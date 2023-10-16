@@ -57,8 +57,11 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
       </div>
       <CldUploadWidget onUpload={onUpload} uploadPreset="u0dp1v1y">
         {({ open }) => {
-          const onClick = () => {
-            open()
+          const onClick = (
+            e: React.MouseEvent<HTMLButtonElement, MouseEvent>
+          ) => {
+            e.preventDefault()
+            open?.()
           }
           return (
             <Button

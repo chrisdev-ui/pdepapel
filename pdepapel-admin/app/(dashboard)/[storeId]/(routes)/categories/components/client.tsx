@@ -7,34 +7,34 @@ import { Heading } from '@/components/ui/heading'
 import { Separator } from '@/components/ui/separator'
 import { Plus } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
-import { BillboardColumn, columns } from './columns'
+import { CategoryColumn, columns } from './columns'
 
-interface BillboardClientProps {
-  data: BillboardColumn[]
+interface CategoryClientProps {
+  data: CategoryColumn[]
 }
 
-export const BillboardClient = ({ data }: BillboardClientProps) => {
+export const CategoryClient = ({ data }: CategoryClientProps) => {
   const router = useRouter()
   const params = useParams()
   return (
     <>
       <div className="flex items-center justify-between">
         <Heading
-          title={`Publicaciones (${data.length})`}
-          description="Maneja las publicaciones para tu tienda"
+          title={`Categorías (${data.length})`}
+          description="Maneja las categorías para tu tienda"
         />
         <Button
-          onClick={() => router.push(`/${params.storeId}/billboards/new`)}
+          onClick={() => router.push(`/${params.storeId}/categories/new`)}
         >
           <Plus className="mr-2 h-4 w-4" />
-          Crear publicación
+          Crear categoría
         </Button>
       </div>
       <Separator />
-      <DataTable searchKey="label" columns={columns} data={data} />
-      <Heading title="API" description="API calls para las publicaciones" />
+      <DataTable searchKey="name" columns={columns} data={data} />
+      <Heading title="API" description="API calls para las categorías" />
       <Separator />
-      <ApiList entityName="billboards" entityIdName="billboardId" />
+      <ApiList entityName="categories" entityIdName="categoryId" />
     </>
   )
 }
