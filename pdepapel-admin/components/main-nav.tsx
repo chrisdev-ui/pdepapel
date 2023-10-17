@@ -27,6 +27,21 @@ export function MainNav({
       active: pathname === `/${params.storeId}/categories`
     },
     {
+      href: `/${params.storeId}/sizes`,
+      label: 'Tamaños',
+      active: pathname === `/${params.storeId}/sizes`
+    },
+    {
+      href: `/${params.storeId}/colors`,
+      label: 'Colores',
+      active: pathname === `/${params.storeId}/colors`
+    },
+    {
+      href: `/${params.storeId}/designs`,
+      label: 'Diseños',
+      active: pathname === `/${params.storeId}/designs`
+    },
+    {
       href: `/${params.storeId}/settings`,
       label: 'Ajustes',
       active: pathname === `/${params.storeId}/settings`
