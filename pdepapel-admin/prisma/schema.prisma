@@ -9,76 +9,75 @@ generator client {
 }
 
 model Store {
-  id          String   @id @default(uuid())
+  id          String      @id @default(uuid())
   name        String
   userId      String
-  billboards  Billboard[] @relation("StoreToBillboard")
+  types       Type[]      @relation("StoreToType")
   categories  Category[]  @relation("StoreToCategory")
   sizes       Size[]      @relation("StoreToSize")
   colors      Color[]     @relation("StoreToColor")
   designs     Design[]    @relation("StoreToDesign")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 }
 
-model Billboard {
-  id          String   @id @default(uuid())
+model Type {
+  id          String      @id @default(uuid())
   storeId     String
-  store       Store    @relation("StoreToBillboard", fields: [storeId], references: [id])
-  label       String
-  imageUrl    String
+  store       Store       @relation("StoreToType", fields: [storeId], references: [id])
+  name        String
   categories  Category[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 
   @@index([storeId])
 }
 
 model Category {
-  id          String   @id @default(uuid())
+  id          String      @id @default(uuid())
   storeId     String
-  store       Store    @relation("StoreToCategory", fields: [storeId], references: [id])
-  billboardId String
-  billboard   Billboard @relation(fields: [billboardId], references: [id])
+  store       Store       @relation("StoreToCategory", fields: [storeId], references: [id])
+  typeId      String
+  type        Type        @relation(fields: [typeId], references: [id])
   name        String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 
   @@index([storeId])
-  @@index([billboardId])
+  @@index([typeId])
 }
 
 model Size {
-  id          String   @id @default(uuid())
+  id          String      @id @default(uuid())
   storeId     String
-  store       Store    @relation("StoreToSize", fields: [storeId], references: [id])
+  store       Store       @relation("StoreToSize", fields: [storeId], references: [id])
   name        String
   value       String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 
   @@index([storeId])
 }
 
 model Color {
-  id          String   @id @default(uuid())
+  id          String      @id @default(uuid())
   storeId     String
-  store       Store    @relation("StoreToColor", fields: [storeId], references: [id])
+  store       Store       @relation("StoreToColor", fields: [storeId], references: [id])
   name        String
   value       String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 
   @@index([storeId])
 }
 
 model Design {
-  id          String   @id @default(uuid())
+  id          String      @id @default(uuid())
   storeId     String
-  store       Store    @relation("StoreToDesign", fields: [storeId], references: [id])
+  store       Store       @relation("StoreToDesign", fields: [storeId], references: [id])
   name       String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 
   @@index([storeId])
 }

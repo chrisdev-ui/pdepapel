@@ -14,10 +14,10 @@ import axios from 'axios'
 import { Copy, Edit, MoreHorizontal, Trash } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { BillboardColumn } from './columns'
+import { TypeColumn } from './columns'
 
 interface CellActionProps {
-  data: BillboardColumn
+  data: TypeColumn
 }
 
 export const CellAction: React.FC<CellActionProps> = ({ data }) => {
@@ -30,7 +30,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const onCopy = (id: string) => {
     navigator.clipboard.writeText(id)
     toast({
-      description: 'ID de la publicación copiado al portapapeles',
+      description: 'ID del tipo copiado al portapapeles',
       variant: 'success'
     })
   }
@@ -38,16 +38,16 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const onDelete = async () => {
     try {
       setLoading(true)
-      await axios.delete(`/api/${params.storeId}/billboards/${data.id}`)
+      await axios.delete(`/api/${params.storeId}/types/${data.id}`)
       router.refresh()
       toast({
-        description: 'Publicación eliminada',
+        description: 'Tipo eliminado',
         variant: 'success'
       })
     } catch (error) {
       toast({
         description:
-          'Asegúrate de haber eliminado todas las categorías que usen esta publicación primero.',
+          'Asegúrate de haber eliminado todas las categorías que usen este tipo primero.',
         variant: 'destructive'
       })
     } finally {
@@ -78,9 +78,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
             Copiar ID
           </DropdownMenuItem>
           <DropdownMenuItem
-            onClick={() =>
-              router.push(`/${params.storeId}/billboards/${data.id}`)
-            }
+            onClick={() => router.push(`/${params.storeId}/types/${data.id}`)}
           >
             <Edit className="mr-2 h-4 w-4" />
             Actualizar

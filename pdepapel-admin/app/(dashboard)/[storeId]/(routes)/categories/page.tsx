@@ -15,7 +15,7 @@ export default async function CategoriesPage({
       storeId: params.storeId
     },
     include: {
-      billboard: true
+      type: true
     },
     orderBy: {
       createdAt: 'desc'
@@ -25,7 +25,7 @@ export default async function CategoriesPage({
   const formattedCategories: CategoryColumn[] = categories.map((category) => ({
     id: category.id,
     name: category.name,
-    billboardLabel: category.billboard.label,
+    typeName: category.type.name,
     createdAt: format(category.createdAt, 'MMMM d, yyyy')
   }))
 

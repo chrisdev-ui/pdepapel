@@ -12,15 +12,16 @@ export default async function CategoryPage({
     }
   })
 
-  const billboards = await prismadb.billboard.findMany({
+  const types = await prismadb.type.findMany({
     where: {
       storeId: params.storeId
     }
   })
+
   return (
     <div className="flex-col">
       <div className="flex-1 space-y-4 p-8 pt-6">
-        <CategoryForm billboards={billboards} initialData={category} />
+        <CategoryForm types={types} initialData={category} />
       </div>
     </div>
   )

@@ -9,23 +9,21 @@ export async function POST(
   try {
     const { userId } = auth()
     const body = await req.json()
-    const { label, imageUrl } = body
+    const { name } = body
     if (!userId) return new NextResponse('Unauthenticated', { status: 401 })
-    if (!label) return new NextResponse('Label is required', { status: 400 })
-    if (!imageUrl)
-      return new NextResponse('Image URL is required', { status: 400 })
+    if (!name) return new NextResponse('Name is required', { status: 400 })
     if (!params.storeId)
       return new NextResponse('Store ID is required', { status: 400 })
     const storeByUserId = await prismadb.store.findFirst({
       where: { id: params.storeId, userId }
     })
     if (!storeByUserId) return new NextResponse('Unauthorized', { status: 403 })
-    const billboard = await prismadb.billboard.create({
-      data: { label, imageUrl, storeId: params.storeId }
+    const type = await prismadb.type.create({
+      data: { name, storeId: params.storeId }
     })
-    return NextResponse.json(billboard)
+    return NextResponse.json(type)
   } catch (error) {
-    console.log('[BILLBOARDS_POST]', error)
+    console.log('[TYPES_POST]', error)
     return new NextResponse('Internal Server Error', { status: 500 })
   }
 }
@@ -37,12 +35,12 @@ export async function GET(
   try {
     if (!params.storeId)
       return new NextResponse('Store ID is required', { status: 400 })
-    const billboards = await prismadb.billboard.findMany({
+    const types = await prismadb.type.findMany({
       where: { storeId: params.storeId }
     })
-    return NextResponse.json(billboards)
+    return NextResponse.json(types)
   } catch (error) {
-    console.log('[BILLBOARDS_GET]', error)
+    console.log('[TYPES_GET]', error)
     return new NextResponse('Internal Server Error', { status: 500 })
   }
 }

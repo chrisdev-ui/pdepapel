@@ -7,34 +7,32 @@ import { Heading } from '@/components/ui/heading'
 import { Separator } from '@/components/ui/separator'
 import { Plus } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
-import { BillboardColumn, columns } from './columns'
+import { TypeColumn, columns } from './columns'
 
-interface BillboardClientProps {
-  data: BillboardColumn[]
+interface TypeClientProps {
+  data: TypeColumn[]
 }
 
-export const BillboardClient = ({ data }: BillboardClientProps) => {
+export const TypeClient = ({ data }: TypeClientProps) => {
   const router = useRouter()
   const params = useParams()
   return (
     <>
       <div className="flex items-center justify-between">
         <Heading
-          title={`Publicaciones (${data.length})`}
-          description="Maneja las publicaciones para tu tienda"
+          title={`Tipos (${data.length})`}
+          description="Maneja los tipos de productos para tu tienda"
         />
-        <Button
-          onClick={() => router.push(`/${params.storeId}/billboards/new`)}
-        >
+        <Button onClick={() => router.push(`/${params.storeId}/types/new`)}>
           <Plus className="mr-2 h-4 w-4" />
-          Crear publicación
+          Crear tipo
         </Button>
       </div>
       <Separator />
-      <DataTable searchKey="label" columns={columns} data={data} />
-      <Heading title="API" description="API calls para las publicaciones" />
+      <DataTable searchKey="name" columns={columns} data={data} />
+      <Heading title="API" description="API calls para los tipos" />
       <Separator />
-      <ApiList entityName="billboards" entityIdName="billboardId" />
+      <ApiList entityName="types" entityIdName="typeId" />
     </>
   )
 }

@@ -1,7 +1,6 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Billboard } from '@prisma/client'
 import { Trash } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import z from 'zod'
@@ -17,28 +16,25 @@ import {
   FormMessage
 } from '@/components/ui/form'
 import { Heading } from '@/components/ui/heading'
-import { ImageUpload } from '@/components/ui/image-upload'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { useToast } from '@/hooks/use-toast'
+import { Type } from '@prisma/client'
 import axios from 'axios'
 import { useParams, useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 const formSchema = z.object({
-  label: z.string().min(1, 'El nombre de la publicación no puede estar vacío'),
-  imageUrl: z.string().min(1, 'Se necesita la URL de la publicación')
+  name: z.string().min(1, 'El nombre del tipo no puede estar vacío')
 })
 
-type BillboardFormValues = z.infer<typeof formSchema>
+type TypeFormValues = z.infer<typeof formSchema>
 
-interface BillboardFormProps {
-  initialData: Billboard | null
+interface TypeFormProps {
+  initialData: Type | null
 }
 
-export const BillboardForm: React.FC<BillboardFormProps> = ({
-  initialData
-}) => {
+export const TypeForm: React.FC<TypeFormProps> = ({ initialData }) => {
   const params = useParams()
   const router = useRouter()
   const { toast } = useToast()
@@ -46,35 +42,27 @@ export const BillboardForm: React.FC<BillboardFormProps> = ({
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  const title = initialData ? 'Editar publicación' : 'Crear publicación'
-  const description = initialData
-    ? 'Editar una publicación'
-    : 'Crear una nueva publicación'
-  const toastMessage = initialData
-    ? 'Publicación actualizada'
-    : 'Publicación creada'
+  const title = initialData ? 'Editar tipo' : 'Crear tipo'
+  const description = initialData ? 'Editar un tipo' : 'Crear un nuevo tipo'
+  const toastMessage = initialData ? 'Tipo actualizado' : 'Tipo creado'
   const action = initialData ? 'Guardar cambios' : 'Crear'
 
-  const form = useForm<BillboardFormValues>({
+  const form = useForm<TypeFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: initialData || {
-      label: '',
-      imageUrl: ''
+      name: ''
     }
   })
-  const onSubmit = async (data: BillboardFormValues) => {
+  const onSubmit = async (data: TypeFormValues) => {
     try {
       setLoading(true)
       if (initialData) {
-        await axios.patch(
-          `/api/${params.storeId}/billboards/${params.billboardId}`,
-          data
-        )
+        await axios.patch(`/api/${params.storeId}/types/${params.typeId}`, data)
       } else {
-        await axios.post(`/api/${params.storeId}/billboards`, data)
+        await axios.post(`/api/${params.storeId}/types`, data)
       }
       router.refresh()
-      router.push(`/${params.storeId}/billboards`)
+      router.push(`/${params.storeId}/types`)
       toast({
         description: toastMessage,
         variant: 'success'
@@ -92,19 +80,17 @@ export const BillboardForm: React.FC<BillboardFormProps> = ({
   const onDelete = async () => {
     try {
       setLoading(true)
-      await axios.delete(
-        `/api/${params.storeId}/billboards/${params.billboardId}`
-      )
+      await axios.delete(`/api/${params.storeId}/types/${params.typeId}`)
       router.refresh()
-      router.push(`/${params.storeId}/billboards`)
+      router.push(`/${params.storeId}/types`)
       toast({
-        description: 'Publicación eliminada',
+        description: 'Tipo eliminado',
         variant: 'success'
       })
     } catch (error) {
       toast({
         description:
-          'Asegúrate de haber eliminado todas las categorías que usen esta publicación primero.',
+          'Asegúrate de haber eliminado todas las categorías que usen este tipo primero.',
         variant: 'destructive'
       })
     } finally {
@@ -139,35 +125,17 @@ export const BillboardForm: React.FC<BillboardFormProps> = ({
           onSubmit={form.handleSubmit(onSubmit)}
           className="space-y-8 w-full"
         >
-          <FormField
-            control={form.control}
-            name="imageUrl"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Imagen</FormLabel>
-                <FormControl>
-                  <ImageUpload
-                    value={field.value ? [field.value] : []}
-                    disabled={loading}
-                    onChange={(url) => field.onChange(url)}
-                    onRemove={() => field.onChange('')}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
           <div className="grid grid-cols-3 gap-8">
             <FormField
               control={form.control}
-              name="label"
+              name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Etiqueta</FormLabel>
+                  <FormLabel>Nombre</FormLabel>
                   <FormControl>
                     <Input
                       disabled={loading}
-                      placeholder="Etiqueta de la publicación"
+                      placeholder="Nombre del tipo"
                       {...field}
                     />
                   </FormControl>

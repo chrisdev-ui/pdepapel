@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Billboard, Category } from '@prisma/client'
+import { Category, Type } from '@prisma/client'
 import { Trash } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import z from 'zod'
@@ -33,19 +33,19 @@ import { useState } from 'react'
 
 const formSchema = z.object({
   name: z.string().min(1, 'El nombre de la categoria no puede estar vacío'),
-  billboardId: z.string().min(1)
+  typeId: z.string().min(1)
 })
 
 type CategoryFormValues = z.infer<typeof formSchema>
 
 interface CategoryFormProps {
   initialData: Category | null
-  billboards: Billboard[]
+  types: Type[]
 }
 
 export const CategoryForm: React.FC<CategoryFormProps> = ({
   initialData,
-  billboards
+  types
 }) => {
   const params = useParams()
   const router = useRouter()
@@ -67,7 +67,7 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
     resolver: zodResolver(formSchema),
     defaultValues: initialData || {
       name: '',
-      billboardId: ''
+      typeId: ''
     }
   })
   const onSubmit = async (data: CategoryFormValues) => {
@@ -167,10 +167,10 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
             />
             <FormField
               control={form.control}
-              name="billboardId"
+              name="typeId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Publicación</FormLabel>
+                  <FormLabel>Tipo</FormLabel>
                   <Select
                     disabled={loading}
                     onValueChange={field.onChange}
@@ -181,14 +181,14 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
                       <SelectTrigger>
                         <SelectValue
                           defaultValue={field.value}
-                          placeholder="Selecciona una publicación"
+                          placeholder="Selecciona un tipo"
                         />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {billboards.map((billboard) => (
-                        <SelectItem key={billboard.id} value={billboard.id}>
-                          {billboard.label}
+                      {types.map((type) => (
+                        <SelectItem key={type.id} value={type.id}>
+                          {type.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
