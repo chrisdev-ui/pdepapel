@@ -1,5 +1,7 @@
 import { Footer } from "@/components/footer";
 import { Navbar } from "@/components/navbar";
+import { esES } from "@clerk/localizations";
+import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
 import { Caudex, Coming_Soon, Martel_Sans } from "next/font/google";
 import "./globals.css";
@@ -57,14 +59,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body
-        className={`${caudex.variable} ${comingSoon.variable} ${martelSans.variable}`}
-      >
-        <Navbar />
-        {children}
-        <Footer />
-      </body>
-    </html>
+    <ClerkProvider localization={esES}>
+      <html lang="en">
+        <body
+          className={`${caudex.variable} ${comingSoon.variable} ${martelSans.variable}`}
+        >
+          <Navbar />
+          {children}
+          <Footer />
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }
