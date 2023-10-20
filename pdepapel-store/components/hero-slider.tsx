@@ -66,7 +66,7 @@ export const HeroSlider: React.FC<{}> = () => {
           <div
             key={idx}
             className={cn(
-              "slideShowDot mx-2 mb-0 mt-4 inline-block h-5 w-5 cursor-pointer rounded-full bg-pink-froly/30",
+              "mx-2 mb-0 mt-4 inline-block h-5 w-5 cursor-pointer rounded-full bg-pink-froly/30",
               {
                 "bg-pink-froly": index === idx,
               },
