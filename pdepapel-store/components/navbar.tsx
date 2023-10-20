@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 export const Navbar: React.FC<{}> = () => {
   const { userId } = auth();
   return (
-    <section className="relative mx-auto">
+    <header className="sticky left-0 top-0 z-50 mx-auto">
       <nav className="flex w-screen justify-between bg-white-rock">
         <div className="flex w-full items-center px-5 py-3 lg:py-6 xl:px-12">
           <Link href="/" className="relative h-24 w-48">
@@ -66,6 +66,6 @@ export const Navbar: React.FC<{}> = () => {
         </Button>
         <HamburgerMenu isUserLoggedIn={!!userId} />
       </nav>
-    </section>
+    </header>
   );
 };
