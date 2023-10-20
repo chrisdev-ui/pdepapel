@@ -29,6 +29,8 @@ export default function RegisterPage() {
         <DialogOverlay>
           <DialogPrimitive.Content className="relative flex h-full w-full items-center justify-center">
             <SignUp
+              afterSignUpUrl={redirectUrl || "/"}
+              afterSignInUrl={redirectUrl || "/"}
               appearance={{
                 elements: {
                   headerSubtitle: "hidden",
@@ -38,7 +40,7 @@ export default function RegisterPage() {
                   card: "bg-gradient-to-r from-pink-shell via-transparent to-pink-froly",
                   formFieldLabel: "text-blue-yankees",
                   formButtonPrimary:
-                    "bg-gradient-to-r from-green-leaf from-10% via-white-rock via-50% to-green-leaf to-90% hover:from-white-rock hover:via-green-leaf hover:to-white-rock text-blue-yankees",
+                    "bg-blue-yankees text-white font-semibold hover:opacity-75",
                 },
               }}
             />

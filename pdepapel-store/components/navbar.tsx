@@ -1,11 +1,15 @@
-import { NavigationLink } from "@/components/navigation-link";
-import { Button } from "@/components/ui/button";
+import { UserButton, auth } from "@clerk/nextjs";
 import { ShoppingBag } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { Icons } from "./icons";
+
+import { HamburgerMenu } from "@/components/hamburger-menu";
+import { Icons } from "@/components/icons";
+import { NavigationLink } from "@/components/navigation-link";
+import { Button } from "@/components/ui/button";
 
 export const Navbar: React.FC<{}> = () => {
+  const { userId } = auth();
   return (
     <section className="relative mx-auto">
       <nav className="flex w-screen justify-between bg-white-rock">
@@ -33,7 +37,7 @@ export const Navbar: React.FC<{}> = () => {
               <NavigationLink href="/contact">Contacto</NavigationLink>
             </li>
           </ul>
-          <div className="hidden items-center space-x-5 xl:flex">
+          <div className="hidden items-center space-x-5 lg:flex">
             <Link href="#" className="hover:opacity-75">
               <Icons.heart className="h-6 w-6" />
             </Link>
@@ -43,11 +47,24 @@ export const Navbar: React.FC<{}> = () => {
                 0
               </span>
             </Button>
-            <Link href="#" className="hover:opacity-75">
-              <Icons.user className="h-6 w-6" />
-            </Link>
+            {userId && (
+              <UserButton afterSignOutUrl="/" userProfileMode="modal" />
+            )}
+            {!userId && (
+              <Link href="/login" className="hover:opacity-75">
+                <Icons.user className="h-6 w-6" />
+              </Link>
+            )}
           </div>
         </div>
+        {/* Responsive navbar */}
+        <Button className="mr-6 flex w-auto items-center self-center rounded-full border-transparent bg-blue-yankees px-4 py-2 font-semibold text-white transition hover:opacity-75 disabled:cursor-not-allowed disabled:opacity-50 lg:hidden">
+          <ShoppingBag className="h-5 w-5" />
+          <span className="ml-2 flex pt-1 font-serif text-base font-medium">
+            0
+          </span>
+        </Button>
+        <HamburgerMenu isUserLoggedIn={!!userId} />
       </nav>
     </section>
   );
