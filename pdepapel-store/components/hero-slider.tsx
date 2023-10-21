@@ -1,8 +1,8 @@
 "use client";
 
+import { DELAY } from "@/constants";
 import { cn } from "@/lib/utils";
-import { DELAY } from "@/types/constants";
-import { Billboard } from "@/types/types";
+import { Billboard } from "@/types";
 import { useEffect, useRef, useState } from "react";
 
 interface HeroSliderProps {
