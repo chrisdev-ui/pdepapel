@@ -18,6 +18,9 @@ const config: Config = {
       },
     },
     extend: {
+      transformOrigin: {
+        "left-center": "left center",
+      },
       screens: {
         xxs: "320px",
         xs: "375px",
@@ -107,10 +110,88 @@ const config: Config = {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        "dot-pulse": {
+          "0%": { opacity: "0" },
+          "25%": { opacity: "1" },
+          "50%": { opacity: "0" },
+          "100%": { opacity: "0" },
+        },
+        "move-marker": {
+          "10%": { transform: "translate(5%, 100%) rotate(2.5deg)" },
+          "20%": { transform: "translate(20%, 0%) rotate(-5deg)" },
+          "30%": { transform: "translate(30%, 100%) rotate(2.5deg)" },
+          "40%": { transform: "translate(40%, 0%) rotate(-5deg)" },
+          "50%": { transform: "translate(50%, 100%) rotate(2.5deg)" },
+          "60%": { transform: "translate(60%, 0%) rotate(-5deg)" },
+          "70%": { transform: "translate(70%, 100%) rotate(2.5deg)" },
+          "80%": { transform: "translate(80%, 0%) rotate(-5deg)" },
+          "90%": { transform: "translate(90%, 100%) rotate(2.5deg)" },
+          "100%": { transform: "translate(100%, 0%) rotate(-5deg)" },
+        },
+        "rainbow-fill": {
+          "0%": {
+            background: `var(--bg-01-a), var(--bg-02-a), var(--bg-03-a), var(--bg-04-a),
+            var(--bg-05-a), var(--bg-06-a), var(--bg-07-a), var(--bg-08-a),
+            var(--bg-09-a), var(--bg-10-a)`,
+          },
+          "10%": {
+            background: `var(--bg-01-b), var(--bg-02-a), var(--bg-03-a), var(--bg-04-a),
+            var(--bg-05-a), var(--bg-06-a), var(--bg-07-a), var(--bg-08-a),
+            var(--bg-09-a), var(--bg-10-a)`,
+          },
+          "20%": {
+            background: `var(--bg-01-b), var(--bg-02-b), var(--bg-03-a), var(--bg-04-a),
+            var(--bg-05-a), var(--bg-06-a), var(--bg-07-a), var(--bg-08-a),
+            var(--bg-09-a), var(--bg-10-a)`,
+          },
+          "30%": {
+            background: `var(--bg-01-b), var(--bg-02-b), var(--bg-03-b), var(--bg-04-a),
+            var(--bg-05-a), var(--bg-06-a), var(--bg-07-a), var(--bg-08-a),
+            var(--bg-09-a), var(--bg-10-a)`,
+          },
+          "40%": {
+            background: `var(--bg-01-b), var(--bg-02-b), var(--bg-03-b), var(--bg-04-b),
+            var(--bg-05-a), var(--bg-06-a), var(--bg-07-a), var(--bg-08-a),
+            var(--bg-09-a), var(--bg-10-a)`,
+          },
+          "50%": {
+            background: `var(--bg-01-b), var(--bg-02-b), var(--bg-03-b), var(--bg-04-b),
+            var(--bg-05-b), var(--bg-06-a), var(--bg-07-a), var(--bg-08-a),
+            var(--bg-09-a), var(--bg-10-a)`,
+          },
+          "60%": {
+            background: `var(--bg-01-b), var(--bg-02-b), var(--bg-03-b), var(--bg-04-b),
+            var(--bg-05-b), var(--bg-06-b), var(--bg-07-a), var(--bg-08-a),
+            var(--bg-09-a), var(--bg-10-a)`,
+          },
+          "70%": {
+            background: `var(--bg-01-b), var(--bg-02-b), var(--bg-03-b), var(--bg-04-b),
+            var(--bg-05-b), var(--bg-06-b), var(--bg-07-b), var(--bg-08-a),
+            var(--bg-09-a), var(--bg-10-a)`,
+          },
+          "80%": {
+            background: `var(--bg-01-b), var(--bg-02-b), var(--bg-03-b), var(--bg-04-b),
+            var(--bg-05-b), var(--bg-06-b), var(--bg-07-b), var(--bg-08-b),
+            var(--bg-09-a), var(--bg-10-a)`,
+          },
+          "90%": {
+            background: `var(--bg-01-b), var(--bg-02-b), var(--bg-03-b), var(--bg-04-b),
+            var(--bg-05-b), var(--bg-06-b), var(--bg-07-b), var(--bg-08-b),
+            var(--bg-09-b), var(--bg-10-a)`,
+          },
+          "100%": {
+            background: `var(--bg-01-b), var(--bg-02-b), var(--bg-03-b), var(--bg-04-b),
+            var(--bg-05-b), var(--bg-06-b), var(--bg-07-b), var(--bg-08-b),
+            var(--bg-09-b), var(--bg-10-b)`,
+          },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "move-marker": "infinite alternate move-marker 5000ms ease-in-out",
+        "rainbow-fill": "infinite alternate rainbow-fill 5000ms ease-in-out",
+        "dot-pulse": "dot-pulse 1s infinite",
       },
     },
   },

@@ -1,0 +1,36 @@
+import Image from "next/image";
+
+interface LoaderProps {
+  label?: string;
+}
+
+export const Loader: React.FC<LoaderProps> = ({ label }) => {
+  return (
+    <>
+      <div className="relative flex items-center justify-center">
+        <div className="absolute h-32 w-32 animate-spin rounded-full border-b-4 border-t-4 border-pink-froly" />
+        <Image
+          src="/images/no-text-transparent-bg.webp"
+          width={200}
+          height={200}
+          alt="Loader logo"
+          className="h-28 w-28 rounded-full"
+        />
+        {label && (
+          <div className="absolute -bottom-8 text-blue-yankees">
+            {label}
+            <span className="animate-dot-pulse ml-0.5 inline-block font-mono text-xl font-bold">
+              .
+            </span>
+            <span className="animate-dot-pulse ml-0.5 inline-block font-mono text-xl font-bold delay-300">
+              .
+            </span>
+            <span className="animate-dot-pulse ml-0.5 inline-block font-mono text-xl font-bold delay-700">
+              .
+            </span>
+          </div>
+        )}
+      </div>
+    </>
+  );
+};
