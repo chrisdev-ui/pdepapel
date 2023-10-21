@@ -1,10 +1,9 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { Billboard } from "@/types";
+import { DELAY } from "@/types/constants";
+import { Billboard } from "@/types/types";
 import { useEffect, useRef, useState } from "react";
-
-const delay = 5000;
 
 interface HeroSliderProps {
   data: Billboard[];
@@ -25,14 +24,14 @@ export const HeroSlider: React.FC<HeroSliderProps> = ({ data }) => {
     timeoutRef.current = setTimeout(
       () =>
         setIndex((prevIndex) =>
-          prevIndex === data.length - 1 ? 0 : prevIndex + 1,
+          prevIndex === data?.length - 1 ? 0 : prevIndex + 1,
         ),
-      delay,
+      DELAY,
     );
     return () => {
       resetTimeout();
     };
-  }, [data.length, index]);
+  }, [data?.length, index]);
 
   return (
     <div className="mx-auto my-0 overflow-hidden rounded-xl p-4 sm:p-6 lg:p-8">
@@ -44,7 +43,7 @@ export const HeroSlider: React.FC<HeroSliderProps> = ({ data }) => {
             transition: "ease 1000ms",
           }}
         >
-          {data.map(({ label, imageUrl }, index) => (
+          {data?.map(({ label, imageUrl }, index) => (
             <div
               key={index}
               className="relative inline-block aspect-square w-full overflow-hidden rounded-xl bg-cover md:aspect-[2.4/1]"
@@ -60,7 +59,7 @@ export const HeroSlider: React.FC<HeroSliderProps> = ({ data }) => {
         </div>
       </div>
       <div className="text-center">
-        {data.map((_, idx) => (
+        {data?.map((_, idx) => (
           <div
             key={idx}
             className={cn(
