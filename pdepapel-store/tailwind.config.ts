@@ -18,10 +18,21 @@ const config: Config = {
       },
     },
     extend: {
+      screens: {
+        xxs: "320px",
+        xs: "375px",
+        s: "425px",
+      },
       spacing: {
         "9/10": "90%",
       },
       fontSize: {
+        xxs: [
+          "0.625rem",
+          {
+            lineHeight: "1rem",
+          },
+        ],
         "5.5xl": "3.5rem",
       },
       fontFamily: {

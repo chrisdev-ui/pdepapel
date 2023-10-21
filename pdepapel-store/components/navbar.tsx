@@ -58,7 +58,7 @@ export const Navbar: React.FC<{}> = () => {
           </div>
         </div>
         {/* Responsive navbar */}
-        <Button className="mr-6 flex w-auto items-center self-center rounded-full border-transparent bg-blue-yankees px-4 py-2 font-semibold text-white transition hover:opacity-75 disabled:cursor-not-allowed disabled:opacity-50 lg:hidden">
+        <Button className="xs:flex mr-6 hidden w-auto items-center self-center rounded-full border-transparent bg-blue-yankees px-4 py-2 font-semibold text-white transition hover:opacity-75 disabled:cursor-not-allowed disabled:opacity-50 lg:hidden">
           <ShoppingBag className="h-5 w-5" />
           <span className="ml-2 flex pt-1 font-serif text-base font-medium">
             0
