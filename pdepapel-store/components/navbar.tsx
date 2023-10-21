@@ -1,4 +1,5 @@
-import { UserButton, auth } from "@clerk/nextjs";
+"use client";
+import { UserButton, useAuth } from "@clerk/nextjs";
 import { ShoppingBag } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -7,13 +8,23 @@ import { HamburgerMenu } from "@/components/hamburger-menu";
 import { Icons } from "@/components/icons";
 import { NavigationLink } from "@/components/navigation-link";
 import { Button } from "@/components/ui/button";
+import { useScrollPosition } from "@/hooks/use-scroll-position";
+import { cn } from "@/lib/utils";
 
 export const Navbar: React.FC<{}> = () => {
-  const { userId } = auth();
+  const { isSignedIn } = useAuth();
+  const scrollPosition = useScrollPosition();
   return (
     <header className="sticky left-0 top-0 z-50 mx-auto">
       <nav className="flex w-screen justify-between bg-white-rock">
-        <div className="flex w-full items-center px-5 py-3 lg:py-6 xl:px-12">
+        <div
+          className={cn(
+            "flex w-full items-center px-5 py-3 transition-[padding] duration-300 lg:py-6 xl:px-12",
+            {
+              "lg:p-0": scrollPosition > 120,
+            },
+          )}
+        >
           <Link href="/" className="relative h-24 w-48">
             <Image
               src="/images/text-beside-transparent-bg.webp"
@@ -47,10 +58,10 @@ export const Navbar: React.FC<{}> = () => {
                 0
               </span>
             </Button>
-            {userId && (
+            {isSignedIn && (
               <UserButton afterSignOutUrl="/" userProfileMode="modal" />
             )}
-            {!userId && (
+            {!isSignedIn && (
               <Link href="/login" className="hover:opacity-75">
                 <Icons.user className="h-6 w-6" />
               </Link>
@@ -64,7 +75,7 @@ export const Navbar: React.FC<{}> = () => {
             0
           </span>
         </Button>
-        <HamburgerMenu isUserLoggedIn={!!userId} />
+        <HamburgerMenu isUserLoggedIn={!!isSignedIn} />
       </nav>
     </header>
   );
