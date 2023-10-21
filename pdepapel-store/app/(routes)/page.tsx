@@ -1,9 +1,11 @@
+import { getBillboards } from "@/actions/get-billboards";
 import { HeroSlider } from "@/components/hero-slider";
 
-export default function HomePage() {
+export default async function HomePage() {
+  const billboards = await getBillboards();
   return (
     <>
-      <HeroSlider />
+      <HeroSlider data={billboards} />
     </>
   );
 }

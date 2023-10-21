@@ -1,18 +1,16 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { Billboard } from "@/types";
 import { useEffect, useRef, useState } from "react";
-
-// TODO: Get this from database with action. They will be billboards
-const images = [
-  { label: "Cartucheras", imageUrl: "/images/hero-image-1.webp" },
-  { label: "Lapiceros", imageUrl: "/images/hero-image-2.webp" },
-  { label: "Cuadernos", imageUrl: "/images/hero-image-3.webp" },
-];
 
 const delay = 5000;
 
-export const HeroSlider: React.FC<{}> = () => {
+interface HeroSliderProps {
+  data: Billboard[];
+}
+
+export const HeroSlider: React.FC<HeroSliderProps> = ({ data }) => {
   const [index, setIndex] = useState(0);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -27,14 +25,14 @@ export const HeroSlider: React.FC<{}> = () => {
     timeoutRef.current = setTimeout(
       () =>
         setIndex((prevIndex) =>
-          prevIndex === images.length - 1 ? 0 : prevIndex + 1,
+          prevIndex === data.length - 1 ? 0 : prevIndex + 1,
         ),
       delay,
     );
     return () => {
       resetTimeout();
     };
-  }, [index]);
+  }, [data.length, index]);
 
   return (
     <div className="mx-auto my-0 overflow-hidden rounded-xl p-4 sm:p-6 lg:p-8">
@@ -46,7 +44,7 @@ export const HeroSlider: React.FC<{}> = () => {
             transition: "ease 1000ms",
           }}
         >
-          {images.map(({ label, imageUrl }, index) => (
+          {data.map(({ label, imageUrl }, index) => (
             <div
               key={index}
               className="relative inline-block aspect-square w-full overflow-hidden rounded-xl bg-cover md:aspect-[2.4/1]"
@@ -62,7 +60,7 @@ export const HeroSlider: React.FC<{}> = () => {
         </div>
       </div>
       <div className="text-center">
-        {images.map((_, idx) => (
+        {data.map((_, idx) => (
           <div
             key={idx}
             className={cn(
