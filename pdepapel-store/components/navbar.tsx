@@ -10,12 +10,27 @@ import { NavigationLink } from "@/components/navigation-link";
 import { Button } from "@/components/ui/button";
 import { useScrollPosition } from "@/hooks/use-scroll-position";
 import { cn } from "@/lib/utils";
+import { useEffect, useRef } from "react";
 
 export const Navbar: React.FC<{}> = () => {
   const { isSignedIn } = useAuth();
   const scrollPosition = useScrollPosition();
+  const navBarRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (typeof window !== undefined && scrollPosition > 120) {
+      const navbarHeight = navBarRef.current
+        ? navBarRef.current.offsetHeight
+        : 0;
+      document.body.style.paddingTop = `${navbarHeight}px`;
+    }
+    return () => {
+      document.body.style.paddingTop = "144px";
+    };
+  }, [scrollPosition]);
+
   return (
-    <header className="sticky left-0 top-0 z-50 mx-auto">
+    <header className="fixed left-0 top-0 z-50 mx-auto" ref={navBarRef}>
       <nav className="flex w-screen justify-between bg-white-rock">
         <div
           className={cn(

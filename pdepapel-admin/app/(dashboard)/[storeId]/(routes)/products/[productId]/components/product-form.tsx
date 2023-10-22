@@ -46,9 +46,9 @@ import { useState } from 'react'
 const formSchema = z.object({
   name: z.string().min(1, 'El nombre del producto no puede estar vacío'),
   description: z.string().optional(),
-  stock: z.number().min(0, 'El stock no puede ser menor a 0'),
+  stock: z.coerce.number().min(0, 'El stock no puede ser menor a 0'),
   images: z.object({ url: z.string() }).array(),
-  price: z.number().min(1).positive('El precio debe ser mayor a 0'),
+  price: z.coerce.number().min(1, 'El precio debe ser mayor a 0'),
   categoryId: z.string().min(1),
   colorId: z.string().min(1),
   sizeId: z.string().min(1),

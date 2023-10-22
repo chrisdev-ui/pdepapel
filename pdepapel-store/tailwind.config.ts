@@ -18,6 +18,10 @@ const config: Config = {
       },
     },
     extend: {
+      boxShadow: {
+        card: "20px 20px 30px rgba(0,0,0,0.02)",
+        "card-hover": "20px 20px 30px rgba(0,0,0,0.06)",
+      },
       transformOrigin: {
         "left-center": "left center",
       },
@@ -47,6 +51,10 @@ const config: Config = {
         white: {
           DEFAULT: "hsl(var(--white) / <alpha-value>)",
           rock: "hsl(var(--white-rock) / <alpha-value>)",
+        },
+
+        yellow: {
+          star: "hsl(var(--yellow-star) / <alpha-value>)",
         },
 
         green: {

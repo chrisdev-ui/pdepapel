@@ -10,6 +10,7 @@
     --clam-shell: 3 31% 77%;
     --froly: 348 91% 73%;
     --yankees-blue: 252 42% 18%;
+    --yellow-star: 45 100% 51%;
 
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
@@ -81,6 +82,10 @@
   html,
   body,
   :root {
-    @apply h-full font-sans text-blue-yankees;
+    @apply m-0 box-border h-full scroll-smooth p-0 font-sans text-blue-yankees;
+  }
+
+  body {
+    @apply pt-36;
   }
 }
