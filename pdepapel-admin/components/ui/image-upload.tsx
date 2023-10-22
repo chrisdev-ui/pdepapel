@@ -77,7 +77,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
               onClick={onClick}
             >
               <ImagePlus className="h-4 w-4 mr-2" />
-              Cargar imágenes
+              Cargar imagen o imágenes
             </Button>
           )
         }}

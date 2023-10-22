@@ -20,6 +20,8 @@ model Store {
   designs     Design[]    @relation("StoreToDesign")
   products    Product[]   @relation("StoreToProduct")
   orders      Order[]     @relation("StoreToOrder")
+  mainBanner  MainBanner? @relation("StoreToMainBanner")
+  banners     Banner[]    @relation("StoreToBanner")
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 }
@@ -167,6 +169,34 @@ model OrderItem {
 
   @@index([orderId])
   @@index([productId])
+}
+
+model MainBanner {
+  id            String    @id @default(uuid())
+  storeId       String    @unique
+  store         Store     @relation("StoreToMainBanner", fields: [storeId], references: [id])
+  title         String?   @default("")
+  label1        String?   @default("")
+  highlight     String?   @default("")
+  label2        String?   @default("")
+  imageUrl      String
+  callToAction  String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([storeId])
+}
+
+model Banner {
+  id            String    @id @default(uuid())
+  storeId       String
+  store         Store     @relation("StoreToBanner", fields: [storeId], references: [id])
+  imageUrl      String
+  callToAction  String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([storeId])
 }
 
 

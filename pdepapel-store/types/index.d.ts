@@ -51,3 +51,18 @@ export interface Image {
   id: string;
   url: string;
 }
+
+export interface MainBanner {
+  id: string;
+  title: string;
+  label1: string;
+  label2: string;
+  highlight: string;
+  imageUrl: string;
+  callToAction: string;
+}
+
+export interface Banner {
+  imageUrl: string;
+  callToAction: string;
+}
