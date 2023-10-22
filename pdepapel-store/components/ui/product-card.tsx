@@ -5,16 +5,21 @@ import Image from "next/image";
 
 import { Currency } from "@/components/ui/currency";
 import { IconButton } from "@/components/ui/icon-button";
+import { NewBadge } from "@/components/ui/new-badge";
 import { StarRating } from "@/components/ui/star-rating";
 import { Product } from "@/types";
 
 interface ProductCardProps {
   product: Product;
+  isNew?: boolean;
 }
 
-export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
+export const ProductCard: React.FC<ProductCardProps> = ({
+  product,
+  isNew = false,
+}) => {
   return (
-    <div className="group cursor-pointer space-y-4 rounded-xl border border-solid border-white-rock px-3 py-2.5 shadow-card [transition:0.2s_ease] hover:shadow-card-hover">
+    <div className="group relative cursor-pointer space-y-4 rounded-xl border border-solid border-white-rock px-3 py-2.5 shadow-card [transition:0.2s_ease] hover:shadow-card-hover">
       <div className="relative aspect-square rounded-xl bg-gray-100">
         <Image
           src={product?.images?.[0].url}
@@ -43,10 +48,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           {product.category?.name}
         </p>
       </div>
-      <StarRating />
+      <StarRating isDisabled />
       <div className="flex items-center justify-between">
         <Currency value={product.price} />
       </div>
+      {isNew && <NewBadge text="¡Nuevo!" />}
     </div>
   );
 };

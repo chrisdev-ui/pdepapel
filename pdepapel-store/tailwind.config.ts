@@ -18,9 +18,13 @@ const config: Config = {
       },
     },
     extend: {
+      zIndex: {
+        "1": "1",
+      },
       boxShadow: {
         card: "20px 20px 30px rgba(0,0,0,0.02)",
         "card-hover": "20px 20px 30px rgba(0,0,0,0.06)",
+        badge: "0 0px 10px",
       },
       transformOrigin: {
         "left-center": "left center",

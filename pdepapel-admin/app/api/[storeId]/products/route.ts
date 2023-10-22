@@ -80,29 +80,51 @@ export async function GET(
     const sizeId = searchParams.get('sizeId') || undefined
     const designId = searchParams.get('designId') || undefined
     const isFeatured = searchParams.get('isFeatured')
+    const onlyNew = searchParams.get('onlyNew') || undefined
     if (!params.storeId)
       return new NextResponse('Store ID is required', { status: 400 })
-    const products = await prismadb.product.findMany({
-      where: {
-        storeId: params.storeId,
-        categoryId,
-        colorId,
-        sizeId,
-        designId,
-        isFeatured: isFeatured !== null ? isFeatured === 'true' : undefined,
-        isArchived: false
-      },
-      include: {
-        images: true,
-        category: true,
-        color: true,
-        design: true,
-        size: true
-      },
-      orderBy: {
-        createdAt: 'desc'
-      }
-    })
+    let products
+    if (onlyNew) {
+      products = await prismadb.product.findMany({
+        where: {
+          storeId: params.storeId,
+          isArchived: false
+        },
+        include: {
+          images: true,
+          category: true,
+          color: true,
+          design: true,
+          size: true
+        },
+        orderBy: {
+          createdAt: 'desc'
+        },
+        take: 8
+      })
+    } else {
+      products = await prismadb.product.findMany({
+        where: {
+          storeId: params.storeId,
+          categoryId,
+          colorId,
+          sizeId,
+          designId,
+          isFeatured: isFeatured !== null ? isFeatured === 'true' : undefined,
+          isArchived: false
+        },
+        include: {
+          images: true,
+          category: true,
+          color: true,
+          design: true,
+          size: true
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      })
+    }
     return NextResponse.json(products)
   } catch (error) {
     console.log('[PRODUCTS_GET]', error)

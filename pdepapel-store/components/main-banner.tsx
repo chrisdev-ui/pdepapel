@@ -1,6 +1,6 @@
+import { Button } from "@/components/ui/button";
 import { MainBanner as MainBannerType } from "@/types";
 import Link from "next/link";
-import { Button } from "./ui/button";
 
 interface MainBannerProps {
   data: MainBannerType;
