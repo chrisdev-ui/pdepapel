@@ -15,7 +15,7 @@ export const FeaturedProducts: React.FC<FeaturedProductsProps> = ({
   featureProducts,
 }) => {
   return (
-    <Container className="mt-8 flex max-w-full flex-col gap-y-8">
+    <Container className="mt-8 flex flex-col gap-y-8">
       <div className="space-y-4 text-center">
         <h2 className="font-serif text-4xl font-extrabold">
           Productos destacados
