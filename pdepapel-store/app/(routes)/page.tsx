@@ -1,6 +1,8 @@
+import { getBanners } from "@/actions/get-banners";
 import { getBillboards } from "@/actions/get-billboards";
 import { getMainBanner } from "@/actions/get-main-banner";
 import { getProducts } from "@/actions/get-products";
+import { BannersCta } from "@/components/banners-cta";
 import { FeaturedProducts } from "@/components/featured-products";
 import { Features } from "@/components/features";
 import { HeroSlider } from "@/components/hero-slider";
@@ -14,6 +16,7 @@ export default async function HomePage() {
   const featureProducts = await getProducts({ isFeatured: true });
   const mainBanner = await getMainBanner();
   const newProducts = await getProducts({ onlyNew: true });
+  const banners = await getBanners();
   return (
     <>
       <HeroSlider data={billboards} />
@@ -21,6 +24,7 @@ export default async function HomePage() {
       <FeaturedProducts featureProducts={featureProducts} />
       <MainBanner data={mainBanner} />
       <NewArrivals newProducts={newProducts} />
+      <BannersCta banners={banners} />
     </>
   );
 }
