@@ -8,6 +8,7 @@ import { Features } from "@/components/features";
 import { HeroSlider } from "@/components/hero-slider";
 import { MainBanner } from "@/components/main-banner";
 import { NewArrivals } from "@/components/new-arrivals";
+import { Newsletter } from "@/components/newsletter";
 
 export const revalidate = 0;
 
@@ -25,6 +26,7 @@ export default async function HomePage() {
       <MainBanner data={mainBanner} />
       <NewArrivals newProducts={newProducts} />
       <BannersCta banners={banners} />
+      <Newsletter />
     </>
   );
 }
