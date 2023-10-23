@@ -10,6 +10,7 @@ interface Query {
   designId?: string;
   isFeatured?: boolean;
   onlyNew?: boolean;
+  limit?: number;
 }
 
 export const getProducts = async (query: Query): Promise<Product[]> => {
@@ -22,6 +23,7 @@ export const getProducts = async (query: Query): Promise<Product[]> => {
       designId: query.designId,
       isFeatured: query.isFeatured,
       onlyNew: query.onlyNew,
+      limit: query.limit,
     },
   });
 

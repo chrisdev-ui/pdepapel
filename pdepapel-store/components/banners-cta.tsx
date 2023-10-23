@@ -1,7 +1,8 @@
+import Link from "next/link";
+
+import { Container } from "@/components/ui/container";
 import { cn } from "@/lib/utils";
 import { Banner } from "@/types";
-import Link from "next/link";
-import { Container } from "./ui/container";
 
 interface BannersCtaProps {
   banners: Banner[];

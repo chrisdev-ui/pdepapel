@@ -14,9 +14,9 @@ export const revalidate = 0;
 
 export default async function HomePage() {
   const billboards = await getBillboards();
-  const featureProducts = await getProducts({ isFeatured: true });
+  const featureProducts = await getProducts({ isFeatured: true, limit: 8 });
   const mainBanner = await getMainBanner();
-  const newProducts = await getProducts({ onlyNew: true });
+  const newProducts = await getProducts({ onlyNew: true, limit: 8 });
   const banners = await getBanners();
   return (
     <>

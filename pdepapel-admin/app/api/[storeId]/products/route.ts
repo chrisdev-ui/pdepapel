@@ -81,6 +81,7 @@ export async function GET(
     const designId = searchParams.get('designId') || undefined
     const isFeatured = searchParams.get('isFeatured')
     const onlyNew = searchParams.get('onlyNew') || undefined
+    const limit = Number(searchParams.get('limit'))
     if (!params.storeId)
       return new NextResponse('Store ID is required', { status: 400 })
     let products
@@ -100,7 +101,7 @@ export async function GET(
         orderBy: {
           createdAt: 'desc'
         },
-        take: 8
+        take: limit || undefined
       })
     } else {
       products = await prismadb.product.findMany({
@@ -122,7 +123,8 @@ export async function GET(
         },
         orderBy: {
           createdAt: 'desc'
-        }
+        },
+        take: limit || undefined
       })
     }
     return NextResponse.json(products)
