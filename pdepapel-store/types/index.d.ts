@@ -6,6 +6,7 @@ export interface Billboard {
 
 export interface Type {
   id: string;
+  categories: Category[];
   name: string;
 }
 
@@ -65,4 +66,9 @@ export interface MainBanner {
 export interface Banner {
   imageUrl: string;
   callToAction: string;
+}
+
+export interface PriceRange {
+  id: string;
+  name: string;
 }

@@ -2,6 +2,21 @@ import prismadb from '@/lib/prismadb'
 import { auth } from '@clerk/nextjs'
 import { NextResponse } from 'next/server'
 
+type SortOption =
+  | 'default'
+  | 'dateAdded'
+  | 'priceLowToHigh'
+  | 'priceHighToLow'
+  | 'name'
+  | 'featuredFirst'
+
+type PriceRanges =
+  | '[0,5000]'
+  | '[5000,10000]'
+  | '[10000,20000]'
+  | '[20000,50000]'
+  | '[50000,99999999]'
+
 export async function POST(
   req: Request,
   { params }: { params: { storeId: string } }
@@ -75,6 +90,7 @@ export async function GET(
 ) {
   try {
     const { searchParams } = new URL(req.url)
+    const typeId = searchParams.get('typeId') || undefined
     const categoryId = searchParams.get('categoryId') || undefined
     const colorId = searchParams.get('colorId') || undefined
     const sizeId = searchParams.get('sizeId') || undefined
@@ -82,9 +98,39 @@ export async function GET(
     const isFeatured = searchParams.get('isFeatured')
     const onlyNew = searchParams.get('onlyNew') || undefined
     const limit = Number(searchParams.get('limit'))
+    const sortOption = searchParams.get('sortOption') || 'default'
+    const priceRange = searchParams.get('priceRange') || undefined
     if (!params.storeId)
       return new NextResponse('Store ID is required', { status: 400 })
+    let categoriesIds: string[] = []
+    if (typeId) {
+      const categoriesForType = await prismadb.category.findMany({
+        where: {
+          typeId,
+          storeId: params.storeId
+        },
+        select: {
+          id: true
+        }
+      })
+      categoriesIds = categoriesForType.map((category) => category.id)
+    }
     let products
+    const sort: Record<SortOption, Record<string, 'asc' | 'desc'>> = {
+      default: { createdAt: 'desc' },
+      dateAdded: { createdAt: 'desc' },
+      priceLowToHigh: { price: 'asc' },
+      priceHighToLow: { price: 'desc' },
+      name: { name: 'asc' },
+      featuredFirst: { isFeatured: 'desc' }
+    }
+    const priceRanges = {
+      '[0,5000]': { gte: 0, lte: 5000 },
+      '[5000,10000]': { gte: 5000, lte: 10000 },
+      '[10000,20000]': { gte: 10000, lte: 20000 },
+      '[20000,50000]': { gte: 20000, lte: 50000 },
+      '[50000,99999999]': { gte: 50000 }
+    }
     if (onlyNew) {
       products = await prismadb.product.findMany({
         where: {
@@ -107,12 +153,15 @@ export async function GET(
       products = await prismadb.product.findMany({
         where: {
           storeId: params.storeId,
-          categoryId,
+          categoryId:
+            categoryId ||
+            (categoriesIds.length > 0 ? { in: categoriesIds } : undefined),
           colorId,
           sizeId,
           designId,
           isFeatured: isFeatured !== null ? isFeatured === 'true' : undefined,
-          isArchived: false
+          isArchived: false,
+          price: priceRange ? priceRanges[priceRange as PriceRanges] : undefined
         },
         include: {
           images: true,
@@ -121,9 +170,7 @@ export async function GET(
           design: true,
           size: true
         },
-        orderBy: {
-          createdAt: 'desc'
-        },
+        orderBy: sort[sortOption as SortOption],
         take: limit || undefined
       })
     }

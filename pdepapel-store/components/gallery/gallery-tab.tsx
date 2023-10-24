@@ -1,8 +1,8 @@
 "use client";
 
+import { TabsTrigger } from "@/components/ui/tabs";
 import { Image as ImageType } from "@/types";
 import Image from "next/image";
-import { TabsTrigger } from "../ui/tabs";
 
 interface GalleryTabProps {
   image: ImageType;

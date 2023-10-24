@@ -36,7 +36,10 @@ export async function GET(
     if (!params.storeId)
       return new NextResponse('Store ID is required', { status: 400 })
     const types = await prismadb.type.findMany({
-      where: { storeId: params.storeId }
+      where: { storeId: params.storeId },
+      include: {
+        categories: true
+      }
     })
     return NextResponse.json(types)
   } catch (error) {

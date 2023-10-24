@@ -1,9 +1,10 @@
 "use client";
 
+import Image from "next/image";
+
+import { GalleryTab } from "@/components/gallery/gallery-tab";
 import { Tabs, TabsContent, TabsList } from "@/components/ui/tabs";
 import { Image as ImageType } from "@/types";
-import Image from "next/image";
-import { GalleryTab } from "./gallery-tab";
 
 interface GalleryProps {
   images: ImageType[];
