@@ -74,14 +74,6 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
     <Container className="flex flex-col gap-y-8">
       <Features />
       <div className="lg:grid lg:grid-cols-5 lg:gap-x-8">
-        <MobileFilters
-          types={types}
-          categories={categories}
-          sizes={sizes}
-          colors={colors}
-          pricesRanges={prices}
-          designs={designs}
-        />
         <div className="hidden lg:block">
           <Filter
             valueKey="typeId"
@@ -120,13 +112,21 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
             data={prices}
           />
         </div>
-        <div className="mt-6 lg:col-span-4 lg:mt-0">
+        <div className="mt-6 space-y-5 lg:col-span-4 lg:mt-0 lg:space-y-0">
           <div className="mb-4 flex w-full items-center justify-between">
             <h2 className="font-serif text-3xl font-bold">
               Todos los productos
             </h2>
             <SortSelector options={sortOptions} />
           </div>
+          <MobileFilters
+            types={types}
+            categories={categories}
+            sizes={sizes}
+            colors={colors}
+            pricesRanges={prices}
+            designs={designs}
+          />
           {products.length === 0 && (
             <NoResults message={`No hay productos ${KAWAII_FACE_SAD}`} />
           )}
