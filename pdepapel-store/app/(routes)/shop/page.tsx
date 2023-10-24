@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import { getCategories } from "@/actions/get-categories";
 import { getColors } from "@/actions/get-colors";
 import { getDesigns } from "@/actions/get-designs";
@@ -6,6 +8,8 @@ import { getSizes } from "@/actions/get-sizes";
 import { getTypes } from "@/actions/get-types";
 import { Features } from "@/components/features";
 import { Filter } from "@/components/filter";
+import { Loader } from "@/components/loader";
+import { MobileFilters } from "@/components/mobile-filters";
 import { Container } from "@/components/ui/container";
 import { NoResults } from "@/components/ui/no-results";
 import { ProductCard } from "@/components/ui/product-card";
@@ -28,20 +32,22 @@ interface ShopPageProps {
 }
 
 export default async function ShopPage({ searchParams }: ShopPageProps) {
-  const products = await getProducts({
-    typeId: searchParams.typeId,
-    categoryId: searchParams.categoryId,
-    colorId: searchParams.colorId,
-    sizeId: searchParams.sizeId,
-    designId: searchParams.designId,
-    sortOption: searchParams.sortOption,
-    priceRange: searchParams.priceRange,
-  });
-  const types = await getTypes();
+  const [products, types, sizes, colors, designs] = await Promise.all([
+    getProducts({
+      typeId: searchParams.typeId,
+      categoryId: searchParams.categoryId,
+      colorId: searchParams.colorId,
+      sizeId: searchParams.sizeId,
+      designId: searchParams.designId,
+      sortOption: searchParams.sortOption,
+      priceRange: searchParams.priceRange,
+    }),
+    getTypes(),
+    getSizes(),
+    getColors(),
+    getDesigns(),
+  ]);
   let categories = await getCategories();
-  const sizes = await getSizes();
-  const colors = await getColors();
-  const designs = await getDesigns();
 
   const sortOptions = [
     { value: SortOptions.dateAdded, label: "Los más nuevos" },
@@ -67,9 +73,16 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
   return (
     <Container className="flex flex-col gap-y-8">
       <Features />
-      <div className="md:grid md:grid-cols-5 md:gap-x-8">
-        {/* Add Mobile Filters */}
-        <div className="hidden md:block">
+      <div className="lg:grid lg:grid-cols-5 lg:gap-x-8">
+        <MobileFilters
+          types={types}
+          categories={categories}
+          sizes={sizes}
+          colors={colors}
+          pricesRanges={prices}
+          designs={designs}
+        />
+        <div className="hidden lg:block">
           <Filter
             valueKey="typeId"
             name="Tipos"
@@ -107,7 +120,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
             data={prices}
           />
         </div>
-        <div className="mt-6 md:col-span-4 md:mt-0">
+        <div className="mt-6 lg:col-span-4 lg:mt-0">
           <div className="mb-4 flex w-full items-center justify-between">
             <h2 className="font-serif text-3xl font-bold">
               Todos los productos
@@ -117,13 +130,15 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
           {products.length === 0 && (
             <NoResults message={`No hay productos ${KAWAII_FACE_SAD}`} />
           )}
-          {!!products.length && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
-              {products.map((product) => (
-                <ProductCard key={product.id} product={product} />
-              ))}
-            </div>
-          )}
+          <Suspense fallback={<Loader />}>
+            {!!products.length && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {products.map((product) => (
+                  <ProductCard key={product.id} product={product} />
+                ))}
+              </div>
+            )}
+          </Suspense>
         </div>
       </div>
     </Container>

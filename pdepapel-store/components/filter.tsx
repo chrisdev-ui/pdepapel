@@ -55,22 +55,22 @@ export const Filter: React.FC<FilterProps> = ({
       <h3 className="font-serif text-lg font-semibold">{name}</h3>
       <Separator className="my-4" />
       <div className="flex flex-wrap gap-2">
-        {data.length === 0 && (
+        {data?.length === 0 && (
           <div className="flex items-center">{emptyMessage}</div>
         )}
-        {!!data.length &&
-          data.map((filter) => (
-            <div key={filter.id} className="flex items-center">
+        {!!data?.length &&
+          data?.map((filter) => (
+            <div key={filter?.id} className="flex items-center">
               <Button
                 className={cn(
                   "rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-800 hover:bg-blue-yankees hover:text-white",
                   {
-                    "bg-blue-yankees text-white": selectedValue === filter.id,
+                    "bg-blue-yankees text-white": selectedValue === filter?.id,
                   },
                 )}
-                onClick={() => handleSelected(filter.id)}
+                onClick={() => handleSelected(filter?.id)}
               >
-                {filter.name}
+                {filter?.name}
               </Button>
             </div>
           ))}
