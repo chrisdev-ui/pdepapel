@@ -8,7 +8,10 @@ export async function GET(
 ) {
   try {
     if (!params.bannerId)
-      return new NextResponse('Banner ID is required', { status: 400 })
+      return NextResponse.json(
+        { error: 'Banner ID is required' },
+        { status: 400 }
+      )
 
     const banner = await prismadb.banner.findUnique({
       where: { id: params.bannerId }
@@ -16,7 +19,7 @@ export async function GET(
     return NextResponse.json(banner)
   } catch (error) {
     console.log('[BANNER_GET]', error)
-    return new NextResponse('Internal Error', { status: 500 })
+    return NextResponse.json({ error: 'Internal Error' }, { status: 500 })
   }
 }
 
