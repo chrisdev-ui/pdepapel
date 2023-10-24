@@ -1,8 +1,10 @@
+import { ShoppingCart } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
 import { Currency } from "@/components/ui/currency";
 import { Separator } from "@/components/ui/separator";
+import { StarRating } from "@/components/ui/star-rating";
 import { Product } from "@/types";
-import { Button } from "./ui/button";
-import { StarRating } from "./ui/star-rating";
 
 interface InfoProps {
   data: Product;
@@ -39,7 +41,10 @@ export const Info: React.FC<InfoProps> = ({ data }) => {
         </div>
       </div>
       <div className="mt-10 flex items-center gap-x-3">
-        <Button>Agregar al carrito</Button>
+        <Button className="flex gap-2 rounded-full border-none bg-blue-yankees px-8 py-4 font-serif text-sm font-semibold text-white outline-none [transition:0.2s]">
+          Agregar al carrito
+          <ShoppingCart className="h-5 w-5" />
+        </Button>
       </div>
       {data?.description && (
         <>
