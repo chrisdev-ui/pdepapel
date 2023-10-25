@@ -1,20 +1,24 @@
 "use client";
+
 import { UserButton, useAuth } from "@clerk/nextjs";
 import { ShoppingBag } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { useEffect, useRef } from "react";
 
 import { HamburgerMenu } from "@/components/hamburger-menu";
 import { Icons } from "@/components/icons";
+import { NavbarCart } from "@/components/navbar-cart";
 import { NavigationLink } from "@/components/navigation-link";
 import { Button } from "@/components/ui/button";
+import { useCart } from "@/hooks/use-cart";
 import { useScrollPosition } from "@/hooks/use-scroll-position";
 import { cn } from "@/lib/utils";
-import { useEffect, useRef } from "react";
 
 export const Navbar: React.FC<{}> = () => {
   const { isSignedIn } = useAuth();
   const scrollPosition = useScrollPosition();
+  const cart = useCart();
   const navBarRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -67,12 +71,7 @@ export const Navbar: React.FC<{}> = () => {
             <Link href="#" className="hover:opacity-75">
               <Icons.heart className="h-6 w-6" />
             </Link>
-            <Button className="flex w-auto items-center rounded-full border-transparent bg-blue-yankees px-4 py-2 font-semibold text-white transition hover:opacity-75 disabled:cursor-not-allowed disabled:opacity-50">
-              <ShoppingBag className="h-5 w-5" />
-              <span className="ml-2 flex pt-1 font-serif text-base font-medium">
-                0
-              </span>
-            </Button>
+            <NavbarCart />
             {isSignedIn && (
               <UserButton afterSignOutUrl="/" userProfileMode="modal" />
             )}
