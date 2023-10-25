@@ -1,5 +1,4 @@
 "use client";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,7 +14,7 @@ import {
   LogIn,
   LogOut,
   Menu,
-  ShoppingBag,
+  ShoppingCart,
   Store,
 } from "lucide-react";
 import Link from "next/link";
@@ -40,30 +39,28 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem className="flex w-full px-6 py-3 text-xl hover:bg-green-leaf hover:text-white">
-          <Link className="flex items-center gap-6" href="/">
+          <Link className="flex items-center gap-6" href="/shop">
             <Store className="h-6 w-6" />
             Tienda
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem className="flex w-full px-6 py-3 text-xl hover:bg-green-leaf hover:text-white">
-          <Link className="flex items-center gap-6" href="/">
+          <Link className="flex items-center gap-6" href="/about">
             <Info className="h-6 w-6" />
             Nosotros
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem className="flex w-full px-6 py-3 text-xl hover:bg-green-leaf hover:text-white">
-          <Link className="flex items-center gap-6" href="/">
+          <Link className="flex items-center gap-6" href="/contact">
             <Contact className="h-6 w-6" />
             Contacto
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem className="xs:hidden flex w-full px-6 py-3 text-xl hover:bg-green-leaf hover:text-white">
-          <Button className="mr-6 flex w-auto items-center self-center rounded-full border-transparent bg-blue-yankees px-4 py-2 font-semibold text-white transition hover:opacity-75 disabled:cursor-not-allowed disabled:opacity-50">
-            <ShoppingBag className="h-5 w-5" />
-            <span className="ml-2 flex pt-1 font-serif text-base font-medium">
-              0
-            </span>
-          </Button>
+        <DropdownMenuItem className="flex w-full px-6 py-3 text-xl hover:bg-green-leaf hover:text-white xs:hidden">
+          <Link className="flex items-center gap-6" href="/cart">
+            <ShoppingCart className="h-6 w-6" />
+            Carrito
+          </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         {isUserLoggedIn && (

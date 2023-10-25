@@ -1,7 +1,6 @@
 "use client";
 
 import { UserButton, useAuth } from "@clerk/nextjs";
-import { ShoppingBag } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef } from "react";
@@ -10,7 +9,6 @@ import { HamburgerMenu } from "@/components/hamburger-menu";
 import { Icons } from "@/components/icons";
 import { NavbarCart } from "@/components/navbar-cart";
 import { NavigationLink } from "@/components/navigation-link";
-import { Button } from "@/components/ui/button";
 import { useCart } from "@/hooks/use-cart";
 import { useScrollPosition } from "@/hooks/use-scroll-position";
 import { cn } from "@/lib/utils";
@@ -83,12 +81,7 @@ export const Navbar: React.FC<{}> = () => {
           </div>
         </div>
         {/* Responsive navbar */}
-        <Button className="mr-6 hidden w-auto items-center self-center rounded-full border-transparent bg-blue-yankees px-4 py-2 font-semibold text-white transition hover:opacity-75 disabled:cursor-not-allowed disabled:opacity-50 xs:flex lg:hidden">
-          <ShoppingBag className="h-5 w-5" />
-          <span className="ml-2 flex pt-1 font-serif text-base font-medium">
-            0
-          </span>
-        </Button>
+        <NavbarCart className="mr-4 hidden self-center xs:flex lg:hidden" />
         <HamburgerMenu isUserLoggedIn={!!isSignedIn} />
       </nav>
     </header>

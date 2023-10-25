@@ -17,8 +17,13 @@ import {
 } from "@/components/ui/sheet";
 import { KAWAII_FACE_SAD } from "@/constants";
 import { useCart } from "@/hooks/use-cart";
+import { cn } from "@/lib/utils";
 
-export const NavbarCart: React.FC<{}> = () => {
+interface NavbarCartProps {
+  className?: string;
+}
+
+export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
   const cart = useCart();
   const [isMounted, setIsMounted] = useState(false);
 
@@ -42,7 +47,12 @@ export const NavbarCart: React.FC<{}> = () => {
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <Button className="flex w-auto items-center rounded-full border-transparent bg-blue-yankees px-4 py-2 font-semibold text-white transition hover:opacity-75 disabled:cursor-not-allowed disabled:opacity-50">
+        <Button
+          className={cn(
+            "flex w-auto items-center rounded-full border-transparent bg-blue-yankees px-4 py-2 font-semibold text-white transition hover:opacity-75 disabled:cursor-not-allowed disabled:opacity-50",
+            className,
+          )}
+        >
           <ShoppingBag className="h-5 w-5" />
           <span className="ml-2 flex pt-1 font-serif text-base font-medium">
             {cart.items.length}
