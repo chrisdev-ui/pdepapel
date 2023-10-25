@@ -73,8 +73,8 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
 
   return (
     <>
+      <Features />
       <Container className="flex flex-col gap-y-8">
-        <Features />
         <div className="lg:grid lg:grid-cols-5 lg:gap-x-8">
           <div className="hidden lg:block">
             <Filter
@@ -134,7 +134,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
             )}
             <Suspense fallback={<Loader />}>
               {!!products.length && (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-2 gap-1 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
                   {products.map((product) => (
                     <ProductCard key={product.id} product={product} />
                   ))}

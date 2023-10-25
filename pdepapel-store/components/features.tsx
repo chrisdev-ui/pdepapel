@@ -1,5 +1,9 @@
+"use client";
+
 import { Icons } from "@/components/icons";
 import { Container } from "@/components/ui/container";
+import { DELAY } from "@/constants";
+import { useEffect, useRef, useState } from "react";
 
 interface Feature {
   title: string;
@@ -36,9 +40,57 @@ const features: Feature[] = [
 ];
 
 export const Features: React.FC<{}> = () => {
+  const [index, setIndex] = useState(0);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const resetTimeout = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+  };
+
+  useEffect(() => {
+    resetTimeout();
+    timeoutRef.current = setTimeout(
+      () =>
+        setIndex((prevIndex) =>
+          prevIndex === features?.length - 1 ? 0 : prevIndex + 1,
+        ),
+      DELAY,
+    );
+    return () => {
+      resetTimeout();
+    };
+  }, [index]);
+
   return (
     <Container>
-      <div className="flex w-full flex-wrap items-center justify-between gap-y-6 sm:gap-y-0">
+      <div className="mx-auto my-0 overflow-hidden rounded-xl p-4 sm:p-6 lg:hidden lg:p-8">
+        <div className="overflow-hidden">
+          <div
+            className="whitespace-nowrap"
+            style={{
+              transform: `translate3d(${-index * 100}%, 0, 0)`,
+              transition: "ease 1000ms",
+            }}
+          >
+            {features.map(({ title, description, icon }, idx) => (
+              <div key={title} className="relative inline-block w-full">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="flex items-start justify-center">{icon}</div>
+                  <div className="flex flex-col gap-2">
+                    <span className="text-center font-serif text-sm font-semibold">
+                      {title}
+                    </span>
+                    <span className="text-left text-xs">{description}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="hidden w-full flex-wrap items-center justify-between gap-y-6 sm:gap-y-0 lg:flex">
         {features.map(({ title, description, icon }, index) => (
           <div
             key={title}

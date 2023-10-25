@@ -16,7 +16,7 @@ export const NewBadge: React.FC<NewBadgeProps> = ({
   return (
     <div
       className={cn(
-        "absolute -right-0 -top-4 h-40 w-40 overflow-hidden",
+        "absolute -right-0 -top-4 h-28 w-28 overflow-hidden md:h-40 md:w-40",
         containerClasses,
       )}
     >
@@ -26,7 +26,9 @@ export const NewBadge: React.FC<NewBadgeProps> = ({
           spanClasses,
         )}
       >
-        <span className={cn("animate-pulse", textClasses)}>{text}</span>
+        <span className={cn("mr-10 animate-pulse md:mr-0", textClasses)}>
+          {text}
+        </span>
       </span>
     </div>
   );

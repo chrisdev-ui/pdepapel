@@ -27,7 +27,7 @@ export const NewArrivals: React.FC<NewArrivalsProps> = ({ newProducts }) => {
         {newProducts.length === 0 ? (
           <NoResults message={`No hay productos nuevos ${KAWAII_FACE_SAD}`} />
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-1 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
             {newProducts.map((product) => (
               <ProductCard key={product.id} product={product} isNew />
             ))}
