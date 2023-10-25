@@ -100,6 +100,7 @@ export async function GET(
     const limit = Number(searchParams.get('limit'))
     const sortOption = searchParams.get('sortOption') || 'default'
     const priceRange = searchParams.get('priceRange') || undefined
+    const excludeProducts = searchParams.get('excludeProducts') || undefined
     if (!params.storeId)
       return new NextResponse('Store ID is required', { status: 400 })
     let categoriesIds: string[] = []
@@ -161,7 +162,12 @@ export async function GET(
           designId,
           isFeatured: isFeatured !== null ? isFeatured === 'true' : undefined,
           isArchived: false,
-          price: priceRange ? priceRanges[priceRange as PriceRanges] : undefined
+          price: priceRange
+            ? priceRanges[priceRange as PriceRanges]
+            : undefined,
+          NOT: {
+            id: excludeProducts ? { in: excludeProducts.split(',') } : undefined
+          }
         },
         include: {
           images: true,

@@ -1,5 +1,6 @@
 import { Footer } from "@/components/footer";
 import { Navbar } from "@/components/navbar";
+import { ModalProvider } from "@/providers/moda-provider";
 import { esES } from "@clerk/localizations";
 import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
@@ -64,6 +65,7 @@ export default function RootLayout({
         <body
           className={`${caudex.variable} ${comingSoon.variable} ${martelSans.variable}`}
         >
+          <ModalProvider />
           <Navbar />
           {children}
           <Footer />

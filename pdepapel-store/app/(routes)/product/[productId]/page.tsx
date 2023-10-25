@@ -17,6 +17,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
   const product = await getProduct(params.productId);
   const suggestedProducts = await getProducts({
     categoryId: product?.category?.id,
+    excludeProducts: params.productId,
     limit: 4,
   });
   return (

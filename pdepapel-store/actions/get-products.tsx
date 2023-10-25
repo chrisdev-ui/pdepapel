@@ -14,6 +14,7 @@ interface Query {
   limit?: number;
   sortOption?: string;
   priceRange?: string;
+  excludeProducts?: string;
 }
 
 export const getProducts = async (query: Query): Promise<Product[]> => {
@@ -30,6 +31,7 @@ export const getProducts = async (query: Query): Promise<Product[]> => {
       limit: query.limit,
       sortOption: query.sortOption,
       priceRange: query.priceRange,
+      excludeProducts: query.excludeProducts,
     },
   });
 

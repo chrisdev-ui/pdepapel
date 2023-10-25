@@ -8,9 +8,10 @@ import { Product } from "@/types";
 
 interface InfoProps {
   data: Product;
+  showDescription?: boolean;
 }
 
-export const Info: React.FC<InfoProps> = ({ data }) => {
+export const Info: React.FC<InfoProps> = ({ data, showDescription = true }) => {
   return (
     <div>
       <h1 className="font-serif text-3xl font-bold">{data?.name}</h1>
@@ -46,7 +47,7 @@ export const Info: React.FC<InfoProps> = ({ data }) => {
           <ShoppingCart className="h-5 w-5" />
         </Button>
       </div>
-      {data?.description && (
+      {showDescription && data?.description && (
         <>
           <Separator className="my-4" />
           <div className="flex flex-col items-start">
