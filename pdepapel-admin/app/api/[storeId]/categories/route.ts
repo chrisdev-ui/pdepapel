@@ -10,22 +10,35 @@ export async function POST(
     const { userId } = auth()
     const body = await req.json()
     const { name, typeId } = body
-    if (!userId) return new NextResponse('Unauthenticated', { status: 401 })
-    if (!name) return new NextResponse('Name is required', { status: 400 })
-    if (!typeId) return new NextResponse('Type ID is required', { status: 400 })
+    if (!userId)
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    if (!name)
+      return NextResponse.json({ error: 'Name is required' }, { status: 400 })
+    if (!typeId)
+      return NextResponse.json(
+        { error: 'Type ID is required' },
+        { status: 400 }
+      )
     if (!params.storeId)
-      return new NextResponse('Store ID is required', { status: 400 })
+      return NextResponse.json(
+        { error: 'Store ID is required' },
+        { status: 400 }
+      )
     const storeByUserId = await prismadb.store.findFirst({
       where: { id: params.storeId, userId }
     })
-    if (!storeByUserId) return new NextResponse('Unauthorized', { status: 403 })
+    if (!storeByUserId)
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
     const category = await prismadb.category.create({
       data: { name, typeId, storeId: params.storeId }
     })
     return NextResponse.json(category)
   } catch (error) {
     console.log('[CATEGORIES_POST]', error)
-    return new NextResponse('Internal Server Error', { status: 500 })
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    )
   }
 }
 
@@ -35,13 +48,19 @@ export async function GET(
 ) {
   try {
     if (!params.storeId)
-      return new NextResponse('Store ID is required', { status: 400 })
+      return NextResponse.json(
+        { error: 'Store ID is required' },
+        { status: 400 }
+      )
     const categories = await prismadb.category.findMany({
       where: { storeId: params.storeId }
     })
     return NextResponse.json(categories)
   } catch (error) {
     console.log('[CATEGORIES_GET]', error)
-    return new NextResponse('Internal Server Error', { status: 500 })
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    )
   }
 }

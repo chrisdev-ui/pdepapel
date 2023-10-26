@@ -10,10 +10,15 @@ export async function PATCH(
     const { userId } = auth()
     const body = await req.json()
     const { name } = body
-    if (!userId) return new NextResponse('Unauthenticated', { status: 401 })
-    if (!name) return new NextResponse('Name is required', { status: 400 })
+    if (!userId)
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    if (!name)
+      return NextResponse.json({ error: 'Name is required' }, { status: 400 })
     if (!params.storeId)
-      return new NextResponse('Store ID is required', { status: 400 })
+      return NextResponse.json(
+        { error: 'Store ID is required' },
+        { status: 400 }
+      )
     const store = await prismadb.store.updateMany({
       where: { id: params.storeId, userId },
       data: {
@@ -23,7 +28,7 @@ export async function PATCH(
     return NextResponse.json(store)
   } catch (error) {
     console.log('[STORE_PATCH]', error)
-    return new NextResponse('Internal Error', { status: 500 })
+    return NextResponse.json({ error: 'Internal Error' }, { status: 500 })
   }
 }
 
@@ -33,16 +38,20 @@ export async function DELETE(
 ) {
   try {
     const { userId } = auth()
-    if (!userId) return new NextResponse('Unauthenticated', { status: 401 })
+    if (!userId)
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
 
     if (!params.storeId)
-      return new NextResponse('Store ID is required', { status: 400 })
+      return NextResponse.json(
+        { error: 'Store ID is required' },
+        { status: 400 }
+      )
     const store = await prismadb.store.deleteMany({
       where: { id: params.storeId, userId }
     })
     return NextResponse.json(store)
   } catch (error) {
     console.log('[STORE_DELETE]', error)
-    return new NextResponse('Internal Error', { status: 500 })
+    return NextResponse.json({ error: 'Internal Error' }, { status: 500 })
   }
 }

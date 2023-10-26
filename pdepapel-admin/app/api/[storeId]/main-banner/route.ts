@@ -10,18 +10,29 @@ export async function POST(
     const { userId } = auth()
     const body = await req.json()
     const { title, label1, label2, highlight, callToAction, imageUrl } = body
-    if (!userId) return new NextResponse('Unauthenticated', { status: 401 })
+    if (!userId)
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
     if (!imageUrl)
-      return new NextResponse('Image URL is required', { status: 400 })
+      return NextResponse.json(
+        { error: 'Image URL is required' },
+        { status: 400 }
+      )
     if (!callToAction) {
-      return new NextResponse('Call to action is required', { status: 400 })
+      return NextResponse.json(
+        { error: 'Call to action is required' },
+        { status: 400 }
+      )
     }
     if (!params.storeId)
-      return new NextResponse('Store ID is required', { status: 400 })
+      return NextResponse.json(
+        { error: 'Store ID is required' },
+        { status: 400 }
+      )
     const storeByUserId = await prismadb.store.findFirst({
       where: { id: params.storeId, userId }
     })
-    if (!storeByUserId) return new NextResponse('Unauthorized', { status: 403 })
+    if (!storeByUserId)
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
     const mainBanner = await prismadb.mainBanner.create({
       data: {
         title,
@@ -36,7 +47,10 @@ export async function POST(
     return NextResponse.json(mainBanner)
   } catch (error) {
     console.log('[MAIN_BANNERS_POST]', error)
-    return new NextResponse('Internal Server Error', { status: 500 })
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    )
   }
 }
 
@@ -46,13 +60,19 @@ export async function GET(
 ) {
   try {
     if (!params.storeId)
-      return new NextResponse('Store ID is required', { status: 400 })
+      return NextResponse.json(
+        { error: 'Store ID is required' },
+        { status: 400 }
+      )
     const mainBanner = await prismadb.mainBanner.findFirst({
       where: { storeId: params.storeId }
     })
     return NextResponse.json(mainBanner)
   } catch (error) {
     console.log('[MAIN_BANNERS_GET]', error)
-    return new NextResponse('Internal Server Error', { status: 500 })
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    )
   }
 }

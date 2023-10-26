@@ -37,26 +37,52 @@ export async function POST(
       isArchived,
       isFeatured
     } = body
-    if (!userId) return new NextResponse('Unauthenticated', { status: 401 })
-    if (!name) return new NextResponse('Name is required', { status: 400 })
+    if (!userId)
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    if (!name)
+      return NextResponse.json({ error: 'Name is required' }, { status: 400 })
     if (!images || !images.length)
-      return new NextResponse('Images are required', { status: 400 })
-    if (!price) return new NextResponse('Price is required', { status: 400 })
+      return NextResponse.json(
+        { error: 'Images are required' },
+        { status: 400 }
+      )
+    if (!price)
+      return NextResponse.json({ error: 'Price is required' }, { status: 400 })
     if (!categoryId)
-      return new NextResponse('Category ID is required', { status: 400 })
-    if (!sizeId) return new NextResponse('Size ID is required', { status: 400 })
+      return NextResponse.json(
+        { error: 'Category ID is required' },
+        { status: 400 }
+      )
+    if (!sizeId)
+      return NextResponse.json(
+        { error: 'Size ID is required' },
+        { status: 400 }
+      )
     if (!colorId)
-      return new NextResponse('Color ID is required', { status: 400 })
+      return NextResponse.json(
+        { error: 'Color ID is required' },
+        { status: 400 }
+      )
     if (!designId)
-      return new NextResponse('Design ID is required', { status: 400 })
+      return NextResponse.json(
+        { error: 'Design ID is required' },
+        { status: 400 }
+      )
     if (!stock)
-      return new NextResponse('Stock must be greater than 0', { status: 400 })
+      return NextResponse.json(
+        { error: 'Stock must be greater than 0' },
+        { status: 400 }
+      )
     if (!params.storeId)
-      return new NextResponse('Store ID is required', { status: 400 })
+      return NextResponse.json(
+        { error: 'Store ID is required' },
+        { status: 400 }
+      )
     const storeByUserId = await prismadb.store.findFirst({
       where: { id: params.storeId, userId }
     })
-    if (!storeByUserId) return new NextResponse('Unauthorized', { status: 403 })
+    if (!storeByUserId)
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
     const product = await prismadb.product.create({
       data: {
         name,
@@ -80,7 +106,10 @@ export async function POST(
     return NextResponse.json(product)
   } catch (error) {
     console.log('[PRODUCTS_POST]', error)
-    return new NextResponse('Internal Server Error', { status: 500 })
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    )
   }
 }
 
@@ -102,7 +131,10 @@ export async function GET(
     const priceRange = searchParams.get('priceRange') || undefined
     const excludeProducts = searchParams.get('excludeProducts') || undefined
     if (!params.storeId)
-      return new NextResponse('Store ID is required', { status: 400 })
+      return NextResponse.json(
+        { error: 'Store ID is required' },
+        { status: 400 }
+      )
     let categoriesIds: string[] = []
     if (typeId) {
       const categoriesForType = await prismadb.category.findMany({
@@ -183,6 +215,9 @@ export async function GET(
     return NextResponse.json(products)
   } catch (error) {
     console.log('[PRODUCTS_GET]', error)
-    return new NextResponse('Internal Server Error', { status: 500 })
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    )
   }
 }
