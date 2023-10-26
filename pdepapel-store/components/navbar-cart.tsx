@@ -18,6 +18,7 @@ import {
 import { KAWAII_FACE_SAD } from "@/constants";
 import { useCart } from "@/hooks/use-cart";
 import { cn } from "@/lib/utils";
+import { useRouter } from "next/navigation";
 
 interface NavbarCartProps {
   className?: string;
@@ -25,7 +26,9 @@ interface NavbarCartProps {
 
 export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
   const cart = useCart();
+  const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -39,13 +42,18 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
     cart.removeItem(productId);
   };
 
+  const onGoToCart = () => {
+    setIsSheetOpen(false);
+    router.push("/cart");
+  };
+
   const totalPrice = cart.items.reduce(
     (total, item) => total + Number(item.price),
     0,
   );
 
   return (
-    <Sheet>
+    <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
       <SheetTrigger asChild>
         <Button
           className={cn(
@@ -125,7 +133,10 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
             <Currency value={totalPrice} />
           </div>
           <div className="flex w-full flex-col gap-3 lg:flex-row">
-            <Button className="group relative w-full overflow-hidden bg-green-leaf font-serif text-base font-bold uppercase text-white hover:bg-green-leaf lg:w-1/2">
+            <Button
+              className="group relative w-full overflow-hidden bg-green-leaf font-serif text-base font-bold uppercase text-white hover:bg-green-leaf lg:w-1/2"
+              onClick={onGoToCart}
+            >
               <ShoppingCart className="absolute left-0 h-5 w-5 -translate-x-full transform transition-transform duration-500 ease-out group-hover:translate-x-20" />
               <span className="group-hover:hidden">Ver Carrito</span>
             </Button>
