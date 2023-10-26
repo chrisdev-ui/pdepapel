@@ -110,6 +110,14 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
                 </div>
               ))}
           </div>
+          {cart.items.length > 0 && (
+            <Button
+              className="w-fit self-center bg-gray-400/30 p-2 text-gray-500/60 hover:bg-gray-400 hover:text-gray-500"
+              onClick={() => cart.removeAll()}
+            >
+              Limpiar carrito
+            </Button>
+          )}
         </div>
         <SheetFooter className="grid w-full grid-cols-1 grid-rows-2 gap-6 border-t border-green-leaf p-6 sm:space-x-0">
           <div className="flex w-full items-center justify-between text-2xl">

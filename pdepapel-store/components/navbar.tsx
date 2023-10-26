@@ -38,7 +38,7 @@ export const Navbar: React.FC<{}> = () => {
           className={cn(
             "flex w-full items-center px-5 py-3 transition-[padding] duration-300 lg:py-6 xl:px-12",
             {
-              "lg:p-0": scrollPosition > 120,
+              "lg:py-0": scrollPosition > 120,
             },
           )}
         >
