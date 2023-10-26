@@ -4,14 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Currency } from "@/components/ui/currency";
 import { useCart } from "@/hooks/use-cart";
 import { useToast } from "@/hooks/use-toast";
+import axios from "axios";
 import { CreditCard } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 export const Summary: React.FC<{}> = () => {
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const items = useCart((state) => state.items);
+  const [isLoading, setIsLoading] = useState(false);
   const removeAll = useCart((state) => state.removeAll);
 
   useEffect(() => {
@@ -35,7 +37,27 @@ export const Summary: React.FC<{}> = () => {
     0,
   );
 
-  const onCheckout = () => {};
+  const onCheckout = async () => {
+    try {
+      setIsLoading(true);
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL}/checkout`,
+        {
+          productIds: items.map((item) => item.id),
+        },
+      );
+      window.location = response.data.url;
+    } catch (error) {
+      setIsLoading(false);
+      console.log("[CHECKOUT_ERROR]", error);
+      toast({
+        description: "Ups! Algo ha ido mal, por favor inténtalo de nuevo.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="mt-16 rounded-lg bg-white-rock/20 px-4 py-6 sm:p-6 lg:col-span-5 lg:mt-0 lg:p-8">
@@ -48,7 +70,7 @@ export const Summary: React.FC<{}> = () => {
       </div>
       <Button
         onClick={onCheckout}
-        disabled={items.length === 0}
+        disabled={items.length === 0 || isLoading}
         className="group relative mt-6 w-full overflow-hidden rounded-full bg-blue-yankees font-serif text-base font-bold uppercase text-white hover:bg-blue-yankees"
       >
         <CreditCard className="absolute left-0 h-5 w-5 -translate-x-full transform transition-transform duration-500 ease-out group-hover:translate-x-64" />
