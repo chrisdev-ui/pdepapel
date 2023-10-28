@@ -29,11 +29,10 @@ export default async function OrdersPage({
 
   const formattedOrders: OrderColumn[] = orders.map((order) => ({
     id: order.id,
+    orderNumber: order.orderNumber,
     phone: order.phone,
     address: order.address,
-    products: order.orderItems
-      .map((orderItem) => orderItem.product.name)
-      .join(', '),
+    products: order.orderItems.map((orderItem) => orderItem.product.name),
     totalPrice: formatter.format(
       order.orderItems.reduce(
         (total, orderItem) => total + Number(orderItem.product.price),

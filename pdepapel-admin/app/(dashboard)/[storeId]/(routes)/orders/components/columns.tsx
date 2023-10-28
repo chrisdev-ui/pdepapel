@@ -2,22 +2,29 @@
 
 import { ColumnDef } from '@tanstack/react-table'
 import { CellAction } from './cell-action'
+import { ProductList } from './product-list'
 
 export type OrderColumn = {
   id: string
+  orderNumber: string
   phone: string
   address: string
   isPaid: boolean
   isDelivered: boolean
   totalPrice: string
-  products: string
+  products: string[]
   createdAt: string
 }
 
 export const columns: ColumnDef<OrderColumn>[] = [
   {
+    accessorKey: 'orderNumber',
+    header: 'Número de orden'
+  },
+  {
     accessorKey: 'products',
-    header: 'Productos'
+    header: 'Productos',
+    cell: ({ row }) => <ProductList products={row.getValue('products')} />
   },
   {
     accessorKey: 'phone',
@@ -38,6 +45,10 @@ export const columns: ColumnDef<OrderColumn>[] = [
   {
     accessorKey: 'isDelivered',
     header: 'Estado de la entrega'
+  },
+  {
+    accessorKey: 'createdAt',
+    header: 'Fecha de creación'
   },
   {
     id: 'actions',

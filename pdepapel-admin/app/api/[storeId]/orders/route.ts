@@ -34,8 +34,10 @@ export async function POST(
     })
     if (!storeByUserId)
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+    const orderNumber = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`
     const order = await prismadb.order.create({
       data: {
+        orderNumber,
         phone,
         address,
         isDelivered,

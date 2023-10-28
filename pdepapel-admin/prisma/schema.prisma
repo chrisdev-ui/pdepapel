@@ -147,6 +147,7 @@ model Image {
 
 model Order {
   id          String      @id @default(uuid())
+  orderNumber String      @unique
   storeId     String
   store       Store       @relation("StoreToOrder", fields: [storeId], references: [id])
   orderItems  OrderItem[]

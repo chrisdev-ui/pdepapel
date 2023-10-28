@@ -28,10 +28,10 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
 
-  const onCopy = (id: string) => {
+  const onCopy = (id: string, message: string) => {
     navigator.clipboard.writeText(id)
     toast({
-      description: 'ID de la orden copiado al portapapeles',
+      description: message,
       variant: 'success'
     })
   }
@@ -74,9 +74,24 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-          <DropdownMenuItem onClick={() => onCopy(data.id)}>
+          <DropdownMenuItem
+            onClick={() =>
+              onCopy(data.id, 'ID de la orden copiada la portapapeles')
+            }
+          >
             <Copy className="mr-2 h-4 w-4" />
             Copiar ID
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() =>
+              onCopy(
+                data.orderNumber,
+                'Número de la orden copiado al portapapeles'
+              )
+            }
+          >
+            <Copy className="mr-2 h-4 w-4" />
+            Copiar Número de orden
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => router.push(`/${params.storeId}/orders/${data.id}`)}
