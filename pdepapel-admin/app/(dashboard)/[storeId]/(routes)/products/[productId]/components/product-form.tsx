@@ -8,6 +8,7 @@ import z from 'zod'
 import { AlertModal } from '@/components/modals/alert-modal'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { DataTable } from '@/components/ui/data-table'
 import {
   Form,
   FormControl,
@@ -42,6 +43,7 @@ import {
 import axios from 'axios'
 import { useParams, useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { ReviewColumn, columns } from './columns'
 
 const formSchema = z.object({
   name: z.string().min(1, 'El nombre del producto no puede estar vacío'),
@@ -69,6 +71,7 @@ interface ProductFormProps {
   sizes: Size[]
   colors: Color[]
   designs: Design[]
+  reviews?: ReviewColumn[]
 }
 
 export const ProductForm: React.FC<ProductFormProps> = ({
@@ -76,7 +79,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   categories,
   sizes,
   colors,
-  designs
+  designs,
+  reviews
 }) => {
   const params = useParams()
   const router = useRouter()
@@ -504,6 +508,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
           </Button>
         </form>
       </Form>
+      <Separator />
+      <Heading title="Reseñas" description="Reseñas de este producto" />
+      <Separator />
+      <DataTable searchKey="userId" columns={columns} data={reviews ?? []} />
     </>
   )
 }

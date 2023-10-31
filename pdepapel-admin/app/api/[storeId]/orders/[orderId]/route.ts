@@ -6,15 +6,20 @@ export async function GET(
   _req: Request,
   { params }: { params: { orderId: string } }
 ) {
+  if (!params.orderId)
+    return NextResponse.json({ error: 'Order ID is required' }, { status: 400 })
   try {
-    if (!params.orderId)
-      return NextResponse.json(
-        { error: 'Order ID is required' },
-        { status: 400 }
-      )
-
     const order = await prismadb.order.findUnique({
-      where: { id: params.orderId }
+      where: { id: params.orderId },
+      include: {
+        orderItems: {
+          include: {
+            product: true
+          }
+        },
+        payment: true,
+        shipping: true
+      }
     })
     return NextResponse.json(order)
   } catch (error) {
@@ -27,12 +32,32 @@ export async function PATCH(
   req: Request,
   { params }: { params: { storeId: string; orderId: string } }
 ) {
+  const { userId } = auth()
+  if (!userId)
+    return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+  if (!params.orderId)
+    return NextResponse.json({ error: 'Order ID is required' }, { status: 400 })
   try {
-    const { userId } = auth()
     const body = await req.json()
-    const { phone, address, isPaid, isDelivered, orderItems: productIds } = body
-    if (!userId)
-      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    const {
+      fullName,
+      phone,
+      address,
+      orderItems: productIds,
+      status,
+      payment,
+      shipping
+    } = body
+    const storeByUserId = await prismadb.store.findFirst({
+      where: { id: params.storeId, userId }
+    })
+    if (!storeByUserId)
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+    if (!fullName)
+      return NextResponse.json(
+        { error: 'Full name is required' },
+        { status: 400 }
+      )
     if (!phone)
       return NextResponse.json({ error: 'Phone is required' }, { status: 400 })
     if (!address)
@@ -45,34 +70,39 @@ export async function PATCH(
         { error: 'Order items are required' },
         { status: 400 }
       )
-    if (!params.orderId)
-      return NextResponse.json(
-        { error: 'Order ID is required' },
-        { status: 400 }
-      )
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId }
-    })
-    if (!storeByUserId)
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
-    // Delete related order items first
-    await prismadb.orderItem.deleteMany({
-      where: { orderId: params.orderId }
-    })
-    const order = await prismadb.order.update({
-      where: { id: params.orderId },
-      data: {
-        phone,
-        address,
-        isDelivered,
-        isPaid,
-        orderItems: {
-          create: productIds.map((productId: string) => ({
-            product: { connect: { id: productId } }
-          }))
-        }
+    const orderUpdateData = {
+      fullName,
+      phone,
+      address,
+      orderItems: {
+        create: productIds.map((productId: string) => ({
+          product: { connect: { id: productId } }
+        }))
+      },
+      ...(status && { status })
+    }
+
+    if (payment && Object.keys(payment).length > 0) {
+      orderUpdateData.payment = {
+        update: payment
       }
-    })
+    }
+
+    if (shipping && Object.keys(shipping).length > 0) {
+      orderUpdateData.shipping = {
+        update: shipping
+      }
+    }
+    // Delete related order items first
+    const [_, order] = await prismadb.$transaction([
+      prismadb.orderItem.deleteMany({
+        where: { orderId: params.orderId }
+      }),
+      prismadb.order.update({
+        where: { id: params.orderId },
+        data: orderUpdateData
+      })
+    ])
     return NextResponse.json(order)
   } catch (error) {
     console.log('[ORDER_PATCH]', error)
@@ -84,22 +114,19 @@ export async function DELETE(
   _req: Request,
   { params }: { params: { storeId: string; orderId: string } }
 ) {
-  try {
-    const { userId } = auth()
-    if (!userId)
-      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+  const { userId } = auth()
+  if (!userId)
+    return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
 
-    if (!params.orderId)
-      return NextResponse.json(
-        { error: 'Order ID is required' },
-        { status: 400 }
-      )
+  if (!params.orderId)
+    return NextResponse.json({ error: 'Order ID is required' }, { status: 400 })
+  try {
     const storeByUserId = await prismadb.store.findFirst({
       where: { id: params.storeId, userId }
     })
     if (!storeByUserId)
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
-    const order = await prismadb.order.deleteMany({
+    const order = await prismadb.order.delete({
       where: { id: params.orderId }
     })
     return NextResponse.json(order)

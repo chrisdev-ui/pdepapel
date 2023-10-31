@@ -8,6 +8,28 @@ generator client {
   provider = "prisma-client-js"
 }
 
+enum OrderStatus {
+  CREATED
+  PENDING
+  PAID
+  CANCELLED
+}
+
+enum PaymentMethod {
+  COD
+  Stripe
+  BankTransfer
+  Bancolombia
+}
+
+enum ShippingStatus {
+  Preparing
+  Shipped
+  InTransit
+  Delivered
+  Returned
+}
+
 model Store {
   id          String      @id @default(uuid())
   name        String
@@ -22,6 +44,9 @@ model Store {
   orders      Order[]     @relation("StoreToOrder")
   mainBanner  MainBanner? @relation("StoreToMainBanner")
   banners     Banner[]    @relation("StoreToBanner")
+  reviews     Review[]    @relation("StoreToReview")
+  shippings   Shipping[]  @relation("StoreToShipping")
+  payments    PaymentDetails[] @relation("StoreToPaymentDetails")
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 }
@@ -112,7 +137,6 @@ model Product {
   name        String
   description String      @db.Text
   stock       Int
-  ratings     Float       @default(0)
   price       Float
   isFeatured  Boolean     @default(false)
   isArchived  Boolean     @default(false)
@@ -124,6 +148,8 @@ model Product {
   design      Design      @relation(fields: [designId], references: [id])
   images      Image[]
   orderItems  OrderItem[]
+  reviews     Review[]
+  sku         String      @unique
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
@@ -150,9 +176,11 @@ model Order {
   orderNumber String      @unique
   storeId     String
   store       Store       @relation("StoreToOrder", fields: [storeId], references: [id])
+  status      OrderStatus @default(CREATED)
   orderItems  OrderItem[]
-  isPaid      Boolean     @default(false)
-  isDelivered Boolean     @default(false)
+  shipping    Shipping?   
+  payment     PaymentDetails?
+  fullName    String      @default("")
   phone       String      @default("")
   address     String      @default("")
   createdAt   DateTime    @default(now())
@@ -167,6 +195,7 @@ model OrderItem {
   order       Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
   productId   String
   product     Product     @relation(fields: [productId], references: [id])
+  quantity    Int
 
   @@index([orderId])
   @@index([productId])
@@ -197,6 +226,54 @@ model Banner {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
+  @@index([storeId])
+}
+
+model Review {
+  id          String      @id @default(uuid())
+  storeId     String
+  store       Store       @relation("StoreToReview", fields: [storeId], references: [id])
+  productId   String
+  product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId      String
+  rating      Float
+  comment     String?     @db.Text
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([productId])
+  @@index([storeId])
+}
+
+model Shipping {
+  id            String          @id @default(uuid())
+  storeId       String
+  store         Store           @relation("StoreToShipping", fields: [storeId], references: [id])
+  orderId       String          @unique
+  order         Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status        ShippingStatus  @default(Preparing)
+  courier       String?
+  cost          Float?
+  trackingCode  String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([orderId])
+  @@index([storeId])
+}
+
+model PaymentDetails {
+  id            String          @id @default(uuid())
+  storeId       String
+  store         Store           @relation("StoreToPaymentDetails", fields: [storeId], references: [id])
+  orderId       String          @unique
+  order         Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  method        PaymentMethod   @default(BankTransfer)         
+  transactionId String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([orderId])
   @@index([storeId])
 }
 

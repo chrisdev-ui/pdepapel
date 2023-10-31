@@ -20,7 +20,9 @@ export default async function OrdersPage({
         include: {
           product: true
         }
-      }
+      },
+      shipping: true,
+      payment: true
     },
     orderBy: {
       createdAt: 'desc'
@@ -30,6 +32,7 @@ export default async function OrdersPage({
   const formattedOrders: OrderColumn[] = orders.map((order) => ({
     id: order.id,
     orderNumber: order.orderNumber,
+    fullname: order.fullName,
     phone: order.phone,
     address: order.address,
     products: order.orderItems.map((orderItem) => orderItem.product.name),
@@ -39,8 +42,8 @@ export default async function OrdersPage({
         0
       )
     ),
-    isPaid: order.isPaid,
-    isDelivered: order.isDelivered,
+    status: order.status,
+    shippingStatus: order?.shipping?.status,
     createdAt: format(order.createdAt, 'MMMM d, yyyy')
   }))
 

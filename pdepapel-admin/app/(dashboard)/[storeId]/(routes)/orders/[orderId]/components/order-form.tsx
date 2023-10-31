@@ -1,6 +1,13 @@
 'use client'
 
-import { Order } from '@prisma/client'
+import {
+  Order,
+  OrderStatus,
+  PaymentDetails,
+  PaymentMethod,
+  Shipping,
+  ShippingStatus
+} from '@prisma/client'
 import { useParams, useRouter } from 'next/navigation'
 import { useState } from 'react'
 import z from 'zod'
@@ -8,11 +15,9 @@ import z from 'zod'
 import { AlertModal } from '@/components/modals/alert-modal'
 import { AutoComplete } from '@/components/ui/autocomplete'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -20,15 +25,39 @@ import {
 } from '@/components/ui/form'
 import { Heading } from '@/components/ui/heading'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { useToast } from '@/hooks/use-toast'
 import { formatter } from '@/lib/utils'
 import { zodResolver } from '@hookform/resolvers/zod'
 import axios from 'axios'
-import { Trash } from 'lucide-react'
+import { DollarSign, Trash } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 
+const paymentSchema = z
+  .object({
+    method: z.nativeEnum(PaymentMethod),
+    transactionId: z.string()
+  })
+  .partial()
+
+const shippingSchema = z
+  .object({
+    status: z.nativeEnum(ShippingStatus),
+    courier: z.string(),
+    cost: z.coerce.number(),
+    trackingCode: z.string()
+  })
+  .partial()
+
 const formSchema = z.object({
+  fullName: z.string().min(1, 'Debes agregar un nombre'),
   phone: z
     .string()
     .min(10, 'El número telefónico debe tener 10 dígitos')
@@ -37,8 +66,9 @@ const formSchema = z.object({
   orderItems: z
     .array(z.string())
     .nonempty({ message: 'Debes agregar al menos 1 producto' }),
-  isPaid: z.boolean().default(false).optional(),
-  isDelivered: z.boolean().default(false).optional()
+  status: z.nativeEnum(OrderStatus),
+  payment: paymentSchema,
+  shipping: shippingSchema
 })
 
 type OrderFormValues = z.infer<typeof formSchema>
@@ -59,6 +89,8 @@ interface OrderFormProps {
   initialData:
     | (Order & {
         orderItems: OrderItem[]
+        payment: PaymentDetails | null
+        shipping: Shipping | null
       })
     | null
   products: ProductOption[]
@@ -95,6 +127,28 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   )
   const [loading, setLoading] = useState(false)
 
+  const statusOptions = {
+    [OrderStatus.CREATED]: 'Creada',
+    [OrderStatus.PENDING]: 'Pendiente',
+    [OrderStatus.PAID]: 'Pagada',
+    [OrderStatus.CANCELLED]: 'Cancelada'
+  }
+
+  const paymentOptions = {
+    [PaymentMethod.BankTransfer]: 'Transferencia bancaria',
+    [PaymentMethod.COD]: 'Contra entrega',
+    [PaymentMethod.Stripe]: 'Tarjeta de crédito o débito',
+    [PaymentMethod.Bancolombia]: 'Bancolombia'
+  }
+
+  const shippingOptions = {
+    [ShippingStatus.Preparing]: 'En preparación',
+    [ShippingStatus.Shipped]: 'Enviada',
+    [ShippingStatus.InTransit]: 'En tránsito',
+    [ShippingStatus.Delivered]: 'Entregada',
+    [ShippingStatus.Returned]: 'Devuelta'
+  }
+
   const title = initialData ? 'Editar orden' : 'Crear orden'
   const description = initialData ? 'Editar una orden' : 'Crear una nueva orden'
   const toastMessage = initialData ? 'Orden actualizada' : 'Orden creada'
@@ -102,18 +156,29 @@ export const OrderForm: React.FC<OrderFormProps> = ({
 
   const form = useForm<OrderFormValues>({
     resolver: zodResolver(formSchema),
-    mode: 'onChange',
     defaultValues: initialData
       ? {
           ...initialData,
-          orderItems: initialData.orderItems.map((item) => item.productId)
+          orderItems: initialData.orderItems.map((item) => item.productId),
+          payment: {
+            ...initialData.payment,
+            transactionId: initialData.payment?.transactionId || undefined
+          },
+          shipping: {
+            ...initialData.shipping,
+            courier: initialData.shipping?.courier || undefined,
+            trackingCode: initialData.shipping?.trackingCode || undefined,
+            cost: initialData.shipping?.cost || undefined
+          }
         }
       : {
+          fullName: '',
           orderItems: [],
           phone: '',
           address: '',
-          isPaid: false,
-          isDelivered: false
+          status: OrderStatus.CREATED,
+          payment: {},
+          shipping: {}
         }
   })
 
@@ -194,6 +259,9 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           onSubmit={form.handleSubmit(onSubmit)}
           className="space-y-8 w-full"
         >
+          <h2 className="text-lg font-semibold">
+            Orden # {initialData?.orderNumber}
+          </h2>
           <div className="flex w-full items-start gap-2">
             {productsSelected.length > 0 &&
               productsSelected.map((product) => (
@@ -243,6 +311,23 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             />
             <FormField
               control={form.control}
+              name="fullName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Nombre</FormLabel>
+                  <FormControl>
+                    <Input
+                      disabled={loading}
+                      placeholder="Nombre completo"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="phone"
               render={({ field }) => (
                 <FormItem>
@@ -277,41 +362,182 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             />
             <FormField
               control={form.control}
-              name="isPaid"
+              name="status"
               render={({ field }) => (
-                <FormItem className="flex items-start space-x-3 space-y-0 rounded-md border p-4 h-fit mt-auto">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel>Estado del pago</FormLabel>
-                    <FormDescription>
-                      Marca la casilla si el pago ya fue realizado
-                    </FormDescription>
-                  </div>
+                <FormItem>
+                  <FormLabel>Estado de la orden</FormLabel>
+                  <Select
+                    disabled={loading}
+                    onValueChange={field.onChange}
+                    value={field.value}
+                    defaultValue={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue
+                          defaultValue={field.value}
+                          placeholder="Selecciona un estado para la orden"
+                        />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {Object.values(OrderStatus).map((state) => (
+                        <SelectItem key={state} value={state}>
+                          {statusOptions[state]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+          <Separator />
+          <h2 className="text-lg font-semibold">
+            Estado del pago # {initialData?.payment?.id}
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-8">
+            <FormField
+              control={form.control}
+              name="payment.method"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Método de pago</FormLabel>
+                  <Select
+                    disabled={loading}
+                    onValueChange={field.onChange}
+                    value={field.value}
+                    defaultValue={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue
+                          defaultValue={field.value}
+                          placeholder="Selecciona un método de pago"
+                        />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {Object.values(PaymentMethod).map((state) => (
+                        <SelectItem key={state} value={state}>
+                          {paymentOptions[state]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
                 </FormItem>
               )}
             />
             <FormField
               control={form.control}
-              name="isDelivered"
+              name="payment.transactionId"
               render={({ field }) => (
-                <FormItem className="flex items-start space-x-3 space-y-0 rounded-md border p-4 h-fit mt-auto">
+                <FormItem>
+                  <FormLabel>Número de la transacción</FormLabel>
                   <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
+                    <Input
+                      disabled={loading}
+                      placeholder="Número de la transacción (opcional)"
+                      {...field}
                     />
                   </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel>Estado del envio</FormLabel>
-                    <FormDescription>
-                      Marca la casilla si el envio ya fue realizado
-                    </FormDescription>
-                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+          <Separator />
+          <h2 className="text-lg font-semibold">
+            Estado del envío # {initialData?.shipping?.id}
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-8">
+            <FormField
+              control={form.control}
+              name="shipping.status"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Estado del envío</FormLabel>
+                  <Select
+                    disabled={loading}
+                    onValueChange={field.onChange}
+                    value={field.value}
+                    defaultValue={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue
+                          defaultValue={field.value}
+                          placeholder="Selecciona un estado para el envío"
+                        />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {Object.values(ShippingStatus).map((state) => (
+                        <SelectItem key={state} value={state}>
+                          {shippingOptions[state]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="shipping.courier"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Nombre de la transportadora</FormLabel>
+                  <FormControl>
+                    <Input
+                      disabled={loading}
+                      placeholder="Empresa (opcional)"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="shipping.cost"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Costo</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <DollarSign className="h-4 w-4 absolute left-3 top-3" />
+                      <Input
+                        type="number"
+                        disabled={loading}
+                        placeholder="10000 (opcional)"
+                        className="pl-8"
+                        {...field}
+                      />
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="shipping.trackingCode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Número de guía</FormLabel>
+                  <FormControl>
+                    <Input
+                      disabled={loading}
+                      placeholder="Guía (opcional)"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
                 </FormItem>
               )}
             />

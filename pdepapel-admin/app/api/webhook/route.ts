@@ -1,5 +1,6 @@
 import prismadb from '@/lib/prismadb'
 import { stripe } from '@/lib/stripe'
+import { OrderStatus, PaymentMethod, ShippingStatus } from '@prisma/client'
 import { headers } from 'next/headers'
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
@@ -38,32 +39,86 @@ export async function POST(req: Request) {
   const addressString = addressComponents.filter((a) => a !== null).join(', ')
 
   if (event.type === 'checkout.session.completed') {
-    const order = await prismadb.order.update({
-      where: {
-        id: session?.metadata?.orderId
-      },
-      data: {
-        isPaid: true,
-        address: addressString,
-        phone: session?.customer_details?.phone || ''
-      },
-      include: {
-        orderItems: true
-      }
-    })
-
-    const productIds = order.orderItems?.map((orderItem) => orderItem.productId)
-
-    await prismadb.product.updateMany({
-      where: {
-        id: {
-          in: [...productIds]
+    const [order] = await prismadb.$transaction([
+      prismadb.order.update({
+        where: {
+          id: session?.metadata?.orderId
+        },
+        data: {
+          fullName:
+            session?.customer_details?.name ||
+            session?.customer_details?.email ||
+            '',
+          address: addressString,
+          phone: session?.customer_details?.phone || '',
+          status: OrderStatus.PAID
+        },
+        include: {
+          orderItems: true
         }
-      },
-      data: {
-        isArchived: true
-      }
-    })
+      })
+    ])
+
+    const orderItems = order.orderItems || []
+
+    await prismadb.$transaction([
+      ...orderItems.map((orderItem) =>
+        prismadb.product.update({
+          where: {
+            id: orderItem.productId
+          },
+          data: {
+            stock: {
+              decrement: orderItem.quantity
+            }
+          }
+        })
+      ),
+      prismadb.paymentDetails.upsert({
+        where: {
+          orderId: order.id
+        },
+        update: {
+          method: PaymentMethod.Stripe,
+          transactionId: session?.payment_intent?.toString() || ''
+        },
+        create: {
+          method: PaymentMethod.Stripe,
+          transactionId: session?.payment_intent?.toString() || '',
+          store: {
+            connect: {
+              id: order.storeId
+            }
+          },
+          order: {
+            connect: {
+              id: order.id
+            }
+          }
+        }
+      }),
+      prismadb.shipping.upsert({
+        where: {
+          orderId: order.id
+        },
+        update: {
+          status: ShippingStatus.Preparing
+        },
+        create: {
+          status: ShippingStatus.Preparing,
+          store: {
+            connect: {
+              id: order.storeId
+            }
+          },
+          order: {
+            connect: {
+              id: order.id
+            }
+          }
+        }
+      })
+    ])
   }
 
   return NextResponse.json(null, { status: 200 })

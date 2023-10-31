@@ -28,6 +28,7 @@ export default async function ProductsPage({
 
   const formattedProducts: ProductColumn[] = products.map((product) => ({
     id: product.id,
+    sku: product.sku,
     name: product.name,
     isFeatured: product.isFeatured,
     isArchived: product.isArchived,

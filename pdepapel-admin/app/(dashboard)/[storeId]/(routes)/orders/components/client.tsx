@@ -29,7 +29,7 @@ export const OrderClient = ({ data }: OrderClientProps) => {
         </Button>
       </div>
       <Separator />
-      <DataTable searchKey="products" columns={columns} data={data} />
+      <DataTable searchKey="orderNumber" columns={columns} data={data} />
       <Heading title="API" description="API calls para las órdenes" />
       <Separator />
       <ApiList entityName="orders" entityIdName="orderId" />

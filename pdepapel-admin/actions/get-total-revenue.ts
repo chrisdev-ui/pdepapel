@@ -1,10 +1,11 @@
 import prismadb from '@/lib/prismadb'
+import { OrderStatus } from '@prisma/client'
 
 export const getTotalRevenue = async (storeId: string) => {
   const paidOrders = await prismadb.order.findMany({
     where: {
       storeId,
-      isPaid: true
+      status: OrderStatus.PAID
     },
     include: {
       orderItems: {

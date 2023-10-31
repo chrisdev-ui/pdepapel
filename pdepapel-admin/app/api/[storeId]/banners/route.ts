@@ -6,33 +6,30 @@ export async function POST(
   req: Request,
   { params }: { params: { storeId: string } }
 ) {
+  const { userId } = auth()
+  if (!userId)
+    return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+  if (!params.storeId)
+    return NextResponse.json({ error: 'Store ID is required' }, { status: 400 })
   try {
-    const { userId } = auth()
     const body = await req.json()
     const { callToAction, imageUrl } = body
-    if (!userId)
-      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
-    if (!imageUrl)
-      return NextResponse.json(
-        { error: 'Image URL is required' },
-        { status: 400 }
-      )
-    if (!callToAction) {
-      return NextResponse.json(
-        { error: 'Call to action is required' },
-        { status: 400 }
-      )
-    }
-    if (!params.storeId)
-      return NextResponse.json(
-        { error: 'Store ID is required' },
-        { status: 400 }
-      )
     const storeByUserId = await prismadb.store.findFirst({
       where: { id: params.storeId, userId }
     })
     if (!storeByUserId)
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+    if (!imageUrl)
+      return NextResponse.json(
+        { error: 'Image URL is required' },
+        { status: 400 }
+      )
+    if (!callToAction)
+      return NextResponse.json(
+        { error: 'Call to action is required' },
+        { status: 400 }
+      )
+
     const banner = await prismadb.banner.create({
       data: {
         callToAction,
@@ -54,12 +51,9 @@ export async function GET(
   req: Request,
   { params }: { params: { storeId: string } }
 ) {
+  if (!params.storeId)
+    return NextResponse.json({ error: 'Store ID is required' }, { status: 400 })
   try {
-    if (!params.storeId)
-      return NextResponse.json(
-        { error: 'Store ID is required' },
-        { status: 400 }
-      )
     const banners = await prismadb.banner.findMany({
       where: { storeId: params.storeId }
     })

@@ -11,7 +11,9 @@ export default async function OrderPage({
       id: params.orderId
     },
     include: {
-      orderItems: true
+      orderItems: true,
+      payment: true,
+      shipping: true
     }
   })
   const products = await prismadb.product.findMany({

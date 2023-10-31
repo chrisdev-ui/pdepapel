@@ -31,7 +31,7 @@ export const BillboardClient = ({ data }: BillboardClientProps) => {
         </Button>
       </div>
       <Separator />
-      <DataTable searchKey="name" columns={columns} data={data} />
+      <DataTable searchKey="label" columns={columns} data={data} />
       <Heading title="API" description="API calls para las publicaciones" />
       <Separator />
       <ApiList entityName="billboards" entityIdName="billboardId" />

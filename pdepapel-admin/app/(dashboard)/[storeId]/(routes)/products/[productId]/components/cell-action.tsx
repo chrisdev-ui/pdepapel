@@ -11,13 +11,13 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useToast } from '@/hooks/use-toast'
 import axios from 'axios'
-import { Copy, Edit, MoreHorizontal, Trash } from 'lucide-react'
+import { Copy, MoreHorizontal, Trash } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { ProductColumn } from './columns'
+import { ReviewColumn } from './columns'
 
 interface CellActionProps {
-  data: ProductColumn
+  data: ReviewColumn
 }
 
 export const CellAction: React.FC<CellActionProps> = ({ data }) => {
@@ -27,12 +27,10 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
 
-  const onCopy = (id: string, isSku = false) => {
-    navigator.clipboard.writeText(id)
+  const onCopy = (property: string, message: string) => {
+    navigator.clipboard.writeText(property)
     toast({
-      description: isSku
-        ? 'SKU del producto copiado al portapapeles'
-        : 'ID del producto copiado al portapapeles',
+      description: message,
       variant: 'success'
     })
   }
@@ -40,10 +38,12 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const onDelete = async () => {
     try {
       setLoading(true)
-      await axios.delete(`/api/${params.storeId}/products/${data.id}`)
+      await axios.delete(
+        `/api/${params.storeId}/products/${params.productId}/reviews/${data.id}`
+      )
       router.refresh()
       toast({
-        description: 'Producto eliminado',
+        description: 'Reseña eliminada',
         variant: 'success'
       })
     } catch (error) {
@@ -75,21 +75,21 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-          <DropdownMenuItem onClick={() => onCopy(data.id)}>
+          <DropdownMenuItem
+            onClick={() =>
+              onCopy(data.id, 'ID de la reseña copiada al portapapeles')
+            }
+          >
             <Copy className="mr-2 h-4 w-4" />
             Copiar ID
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onCopy(data.sku, true)}>
-            <Copy className="mr-2 h-4 w-4" />
-            Copiar SKU
-          </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() =>
-              router.push(`/${params.storeId}/products/${data.id}`)
+              onCopy(data.userId, 'ID del usuario copiado al portapapeles')
             }
           >
-            <Edit className="mr-2 h-4 w-4" />
-            Actualizar
+            <Copy className="mr-2 h-4 w-4" />
+            Copiar UserID
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setOpen(true)}>
             <Trash className="mr-2 h-4 w-4" />

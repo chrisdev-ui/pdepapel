@@ -1,4 +1,6 @@
 import prismadb from '@/lib/prismadb'
+import { format } from 'date-fns'
+import { ReviewColumn } from './components/columns'
 import { ProductForm } from './components/product-form'
 
 export default async function ProductPage({
@@ -11,7 +13,8 @@ export default async function ProductPage({
       id: params.productId
     },
     include: {
-      images: true
+      images: true,
+      reviews: true
     }
   })
   const categories = await prismadb.category.findMany({
@@ -38,6 +41,16 @@ export default async function ProductPage({
     }
   })
 
+  const formattedReviews: ReviewColumn[] =
+    product?.reviews.map((review) => ({
+      id: review.id,
+      productId: review.productId,
+      userId: review.userId,
+      rating: String(review.rating),
+      comment: review.comment || '',
+      createdAt: format(product.createdAt, 'MMMM d, yyyy')
+    })) || []
+
   return (
     <div className="flex-col">
       <div className="flex-1 space-y-4 p-8 pt-6">
@@ -47,6 +60,7 @@ export default async function ProductPage({
           colors={colors}
           designs={designs}
           initialData={product}
+          reviews={formattedReviews}
         />
       </div>
     </div>

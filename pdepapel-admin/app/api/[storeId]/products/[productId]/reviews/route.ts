@@ -4,36 +4,35 @@ import { NextResponse } from 'next/server'
 
 export async function POST(
   req: Request,
-  { params }: { params: { storeId: string } }
+  { params }: { params: { storeId: string; productId: string } }
 ) {
   const { userId } = auth()
   if (!userId)
     return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
   if (!params.storeId)
     return NextResponse.json({ error: 'Store ID is required' }, { status: 400 })
+  if (!params.productId)
+    return NextResponse.json(
+      { error: 'Product ID is required' },
+      { status: 400 }
+    )
   try {
     const body = await req.json()
-    const { label, imageUrl } = body
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId }
-    })
-    if (!storeByUserId)
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
-    if (!imageUrl)
-      return NextResponse.json(
-        { error: 'Image URL is required' },
-        { status: 400 }
-      )
-    const billboard = await prismadb.billboard.create({
+    const { rating, comment } = body
+    if (!rating)
+      return NextResponse.json({ error: 'Rating is required' }, { status: 400 })
+    const review = await prismadb.review.create({
       data: {
-        label: label ?? '',
-        imageUrl,
-        storeId: params.storeId
+        userId,
+        storeId: params.storeId,
+        productId: params.productId,
+        rating,
+        comment: comment ?? ''
       }
     })
-    return NextResponse.json(billboard)
+    return NextResponse.json(review)
   } catch (error) {
-    console.log('[BILLBOARDS_POST]', error)
+    console.log('[REVIEWS_POST]', error)
     return NextResponse.json(
       { error: 'Internal Server Error' },
       { status: 500 }
@@ -43,17 +42,17 @@ export async function POST(
 
 export async function GET(
   req: Request,
-  { params }: { params: { storeId: string } }
+  { params }: { params: { storeId: string; productId: string } }
 ) {
   if (!params.storeId)
     return NextResponse.json({ error: 'Store ID is required' }, { status: 400 })
   try {
-    const billboards = await prismadb.billboard.findMany({
-      where: { storeId: params.storeId }
+    const reviews = await prismadb.review.findMany({
+      where: { storeId: params.storeId, productId: params.productId }
     })
-    return NextResponse.json(billboards)
+    return NextResponse.json(reviews)
   } catch (error) {
-    console.log('[BILLBOARDS_GET]', error)
+    console.log('[REVIEWS_GET]', error)
     return NextResponse.json(
       { error: 'Internal Server Error' },
       { status: 500 }

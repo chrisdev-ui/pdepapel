@@ -1,4 +1,6 @@
+import cloudinaryInstance from '@/lib/cloudinary'
 import prismadb from '@/lib/prismadb'
+import { getPublicIdFromCloudinaryUrl } from '@/lib/utils'
 import { auth } from '@clerk/nextjs'
 import { NextResponse } from 'next/server'
 
@@ -6,13 +8,12 @@ export async function GET(
   _req: Request,
   { params }: { params: { productId: string } }
 ) {
+  if (!params.productId)
+    return NextResponse.json(
+      { error: 'Product ID is required' },
+      { status: 400 }
+    )
   try {
-    if (!params.productId)
-      return NextResponse.json(
-        { error: 'Product ID is required' },
-        { status: 400 }
-      )
-
     const product = await prismadb.product.findUnique({
       where: { id: params.productId },
       include: {
@@ -34,8 +35,15 @@ export async function PATCH(
   req: Request,
   { params }: { params: { storeId: string; productId: string } }
 ) {
+  const { userId } = auth()
+  if (!userId)
+    return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+  if (!params.productId)
+    return NextResponse.json(
+      { error: 'Product ID is required' },
+      { status: 400 }
+    )
   try {
-    const { userId } = auth()
     const body = await req.json()
     const {
       name,
@@ -46,13 +54,15 @@ export async function PATCH(
       designId,
       description,
       stock,
-      ratings,
       images,
       isArchived,
       isFeatured
     } = body
-    if (!userId)
-      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    const storeByUserId = await prismadb.store.findFirst({
+      where: { id: params.storeId, userId }
+    })
+    if (!storeByUserId)
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
     if (!name)
       return NextResponse.json({ error: 'Name is required' }, { status: 400 })
     if (!images || !images.length)
@@ -87,47 +97,56 @@ export async function PATCH(
         { error: 'Stock must be greater than 0' },
         { status: 400 }
       )
-    if (!params.productId)
-      return NextResponse.json(
-        { error: 'Product ID is required' },
-        { status: 400 }
-      )
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId }
-    })
-    if (!storeByUserId)
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
-    await prismadb.product.update({
+    const productToUpdate = await prismadb.product.findUnique({
       where: { id: params.productId },
-      data: {
-        name,
-        price,
-        categoryId,
-        colorId,
-        sizeId,
-        designId,
-        isArchived,
-        isFeatured,
-        stock,
-        ratings,
-        description,
-        images: {
-          deleteMany: {}
-        }
-      }
+      include: { images: true }
     })
-
-    const product = await prismadb.product.update({
-      where: { id: params.productId },
-      data: {
-        images: {
-          createMany: {
-            data: [...images.map((image: { url: string }) => image)]
+    if (!productToUpdate)
+      return NextResponse.json({ error: 'Product not found' }, { status: 404 })
+    const currentImageUrls = productToUpdate.images.map((image) => image.url)
+    const newImageUrls = images.map((image: { url: string }) => image.url)
+    const imagesToDelete = currentImageUrls.filter(
+      (url) => !newImageUrls.includes(url)
+    )
+    const publicIds = imagesToDelete.map(
+      (url) => getPublicIdFromCloudinaryUrl(url) ?? ''
+    )
+    if (publicIds.length)
+      await cloudinaryInstance.v2.api.delete_resources(publicIds, {
+        type: 'upload',
+        resource_type: 'image'
+      })
+    const [_, updatedProduct] = await prismadb.$transaction([
+      prismadb.product.update({
+        where: { id: params.productId },
+        data: {
+          name,
+          price,
+          categoryId,
+          colorId,
+          sizeId,
+          designId,
+          isArchived,
+          isFeatured,
+          stock,
+          description,
+          images: {
+            deleteMany: {}
           }
         }
-      }
-    })
-    return NextResponse.json(product)
+      }),
+      prismadb.product.update({
+        where: { id: params.productId },
+        data: {
+          images: {
+            createMany: {
+              data: [...images.map((image: { url: string }) => image)]
+            }
+          }
+        }
+      })
+    ])
+    return NextResponse.json(updatedProduct)
   } catch (error) {
     console.log('[PRODUCT_PATCH]', error)
     return NextResponse.json({ error: 'Internal Error' }, { status: 500 })
@@ -138,25 +157,38 @@ export async function DELETE(
   _req: Request,
   { params }: { params: { storeId: string; productId: string } }
 ) {
-  try {
-    const { userId } = auth()
-    if (!userId)
-      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+  const { userId } = auth()
+  if (!userId)
+    return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
 
-    if (!params.productId)
-      return NextResponse.json(
-        { error: 'Product ID is required' },
-        { status: 400 }
-      )
+  if (!params.productId)
+    return NextResponse.json(
+      { error: 'Product ID is required' },
+      { status: 400 }
+    )
+  try {
     const storeByUserId = await prismadb.store.findFirst({
       where: { id: params.storeId, userId }
     })
     if (!storeByUserId)
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
-    const product = await prismadb.product.deleteMany({
+    const productToDelete = await prismadb.product.findUnique({
+      where: { id: params.productId },
+      include: { images: true }
+    })
+    if (!productToDelete)
+      return NextResponse.json({ error: 'Product not found' }, { status: 404 })
+    const publicIds = productToDelete.images.map(
+      (image) => getPublicIdFromCloudinaryUrl(image.url) ?? ''
+    )
+    await cloudinaryInstance.v2.api.delete_resources(publicIds, {
+      type: 'upload',
+      resource_type: 'image'
+    })
+    const deletedProduct = await prismadb.product.deleteMany({
       where: { id: params.productId }
     })
-    return NextResponse.json(product)
+    return NextResponse.json(deletedProduct)
   } catch (error) {
     console.log('[PRODUCT_DELETE]', error)
     return NextResponse.json({ error: 'Internal Error' }, { status: 500 })
