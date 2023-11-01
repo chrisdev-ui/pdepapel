@@ -1,5 +1,6 @@
 'use client'
 
+import { DataTableColumnHeader } from '@/components/ui/data-table-column-header'
 import { ColumnDef } from '@tanstack/react-table'
 import { CellAction } from './cell-action'
 
@@ -24,15 +25,21 @@ export type MainBannerColumn = {
 export const bannerColumns: ColumnDef<BannerColumn>[] = [
   {
     accessorKey: 'callToAction',
-    header: 'URL de redirección'
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="URL de redirección" />
+    )
   },
   {
     accessorKey: 'imageUrl',
-    header: 'Dirección de la imagen'
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Dirección de la imágen" />
+    )
   },
   {
     accessorKey: 'createdAt',
-    header: 'Fecha de creación'
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Fecha de creación" />
+    )
   },
   {
     id: 'actions',
@@ -43,31 +50,45 @@ export const bannerColumns: ColumnDef<BannerColumn>[] = [
 export const mainBannerColumns: ColumnDef<MainBannerColumn>[] = [
   {
     accessorKey: 'title',
-    header: 'Título'
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Título" />
+    )
   },
   {
     accessorKey: 'label1',
-    header: 'Párrafo 1'
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Párrafo 1" />
+    )
   },
   {
     accessorKey: 'highlight',
-    header: 'Subrayado'
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Subrayado" />
+    )
   },
   {
     accessorKey: 'label2',
-    header: 'Párrafo 2'
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Párrafo 2" />
+    )
   },
   {
     accessorKey: 'callToAction',
-    header: 'URL de redirección'
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="URL de redirección" />
+    )
   },
   {
     accessorKey: 'imageUrl',
-    header: 'Dirección de la imagen'
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Dirección de la imágen" />
+    )
   },
   {
     accessorKey: 'createdAt',
-    header: 'Fecha de creación'
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Fecha de creación" />
+    )
   },
   {
     id: 'actions',

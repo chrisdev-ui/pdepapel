@@ -1,6 +1,7 @@
 'use client'
 
 import { Badge } from '@/components/ui/badge'
+import { DataTableColumnHeader } from '@/components/ui/data-table-column-header'
 import { ColumnDef } from '@tanstack/react-table'
 import { CellAction } from './cell-action'
 
@@ -22,27 +23,39 @@ export type ProductColumn = {
 export const columns: ColumnDef<ProductColumn>[] = [
   {
     accessorKey: 'sku',
-    header: 'SKU'
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="SKU" />
+    )
   },
   {
     accessorKey: 'name',
-    header: 'Nombre'
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Nombre" />
+    )
   },
   {
     accessorKey: 'price',
-    header: 'Precio'
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Precio" />
+    )
   },
   {
     accessorKey: 'category',
-    header: 'Categoría'
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Categoría" />
+    )
   },
   {
     accessorKey: 'size',
-    header: 'Tamaño'
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Tamaño" />
+    )
   },
   {
     accessorKey: 'color',
-    header: 'Color',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Color" />
+    ),
     cell: ({ row }) => (
       <div className="flex items-center gap-x-2">
         {row.original.color}
@@ -55,15 +68,21 @@ export const columns: ColumnDef<ProductColumn>[] = [
   },
   {
     accessorKey: 'stock',
-    header: 'Cantidad'
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Stock" />
+    )
   },
   {
     accessorKey: 'design',
-    header: 'Diseño'
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Diseño" />
+    )
   },
   {
     accessorKey: 'isArchived',
-    header: 'Archivado',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Archivado" />
+    ),
     cell: ({ row }) => (
       <Badge variant={row.original.isArchived ? 'destructive' : 'success'}>
         {row.original.isArchived ? 'Sí' : 'No'}
@@ -72,7 +91,9 @@ export const columns: ColumnDef<ProductColumn>[] = [
   },
   {
     accessorKey: 'isFeatured',
-    header: 'Destacado',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Destacado" />
+    ),
     cell: ({ row }) => (
       <Badge variant={row.original.isFeatured ? 'success' : 'outline'}>
         {row.original.isFeatured ? 'Sí' : 'No'}
@@ -81,7 +102,9 @@ export const columns: ColumnDef<ProductColumn>[] = [
   },
   {
     accessorKey: 'createdAt',
-    header: 'Fecha de creación'
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Fecha de creación" />
+    )
   },
   {
     id: 'actions',

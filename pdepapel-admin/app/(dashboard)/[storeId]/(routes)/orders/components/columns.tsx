@@ -1,6 +1,7 @@
 'use client'
 
 import { Badge } from '@/components/ui/badge'
+import { DataTableColumnHeader } from '@/components/ui/data-table-column-header'
 import { OrderStatus, ShippingStatus } from '@prisma/client'
 import { ColumnDef } from '@tanstack/react-table'
 import { CellAction } from './cell-action'
@@ -22,7 +23,9 @@ export type OrderColumn = {
 export const columns: ColumnDef<OrderColumn>[] = [
   {
     accessorKey: 'orderNumber',
-    header: 'Número de orden'
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Número de orden" />
+    )
   },
   {
     accessorKey: 'products',
@@ -31,19 +34,27 @@ export const columns: ColumnDef<OrderColumn>[] = [
   },
   {
     accessorKey: 'phone',
-    header: 'Teléfono'
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Teléfono" />
+    )
   },
   {
     accessorKey: 'address',
-    header: 'Dirección'
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Dirección" />
+    )
   },
   {
     accessorKey: 'totalPrice',
-    header: 'Precio Total'
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Precio total" />
+    )
   },
   {
     accessorKey: 'status',
-    header: 'Estado de la orden',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Estado de la orden" />
+    ),
     cell: ({ row }) => {
       const status = row.getValue('status') as OrderStatus | undefined
       if (!status) return null
@@ -73,7 +84,9 @@ export const columns: ColumnDef<OrderColumn>[] = [
   },
   {
     accessorKey: 'shippingStatus',
-    header: 'Estado del envío',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Estado del envío" />
+    ),
     cell: ({ row }) => {
       const status = row.getValue('shippingStatus') as
         | ShippingStatus
@@ -121,7 +134,9 @@ export const columns: ColumnDef<OrderColumn>[] = [
   },
   {
     accessorKey: 'createdAt',
-    header: 'Fecha de creación'
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Fecha de creación" />
+    )
   },
   {
     id: 'actions',

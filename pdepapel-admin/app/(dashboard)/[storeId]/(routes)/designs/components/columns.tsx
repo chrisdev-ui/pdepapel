@@ -1,5 +1,6 @@
 'use client'
 
+import { DataTableColumnHeader } from '@/components/ui/data-table-column-header'
 import { ColumnDef } from '@tanstack/react-table'
 import { CellAction } from './cell-action'
 
@@ -12,11 +13,15 @@ export type DesignColumn = {
 export const columns: ColumnDef<DesignColumn>[] = [
   {
     accessorKey: 'name',
-    header: 'Nombre'
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Nombre" />
+    )
   },
   {
     accessorKey: 'createdAt',
-    header: 'Fecha de creación'
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Fecha de creación" />
+    )
   },
   {
     id: 'actions',
