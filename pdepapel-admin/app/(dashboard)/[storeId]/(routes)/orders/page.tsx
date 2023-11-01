@@ -38,7 +38,8 @@ export default async function OrdersPage({
     products: order.orderItems.map((orderItem) => orderItem.product.name),
     totalPrice: formatter.format(
       order.orderItems.reduce(
-        (total, orderItem) => total + Number(orderItem.product.price),
+        (total, orderItem) =>
+          total + Number(orderItem.product.price) * orderItem.quantity,
         0
       )
     ),

@@ -2,6 +2,7 @@
 
 import {
   Order,
+  OrderItem,
   OrderStatus,
   PaymentDetails,
   PaymentMethod,
@@ -13,6 +14,7 @@ import { useState } from 'react'
 import z from 'zod'
 
 import { AlertModal } from '@/components/modals/alert-modal'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { AutoComplete } from '@/components/ui/autocomplete'
 import { Button } from '@/components/ui/button'
 import {
@@ -37,7 +39,7 @@ import { useToast } from '@/hooks/use-toast'
 import { formatter } from '@/lib/utils'
 import { zodResolver } from '@hookform/resolvers/zod'
 import axios from 'axios'
-import { DollarSign, Trash } from 'lucide-react'
+import { DollarSign, ShoppingBasket, Trash } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 
 const paymentSchema = z
@@ -64,7 +66,9 @@ const formSchema = z.object({
     .max(13, 'El número telefónico debe tener 13 dígitos'),
   address: z.string().min(1, 'Debes agregar una dirección'),
   orderItems: z
-    .array(z.string())
+    .array(
+      z.object({ productId: z.string(), quantity: z.coerce.number().min(1) })
+    )
     .nonempty({ message: 'Debes agregar al menos 1 producto' }),
   status: z.nativeEnum(OrderStatus),
   payment: paymentSchema,
@@ -72,12 +76,6 @@ const formSchema = z.object({
 })
 
 type OrderFormValues = z.infer<typeof formSchema>
-
-type OrderItem = {
-  id: string
-  orderId: string
-  productId: string
-}
 
 type ProductOption = {
   value: string
@@ -120,10 +118,20 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           (sum, item) =>
             sum +
             (products.find((product) => product.value === item.productId)
-              ?.price || 0),
+              ?.price || 0) *
+              (item.quantity || 1),
           0
         )
       : 0
+  )
+
+  const [quantities, setQuantity] = useState(
+    initialData
+      ? initialData.orderItems.reduce((acc, item) => {
+          acc[item.productId] = item.quantity
+          return acc
+        }, {} as { [key: string]: number })
+      : {}
   )
   const [loading, setLoading] = useState(false)
 
@@ -159,7 +167,10 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     defaultValues: initialData
       ? {
           ...initialData,
-          orderItems: initialData.orderItems.map((item) => item.productId),
+          orderItems: initialData.orderItems.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity
+          })),
           payment: {
             ...initialData.payment,
             transactionId: initialData.payment?.transactionId || undefined
@@ -185,13 +196,22 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   const onSubmit = async (data: OrderFormValues) => {
     try {
       setLoading(true)
+      const updatedOrderItems = data.orderItems.map((item) => ({
+        ...item,
+        quantity: quantities[item.productId] || item.quantity
+      }))
+
+      const updatedData = {
+        ...data,
+        orderItems: updatedOrderItems
+      }
       if (initialData) {
         await axios.patch(
           `/api/${params.storeId}/orders/${params.orderId}`,
-          data
+          updatedData
         )
       } else {
-        await axios.post(`/api/${params.storeId}/orders`, data)
+        await axios.post(`/api/${params.storeId}/orders`, updatedData)
       }
       router.refresh()
       router.push(`/${params.storeId}/orders`)
@@ -262,12 +282,39 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           <h2 className="text-lg font-semibold">
             Orden # {initialData?.orderNumber}
           </h2>
-          <div className="flex w-full items-start gap-2">
+          <div className="flex w-full items-start gap-2 flex-wrap">
             {productsSelected.length > 0 &&
-              productsSelected.map((product) => (
-                <Button variant="outline" key={product.value}>
-                  {product.label}
-                </Button>
+              productsSelected.map((product, index) => (
+                <Alert key={product.value} className="max-w-xs">
+                  <ShoppingBasket className="h-4 w-4" />
+                  <AlertTitle>{product.label}</AlertTitle>
+                  <AlertDescription>
+                    {formatter.format(product.price || 0)} x{' '}
+                    <Input
+                      type="number"
+                      min={1}
+                      defaultValue={quantities[product.value] || 1}
+                      onChange={(event) => {
+                        const newQuantity = Number(event.target.value)
+                        setQuantity((prev) => ({
+                          ...prev,
+                          [product.value]: newQuantity
+                        }))
+                        const newTotal = productsSelected.reduce(
+                          (sum, option) => {
+                            const quantity =
+                              option.value === product.value
+                                ? newQuantity
+                                : quantities[option.value] || 1
+                            return sum + Number(option?.price) * quantity
+                          },
+                          0
+                        )
+                        setTotalPrice(newTotal)
+                      }}
+                    />
+                  </AlertDescription>
+                </Alert>
               ))}
             <div className="ml-auto text-lg font-semibold">
               Total: {formatter.format(totalPrice)}
@@ -287,20 +334,29 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                       placeholder='Escribe el nombre del producto y presiona "Enter"'
                       isLoading={loading}
                       onValuesChange={(selectedOptions) => {
-                        const ids = selectedOptions.map(
-                          (option) => option.value
-                        )
-                        field.onChange(ids)
+                        const orderItems = selectedOptions.map((option) => ({
+                          productId: option.value,
+                          quantity: quantities[option.value] || 1
+                        }))
+                        field.onChange(orderItems)
                         setProductsSelected(selectedOptions)
                         const newTotal = selectedOptions.reduce(
-                          (sum, option) => sum + Number(option?.price),
+                          (sum, option) =>
+                            sum +
+                            Number(option?.price) *
+                              (quantities[option.value] || 1),
                           0
                         )
                         setTotalPrice(newTotal)
                       }}
-                      values={products.filter((product) =>
-                        field.value.includes(product.value)
-                      )}
+                      values={
+                        field.value.map((item) => ({
+                          ...products.find(
+                            (product) => product.value === item.productId
+                          ),
+                          quantity: item.quantity
+                        })) as ProductOption[]
+                      }
                       multiSelect
                       disabled={loading}
                     />

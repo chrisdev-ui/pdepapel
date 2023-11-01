@@ -28,7 +28,7 @@ export async function POST(
         { error: 'Address is required' },
         { status: 400 }
       )
-    if (!orderItems)
+    if (!orderItems || orderItems.length === 0)
       return NextResponse.json(
         { error: 'Order items are required' },
         { status: 400 }
@@ -51,8 +51,8 @@ export async function POST(
           },
           orderItems: {
             create: orderItems.map(
-              (product: { id: string; quantity: number }) => ({
-                product: { connect: { id: product.id } },
+              (product: { productId: string; quantity: number }) => ({
+                product: { connect: { id: product.productId } },
                 quantity: product.quantity ?? 1
               })
             )

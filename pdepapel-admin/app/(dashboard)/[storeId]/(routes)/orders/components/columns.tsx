@@ -54,20 +54,19 @@ export const columns: ColumnDef<OrderColumn>[] = [
           text: string
         }
       > = {
-        [OrderStatus.PENDING]: { variant: 'outline', text: '⌛ Pendiente' },
-        [OrderStatus.CREATED]: { variant: 'secondary', text: '📖 Creada' },
-        [OrderStatus.PAID]: { variant: 'success', text: '💵 Pagada' },
+        [OrderStatus.PENDING]: { variant: 'outline', text: `⌛ Pendiente` },
+        [OrderStatus.CREATED]: { variant: 'secondary', text: `📖 Creada` },
+        [OrderStatus.PAID]: { variant: 'success', text: `💵 Pagada` },
         [OrderStatus.CANCELLED]: {
           variant: 'destructive',
-          text: '🚫 Cancelada'
+          text: `🚫 Cancelada`
         }
       }
       return (
-        <Badge
-          variant={variants[status].variant}
-          className="flex gap-1 items-start"
-        >
-          <span className="capitalize">{variants[status].text}</span>
+        <Badge variant={variants[status].variant} className="flex items-start">
+          <span className="capitalize tracking-wide">
+            {variants[status].text}
+          </span>
         </Badge>
       )
     }
@@ -113,7 +112,9 @@ export const columns: ColumnDef<OrderColumn>[] = [
           variant={variants[status].variant}
           className="flex gap-1 items-start"
         >
-          <span className="capitalize">{variants[status].text}</span>
+          <span className="capitalize tracking-wide">
+            {variants[status].text}
+          </span>
         </Badge>
       )
     }

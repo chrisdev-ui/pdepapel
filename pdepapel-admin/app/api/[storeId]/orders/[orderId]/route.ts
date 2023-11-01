@@ -39,15 +39,8 @@ export async function PATCH(
     return NextResponse.json({ error: 'Order ID is required' }, { status: 400 })
   try {
     const body = await req.json()
-    const {
-      fullName,
-      phone,
-      address,
-      orderItems: productIds,
-      status,
-      payment,
-      shipping
-    } = body
+    const { fullName, phone, address, orderItems, status, payment, shipping } =
+      body
     const storeByUserId = await prismadb.store.findFirst({
       where: { id: params.storeId, userId }
     })
@@ -65,7 +58,7 @@ export async function PATCH(
         { error: 'Address is required' },
         { status: 400 }
       )
-    if (!productIds)
+    if (!orderItems || orderItems.length === 0)
       return NextResponse.json(
         { error: 'Order items are required' },
         { status: 400 }
@@ -75,9 +68,12 @@ export async function PATCH(
       phone,
       address,
       orderItems: {
-        create: productIds.map((productId: string) => ({
-          product: { connect: { id: productId } }
-        }))
+        create: orderItems.map(
+          (orderItem: { productId: string; quantity: number }) => ({
+            product: { connect: { id: orderItem.productId } },
+            quantity: orderItem.quantity ?? 1
+          })
+        )
       },
       ...(status && { status })
     }
