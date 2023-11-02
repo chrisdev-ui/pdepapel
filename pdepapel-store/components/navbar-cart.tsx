@@ -140,7 +140,10 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
               <ShoppingCart className="absolute left-0 h-5 w-5 -translate-x-full transform transition-transform duration-500 ease-out group-hover:translate-x-20" />
               <span className="group-hover:hidden">Ver Carrito</span>
             </Button>
-            <Button className="group relative w-full overflow-hidden bg-pink-shell font-serif text-base font-bold uppercase text-white hover:bg-pink-shell lg:w-1/2">
+            <Button
+              className="group relative w-full overflow-hidden bg-pink-shell font-serif text-base font-bold uppercase text-white hover:bg-pink-shell lg:w-1/2"
+              disabled={cart.items.length === 0}
+            >
               <CreditCard className="absolute left-0 h-5 w-5 -translate-x-full transform transition-transform duration-500 ease-out group-hover:translate-x-20" />
               <span className="group-hover:hidden">Finalizar compra</span>
             </Button>
