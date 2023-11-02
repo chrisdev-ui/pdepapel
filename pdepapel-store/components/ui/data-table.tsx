@@ -50,7 +50,10 @@ export function DataTable<TData, TValue>({
           {caption && <TableCaption>{caption}</TableCaption>}
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
+              <TableRow
+                key={headerGroup.id}
+                className="hover:bg-inherit data-[state=selected]:bg-inherit"
+              >
                 {headerGroup.headers.map((header) => {
                   return (
                     <TableHead key={header.id}>
