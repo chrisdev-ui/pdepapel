@@ -1,21 +1,30 @@
 import prismadb from '@/lib/prismadb'
 import { generateOrderNumber } from '@/lib/utils'
-import { auth } from '@clerk/nextjs'
+import { auth, clerkClient } from '@clerk/nextjs'
 import { NextResponse } from 'next/server'
 
 export async function POST(
   req: Request,
   { params }: { params: { storeId: string } }
 ) {
-  const { userId } = auth()
-  if (!userId)
-    return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+  const { userId: ownerId } = auth()
   if (!params.storeId)
     return NextResponse.json({ error: 'Store ID is required' }, { status: 400 })
   try {
     const body = await req.json()
-    const { fullName, phone, address, orderItems, status, payment, shipping } =
-      body
+    const {
+      fullName,
+      phone,
+      address,
+      orderItems,
+      status,
+      payment,
+      shipping,
+      userId
+    } = body
+    const user = await clerkClient.users.getUser(userId)
+    if (!user || !ownerId)
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
     if (!fullName)
       return NextResponse.json(
         { error: 'Full name is required' },
@@ -38,6 +47,7 @@ export async function POST(
       prismadb.order.create({
         data: {
           storeId: params.storeId,
+          userId: user.id ?? ownerId,
           orderNumber,
           fullName,
           phone,

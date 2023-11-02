@@ -2,8 +2,8 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import { ToastIcon } from "@/components/ui/toast-icon";
+import { toast } from "@/hooks/use-toast";
 import { Product } from "@/types";
-import { toast } from "./use-toast";
 
 interface CartStore {
   items: Product[];

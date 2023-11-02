@@ -1,8 +1,9 @@
 import { cn } from "@/lib/utils";
 import { ShoppingCart } from "lucide-react";
+import { Icons } from "../icons";
 
 interface ToastIconProps {
-  icon: "cart";
+  icon: "cart" | "heart";
   variant?: "success" | "destructive" | "warning" | "info" | "default";
 }
 
@@ -12,6 +13,7 @@ export const ToastIcon: React.FC<ToastIconProps> = ({
 }) => {
   const toastIcon: Record<string, React.ReactNode> = {
     cart: <ShoppingCart className="h-5 w-5" />,
+    heart: <Icons.heart className="h-5 w-5" />,
   };
   return (
     <div

@@ -9,6 +9,7 @@ import { HamburgerMenu } from "@/components/hamburger-menu";
 import { Icons } from "@/components/icons";
 import { NavbarCart } from "@/components/navbar-cart";
 import { NavigationLink } from "@/components/navigation-link";
+import { WishlistButton } from "@/components/wishlist-button";
 import { useCart } from "@/hooks/use-cart";
 import { useScrollPosition } from "@/hooks/use-scroll-position";
 import { cn } from "@/lib/utils";
@@ -66,9 +67,7 @@ export const Navbar: React.FC<{}> = () => {
             </li>
           </ul>
           <div className="hidden items-center space-x-5 lg:flex">
-            <Link href="#" className="hover:opacity-75">
-              <Icons.heart className="h-6 w-6" />
-            </Link>
+            <WishlistButton />
             <NavbarCart />
             {isSignedIn && (
               <UserButton afterSignOutUrl="/" userProfileMode="modal" />

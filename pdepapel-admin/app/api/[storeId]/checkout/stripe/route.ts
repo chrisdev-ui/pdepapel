@@ -4,7 +4,7 @@ import Stripe from 'stripe'
 import prismadb from '@/lib/prismadb'
 import { stripe } from '@/lib/stripe'
 import { generateOrderNumber } from '@/lib/utils'
-import { auth } from '@clerk/nextjs'
+import { clerkClient } from '@clerk/nextjs'
 import { OrderStatus } from '@prisma/client'
 
 const corsHeaders = {
@@ -21,11 +21,13 @@ export async function POST(
   req: Request,
   { params }: { params: { storeId: string } }
 ) {
-  const { userId } = auth()
-  if (!userId)
-    return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+  if (!params.storeId)
+    return NextResponse.json({ error: 'Store ID is required' }, { status: 400 })
   try {
-    const { items } = await req.json()
+    const { items, userId } = await req.json()
+    const user = await clerkClient.users.getUser(userId)
+    if (!user)
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
     if (!items || items.length === 0)
       return NextResponse.json(
         { error: 'Products are required' },
@@ -78,6 +80,7 @@ export async function POST(
       prismadb.order.create({
         data: {
           storeId: params.storeId,
+          userId: user.id,
           orderNumber: generateOrderNumber(),
           status: OrderStatus.PENDING,
           orderItems: { create: orderItemsData }

@@ -8,6 +8,7 @@ export default authMiddleware({
     "/cart",
     "/about",
     "/contact",
+    "/wishlist",
   ],
 });
 

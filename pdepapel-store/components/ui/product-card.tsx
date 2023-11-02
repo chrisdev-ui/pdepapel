@@ -1,6 +1,6 @@
 "use client";
 
-import { Expand, ShoppingCart } from "lucide-react";
+import { Expand, Heart, ShoppingCart } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { MouseEventHandler } from "react";
@@ -11,6 +11,7 @@ import { NewBadge } from "@/components/ui/new-badge";
 import { StarRating } from "@/components/ui/star-rating";
 import { useCart } from "@/hooks/use-cart";
 import { usePreviewModal } from "@/hooks/use-preview-modal";
+import { useWishlist } from "@/hooks/use-wishlist";
 import { Product } from "@/types";
 
 interface ProductCardProps {
@@ -25,6 +26,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const router = useRouter();
   const previewModal = usePreviewModal();
   const cart = useCart();
+  const wishlist = useWishlist();
 
   const handleClick = () => {
     router.push(`/product/${product.id}`);
@@ -40,6 +42,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     event.stopPropagation();
 
     cart.addItem(product);
+  };
+
+  const onAddToWishlist: MouseEventHandler<HTMLButtonElement> = (event) => {
+    event.stopPropagation();
+
+    wishlist.addItem(product);
   };
 
   return (
@@ -58,6 +66,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         />
         <div className="absolute bottom-5 w-full px-6 opacity-0 transition group-hover:opacity-100">
           <div className="flex justify-center gap-x-6">
+            <IconButton
+              onClick={onAddToWishlist}
+              icon={<Heart className="h-5 w-5 text-gray-600" />}
+            />
             <IconButton
               onClick={onPreview}
               icon={<Expand className="h-5 w-5 text-gray-600" />}

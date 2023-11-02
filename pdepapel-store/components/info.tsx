@@ -19,7 +19,7 @@ export const Info: React.FC<InfoProps> = ({ data, showDescription = true }) => {
         <p className="text-2xl">
           <Currency value={data?.price} />
         </p>
-        <StarRating />
+        <StarRating isDisabled />
       </div>
       <Separator className="my-4" />
       <div className="flex flex-col gap-y-6">
