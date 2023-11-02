@@ -19,9 +19,13 @@ type Option = {
 
 interface SortSelectorProps {
   options: Option[];
+  isDisabled?: boolean;
 }
 
-export const SortSelector: React.FC<SortSelectorProps> = ({ options }) => {
+export const SortSelector: React.FC<SortSelectorProps> = ({
+  options,
+  isDisabled = false,
+}) => {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -57,6 +61,7 @@ export const SortSelector: React.FC<SortSelectorProps> = ({ options }) => {
         value={selectedValue || ""}
         defaultValue={selectedValue || ""}
         onValueChange={onSelectOption}
+        disabled={isDisabled}
       >
         <SelectTrigger>
           <SelectValue placeholder="Ordernar productos" />

@@ -9,6 +9,7 @@ import {
 import { SignInButton, SignOutButton } from "@clerk/nextjs";
 import {
   Contact,
+  Heart,
   Home,
   Info,
   LogIn,
@@ -54,6 +55,12 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
           <Link className="flex items-center gap-6" href="/contact">
             <Contact className="h-6 w-6" />
             Contacto
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem className="flex w-full px-6 py-3 text-xl hover:bg-green-leaf hover:text-white">
+          <Link className="flex items-center gap-6" href="/wishlist">
+            <Heart className="h-6 w-6" />
+            Lista de deseos
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem className="flex w-full px-6 py-3 text-xl hover:bg-green-leaf hover:text-white xs:hidden">

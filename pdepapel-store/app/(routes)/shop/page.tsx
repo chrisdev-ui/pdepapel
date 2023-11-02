@@ -111,7 +111,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
               valueKey="priceRange"
               name="Precios"
               emptyMessage="No hay precios disponibles"
-              data={prices}
+              data={products.length > 0 ? prices : []}
             />
           </div>
           <div className="mt-6 space-y-5 lg:col-span-4 lg:mt-0 lg:space-y-0">
@@ -119,7 +119,10 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
               <h2 className="font-serif text-3xl font-bold">
                 Todos los productos
               </h2>
-              <SortSelector options={sortOptions} />
+              <SortSelector
+                options={sortOptions}
+                isDisabled={products.length === 0}
+              />
             </div>
             <MobileFilters
               types={types}

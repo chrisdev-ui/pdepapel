@@ -13,11 +13,12 @@ export const Footer: React.FC<{}> = () => {
             rel="noopener noreferrer"
             className="flex justify-center space-x-3 lg:justify-start"
           >
-            <div className="relative flex h-32 w-64 items-center justify-center">
+            <div className="relative flex h-32 w-full items-center justify-center sm:w-64">
               <Image
                 src="/images/text-beside-transparent-bg.webp"
                 alt="Footer Image"
                 sizes="(max-width: 640px) 100vw, 640px"
+                className="object-cover"
                 priority
                 fill
               />
