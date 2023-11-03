@@ -10,7 +10,7 @@ import { MainBanner } from "@/components/main-banner";
 import { NewArrivals } from "@/components/new-arrivals";
 import { Newsletter } from "@/components/newsletter";
 
-export const revalidate = 0;
+export const revalidate = 30;
 
 export default async function HomePage() {
   const [billboards, featureProducts, mainBanner, newProducts, banners] =
