@@ -6,12 +6,15 @@ import { Separator } from "@/components/ui/separator";
 import { StarRating } from "@/components/ui/star-rating";
 import { Product } from "@/types";
 
-interface InfoProps {
+interface ProductInfoProps {
   data: Product;
   showDescription?: boolean;
 }
 
-export const Info: React.FC<InfoProps> = ({ data, showDescription = true }) => {
+export const ProductInfo: React.FC<ProductInfoProps> = ({
+  data,
+  showDescription = true,
+}) => {
   return (
     <div>
       <h1 className="font-serif text-3xl font-bold">{data?.name}</h1>
@@ -42,7 +45,10 @@ export const Info: React.FC<InfoProps> = ({ data, showDescription = true }) => {
         </div>
       </div>
       <div className="mt-10 flex items-center gap-x-3">
-        <Button className="flex gap-2 rounded-full border-none bg-blue-yankees px-8 py-4 font-serif text-sm font-semibold text-white outline-none [transition:0.2s]">
+        <Button
+          disabled={data.stock === 0}
+          className="flex gap-2 rounded-full border-none bg-blue-yankees px-8 py-4 font-serif text-sm font-semibold text-white outline-none [transition:0.2s]"
+        >
           Agregar al carrito
           <ShoppingCart className="h-5 w-5" />
         </Button>

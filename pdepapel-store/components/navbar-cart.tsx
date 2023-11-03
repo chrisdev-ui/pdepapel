@@ -47,8 +47,13 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
     router.push("/cart");
   };
 
+  const totalQuantity = cart.items.reduce(
+    (total, item) => total + Number(item.quantity ?? 1),
+    0,
+  );
+
   const totalPrice = cart.items.reduce(
-    (total, item) => total + Number(item.price),
+    (total, item) => total + Number(item.price) * Number(item.quantity ?? 1),
     0,
   );
 
@@ -63,7 +68,7 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
         >
           <ShoppingBag className="h-5 w-5" />
           <span className="ml-2 flex pt-1 font-serif text-base font-medium">
-            {cart.items.length}
+            {totalQuantity}
           </span>
         </Button>
       </SheetTrigger>

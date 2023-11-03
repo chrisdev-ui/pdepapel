@@ -1,8 +1,8 @@
 import { getProduct } from "@/actions/get-product";
 import { getProducts } from "@/actions/get-products";
 import { Gallery } from "@/components/gallery";
-import { Info } from "@/components/info";
 import { Newsletter } from "@/components/newsletter";
+import { ProductInfo } from "@/components/product-info";
 import { ProductList } from "@/components/product-list";
 import { Container } from "@/components/ui/container";
 import { Separator } from "@/components/ui/separator";
@@ -26,7 +26,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
         <div className="lg:grid lg:grid-cols-2 lg:items-start lg:gap-x-8">
           <Gallery images={product.images} />
           <div className="mt-10 px-4 sm:mt-6 sm:px-0 lg:mt-0">
-            <Info data={product} />
+            <ProductInfo data={product} />
           </div>
         </div>
         <Separator className="my-10" />

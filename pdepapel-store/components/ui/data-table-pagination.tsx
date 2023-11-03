@@ -1,14 +1,15 @@
 import { Table } from "@tanstack/react-table";
 
+import { WishlistColumn } from "@/app/(routes)/wishlist/components/columns";
 import { Button } from "@/components/ui/button";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { ArrowLeft, ArrowRight, PlusCircle, Trash } from "lucide-react";
 
-interface DataTablePaginationProps<TData> {
+interface DataTablePaginationProps<TData extends WishlistColumn> {
   table: Table<TData>;
 }
 
-export function DataTablePagination<TData>({
+export function DataTablePagination<TData extends WishlistColumn>({
   table,
 }: DataTablePaginationProps<TData>) {
   const { clearWishlist, moveToCartMultiple } = useWishlist();
@@ -22,7 +23,7 @@ export function DataTablePagination<TData>({
             moveToCartMultiple(
               table
                 .getFilteredSelectedRowModel()
-                .rows.map((row) => row.getValue("id")),
+                .rows.map((row) => row.original.id),
             )
           }
         >

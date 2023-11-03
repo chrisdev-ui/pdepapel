@@ -23,6 +23,7 @@ export interface Product {
   color: Color;
   design: Design;
   images: Image[];
+  quantity?: number;
 }
 
 export interface Category {

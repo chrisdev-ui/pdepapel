@@ -76,6 +76,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             />
             <IconButton
               onClick={onAddToCart}
+              isDisabled={product.stock === 0}
               icon={<ShoppingCart className="h-5 w-5 text-gray-600" />}
             />
           </div>

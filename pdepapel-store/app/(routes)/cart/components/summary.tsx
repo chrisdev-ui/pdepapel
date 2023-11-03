@@ -33,7 +33,7 @@ export const Summary: React.FC<{}> = () => {
   }, [removeAll, searchParams, toast]);
 
   const totalPrice = items.reduce(
-    (total, item) => total + Number(item.price),
+    (total, item) => total + Number(item.price) * Number(item.quantity ?? 1),
     0,
   );
 

@@ -67,7 +67,10 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
             e: React.MouseEvent<HTMLButtonElement, MouseEvent>
           ) => {
             e.preventDefault()
-            open?.()
+            open()
+          }
+          if (!open) {
+            return <div>Cargando...</div>
           }
           return (
             <Button
@@ -77,7 +80,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
               onClick={onClick}
             >
               <ImagePlus className="h-4 w-4 mr-2" />
-              Cargar imagen o imágenes
+              Cargar una imagen
             </Button>
           )
         }}

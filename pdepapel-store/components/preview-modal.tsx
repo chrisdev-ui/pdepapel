@@ -3,7 +3,7 @@
 import { Gallery } from "@/components/gallery";
 import { Modal } from "@/components/ui/modal";
 import { usePreviewModal } from "@/hooks/use-preview-modal";
-import { Info } from "./info";
+import { ProductInfo } from "./product-info";
 
 export const PreviewModal: React.FC<{}> = () => {
   const previewModal = usePreviewModal();
@@ -20,7 +20,7 @@ export const PreviewModal: React.FC<{}> = () => {
           <Gallery images={product.images} />
         </div>
         <div className="sm:col-span-8 lg:col-span-7">
-          <Info data={product} showDescription={false} />
+          <ProductInfo data={product} showDescription={false} />
         </div>
       </div>
     </Modal>

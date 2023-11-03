@@ -8,6 +8,7 @@ import { Product } from "@/types";
 interface CartStore {
   items: Product[];
   addItem: (item: Product) => void;
+  updateQuantity: (id: string, quantity: number) => void;
   removeItem: (id: string) => void;
   removeAll: () => void;
 }
@@ -21,24 +22,52 @@ export const useCart = create(
         const existingItem = currentItems.find((i) => i.id === item.id);
 
         if (existingItem) {
-          return toast({
-            description: "El producto ya está en el carrito.",
-            icon: <ToastIcon icon="cart" />,
+          if (
+            existingItem.quantity &&
+            existingItem.quantity < existingItem.stock
+          ) {
+            existingItem.quantity += 1;
+            set({ items: [...currentItems] });
+            toast({
+              description: "Producto agregado al carrito.",
+              variant: "success",
+              icon: <ToastIcon icon="cart" variant="success" />,
+            });
+          } else {
+            toast({
+              description: "No hay más stock de este producto.",
+              variant: "warning",
+              icon: <ToastIcon icon="cart" variant="warning" />,
+            });
+          }
+        } else {
+          const newItem: Product = {
+            ...item,
+            quantity: 1,
+          };
+          set({ items: [...currentItems, newItem] });
+          toast({
+            description: "Producto agregado al carrito.",
+            variant: "success",
+            icon: <ToastIcon icon="cart" variant="success" />,
           });
         }
+      },
+      updateQuantity: (id: string, quantity: number) => {
+        const currentItems = get().items;
+        const item = currentItems.find((i) => i.id === id);
 
-        set({ items: [...get().items, item] });
-        toast({
-          description: "Producto agregado al carrito.",
-          variant: "success",
-          icon: <ToastIcon icon="cart" variant="success" />,
-        });
+        if (item && quantity <= item.stock) {
+          item.quantity = quantity;
+          set({ items: [...currentItems] });
+        }
       },
       removeItem: (id: string) => {
         set({ items: [...get().items.filter((i) => i.id !== id)] });
         toast({
           description: "Producto eliminado del carrito.",
-          icon: <ToastIcon icon="cart" />,
+          variant: "info",
+          icon: <ToastIcon icon="cart" variant="info" />,
         });
       },
       removeAll: () => set({ items: [] }),

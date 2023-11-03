@@ -30,7 +30,8 @@ export const useWishlist = create(
         if (existingItem) {
           return toast({
             description: "Este producto ya está en tu lista de deseos.",
-            icon: <ToastIcon icon="heart" />,
+            variant: "info",
+            icon: <ToastIcon icon="heart" variant="info" />,
           });
         }
         const newItem: WishlistProduct = {
@@ -48,7 +49,8 @@ export const useWishlist = create(
         set({ items: [...get().items.filter((i) => i.id !== id)] });
         toast({
           description: "Producto eliminado de la lista de deseos.",
-          icon: <ToastIcon icon="heart" />,
+          variant: "info",
+          icon: <ToastIcon icon="heart" variant="info" />,
         });
       },
       moveToCart: (id: string) => {
@@ -58,9 +60,8 @@ export const useWishlist = create(
         const item = items.find((i) => i.id === id);
 
         if (item) {
-          // Check if the item is already in the cart
           const isInCart = cartItems.some((cartItem) => cartItem.id === id);
-          if (!isInCart) {
+          if (!isInCart && item.stock > 0) {
             addToCart(item);
             removeFromWishlist(id);
             toast({
@@ -71,7 +72,8 @@ export const useWishlist = create(
           } else {
             toast({
               description: "Este producto ya está en tu carrito.",
-              icon: <ToastIcon icon="cart" />,
+              variant: "info",
+              icon: <ToastIcon icon="cart" variant="info" />,
             });
           }
         }

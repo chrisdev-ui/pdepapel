@@ -79,12 +79,6 @@ export const mainBannerColumns: ColumnDef<MainBannerColumn>[] = [
     )
   },
   {
-    accessorKey: 'imageUrl',
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Dirección de la imágen" />
-    )
-  },
-  {
     accessorKey: 'createdAt',
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Fecha de creación" />

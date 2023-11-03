@@ -10,14 +10,12 @@ import { Icons } from "@/components/icons";
 import { NavbarCart } from "@/components/navbar-cart";
 import { NavigationLink } from "@/components/navigation-link";
 import { WishlistButton } from "@/components/wishlist-button";
-import { useCart } from "@/hooks/use-cart";
 import { useScrollPosition } from "@/hooks/use-scroll-position";
 import { cn } from "@/lib/utils";
 
 export const Navbar: React.FC<{}> = () => {
   const { isSignedIn } = useAuth();
   const scrollPosition = useScrollPosition();
-  const cart = useCart();
   const navBarRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
