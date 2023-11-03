@@ -21,7 +21,8 @@ export async function GET(
         category: true,
         size: true,
         color: true,
-        design: true
+        design: true,
+        reviews: true
       }
     })
     return NextResponse.json(product)
