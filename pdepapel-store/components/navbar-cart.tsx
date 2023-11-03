@@ -103,6 +103,9 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
                       sizes="(max-width: 640px) 80px, 120px"
                       className="rounded-md"
                     />
+                    <span className="absolute right-0 top-0 flex h-4 w-4 items-center justify-center rounded-full bg-blue-yankees font-serif text-xs text-white">
+                      {item.quantity}
+                    </span>
                   </Link>
                   <div className="flex max-h-20 items-center justify-between">
                     <div className="flex h-full flex-col items-start justify-between">

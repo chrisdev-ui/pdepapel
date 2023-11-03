@@ -12,6 +12,7 @@ import { StarRating } from "@/components/ui/star-rating";
 import { useCart } from "@/hooks/use-cart";
 import { usePreviewModal } from "@/hooks/use-preview-modal";
 import { useWishlist } from "@/hooks/use-wishlist";
+import { cn } from "@/lib/utils";
 import { Product } from "@/types";
 
 interface ProductCardProps {
@@ -50,6 +51,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     wishlist.addItem(product);
   };
 
+  const isWishlistProduct = wishlist.items.some(
+    (item) => item.id === product.id,
+  );
+
+  const isCartProduct = cart.items.some((item) => item.id === product.id);
+
   return (
     <div
       onClick={handleClick}
@@ -68,7 +75,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           <div className="flex justify-center gap-x-6">
             <IconButton
               onClick={onAddToWishlist}
-              icon={<Heart className="h-5 w-5 text-gray-600" />}
+              icon={
+                <Heart
+                  className={cn("h-5 w-5 text-gray-600", {
+                    "text-red-400": isWishlistProduct,
+                  })}
+                  fill={isWishlistProduct ? "#f87171" : "none"}
+                />
+              }
             />
             <IconButton
               onClick={onPreview}
@@ -77,7 +91,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             <IconButton
               onClick={onAddToCart}
               isDisabled={product.stock === 0}
-              icon={<ShoppingCart className="h-5 w-5 text-gray-600" />}
+              icon={
+                <ShoppingCart
+                  className={cn("h-5 w-5 text-gray-600", {
+                    "text-pink-froly": isCartProduct,
+                  })}
+                />
+              }
             />
           </div>
         </div>
