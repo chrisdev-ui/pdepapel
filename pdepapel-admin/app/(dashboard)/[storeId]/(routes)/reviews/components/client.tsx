@@ -15,7 +15,7 @@ export const ReviewsClient = ({ data }: ReviewsClientProps) => {
         description="Maneja las reseñas de los productos para tu tienda"
       />
       <Separator />
-      <DataTable searchKey="userId" columns={columns} data={data} />
+      <DataTable searchKey="name" columns={columns} data={data} />
     </>
   )
 }

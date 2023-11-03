@@ -1,14 +1,11 @@
 import prismadb from '@/lib/prismadb'
-import { auth } from '@clerk/nextjs'
+import { clerkClient } from '@clerk/nextjs'
 import { NextResponse } from 'next/server'
 
 export async function POST(
   req: Request,
   { params }: { params: { storeId: string; productId: string } }
 ) {
-  const { userId } = auth()
-  if (!userId)
-    return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
   if (!params.storeId)
     return NextResponse.json({ error: 'Store ID is required' }, { status: 400 })
   if (!params.productId)
@@ -18,12 +15,16 @@ export async function POST(
     )
   try {
     const body = await req.json()
-    const { rating, comment } = body
+    const { rating, comment, userId } = body
+    const user = await clerkClient.users.getUser(userId)
+    if (!user)
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
     if (!rating)
       return NextResponse.json({ error: 'Rating is required' }, { status: 400 })
     const review = await prismadb.review.create({
       data: {
         userId,
+        name: `${user.firstName ?? ''} ${user.lastName ?? ''}`,
         storeId: params.storeId,
         productId: params.productId,
         rating,

@@ -1,5 +1,6 @@
 import prismadb from '@/lib/prismadb'
-import { auth } from '@clerk/nextjs'
+import { auth, clerkClient } from '@clerk/nextjs'
+import { Review } from '@prisma/client'
 import { NextResponse } from 'next/server'
 
 export async function GET(
@@ -40,9 +41,6 @@ export async function PATCH(
     params
   }: { params: { storeId: string; productId: string; reviewId: string } }
 ) {
-  const { userId } = auth()
-  if (!userId)
-    return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
   if (!params.reviewId)
     return NextResponse.json(
       { error: 'Review ID is required' },
@@ -57,7 +55,10 @@ export async function PATCH(
     return NextResponse.json({ error: 'Store ID is required' }, { status: 400 })
   try {
     const body = await req.json()
-    const { rating, comment } = body
+    const { rating, comment, userId } = body
+    const user = await clerkClient.users.getUser(userId)
+    if (!user)
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
     if (!rating || isNaN(rating))
       return NextResponse.json({ error: 'Rating is required' }, { status: 400 })
     const existingReview = await prismadb.review.findUnique({
@@ -71,16 +72,23 @@ export async function PATCH(
         { status: 403 }
       )
 
+    let updateData: Partial<Review> = {
+      rating,
+      comment: comment ?? ''
+    }
+
+    if (
+      existingReview.name !== `${user.firstName ?? ''} ${user.lastName ?? ''}`
+    ) {
+      updateData.name = `${user.firstName ?? ''} ${user.lastName ?? ''}`
+    }
     const updatedReview = await prismadb.review.update({
       where: {
         id: params.reviewId,
         productId: params.productId,
         userId
       },
-      data: {
-        rating,
-        comment: comment ?? ''
-      }
+      data: updateData
     })
     return NextResponse.json(updatedReview)
   } catch (error) {

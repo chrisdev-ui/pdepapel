@@ -511,7 +511,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       <Separator />
       <Heading title="Reseñas" description="Reseñas de este producto" />
       <Separator />
-      <DataTable searchKey="userId" columns={columns} data={reviews ?? []} />
+      <DataTable searchKey="name" columns={columns} data={reviews ?? []} />
     </>
   )
 }

@@ -23,6 +23,7 @@ export default async function ReviewsPage({
     id: review.id,
     productId: review.productId,
     userId: review.userId,
+    name: review.name,
     rating: String(review.rating),
     comment: review.comment,
     createdAt: format(review.createdAt, 'MMMM d, yyyy')

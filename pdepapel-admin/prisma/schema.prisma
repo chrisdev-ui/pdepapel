@@ -237,6 +237,7 @@ model Review {
   productId   String
   product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
   userId      String
+  name        String
   rating      Float
   comment     String?     @db.Text
   createdAt   DateTime    @default(now())

@@ -8,6 +8,7 @@ export type ReviewsColumn = {
   id: string
   productId: string
   userId: string
+  name: string
   rating: string
   comment: string | null
   createdAt: string
@@ -21,9 +22,9 @@ export const columns: ColumnDef<ReviewsColumn>[] = [
     )
   },
   {
-    accessorKey: 'userId',
+    accessorKey: 'name',
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="ID del usuario" />
+      <DataTableColumnHeader column={column} title="Nombre del usuario" />
     )
   },
   {
