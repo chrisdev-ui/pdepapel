@@ -41,7 +41,7 @@ export const CartItem: React.FC<CartItemProps> = ({ item }) => {
             <p className="font-serif text-lg font-semibold">{item.name}</p>
           </div>
 
-          <div className="mt-1 flex text-sm text-gray-500">
+          <div className="mb-3 mt-1 flex flex-wrap text-sm text-gray-500 lg:mb-0">
             <p>{item.color.name}</p>
             <p className="ml-4 border-l border-gray-200 pl-4">
               {item.size.name}
