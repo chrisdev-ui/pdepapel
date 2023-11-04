@@ -24,6 +24,7 @@ export const PreviewModal: React.FC<{}> = () => {
             data={product}
             showDescription={false}
             showReviews={false}
+            onAddedToCart={previewModal.onClose}
           />
         </div>
       </div>

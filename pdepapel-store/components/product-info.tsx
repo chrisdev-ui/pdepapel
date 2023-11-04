@@ -14,6 +14,7 @@ import { QuantitySelector } from "./ui/quantity-selector";
 interface ProductInfoProps {
   data: Product;
   showDescription?: boolean;
+  onAddedToCart?: () => void;
   showReviews?: boolean;
   reviewsRef?: RefObject<HTMLDivElement>;
 }
@@ -21,6 +22,7 @@ interface ProductInfoProps {
 export const ProductInfo: React.FC<ProductInfoProps> = ({
   data,
   showDescription = true,
+  onAddedToCart,
   showReviews = true,
   reviewsRef,
 }) => {
@@ -43,15 +45,16 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
       cart.addItem(data, quantity);
     }
     router.push("/cart");
+    onAddedToCart?.();
   };
 
   return (
     <div>
       <h1 className="font-serif text-3xl font-bold">{data?.name}</h1>
       <div className="mt-3 flex items-end justify-between">
-        <p className="text-2xl">
+        <div className="text-2xl">
           <Currency value={data?.price} />
-        </p>
+        </div>
         <div className="flex items-center gap-2">
           {showReviews && (
             <button onClick={goToReviews} className="text-sm underline">
