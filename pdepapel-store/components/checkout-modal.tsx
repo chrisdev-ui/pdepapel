@@ -31,7 +31,7 @@ export const CheckoutModal: React.FC<{}> = () => {
     try {
       setIsLoading(true);
       const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/checkout`,
+        `${process.env.NEXT_PUBLIC_API_URL}/checkout/stripe`,
         {
           items: orderItems.map((item) => ({
             productId: item.id,
@@ -40,11 +40,12 @@ export const CheckoutModal: React.FC<{}> = () => {
         },
       );
       window.location = response.data.url;
-    } catch (error) {
+    } catch (error: any) {
       setIsLoading(false);
       console.log("[CHECKOUT_ERROR]", error);
       toast({
-        description: "Ups! Algo ha ido mal, por favor inténtalo de nuevo.",
+        description:
+          error.response?.data.message || "Error al procesar el pago",
         variant: "destructive",
       });
     } finally {

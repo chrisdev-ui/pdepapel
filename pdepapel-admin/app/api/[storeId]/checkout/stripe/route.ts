@@ -104,10 +104,17 @@ export async function POST(
     )
 
     return NextResponse.json({ url: session.url }, { headers: corsHeaders })
-  } catch (error) {
+  } catch (error: any) {
     console.error('[ORDER_CHECKOUT]', error)
     return NextResponse.json(
-      { error: 'Internal Server Error' },
+      {
+        error: 'Internal Server Error',
+        message: `${
+          error.raw.code === 'amount_too_small'
+            ? 'El valor mínimo de compra con tarjeta es de al menos $5,000'
+            : error.message
+        }`
+      },
       { status: 500, headers: corsHeaders }
     )
   }

@@ -39,7 +39,18 @@ export async function POST(req: Request) {
   const addressString = addressComponents.filter((a) => a !== null).join(', ')
 
   if (event.type === 'checkout.session.completed') {
-    const [order] = await prismadb.$transaction([
+    const existingOrder = await prismadb.order.findUnique({
+      where: {
+        id: session?.metadata?.orderId
+      },
+      include: {
+        orderItems: true
+      }
+    })
+    if (!existingOrder || existingOrder.status === OrderStatus.PAID) {
+      return NextResponse.json(null, { status: 200 })
+    }
+    await prismadb.$transaction([
       prismadb.order.update({
         where: {
           id: session?.metadata?.orderId
@@ -56,13 +67,8 @@ export async function POST(req: Request) {
         include: {
           orderItems: true
         }
-      })
-    ])
-
-    const orderItems = order.orderItems || []
-
-    await prismadb.$transaction([
-      ...orderItems.map((orderItem) =>
+      }),
+      ...existingOrder.orderItems.map((orderItem) =>
         prismadb.product.update({
           where: {
             id: orderItem.productId
@@ -76,7 +82,7 @@ export async function POST(req: Request) {
       ),
       prismadb.paymentDetails.upsert({
         where: {
-          orderId: order.id
+          orderId: session?.metadata?.orderId
         },
         update: {
           method: PaymentMethod.Stripe,
@@ -87,19 +93,19 @@ export async function POST(req: Request) {
           transactionId: session?.payment_intent?.toString() || '',
           store: {
             connect: {
-              id: order.storeId
+              id: existingOrder.storeId
             }
           },
           order: {
             connect: {
-              id: order.id
+              id: existingOrder.id
             }
           }
         }
       }),
       prismadb.shipping.upsert({
         where: {
-          orderId: order.id
+          orderId: session?.metadata?.orderId
         },
         update: {
           status: ShippingStatus.Preparing
@@ -108,12 +114,12 @@ export async function POST(req: Request) {
           status: ShippingStatus.Preparing,
           store: {
             connect: {
-              id: order.storeId
+              id: existingOrder.storeId
             }
           },
           order: {
             connect: {
-              id: order.id
+              id: existingOrder.id
             }
           }
         }

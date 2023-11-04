@@ -1,13 +1,13 @@
 import { cn } from "@/lib/utils";
 
-interface NewBadgeProps {
+interface ProductCardBadgeProps {
   text: string;
   containerClasses?: string;
   spanClasses?: string;
   textClasses?: string;
 }
 
-export const NewBadge: React.FC<NewBadgeProps> = ({
+export const ProductCardBadge: React.FC<ProductCardBadgeProps> = ({
   text,
   containerClasses,
   spanClasses,

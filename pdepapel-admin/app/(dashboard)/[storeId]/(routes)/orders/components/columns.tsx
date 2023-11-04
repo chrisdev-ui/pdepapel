@@ -42,6 +42,11 @@ export const columns: ColumnDef<OrderColumn>[] = [
     accessorKey: 'address',
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Dirección" />
+    ),
+    cell: ({ row }) => (
+      <div className="max-w-xs whitespace-normal break-words">
+        {row.original.address}
+      </div>
     )
   },
   {
@@ -74,7 +79,10 @@ export const columns: ColumnDef<OrderColumn>[] = [
         }
       }
       return (
-        <Badge variant={variants[status].variant} className="flex items-start">
+        <Badge
+          variant={variants[status].variant}
+          className="flex items-center justify-center [word-spacing:.2rem]"
+        >
           <span className="capitalize tracking-wide">
             {variants[status].text}
           </span>
@@ -123,7 +131,7 @@ export const columns: ColumnDef<OrderColumn>[] = [
       return (
         <Badge
           variant={variants[status].variant}
-          className="flex gap-1 items-start"
+          className="flex items-center justify-center [word-spacing:.2rem]"
         >
           <span className="capitalize tracking-wide">
             {variants[status].text}

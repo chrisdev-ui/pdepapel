@@ -100,7 +100,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
           </div>
         </div>
       </div>
-      <div className="mt-10 flex items-center gap-x-3">
+      <div className="mt-10 flex flex-wrap items-center gap-x-3 gap-y-4 sm:gap-y-0">
         <Button
           disabled={data.stock === 0}
           className="flex gap-2 rounded-full border-none bg-blue-yankees px-8 py-4 font-serif text-sm font-semibold text-white outline-none [transition:0.2s]"
@@ -109,6 +109,11 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
           Agregar al carrito
           <ShoppingCart className="h-5 w-5" />
         </Button>
+        {data.stock === 0 && (
+          <span className="animate-pulse text-xs text-red-500">
+            Este producto está agotado por el momento
+          </span>
+        )}
       </div>
       {showDescription && data?.description && (
         <>

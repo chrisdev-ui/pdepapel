@@ -3,11 +3,11 @@
 import { Expand, Heart, ShoppingCart } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { MouseEventHandler } from "react";
+import { MouseEventHandler, useEffect, useState } from "react";
 
 import { Currency } from "@/components/ui/currency";
 import { IconButton } from "@/components/ui/icon-button";
-import { NewBadge } from "@/components/ui/new-badge";
+import { ProductCardBadge } from "@/components/ui/product-cart-badge";
 import { StarRating } from "@/components/ui/star-rating";
 import { useCart } from "@/hooks/use-cart";
 import { usePreviewModal } from "@/hooks/use-preview-modal";
@@ -24,10 +24,17 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   product,
   isNew = false,
 }) => {
+  const [isMounted, setIsMounted] = useState(false);
   const router = useRouter();
   const previewModal = usePreviewModal();
   const cart = useCart();
   const wishlist = useWishlist();
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  if (!isMounted) return null;
 
   const handleClick = () => {
     router.push(`/product/${product.id}`);
@@ -90,6 +97,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             />
             <IconButton
               onClick={onAddToCart}
+              className="disabled:pointer-events-none disabled:opacity-50"
               isDisabled={product.stock === 0}
               icon={
                 <ShoppingCart
@@ -112,7 +120,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       <div className="flex items-center justify-between">
         <Currency value={product.price} />
       </div>
-      {isNew && <NewBadge text="¡Nuevo!" />}
+      {product.stock === 0 && (
+        <ProductCardBadge
+          text="¡Agotado!"
+          spanClasses="border-white bg-red-500 text-white outline-white"
+        />
+      )}
+      {isNew && <ProductCardBadge text="¡Nuevo!" />}
     </div>
   );
 };
