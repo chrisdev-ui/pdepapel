@@ -2,6 +2,7 @@ import { ShoppingCart } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Currency } from "@/components/ui/currency";
+import { QuantitySelector } from "@/components/ui/quantity-selector";
 import { Separator } from "@/components/ui/separator";
 import { StarRating } from "@/components/ui/star-rating";
 import { useCart } from "@/hooks/use-cart";
@@ -9,7 +10,6 @@ import { calculateAverageRating } from "@/lib/utils";
 import { Product } from "@/types";
 import { useRouter } from "next/navigation";
 import { RefObject, useState } from "react";
-import { QuantitySelector } from "./ui/quantity-selector";
 
 interface ProductInfoProps {
   data: Product;

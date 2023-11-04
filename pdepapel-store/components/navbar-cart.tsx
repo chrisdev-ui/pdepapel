@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/sheet";
 import { KAWAII_FACE_SAD } from "@/constants";
 import { useCart } from "@/hooks/use-cart";
+import { useCheckoutModal } from "@/hooks/use-checkout-modal";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 
@@ -27,6 +28,7 @@ interface NavbarCartProps {
 export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
   const cart = useCart();
   const router = useRouter();
+  const checkoutModal = useCheckoutModal();
   const [isMounted, setIsMounted] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
 
@@ -45,6 +47,10 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
   const onGoToCart = () => {
     setIsSheetOpen(false);
     router.push("/cart");
+  };
+
+  const onCheckout = () => {
+    checkoutModal.onOpen(cart.items);
   };
 
   const totalQuantity = cart.items.reduce(
@@ -151,6 +157,7 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
             <Button
               className="group relative w-full overflow-hidden bg-pink-shell font-serif text-base font-bold uppercase text-white hover:bg-pink-shell lg:w-1/2"
               disabled={cart.items.length === 0}
+              onClick={onCheckout}
             >
               <CreditCard className="absolute left-0 h-5 w-5 -translate-x-full transform transition-transform duration-500 ease-out group-hover:translate-x-20" />
               <span className="group-hover:hidden">Finalizar compra</span>

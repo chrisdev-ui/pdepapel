@@ -10,6 +10,7 @@ import {
 import { useState } from "react";
 
 import { WishlistColumn } from "@/app/(routes)/wishlist/components/columns";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import {
   Table,
   TableBody,
@@ -19,7 +20,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { DataTablePagination } from "./data-table-pagination";
 
 interface DataTableProps<TData extends WishlistColumn, TValue> {
   columns: ColumnDef<TData, TValue>[];

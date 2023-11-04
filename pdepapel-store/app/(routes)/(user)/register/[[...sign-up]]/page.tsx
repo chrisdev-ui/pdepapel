@@ -13,16 +13,25 @@ export default function RegisterPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectUrl = searchParams.get("redirect_url");
+
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
   if (!isMounted) {
     return null;
   }
+
   const handleCloseModal = () => {
     router.push(redirectUrl || "/");
     setOpen(false);
   };
+
+  const handleGoBack = () => {
+    router.push("/");
+    setOpen(false);
+  };
+
   return (
     <Dialog open={open} onOpenChange={handleCloseModal}>
       <DialogPortal>
@@ -44,12 +53,15 @@ export default function RegisterPage() {
                 },
               }}
             />
-            <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
-              <Button className="flex items-center gap-2 bg-blue-yankees p-8">
+            <div className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+              <Button
+                className="flex items-center gap-2 bg-blue-yankees p-8"
+                onClick={handleGoBack}
+              >
                 <ArrowBigLeftDashIcon className="h-6 w-6" />
                 Volver al sitio
               </Button>
-            </DialogPrimitive.Close>
+            </div>
           </DialogPrimitive.Content>
         </DialogOverlay>
       </DialogPortal>

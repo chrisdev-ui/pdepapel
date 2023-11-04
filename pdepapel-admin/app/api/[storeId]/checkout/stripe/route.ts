@@ -4,7 +4,6 @@ import Stripe from 'stripe'
 import prismadb from '@/lib/prismadb'
 import { stripe } from '@/lib/stripe'
 import { generateOrderNumber } from '@/lib/utils'
-import { clerkClient } from '@clerk/nextjs'
 import { OrderStatus } from '@prisma/client'
 
 const corsHeaders = {
@@ -24,24 +23,27 @@ export async function POST(
   if (!params.storeId)
     return NextResponse.json({ error: 'Store ID is required' }, { status: 400 })
   try {
-    const { items, userId } = await req.json()
-    const user = await clerkClient.users.getUser(userId)
-    if (!user)
-      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    const { items } = await req.json()
+
     if (!items || items.length === 0)
       return NextResponse.json(
         { error: 'Products are required' },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       )
 
     const errors: string[] = []
     const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = []
     const orderItemsData = []
 
+    const productIds = items.map(
+      (item: { productId: string }) => item.productId
+    )
+    const products = await prismadb.product.findMany({
+      where: { id: { in: productIds } }
+    })
+
     for (const { productId, quantity = 1 } of items) {
-      const product = await prismadb.product.findUnique({
-        where: { id: productId }
-      })
+      const product = products.find((product) => product.id === productId)
 
       if (!product) {
         errors.push(`Product ${productId} not found`)
@@ -80,7 +82,7 @@ export async function POST(
       prismadb.order.create({
         data: {
           storeId: params.storeId,
-          userId: user.id,
+          userId: 'guest',
           orderNumber: generateOrderNumber(),
           status: OrderStatus.PENDING,
           orderItems: { create: orderItemsData }
