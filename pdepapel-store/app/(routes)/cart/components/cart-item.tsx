@@ -1,5 +1,6 @@
 import { Currency } from "@/components/ui/currency";
 import { IconButton } from "@/components/ui/icon-button";
+import { QuantitySelector } from "@/components/ui/quantity-selector";
 import { useCart } from "@/hooks/use-cart";
 import { Product } from "@/types";
 import { X } from "lucide-react";
@@ -14,6 +15,10 @@ export const CartItem: React.FC<CartItemProps> = ({ item }) => {
 
   const onRemove = () => {
     cart.removeItem(item.id);
+  };
+
+  const onUpdateQuantity = (quantity: number) => {
+    cart.updateQuantity(item.id, quantity);
   };
 
   return (
@@ -45,7 +50,14 @@ export const CartItem: React.FC<CartItemProps> = ({ item }) => {
               {item.design.name}
             </p>
           </div>
-          <Currency value={item.price} />
+          <div className="flex w-fit flex-col space-y-2">
+            <QuantitySelector
+              max={item.stock}
+              initialValue={item?.quantity ?? 1}
+              onValueChange={onUpdateQuantity}
+            />
+            <Currency value={item.price} />
+          </div>
         </div>
       </div>
     </li>

@@ -22,7 +22,9 @@ export async function GET(
         size: true,
         color: true,
         design: true,
-        reviews: true
+        reviews: {
+          orderBy: { createdAt: 'desc' }
+        }
       }
     })
     return NextResponse.json(product)

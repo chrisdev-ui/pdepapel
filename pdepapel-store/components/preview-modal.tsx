@@ -1,9 +1,9 @@
 "use client";
 
 import { Gallery } from "@/components/gallery";
+import { ProductInfo } from "@/components/product-info";
 import { Modal } from "@/components/ui/modal";
 import { usePreviewModal } from "@/hooks/use-preview-modal";
-import { ProductInfo } from "./product-info";
 
 export const PreviewModal: React.FC<{}> = () => {
   const previewModal = usePreviewModal();
@@ -20,7 +20,11 @@ export const PreviewModal: React.FC<{}> = () => {
           <Gallery images={product.images} />
         </div>
         <div className="sm:col-span-8 lg:col-span-7">
-          <ProductInfo data={product} showDescription={false} />
+          <ProductInfo
+            data={product}
+            showDescription={false}
+            showReviews={false}
+          />
         </div>
       </div>
     </Modal>

@@ -1,6 +1,7 @@
-import { cn } from "@/lib/utils";
 import { ShoppingCart } from "lucide-react";
-import { Icons } from "../icons";
+
+import { Icons } from "@/components/icons";
+import { cn } from "@/lib/utils";
 
 interface ToastIconProps {
   icon: "cart" | "heart";

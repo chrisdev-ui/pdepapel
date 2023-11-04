@@ -41,7 +41,7 @@ const buttonRightVariants = cva(
 );
 
 interface QuantitySelectorProps {
-  min: number;
+  min?: number;
   max: number;
   initialValue?: number;
   step?: number;

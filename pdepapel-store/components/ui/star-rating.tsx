@@ -8,12 +8,14 @@ interface StarRatingProps {
   className?: string;
   isDisabled?: boolean;
   currentRating?: number;
+  onRatingChange?: (rating: number) => void;
 }
 
 export const StarRating: React.FC<StarRatingProps> = ({
   className,
   isDisabled = false,
   currentRating = 0,
+  onRatingChange,
 }) => {
   const [rating, setRating] = useState<number>(currentRating);
   const [hover, setHover] = useState<number>(currentRating);
@@ -32,11 +34,15 @@ export const StarRating: React.FC<StarRatingProps> = ({
               },
               className,
             )}
-            onClick={() => setRating(index)}
+            onClick={() => {
+              setRating(index);
+              onRatingChange?.(index);
+            }}
             onMouseEnter={() => setHover(index)}
             onMouseLeave={() => setHover(rating)}
             onDoubleClick={() => {
               setRating(0);
+              onRatingChange?.(0);
               setHover(0);
             }}
             disabled={isDisabled}

@@ -49,7 +49,8 @@ export async function GET(
     return NextResponse.json({ error: 'Store ID is required' }, { status: 400 })
   try {
     const reviews = await prismadb.review.findMany({
-      where: { storeId: params.storeId, productId: params.productId }
+      where: { storeId: params.storeId, productId: params.productId },
+      orderBy: { createdAt: 'desc' }
     })
     return NextResponse.json(reviews)
   } catch (error) {

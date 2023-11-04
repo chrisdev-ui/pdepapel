@@ -173,7 +173,9 @@ export async function GET(
           color: true,
           design: true,
           size: true,
-          reviews: true
+          reviews: {
+            orderBy: { createdAt: 'desc' }
+          }
         },
         orderBy: {
           createdAt: 'desc'
@@ -205,7 +207,9 @@ export async function GET(
           color: true,
           design: true,
           size: true,
-          reviews: true
+          reviews: {
+            orderBy: { createdAt: 'desc' }
+          }
         },
         orderBy: sort[sortOption as SortOption],
         take: limit || undefined

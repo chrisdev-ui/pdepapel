@@ -7,7 +7,7 @@ import { Product } from "@/types";
 
 interface CartStore {
   items: Product[];
-  addItem: (item: Product) => void;
+  addItem: (item: Product, quantity?: number) => void;
   updateQuantity: (id: string, quantity: number) => void;
   removeItem: (id: string) => void;
   removeAll: () => void;
@@ -17,16 +17,16 @@ export const useCart = create(
   persist<CartStore>(
     (set, get) => ({
       items: [],
-      addItem: (item: Product) => {
+      addItem: (item: Product, quantity: number = 1) => {
         const currentItems = get().items;
         const existingItem = currentItems.find((i) => i.id === item.id);
 
         if (existingItem) {
           if (
             existingItem.quantity &&
-            existingItem.quantity < existingItem.stock
+            existingItem.quantity + quantity <= existingItem.stock
           ) {
-            existingItem.quantity += 1;
+            existingItem.quantity += quantity;
             set({ items: [...currentItems] });
             toast({
               description: "Producto agregado al carrito.",
@@ -43,7 +43,7 @@ export const useCart = create(
         } else {
           const newItem: Product = {
             ...item,
-            quantity: 1,
+            quantity,
           };
           set({ items: [...currentItems, newItem] });
           toast({

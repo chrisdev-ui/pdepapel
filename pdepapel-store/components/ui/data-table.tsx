@@ -7,7 +7,9 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from "@tanstack/react-table";
+import { useState } from "react";
 
+import { WishlistColumn } from "@/app/(routes)/wishlist/components/columns";
 import {
   Table,
   TableBody,
@@ -17,16 +19,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useState } from "react";
 import { DataTablePagination } from "./data-table-pagination";
 
-interface DataTableProps<TData, TValue> {
+interface DataTableProps<TData extends WishlistColumn, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   caption?: string;
 }
 
-export function DataTable<TData, TValue>({
+export function DataTable<TData extends WishlistColumn, TValue>({
   columns,
   data,
   caption,

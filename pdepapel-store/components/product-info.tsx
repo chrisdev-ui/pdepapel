@@ -4,17 +4,47 @@ import { Button } from "@/components/ui/button";
 import { Currency } from "@/components/ui/currency";
 import { Separator } from "@/components/ui/separator";
 import { StarRating } from "@/components/ui/star-rating";
+import { useCart } from "@/hooks/use-cart";
+import { calculateAverageRating } from "@/lib/utils";
 import { Product } from "@/types";
+import { useRouter } from "next/navigation";
+import { RefObject, useState } from "react";
+import { QuantitySelector } from "./ui/quantity-selector";
 
 interface ProductInfoProps {
   data: Product;
   showDescription?: boolean;
+  showReviews?: boolean;
+  reviewsRef?: RefObject<HTMLDivElement>;
 }
 
 export const ProductInfo: React.FC<ProductInfoProps> = ({
   data,
   showDescription = true,
+  showReviews = true,
+  reviewsRef,
 }) => {
+  const [quantity, setQuantity] = useState<number>();
+  const cart = useCart();
+  const router = useRouter();
+
+  const goToReviews = () => {
+    reviewsRef?.current?.scrollIntoView({
+      behavior: "smooth",
+    });
+  };
+
+  const productInCart = cart.items.find((item) => item.id === data.id);
+
+  const handleAddToCart = () => {
+    if (productInCart) {
+      cart.updateQuantity(data.id, quantity ?? 1);
+    } else {
+      cart.addItem(data, quantity);
+    }
+    router.push("/cart");
+  };
+
   return (
     <div>
       <h1 className="font-serif text-3xl font-bold">{data?.name}</h1>
@@ -22,7 +52,17 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
         <p className="text-2xl">
           <Currency value={data?.price} />
         </p>
-        <StarRating isDisabled />
+        <div className="flex items-center gap-2">
+          {showReviews && (
+            <button onClick={goToReviews} className="text-sm underline">
+              {data.reviews?.length ?? 0} Opiniones
+            </button>
+          )}
+          <StarRating
+            currentRating={calculateAverageRating(data?.reviews)}
+            isDisabled
+          />
+        </div>
       </div>
       <Separator className="my-4" />
       <div className="flex flex-col gap-y-6">
@@ -43,11 +83,25 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
           <h3 className="font-serif font-semibold">Diseño:</h3>
           <div>{data?.design?.name}</div>
         </div>
+        <div className="flex items-center gap-x-4">
+          <h3 className="font-serif font-semibold">Cantidad:</h3>
+          <div>
+            <QuantitySelector
+              max={data.stock}
+              initialValue={productInCart?.quantity || 1}
+              size="medium"
+              onValueChange={(value) => {
+                setQuantity(value);
+              }}
+            />
+          </div>
+        </div>
       </div>
       <div className="mt-10 flex items-center gap-x-3">
         <Button
           disabled={data.stock === 0}
           className="flex gap-2 rounded-full border-none bg-blue-yankees px-8 py-4 font-serif text-sm font-semibold text-white outline-none [transition:0.2s]"
+          onClick={handleAddToCart}
         >
           Agregar al carrito
           <ShoppingCart className="h-5 w-5" />

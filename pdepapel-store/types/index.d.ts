@@ -17,12 +17,12 @@ export interface Product {
   description: string;
   price: string;
   stock: number;
-  ratings: number;
   isFeatured: boolean;
   size: Size;
   color: Color;
   design: Design;
   images: Image[];
+  reviews: Review[];
   quantity?: number;
 }
 
@@ -72,4 +72,12 @@ export interface Banner {
 export interface PriceRange {
   id: string;
   name: string;
+}
+
+export interface Review {
+  id: string;
+  userId: string;
+  name: string;
+  rating: number;
+  comment: string;
 }
