@@ -45,6 +45,7 @@ export default async function ProductPage({
     product?.reviews.map((review) => ({
       id: review.id,
       productId: review.productId,
+      name: review.name,
       userId: review.userId,
       rating: String(review.rating),
       comment: review.comment || '',

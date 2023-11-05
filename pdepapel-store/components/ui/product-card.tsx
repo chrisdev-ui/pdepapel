@@ -12,7 +12,7 @@ import { StarRating } from "@/components/ui/star-rating";
 import { useCart } from "@/hooks/use-cart";
 import { usePreviewModal } from "@/hooks/use-preview-modal";
 import { useWishlist } from "@/hooks/use-wishlist";
-import { cn } from "@/lib/utils";
+import { calculateAverageRating, cn } from "@/lib/utils";
 import { Product } from "@/types";
 
 interface ProductCardProps {
@@ -116,7 +116,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           {product.category?.name}
         </p>
       </div>
-      <StarRating isDisabled />
+      <StarRating
+        currentRating={calculateAverageRating(product.reviews)}
+        isDisabled
+      />
       <div className="flex items-center justify-between">
         <Currency value={product.price} />
       </div>

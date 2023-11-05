@@ -2,7 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { Star } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface StarRatingProps {
   className?: string;
@@ -19,6 +19,12 @@ export const StarRating: React.FC<StarRatingProps> = ({
 }) => {
   const [rating, setRating] = useState<number>(currentRating);
   const [hover, setHover] = useState<number>(currentRating);
+
+  useEffect(() => {
+    setRating(currentRating);
+    setHover(currentRating);
+  }, [currentRating]);
+
   return (
     <div>
       {[...Array(5)].map((_, index) => {

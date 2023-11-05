@@ -2,7 +2,7 @@
 
 import { SignedIn, SignedOut, useAuth } from "@clerk/nextjs";
 import Link from "next/link";
-import { useParams, usePathname } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import { RefObject, useState } from "react";
 
 import { ReviewItem } from "@/components/reviews/review-item";
@@ -13,7 +13,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { StarRating } from "@/components/ui/star-rating";
 import { Textarea } from "@/components/ui/textarea";
 import { KAWAII_FACE_SAD } from "@/constants";
+import { useToast } from "@/hooks/use-toast";
 import { Review } from "@/types";
+import axios from "axios";
 
 interface ReviewsProps {
   title: string;
@@ -29,11 +31,53 @@ export const Reviews: React.FC<ReviewsProps> = ({
   const params = useParams();
   const { userId } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
+  const { toast } = useToast();
   const [rating, setRating] = useState<number>(0);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [comments, setComments] = useState<string>("");
 
-  const onSubmit = () => {
-    console.log({ rating, comments });
+  const onSubmit = async () => {
+    try {
+      setIsLoading(true);
+      const existentReview = reviews.find((review) => review.userId === userId);
+      if (existentReview) {
+        await axios.patch(
+          `${process.env.NEXT_PUBLIC_API_URL}/products/${params.productId}/reviews/${existentReview.id}`,
+          {
+            rating,
+            comment: comments,
+            userId,
+          },
+        );
+      } else {
+        await axios.post(
+          `${process.env.NEXT_PUBLIC_API_URL}/products/${params.productId}/reviews`,
+          {
+            rating,
+            comment: comments,
+            userId,
+          },
+        );
+      }
+      setRating(0);
+      setComments("");
+      toast({
+        title: "Comentario enviado",
+        variant: "success",
+        description: "Tu comentario ha sido enviado correctamente",
+      });
+    } catch (error) {
+      console.log("[REVIEW_ERROR]", error);
+      toast({
+        title: "Error al enviar el comentario",
+        variant: "destructive",
+        description: "Ha ocurrido un error al enviar tu comentario",
+      });
+    } finally {
+      setIsLoading(false);
+      router.refresh();
+    }
   };
 
   return (
@@ -44,7 +88,7 @@ export const Reviews: React.FC<ReviewsProps> = ({
           message={`No hay comentarios sobre este producto ${KAWAII_FACE_SAD}`}
         />
       ) : (
-        <ScrollArea className="h-96 w-full">
+        <ScrollArea className="max-h-96 w-full">
           {reviews?.map((review) => (
             <ReviewItem key={review.id} review={review} />
           ))}
@@ -64,9 +108,10 @@ export const Reviews: React.FC<ReviewsProps> = ({
             <Textarea
               id="message"
               placeholder="Escribe tu comentario"
+              value={comments}
               onChange={(e) => setComments(e.target.value)}
             />
-            <Button onClick={onSubmit}>
+            <Button onClick={onSubmit} disabled={isLoading}>
               Enviar tus comentarios y valoración
             </Button>
           </div>
