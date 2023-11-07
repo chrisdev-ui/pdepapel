@@ -3,34 +3,12 @@
 import { Button } from "@/components/ui/button";
 import { Currency } from "@/components/ui/currency";
 import { useCart } from "@/hooks/use-cart";
-import { useToast } from "@/hooks/use-toast";
 import { CreditCard } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 export const Summary: React.FC<{}> = () => {
-  const searchParams = useSearchParams();
-  const { toast } = useToast();
   const router = useRouter();
   const items = useCart((state) => state.items);
-  const [isLoading, setIsLoading] = useState(false);
-  const removeAll = useCart((state) => state.removeAll);
-
-  useEffect(() => {
-    if (searchParams.get("success")) {
-      toast({
-        description: "Pago realizado con éxito, gracias por tu compra!",
-        variant: "success",
-      });
-      removeAll();
-    }
-    if (searchParams.get("canceled")) {
-      toast({
-        description: "Pago cancelado, no se ha realizado ningún cargo.",
-        variant: "destructive",
-      });
-    }
-  }, [removeAll, searchParams, toast]);
 
   const goToCheckout = () => {
     router.push("/checkout");
@@ -57,7 +35,7 @@ export const Summary: React.FC<{}> = () => {
       >
         <CreditCard className="absolute left-0 h-5 w-5 -translate-x-full transform transition-transform duration-500 ease-out group-hover:translate-x-64" />
         <span className="transition-opacity duration-150 group-hover:opacity-0">
-          Finalizar compra
+          Completar pedido
         </span>
       </Button>
     </div>

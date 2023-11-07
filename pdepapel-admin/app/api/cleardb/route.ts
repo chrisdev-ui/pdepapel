@@ -18,7 +18,6 @@ export async function POST(req: Request) {
     await prismadb.paymentDetails.deleteMany()
     await prismadb.order.deleteMany()
     await prismadb.image.deleteMany()
-    await prismadb.store.deleteMany()
 
     return NextResponse.json({ message: 'Database cleared' }, { status: 200 })
   } catch (error) {

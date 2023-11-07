@@ -3,6 +3,7 @@ export const TOAST_DURATION = 2000;
 export const KAWAII_FACE_EXCITED = `(,,>﹏<,,)`;
 export const KAWAII_FACE_SAD = `(｡-_-｡)`;
 export const KAWAII_FACE_HAPPY = `٩(ˊᗜˋ*)و ♡`;
+export const KAWAII_FACE_WELCOME = `｡◕ ‿ ◕｡`;
 
 export enum SortOptions {
   priceLowToHigh = "priceLowToHigh",
