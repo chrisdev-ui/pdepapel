@@ -11,10 +11,10 @@ export default async function CheckoutPage() {
   return (
     <>
       <Container>
-        <div className="flex w-full items-center justify-between">
+        <div className="flex w-full flex-col items-center justify-between sm:flex-row">
           <h1 className="flex items-center justify-start font-serif text-3xl font-bold">
             Ya casi completas tu orden...
-            <CheckCircle className="ml-2 h-8 w-8 text-green-500" />
+            <CheckCircle className="h-8 w-8 text-green-500 sm:ml-2" />
           </h1>
           <SignedOut>
             <div className="flex items-center gap-3">
