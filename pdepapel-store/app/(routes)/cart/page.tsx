@@ -1,11 +1,14 @@
 "use client";
 
-import { ShoppingBag } from "lucide-react";
+import { ArrowLeft, ShoppingBag } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { KAWAII_FACE_SAD } from "@/constants";
 import { useCart } from "@/hooks/use-cart";
+import { cn } from "@/lib/utils";
+import Link from "next/link";
 import { CartItem } from "./components/cart-item";
 import { Summary } from "./components/summary";
 
@@ -29,11 +32,23 @@ export default function CartPage() {
           <ShoppingBag className="ml-2 h-8 w-8" />
         </h1>
         <div className="mt-12 gap-x-12 lg:grid lg:grid-cols-12 lg:items-start">
-          <div className="lg:col-span-7">
+          <div
+            className={cn("lg:col-span-7", {
+              "lg:col-span-12": cart.items?.length === 0,
+            })}
+          >
             {cart.items?.length === 0 && (
-              <p className="text-neutral-500">
-                No tienes productos en tu carrito. {KAWAII_FACE_SAD}
-              </p>
+              <div className="flex w-full flex-col flex-wrap items-center sm:flex-row sm:justify-between">
+                <p className="text-neutral-500">
+                  No tienes productos en tu carrito. {KAWAII_FACE_SAD}
+                </p>
+                <Link href="/shop">
+                  <Button className="mt-4">
+                    {" "}
+                    <ArrowLeft className="mr-2 h-5 w-5" /> Regresar a la tienda
+                  </Button>
+                </Link>
+              </div>
             )}
             <ul>
               {cart.items?.length > 0 &&
@@ -42,7 +57,7 @@ export default function CartPage() {
                 ))}
             </ul>
           </div>
-          <Summary />
+          {cart.items?.length > 0 && <Summary />}
         </div>
       </Container>
     </>
