@@ -396,7 +396,6 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
               </Label>
             </div>
           </RadioGroup>
-          <Separator className="my-6" />
           <Button
             onClick={() => {}}
             disabled={cart.items.length === 0}
