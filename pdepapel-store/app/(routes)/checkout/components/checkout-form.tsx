@@ -397,7 +397,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
             </div>
           </RadioGroup>
           <Button
-            onClick={() => {}}
+            type="submit"
             disabled={cart.items.length === 0}
             className="group relative mt-6 w-full overflow-hidden rounded-full bg-blue-yankees font-serif text-base font-bold uppercase text-white hover:bg-blue-yankees"
           >
