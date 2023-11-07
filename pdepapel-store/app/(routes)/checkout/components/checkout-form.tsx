@@ -264,7 +264,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                       Envíanos una imagen de la transferencia al siguiente
                       número
                       <Icons.whatsapp className="mx-1 inline-flex h-3 w-3 text-green-600" />
-                      <strong>314-282-9044</strong>
+                      <strong>321-629-9845</strong>
                     </p>
                   </li>
                 </ol>

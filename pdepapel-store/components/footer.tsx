@@ -31,20 +31,20 @@ export const Footer: React.FC<{}> = () => {
             <ul className="space-y-1">
               <li className="">
                 <Link
-                  href="https://api.whatsapp.com/send/?phone=%2B573142829044&text&type=phone_number&app_absent=0"
+                  href="https://api.whatsapp.com/send/?phone=%2B573216299845&text&type=phone_number&app_absent=0"
                   className="flex items-center gap-2 text-blue-yankees hover:text-pink-shell focus-visible:text-pink-shell"
                 >
                   <Icons.whatsapp className="h-5 w-5" />
-                  (+57) 314 282 9044
+                  (+57) 321 629 9845
                 </Link>
               </li>
               <li className="">
                 <Link
-                  href="tel:+573142829044"
+                  href="tel:+573216299845"
                   className="flex items-center gap-2 text-blue-yankees hover:text-pink-shell focus-visible:text-pink-shell"
                 >
                   <Phone className="h-5 w-5" />
-                  (+57) 314 282 9044
+                  (+57) 321 629 9845
                 </Link>
               </li>
               <li className="">
