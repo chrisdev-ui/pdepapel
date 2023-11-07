@@ -1,6 +1,5 @@
 "use client";
 
-import { User } from "@clerk/nextjs/server";
 import Image from "next/image";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
@@ -34,6 +33,12 @@ type PaymentMethod =
   | "bankTransfer"
   | "bancolombia";
 
+type CheckoutFormUser = {
+  firstName?: string | null;
+  lastName?: string | null;
+  telephone?: string | null;
+};
+
 const formSchema = z.object({
   firstName: z.string().min(1, "Por favor, escribe tu nombre").max(20),
   lastName: z.string().min(1, "Por favor, escribe tu apellido").max(20),
@@ -47,7 +52,7 @@ const formSchema = z.object({
 type CheckoutFormValue = z.infer<typeof formSchema>;
 
 interface CheckoutFormProps {
-  currentUser?: User;
+  currentUser?: CheckoutFormUser | null;
 }
 
 export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
@@ -60,7 +65,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
     defaultValues: {
       firstName: currentUser?.firstName ?? "",
       lastName: currentUser?.lastName ?? "",
-      telephone: currentUser?.phoneNumbers[0].phoneNumber ?? "",
+      telephone: currentUser?.telephone ?? "",
       address1: "",
       address2: "",
       city: "",

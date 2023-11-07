@@ -8,6 +8,11 @@ import { CheckoutForm } from "./components/checkout-form";
 
 export default async function CheckoutPage() {
   const user = await currentUser();
+  const formattedUser = {
+    firstName: user?.firstName,
+    lastName: user?.lastName,
+    telephone: user?.phoneNumbers[0]?.phoneNumber,
+  };
   return (
     <>
       <Container>
@@ -32,7 +37,7 @@ export default async function CheckoutPage() {
             </span>
           </SignedIn>
         </div>
-        <CheckoutForm />
+        <CheckoutForm currentUser={formattedUser} />
       </Container>
     </>
   );
