@@ -50,6 +50,7 @@ const config: Config = {
         mono: ["var(--font-caudex)", ...fontFamily.mono],
         sans: ["var(--font-coming-soon)", ...fontFamily.sans],
         serif: ["var(--font-martel-sans)", ...fontFamily.serif],
+        roboto: ["var(--font-roboto)", ...fontFamily.sans],
       },
       colors: {
         white: {

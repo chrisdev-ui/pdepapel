@@ -5,7 +5,7 @@ import { Toaster } from "@/providers/toaster";
 import { esES } from "@clerk/localizations";
 import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
-import { Caudex, Coming_Soon, Martel_Sans } from "next/font/google";
+import { Caudex, Coming_Soon, Martel_Sans, Roboto } from "next/font/google";
 import "./globals.css";
 
 const caudex = Caudex({
@@ -28,6 +28,14 @@ const martelSans = Martel_Sans({
   weight: ["200", "300", "400", "600", "700", "800", "900"],
   style: "normal",
   variable: "--font-martel-sans",
+});
+
+const roboto = Roboto({
+  style: ["normal", "italic"],
+  weight: ["100", "300", "400", "500", "700", "900"],
+  subsets: ["latin", "latin-ext"],
+  display: "swap",
+  variable: "--font-roboto",
 });
 
 export const metadata: Metadata = {
@@ -64,7 +72,7 @@ export default function RootLayout({
     <ClerkProvider localization={esES}>
       <html lang="en">
         <body
-          className={`${caudex.variable} ${comingSoon.variable} ${martelSans.variable}`}
+          className={`${caudex.variable} ${comingSoon.variable} ${martelSans.variable} ${roboto.variable}`}
         >
           <ModalProvider />
           <Navbar />

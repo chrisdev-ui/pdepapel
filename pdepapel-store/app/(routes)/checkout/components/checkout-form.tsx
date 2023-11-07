@@ -11,9 +11,11 @@ import { Currency } from "@/components/ui/currency";
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
+  FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +27,7 @@ import { useCart } from "@/hooks/use-cart";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, CreditCard } from "lucide-react";
 import { useEffect, useState } from "react";
+import { BancolombiaButton } from "./bancolombia-button";
 import { InfoCountryTooltip } from "./info-country-tooltip";
 
 type PaymentMethod =
@@ -135,6 +138,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                         {...field}
                       />
                     </FormControl>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
@@ -151,6 +155,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                         {...field}
                       />
                     </FormControl>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
@@ -167,6 +172,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                         {...field}
                       />
                     </FormControl>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
@@ -183,6 +189,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                         {...field}
                       />
                     </FormControl>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
@@ -199,6 +206,8 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                         {...field}
                       />
                     </FormControl>
+                    <FormDescription>Este campo es opcional</FormDescription>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
@@ -215,6 +224,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                         {...field}
                       />
                     </FormControl>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
@@ -231,6 +241,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                         {...field}
                       />
                     </FormControl>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
@@ -302,44 +313,38 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
             </div>
             <Separator className="my-6" />
             <div className="flex w-full flex-col gap-4">
-              {cart.items.length === 0 && (
-                <NoResults
-                  message={`No hay productos en el carrito ${KAWAII_FACE_SAD}`}
-                />
-              )}
-              {cart.items.length > 0 &&
-                cart.items.map((item) => (
-                  <div
-                    key={item.id}
-                    className="grid grid-cols-[80px_1fr] gap-2.5"
+              {cart.items.map((item) => (
+                <div
+                  key={item.id}
+                  className="grid grid-cols-[80px_1fr] gap-2.5"
+                >
+                  <Link
+                    href={`/product/${item.id}`}
+                    className="relative h-20 w-20"
                   >
-                    <Link
-                      href={`/product/${item.id}`}
-                      className="relative h-20 w-20"
-                    >
-                      <Image
-                        src={item.images[0].url}
-                        alt={item.id}
-                        fill
-                        sizes="(max-width: 640px) 80px, 120px"
-                        className="rounded-md"
-                      />
-                      <span className="absolute right-0 top-0 flex h-4 w-4 items-center justify-center rounded-full bg-blue-yankees font-serif text-xs text-white">
-                        {item.quantity}
-                      </span>
-                    </Link>
-                    <div className="flex max-h-20 items-center justify-between">
-                      <div className="flex h-full flex-col items-start justify-between">
-                        <div className="flex flex-col text-left font-serif text-sm font-medium tracking-tight">
-                          <span>{item.name}</span>
-                          <span className="text-xs text-gray-400">{`Diseño: ${item.design.name}`}</span>
-                          <span className="hidden text-xs text-gray-400 lg:block">{`Categoría: ${item.category.name}`}</span>
-                        </div>
-                        <Currency className="text-lg" value={item.price} />
+                    <Image
+                      src={item.images[0].url}
+                      alt={item.id}
+                      fill
+                      sizes="(max-width: 640px) 80px, 120px"
+                      className="rounded-md"
+                    />
+                    <span className="absolute right-0 top-0 flex h-4 w-4 items-center justify-center rounded-full bg-blue-yankees font-serif text-xs text-white">
+                      {item.quantity}
+                    </span>
+                  </Link>
+                  <div className="flex max-h-20 items-center justify-between">
+                    <div className="flex h-full flex-col items-start justify-between">
+                      <div className="flex flex-col text-left font-serif text-sm font-medium tracking-tight">
+                        <span>{item.name}</span>
+                        <span className="text-xs text-gray-400">{`Diseño: ${item.design.name}`}</span>
+                        <span className="hidden text-xs text-gray-400 lg:block">{`Categoría: ${item.category.name}`}</span>
                       </div>
+                      <Currency className="text-lg" value={item.price} />
                     </div>
                   </div>
-                ))}
+                </div>
+              ))}
             </div>
             <Separator className="my-6" />
             <div className="flex w-full items-center justify-between text-xl">
@@ -413,16 +418,22 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                 </Label>
               </div>
             </RadioGroup>
-            <Button
-              type="submit"
-              disabled={cart.items.length === 0}
-              className="group relative mt-6 w-full overflow-hidden rounded-full bg-blue-yankees font-serif text-base font-bold uppercase text-white hover:bg-blue-yankees"
-            >
-              <CreditCard className="absolute left-0 h-5 w-5 -translate-x-full transform transition-transform duration-500 ease-out group-hover:translate-x-52" />
-              <span className="transition-opacity duration-150 group-hover:opacity-0">
-                Finalizar compra
-              </span>
-            </Button>
+            {paymentMethod !== "bancolombia" ? (
+              <Button
+                type="submit"
+                disabled={cart.items.length === 0}
+                className="group relative mt-6 w-full overflow-hidden rounded-full bg-blue-yankees font-serif text-base font-bold uppercase text-white hover:bg-blue-yankees"
+              >
+                <CreditCard className="absolute left-0 h-5 w-5 -translate-x-full transform transition-transform duration-500 ease-out group-hover:translate-x-52" />
+                <span className="transition-opacity duration-150 group-hover:opacity-0">
+                  Finalizar compra
+                </span>
+              </Button>
+            ) : (
+              <div className="mt-6 w-full">
+                <BancolombiaButton />
+              </div>
+            )}
           </div>
         </form>
       )}
