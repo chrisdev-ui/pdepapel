@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 
@@ -24,19 +25,22 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { KAWAII_FACE_SAD } from "@/constants";
 import { useCart } from "@/hooks/use-cart";
+import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
+import axios from "axios";
 import { ArrowLeft, CreditCard } from "lucide-react";
-import { useEffect, useState } from "react";
 import { BancolombiaButton } from "./bancolombia-button";
 import { InfoCountryTooltip } from "./info-country-tooltip";
 
-type PaymentMethod =
-  | "cashOnDelivery"
-  | "stripe"
-  | "bankTransfer"
-  | "bancolombia";
+enum PaymentMethod {
+  COD = "COD",
+  Stripe = "Stripe",
+  BankTransfer = "BankTransfer",
+  Bancolombia = "Bancolombia",
+}
 
 type CheckoutFormUser = {
+  id?: string | null;
   firstName?: string | null;
   lastName?: string | null;
   telephone?: string | null;
@@ -61,8 +65,11 @@ interface CheckoutFormProps {
 export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
   const cart = useCart();
   const [isMounted, setIsMounted] = useState(false);
-  const [paymentMethod, setPaymentMethod] =
-    useState<PaymentMethod>("bankTransfer");
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
+    PaymentMethod.BankTransfer,
+  );
   const form = useForm<CheckoutFormValue>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -96,7 +103,62 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
   );
 
   const onSubmit = async (data: CheckoutFormValue) => {
-    console.log(data);
+    const userId = currentUser?.id ?? null;
+    const orderItems = cart.items.map((item) => ({
+      productId: item.id,
+      quantity: item.quantity,
+    }));
+    const { firstName, lastName, telephone, address1, address2, city, state } =
+      data;
+    const formattedData = {
+      fullName: `${firstName} ${lastName}`,
+      phone: telephone,
+      address: [address1, address2, city, state]
+        .filter((a) => a !== null)
+        .join(", "),
+      userId,
+      orderItems,
+    };
+    try {
+      setIsLoading(true);
+      if (
+        paymentMethod === PaymentMethod.BankTransfer ||
+        paymentMethod === PaymentMethod.COD
+      ) {
+        const order = await axios.post(
+          `${process.env.NEXT_PUBLIC_API_URL}/orders`,
+          formattedData,
+        );
+        toast({
+          title: "Orden creada",
+          description: `Tu orden #${order.data.id} ha sido creada exitosamente`,
+          variant: "success",
+        });
+        cart.removeAll();
+      } else if (paymentMethod === PaymentMethod.Stripe) {
+        const response = await axios.post(
+          `${process.env.NEXT_PUBLIC_API_URL}/checkout/stripe`,
+          {
+            items: orderItems,
+          },
+        );
+        window.location = response.data.url;
+      } else if (paymentMethod === PaymentMethod.Bancolombia) {
+        toast({
+          description: `Aún estamos trabajando en la implementación de este método de pago, por favor utiliza otro.`,
+          variant: "info",
+        });
+      }
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "Error",
+        description: "Ha ocurrido un error creando tu orden",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -134,6 +196,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                     <FormControl>
                       <Input
                         className="bg-green-leaf/20 invalid:bg-pink-froly/20"
+                        disabled={isLoading}
                         placeholder="Maria"
                         {...field}
                       />
@@ -151,6 +214,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                     <FormControl>
                       <Input
                         className="bg-green-leaf/20 invalid:bg-pink-froly/20"
+                        disabled={isLoading}
                         placeholder="Dolores"
                         {...field}
                       />
@@ -168,6 +232,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                     <FormControl>
                       <Input
                         className="bg-green-leaf/20 invalid:bg-pink-froly/20"
+                        disabled={isLoading}
                         placeholder="3XXXXXXXXX"
                         {...field}
                       />
@@ -185,6 +250,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                     <FormControl>
                       <Input
                         className="bg-green-leaf/20 invalid:bg-pink-froly/20"
+                        disabled={isLoading}
                         placeholder="Calle 1 # 2 - 3"
                         {...field}
                       />
@@ -202,6 +268,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                     <FormControl>
                       <Input
                         className="bg-green-leaf/20 invalid:bg-pink-froly/20"
+                        disabled={isLoading}
                         placeholder="Edificio, Apto, Casa, Lote, etc. (Opcional)"
                         {...field}
                       />
@@ -220,6 +287,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                     <FormControl>
                       <Input
                         className="bg-green-leaf/20 invalid:bg-pink-froly/20"
+                        disabled={isLoading}
                         placeholder="ex: Medellín"
                         {...field}
                       />
@@ -237,6 +305,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                     <FormControl>
                       <Input
                         className="bg-green-leaf/20 invalid:bg-pink-froly/20"
+                        disabled={isLoading}
                         placeholder="ex: Antioquia"
                         {...field}
                       />
@@ -258,7 +327,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                 </div>
               </div>
             </div>
-            {paymentMethod === "bankTransfer" && (
+            {paymentMethod === PaymentMethod.BankTransfer && (
               <>
                 <h2 className="mt-10 font-serif text-lg font-bold">
                   Pagos por transferencia bancaria
@@ -357,7 +426,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
             </div>
             <Separator className="my-6" />
             <RadioGroup
-              defaultValue="bankTransfer"
+              defaultValue={PaymentMethod.BankTransfer}
               value={paymentMethod}
               disabled={cart.items.length === 0}
               onValueChange={(value) =>
@@ -367,12 +436,12 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
             >
               <div>
                 <RadioGroupItem
-                  value="bankTransfer"
-                  id="bankTransfer"
+                  value={PaymentMethod.BankTransfer}
+                  id={PaymentMethod.BankTransfer}
                   className="peer sr-only"
                 />
                 <Label
-                  htmlFor="bankTransfer"
+                  htmlFor={PaymentMethod.BankTransfer}
                   className="flex cursor-pointer items-center justify-start gap-4 rounded-md border border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-pink-shell peer-data-[state=checked]:bg-pink-shell/20 [&:has([data-state=checked])]:border-pink-shell [&:has([data-state=checked])]:bg-pink-shell/20"
                 >
                   <Icons.payments.transfer className="h-6 w-6" />
@@ -381,12 +450,12 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
               </div>
               <div>
                 <RadioGroupItem
-                  value="stripe"
-                  id="stripe"
+                  value={PaymentMethod.Stripe}
+                  id={PaymentMethod.Stripe}
                   className="peer sr-only"
                 />
                 <Label
-                  htmlFor="stripe"
+                  htmlFor={PaymentMethod.Stripe}
                   className="flex cursor-pointer items-center justify-start gap-4 rounded-md border border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-pink-shell peer-data-[state=checked]:bg-pink-shell/20 [&:has([data-state=checked])]:border-pink-shell [&:has([data-state=checked])]:bg-pink-shell/20"
                 >
                   <Icons.payments.stripe className="h-6 w-6" />
@@ -395,12 +464,12 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
               </div>
               <div>
                 <RadioGroupItem
-                  value="cashOnDelivery"
-                  id="cashOnDelivery"
+                  value={PaymentMethod.COD}
+                  id={PaymentMethod.COD}
                   className="peer sr-only"
                 />
                 <Label
-                  htmlFor="cashOnDelivery"
+                  htmlFor={PaymentMethod.COD}
                   className="flex cursor-pointer items-center justify-start gap-4 rounded-md border border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-pink-shell peer-data-[state=checked]:bg-pink-shell/20 [&:has([data-state=checked])]:border-pink-shell [&:has([data-state=checked])]:bg-pink-shell/20"
                 >
                   <Icons.payments.cashOnDelivery className="h-6 w-6" />
@@ -409,12 +478,12 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
               </div>
               <div>
                 <RadioGroupItem
-                  value="bancolombia"
-                  id="bancolombia"
+                  value={PaymentMethod.Bancolombia}
+                  id={PaymentMethod.Bancolombia}
                   className="peer sr-only"
                 />
                 <Label
-                  htmlFor="bancolombia"
+                  htmlFor={PaymentMethod.Bancolombia}
                   className="flex cursor-pointer items-center justify-start gap-4 rounded-md border border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-pink-shell peer-data-[state=checked]:bg-pink-shell/20 [&:has([data-state=checked])]:border-pink-shell [&:has([data-state=checked])]:bg-pink-shell/20"
                 >
                   <Icons.payments.bancolombiaButton className="h-6 w-6" />
@@ -422,10 +491,10 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                 </Label>
               </div>
             </RadioGroup>
-            {paymentMethod !== "bancolombia" ? (
+            {paymentMethod !== PaymentMethod.Bancolombia ? (
               <Button
                 type="submit"
-                disabled={cart.items.length === 0}
+                disabled={cart.items.length === 0 || isLoading}
                 className="group relative mt-6 w-full overflow-hidden rounded-full bg-blue-yankees font-serif text-base font-bold uppercase text-white hover:bg-blue-yankees"
               >
                 <CreditCard className="absolute left-0 h-5 w-5 -translate-x-full transform transition-transform duration-500 ease-out group-hover:translate-x-52" />
@@ -435,7 +504,9 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
               </Button>
             ) : (
               <div className="mt-6 w-full">
-                <BancolombiaButton />
+                <BancolombiaButton
+                  disabled={cart.items.length === 0 || isLoading}
+                />
               </div>
             )}
           </div>

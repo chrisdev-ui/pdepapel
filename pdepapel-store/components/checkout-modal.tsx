@@ -41,7 +41,6 @@ export const CheckoutModal: React.FC<{}> = () => {
       );
       window.location = response.data.url;
     } catch (error: any) {
-      setIsLoading(false);
       console.log("[CHECKOUT_ERROR]", error);
       toast({
         description:

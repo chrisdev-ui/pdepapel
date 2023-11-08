@@ -4,10 +4,12 @@ import { useEffect, useRef, useState } from "react";
 
 interface BancolombiaButtonProps {
   url?: string;
+  disabled?: boolean;
 }
 
 export const BancolombiaButton: React.FC<BancolombiaButtonProps> = ({
   url = "#",
+  disabled = false,
 }) => {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [hovered, setHovered] = useState(false);
@@ -34,6 +36,7 @@ export const BancolombiaButton: React.FC<BancolombiaButtonProps> = ({
     <Link href={url} className="w-full">
       <Button
         ref={buttonRef}
+        disabled={disabled}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         className="group relative flex w-full select-none items-center justify-center whitespace-nowrap rounded-[30px] border-0 bg-[#f9c300] px-4 py-0 text-center align-middle font-roboto text-lg font-semibold normal-case leading-9 text-transparent transition-all duration-500 ease-out hover:bg-gray-900"
