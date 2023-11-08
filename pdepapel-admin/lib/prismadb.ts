@@ -1,5 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 
+import { env } from '@/lib/env.mjs'
+
 declare global {
   var prisma: PrismaClient | undefined
 }
@@ -10,6 +12,6 @@ const prismadb =
     log: ['query', 'info', 'warn', 'error']
   })
 
-if (process.env.NODE_ENV !== 'production') globalThis.prisma = prismadb
+if (env.NODE_ENV !== 'production') globalThis.prisma = prismadb
 
 export default prismadb

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 
+import { env } from '@/lib/env.mjs'
 import prismadb from '@/lib/prismadb'
 import { stripe } from '@/lib/stripe'
 import { generateOrderNumber } from '@/lib/utils'
@@ -96,8 +97,8 @@ export async function POST(
         mode: 'payment',
         billing_address_collection: 'required',
         phone_number_collection: { enabled: true },
-        success_url: `${process.env.FRONTEND_STORE_URL}/cart?success=1`,
-        cancel_url: `${process.env.FRONTEND_STORE_URL}/cart?canceled=1`,
+        success_url: `${env.FRONTEND_STORE_URL}/cart?success=1`,
+        cancel_url: `${env.FRONTEND_STORE_URL}/cart?canceled=1`,
         metadata: { orderId: order.id }
       },
       { idempotencyKey: order.id }

@@ -1,3 +1,4 @@
+import { env } from '@/lib/env.mjs'
 import prismadb from '@/lib/prismadb'
 import { stripe } from '@/lib/stripe'
 import { OrderStatus, PaymentMethod, ShippingStatus } from '@prisma/client'
@@ -15,7 +16,7 @@ export async function POST(req: Request) {
     event = stripe.webhooks.constructEvent(
       body,
       signature,
-      process.env.STRIPE_WEBHOOK_SECRET!
+      env.STRIPE_WEBHOOK_SECRET
     )
   } catch (error: any) {
     return NextResponse.json(
