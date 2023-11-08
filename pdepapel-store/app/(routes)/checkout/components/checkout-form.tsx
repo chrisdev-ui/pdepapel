@@ -311,8 +311,12 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                 Editar
               </Link>
             </div>
-            <Separator className="my-6" />
-            <div className="flex w-full flex-col gap-4">
+            <Separator className="mt-6" />
+            <span className="text-xxs text-green-500">
+              Los productos demoran entre 1 - 4 días hábiles en llegar a
+              destino.
+            </span>
+            <div className="mt-6 flex w-full flex-col gap-4">
               {cart.items.map((item) => (
                 <div
                   key={item.id}
