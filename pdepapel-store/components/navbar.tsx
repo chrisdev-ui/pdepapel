@@ -12,6 +12,7 @@ import { NavigationLink } from "@/components/navigation-link";
 import { WishlistButton } from "@/components/wishlist-button";
 import { useScrollPosition } from "@/hooks/use-scroll-position";
 import { cn } from "@/lib/utils";
+import { FileSearch } from "lucide-react";
 
 export const Navbar: React.FC<{}> = () => {
   const { isSignedIn } = useAuth();
@@ -68,7 +69,15 @@ export const Navbar: React.FC<{}> = () => {
             <WishlistButton />
             <NavbarCart />
             {isSignedIn && (
-              <UserButton afterSignOutUrl="/" userProfileMode="modal" />
+              <UserButton afterSignOutUrl="/" userProfileMode="modal">
+                <UserButton.UserProfilePage
+                  label="Mis Órdenes"
+                  url="/orders"
+                  labelIcon={<FileSearch className="h-4 w-4" />}
+                >
+                  <div>Hello Orders!</div>
+                </UserButton.UserProfilePage>
+              </UserButton>
             )}
             {!isSignedIn && (
               <Link href="/login" className="hover:opacity-75">

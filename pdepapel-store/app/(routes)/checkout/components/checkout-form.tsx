@@ -135,6 +135,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
           variant: "success",
         });
         cart.removeAll();
+        form.reset();
       } else if (paymentMethod === PaymentMethod.Stripe) {
         const response = await axios.post(
           `${process.env.NEXT_PUBLIC_API_URL}/checkout/stripe`,
