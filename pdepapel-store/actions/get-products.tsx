@@ -1,7 +1,8 @@
+import { env } from "@/lib/env.mjs";
 import { Product } from "@/types";
 import qs from "query-string";
 
-const API_URL = `${process.env.NEXT_PUBLIC_API_URL}/products`;
+const API_URL = `${env.NEXT_PUBLIC_API_URL}/products`;
 
 interface Query {
   typeId?: string;

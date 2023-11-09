@@ -1,15 +1,16 @@
 "use client";
 
+import axios from "axios";
 import { CreditCard, ShieldCheck } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 import { Icons } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { useCheckoutModal } from "@/hooks/use-checkout-modal";
 import { useToast } from "@/hooks/use-toast";
-import axios from "axios";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { env } from "@/lib/env.mjs";
 
 export const CheckoutModal: React.FC<{}> = () => {
   const router = useRouter();
@@ -31,7 +32,7 @@ export const CheckoutModal: React.FC<{}> = () => {
     try {
       setIsLoading(true);
       const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/checkout/stripe`,
+        `${env.NEXT_PUBLIC_API_URL}/checkout/stripe`,
         {
           items: orderItems.map((item) => ({
             productId: item.id,

@@ -26,6 +26,7 @@ import { Separator } from "@/components/ui/separator";
 import { KAWAII_FACE_SAD } from "@/constants";
 import { useCart } from "@/hooks/use-cart";
 import { useToast } from "@/hooks/use-toast";
+import { env } from "@/lib/env.mjs";
 import { zodResolver } from "@hookform/resolvers/zod";
 import axios from "axios";
 import { ArrowLeft, CreditCard } from "lucide-react";
@@ -126,7 +127,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
         paymentMethod === PaymentMethod.COD
       ) {
         const order = await axios.post(
-          `${process.env.NEXT_PUBLIC_API_URL}/orders`,
+          `${env.NEXT_PUBLIC_API_URL}/orders`,
           formattedData,
         );
         toast({
@@ -138,7 +139,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
         form.reset();
       } else if (paymentMethod === PaymentMethod.Stripe) {
         const response = await axios.post(
-          `${process.env.NEXT_PUBLIC_API_URL}/checkout/stripe`,
+          `${env.NEXT_PUBLIC_API_URL}/checkout/stripe`,
           {
             items: orderItems,
           },

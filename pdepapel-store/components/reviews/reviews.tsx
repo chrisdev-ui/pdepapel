@@ -14,6 +14,7 @@ import { StarRating } from "@/components/ui/star-rating";
 import { Textarea } from "@/components/ui/textarea";
 import { KAWAII_FACE_SAD } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
+import { env } from "@/lib/env.mjs";
 import { Review } from "@/types";
 import axios from "axios";
 
@@ -43,7 +44,7 @@ export const Reviews: React.FC<ReviewsProps> = ({
       const existentReview = reviews.find((review) => review.userId === userId);
       if (existentReview) {
         await axios.patch(
-          `${process.env.NEXT_PUBLIC_API_URL}/products/${params.productId}/reviews/${existentReview.id}`,
+          `${env.NEXT_PUBLIC_API_URL}/products/${params.productId}/reviews/${existentReview.id}`,
           {
             rating,
             comment: comments,
@@ -52,7 +53,7 @@ export const Reviews: React.FC<ReviewsProps> = ({
         );
       } else {
         await axios.post(
-          `${process.env.NEXT_PUBLIC_API_URL}/products/${params.productId}/reviews`,
+          `${env.NEXT_PUBLIC_API_URL}/products/${params.productId}/reviews`,
           {
             rating,
             comment: comments,
