@@ -10,6 +10,7 @@ export default authMiddleware({
     "/contact",
     "/wishlist",
     "/checkout",
+    "/order/:path*",
   ],
 });
 

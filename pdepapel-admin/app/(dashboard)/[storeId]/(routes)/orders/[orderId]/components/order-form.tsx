@@ -59,6 +59,7 @@ const shippingSchema = z
   .partial()
 
 const formSchema = z.object({
+  userId: z.string().default('guest'),
   fullName: z.string().min(1, 'Debes agregar un nombre'),
   phone: z
     .string()
@@ -183,6 +184,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           }
         }
       : {
+          userId: 'guest',
           fullName: '',
           orderItems: [],
           phone: '',
@@ -359,6 +361,23 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                       }
                       multiSelect
                       disabled={loading}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="userId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Id del usuario</FormLabel>
+                  <FormControl>
+                    <Input
+                      disabled={loading}
+                      placeholder="Id del usuario"
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />

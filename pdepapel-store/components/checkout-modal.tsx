@@ -25,6 +25,7 @@ export const CheckoutModal: React.FC<{}> = () => {
 
   const goToCheckout = () => {
     router.push("/checkout");
+    if (checkoutModal.callback) checkoutModal.callback();
     checkoutModal.onClose();
   };
 

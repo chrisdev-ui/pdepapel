@@ -1,16 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { KAWAII_FACE_WELCOME } from "@/constants";
-import { SignedIn, SignedOut, auth, clerkClient } from "@clerk/nextjs";
+import { SignedIn, SignedOut, currentUser } from "@clerk/nextjs";
 import { CheckCircle, User2 } from "lucide-react";
 import Link from "next/link";
 import { CheckoutForm } from "./components/checkout-form";
 
 export default async function CheckoutPage() {
-  const { userId } = auth();
-  const user = await clerkClient.users.getUser(userId as string);
+  const user = await currentUser();
   const formattedUser = {
-    id: user?.id,
     firstName: user?.firstName,
     lastName: user?.lastName,
     telephone: user?.phoneNumbers[0]?.phoneNumber,

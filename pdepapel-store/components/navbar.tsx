@@ -1,6 +1,7 @@
 "use client";
 
 import { UserButton, useAuth } from "@clerk/nextjs";
+import { FileSearch } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef } from "react";
@@ -9,10 +10,10 @@ import { HamburgerMenu } from "@/components/hamburger-menu";
 import { Icons } from "@/components/icons";
 import { NavbarCart } from "@/components/navbar-cart";
 import { NavigationLink } from "@/components/navigation-link";
+import { OrderHistory } from "@/components/order-history";
 import { WishlistButton } from "@/components/wishlist-button";
 import { useScrollPosition } from "@/hooks/use-scroll-position";
 import { cn } from "@/lib/utils";
-import { FileSearch } from "lucide-react";
 
 export const Navbar: React.FC<{}> = () => {
   const { isSignedIn } = useAuth();
@@ -75,7 +76,7 @@ export const Navbar: React.FC<{}> = () => {
                   url="/orders"
                   labelIcon={<FileSearch className="h-4 w-4" />}
                 >
-                  <div>Hello Orders!</div>
+                  <OrderHistory />
                 </UserButton.UserProfilePage>
               </UserButton>
             )}

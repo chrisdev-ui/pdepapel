@@ -23,25 +23,18 @@ import { Label } from "@/components/ui/label";
 import { NoResults } from "@/components/ui/no-results";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
-import { KAWAII_FACE_SAD } from "@/constants";
+import { KAWAII_FACE_SAD, PaymentMethod } from "@/constants";
 import { useCart } from "@/hooks/use-cart";
 import { useToast } from "@/hooks/use-toast";
 import { env } from "@/lib/env.mjs";
+import { useAuth } from "@clerk/nextjs";
 import { zodResolver } from "@hookform/resolvers/zod";
 import axios from "axios";
 import { ArrowLeft, CreditCard } from "lucide-react";
 import { BancolombiaButton } from "./bancolombia-button";
 import { InfoCountryTooltip } from "./info-country-tooltip";
 
-enum PaymentMethod {
-  COD = "COD",
-  Stripe = "Stripe",
-  BankTransfer = "BankTransfer",
-  Bancolombia = "Bancolombia",
-}
-
 type CheckoutFormUser = {
-  id?: string | null;
   firstName?: string | null;
   lastName?: string | null;
   telephone?: string | null;
@@ -64,6 +57,7 @@ interface CheckoutFormProps {
 }
 
 export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
+  const { userId } = useAuth();
   const cart = useCart();
   const [isMounted, setIsMounted] = useState(false);
   const { toast } = useToast();
@@ -104,7 +98,6 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
   );
 
   const onSubmit = async (data: CheckoutFormValue) => {
-    const userId = currentUser?.id ?? null;
     const orderItems = cart.items.map((item) => ({
       productId: item.id,
       quantity: item.quantity,

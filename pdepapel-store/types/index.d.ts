@@ -81,3 +81,37 @@ export interface Review {
   rating: number;
   comment: string;
 }
+
+export interface Order {
+  id: string;
+  orderNumber: string;
+  userId: string;
+  status: string;
+  fullName: string;
+  phone: string;
+  address: string;
+  orderItems: OrderItem[];
+  payment: Payment;
+  shipping: Shipping;
+  createdAt: string;
+}
+
+export interface OrderItem {
+  id: string;
+  product: Product;
+  quantity: number;
+}
+
+export interface Payment {
+  id: string;
+  method: string;
+  transactionId?: string;
+}
+
+export interface Shipping {
+  id: string;
+  status: string;
+  courier: string;
+  cost: number;
+  trackingNumber: string;
+}

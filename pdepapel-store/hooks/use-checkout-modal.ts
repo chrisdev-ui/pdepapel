@@ -4,13 +4,16 @@ import { create } from "zustand";
 interface CheckoutModalStore {
   isOpen: boolean;
   data?: Product[];
-  onOpen: (data: Product[]) => void;
+  callback?: () => void;
+  onOpen: (data: Product[], callback?: () => void) => void;
   onClose: () => void;
 }
 
 export const useCheckoutModal = create<CheckoutModalStore>((set) => ({
   isOpen: false,
   data: undefined,
-  onOpen: (data: Product[]) => set({ data, isOpen: true }),
+  callback: undefined,
+  onOpen: (data: Product[], callback?: () => void) =>
+    set({ data, isOpen: true, callback }),
   onClose: () => set({ isOpen: false }),
 }));

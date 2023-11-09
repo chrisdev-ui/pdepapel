@@ -12,3 +12,41 @@ export enum SortOptions {
   dateAdded = "dateAdded",
   featuredFirst = "featuredFirst",
 }
+
+export enum PaymentMethod {
+  COD = "COD",
+  Stripe = "Stripe",
+  BankTransfer = "BankTransfer",
+  Bancolombia = "Bancolombia",
+}
+
+export enum ShippingStatus {
+  Preparing = "Preparing",
+  Shipped = "Shipped",
+  InTransit = "InTransit",
+  Delivered = "Delivered",
+  Returned = "Returned",
+}
+
+export const steps: { status: string; value: string }[] = [
+  {
+    status: ShippingStatus.Preparing,
+    value: "Orden en preparación",
+  },
+  {
+    status: ShippingStatus.Shipped,
+    value: "Orden despachada",
+  },
+  {
+    status: ShippingStatus.InTransit,
+    value: "Orden en tránsito",
+  },
+  {
+    status: ShippingStatus.Delivered,
+    value: "Orden entregada",
+  },
+  {
+    status: ShippingStatus.Returned,
+    value: "Orden devuelta",
+  },
+];

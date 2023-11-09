@@ -1,24 +1,24 @@
 import prismadb from '@/lib/prismadb'
 import { generateOrderNumber } from '@/lib/utils'
 import { clerkClient } from '@clerk/nextjs'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 
 type OrderData = {
   storeId: string
   userId: string
   orderNumber: string
-  fullName: any
-  phone: any
-  address: any
+  fullName: string
+  phone: string
+  address: string
   orderItems: { create: any }
-  status?: any // Add this line
-  payment?: { create: any } // If needed
-  shipping?: { create: any } // If needed
+  status?: any
+  payment?: { create: any }
+  shipping?: { create: any }
 }
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST',
+  'Access-Control-Allow-Methods': 'GET, POST',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization'
 }
 
@@ -119,12 +119,31 @@ export async function POST(
 }
 
 export async function GET(
-  req: Request,
+  req: NextRequest,
   { params }: { params: { storeId: string } }
 ) {
   if (!params.storeId)
-    return NextResponse.json({ error: 'Store ID is required' }, { status: 400 })
+    return NextResponse.json(
+      { error: 'Store ID is required' },
+      { status: 400, headers: corsHeaders }
+    )
   try {
+    const userId = req.nextUrl.searchParams.get('userId')
+    if (userId) {
+      const orders = await prismadb.order.findMany({
+        where: { userId },
+        include: {
+          orderItems: {
+            include: {
+              product: true
+            }
+          },
+          payment: true,
+          shipping: true
+        }
+      })
+      return NextResponse.json(orders, { headers: corsHeaders })
+    }
     const orders = await prismadb.order.findMany({
       where: { storeId: params.storeId },
       include: {
@@ -137,7 +156,7 @@ export async function GET(
         shipping: true
       }
     })
-    return NextResponse.json(orders)
+    return NextResponse.json(orders, { headers: corsHeaders })
   } catch (error) {
     console.log('[ORDERS_GET]', error)
     return NextResponse.json(

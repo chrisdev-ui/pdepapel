@@ -50,7 +50,9 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
   };
 
   const onCheckout = () => {
-    checkoutModal.onOpen(cart.items);
+    checkoutModal.onOpen(cart.items, () => {
+      setIsSheetOpen(false);
+    });
   };
 
   const totalQuantity = cart.items.reduce(

@@ -2,12 +2,25 @@ import prismadb from '@/lib/prismadb'
 import { auth } from '@clerk/nextjs'
 import { NextResponse } from 'next/server'
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+}
+
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders })
+}
+
 export async function GET(
   _req: Request,
   { params }: { params: { orderId: string } }
 ) {
   if (!params.orderId)
-    return NextResponse.json({ error: 'Order ID is required' }, { status: 400 })
+    return NextResponse.json(
+      { error: 'Order ID is required' },
+      { status: 400, headers: corsHeaders }
+    )
   try {
     const order = await prismadb.order.findUnique({
       where: { id: params.orderId },
@@ -21,10 +34,13 @@ export async function GET(
         shipping: true
       }
     })
-    return NextResponse.json(order)
+    return NextResponse.json(order, { headers: corsHeaders })
   } catch (error) {
     console.log('[ORDER_GET]', error)
-    return NextResponse.json({ error: 'Internal Error' }, { status: 500 })
+    return NextResponse.json(
+      { error: 'Internal Error' },
+      { status: 500, headers: corsHeaders }
+    )
   }
 }
 
@@ -32,17 +48,25 @@ export async function PATCH(
   req: Request,
   { params }: { params: { storeId: string; orderId: string } }
 ) {
-  const { userId } = auth()
-  if (!userId)
+  const { userId: ownerId } = auth()
+  if (!ownerId)
     return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
   if (!params.orderId)
     return NextResponse.json({ error: 'Order ID is required' }, { status: 400 })
   try {
     const body = await req.json()
-    const { fullName, phone, address, orderItems, status, payment, shipping } =
-      body
+    const {
+      fullName,
+      phone,
+      address,
+      orderItems,
+      status,
+      payment,
+      shipping,
+      userId
+    } = body
     const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId }
+      where: { id: params.storeId, userId: ownerId }
     })
     if (!storeByUserId)
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
@@ -67,6 +91,7 @@ export async function PATCH(
       fullName,
       phone,
       address,
+      userId,
       orderItems: {
         create: orderItems.map(
           (orderItem: { productId: string; quantity: number }) => ({
