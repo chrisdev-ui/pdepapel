@@ -63,7 +63,7 @@ export default async function OrderPage({
             </div>
             <button className="flex gap-2">
               <Printer className="h-5 w-5" />
-              <span className="underline">Print</span>
+              <span className="underline">Imprimir</span>
             </button>
           </div>
           <div className="my-10 grid grid-flow-row grid-cols-1 gap-0 border border-solid md:grid-cols-3">
