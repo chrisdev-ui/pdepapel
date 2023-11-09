@@ -49,9 +49,9 @@ export default async function OrderPage({
           </div>
           <p className="my-8 px-10 text-center text-sm">
             Si creaste esta orden con tu usuario registrado en nuestra web,
-            revisa tus órdenes en el botón de usuario arriba a la derecha y en{" "}
-            <i>Administrar cuenta</i> &gt; <i>Mis órdenes</i> para ver los
-            detalles de tu orden.
+            revisa tus órdenes en el botón de usuario arriba a la derecha y da
+            click en <i>Administrar cuenta</i> &gt; <i>Mis órdenes</i> para ver
+            los detalles de tu orden.
           </p>
           <div className="flex items-start justify-between text-sm md:items-center md:justify-evenly md:gap-1">
             <div className="flex gap-2">
