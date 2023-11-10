@@ -27,7 +27,11 @@ export async function GET(
       include: {
         orderItems: {
           include: {
-            product: true
+            product: {
+              include: {
+                images: true
+              }
+            }
           }
         },
         payment: true,
@@ -87,33 +91,6 @@ export async function PATCH(
         { error: 'Order items are required' },
         { status: 400 }
       )
-    const orderUpdateData = {
-      fullName,
-      phone,
-      address,
-      userId,
-      orderItems: {
-        create: orderItems.map(
-          (orderItem: { productId: string; quantity: number }) => ({
-            product: { connect: { id: orderItem.productId } },
-            quantity: orderItem.quantity ?? 1
-          })
-        )
-      },
-      ...(status && { status })
-    }
-
-    if (payment && Object.keys(payment).length > 0) {
-      orderUpdateData.payment = {
-        update: payment
-      }
-    }
-
-    if (shipping && Object.keys(shipping).length > 0) {
-      orderUpdateData.shipping = {
-        update: shipping
-      }
-    }
     // Delete related order items first
     const [_, order] = await prismadb.$transaction([
       prismadb.orderItem.deleteMany({
@@ -121,7 +98,47 @@ export async function PATCH(
       }),
       prismadb.order.update({
         where: { id: params.orderId },
-        data: orderUpdateData
+        data: {
+          fullName,
+          phone,
+          address,
+          userId,
+          orderItems: {
+            create: orderItems.map(
+              (orderItem: { productId: string; quantity: number }) => ({
+                product: { connect: { id: orderItem.productId } },
+                quantity: orderItem.quantity ?? 1
+              })
+            )
+          },
+          ...(status && { status }),
+          payment: payment
+            ? {
+                upsert: {
+                  create: {
+                    ...payment,
+                    store: { connect: { id: params.storeId } }
+                  },
+                  update: {
+                    ...payment
+                  }
+                }
+              }
+            : undefined,
+          shipping: shipping
+            ? {
+                upsert: {
+                  create: {
+                    ...shipping,
+                    store: { connect: { id: params.storeId } }
+                  },
+                  update: {
+                    ...shipping
+                  }
+                }
+              }
+            : undefined
+        }
       })
     ])
     return NextResponse.json(order)

@@ -13,6 +13,13 @@ export enum SortOptions {
   featuredFirst = "featuredFirst",
 }
 
+export enum OrderStatus {
+  CREATED = "CREATED",
+  PENDING = "PENDING",
+  PAID = "PAID",
+  CANCELLED = "CANCELLED",
+}
+
 export enum PaymentMethod {
   COD = "COD",
   Stripe = "Stripe",

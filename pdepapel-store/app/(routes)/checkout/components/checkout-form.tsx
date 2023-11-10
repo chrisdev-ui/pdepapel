@@ -30,7 +30,7 @@ import { env } from "@/lib/env.mjs";
 import { useAuth } from "@clerk/nextjs";
 import { zodResolver } from "@hookform/resolvers/zod";
 import axios from "axios";
-import { ArrowLeft, CreditCard } from "lucide-react";
+import { ArrowLeft, CreditCard, Info } from "lucide-react";
 import { BancolombiaButton } from "./bancolombia-button";
 import { InfoCountryTooltip } from "./info-country-tooltip";
 
@@ -504,6 +504,16 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                 />
               </div>
             )}
+            <div className="mt-5">
+              <small className="text-xxs">
+                <Info className="inline-flex h-4 w-4 text-success" /> ¡Hola!
+                Solo queremos recordarte que el costo de envío no está incluido
+                en este total. El costo exacto de envío se calculará y te será
+                informado al finalizar tu compra, justo después de confirmar el
+                pago de tu pedido. ¡Estamos aquí para ayudarte con cualquier
+                duda que tengas!
+              </small>
+            </div>
           </div>
         </form>
       )}

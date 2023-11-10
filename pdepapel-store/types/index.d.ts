@@ -23,6 +23,7 @@ export interface Product {
   design: Design;
   images: Image[];
   reviews: Review[];
+  sku: string;
   quantity?: number;
 }
 
@@ -113,5 +114,7 @@ export interface Shipping {
   status: string;
   courier: string;
   cost: number;
-  trackingNumber: string;
+  trackingCode: string;
+  createdAt: string;
+  updatedAt: string;
 }

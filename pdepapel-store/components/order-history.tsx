@@ -20,7 +20,7 @@ import {
 import { Container } from "@/components/ui/container";
 import { Currency } from "@/components/ui/currency";
 import { NoResults } from "@/components/ui/no-results";
-import { KAWAII_FACE_SAD, ShippingStatus } from "@/constants";
+import { KAWAII_FACE_SAD, OrderStatus, ShippingStatus } from "@/constants";
 import { Order } from "@/types";
 
 export const OrderHistory: React.FC<{}> = () => {
@@ -86,11 +86,13 @@ export const OrderHistory: React.FC<{}> = () => {
               <CardTitle className="flex w-full flex-wrap items-center justify-between font-serif text-lg">
                 <div className="flex gap-1">{order.orderNumber}</div>
                 <Currency
-                  value={order.orderItems.reduce(
-                    (acc, item) =>
-                      acc + Number(item.product.price) * item.quantity,
-                    0,
-                  )}
+                  value={
+                    order.orderItems.reduce(
+                      (acc, item) =>
+                        acc + Number(item.product.price) * item.quantity,
+                      0,
+                    ) + Number(order?.shipping?.cost ?? 0)
+                  }
                 />
               </CardTitle>
               <CardDescription className="flex flex-wrap items-center justify-between gap-y-2 text-xs">
@@ -100,9 +102,9 @@ export const OrderHistory: React.FC<{}> = () => {
                 </span>
                 <span>
                   Estado de la orden:{" "}
-                  {order.status === "PAID"
+                  {order.status === OrderStatus.PAID
                     ? "Pagada"
-                    : order.status === "CANCELLED"
+                    : order.status === OrderStatus.CANCELLED
                     ? "Cancelada"
                     : "Pendiente de pago"}
                 </span>
