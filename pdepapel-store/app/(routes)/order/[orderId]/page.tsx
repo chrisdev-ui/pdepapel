@@ -1,5 +1,6 @@
-import { SignedIn, SignedOut, auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs";
 import { format } from "date-fns";
+import { es } from "date-fns/locale";
 import {
   Clock,
   CreditCard,
@@ -13,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 
 import { getOrder } from "@/actions/get-order";
 import { Icons } from "@/components/icons";
@@ -20,8 +22,6 @@ import { Container } from "@/components/ui/container";
 import { Currency } from "@/components/ui/currency";
 import { OrderStatus, ShippingStatus, steps } from "@/constants";
 import { cn } from "@/lib/utils";
-import { es } from "date-fns/locale";
-import Link from "next/link";
 import { Courier } from "./components/courier";
 
 export const revalidate = 0;
@@ -71,7 +71,7 @@ export default async function OrderPage({
 
   return (
     <>
-      <SignedIn>
+      {userId === order?.userId && (
         <Container>
           <div className="mt-5 flex items-center justify-center gap-5">
             <div className="relative h-20 w-20">
@@ -310,8 +310,22 @@ export default async function OrderPage({
             </div>
           </div>
         </Container>
-      </SignedIn>
-      <SignedOut></SignedOut>
+      )}
+      {userId !== order?.userId && (
+        <Container>
+          <div></div>
+        </Container>
+      )}
+      {!userId && order?.userId === "guest" && (
+        <Container>
+          <div></div>
+        </Container>
+      )}
+      {!userId && !order && (
+        <Container>
+          <div></div>
+        </Container>
+      )}
     </>
   );
 }
