@@ -1,3 +1,5 @@
+import { clerkClient } from '@clerk/nextjs'
+import { OrderStatus, PaymentMethod } from '@prisma/client'
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 
@@ -5,7 +7,6 @@ import { env } from '@/lib/env.mjs'
 import prismadb from '@/lib/prismadb'
 import { stripe } from '@/lib/stripe'
 import { generateOrderNumber } from '@/lib/utils'
-import { OrderStatus } from '@prisma/client'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -24,7 +25,20 @@ export async function POST(
   if (!params.storeId)
     return NextResponse.json({ error: 'Store ID is required' }, { status: 400 })
   try {
-    const { items } = await req.json()
+    const { items, userId, guestId } = await req.json()
+
+    let authenticatedUserId = null
+    if (userId) {
+      const user = await clerkClient.users.getUser(userId)
+      if (user) {
+        authenticatedUserId = user.id
+      } else {
+        return NextResponse.json(
+          { error: 'Unauthenticated or invalid user' },
+          { status: 401, headers: corsHeaders }
+        )
+      }
+    }
 
     if (!items || items.length === 0)
       return NextResponse.json(
@@ -83,10 +97,17 @@ export async function POST(
       prismadb.order.create({
         data: {
           storeId: params.storeId,
-          userId: 'guest',
+          userId: authenticatedUserId,
+          guestId: !authenticatedUserId ? guestId : null,
           orderNumber: generateOrderNumber(),
           status: OrderStatus.PENDING,
-          orderItems: { create: orderItemsData }
+          orderItems: { create: orderItemsData },
+          payment: {
+            create: {
+              storeId: params.storeId,
+              method: PaymentMethod.Stripe
+            }
+          }
         }
       })
     ])
@@ -97,8 +118,8 @@ export async function POST(
         mode: 'payment',
         billing_address_collection: 'required',
         phone_number_collection: { enabled: true },
-        success_url: `${env.FRONTEND_STORE_URL}/cart?success=1`,
-        cancel_url: `${env.FRONTEND_STORE_URL}/cart?canceled=1`,
+        success_url: `${env.FRONTEND_STORE_URL}/order/${order.id}/?success=1`,
+        cancel_url: `${env.FRONTEND_STORE_URL}/order/${order.id}/?canceled=1`,
         metadata: { orderId: order.id }
       },
       { idempotencyKey: order.id }

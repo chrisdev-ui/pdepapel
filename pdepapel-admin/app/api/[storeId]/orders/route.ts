@@ -1,11 +1,13 @@
 import prismadb from '@/lib/prismadb'
 import { generateOrderNumber } from '@/lib/utils'
 import { clerkClient } from '@clerk/nextjs'
+import { OrderStatus } from '@prisma/client'
 import { NextRequest, NextResponse } from 'next/server'
 
 type OrderData = {
   storeId: string
-  userId: string
+  userId: string | null
+  guestId: string | null
   orderNumber: string
   fullName: string
   phone: string
@@ -45,14 +47,21 @@ export async function POST(
       status,
       payment,
       shipping,
-      userId
+      userId,
+      guestId
     } = body
-    const user = await clerkClient.users.getUser(userId)
-    if (!user)
-      return NextResponse.json(
-        { error: 'Unauthenticated' },
-        { status: 401, headers: corsHeaders }
-      )
+    let authenticatedUserId = null
+    if (userId) {
+      const user = await clerkClient.users.getUser(userId)
+      if (user) {
+        authenticatedUserId = user.id
+      } else {
+        return NextResponse.json(
+          { error: 'Unauthenticated' },
+          { status: 401, headers: corsHeaders }
+        )
+      }
+    }
     if (!fullName)
       return NextResponse.json(
         { error: 'Full name is required' },
@@ -76,7 +85,8 @@ export async function POST(
     const orderNumber = generateOrderNumber()
     const orderData: OrderData = {
       storeId: params.storeId,
-      userId: user.id,
+      userId: authenticatedUserId,
+      guestId: !authenticatedUserId ? guestId : null,
       orderNumber,
       fullName,
       phone,
@@ -106,7 +116,21 @@ export async function POST(
     const [order] = await prismadb.$transaction([
       prismadb.order.create({
         data: orderData
-      })
+      }),
+      ...(status &&
+        status === OrderStatus.PAID &&
+        orderItems.map((orderItem: { productId: string; quantity: number }) =>
+          prismadb.product.update({
+            where: {
+              id: orderItem.productId
+            },
+            data: {
+              stock: {
+                decrement: orderItem.quantity
+              }
+            }
+          })
+        ))
     ])
     return NextResponse.json(order, { headers: corsHeaders })
   } catch (error) {
@@ -129,23 +153,20 @@ export async function GET(
     )
   try {
     const userId = req.nextUrl.searchParams.get('userId')
+    const guestId = req.nextUrl.searchParams.get('guestId')
+    const whereClause: { storeId: string; userId?: string; guestId?: string } =
+      {
+        storeId: params.storeId
+      }
+
     if (userId) {
-      const orders = await prismadb.order.findMany({
-        where: { userId },
-        include: {
-          orderItems: {
-            include: {
-              product: true
-            }
-          },
-          payment: true,
-          shipping: true
-        }
-      })
-      return NextResponse.json(orders, { headers: corsHeaders })
+      whereClause.userId = userId
+    } else if (guestId) {
+      whereClause.guestId = guestId
     }
+
     const orders = await prismadb.order.findMany({
-      where: { storeId: params.storeId },
+      where: whereClause,
       include: {
         orderItems: {
           include: {
@@ -161,7 +182,7 @@ export async function GET(
     console.log('[ORDERS_GET]', error)
     return NextResponse.json(
       { error: 'Internal Server Error' },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     )
   }
 }

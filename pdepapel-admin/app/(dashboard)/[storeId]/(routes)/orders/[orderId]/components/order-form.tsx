@@ -36,7 +36,7 @@ import {
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { useToast } from '@/hooks/use-toast'
-import { formatter } from '@/lib/utils'
+import { formatter, generateGuestId } from '@/lib/utils'
 import { zodResolver } from '@hookform/resolvers/zod'
 import axios from 'axios'
 import { DollarSign, ShoppingBasket, Trash } from 'lucide-react'
@@ -59,7 +59,8 @@ const shippingSchema = z
   .partial()
 
 const formSchema = z.object({
-  userId: z.string().default('guest'),
+  userId: z.string().default(''),
+  guestId: z.string().default(''),
   fullName: z.string().min(1, 'Debes agregar un nombre'),
   phone: z
     .string()
@@ -168,6 +169,8 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     defaultValues: initialData
       ? {
           ...initialData,
+          userId: initialData.userId || '',
+          guestId: initialData.guestId || '',
           orderItems: initialData.orderItems.map((item) => ({
             productId: item.productId,
             quantity: item.quantity
@@ -184,7 +187,8 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           }
         }
       : {
-          userId: 'guest',
+          userId: '',
+          guestId: generateGuestId(),
           fullName: '',
           orderItems: [],
           phone: '',
@@ -377,6 +381,24 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                     <Input
                       disabled={loading}
                       placeholder="Id del usuario"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="guestId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Id de invitado</FormLabel>
+                  <FormControl>
+                    <Input
+                      disabled={loading}
+                      readOnly
+                      placeholder="Id de invitado"
                       {...field}
                     />
                   </FormControl>

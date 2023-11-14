@@ -1,5 +1,6 @@
 import prismadb from '@/lib/prismadb'
 import { auth } from '@clerk/nextjs'
+import { OrderStatus } from '@prisma/client'
 import { NextResponse } from 'next/server'
 
 const corsHeaders = {
@@ -38,6 +39,11 @@ export async function GET(
         shipping: true
       }
     })
+    if (!order)
+      return NextResponse.json(
+        { error: 'Order not found' },
+        { status: 404, headers: corsHeaders }
+      )
     return NextResponse.json(order, { headers: corsHeaders })
   } catch (error) {
     console.log('[ORDER_GET]', error)
@@ -67,7 +73,8 @@ export async function PATCH(
       status,
       payment,
       shipping,
-      userId
+      userId,
+      guestId
     } = body
     const storeByUserId = await prismadb.store.findFirst({
       where: { id: params.storeId, userId: ownerId }
@@ -103,6 +110,7 @@ export async function PATCH(
           phone,
           address,
           userId,
+          guestId,
           orderItems: {
             create: orderItems.map(
               (orderItem: { productId: string; quantity: number }) => ({
@@ -139,7 +147,21 @@ export async function PATCH(
               }
             : undefined
         }
-      })
+      }),
+      ...(status &&
+        status === OrderStatus.PAID &&
+        orderItems.map((orderItem: { productId: string; quantity: number }) =>
+          prismadb.product.update({
+            where: {
+              id: orderItem.productId
+            },
+            data: {
+              stock: {
+                decrement: orderItem.quantity
+              }
+            }
+          })
+        ))
     ])
     return NextResponse.json(order)
   } catch (error) {
@@ -167,6 +189,8 @@ export async function DELETE(
     const order = await prismadb.order.delete({
       where: { id: params.orderId }
     })
+    if (!order)
+      return NextResponse.json({ error: 'Order not found' }, { status: 404 })
     return NextResponse.json(order)
   } catch (error) {
     console.log('[ORDER_DELETE]', error)

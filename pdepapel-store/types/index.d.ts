@@ -86,7 +86,8 @@ export interface Review {
 export interface Order {
   id: string;
   orderNumber: string;
-  userId: string;
+  userId: string | null;
+  guestId: string | null;
   status: string;
   fullName: string;
   phone: string;

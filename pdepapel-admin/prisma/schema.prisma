@@ -174,7 +174,8 @@ model Image {
 model Order {
   id          String      @id @default(uuid())
   orderNumber String      @unique
-  userId      String
+  userId      String?     @default("")
+  guestId     String?     @default("")
   storeId     String
   store       Store       @relation("StoreToOrder", fields: [storeId], references: [id])
   status      OrderStatus @default(CREATED)

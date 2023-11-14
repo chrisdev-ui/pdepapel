@@ -25,12 +25,15 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { KAWAII_FACE_SAD, PaymentMethod } from "@/constants";
 import { useCart } from "@/hooks/use-cart";
+import { useGuestUser } from "@/hooks/use-guest-user";
 import { useToast } from "@/hooks/use-toast";
 import { env } from "@/lib/env.mjs";
+import { generateGuestId } from "@/lib/utils";
 import { useAuth } from "@clerk/nextjs";
 import { zodResolver } from "@hookform/resolvers/zod";
 import axios from "axios";
 import { ArrowLeft, CreditCard, Info } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { BancolombiaButton } from "./bancolombia-button";
 import { InfoCountryTooltip } from "./info-country-tooltip";
 
@@ -58,6 +61,8 @@ interface CheckoutFormProps {
 
 export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
   const { userId } = useAuth();
+  const router = useRouter();
+  const { guestId, setGuestId, clearGuestId } = useGuestUser();
   const cart = useCart();
   const [isMounted, setIsMounted] = useState(false);
   const { toast } = useToast();
@@ -104,14 +109,24 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
     }));
     const { firstName, lastName, telephone, address1, address2, city, state } =
       data;
+    const isUserLoggedIn = Boolean(userId);
+    let guestUserId = guestId;
+    if (!isUserLoggedIn && !guestUserId) {
+      guestUserId = generateGuestId();
+      setGuestId(guestUserId);
+    }
     const formattedData = {
       fullName: `${firstName} ${lastName}`,
       phone: telephone,
       address: [address1, address2, city, state]
         .filter((a) => a !== null)
         .join(", "),
-      userId,
+      userId: isUserLoggedIn ? userId : null,
+      guestId: isUserLoggedIn ? null : guestUserId,
       orderItems,
+      payment: {
+        method: paymentMethod,
+      },
     };
     try {
       setIsLoading(true);
@@ -123,18 +138,31 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
           `${env.NEXT_PUBLIC_API_URL}/orders`,
           formattedData,
         );
-        toast({
-          title: "Orden creada",
-          description: `Tu orden #${order.data.id} ha sido creada exitosamente`,
-          variant: "success",
-        });
-        cart.removeAll();
-        form.reset();
+        if (order) {
+          toast({
+            title: "Orden creada",
+            description: `Tu orden #${order.data.id} ha sido creada exitosamente`,
+            variant: "success",
+          });
+          cart.removeAll();
+          form.reset();
+          if (userId) clearGuestId();
+          router.push(`/order/${order.data.id}`);
+        } else {
+          toast({
+            title: "Error",
+            description:
+              "Ha ocurrido un error creando tu orden, inténtalo de nuevo más tarde...",
+            variant: "destructive",
+          });
+        }
       } else if (paymentMethod === PaymentMethod.Stripe) {
         const response = await axios.post(
           `${env.NEXT_PUBLIC_API_URL}/checkout/stripe`,
           {
             items: orderItems,
+            userId: isUserLoggedIn ? userId : null,
+            guestId: isUserLoggedIn ? null : guestUserId,
           },
         );
         window.location = response.data.url;

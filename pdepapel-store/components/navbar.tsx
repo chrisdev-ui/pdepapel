@@ -1,6 +1,6 @@
 "use client";
 
-import { UserButton, useAuth } from "@clerk/nextjs";
+import { SignedIn, SignedOut, UserButton, useAuth } from "@clerk/nextjs";
 import { FileSearch } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -14,10 +14,12 @@ import { OrderHistory } from "@/components/order-history";
 import { WishlistButton } from "@/components/wishlist-button";
 import { useScrollPosition } from "@/hooks/use-scroll-position";
 import { cn } from "@/lib/utils";
+import { usePathname } from "next/navigation";
 
 export const Navbar: React.FC<{}> = () => {
   const { isSignedIn } = useAuth();
   const scrollPosition = useScrollPosition();
+  const pathname = usePathname();
   const navBarRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -69,7 +71,7 @@ export const Navbar: React.FC<{}> = () => {
           <div className="hidden items-center space-x-5 lg:flex">
             <WishlistButton />
             <NavbarCart />
-            {isSignedIn && (
+            <SignedIn>
               <UserButton afterSignOutUrl="/" userProfileMode="modal">
                 <UserButton.UserProfilePage
                   label="Mis Órdenes"
@@ -79,12 +81,15 @@ export const Navbar: React.FC<{}> = () => {
                   <OrderHistory />
                 </UserButton.UserProfilePage>
               </UserButton>
-            )}
-            {!isSignedIn && (
-              <Link href="/login" className="hover:opacity-75">
+            </SignedIn>
+            <SignedOut>
+              <Link
+                href={`/login?redirectUrl=${pathname}`}
+                className="hover:opacity-75"
+              >
                 <Icons.user className="h-6 w-6" />
               </Link>
-            )}
+            </SignedOut>
           </div>
         </div>
         {/* Responsive navbar */}

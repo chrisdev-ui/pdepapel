@@ -48,9 +48,11 @@ export async function POST(req: Request) {
         orderItems: true
       }
     })
-    if (!existingOrder || existingOrder.status === OrderStatus.PAID) {
+    if (!existingOrder)
+      return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+    if (existingOrder.status === OrderStatus.PAID)
       return NextResponse.json(null, { status: 200 })
-    }
+
     await prismadb.$transaction([
       prismadb.order.update({
         where: {
@@ -64,9 +66,6 @@ export async function POST(req: Request) {
           address: addressString,
           phone: session?.customer_details?.phone || '',
           status: OrderStatus.PAID
-        },
-        include: {
-          orderItems: true
         }
       }),
       ...existingOrder.orderItems.map((orderItem) =>

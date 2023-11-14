@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
+import { v4 as uuidv4 } from 'uuid'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -13,6 +14,8 @@ export const formatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
   useGrouping: true
 })
+
+export const generateGuestId = () => `guest_${uuidv4()}`
 
 export const generateOrderNumber = () =>
   `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`

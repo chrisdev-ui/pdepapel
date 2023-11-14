@@ -9,12 +9,17 @@ import { Icons } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { useCheckoutModal } from "@/hooks/use-checkout-modal";
+import { useGuestUser } from "@/hooks/use-guest-user";
 import { useToast } from "@/hooks/use-toast";
 import { env } from "@/lib/env.mjs";
+import { generateGuestId } from "@/lib/utils";
+import { useAuth } from "@clerk/nextjs";
 
 export const CheckoutModal: React.FC<{}> = () => {
+  const { userId } = useAuth();
   const router = useRouter();
   const checkoutModal = useCheckoutModal();
+  const { guestId, setGuestId, clearGuestId } = useGuestUser();
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const orderItems = useCheckoutModal((state) => state.data);
@@ -30,6 +35,12 @@ export const CheckoutModal: React.FC<{}> = () => {
   };
 
   const onCheckout = async () => {
+    const isUserLoggedIn = Boolean(userId);
+    let guestUserId = guestId;
+    if (!isUserLoggedIn && !guestUserId) {
+      guestUserId = generateGuestId();
+      setGuestId(guestUserId);
+    }
     try {
       setIsLoading(true);
       const response = await axios.post(
@@ -39,6 +50,8 @@ export const CheckoutModal: React.FC<{}> = () => {
             productId: item.id,
             quantity: item.quantity,
           })),
+          userId: isUserLoggedIn ? userId : null,
+          guestId: isUserLoggedIn ? null : guestUserId,
         },
       );
       window.location = response.data.url;
