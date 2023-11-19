@@ -1,3 +1,5 @@
+import { Social } from "@/constants";
+
 export interface Billboard {
   id: string;
   label: string;
@@ -118,4 +120,11 @@ export interface Shipping {
   trackingCode: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface Post {
+  id: string;
+  social: Social;
+  postId: string;
+  createdAt: string;
 }

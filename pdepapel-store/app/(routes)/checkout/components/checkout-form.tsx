@@ -167,10 +167,16 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
         );
         window.location = response.data.url;
       } else if (paymentMethod === PaymentMethod.Bancolombia) {
-        toast({
-          description: `Aún estamos trabajando en la implementación de este método de pago, por favor utiliza otro.`,
-          variant: "info",
-        });
+        const response = await axios.post(
+          `${env.NEXT_PUBLIC_API_URL}/checkout/bancolombia`,
+          {
+            items: orderItems,
+            userId: isUserLoggedIn ? userId : null,
+            guestId: isUserLoggedIn ? null : guestUserId,
+            buttonId: "",
+          },
+        );
+        window.location = response.data.url;
       }
     } catch (error) {
       console.error(error);

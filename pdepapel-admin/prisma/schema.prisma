@@ -30,12 +30,22 @@ enum ShippingStatus {
   Returned
 }
 
+enum Social {
+  Facebook
+  Instagram
+  Twitter
+  TikTok
+  Pinterest
+  Youtube
+}
+
 model Store {
   id          String      @id @default(uuid())
   name        String
   userId      String
   types       Type[]      @relation("StoreToType")
   billboards  Billboard[] @relation("StoreToBillboard")
+  posts       Post[]      @relation("StoreToPost")
   categories  Category[]  @relation("StoreToCategory")
   sizes       Size[]      @relation("StoreToSize")
   colors      Color[]     @relation("StoreToColor")
@@ -57,6 +67,18 @@ model Billboard {
   store       Store       @relation("StoreToBillboard", fields: [storeId], references: [id])
   label       String?
   imageUrl    String
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([storeId])
+}
+
+model Post {
+  id          String      @id @default(uuid())
+  storeId     String
+  store       Store       @relation("StoreToPost", fields: [storeId], references: [id])
+  social      Social
+  postId      String      
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 

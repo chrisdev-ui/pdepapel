@@ -1,5 +1,10 @@
 import { getOrder } from "@/actions/get-order";
-import { SingleOrderPage } from "./components/single-order-page";
+import dynamic from "next/dynamic";
+
+const SingleOrderPage = dynamic(
+  () => import("./components/single-order-page"),
+  { ssr: false },
+);
 
 export const revalidate = 0;
 

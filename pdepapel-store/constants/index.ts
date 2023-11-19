@@ -35,6 +35,15 @@ export enum ShippingStatus {
   Returned = "Returned",
 }
 
+export enum Social {
+  Facebook = "Facebook",
+  Instagram = "Instagram",
+  Twitter = "Twitter",
+  TikTok = "TikTok",
+  Pinterest = "Pinterest",
+  Youtube = "Youtube",
+}
+
 export const steps: { status: string; value: string }[] = [
   {
     status: ShippingStatus.Preparing,

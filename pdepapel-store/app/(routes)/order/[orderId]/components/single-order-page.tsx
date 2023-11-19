@@ -12,6 +12,8 @@ import {
   Printer,
   Receipt,
   SearchCheck,
+  ShieldCheck,
+  ShieldClose,
   Truck,
   X,
 } from "lucide-react";
@@ -23,26 +25,49 @@ import { Icons } from "@/components/icons";
 import { Container } from "@/components/ui/container";
 import { Currency } from "@/components/ui/currency";
 import { OrderStatus, ShippingStatus, steps } from "@/constants";
+import { useCart } from "@/hooks/use-cart";
 import { useGuestUser } from "@/hooks/use-guest-user";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Order } from "@/types";
-import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect } from "react";
 import { Courier } from "./courier";
 
 interface SingleOrderPageProps {
   order: Order;
 }
 
-export const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
+const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
+  const searchParams = useSearchParams();
   const { userId } = useAuth();
+  const { toast } = useToast();
   const { guestId } = useGuestUser();
-  const [isMounted, setIsMounted] = useState(false);
+  const removeAll = useCart((state) => state.removeAll);
 
   useEffect(() => {
-    setIsMounted(true);
-  }, []);
+    if (Boolean(searchParams.get("success"))) {
+      toast({
+        title: "¡Gracias por tu compra!",
+        variant: "success",
+        icon: <ShieldCheck className="h-8 w-8" />,
+        description: "Tu pago ha sido recibido.",
+        duration: 10000,
+      });
+      removeAll();
+    }
 
-  if (!isMounted) return null;
+    if (Boolean(searchParams.get("canceled"))) {
+      toast({
+        title: "¡Hubo un fallo en tu intento de pago!",
+        variant: "destructive",
+        icon: <ShieldClose className="h-14 w-14" />,
+        description:
+          "No se realizó ningún cargo a tu cuenta, intenta el pago de nuevo más tarde o utiliza otro método.",
+        duration: 10000,
+      });
+    }
+  }, [removeAll, searchParams, toast]);
 
   const addresses = order?.address.split(",");
   const shippingStatus = steps.slice(
@@ -330,3 +355,5 @@ export const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
     </>
   );
 };
+
+export default SingleOrderPage;

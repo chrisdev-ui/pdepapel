@@ -1,12 +1,9 @@
+import Bancolombia from '@/actions/bancolombia-actions'
+import prismadb from '@/lib/prismadb'
+import { generateOrderNumber } from '@/lib/utils'
 import { clerkClient } from '@clerk/nextjs'
 import { OrderStatus, PaymentMethod } from '@prisma/client'
 import { NextResponse } from 'next/server'
-import Stripe from 'stripe'
-
-import { env } from '@/lib/env.mjs'
-import prismadb from '@/lib/prismadb'
-import { stripe } from '@/lib/stripe'
-import { generateOrderNumber } from '@/lib/utils'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -25,7 +22,7 @@ export async function POST(
   if (!params.storeId)
     return NextResponse.json({ error: 'Store ID is required' }, { status: 400 })
   try {
-    const { items, userId, guestId } = await req.json()
+    const { items, userId, guestId, buttonId } = await req.json()
 
     let authenticatedUserId = null
     if (userId) {
@@ -39,7 +36,6 @@ export async function POST(
         )
       }
     }
-
     if (!items || items.length === 0)
       return NextResponse.json(
         { error: 'Products are required' },
@@ -47,7 +43,7 @@ export async function POST(
       )
 
     const errors: string[] = []
-    const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = []
+    const { transferRegistry } = new Bancolombia()
     const orderItemsData = []
 
     const productIds = items.map(
@@ -69,17 +65,6 @@ export async function POST(
         errors.push(`Product ${productId} out of stock`)
         continue
       }
-
-      line_items.push({
-        quantity,
-        price_data: {
-          currency: 'COP',
-          product_data: {
-            name: product.name
-          },
-          unit_amount: Number(product.price) * 100
-        }
-      })
 
       orderItemsData.push({
         product: { connect: { id: productId } },
@@ -105,37 +90,40 @@ export async function POST(
           payment: {
             create: {
               storeId: params.storeId,
-              method: PaymentMethod.Stripe
+              method: PaymentMethod.Bancolombia
+            }
+          }
+        },
+        include: {
+          orderItems: {
+            include: {
+              product: true
             }
           }
         }
       })
     ])
 
-    const session = await stripe.checkout.sessions.create(
-      {
-        line_items,
-        mode: 'payment',
-        billing_address_collection: 'required',
-        phone_number_collection: { enabled: true },
-        success_url: `${env.FRONTEND_STORE_URL}/order/${order.id}/?success=1`,
-        cancel_url: `${env.FRONTEND_STORE_URL}/order/${order.id}/?canceled=1`,
-        metadata: { orderId: order.id }
-      },
-      { idempotencyKey: order.id }
-    )
+    const { data } = await transferRegistry({
+      commerceTransferButtonId: buttonId as string,
+      transferReference: order.id,
+      transferAmount: order.orderItems.reduce(
+        (acc, item) => acc + Number(item.product.price) * item.quantity,
+        0
+      ),
+      transferDescription: `Orden #${order.id} realizada en la Papelería P de Papel`
+    })
 
-    return NextResponse.json({ url: session.url }, { headers: corsHeaders })
+    return NextResponse.json(
+      { url: data[0]?.redirectURL },
+      { headers: corsHeaders }
+    )
   } catch (error: any) {
-    console.error('[ORDER_STRIPE_CHECKOUT]', error)
+    console.error('[ORDER_BANCOLOMBIA_CHECKOUT]', error)
     return NextResponse.json(
       {
         error: 'Internal Server Error',
-        message: `${
-          error.raw.code === 'amount_too_small'
-            ? 'El valor mínimo de compra con tarjeta es de al menos $5,000'
-            : error.message
-        }`
+        message: error.message
       },
       { status: 500, headers: corsHeaders }
     )
