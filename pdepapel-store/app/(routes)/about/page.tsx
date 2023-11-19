@@ -19,13 +19,13 @@ export default async function AboutPage() {
         </h1>
         <div className="mt-12 flex flex-col gap-6 lg:grid lg:grid-cols-8 lg:items-start lg:gap-x-6 xl:gap-x-12">
           <div className="col-span-3">
-            <div className="relative h-[15vh] w-full bg-[#ffe5ee] sm:h-[40vh] xl:h-[30vh]">
+            <div className="relative h-[15vh] w-full bg-[#ffe5ee] transition-all duration-700 ease-in-out hover:scale-105 hover:cursor-zoom-in sm:h-[40vh] xl:h-[30vh]">
               <Image
                 src="/images/text-beside-lightpink-bg.webp"
                 alt="logo"
                 fill
                 sizes="(max-width: 640px) 100vw, 640px"
-                className="rounded-lg object-contain shadow-lg transition-all duration-700 ease-in-out hover:scale-105"
+                className="rounded-lg object-contain shadow-lg"
               />
               <div className="absolute bottom-1 left-1 z-20 animate-bounce font-serif font-semibold sm:bottom-6 sm:left-4 sm:text-2xl lg:bottom-auto lg:left-auto lg:right-4 lg:top-6">
                 ¿Quiénes somos?
