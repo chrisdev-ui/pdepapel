@@ -15,14 +15,16 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 
 const formSchema = z.object({
-  email: z.string().email("Ingresa un correo electrónico válido").optional(),
+  email: z.string().email("Ingresa un correo electrónico válido"),
 });
 
 type NewsletterFormValues = z.infer<typeof formSchema>;
 
 export const Newsletter: React.FC<{}> = () => {
+  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
 
   const form = useForm<NewsletterFormValues>({
@@ -35,9 +37,18 @@ export const Newsletter: React.FC<{}> = () => {
   const onSubmit = async (values: NewsletterFormValues) => {
     try {
       setLoading(true);
-      console.log(values);
+      toast({
+        title: "¡Gracias por suscribirte!",
+        description:
+          "Te enviaremos un correo electrónico con más información pronto.",
+        variant: "success",
+      });
     } catch (error: any) {
-      console.log(error);
+      toast({
+        title: "¡Ups! Algo salió mal.",
+        description: "Por favor, inténtalo de nuevo más tarde.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -77,7 +88,10 @@ export const Newsletter: React.FC<{}> = () => {
                   </FormItem>
                 )}
               />
-              <Button className="h-10 whitespace-nowrap rounded rounded-bl-none rounded-tl-none border-none bg-blue-yankees px-10 py-5 text-sm font-semibold text-white outline-none ring-offset-transparent [transition:0.2s]">
+              <Button
+                type="submit"
+                className="h-10 whitespace-nowrap rounded rounded-bl-none rounded-tl-none border-none bg-blue-yankees px-10 py-5 text-sm font-semibold text-white outline-none ring-offset-transparent [transition:0.2s]"
+              >
                 ¡Regístrate!
               </Button>
             </form>
