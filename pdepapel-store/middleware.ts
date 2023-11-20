@@ -11,6 +11,7 @@ export default authMiddleware({
     "/wishlist",
     "/checkout",
     "/order/:path*",
+    "/api/:path*",
   ],
 });
 
