@@ -1,5 +1,3 @@
-import { Suspense } from "react";
-
 import { getCategories } from "@/actions/get-categories";
 import { getColors } from "@/actions/get-colors";
 import { getDesigns } from "@/actions/get-designs";
@@ -8,7 +6,6 @@ import { getSizes } from "@/actions/get-sizes";
 import { getTypes } from "@/actions/get-types";
 import { Features } from "@/components/features";
 import { Filter } from "@/components/filter";
-import { Loader } from "@/components/loader";
 import { MobileFilters } from "@/components/mobile-filters";
 import { Newsletter } from "@/components/newsletter";
 import { Container } from "@/components/ui/container";
@@ -135,15 +132,13 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
             {products.length === 0 && (
               <NoResults message={`No hay productos ${KAWAII_FACE_SAD}`} />
             )}
-            <Suspense fallback={<Loader />}>
-              {!!products.length && (
-                <div className="grid grid-cols-2 gap-1 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
-                  {products.map((product) => (
-                    <ProductCard key={product.id} product={product} />
-                  ))}
-                </div>
-              )}
-            </Suspense>
+            {!!products.length && (
+              <div className="grid grid-cols-2 gap-1 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+                {products.map((product) => (
+                  <ProductCard key={product.id} product={product} />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </Container>
