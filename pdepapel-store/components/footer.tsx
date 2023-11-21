@@ -67,7 +67,7 @@ export const Footer: React.FC<{}> = () => {
             <ul className="space-y-1">
               <li className="">
                 <Link
-                  href="#"
+                  href="/policies/returns"
                   className="flex items-center gap-2 text-blue-yankees hover:text-pink-shell focus-visible:text-pink-shell"
                 >
                   Políticas de devolución o cambio
@@ -75,7 +75,7 @@ export const Footer: React.FC<{}> = () => {
               </li>
               <li className="">
                 <Link
-                  href="#"
+                  href="/policies/shipping"
                   className="flex items-center gap-2 text-blue-yankees hover:text-pink-shell focus-visible:text-pink-shell"
                 >
                   Políticas de entrega
@@ -83,7 +83,7 @@ export const Footer: React.FC<{}> = () => {
               </li>
               <li className="">
                 <Link
-                  href="#"
+                  href="/policies/data"
                   className="flex items-center gap-2 text-blue-yankees hover:text-pink-shell focus-visible:text-pink-shell"
                 >
                   Políticas de tratamiento de datos

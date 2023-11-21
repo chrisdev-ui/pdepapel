@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 
 import { Footer } from "@/components/footer";
 import { Navbar } from "@/components/navbar";
-import { caudex, comingSoon, martelSans, roboto } from '@/lib/fonts';
+import { caudex, comingSoon, martelSans, roboto } from "@/lib/fonts";
 import { ModalProvider } from "@/providers/modal-provider";
 import { Toaster } from "@/providers/toaster";
 import "./globals.css";

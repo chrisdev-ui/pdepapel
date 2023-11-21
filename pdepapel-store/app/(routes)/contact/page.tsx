@@ -1,7 +1,9 @@
+import { Clock, Mail, MailCheck, PhoneCall } from "lucide-react";
+import Image from "next/image";
+
 import { Icons } from "@/components/icons";
 import { Container } from "@/components/ui/container";
 import { Separator } from "@/components/ui/separator";
-import { Clock, Mail, MailCheck, PhoneCall } from "lucide-react";
 import { ContactForm } from "./components/contact-form";
 
 export default function ContactPage() {
@@ -27,8 +29,17 @@ export default function ContactPage() {
             <div className="flex w-full p-8" />
             <div className="flex w-full flex-col gap-y-5">
               <p>
-                En <span className="text-pink-froly">P de Papel</span>, nos
-                encanta estar en contacto contigo. Si tienes alguna duda o
+                En{" "}
+                <Image
+                  src="/images/text-beside-transparent-bg.webp"
+                  alt="logo"
+                  width={80}
+                  height={20}
+                  quality={100}
+                  title="P de Papel"
+                  className="inline-flex object-contain"
+                />
+                , nos encanta estar en contacto contigo. Si tienes alguna duda o
                 simplemente quieres decir hola, no dudes en enviarnos un correo
                 electrónico. Nos esforzamos por responder a todos los mensajes
                 en un plazo de 12 a 24 horas, porque sabemos lo importante que
@@ -41,8 +52,7 @@ export default function ContactPage() {
                 carpeta de spam. O aún mejor, puedes visitar tu perfil aquí en
                 nuestro sitio web, donde encontrarás un enlace directo a tus
                 órdenes con todos los detalles que necesitas. ¡Estamos aquí para
-                ayudarte en cada paso de tu experiencia kawaii en{" "}
-                <span className="text-pink-froly">P de Papel</span>!
+                ayudarte en cada paso de tu experiencia kawaii con nosotros!
               </p>
               <div className="flex w-full items-center justify-start py-2">
                 <h2 className="font-serif text-xl font-semibold">

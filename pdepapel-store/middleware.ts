@@ -12,6 +12,8 @@ export default authMiddleware({
     "/checkout",
     "/order/:path*",
     "/api/:path*",
+    "/policies/:path*",
+    "/:path*",
   ],
 });
 

@@ -21,6 +21,7 @@ export default async function HomePage() {
       getProducts({ onlyNew: true, limit: 8 }),
       getBanners(),
     ]);
+
   return (
     <>
       <HeroSlider data={billboards} />
