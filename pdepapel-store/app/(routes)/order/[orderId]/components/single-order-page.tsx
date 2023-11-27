@@ -12,6 +12,7 @@ import {
   Printer,
   Receipt,
   SearchCheck,
+  ShieldAlert,
   ShieldCheck,
   ShieldClose,
   Truck,
@@ -20,18 +21,21 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 
+import { BancolombiaButton } from "@/app/(routes)/checkout/components/bancolombia-button";
 import { Forbidden } from "@/components/forbidden";
 import { Icons } from "@/components/icons";
 import { Container } from "@/components/ui/container";
 import { Currency } from "@/components/ui/currency";
-import { OrderStatus, ShippingStatus, steps } from "@/constants";
+import { OrderStatus, PaymentMethod, ShippingStatus, steps } from "@/constants";
 import { useCart } from "@/hooks/use-cart";
 import { useGuestUser } from "@/hooks/use-guest-user";
 import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
+import { env } from "@/lib/env.mjs";
+import { cn, generateGuestId } from "@/lib/utils";
 import { Order } from "@/types";
+import axios from "axios";
 import { useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Courier } from "./courier";
 
 interface SingleOrderPageProps {
@@ -42,11 +46,15 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
   const searchParams = useSearchParams();
   const { userId } = useAuth();
   const { toast } = useToast();
-  const { guestId } = useGuestUser();
+  const { guestId, setGuestId } = useGuestUser();
+  const [isLoading, setIsLoading] = useState(false);
   const removeAll = useCart((state) => state.removeAll);
 
   useEffect(() => {
-    if (Boolean(searchParams.get("success"))) {
+    if (
+      Boolean(searchParams.get("success")) ||
+      searchParams.get("transferState") === "approved"
+    ) {
       toast({
         title: "¡Gracias por tu compra!",
         variant: "success",
@@ -57,13 +65,27 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
       removeAll();
     }
 
-    if (Boolean(searchParams.get("canceled"))) {
+    if (
+      Boolean(searchParams.get("canceled")) ||
+      searchParams.get("transferState") === "rejected"
+    ) {
       toast({
         title: "¡Hubo un fallo en tu intento de pago!",
         variant: "destructive",
         icon: <ShieldClose className="h-14 w-14" />,
         description:
           "No se realizó ningún cargo a tu cuenta, intenta el pago de nuevo más tarde o utiliza otro método.",
+        duration: 10000,
+      });
+    }
+
+    if (searchParams.get("transferState") === "pending") {
+      toast({
+        title: "Pago pendiente",
+        variant: "warning",
+        icon: <ShieldAlert className="h-14 w-14" />,
+        description:
+          "¡Casi listo! Estamos confirmando tu pago. Te mantendremos informado y te avisaremos en cuanto tengamos todo confirmado.",
         duration: 10000,
       });
     }
@@ -108,6 +130,36 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
   const hasAccess = userId
     ? userId === order?.userId
     : guestId === order?.guestId;
+
+  const onSubmit = async () => {
+    const isUserLoggedIn = Boolean(userId);
+    let guestUserId = guestId;
+    if (!isUserLoggedIn && !guestUserId) {
+      guestUserId = generateGuestId();
+      setGuestId(guestUserId);
+    }
+    try {
+      setIsLoading(true);
+      const response = await axios.post(
+        `${env.NEXT_PUBLIC_API_URL}/checkout/bancolombia/${order.id}`,
+        {
+          buttonId: "",
+          userId: isUserLoggedIn ? userId : null,
+          guestId: isUserLoggedIn ? null : guestUserId,
+        },
+      );
+      window.location = response.data.url;
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "Error",
+        description: "Ha ocurrido intentando procesar tu pago.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <>
@@ -253,6 +305,13 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                     {status[order?.status as OrderStatus].icon}
                     <span>{status[order?.status as OrderStatus].text}</span>
                   </div>
+                  {order?.payment?.method === PaymentMethod.Bancolombia &&
+                    order.status !== OrderStatus.PAID && (
+                      <BancolombiaButton
+                        disabled={isLoading}
+                        onClick={onSubmit}
+                      />
+                    )}
                   {order.status !== OrderStatus.PAID && (
                     <small>
                       *** Recuerda que si pagas por transferencia bancaria debes

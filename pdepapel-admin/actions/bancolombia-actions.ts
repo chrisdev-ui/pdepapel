@@ -51,6 +51,13 @@ class Bancolombia {
     bancolombiaService: BancolombiaService = new BancolombiaService()
   ) {
     this.bancolombiaService = bancolombiaService
+    this.refreshAccessToken = this.refreshAccessToken.bind(this)
+    this.isTokenValid = this.isTokenValid.bind(this)
+    this.getHeaders = this.getHeaders.bind(this)
+    this.getUrl = this.getUrl.bind(this)
+    this.transferRegistry = this.transferRegistry.bind(this)
+    this.validateTransferCode = this.validateTransferCode.bind(this)
+    this.handleError = this.handleError.bind(this)
   }
 
   private async refreshAccessToken(): Promise<void> {
@@ -98,7 +105,7 @@ class Bancolombia {
         data: [
           {
             ...request,
-            commerceUrl: `${env.FRONTEND_STORE_URL}/order/${request.transferReference}?success=1`,
+            commerceUrl: `${env.FRONTEND_STORE_URL}/order/${request.transferReference}`,
             confirmationURL: `https://75ca-2800-e6-4010-fa4e-84cc-bb74-4897-6c29.ngrok-free.app/api/webhook/bancolombia`
           }
         ]

@@ -170,10 +170,8 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
         const response = await axios.post(
           `${env.NEXT_PUBLIC_API_URL}/checkout/bancolombia`,
           {
-            items: orderItems,
-            userId: isUserLoggedIn ? userId : null,
-            guestId: isUserLoggedIn ? null : guestUserId,
             buttonId: "",
+            ...formattedData,
           },
         );
         window.location = response.data.url;
@@ -182,7 +180,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
       console.error(error);
       toast({
         title: "Error",
-        description: "Ha ocurrido un error creando tu orden",
+        description: "Ha ocurrido un error creando tu orden, intenta de nuevo",
         variant: "destructive",
       });
     } finally {
@@ -535,6 +533,8 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
               <div className="mt-6 w-full">
                 <BancolombiaButton
                   disabled={cart.items.length === 0 || isLoading}
+                  type="submit"
+                  onClick={form.handleSubmit(onSubmit)}
                 />
               </div>
             )}

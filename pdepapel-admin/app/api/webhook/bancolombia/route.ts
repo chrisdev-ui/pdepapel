@@ -51,12 +51,12 @@ export async function POST(req: Request) {
           orderId: transferReference
         },
         update: {
-          method: PaymentMethod.Stripe,
-          transactionId: transferCode || ''
+          method: PaymentMethod.Bancolombia,
+          transactionId: transferCode
         },
         create: {
-          method: PaymentMethod.Stripe,
-          transactionId: transferCode || '',
+          method: PaymentMethod.Bancolombia,
+          transactionId: transferCode,
           store: {
             connect: {
               id: existingOrder.storeId
