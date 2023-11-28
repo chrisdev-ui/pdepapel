@@ -8,6 +8,7 @@ export const env = createEnv({
     DATABASE_URL: z.string().min(1),
     STRIPE_API_KEY: z.string().min(1),
     FRONTEND_STORE_URL: z.string().min(1),
+    ADMIN_WEB_URL: z.string().min(1),
     STRIPE_WEBHOOK_SECRET: z.string().min(1),
     CLOUDINARY_CLOUD_NAME: z.string().min(1),
     CLOUDINARY_API_KEY: z.string().min(1),

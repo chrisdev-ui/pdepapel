@@ -106,7 +106,7 @@ class Bancolombia {
           {
             ...request,
             commerceUrl: `${env.FRONTEND_STORE_URL}/order/${request.transferReference}`,
-            confirmationURL: `https://75ca-2800-e6-4010-fa4e-84cc-bb74-4897-6c29.ngrok-free.app/api/webhook/bancolombia`
+            confirmationURL: `${env.ADMIN_WEB_URL}/api/webhook/bancolombia`
           }
         ]
       }
