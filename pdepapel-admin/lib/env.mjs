@@ -15,7 +15,7 @@ export const env = createEnv({
     CLOUDINARY_API_SECRET: z.string().min(1),
     BANCOLOMBIA_CLIENT_ID: z.string().min(1),
     BANCOLOMBIA_CLIENT_SECRET: z.string().min(1),
-    BANCOLOMBIA_SANDBOX_API_URL: z.string().min(1)
+    BANCOLOMBIA_API_URL: z.string().min(1)
   },
   client: {
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().min(1),

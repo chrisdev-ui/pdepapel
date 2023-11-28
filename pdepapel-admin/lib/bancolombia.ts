@@ -20,7 +20,7 @@ class BancolombiaService {
   constructor(
     clientId: string = env.BANCOLOMBIA_CLIENT_ID,
     clientSecret: string = env.BANCOLOMBIA_CLIENT_SECRET,
-    oauthApi: string = env.BANCOLOMBIA_SANDBOX_API_URL
+    oauthApi: string = env.BANCOLOMBIA_API_URL
   ) {
     this.clientId = clientId
     this.clientSecret = clientSecret

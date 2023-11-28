@@ -82,7 +82,7 @@ class Bancolombia {
   }
 
   private getUrl(endpoint: string): string {
-    return `${env.BANCOLOMBIA_SANDBOX_API_URL}${endpoint}`
+    return `${env.BANCOLOMBIA_API_URL}${endpoint}`
   }
 
   private handleError(error: any): ApiError {
