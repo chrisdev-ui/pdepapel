@@ -1,12 +1,22 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 import { Icons } from "@/components/icons";
 import { useWishlist } from "@/hooks/use-wishlist";
 
 export const WishlistButton: React.FC<{}> = () => {
   const { items } = useWishlist();
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  if (!isMounted) {
+    return null;
+  }
   return (
     <Link href="/wishlist" className="relative hover:opacity-75">
       <Icons.heart className="h-6 w-6" isFilled={items.length > 0} />

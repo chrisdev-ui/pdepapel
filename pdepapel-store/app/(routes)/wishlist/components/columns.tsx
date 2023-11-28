@@ -108,7 +108,8 @@ export const columns: ColumnDef<WishlistColumn>[] = [
     cell: ({ row }) => (
       <div className="flex flex-col items-center justify-center space-y-1">
         <span className="text-xs text-gray-400">
-          Agregado el {format(row.original.createdAt, "PPP", { locale: es })}
+          Agregado el{" "}
+          {format(new Date(row.original.createdAt), "PPP", { locale: es })}
         </span>
         <AddToCartButton row={row} />
       </div>
