@@ -148,20 +148,20 @@ export async function PATCH(
             : undefined
         }
       }),
-      ...(status &&
-        status === OrderStatus.PAID &&
-        orderItems.map((orderItem: { productId: string; quantity: number }) =>
-          prismadb.product.update({
-            where: {
-              id: orderItem.productId
-            },
-            data: {
-              stock: {
-                decrement: orderItem.quantity
+      ...(status === OrderStatus.PAID
+        ? orderItems.map((orderItem: { productId: string; quantity: number }) =>
+            prismadb.product.update({
+              where: {
+                id: orderItem.productId
+              },
+              data: {
+                stock: {
+                  decrement: orderItem.quantity
+                }
               }
-            }
-          })
-        ))
+            })
+          )
+        : [])
     ])
     return NextResponse.json(order)
   } catch (error) {

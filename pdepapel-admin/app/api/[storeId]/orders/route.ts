@@ -117,20 +117,20 @@ export async function POST(
       prismadb.order.create({
         data: orderData
       }),
-      ...(status &&
-        status === OrderStatus.PAID &&
-        orderItems.map((orderItem: { productId: string; quantity: number }) =>
-          prismadb.product.update({
-            where: {
-              id: orderItem.productId
-            },
-            data: {
-              stock: {
-                decrement: orderItem.quantity
+      ...(status === OrderStatus.PAID
+        ? orderItems.map((orderItem: { productId: string; quantity: number }) =>
+            prismadb.product.update({
+              where: {
+                id: orderItem.productId
+              },
+              data: {
+                stock: {
+                  decrement: orderItem.quantity
+                }
               }
-            }
-          })
-        ))
+            })
+          )
+        : [])
     ])
     return NextResponse.json(order, { headers: corsHeaders })
   } catch (error) {
