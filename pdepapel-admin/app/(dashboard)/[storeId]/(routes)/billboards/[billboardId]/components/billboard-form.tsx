@@ -26,7 +26,9 @@ import { useParams, useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 const formSchema = z.object({
-  label: z.string().optional(),
+  label: z.string(),
+  title: z.string().optional(),
+  redirectUrl: z.string().optional(),
   imageUrl: z.string().min(1, 'La URL de la imagen no puede estar vacía')
 })
 
@@ -58,10 +60,16 @@ export const BillboardForm: React.FC<BillboardFormProps> = ({
   const form = useForm<BillboardFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: initialData
-      ? { ...initialData, label: initialData.label ?? '' }
+      ? {
+          ...initialData,
+          title: initialData.title ?? '',
+          redirectUrl: initialData.redirectUrl ?? ''
+        }
       : {
           label: '',
-          imageUrl: ''
+          imageUrl: '',
+          title: '',
+          redirectUrl: ''
         }
   })
   const onSubmit = async (data: BillboardFormValues) => {
@@ -170,6 +178,40 @@ export const BillboardForm: React.FC<BillboardFormProps> = ({
                     <Input
                       disabled={loading}
                       placeholder="Etiqueta de la publicación"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="title"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Título</FormLabel>
+                  <FormControl>
+                    <Input
+                      disabled={loading}
+                      placeholder="Título de la publicación (Opcional)"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="redirectUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Link de redirección</FormLabel>
+                  <FormControl>
+                    <Input
+                      disabled={loading}
+                      placeholder="Link de redirección (Opcional)"
                       {...field}
                     />
                   </FormControl>

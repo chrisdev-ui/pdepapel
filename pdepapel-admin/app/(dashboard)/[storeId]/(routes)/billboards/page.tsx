@@ -22,7 +22,11 @@ export default async function BillboardsPage({
   const formattedBillboards: BillboardColumn[] = billboards.map(
     (billboard) => ({
       id: billboard.id,
-      label: billboard.label ?? 'Sin mensaje',
+      label: billboard.label,
+      title: billboard.title ? billboard.title : 'Sin título',
+      redirectUrl: billboard.redirectUrl
+        ? billboard.redirectUrl
+        : 'Sin link de redirección',
       createdAt: format(billboard.createdAt, 'MMMM d, yyyy')
     })
   )

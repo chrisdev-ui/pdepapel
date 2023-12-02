@@ -13,12 +13,14 @@ export async function POST(
     return NextResponse.json({ error: 'Store ID is required' }, { status: 400 })
   try {
     const body = await req.json()
-    const { label, imageUrl } = body
+    const { label, imageUrl, title, redirectUrl } = body
     const storeByUserId = await prismadb.store.findFirst({
       where: { id: params.storeId, userId }
     })
     if (!storeByUserId)
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+    if (!label)
+      return NextResponse.json({ error: 'Label is required' }, { status: 400 })
     if (!imageUrl)
       return NextResponse.json(
         { error: 'Image URL is required' },
@@ -26,8 +28,10 @@ export async function POST(
       )
     const billboard = await prismadb.billboard.create({
       data: {
-        label: label ?? '',
+        label,
         imageUrl,
+        title: title ?? '',
+        redirectUrl: redirectUrl ?? '',
         storeId: params.storeId
       }
     })

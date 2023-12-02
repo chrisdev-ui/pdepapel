@@ -39,7 +39,10 @@ export async function PATCH(
     )
   try {
     const body = await req.json()
-    const { label, imageUrl } = body
+    const { label, imageUrl, title, redirectUrl } = body
+
+    if (!label)
+      return NextResponse.json({ error: 'Label is required' }, { status: 400 })
 
     if (!imageUrl)
       return NextResponse.json(
@@ -51,6 +54,7 @@ export async function PATCH(
     })
     if (!storeByUserId)
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+
     const oldBillboard = await prismadb.billboard.findUnique({
       where: { id: params.billboardId }
     })
@@ -69,8 +73,10 @@ export async function PATCH(
     const updatedBillboard = await prismadb.billboard.update({
       where: { id: params.billboardId },
       data: {
-        label: label ?? '',
-        imageUrl
+        label,
+        imageUrl,
+        title: title ?? '',
+        redirectUrl: redirectUrl ?? ''
       }
     })
 
