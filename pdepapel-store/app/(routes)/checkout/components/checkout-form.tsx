@@ -8,6 +8,7 @@ import * as z from "zod";
 
 import { Icons } from "@/components/icons";
 import { Button } from "@/components/ui/button";
+import { ComingSoonBadge } from "@/components/ui/coming-soon-badge";
 import { Currency } from "@/components/ui/currency";
 import {
   Form,
@@ -480,13 +481,15 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                   value={PaymentMethod.Stripe}
                   id={PaymentMethod.Stripe}
                   className="peer sr-only"
+                  disabled
                 />
                 <Label
                   htmlFor={PaymentMethod.Stripe}
-                  className="flex cursor-pointer items-center justify-start gap-4 rounded-md border border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-pink-shell peer-data-[state=checked]:bg-pink-shell/20 [&:has([data-state=checked])]:border-pink-shell [&:has([data-state=checked])]:bg-pink-shell/20"
+                  className="relative flex cursor-pointer items-center justify-start gap-4 rounded-md border border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-pink-shell peer-data-[state=checked]:bg-pink-shell/20 [&:has([data-state=checked])]:border-pink-shell [&:has([data-state=checked])]:bg-pink-shell/20"
                 >
-                  <Icons.payments.stripe className="h-6 w-6" />
-                  Tarjeta de crédito o débito
+                  <Icons.payments.payu className="h-6" />
+                  Paga a través de PayU
+                  <ComingSoonBadge />
                 </Label>
               </div>
               <div>
@@ -508,13 +511,15 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                   value={PaymentMethod.Bancolombia}
                   id={PaymentMethod.Bancolombia}
                   className="peer sr-only"
+                  disabled
                 />
                 <Label
                   htmlFor={PaymentMethod.Bancolombia}
-                  className="flex cursor-pointer items-center justify-start gap-4 rounded-md border border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-pink-shell peer-data-[state=checked]:bg-pink-shell/20 [&:has([data-state=checked])]:border-pink-shell [&:has([data-state=checked])]:bg-pink-shell/20"
+                  className="relative flex cursor-pointer items-center justify-start gap-4 rounded-md border border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-pink-shell peer-data-[state=checked]:bg-pink-shell/20 [&:has([data-state=checked])]:border-pink-shell [&:has([data-state=checked])]:bg-pink-shell/20"
                 >
-                  <Icons.payments.bancolombiaButton className="h-6 w-6" />
-                  Botón Bancolombia
+                  <Icons.payments.wompi className="h-6" />
+                  Paga a través de Wompi
+                  <ComingSoonBadge />
                 </Label>
               </div>
             </RadioGroup>

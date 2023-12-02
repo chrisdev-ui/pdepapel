@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/sheet";
 import { KAWAII_FACE_SAD } from "@/constants";
 import { useCart } from "@/hooks/use-cart";
-import { useCheckoutModal } from "@/hooks/use-checkout-modal";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 
@@ -28,7 +27,6 @@ interface NavbarCartProps {
 export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
   const cart = useCart();
   const router = useRouter();
-  const checkoutModal = useCheckoutModal();
   const [isMounted, setIsMounted] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
 
@@ -50,9 +48,12 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
   };
 
   const onCheckout = () => {
-    checkoutModal.onOpen(cart.items, () => {
-      setIsSheetOpen(false);
-    });
+    setIsSheetOpen(false);
+    router.push("/checkout");
+    // TODO: Enable when PayU and Wompi will be integrated
+    // checkoutModal.onOpen(cart.items, () => {
+    //   setIsSheetOpen(false);
+    // });
   };
 
   const totalQuantity = cart.items.reduce(
