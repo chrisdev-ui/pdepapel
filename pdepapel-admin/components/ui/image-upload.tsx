@@ -1,9 +1,12 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
+import { useToast } from '@/hooks/use-toast'
+import axios from 'axios'
 import { ImagePlus, Trash } from 'lucide-react'
 import { CldUploadWidget } from 'next-cloudinary'
 import Image from 'next/image'
+import { useParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 interface ImageUploadProps {
@@ -20,6 +23,9 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
   value
 }) => {
   const [isMounted, setIsMounted] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const { toast } = useToast()
+  const params = useParams()
 
   useEffect(() => {
     setIsMounted(true)
@@ -27,6 +33,22 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
 
   const onUpload = (result: any) => {
     onChange(result.info.secure_url)
+  }
+
+  const handleRemove = async (url: string) => {
+    try {
+      setIsDeleting(true)
+      await axios.post(`/api/${params.storeId}/cloudinary`, { imageUrl: url })
+    } catch (error) {
+      toast({
+        description:
+          '¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.',
+        variant: 'destructive'
+      })
+    } finally {
+      setIsDeleting(false)
+      onRemove(url)
+    }
   }
 
   if (!isMounted) {
@@ -44,7 +66,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
             <div className="z-10 absolute top-2 right-2">
               <Button
                 type="button"
-                onClick={() => onRemove(url)}
+                onClick={() => handleRemove(url)}
                 variant="destructive"
                 size="icon"
               >
@@ -58,6 +80,13 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
               alt="Image"
               src={url}
             />
+            {isDeleting && (
+              <div className="w-full h-full backdrop-brightness-50 absolute top-0 left-0 flex justify-center items-center">
+                <span className="text-xs animate-pulse backdrop-brightness-50 text-white">
+                  Eliminando...
+                </span>
+              </div>
+            )}
           </div>
         ))}
       </div>
