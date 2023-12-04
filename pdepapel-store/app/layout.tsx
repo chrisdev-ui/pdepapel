@@ -43,10 +43,6 @@ export const metadata: Metadata = {
   ],
   creator: "Christian Torres Martínez",
   publisher: "Vercel",
-  icons: {
-    icon: "/favicon.ico",
-    apple: "/apple-icon.png",
-  },
   formatDetection: {
     telephone: true,
     email: true,
