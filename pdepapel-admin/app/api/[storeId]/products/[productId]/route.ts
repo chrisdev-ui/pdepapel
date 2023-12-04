@@ -95,9 +95,9 @@ export async function PATCH(
         { error: 'Design ID is required' },
         { status: 400 }
       )
-    if (!stock)
+    if (stock && stock < 0)
       return NextResponse.json(
-        { error: 'Stock must be greater than 0' },
+        { error: 'Stock must be 0 or greater' },
         { status: 400 }
       )
     const productToUpdate = await prismadb.product.findUnique({
