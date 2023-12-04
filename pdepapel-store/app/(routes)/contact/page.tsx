@@ -1,10 +1,20 @@
 import { Clock, Mail, MailCheck, PhoneCall } from "lucide-react";
+import { Metadata } from "next";
 import Image from "next/image";
 
 import { Icons } from "@/components/icons";
 import { Container } from "@/components/ui/container";
 import { Separator } from "@/components/ui/separator";
 import { ContactForm } from "./components/contact-form";
+
+export const metadata: Metadata = {
+  title: "Contáctanos",
+  description:
+    "Ponte en contacto con Papelería P de Papel para cualquier consulta o asistencia. Nuestro equipo está listo para ayudarte con tus preguntas sobre productos kawaii y de oficina, pedidos y más. ¡Tu satisfacción es nuestra prioridad! Visita nuestra página de contacto.",
+  alternates: {
+    canonical: "/contact",
+  },
+};
 
 export default function ContactPage() {
   return (

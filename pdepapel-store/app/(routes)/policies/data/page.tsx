@@ -1,8 +1,18 @@
 import { User2 } from "lucide-react";
+import { Metadata } from "next";
 import Image from "next/image";
 
 import { Container } from "@/components/ui/container";
 import { Separator } from "@/components/ui/separator";
+
+export const metadata: Metadata = {
+  title: "Política de tratamiento de datos",
+  description:
+    "Explora nuestra Política de Tratamiento de Datos en Papelería P de Papel. Comprometidos con la seguridad y privacidad de tu información. Conoce cómo recopilamos, usamos y protegemos tus datos personales en nuestras operaciones de venta de artículos kawaii y de oficina.",
+  alternates: {
+    canonical: "/policies/data",
+  },
+};
 
 export default function DataPolicyPage() {
   return (

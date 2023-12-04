@@ -1,3 +1,5 @@
+import { Metadata } from "next";
+
 import { getCategories } from "@/actions/get-categories";
 import { getColors } from "@/actions/get-colors";
 import { getDesigns } from "@/actions/get-designs";
@@ -16,6 +18,15 @@ import { PriceRange } from "@/types";
 import { SortSelector } from "./components/sort-selector";
 
 export const revalidate = 0;
+
+export const metadata: Metadata = {
+  title: "Tienda",
+  description:
+    "Explora nuestra tienda online en Papelería P de Papel. Un mundo de artículos kawaii, suministros de oficina y papelería general te espera. Descubre productos únicos y de calidad para darle un toque especial a tu espacio de trabajo o estudio. Navega, elige y compra con facilidad.",
+  alternates: {
+    canonical: "/shop",
+  },
+};
 
 interface ShopPageProps {
   searchParams: {

@@ -1,4 +1,5 @@
 import { BookHeartIcon, Facebook, Instagram } from "lucide-react";
+import { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -7,6 +8,15 @@ import { Icons } from "@/components/icons";
 import { Newsletter } from "@/components/newsletter";
 import { Container } from "@/components/ui/container";
 import { SocialMedia } from "./components/social-media";
+
+export const metadata: Metadata = {
+  title: "Nuestra historia",
+  description:
+    "Descubre la historia detrás de Papelería P de Papel. Aprende sobre nuestra misión de traer productos kawaii y de oficina de alta calidad a tu espacio. Conoce nuestras redes y nuestra pasión por la papelería que inspira creatividad y organización.",
+  alternates: {
+    canonical: "/about",
+  },
+};
 
 export default async function AboutPage() {
   const posts = await getPosts();

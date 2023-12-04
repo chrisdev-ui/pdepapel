@@ -1,10 +1,20 @@
 import { Mail, Phone, ScrollText } from "lucide-react";
+import { Metadata } from "next";
 import Image from "next/image";
 
 import { Icons } from "@/components/icons";
 import { Container } from "@/components/ui/container";
 import { Separator } from "@/components/ui/separator";
 import { KAWAII_FACE_HAPPY } from "@/constants";
+
+export const metadata: Metadata = {
+  title: "Política de devoluciones",
+  description:
+    "Conoce la política de devoluciones de Papelería P de Papel. Brindamos información clara y detallada sobre cómo realizar devoluciones de artículos kawaii y de oficina. Nuestro objetivo es garantizar tu satisfacción y una experiencia de compra positiva. Aquí te explicamos los pasos y condiciones.",
+  alternates: {
+    canonical: "/policies/returns",
+  },
+};
 
 export default function ReturnsPolicyPage() {
   return (

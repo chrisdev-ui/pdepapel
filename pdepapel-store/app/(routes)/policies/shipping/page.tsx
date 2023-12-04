@@ -1,9 +1,19 @@
 import { CircleDollarSign, Truck } from "lucide-react";
+import { Metadata } from "next";
 import Image from "next/image";
 
 import { Container } from "@/components/ui/container";
 import { Separator } from "@/components/ui/separator";
 import { KAWAII_FACE_WELCOME } from "@/constants";
+
+export const metadata: Metadata = {
+  title: "Política de envíos",
+  description:
+    "Descubre nuestra Política de Envíos en Papelería P de Papel. Información detallada sobre opciones de envío, tiempos de entrega, y tarifas para tus artículos kawaii y de oficina. Nos esforzamos por ofrecer un servicio de envío rápido, seguro y eficiente. Aprende más sobre cómo llevamos la alegría a tu puerta.",
+  alternates: {
+    canonical: "/policies/shipping",
+  },
+};
 
 export default function ShippingPolicyPage() {
   return (
