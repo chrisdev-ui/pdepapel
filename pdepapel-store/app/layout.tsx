@@ -59,8 +59,7 @@ export const metadata: Metadata = {
     },
   },
   verification: {
-    google:
-      "google-site-verification=bNg7w8CM30aKsixoCkhoBU7yhISJBm8isqVm6SrtBOY",
+    google: "bNg7w8CM30aKsixoCkhoBU7yhISJBm8isqVm6SrtBOY",
   },
   openGraph: {
     title: "Papelería P de Papel",
