@@ -36,7 +36,7 @@ import {
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { useToast } from '@/hooks/use-toast'
-import { formatter, generateGuestId } from '@/lib/utils'
+import { formatter, generateGuestId, parseOrderDetails } from '@/lib/utils'
 import { zodResolver } from '@hookform/resolvers/zod'
 import axios from 'axios'
 import { DollarSign, ShoppingBasket, Trash } from 'lucide-react'
@@ -83,6 +83,17 @@ type ProductOption = {
   value: string
   label: string
   price?: number
+}
+
+type WompiPaymentMethods = {
+  [key in
+    | 'CARD'
+    | 'BANCOLOMBIA_TRANSFER'
+    | 'BANCOLOMBIA_QR'
+    | 'NEQUI'
+    | 'PSE'
+    | 'PCOL'
+    | string]: string
 }
 
 interface OrderFormProps {
@@ -147,8 +158,8 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   const paymentOptions = {
     [PaymentMethod.BankTransfer]: 'Transferencia bancaria',
     [PaymentMethod.COD]: 'Contra entrega',
-    [PaymentMethod.Stripe]: 'Tarjeta de crédito o débito',
-    [PaymentMethod.Bancolombia]: 'Bancolombia'
+    [PaymentMethod.PayU]: 'PayU',
+    [PaymentMethod.Wompi]: 'Wompi'
   }
 
   const shippingOptions = {
@@ -157,6 +168,27 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     [ShippingStatus.InTransit]: 'En tránsito',
     [ShippingStatus.Delivered]: 'Entregada',
     [ShippingStatus.Returned]: 'Devuelta'
+  }
+
+  const detailsTitleOptions: { [key: string]: string } = {
+    customer_email: 'Correo electrónico del cliente',
+    payment_method_type: 'Tipo de método de pago'
+  }
+
+  const paymentMethodsByOption: {
+    [P in PaymentMethod]: WompiPaymentMethods | null
+  } = {
+    [PaymentMethod.Wompi]: {
+      CARD: 'Tarjeta de crédito',
+      BANCOLOMBIA_TRANSFER: 'Transferencia bancaria Bancolombia',
+      BANCOLOMBIA_QR: 'Código QR',
+      NEQUI: 'Nequi',
+      PSE: 'PSE',
+      PCOL: 'Puntos Colombia'
+    },
+    [PaymentMethod.PayU]: null,
+    [PaymentMethod.BankTransfer]: null,
+    [PaymentMethod.COD]: null
   }
 
   const title = initialData ? 'Editar orden' : 'Crear orden'
@@ -257,6 +289,8 @@ export const OrderForm: React.FC<OrderFormProps> = ({
       setOpen(false)
     }
   }
+
+  const parsedDetails = parseOrderDetails(initialData?.payment?.details)
 
   return (
     <>
@@ -494,7 +528,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           <h2 className="text-lg font-semibold">
             Estado del pago # {initialData?.payment?.id}
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
             <FormField
               control={form.control}
               name="payment.method"
@@ -544,6 +578,36 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 </FormItem>
               )}
             />
+            {initialData?.payment?.details && (
+              <FormItem className="flex flex-col w-full">
+                <FormLabel>Detalles del pago</FormLabel>
+                <Alert className="max-w-full">
+                  <AlertDescription>
+                    <div className="flex flex-col w-full">
+                      {Object.entries(parsedDetails).map(([key, value]) => {
+                        const currentPaymentMethodObject =
+                          paymentMethodsByOption[
+                            initialData?.payment?.method as PaymentMethod
+                          ]
+                        return (
+                          <div
+                            key={key}
+                            className="flex flex-col w-full text-sm"
+                          >
+                            <span className="font-semibold">
+                              {detailsTitleOptions[key] || key}
+                            </span>
+                            <span>
+                              {currentPaymentMethodObject?.[value] || value}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              </FormItem>
+            )}
           </div>
           <Separator />
           <h2 className="text-lg font-semibold">

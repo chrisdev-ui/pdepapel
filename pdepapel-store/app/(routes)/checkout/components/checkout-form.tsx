@@ -35,7 +35,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import axios from "axios";
 import { ArrowLeft, CreditCard, Info } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { BancolombiaButton } from "./bancolombia-button";
 import { InfoCountryTooltip } from "./info-country-tooltip";
 
 type CheckoutFormUser = {
@@ -157,23 +156,10 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
             variant: "destructive",
           });
         }
-      } else if (paymentMethod === PaymentMethod.Stripe) {
+      } else if (paymentMethod === PaymentMethod.Wompi) {
         const response = await axios.post(
-          `${env.NEXT_PUBLIC_API_URL}/checkout/stripe`,
-          {
-            items: orderItems,
-            userId: isUserLoggedIn ? userId : null,
-            guestId: isUserLoggedIn ? null : guestUserId,
-          },
-        );
-        window.location = response.data.url;
-      } else if (paymentMethod === PaymentMethod.Bancolombia) {
-        const response = await axios.post(
-          `${env.NEXT_PUBLIC_API_URL}/checkout/bancolombia`,
-          {
-            buttonId: "",
-            ...formattedData,
-          },
+          `${env.NEXT_PUBLIC_API_URL}/checkout`,
+          formattedData,
         );
         window.location = response.data.url;
       }
@@ -379,7 +365,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                       <p className="md:2vw mx-auto max-w-xs pl-[var(--spacing)] text-xs">
                         Realiza una transferencia bancaria a la siguiente{" "}
                         <strong>Cuenta de Ahorros Bancolombia</strong>
-                        <Icons.payments.bancolombiaButton className="mx-1 inline-flex h-3 w-3" />
+                        <Icons.payments.bancolombia className="mx-1 inline-flex h-3 w-3" />
                         <strong>236-000036-64</strong>
                       </p>
                     </li>
@@ -478,13 +464,13 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
               </div>
               <div>
                 <RadioGroupItem
-                  value={PaymentMethod.Stripe}
-                  id={PaymentMethod.Stripe}
+                  value={PaymentMethod.PayU}
+                  id={PaymentMethod.PayU}
                   className="peer sr-only"
                   disabled
                 />
                 <Label
-                  htmlFor={PaymentMethod.Stripe}
+                  htmlFor={PaymentMethod.PayU}
                   className="relative flex cursor-pointer items-center justify-start gap-4 rounded-md border border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-pink-shell peer-data-[state=checked]:bg-pink-shell/20 [&:has([data-state=checked])]:border-pink-shell [&:has([data-state=checked])]:bg-pink-shell/20"
                 >
                   <Icons.payments.payu className="h-6" />
@@ -508,41 +494,29 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
               </div>
               <div>
                 <RadioGroupItem
-                  value={PaymentMethod.Bancolombia}
-                  id={PaymentMethod.Bancolombia}
+                  value={PaymentMethod.Wompi}
+                  id={PaymentMethod.Wompi}
                   className="peer sr-only"
-                  disabled
                 />
                 <Label
-                  htmlFor={PaymentMethod.Bancolombia}
+                  htmlFor={PaymentMethod.Wompi}
                   className="relative flex cursor-pointer items-center justify-start gap-4 rounded-md border border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-pink-shell peer-data-[state=checked]:bg-pink-shell/20 [&:has([data-state=checked])]:border-pink-shell [&:has([data-state=checked])]:bg-pink-shell/20"
                 >
-                  <Icons.payments.wompi className="h-6" />
+                  <Icons.payments.wompi className="h-6" fill="#2C2A29" />
                   Paga a través de Wompi
-                  <ComingSoonBadge />
                 </Label>
               </div>
             </RadioGroup>
-            {paymentMethod !== PaymentMethod.Bancolombia ? (
-              <Button
-                type="submit"
-                disabled={cart.items.length === 0 || isLoading}
-                className="group relative mt-6 w-full overflow-hidden rounded-full bg-blue-yankees font-serif text-base font-bold uppercase text-white hover:bg-blue-yankees"
-              >
-                <CreditCard className="absolute left-0 h-5 w-5 -translate-x-full transform transition-transform duration-500 ease-out group-hover:translate-x-52" />
-                <span className="transition-opacity duration-150 group-hover:opacity-0">
-                  Finalizar compra
-                </span>
-              </Button>
-            ) : (
-              <div className="mt-6 w-full">
-                <BancolombiaButton
-                  disabled={cart.items.length === 0 || isLoading}
-                  type="submit"
-                  onClick={form.handleSubmit(onSubmit)}
-                />
-              </div>
-            )}
+            <Button
+              type="submit"
+              disabled={cart.items.length === 0 || isLoading}
+              className="group relative mt-6 w-full overflow-hidden rounded-full bg-blue-yankees font-serif text-base font-bold uppercase text-white hover:bg-blue-yankees"
+            >
+              <CreditCard className="absolute left-0 h-5 w-5 -translate-x-full transform transition-transform duration-500 ease-out group-hover:translate-x-52" />
+              <span className="transition-opacity duration-150 group-hover:opacity-0">
+                Finalizar compra
+              </span>
+            </Button>
             <div className="mt-5">
               <small className="text-xxs">
                 <Info className="inline-flex h-4 w-4 text-success" /> ¡Hola!

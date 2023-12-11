@@ -21,9 +21,9 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 
-import { BancolombiaButton } from "@/app/(routes)/checkout/components/bancolombia-button";
 import { Forbidden } from "@/components/forbidden";
 import { Icons } from "@/components/icons";
+import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { Currency } from "@/components/ui/currency";
 import { OrderStatus, PaymentMethod, ShippingStatus, steps } from "@/constants";
@@ -31,7 +31,7 @@ import { useCart } from "@/hooks/use-cart";
 import { useGuestUser } from "@/hooks/use-guest-user";
 import { useToast } from "@/hooks/use-toast";
 import { env } from "@/lib/env.mjs";
-import { cn, generateGuestId } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { Order } from "@/types";
 import axios from "axios";
 import { useSearchParams } from "next/navigation";
@@ -46,14 +46,14 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
   const searchParams = useSearchParams();
   const { userId } = useAuth();
   const { toast } = useToast();
-  const { guestId, setGuestId } = useGuestUser();
+  const guestId = useGuestUser((state) => state.guestId ?? "");
   const [isLoading, setIsLoading] = useState(false);
   const removeAll = useCart((state) => state.removeAll);
 
   useEffect(() => {
     if (
-      Boolean(searchParams.get("success")) ||
-      searchParams.get("transferState") === "approved"
+      searchParams.get("id") === order?.payment?.transactionId &&
+      order?.status === OrderStatus.PAID
     ) {
       toast({
         title: "¡Gracias por tu compra!",
@@ -66,8 +66,8 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
     }
 
     if (
-      Boolean(searchParams.get("canceled")) ||
-      searchParams.get("transferState") === "rejected"
+      searchParams.get("id") === order?.payment?.transactionId &&
+      order?.status === OrderStatus.CANCELLED
     ) {
       toast({
         title: "¡Hubo un fallo en tu intento de pago!",
@@ -77,9 +77,13 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
           "No se realizó ningún cargo a tu cuenta, intenta el pago de nuevo más tarde o utiliza otro método.",
         duration: 10000,
       });
+      removeAll();
     }
 
-    if (searchParams.get("transferState") === "pending") {
+    if (
+      searchParams.get("id") === order?.payment?.transactionId &&
+      order?.status === OrderStatus.PENDING
+    ) {
       toast({
         title: "Pago pendiente",
         variant: "warning",
@@ -88,8 +92,9 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
           "¡Casi listo! Estamos confirmando tu pago. Te mantendremos informado y te avisaremos en cuanto tengamos todo confirmado.",
         duration: 10000,
       });
+      removeAll();
     }
-  }, [removeAll, searchParams, toast]);
+  }, [order, removeAll, searchParams, toast]);
 
   const addresses = order?.address.split(",");
   const shippingStatus = steps.slice(
@@ -131,29 +136,20 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
     ? userId === order?.userId
     : guestId === order?.guestId;
 
-  const onSubmit = async () => {
-    const isUserLoggedIn = Boolean(userId);
-    let guestUserId = guestId;
-    if (!isUserLoggedIn && !guestUserId) {
-      guestUserId = generateGuestId();
-      setGuestId(guestUserId);
-    }
+  const onSubmitPayment = async () => {
     try {
       setIsLoading(true);
-      const response = await axios.post(
-        `${env.NEXT_PUBLIC_API_URL}/checkout/bancolombia/${order.id}`,
-        {
-          buttonId: "",
-          userId: isUserLoggedIn ? userId : null,
-          guestId: isUserLoggedIn ? null : guestUserId,
-        },
-      );
-      window.location = response.data.url;
+      if (order?.payment.method === PaymentMethod.Wompi) {
+        const response = await axios.post(
+          `${env.NEXT_PUBLIC_API_URL}/checkout/${order.id}`,
+        );
+        window.location = response.data.url;
+      }
     } catch (error) {
       console.error(error);
       toast({
         title: "Error",
-        description: "Ha ocurrido intentando procesar tu pago.",
+        description: "Ha ocurrido un error creando tu orden, intenta de nuevo",
         variant: "destructive",
       });
     } finally {
@@ -305,12 +301,15 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                     {status[order?.status as OrderStatus].icon}
                     <span>{status[order?.status as OrderStatus].text}</span>
                   </div>
-                  {order?.payment?.method === PaymentMethod.Bancolombia &&
-                    order.status !== OrderStatus.PAID && (
-                      <BancolombiaButton
+                  {order.status !== OrderStatus.PAID &&
+                    order?.payment?.method === PaymentMethod.Wompi && (
+                      <Button
+                        className="flex font-serif"
                         disabled={isLoading}
-                        onClick={onSubmit}
-                      />
+                        onClick={onSubmitPayment}
+                      >
+                        Pagar con <Icons.payments.wompi className="w-20" />
+                      </Button>
                     )}
                   {order.status !== OrderStatus.PAID && (
                     <small>
@@ -320,7 +319,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                       <strong className="font-serif">321-629-9845</strong> con
                       el comprobante de pago del depósito hecho a la cuenta
                       Bancolombia
-                      <Icons.payments.bancolombiaButton className="mx-1 inline-flex h-3 w-3" />
+                      <Icons.payments.bancolombia className="mx-1 inline-flex h-3 w-3" />
                       <strong className="font-serif">236-000036-64</strong> para
                       que podamos procesar tu orden lo más pronto posible.
                     </small>

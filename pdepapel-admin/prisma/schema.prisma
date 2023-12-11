@@ -17,9 +17,9 @@ enum OrderStatus {
 
 enum PaymentMethod {
   COD
-  Stripe
   BankTransfer
-  Bancolombia
+  Wompi
+  PayU
 }
 
 enum ShippingStatus {
@@ -297,6 +297,7 @@ model PaymentDetails {
   order         Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
   method        PaymentMethod   @default(BankTransfer)         
   transactionId String?
+  details       String?          @default("")
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 

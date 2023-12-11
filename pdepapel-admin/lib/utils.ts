@@ -30,3 +30,51 @@ export function getPublicIdFromCloudinaryUrl(url: string) {
   // Return the matched public ID or null if not found
   return match ? match[1] : null
 }
+
+export async function generateIntegritySignature({
+  reference,
+  amountInCents,
+  currency,
+  expirationTime = '',
+  integritySecret
+}: {
+  reference: string
+  amountInCents: number
+  currency: string
+  expirationTime?: string
+  integritySecret: string
+}): Promise<string> {
+  const stringToSign = `${reference}${amountInCents}${currency}${expirationTime}${integritySecret}`
+  const encodedText = new TextEncoder().encode(stringToSign)
+  const hashBuffer = await crypto.subtle.digest('SHA-256', encodedText)
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+export function parseOrderDetails(input: string | null | undefined): {
+  customer_email: string
+  payment_method_type: string
+} {
+  if (input === null || input === undefined) {
+    return {
+      customer_email: '',
+      payment_method_type: ''
+    }
+  }
+  const keyValuePairs = input.split(' | ')
+  let parsedData = {
+    customer_email: '',
+    payment_method_type: ''
+  }
+
+  keyValuePairs.forEach((pair) => {
+    const [key, value] = pair.split(': ').map((item) => item.trim())
+    if (key === 'customer_email') {
+      parsedData.customer_email = value
+    } else if (key === 'payment_method_type') {
+      parsedData.payment_method_type = value
+    }
+  })
+
+  return parsedData
+}

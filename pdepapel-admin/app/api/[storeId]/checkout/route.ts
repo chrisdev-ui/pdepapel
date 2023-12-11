@@ -1,14 +1,25 @@
-import Bancolombia from '@/actions/bancolombia-actions'
+import { env } from '@/lib/env.mjs'
 import prismadb from '@/lib/prismadb'
-import { generateOrderNumber } from '@/lib/utils'
+import { generateIntegritySignature, generateOrderNumber } from '@/lib/utils'
 import { clerkClient } from '@clerk/nextjs'
-import { OrderStatus, PaymentMethod } from '@prisma/client'
+import {
+  Order,
+  OrderItem,
+  OrderStatus,
+  PaymentDetails,
+  Product
+} from '@prisma/client'
 import { NextResponse } from 'next/server'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+}
+
+export interface CheckoutOrder extends Order {
+  orderItems: (OrderItem & { product: Product })[]
+  payment?: PaymentDetails
 }
 
 export async function OPTIONS() {
@@ -20,9 +31,12 @@ export async function POST(
   { params }: { params: { storeId: string } }
 ) {
   if (!params.storeId)
-    return NextResponse.json({ error: 'Store ID is required' }, { status: 400 })
+    return NextResponse.json(
+      { error: 'Store ID is required' },
+      { status: 400, headers: corsHeaders }
+    )
   try {
-    const { fullName, phone, address, orderItems, userId, guestId, buttonId } =
+    const { fullName, phone, address, orderItems, userId, guestId, payment } =
       await req.json()
 
     let authenticatedUserId = null
@@ -57,9 +71,7 @@ export async function POST(
         { error: 'Order items are required' },
         { status: 400, headers: corsHeaders }
       )
-
     const errors: string[] = []
-    const { transferRegistry } = new Bancolombia()
     const orderItemsData = []
 
     const productIds = orderItems.map(
@@ -79,6 +91,11 @@ export async function POST(
 
       if (product.stock < quantity) {
         errors.push(`Product ${productId} out of stock`)
+        continue
+      }
+
+      if (product.stock - quantity < 0) {
+        errors.push(`Product ${productId} stock would become negative`)
         continue
       }
 
@@ -109,7 +126,7 @@ export async function POST(
           payment: {
             create: {
               storeId: params.storeId,
-              method: PaymentMethod.Bancolombia
+              method: payment.method
             }
           }
         },
@@ -123,33 +140,11 @@ export async function POST(
       })
     ])
 
-    const { data } = await transferRegistry({
-      commerceTransferButtonId: (buttonId as string) || 'h4ShG3NER1C',
-      transferReference: order.id,
-      transferAmount: order.orderItems.reduce(
-        (acc, item) => acc + Number(item.product.price) * item.quantity,
-        0
-      ),
-      transferDescription: `Orden #${order.id} realizada en la Papelería P de Papel`
-    })
+    const url = await generateWompiPayment(order)
 
-    await prismadb.order.update({
-      where: { id: order.id },
-      data: {
-        payment: {
-          update: {
-            transactionId: data[0]?.transferCode
-          }
-        }
-      }
-    })
-
-    return NextResponse.json(
-      { url: data[0]?.redirectURL },
-      { headers: corsHeaders }
-    )
+    return NextResponse.json({ url }, { headers: corsHeaders })
   } catch (error: any) {
-    console.error('[ORDER_BANCOLOMBIA_CHECKOUT]', error)
+    console.error('[ORDER_CHECKOUT]', error)
     return NextResponse.json(
       {
         error: 'Internal Server Error',
@@ -158,4 +153,30 @@ export async function POST(
       { status: 500, headers: corsHeaders }
     )
   }
+}
+
+export async function generateWompiPayment(
+  order: CheckoutOrder
+): Promise<string> {
+  const expirationTime = new Date(
+    new Date().setHours(new Date().getHours() + 1)
+  ).toISOString()
+
+  const amountInCents =
+    order.orderItems.reduce(
+      (acc, item) => acc + Number(item.product.price) * item.quantity,
+      0
+    ) * 100
+
+  const signatureIntegrity = await generateIntegritySignature({
+    reference: order.id,
+    amountInCents,
+    currency: 'COP',
+    integritySecret: env.WOMPI_INTEGRITY_KEY,
+    expirationTime
+  })
+
+  const url = `https://checkout.wompi.co/p/?public-key=${env.WOMPI_API_KEY}&currency=COP&amount-in-cents=${amountInCents}&reference=${order.id}&signature:integrity=${signatureIntegrity}&redirect-url=${env.FRONTEND_STORE_URL}/order/${order.id}&expiration-time=${expirationTime}`
+
+  return url
 }

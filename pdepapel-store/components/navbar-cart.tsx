@@ -50,10 +50,6 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
   const onCheckout = () => {
     setIsSheetOpen(false);
     router.push("/checkout");
-    // TODO: Enable when PayU and Wompi will be integrated
-    // checkoutModal.onOpen(cart.items, () => {
-    //   setIsSheetOpen(false);
-    // });
   };
 
   const totalQuantity = cart.items.reduce(

@@ -6,16 +6,16 @@ export const env = createEnv({
     NODE_ENV: z.enum(['development', 'production']),
     CLERK_SECRET_KEY: z.string().min(1),
     DATABASE_URL: z.string().min(1),
-    STRIPE_API_KEY: z.string().min(1),
     FRONTEND_STORE_URL: z.string().min(1),
     ADMIN_WEB_URL: z.string().min(1),
-    STRIPE_WEBHOOK_SECRET: z.string().min(1),
     CLOUDINARY_CLOUD_NAME: z.string().min(1),
     CLOUDINARY_API_KEY: z.string().min(1),
     CLOUDINARY_API_SECRET: z.string().min(1),
-    BANCOLOMBIA_CLIENT_ID: z.string().min(1),
-    BANCOLOMBIA_CLIENT_SECRET: z.string().min(1),
-    BANCOLOMBIA_API_URL: z.string().min(1)
+    WOMPI_API_URL: z.string().min(1),
+    WOMPI_API_KEY: z.string().min(1),
+    WOMPI_API_SECRET: z.string().min(1),
+    WOMPI_EVENTS_KEY: z.string().min(1),
+    WOMPI_INTEGRITY_KEY: z.string().min(1)
   },
   client: {
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().min(1),
@@ -23,7 +23,8 @@ export const env = createEnv({
     NEXT_PUBLIC_CLERK_SIGN_UP_URL: z.string().min(1),
     NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL: z.string().min(1),
     NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL: z.string().min(1),
-    NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: z.string().min(1)
+    NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: z.string().min(1),
+    NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME: z.string().optional()
   },
   experimental__runtimeEnv: {
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:
@@ -35,6 +36,8 @@ export const env = createEnv({
     NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL:
       process.env.NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL,
     NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME:
-      process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
+      process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
+    NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME:
+      process.env.NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME
   }
 })

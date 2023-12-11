@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
+import { env } from '@/lib/env.mjs'
 import axios from 'axios'
 import { ImagePlus, Trash } from 'lucide-react'
 import { CldUploadWidget } from 'next-cloudinary'
@@ -90,7 +91,17 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
           </div>
         ))}
       </div>
-      <CldUploadWidget onUpload={onUpload} uploadPreset="u0dp1v1y">
+      <CldUploadWidget
+        onUpload={onUpload}
+        uploadPreset="u0dp1v1y"
+        options={
+          env.NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME
+            ? {
+                folder: env.NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME
+              }
+            : {}
+        }
+      >
         {({ open }) => {
           const onClick = (
             e: React.MouseEvent<HTMLButtonElement, MouseEvent>

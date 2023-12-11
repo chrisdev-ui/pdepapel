@@ -22,9 +22,9 @@ export enum OrderStatus {
 
 export enum PaymentMethod {
   COD = "COD",
-  Stripe = "Stripe",
   BankTransfer = "BankTransfer",
-  Bancolombia = "Bancolombia",
+  Wompi = "Wompi",
+  PayU = "PayU",
 }
 
 export enum ShippingStatus {

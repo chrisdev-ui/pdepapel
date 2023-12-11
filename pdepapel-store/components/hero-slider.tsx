@@ -73,7 +73,7 @@ export const HeroSlider: React.FC<HeroSliderProps> = ({ data }) => {
                 sizes="(max-width: 640px) 640px, 1280px"
               />
               {title && (
-                <div className="flex h-full w-full flex-col items-center justify-center gap-y-8 text-center">
+                <div className="relative z-10 flex h-full w-full flex-col items-center justify-center gap-y-8 text-center">
                   <div className="max-w-xs text-3xl font-bold sm:max-w-xl sm:text-5xl lg:text-6xl">
                     {title}
                   </div>
