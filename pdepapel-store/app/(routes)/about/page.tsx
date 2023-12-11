@@ -9,6 +9,8 @@ import { Newsletter } from "@/components/newsletter";
 import { Container } from "@/components/ui/container";
 import { SocialMedia } from "./components/social-media";
 
+export const revalidate = 0;
+
 export const metadata: Metadata = {
   title: "Nuestra historia",
   description:
