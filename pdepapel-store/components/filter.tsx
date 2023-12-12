@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { Category, Color, Design, PriceRange, Size, Type } from "@/types";
+import { useMemo } from "react";
 
 interface FilterProps {
   valueKey: string;
@@ -26,6 +27,10 @@ export const Filter: React.FC<FilterProps> = ({
   const searchParams = useSearchParams();
 
   const selectedValue = searchParams.get(valueKey);
+
+  const sortedData = useMemo(() => {
+    return [...data].sort((a, b) => a.name.localeCompare(b.name));
+  }, [data]);
 
   const handleSelected = (id: string) => {
     const current = qs.parse(searchParams.toString());
@@ -55,11 +60,11 @@ export const Filter: React.FC<FilterProps> = ({
       <h3 className="font-serif text-lg font-semibold">{name}</h3>
       <Separator className="my-4" />
       <div className="flex flex-wrap gap-2">
-        {data?.length === 0 && (
+        {sortedData?.length === 0 && (
           <div className="flex items-center">{emptyMessage}</div>
         )}
-        {!!data?.length &&
-          data?.map((filter) => (
+        {!!sortedData?.length &&
+          sortedData?.map((filter) => (
             <div key={filter?.id} className="flex items-center">
               <Button
                 className={cn(

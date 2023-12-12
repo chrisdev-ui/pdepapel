@@ -1,4 +1,7 @@
-import { Suspense } from "react";
+"use client";
+
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useRef } from "react";
 
 import { Loader } from "@/components/loader";
 import { Container } from "@/components/ui/container";
@@ -12,8 +15,20 @@ interface NewArrivalsProps {
 }
 
 export const NewArrivals: React.FC<NewArrivalsProps> = ({ newProducts }) => {
+  const searchParams = useSearchParams();
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (searchParams.get("scroll") === "new-arrivals") {
+      containerRef.current?.scrollIntoView({
+        behavior: "smooth",
+      });
+    }
+  }, [searchParams]);
+
   return (
     <Container className="mt-8 flex flex-col gap-y-8">
+      <div id="new-arrivals" ref={containerRef} />
       <div className="space-y-4 text-center">
         <h2 className="font-serif text-4xl font-extrabold">
           Productos agregados recientemente
