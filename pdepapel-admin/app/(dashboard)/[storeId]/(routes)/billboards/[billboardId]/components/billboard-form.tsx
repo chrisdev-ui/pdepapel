@@ -26,7 +26,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 const formSchema = z.object({
-  label: z.string(),
+  label: z.string().min(1, 'La etiqueta no puede estar vacía'),
   title: z.string().optional(),
   redirectUrl: z.string().optional(),
   imageUrl: z.string().min(1, 'La URL de la imagen no puede estar vacía')

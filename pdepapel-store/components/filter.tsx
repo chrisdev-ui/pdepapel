@@ -33,23 +33,26 @@ export const Filter: React.FC<FilterProps> = ({
   }, [data]);
 
   const handleSelected = (id: string) => {
-    const current = qs.parse(searchParams.toString());
+    const current = qs.parse(searchParams.toString(), { arrayFormat: "comma" });
+
+    let currentValues = current[valueKey];
+    if (!Array.isArray(currentValues)) {
+      currentValues = currentValues ? [currentValues] : [];
+    }
 
     const query = {
       ...current,
-      [valueKey]: id,
+      [valueKey]: currentValues.includes(id)
+        ? currentValues.filter((value) => value !== id)
+        : [...currentValues, id],
     };
-
-    if (current[valueKey] === id) {
-      query[valueKey] = null;
-    }
 
     const url = qs.stringifyUrl(
       {
         url: pathname,
         query,
       },
-      { skipNull: true },
+      { skipNull: true, arrayFormat: "comma" },
     );
 
     router.push(url);
@@ -70,7 +73,9 @@ export const Filter: React.FC<FilterProps> = ({
                 className={cn(
                   "rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-800 hover:bg-blue-yankees hover:text-white",
                   {
-                    "bg-blue-yankees text-white": selectedValue === filter?.id,
+                    "bg-blue-yankees text-white": selectedValue?.includes(
+                      filter?.id,
+                    ),
                   },
                 )}
                 onClick={() => handleSelected(filter?.id)}

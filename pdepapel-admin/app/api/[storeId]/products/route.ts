@@ -121,11 +121,11 @@ export async function GET(
     return NextResponse.json({ error: 'Store ID is required' }, { status: 400 })
   try {
     const { searchParams } = new URL(req.url)
-    const typeId = searchParams.get('typeId') || undefined
-    const categoryId = searchParams.get('categoryId') || undefined
-    const colorId = searchParams.get('colorId') || undefined
-    const sizeId = searchParams.get('sizeId') || undefined
-    const designId = searchParams.get('designId') || undefined
+    const typeId = searchParams.get('typeId')?.split(',') || []
+    const categoryId = searchParams.get('categoryId')?.split(',') || []
+    const colorId = searchParams.get('colorId')?.split(',') || []
+    const sizeId = searchParams.get('sizeId')?.split(',') || []
+    const designId = searchParams.get('designId')?.split(',') || []
     const isFeatured = searchParams.get('isFeatured')
     const onlyNew = searchParams.get('onlyNew') || undefined
     const limit = Number(searchParams.get('limit'))
@@ -133,10 +133,10 @@ export async function GET(
     const priceRange = searchParams.get('priceRange') || undefined
     const excludeProducts = searchParams.get('excludeProducts') || undefined
     let categoriesIds: string[] = []
-    if (typeId) {
+    if (typeId.length > 0) {
       const categoriesForType = await prismadb.category.findMany({
         where: {
-          typeId,
+          typeId: typeId.length > 0 ? { in: typeId } : undefined,
           storeId: params.storeId
         },
         select: {
@@ -187,11 +187,14 @@ export async function GET(
         where: {
           storeId: params.storeId,
           categoryId:
-            categoryId ||
-            (categoriesIds.length > 0 ? { in: categoriesIds } : undefined),
-          colorId,
-          sizeId,
-          designId,
+            categoryId.length > 0
+              ? { in: categoryId }
+              : categoriesIds.length > 0
+              ? { in: categoriesIds }
+              : undefined,
+          colorId: colorId.length > 0 ? { in: colorId } : undefined,
+          sizeId: sizeId.length > 0 ? { in: sizeId } : undefined,
+          designId: designId.length > 0 ? { in: designId } : undefined,
           isFeatured: isFeatured !== null ? isFeatured === 'true' : undefined,
           isArchived: false,
           price: priceRange
