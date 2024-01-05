@@ -1,10 +1,11 @@
 import { env } from "@/lib/env.mjs";
-import { Product } from "@/types";
+import { ProductsResponse } from "@/types";
 import qs from "query-string";
 
 const API_URL = `${env.NEXT_PUBLIC_API_URL}/products`;
 
 interface Query {
+  page?: number;
   typeId?: string;
   categoryId?: string;
   colorId?: string;
@@ -12,13 +13,15 @@ interface Query {
   designId?: string;
   isFeatured?: boolean;
   onlyNew?: boolean;
+  fromShop?: boolean;
   limit?: number;
+  itemsPerPage?: number;
   sortOption?: string;
   priceRange?: string;
   excludeProducts?: string;
 }
 
-export const getProducts = async (query: Query): Promise<Product[]> => {
+export const getProducts = async (query: Query): Promise<ProductsResponse> => {
   const url = qs.stringifyUrl({
     url: API_URL,
     query: {
@@ -33,6 +36,9 @@ export const getProducts = async (query: Query): Promise<Product[]> => {
       sortOption: query.sortOption,
       priceRange: query.priceRange,
       excludeProducts: query.excludeProducts,
+      page: query.page,
+      itemsPerPage: query.itemsPerPage,
+      fromShop: query.fromShop,
     },
   });
 

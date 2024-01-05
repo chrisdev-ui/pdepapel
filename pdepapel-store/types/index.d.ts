@@ -130,3 +130,9 @@ export interface Post {
   postId: string;
   createdAt: string;
 }
+
+export interface ProductsResponse {
+  products: Product[];
+  totalPages: number;
+  totalItems: number;
+}

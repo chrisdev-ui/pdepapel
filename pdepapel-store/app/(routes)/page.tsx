@@ -24,14 +24,19 @@ export const metadata: Metadata = {
 };
 
 export default async function HomePage() {
-  const [billboards, featureProducts, mainBanner, newProducts, banners] =
-    await Promise.all([
-      getBillboards(),
-      getProducts({ isFeatured: true, limit: 8 }),
-      getMainBanner(),
-      getProducts({ onlyNew: true, limit: 8 }),
-      getBanners(),
-    ]);
+  const [
+    billboards,
+    { products: featureProducts },
+    mainBanner,
+    { products: newProducts },
+    banners,
+  ] = await Promise.all([
+    getBillboards(),
+    getProducts({ isFeatured: true, limit: 8 }),
+    getMainBanner(),
+    getProducts({ onlyNew: true, limit: 8 }),
+    getBanners(),
+  ]);
 
   return (
     <>

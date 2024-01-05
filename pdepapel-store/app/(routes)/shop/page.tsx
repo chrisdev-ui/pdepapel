@@ -15,6 +15,7 @@ import { NoResults } from "@/components/ui/no-results";
 import { ProductCard } from "@/components/ui/product-card";
 import { KAWAII_FACE_SAD, SortOptions } from "@/constants";
 import { PriceRange } from "@/types";
+import { Paginator } from "./components/paginator";
 import { SortSelector } from "./components/sort-selector";
 
 export const revalidate = 0;
@@ -37,25 +38,31 @@ interface ShopPageProps {
     designId: string;
     sortOption: string;
     priceRange: string;
+    page: number;
+    itemsPerPage: number;
   };
 }
 
 export default async function ShopPage({ searchParams }: ShopPageProps) {
-  const [products, types, sizes, colors, designs] = await Promise.all([
-    getProducts({
-      typeId: searchParams.typeId,
-      categoryId: searchParams.categoryId,
-      colorId: searchParams.colorId,
-      sizeId: searchParams.sizeId,
-      designId: searchParams.designId,
-      sortOption: searchParams.sortOption,
-      priceRange: searchParams.priceRange,
-    }),
-    getTypes(),
-    getSizes(),
-    getColors(),
-    getDesigns(),
-  ]);
+  const [{ products, totalPages }, types, sizes, colors, designs] =
+    await Promise.all([
+      getProducts({
+        typeId: searchParams.typeId,
+        categoryId: searchParams.categoryId,
+        colorId: searchParams.colorId,
+        sizeId: searchParams.sizeId,
+        designId: searchParams.designId,
+        sortOption: searchParams.sortOption,
+        priceRange: searchParams.priceRange,
+        fromShop: true,
+        page: searchParams.page,
+        itemsPerPage: searchParams.itemsPerPage,
+      }),
+      getTypes(),
+      getSizes(),
+      getColors(),
+      getDesigns(),
+    ]);
   let categories = await getCategories();
 
   const sortOptions = [
@@ -122,8 +129,8 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
               data={products.length > 0 ? prices : []}
             />
           </div>
-          <div className="mt-6 space-y-5 lg:col-span-4 lg:mt-0 lg:space-y-0">
-            <div className="mb-4 flex w-full items-center justify-between">
+          <div className="mt-6 space-y-8 lg:col-span-4 lg:mt-0">
+            <div className="flex w-full items-center justify-between">
               <h2 className="font-serif text-3xl font-bold">
                 Todos los productos
               </h2>
@@ -150,6 +157,9 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
                 ))}
               </div>
             )}
+            <div className="flex w-full items-center">
+              <Paginator totalPages={totalPages} />
+            </div>
           </div>
         </div>
       </Container>

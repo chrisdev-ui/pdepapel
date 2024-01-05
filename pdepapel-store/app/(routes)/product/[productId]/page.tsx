@@ -40,7 +40,7 @@ export const revalidate = 0;
 
 export default async function ProductPage({ params }: ProductPageProps) {
   const product = await getProduct(params.productId);
-  const suggestedProducts = await getProducts({
+  const { products: suggestedProducts } = await getProducts({
     categoryId: product?.category?.id,
     excludeProducts: params.productId,
     limit: 4,

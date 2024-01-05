@@ -121,6 +121,8 @@ export async function GET(
     return NextResponse.json({ error: 'Store ID is required' }, { status: 400 })
   try {
     const { searchParams } = new URL(req.url)
+    const page = Number(searchParams.get('page')) || 1
+    const itemsPerPage = Number(searchParams.get('itemsPerPage')) || 52
     const typeId = searchParams.get('typeId')?.split(',') || []
     const categoryId = searchParams.get('categoryId')?.split(',') || []
     const colorId = searchParams.get('colorId')?.split(',') || []
@@ -128,6 +130,7 @@ export async function GET(
     const designId = searchParams.get('designId')?.split(',') || []
     const isFeatured = searchParams.get('isFeatured')
     const onlyNew = searchParams.get('onlyNew') || undefined
+    const fromShop = searchParams.get('fromShop') || undefined
     const limit = Number(searchParams.get('limit'))
     const sortOption = searchParams.get('sortOption') || 'default'
     const priceRange = searchParams.get('priceRange') || undefined
@@ -215,10 +218,22 @@ export async function GET(
           }
         },
         orderBy: sort[sortOption as SortOption],
-        take: limit || undefined
+        skip: fromShop ? (page - 1) * itemsPerPage : undefined,
+        take: limit || (fromShop ? itemsPerPage : undefined)
       })
     }
-    return NextResponse.json(products)
+    const totalItems = await prismadb.product.count({
+      where: {
+        storeId: params.storeId,
+        isArchived: false
+      }
+    })
+    const totalPages = fromShop ? Math.ceil(totalItems / itemsPerPage) : 1
+    return NextResponse.json({
+      products,
+      totalItems,
+      totalPages: fromShop ? totalPages : 1
+    })
   } catch (error) {
     console.log('[PRODUCTS_GET]', error)
     return NextResponse.json(
