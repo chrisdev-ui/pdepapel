@@ -1,4 +1,7 @@
+import { EmailTemplate } from '@/components/email-template'
+import { SOURCE } from '@/constants'
 import prismadb from '@/lib/prismadb'
+import { resend } from '@/lib/resend'
 import { generateOrderNumber } from '@/lib/utils'
 import { clerkClient } from '@clerk/nextjs'
 import { OrderStatus } from '@prisma/client'
@@ -48,7 +51,8 @@ export async function POST(
       payment,
       shipping,
       userId,
-      guestId
+      guestId,
+      source
     } = body
     let authenticatedUserId = null
     if (userId) {
@@ -132,6 +136,20 @@ export async function POST(
           )
         : [])
     ])
+    if (source === SOURCE) {
+      await resend.emails.send({
+        from: 'Orders <onboarding@resend.dev>',
+        to: ['web.christian.dev@gmail.com', 'papeleria.pdepapel@gmail.com'],
+        subject: `Nueva orden de compra - ${fullName}`,
+        react: EmailTemplate({
+          name: fullName,
+          phone,
+          address,
+          orderNumber,
+          paymentMethod: 'Transferencia bancaria o contra entrega'
+        }) as React.ReactElement
+      })
+    }
     return NextResponse.json(order, { headers: corsHeaders })
   } catch (error) {
     console.log('[ORDERS_POST]', error)

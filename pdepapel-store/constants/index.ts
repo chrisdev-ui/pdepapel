@@ -70,3 +70,5 @@ export const steps: { status: string; value: string }[] = [
 export const MAX_PAGES = 4;
 export const MAX_ITEMS_PER_PAGE = 52;
 export const DOTS = "...";
+
+export const SOURCE = "website";

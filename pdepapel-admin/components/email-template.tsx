@@ -1,16 +1,20 @@
+import { format } from 'date-fns'
+
 /* eslint-disable @next/next/no-img-element */
 interface EmailTemplateProps {
-  name: string;
-  email: string;
-  subject?: string;
-  message?: string;
+  name: string
+  phone: string
+  address: string
+  orderNumber: string
+  paymentMethod: string
 }
 
 export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
   name,
-  email,
-  subject,
-  message,
+  phone,
+  address,
+  orderNumber,
+  paymentMethod
 }) => {
   return (
     <table
@@ -25,16 +29,16 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
         <td
           width="600"
           style={{
-            backgroundColor: "#ffffff",
-            borderRadius: "8px",
-            overflow: "hidden",
-            boxShadow: "0 0 10px rgba(0, 0, 0, 0.2)",
+            backgroundColor: '#ffffff',
+            borderRadius: '8px',
+            overflow: 'hidden',
+            boxShadow: '0 0 10px rgba(0, 0, 0, 0.2)'
           }}
         >
           {/* Card Start */}
           <table width="100%" border={0} cellSpacing="0" cellPadding="0">
             <tr>
-              <td align="center" style={{ padding: "20px" }}>
+              <td align="center" style={{ padding: '20px' }}>
                 {/* Image  */}
                 <img
                   src="https://res.cloudinary.com/dsogxa0hj/image/upload/v1704428256/wpl8rjmseskt2rzehpfg.png"
@@ -42,10 +46,10 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
                   width="300"
                   height="300"
                   style={{
-                    display: "block",
-                    width: "300px",
-                    height: "auto",
-                    objectFit: "contain",
+                    display: 'block',
+                    width: '300px',
+                    height: 'auto',
+                    objectFit: 'contain'
                   }}
                 />
               </td>
@@ -53,10 +57,10 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
             <tr>
               <td
                 style={{
-                  textAlign: "center",
-                  fontFamily: "Arial",
-                  fontSize: "24px",
-                  fontWeight: "bold",
+                  textAlign: 'center',
+                  fontFamily: 'Arial',
+                  fontSize: '24px',
+                  fontWeight: 'bold'
                 }}
               >
                 {/* Title  */}
@@ -64,10 +68,10 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
                   <tr>
                     <td
                       style={{
-                        padding: "0 10px",
+                        padding: '0 10px'
                       }}
                     >
-                      Correo electrónico de formulario de contacto
+                      Correo electrónico de creación de órdenes
                     </td>
                   </tr>
                 </table>
@@ -76,12 +80,12 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
             <tr>
               <td
                 style={{
-                  textAlign: "left",
-                  fontFamily: "Arial",
-                  fontSize: "18px",
-                  fontWeight: "600",
-                  padding: "0 20px",
-                  marginTop: "30px",
+                  textAlign: 'left',
+                  fontFamily: 'Arial',
+                  fontSize: '18px',
+                  fontWeight: '600',
+                  padding: '0 20px',
+                  marginTop: '30px'
                 }}
               >
                 {/* Description */}
@@ -91,27 +95,29 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
             <tr>
               <td
                 style={{
-                  textAlign: "left",
-                  fontFamily: "Arial",
-                  fontSize: "14px",
-                  padding: "20px",
-                  color: "#666666",
+                  textAlign: 'left',
+                  fontFamily: 'Arial',
+                  fontSize: '14px',
+                  padding: '20px',
+                  color: '#666666'
                 }}
               >
                 {/* Content  */}
                 <div>
-                  ¡Buenas noticias! Alguien ha compartido su ideas o inquietudes
-                  con nosotros a través del formulario de contacto en el sitio
-                  web de P de papel.
+                  ¡Buenas noticias! {name} ha creado una nueva orden de compra #
+                  {orderNumber}.
                 </div>
                 <div>
-                  <div>Detalles:</div>
-                  <div>Nombre del cliente: {name}</div>
-                  <div>Correo electrónico: {email}</div>
-                  <div>Asunto: {subject}</div>
-                  <div>
-                    Mensaje: <p>{message}</p>
-                  </div>
+                  <br />
+                  <strong>Nombre:</strong> {name}
+                  <br />
+                  <strong>Fecha:</strong> {format(new Date(), 'dd/MM/yyyy')}
+                  <br />
+                  <strong>Teléfono:</strong> {phone}
+                  <br />
+                  <strong>Dirección:</strong> {address}
+                  <br />
+                  <strong>Método de pago:</strong> {paymentMethod}
                 </div>
                 <div>Saludos cordiales</div>
               </td>
@@ -119,10 +125,10 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
             <tr>
               <td
                 style={{
-                  textAlign: "center",
-                  fontFamily: "Arial",
-                  fontSize: "14px",
-                  padding: "20px",
+                  textAlign: 'center',
+                  fontFamily: 'Arial',
+                  fontSize: '14px',
+                  padding: '20px'
                 }}
               >
                 {/* Footer  */}
@@ -135,5 +141,5 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
         <td>&nbsp;</td>
       </tr>
     </table>
-  );
-};
+  )
+}

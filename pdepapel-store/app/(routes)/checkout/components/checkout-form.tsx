@@ -24,7 +24,7 @@ import { Label } from "@/components/ui/label";
 import { NoResults } from "@/components/ui/no-results";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
-import { KAWAII_FACE_SAD, PaymentMethod } from "@/constants";
+import { KAWAII_FACE_SAD, PaymentMethod, SOURCE } from "@/constants";
 import { useCart } from "@/hooks/use-cart";
 import { useGuestUser } from "@/hooks/use-guest-user";
 import { useToast } from "@/hooks/use-toast";
@@ -127,6 +127,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
       payment: {
         method: paymentMethod,
       },
+      source: SOURCE,
     };
     try {
       setIsLoading(true);

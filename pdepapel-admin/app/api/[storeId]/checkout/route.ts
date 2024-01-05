@@ -1,5 +1,8 @@
+import { EmailTemplate } from '@/components/email-template'
+import { SOURCE } from '@/constants'
 import { env } from '@/lib/env.mjs'
 import prismadb from '@/lib/prismadb'
+import { resend } from '@/lib/resend'
 import { generateIntegritySignature, generateOrderNumber } from '@/lib/utils'
 import { clerkClient } from '@clerk/nextjs'
 import {
@@ -36,8 +39,16 @@ export async function POST(
       { status: 400, headers: corsHeaders }
     )
   try {
-    const { fullName, phone, address, orderItems, userId, guestId, payment } =
-      await req.json()
+    const {
+      fullName,
+      phone,
+      address,
+      orderItems,
+      userId,
+      guestId,
+      payment,
+      source
+    } = await req.json()
 
     let authenticatedUserId = null
     if (userId) {
@@ -111,13 +122,14 @@ export async function POST(
         { status: 400, headers: corsHeaders }
       )
 
+    const orderNumber = generateOrderNumber()
     const [order] = await prismadb.$transaction([
       prismadb.order.create({
         data: {
           storeId: params.storeId,
           userId: authenticatedUserId,
           guestId: !authenticatedUserId ? guestId : null,
-          orderNumber: generateOrderNumber(),
+          orderNumber: orderNumber,
           status: OrderStatus.PENDING,
           fullName,
           phone,
@@ -139,6 +151,21 @@ export async function POST(
         }
       })
     ])
+
+    if (source === SOURCE) {
+      await resend.emails.send({
+        from: 'Orders <onboarding@resend.dev>',
+        to: ['web.christian.dev@gmail.com', 'papeleria.pdepapel@gmail.com'],
+        subject: `Nueva orden de compra - ${fullName}`,
+        react: EmailTemplate({
+          name: fullName,
+          phone,
+          address,
+          orderNumber,
+          paymentMethod: 'Wompi'
+        }) as React.ReactElement
+      })
+    }
 
     const url = await generateWompiPayment(order)
 
