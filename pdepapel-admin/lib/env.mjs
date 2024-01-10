@@ -16,7 +16,9 @@ export const env = createEnv({
     WOMPI_API_SECRET: z.string().min(1),
     WOMPI_EVENTS_KEY: z.string().min(1),
     WOMPI_INTEGRITY_KEY: z.string().min(1),
-    RESEND_API_KEY: z.string().min(1)
+    RESEND_API_KEY: z.string().min(1),
+    PAYU_MERCHANT_ID: z.string().min(1),
+    PAYU_API_KEY: z.string().min(1)
   },
   client: {
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().min(1),

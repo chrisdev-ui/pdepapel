@@ -163,6 +163,7 @@ export async function DELETE(
     const isStoreOwner = !!storeByUserId
     if (!isStoreOwner && !isAuthor)
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+
     const deletedReview = await prismadb.review.delete({
       where: { id: params.reviewId }
     })

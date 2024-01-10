@@ -1,4 +1,6 @@
+import prismadb from '@/lib/prismadb'
 import { clsx, type ClassValue } from 'clsx'
+import crypto from 'crypto'
 import { twMerge } from 'tailwind-merge'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -51,20 +53,46 @@ export async function generateIntegritySignature({
   return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
+export function generatePayUSignature({
+  apiKey,
+  merchantId,
+  referenceCode,
+  amount,
+  hashAlgorithm = 'md5',
+  currency = 'COP',
+  statePol
+}: {
+  apiKey: string
+  merchantId: string
+  referenceCode: string
+  amount: number | string
+  hashAlgorithm?: 'md5' | 'sha1' | 'sha256'
+  currency?: string
+  statePol?: string
+}): string {
+  const stringToSign = `${apiKey}~${merchantId}~${referenceCode}~${amount}~${currency}${
+    statePol ? `~${statePol}` : ''
+  }`
+  return crypto.createHash(hashAlgorithm).update(stringToSign).digest('hex')
+}
+
 export function parseOrderDetails(input: string | null | undefined): {
   customer_email: string
   payment_method_type: string
+  reference_pol: string
 } {
   if (input === null || input === undefined) {
     return {
       customer_email: '',
-      payment_method_type: ''
+      payment_method_type: '',
+      reference_pol: ''
     }
   }
   const keyValuePairs = input.split(' | ')
   let parsedData = {
     customer_email: '',
-    payment_method_type: ''
+    payment_method_type: '',
+    reference_pol: ''
   }
 
   keyValuePairs.forEach((pair) => {
@@ -73,8 +101,54 @@ export function parseOrderDetails(input: string | null | undefined): {
       parsedData.customer_email = value
     } else if (key === 'payment_method_type') {
       parsedData.payment_method_type = value
+    } else if (key === 'reference_pol') {
+      parsedData.reference_pol = value
     }
   })
 
   return parsedData
+}
+
+export function parseAndSplitAddress(address: string): {
+  shippingAddress: string
+  shippingCity: string
+} {
+  let addressSections = address.split(', ')
+  addressSections = addressSections.filter((section) => section !== null)
+  let shippingAddress = addressSections[0]
+  let shippingCity = addressSections[1]
+  if (addressSections.length > 2) {
+    shippingAddress += ', ' + addressSections[1]
+    shippingCity = addressSections[2]
+  }
+
+  return {
+    shippingAddress,
+    shippingCity
+  }
+}
+
+export async function getLastOrderTimestamp(
+  userId: string | null | undefined,
+  guestId: string | null | undefined,
+  storeId: string
+) {
+  if (!userId && !guestId && !storeId) return null
+  const lastOrder = await prismadb.order.findFirst({
+    where: { OR: [{ userId }, { guestId }], storeId },
+    orderBy: { createdAt: 'desc' }
+  })
+
+  return lastOrder?.createdAt
+}
+
+export function formatPayUValue(value: string): string {
+  const valueNumber = parseFloat(value)
+  let formattedValue = valueNumber.toFixed(2)
+
+  if (formattedValue.charAt(formattedValue.length - 1) === '0') {
+    formattedValue = valueNumber.toFixed(1)
+  }
+
+  return formattedValue
 }

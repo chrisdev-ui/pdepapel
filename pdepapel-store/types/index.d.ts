@@ -136,3 +136,22 @@ export interface ProductsResponse {
   totalPages: number;
   totalItems: number;
 }
+
+export type PayUFormState = Omit<PayUFormProps, "formRef" | "products">;
+
+export interface PayUFormProps {
+  formRef: React.RefObject<HTMLFormElement>;
+  referenceCode: string;
+  products: formattedProduct[];
+  amount: number;
+  tax?: number;
+  taxReturnBase?: number;
+  currency?: string;
+  signature: string;
+  test: number;
+  responseUrl: string;
+  confirmationUrl: string;
+  shippingAddress: string;
+  shippingCity: string;
+  shippingCountry: string;
+}

@@ -1,1 +1,1 @@
-export const SOURCE = 'website'
+export const DEFAULT_COUNTRY = 'CO'

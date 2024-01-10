@@ -172,7 +172,8 @@ export const OrderForm: React.FC<OrderFormProps> = ({
 
   const detailsTitleOptions: { [key: string]: string } = {
     customer_email: 'Correo electrónico del cliente',
-    payment_method_type: 'Tipo de método de pago'
+    payment_method_type: 'Tipo de método de pago',
+    reference_pol: 'Número de orden'
   }
 
   const paymentMethodsByOption: {

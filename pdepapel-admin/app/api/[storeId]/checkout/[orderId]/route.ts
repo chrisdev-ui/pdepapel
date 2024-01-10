@@ -1,7 +1,11 @@
 import prismadb from '@/lib/prismadb'
-import { OrderStatus } from '@prisma/client'
+import { OrderStatus, PaymentMethod } from '@prisma/client'
 import { NextResponse } from 'next/server'
-import { CheckoutOrder, generateWompiPayment } from '../route'
+import {
+  CheckoutOrder,
+  generatePayUPayment,
+  generateWompiPayment
+} from '../route'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -53,6 +57,17 @@ export async function POST(
         { error: `Order is already paid: ${params.orderId}` },
         { status: 400, headers: corsHeaders }
       )
+
+    if (order.payment?.method === PaymentMethod.PayU) {
+      const payUData = generatePayUPayment(order)
+
+      return NextResponse.json(
+        {
+          ...payUData
+        },
+        { headers: corsHeaders }
+      )
+    }
 
     const url = await generateWompiPayment(order as CheckoutOrder)
 

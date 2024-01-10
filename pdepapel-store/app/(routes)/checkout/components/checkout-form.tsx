@@ -2,13 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 
 import { Icons } from "@/components/icons";
+import { PayUForm } from "@/components/payu-form";
 import { Button } from "@/components/ui/button";
-import { ComingSoonBadge } from "@/components/ui/coming-soon-badge";
 import { Currency } from "@/components/ui/currency";
 import {
   Form,
@@ -30,10 +30,11 @@ import { useGuestUser } from "@/hooks/use-guest-user";
 import { useToast } from "@/hooks/use-toast";
 import { env } from "@/lib/env.mjs";
 import { generateGuestId } from "@/lib/utils";
+import { PayUFormState } from "@/types";
 import { useAuth } from "@clerk/nextjs";
 import { zodResolver } from "@hookform/resolvers/zod";
 import axios from "axios";
-import { ArrowLeft, CreditCard, Info } from "lucide-react";
+import { ArrowLeft, CreditCard, Info, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { InfoCountryTooltip } from "./info-country-tooltip";
 
@@ -62,6 +63,8 @@ interface CheckoutFormProps {
 export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
   const { userId } = useAuth();
   const router = useRouter();
+  const payUFormRef = useRef<HTMLFormElement>(null);
+  const [payUformData, setPayUformData] = useState<PayUFormState>();
   const { guestId, setGuestId, clearGuestId } = useGuestUser();
   const cart = useCart();
   const [isMounted, setIsMounted] = useState(false);
@@ -163,12 +166,19 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
           formattedData,
         );
         window.location = response.data.url;
+      } else if (paymentMethod === PaymentMethod.PayU) {
+        const { data } = await axios.post(
+          `${env.NEXT_PUBLIC_API_URL}/checkout`,
+          formattedData,
+        );
+        setPayUformData(data as PayUFormState);
       }
     } catch (error) {
       console.error(error);
       toast({
         title: "Error",
-        description: "Ha ocurrido un error creando tu orden, intenta de nuevo",
+        description:
+          "Ha ocurrido un error creando tu orden, intenta de nuevo más tarde.",
         variant: "destructive",
       });
     } finally {
@@ -177,360 +187,383 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
   };
 
   return (
-    <Form {...form}>
-      {cart.items.length === 0 && (
-        <div className="my-12">
-          <NoResults
-            message={`No hay productos en el carrito ${KAWAII_FACE_SAD}`}
-          />
-          <Link href="/shop">
-            <Button className="mt-4">
-              {" "}
-              <ArrowLeft className="mr-2 h-5 w-5" /> Regresar a la tienda
-            </Button>
-          </Link>
-        </div>
-      )}
-      {cart.items.length > 0 && (
-        <form
-          onSubmit={form.handleSubmit(onSubmit)}
-          className="mt-4 space-y-8 lg:mt-12 lg:grid lg:grid-cols-12 lg:items-start lg:gap-6 lg:space-y-0"
-        >
-          <div className="rounded-md border p-5 lg:col-span-8">
-            <h2 className="font-serif text-lg font-bold">
-              Información para tu envío
-            </h2>
-            <Separator className="my-6" />
-            <div className="grid grid-cols-1 gap-8 sm:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="firstName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nombre</FormLabel>
-                    <FormControl>
-                      <Input
-                        className="bg-green-leaf/20 invalid:bg-pink-froly/20"
-                        disabled={isLoading}
-                        placeholder="Maria"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="lastName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Apellido</FormLabel>
-                    <FormControl>
-                      <Input
-                        className="bg-green-leaf/20 invalid:bg-pink-froly/20"
-                        disabled={isLoading}
-                        placeholder="Dolores"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="telephone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Teléfono</FormLabel>
-                    <FormControl>
-                      <Input
-                        className="bg-green-leaf/20 invalid:bg-pink-froly/20"
-                        disabled={isLoading}
-                        placeholder="3XXXXXXXXX"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="address1"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Dirección</FormLabel>
-                    <FormControl>
-                      <Input
-                        className="bg-green-leaf/20 invalid:bg-pink-froly/20"
-                        disabled={isLoading}
-                        placeholder="Calle 1 # 2 - 3"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="address2"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Dirección 2</FormLabel>
-                    <FormControl>
-                      <Input
-                        className="bg-green-leaf/20 invalid:bg-pink-froly/20"
-                        disabled={isLoading}
-                        placeholder="Edificio, Apto, Casa, Lote, etc. (Opcional)"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>Este campo es opcional</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="city"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Ciudad</FormLabel>
-                    <FormControl>
-                      <Input
-                        className="bg-green-leaf/20 invalid:bg-pink-froly/20"
-                        disabled={isLoading}
-                        placeholder="ex: Medellín"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="state"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Departamento</FormLabel>
-                    <FormControl>
-                      <Input
-                        className="bg-green-leaf/20 invalid:bg-pink-froly/20"
-                        disabled={isLoading}
-                        placeholder="ex: Antioquia"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="flex flex-col space-y-4">
-                <div className="flex items-center gap-2">
-                  <FormLabel>País</FormLabel>
-                  <InfoCountryTooltip />
-                </div>
-                <div className="flex items-center gap-3">
-                  <Icons.flags.colombia className="h-6 w-6" />
-                  <span className="text-sm font-medium text-gray-700">
-                    Colombia
-                  </span>
-                </div>
-              </div>
-            </div>
-            {paymentMethod === PaymentMethod.BankTransfer && (
-              <>
-                <h2 className="mt-10 font-serif text-lg font-bold">
-                  Pagos por transferencia bancaria
-                </h2>
-                <Separator className="my-6" />
-                <div className="w-full">
-                  <ol className="flex flex-wrap">
-                    <li className="flex flex-1 flex-col text-center before:relative before:z-[1] before:mx-auto before:mb-4 before:mt-0 before:block before:h-12 before:w-12 before:rounded-full before:bg-green-leaf before:content-[''] after:relative after:left-[calc(50%_+_calc(var(--circle-size)_/_2_+_var(--spacing)))] after:top-[calc(var(--circle-size)_/_2)] after:-order-1 after:h-0.5 after:w-[calc(100%_-_var(--circle-size)_-_calc(var(--spacing)_*_2))] after:bg-green-leaf/50 after:content-['']">
-                      <h3 className="mb-2 text-base font-bold md:text-[4w]">
-                        Paso 1
-                      </h3>
-                      <p className="md:2vw mx-auto max-w-xs pl-[var(--spacing)] text-xs">
-                        Verifica el valor a transferir al{" "}
-                        <strong>finalizar</strong> tu orden
-                      </p>
-                    </li>
-                    <li className="flex flex-1 flex-col text-center before:relative before:z-[1] before:mx-auto before:mb-4 before:mt-0 before:block before:h-12 before:w-12 before:rounded-full before:bg-green-leaf before:content-[''] after:relative after:left-[calc(50%_+_calc(var(--circle-size)_/_2_+_var(--spacing)))] after:top-[calc(var(--circle-size)_/_2)] after:-order-1 after:h-0.5 after:w-[calc(100%_-_var(--circle-size)_-_calc(var(--spacing)_*_2))] after:bg-green-leaf/50 after:content-['']">
-                      <h3 className="mb-2 text-base font-bold md:text-[4w]">
-                        Paso 2
-                      </h3>
-                      <p className="md:2vw mx-auto max-w-xs pl-[var(--spacing)] text-xs">
-                        Realiza una transferencia bancaria a la siguiente{" "}
-                        <strong>Cuenta de Ahorros Bancolombia</strong>
-                        <Icons.payments.bancolombia className="mx-1 inline-flex h-3 w-3" />
-                        <strong>236-000036-64</strong>
-                      </p>
-                    </li>
-                    <li className="flex flex-1 flex-col text-center before:relative before:z-[1] before:mx-auto before:mb-4 before:mt-0 before:block before:h-12 before:w-12 before:rounded-full before:bg-green-leaf before:content-['']">
-                      <h3 className="mb-2 text-base font-bold md:text-[4w]">
-                        Paso 3
-                      </h3>
-                      <p className="md:2vw mx-auto max-w-xs pl-[var(--spacing)] text-xs">
-                        Envíanos una imagen de la transferencia al siguiente
-                        número
-                        <Icons.whatsapp className="mx-1 inline-flex h-3 w-3 text-green-600" />
-                        <strong>321-629-9845</strong>
-                      </p>
-                    </li>
-                  </ol>
-                </div>
-              </>
-            )}
+    <>
+      <Form {...form}>
+        {cart.items.length === 0 && (
+          <div className="my-12">
+            <NoResults
+              message={`No hay productos en el carrito ${KAWAII_FACE_SAD}`}
+            />
+            <Link href="/shop">
+              <Button className="mt-4">
+                {" "}
+                <ArrowLeft className="mr-2 h-5 w-5" /> Regresar a la tienda
+              </Button>
+            </Link>
           </div>
-          <div className="rounded-md border p-5 lg:col-span-4">
-            <div className="flex w-full items-center justify-between">
+        )}
+        {cart.items.length > 0 && (
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="mt-4 space-y-8 lg:mt-12 lg:grid lg:grid-cols-12 lg:items-start lg:gap-6 lg:space-y-0"
+          >
+            <div className="rounded-md border p-5 lg:col-span-8">
               <h2 className="font-serif text-lg font-bold">
-                ({totalQuantity}) Productos
+                Información para tu envío
               </h2>
-              <Link href="/cart" className="text-sm underline">
-                Editar
-              </Link>
-            </div>
-            <Separator className="mt-6" />
-            <span className="text-xxs text-green-500">
-              Los productos demoran entre 1 - 4 días hábiles en llegar a
-              destino.
-            </span>
-            <div className="mt-6 flex w-full flex-col gap-4">
-              {cart.items.map((item) => (
-                <div
-                  key={item.id}
-                  className="grid grid-cols-[80px_1fr] gap-2.5"
-                >
-                  <Link
-                    href={`/product/${item.id}`}
-                    className="relative h-20 w-20"
-                  >
-                    <Image
-                      src={item.images[0].url}
-                      alt={item.id}
-                      fill
-                      sizes="(max-width: 640px) 80px, 120px"
-                      className="rounded-md"
-                    />
-                    <span className="absolute right-0 top-0 flex h-4 w-4 items-center justify-center rounded-full bg-blue-yankees font-serif text-xs text-white">
-                      {item.quantity}
+              <Separator className="my-6" />
+              <div className="grid grid-cols-1 gap-8 sm:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="firstName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nombre</FormLabel>
+                      <FormControl>
+                        <Input
+                          className="bg-green-leaf/20 invalid:bg-pink-froly/20"
+                          disabled={isLoading}
+                          placeholder="Nombres"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="lastName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Apellidos</FormLabel>
+                      <FormControl>
+                        <Input
+                          className="bg-green-leaf/20 invalid:bg-pink-froly/20"
+                          disabled={isLoading}
+                          placeholder="Apellidos"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="telephone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Teléfono</FormLabel>
+                      <FormControl>
+                        <Input
+                          className="bg-green-leaf/20 invalid:bg-pink-froly/20"
+                          disabled={isLoading}
+                          placeholder="+(57) 999 999 9999"
+                          mask="+(57) 999 999 9999"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="address1"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Dirección</FormLabel>
+                      <FormControl>
+                        <Input
+                          className="bg-green-leaf/20 invalid:bg-pink-froly/20"
+                          disabled={isLoading}
+                          placeholder="Calle 1 # 2 - 3"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="address2"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Dirección 2</FormLabel>
+                      <FormControl>
+                        <Input
+                          className="bg-green-leaf/20 invalid:bg-pink-froly/20"
+                          disabled={isLoading}
+                          placeholder="Edificio, Apto, Casa, Lote, etc. (Opcional)"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>Este campo es opcional</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="city"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Ciudad</FormLabel>
+                      <FormControl>
+                        <Input
+                          className="bg-green-leaf/20 invalid:bg-pink-froly/20"
+                          disabled={isLoading}
+                          placeholder="ex: Medellín"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="state"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Departamento</FormLabel>
+                      <FormControl>
+                        <Input
+                          className="bg-green-leaf/20 invalid:bg-pink-froly/20"
+                          disabled={isLoading}
+                          placeholder="ex: Antioquia"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="flex flex-col space-y-4">
+                  <div className="flex items-center gap-2">
+                    <FormLabel>País</FormLabel>
+                    <InfoCountryTooltip />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Icons.flags.colombia className="h-6 w-6" />
+                    <span className="text-sm font-medium text-gray-700">
+                      Colombia
                     </span>
-                  </Link>
-                  <div className="flex max-h-20 items-center justify-between">
-                    <div className="flex h-full flex-col items-start justify-between">
-                      <div className="flex flex-col text-left font-serif text-sm font-medium tracking-tight">
-                        <span>{item.name}</span>
-                        <span className="text-xs text-gray-400">{`Diseño: ${item.design.name}`}</span>
-                        <span className="hidden text-xs text-gray-400 lg:block">{`Categoría: ${item.category.name}`}</span>
-                      </div>
-                      <Currency className="text-lg" value={item.price} />
-                    </div>
                   </div>
                 </div>
-              ))}
+              </div>
+              {paymentMethod === PaymentMethod.BankTransfer && (
+                <>
+                  <h2 className="mt-10 font-serif text-lg font-bold">
+                    Pagos por transferencia bancaria
+                  </h2>
+                  <Separator className="my-6" />
+                  <div className="w-full">
+                    <ol className="flex flex-wrap">
+                      <li className="flex flex-1 flex-col text-center before:relative before:z-[1] before:mx-auto before:mb-4 before:mt-0 before:block before:h-12 before:w-12 before:rounded-full before:bg-green-leaf before:content-[''] after:relative after:left-[calc(50%_+_calc(var(--circle-size)_/_2_+_var(--spacing)))] after:top-[calc(var(--circle-size)_/_2)] after:-order-1 after:h-0.5 after:w-[calc(100%_-_var(--circle-size)_-_calc(var(--spacing)_*_2))] after:bg-green-leaf/50 after:content-['']">
+                        <h3 className="mb-2 text-base font-bold md:text-[4w]">
+                          Paso 1
+                        </h3>
+                        <p className="md:2vw mx-auto max-w-xs pl-[var(--spacing)] text-xs">
+                          Verifica el valor a transferir al{" "}
+                          <strong>finalizar</strong> tu orden
+                        </p>
+                      </li>
+                      <li className="flex flex-1 flex-col text-center before:relative before:z-[1] before:mx-auto before:mb-4 before:mt-0 before:block before:h-12 before:w-12 before:rounded-full before:bg-green-leaf before:content-[''] after:relative after:left-[calc(50%_+_calc(var(--circle-size)_/_2_+_var(--spacing)))] after:top-[calc(var(--circle-size)_/_2)] after:-order-1 after:h-0.5 after:w-[calc(100%_-_var(--circle-size)_-_calc(var(--spacing)_*_2))] after:bg-green-leaf/50 after:content-['']">
+                        <h3 className="mb-2 text-base font-bold md:text-[4w]">
+                          Paso 2
+                        </h3>
+                        <p className="md:2vw mx-auto max-w-xs pl-[var(--spacing)] text-xs">
+                          Realiza una transferencia bancaria a la siguiente{" "}
+                          <strong>Cuenta de Ahorros Bancolombia</strong>
+                          <Icons.payments.bancolombia className="mx-1 inline-flex h-3 w-3" />
+                          <strong>236-000036-64</strong>
+                        </p>
+                      </li>
+                      <li className="flex flex-1 flex-col text-center before:relative before:z-[1] before:mx-auto before:mb-4 before:mt-0 before:block before:h-12 before:w-12 before:rounded-full before:bg-green-leaf before:content-['']">
+                        <h3 className="mb-2 text-base font-bold md:text-[4w]">
+                          Paso 3
+                        </h3>
+                        <p className="md:2vw mx-auto max-w-xs pl-[var(--spacing)] text-xs">
+                          Envíanos una imagen de la transferencia al siguiente
+                          número
+                          <Icons.whatsapp className="mx-1 inline-flex h-3 w-3 text-green-600" />
+                          <strong>321-629-9845</strong>
+                        </p>
+                      </li>
+                    </ol>
+                  </div>
+                </>
+              )}
             </div>
-            <Separator className="my-6" />
-            <div className="flex w-full items-center justify-between text-xl">
-              <span>Total a pagar</span>
-              <Currency className="text-xl" value={totalPrice} />
-            </div>
-            <Separator className="my-6" />
-            <RadioGroup
-              defaultValue={PaymentMethod.BankTransfer}
-              value={paymentMethod}
-              disabled={cart.items.length === 0}
-              onValueChange={(value) =>
-                setPaymentMethod(value as PaymentMethod)
-              }
-              className="flex flex-col gap-2"
-            >
-              <div>
-                <RadioGroupItem
-                  value={PaymentMethod.BankTransfer}
-                  id={PaymentMethod.BankTransfer}
-                  className="peer sr-only"
-                />
-                <Label
-                  htmlFor={PaymentMethod.BankTransfer}
-                  className="flex cursor-pointer items-center justify-start gap-4 rounded-md border border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-pink-shell peer-data-[state=checked]:bg-pink-shell/20 [&:has([data-state=checked])]:border-pink-shell [&:has([data-state=checked])]:bg-pink-shell/20"
-                >
-                  <Icons.payments.transfer className="h-6 w-6" />
-                  Transferencia bancaria a Bancolombia
-                </Label>
+            <div className="rounded-md border p-5 lg:col-span-4">
+              <div className="flex w-full items-center justify-between">
+                <h2 className="font-serif text-lg font-bold">
+                  ({totalQuantity}) Productos
+                </h2>
+                <Link href="/cart" className="text-sm underline">
+                  Editar
+                </Link>
               </div>
-              <div>
-                <RadioGroupItem
-                  value={PaymentMethod.PayU}
-                  id={PaymentMethod.PayU}
-                  className="peer sr-only"
-                  disabled
-                />
-                <Label
-                  htmlFor={PaymentMethod.PayU}
-                  className="relative flex cursor-pointer items-center justify-start gap-4 rounded-md border border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-pink-shell peer-data-[state=checked]:bg-pink-shell/20 [&:has([data-state=checked])]:border-pink-shell [&:has([data-state=checked])]:bg-pink-shell/20"
-                >
-                  <Icons.payments.payu className="h-6" />
-                  Paga a través de PayU
-                  <ComingSoonBadge />
-                </Label>
-              </div>
-              <div>
-                <RadioGroupItem
-                  value={PaymentMethod.COD}
-                  id={PaymentMethod.COD}
-                  className="peer sr-only"
-                />
-                <Label
-                  htmlFor={PaymentMethod.COD}
-                  className="flex cursor-pointer items-center justify-start gap-4 rounded-md border border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-pink-shell peer-data-[state=checked]:bg-pink-shell/20 [&:has([data-state=checked])]:border-pink-shell [&:has([data-state=checked])]:bg-pink-shell/20"
-                >
-                  <Icons.payments.cashOnDelivery className="h-6 w-6" />
-                  Pago contraentrega
-                </Label>
-              </div>
-              <div>
-                <RadioGroupItem
-                  value={PaymentMethod.Wompi}
-                  id={PaymentMethod.Wompi}
-                  className="peer sr-only"
-                />
-                <Label
-                  htmlFor={PaymentMethod.Wompi}
-                  className="relative flex cursor-pointer items-center justify-start gap-4 rounded-md border border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-pink-shell peer-data-[state=checked]:bg-pink-shell/20 [&:has([data-state=checked])]:border-pink-shell [&:has([data-state=checked])]:bg-pink-shell/20"
-                >
-                  <Icons.payments.wompi className="h-6" fill="#2C2A29" />
-                  Paga a través de Wompi
-                </Label>
-              </div>
-            </RadioGroup>
-            <Button
-              type="submit"
-              disabled={cart.items.length === 0 || isLoading}
-              className="group relative mt-6 w-full overflow-hidden rounded-full bg-blue-yankees font-serif text-base font-bold uppercase text-white hover:bg-blue-yankees"
-            >
-              <CreditCard className="absolute left-0 h-5 w-5 -translate-x-full transform transition-transform duration-500 ease-out group-hover:translate-x-52" />
-              <span className="transition-opacity duration-150 group-hover:opacity-0">
-                Finalizar compra
+              <Separator className="mt-6" />
+              <span className="text-xxs text-green-500">
+                Los productos demoran entre 1 - 4 días hábiles en llegar a
+                destino.
               </span>
-            </Button>
-            <div className="mt-5">
-              <small className="text-xxs">
-                <Info className="inline-flex h-4 w-4 text-success" /> ¡Hola!
-                Solo queremos recordarte que el costo de envío no está incluido
-                en este total. El costo exacto de envío se calculará y te será
-                informado al finalizar tu compra, justo después de confirmar el
-                pago de tu pedido. ¡Estamos aquí para ayudarte con cualquier
-                duda que tengas!
-              </small>
+              <div className="mt-6 flex w-full flex-col gap-4">
+                {cart.items.map((item) => (
+                  <div
+                    key={item.id}
+                    className="grid grid-cols-[80px_1fr] gap-2.5"
+                  >
+                    <Link
+                      href={`/product/${item.id}`}
+                      className="relative h-20 w-20"
+                    >
+                      <Image
+                        src={item.images[0].url}
+                        alt={item.id}
+                        fill
+                        sizes="(max-width: 640px) 80px, 120px"
+                        className="rounded-md"
+                      />
+                      <span className="absolute right-0 top-0 flex h-4 w-4 items-center justify-center rounded-full bg-blue-yankees font-serif text-xs text-white">
+                        {item.quantity}
+                      </span>
+                    </Link>
+                    <div className="flex max-h-20 items-center justify-between">
+                      <div className="flex h-full flex-col items-start justify-between">
+                        <div className="flex flex-col text-left font-serif text-sm font-medium tracking-tight">
+                          <span>{item.name}</span>
+                          <span className="text-xs text-gray-400">{`Diseño: ${item.design.name}`}</span>
+                          <span className="hidden text-xs text-gray-400 lg:block">{`Categoría: ${item.category.name}`}</span>
+                        </div>
+                        <Currency className="text-lg" value={item.price} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <Separator className="my-6" />
+              <div className="flex w-full items-center justify-between text-xl">
+                <span>Total a pagar</span>
+                <Currency className="text-xl" value={totalPrice} />
+              </div>
+              <Separator className="my-6" />
+              <RadioGroup
+                defaultValue={PaymentMethod.BankTransfer}
+                value={paymentMethod}
+                disabled={cart.items.length === 0 || isLoading}
+                onValueChange={(value) =>
+                  setPaymentMethod(value as PaymentMethod)
+                }
+                className="flex flex-col gap-2"
+              >
+                <div>
+                  <RadioGroupItem
+                    value={PaymentMethod.BankTransfer}
+                    id={PaymentMethod.BankTransfer}
+                    className="peer sr-only"
+                  />
+                  <Label
+                    htmlFor={PaymentMethod.BankTransfer}
+                    className="flex cursor-pointer items-center justify-start gap-4 rounded-md border border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-pink-shell peer-data-[state=checked]:bg-pink-shell/20 [&:has([data-state=checked])]:border-pink-shell [&:has([data-state=checked])]:bg-pink-shell/20"
+                  >
+                    <Icons.payments.transfer className="h-6 w-6" />
+                    Transferencia bancaria a Bancolombia
+                  </Label>
+                </div>
+                <div>
+                  <RadioGroupItem
+                    value={PaymentMethod.PayU}
+                    id={PaymentMethod.PayU}
+                    className="peer sr-only"
+                  />
+                  <Label
+                    htmlFor={PaymentMethod.PayU}
+                    className="relative flex cursor-pointer items-center justify-start gap-4 rounded-md border border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-pink-shell peer-data-[state=checked]:bg-pink-shell/20 [&:has([data-state=checked])]:border-pink-shell [&:has([data-state=checked])]:bg-pink-shell/20"
+                  >
+                    <Icons.payments.payu className="h-6" />
+                    Paga a través de PayU
+                  </Label>
+                </div>
+                <div>
+                  <RadioGroupItem
+                    value={PaymentMethod.COD}
+                    id={PaymentMethod.COD}
+                    className="peer sr-only"
+                  />
+                  <Label
+                    htmlFor={PaymentMethod.COD}
+                    className="flex cursor-pointer items-center justify-start gap-4 rounded-md border border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-pink-shell peer-data-[state=checked]:bg-pink-shell/20 [&:has([data-state=checked])]:border-pink-shell [&:has([data-state=checked])]:bg-pink-shell/20"
+                  >
+                    <Icons.payments.cashOnDelivery className="h-6 w-6" />
+                    Pago contraentrega
+                  </Label>
+                </div>
+                <div>
+                  <RadioGroupItem
+                    value={PaymentMethod.Wompi}
+                    id={PaymentMethod.Wompi}
+                    className="peer sr-only"
+                  />
+                  <Label
+                    htmlFor={PaymentMethod.Wompi}
+                    className="relative flex cursor-pointer items-center justify-start gap-4 rounded-md border border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-pink-shell peer-data-[state=checked]:bg-pink-shell/20 [&:has([data-state=checked])]:border-pink-shell [&:has([data-state=checked])]:bg-pink-shell/20"
+                  >
+                    <Icons.payments.wompi className="h-6" fill="#2C2A29" />
+                    Paga a través de Wompi
+                  </Label>
+                </div>
+              </RadioGroup>
+              <Button
+                type="submit"
+                disabled={cart.items.length === 0 || isLoading}
+                className="group relative mt-6 w-full overflow-hidden rounded-full bg-blue-yankees font-serif text-base font-bold uppercase text-white hover:bg-blue-yankees"
+              >
+                <CreditCard className="absolute left-0 h-5 w-5 -translate-x-full transform transition-transform duration-500 ease-out group-hover:translate-x-52" />
+                <span className="transition-opacity duration-150 group-hover:opacity-0">
+                  {`${isLoading ? "Finalizando" : "Finalizar"} compra`}
+                </span>
+                {isLoading && <Loader2 className="ml-3 h-5 w-5 animate-spin" />}
+              </Button>
+              <div className="mt-5">
+                <small className="text-xxs">
+                  <Info className="inline-flex h-4 w-4 text-success" /> ¡Hola!
+                  Solo queremos recordarte que el costo de envío no está
+                  incluido en este total. El costo exacto de envío se calculará
+                  y te será informado al finalizar tu compra, justo después de
+                  confirmar el pago de tu pedido. ¡Estamos aquí para ayudarte
+                  con cualquier duda que tengas!
+                </small>
+              </div>
             </div>
-          </div>
-        </form>
-      )}
-    </Form>
+          </form>
+        )}
+      </Form>
+      {payUformData ? (
+        <PayUForm
+          formRef={payUFormRef}
+          referenceCode={payUformData.referenceCode}
+          products={cart.items.map((product) => ({
+            name: product.name,
+            quantity: product.quantity || 1,
+          }))}
+          amount={payUformData.amount}
+          tax={payUformData.tax}
+          taxReturnBase={payUformData.taxReturnBase}
+          currency={payUformData.currency}
+          signature={payUformData.signature}
+          test={payUformData.test}
+          responseUrl={payUformData.responseUrl}
+          confirmationUrl={payUformData.confirmationUrl}
+          shippingAddress={payUformData.shippingAddress}
+          shippingCity={payUformData.shippingCity}
+          shippingCountry={payUformData.shippingCountry}
+        />
+      ) : null}
+    </>
   );
 };

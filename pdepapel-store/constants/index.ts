@@ -72,3 +72,6 @@ export const MAX_ITEMS_PER_PAGE = 52;
 export const DOTS = "...";
 
 export const SOURCE = "website";
+
+export const LETTER_REGEX = /^[a-zA-Z]*$/;
+export const DIGIT_REGEX = /^[0-9]*$/;

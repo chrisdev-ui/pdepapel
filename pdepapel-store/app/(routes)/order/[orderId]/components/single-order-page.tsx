@@ -23,6 +23,7 @@ import Link from "next/link";
 
 import { Forbidden } from "@/components/forbidden";
 import { Icons } from "@/components/icons";
+import { PayUForm } from "@/components/payu-form";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { Currency } from "@/components/ui/currency";
@@ -31,11 +32,11 @@ import { useCart } from "@/hooks/use-cart";
 import { useGuestUser } from "@/hooks/use-guest-user";
 import { useToast } from "@/hooks/use-toast";
 import { env } from "@/lib/env.mjs";
-import { cn } from "@/lib/utils";
-import { Order } from "@/types";
+import { cn, formatPhoneNumber } from "@/lib/utils";
+import { Order, PayUFormState } from "@/types";
 import axios from "axios";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Courier } from "./courier";
 
 interface SingleOrderPageProps {
@@ -44,14 +45,17 @@ interface SingleOrderPageProps {
 
 const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
   const searchParams = useSearchParams();
+  const payUFormRef = useRef<HTMLFormElement>(null);
   const { userId } = useAuth();
   const { toast } = useToast();
   const guestId = useGuestUser((state) => state.guestId ?? "");
   const [isLoading, setIsLoading] = useState(false);
+  const [payUformData, setPayUformData] = useState<PayUFormState>();
   const removeAll = useCart((state) => state.removeAll);
 
   useEffect(() => {
     if (
+      searchParams.get("id") &&
       searchParams.get("id") === order?.payment?.transactionId &&
       order?.status === OrderStatus.PAID
     ) {
@@ -66,6 +70,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
     }
 
     if (
+      searchParams.get("id") &&
       searchParams.get("id") === order?.payment?.transactionId &&
       order?.status === OrderStatus.CANCELLED
     ) {
@@ -81,6 +86,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
     }
 
     if (
+      searchParams.get("id") &&
       searchParams.get("id") === order?.payment?.transactionId &&
       order?.status === OrderStatus.PENDING
     ) {
@@ -96,7 +102,83 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
     }
   }, [order, removeAll, searchParams, toast]);
 
-  const addresses = order?.address.split(",");
+  useEffect(() => {
+    const transactionState = Number(searchParams.get("transactionState"));
+    const transactionId = searchParams.get("transactionId");
+
+    if (
+      transactionId &&
+      transactionState &&
+      transactionId === order?.payment?.transactionId
+    ) {
+      switch (transactionState) {
+        case 4: {
+          toast({
+            title: "¡Gracias por tu compra!",
+            variant: "success",
+            icon: <ShieldCheck className="h-8 w-8" />,
+            description: "Tu pago ha sido recibido.",
+            duration: 10000,
+          });
+          removeAll();
+          break;
+        }
+
+        case 104: {
+          toast({
+            title: "¡Hubo un fallo en tu intento de pago!",
+            variant: "destructive",
+            icon: <ShieldClose className="h-14 w-14" />,
+            description:
+              "No se realizó ningún cargo a tu cuenta, intenta el pago de nuevo más tarde o utiliza otro método.",
+            duration: 10000,
+          });
+          removeAll();
+          break;
+        }
+
+        case 6: {
+          toast({
+            title: "¡La transacción ha sido rechazada!",
+            variant: "destructive",
+            icon: <ShieldClose className="h-14 w-14" />,
+            description:
+              "No se realizó ningún cargo a tu cuenta, intenta el pago de nuevo más tarde o utiliza otro método.",
+            duration: 10000,
+          });
+          removeAll();
+          break;
+        }
+
+        case 7: {
+          toast({
+            title: "Pago pendiente",
+            variant: "warning",
+            icon: <ShieldAlert className="h-14 w-14" />,
+            description:
+              "¡Casi listo! Estamos confirmando tu pago. Te mantendremos informado y te avisaremos en cuanto tengamos todo confirmado.",
+            duration: 10000,
+          });
+          removeAll();
+          break;
+        }
+
+        default: {
+          toast({
+            title: "Respuesta desconocida",
+            variant: "destructive",
+            icon: <ShieldClose className="h-14 w-14" />,
+            description:
+              "Hemos recibido una respuesta desconocida de PayU. Por favor, contacta a nuestro equipo de soporte para más información.",
+            duration: 10000,
+          });
+          break;
+        }
+      }
+    }
+  }, [order, removeAll, searchParams, toast]);
+
+  const addresses = order?.address?.split(",");
   const shippingStatus = steps.slice(
     0,
     Object.values(ShippingStatus).indexOf(
@@ -144,6 +226,11 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
           `${env.NEXT_PUBLIC_API_URL}/checkout/${order.id}`,
         );
         window.location = response.data.url;
+      } else if (order?.payment.method === PaymentMethod.PayU) {
+        const response = await axios.post(
+          `${env.NEXT_PUBLIC_API_URL}/checkout/${order.id}`,
+        );
+        setPayUformData(response.data as PayUFormState);
       }
     } catch (error) {
       console.error(error);
@@ -216,7 +303,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                 {order.phone && (
                   <span className="flex gap-1">
                     <Phone className="h-4 w-4" />
-                    {`+57${order.phone}`}
+                    {`${formatPhoneNumber(`57${order.phone}`)}`}
                   </span>
                 )}
               </div>
@@ -304,13 +391,24 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                   {order.status !== OrderStatus.PAID &&
                     order?.payment?.method === PaymentMethod.Wompi && (
                       <Button
-                        className="flex font-serif"
+                        className="flex items-center justify-center gap-2 font-serif"
                         disabled={isLoading}
                         onClick={onSubmitPayment}
                       >
                         Pagar con <Icons.payments.wompi className="w-20" />
                       </Button>
                     )}
+                  {order.status !== OrderStatus.PAID &&
+                    order?.payment?.method === PaymentMethod.PayU && (
+                      <Button
+                        className="flex items-center justify-center gap-2 font-serif"
+                        disabled={isLoading}
+                        onClick={onSubmitPayment}
+                      >
+                        Pagar con <Icons.payments.payu className="w-10" />
+                      </Button>
+                    )}
+
                   {order.status !== OrderStatus.PAID && (
                     <small>
                       *** Recuerda que si pagas por transferencia bancaria debes
@@ -407,6 +505,27 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
               </div>
             </div>
           </div>
+          {payUformData && (
+            <PayUForm
+              formRef={payUFormRef}
+              referenceCode={payUformData.referenceCode}
+              products={order.orderItems.map((orderItem) => ({
+                name: orderItem.product.name,
+                quantity: orderItem.quantity || 1,
+              }))}
+              amount={payUformData.amount}
+              tax={payUformData.tax}
+              taxReturnBase={payUformData.taxReturnBase}
+              currency={payUformData.currency}
+              signature={payUformData.signature}
+              test={payUformData.test}
+              responseUrl={payUformData.responseUrl}
+              confirmationUrl={payUformData.confirmationUrl}
+              shippingAddress={payUformData.shippingAddress}
+              shippingCity={payUformData.shippingCity}
+              shippingCountry={payUformData.shippingCountry}
+            />
+          )}
         </Container>
       )}
       {!hasAccess && <Forbidden />}

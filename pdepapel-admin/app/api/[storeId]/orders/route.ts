@@ -1,8 +1,7 @@
 import { EmailTemplate } from '@/components/email-template'
-import { SOURCE } from '@/constants'
 import prismadb from '@/lib/prismadb'
 import { resend } from '@/lib/resend'
-import { generateOrderNumber } from '@/lib/utils'
+import { generateOrderNumber, getLastOrderTimestamp } from '@/lib/utils'
 import { clerkClient } from '@clerk/nextjs'
 import { OrderStatus } from '@prisma/client'
 import { NextRequest, NextResponse } from 'next/server'
@@ -51,8 +50,7 @@ export async function POST(
       payment,
       shipping,
       userId,
-      guestId,
-      source
+      guestId
     } = body
     let authenticatedUserId = null
     if (userId) {
@@ -86,6 +84,20 @@ export async function POST(
         { error: 'Order items are required' },
         { status: 400, headers: corsHeaders }
       )
+    const storeOwner = await isStoreOwner(authenticatedUserId, params.storeId)
+    if (!storeOwner) {
+      const lastOrderTimestamp = await getLastOrderTimestamp(
+        authenticatedUserId,
+        guestId,
+        params.storeId
+      )
+      const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000)
+      if (lastOrderTimestamp && lastOrderTimestamp > threeMinutesAgo)
+        return NextResponse.json(
+          { error: 'Too many orders' },
+          { status: 429, headers: corsHeaders }
+        )
+    }
     const orderNumber = generateOrderNumber()
     const orderData: OrderData = {
       storeId: params.storeId,
@@ -136,7 +148,7 @@ export async function POST(
           )
         : [])
     ])
-    if (source === SOURCE) {
+    if (!storeOwner) {
       await resend.emails.send({
         from: 'Orders <onboarding@resend.dev>',
         to: ['web.christian.dev@gmail.com', 'papeleria.pdepapel@gmail.com'],
@@ -203,4 +215,15 @@ export async function GET(
       { status: 500, headers: corsHeaders }
     )
   }
+}
+
+async function isStoreOwner(userId: string | null, storeId: string) {
+  if (!userId) return false
+  const storeByUserId = await prismadb.store.findFirst({
+    where: {
+      id: storeId,
+      userId
+    }
+  })
+  return !!storeByUserId
 }
