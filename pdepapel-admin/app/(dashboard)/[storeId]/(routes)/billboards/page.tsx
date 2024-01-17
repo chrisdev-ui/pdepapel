@@ -1,35 +1,35 @@
-import prismadb from '@/lib/prismadb'
-import { format } from 'date-fns'
-import { BillboardClient } from './components/client'
-import { BillboardColumn } from './components/columns'
+import prismadb from "@/lib/prismadb";
+import { format } from "date-fns";
+import { BillboardClient } from "./components/client";
+import { BillboardColumn } from "./components/columns";
 
 export default async function BillboardsPage({
-  params
+  params,
 }: {
   params: {
-    storeId: string
-  }
+    storeId: string;
+  };
 }) {
   const billboards = await prismadb.billboard.findMany({
     where: {
-      storeId: params.storeId
+      storeId: params.storeId,
     },
     orderBy: {
-      createdAt: 'desc'
-    }
-  })
+      createdAt: "desc",
+    },
+  });
 
   const formattedBillboards: BillboardColumn[] = billboards.map(
     (billboard) => ({
       id: billboard.id,
       label: billboard.label,
-      title: billboard.title ? billboard.title : 'Sin título',
+      title: billboard.title ? billboard.title : "Sin título",
       redirectUrl: billboard.redirectUrl
         ? billboard.redirectUrl
-        : 'Sin link de redirección',
-      createdAt: format(billboard.createdAt, 'MMMM d, yyyy')
-    })
-  )
+        : "Sin link de redirección",
+      createdAt: format(billboard.createdAt, "MMMM d, yyyy"),
+    }),
+  );
 
   return (
     <div className="flex-col">
@@ -37,5 +37,5 @@ export default async function BillboardsPage({
         <BillboardClient data={formattedBillboards} />
       </div>
     </div>
-  )
+  );
 }

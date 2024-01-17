@@ -1,34 +1,37 @@
-import prismadb from '@/lib/prismadb'
-import { generateRandomSKU } from '@/lib/utils'
-import { auth } from '@clerk/nextjs'
-import { NextResponse } from 'next/server'
+import prismadb from "@/lib/prismadb";
+import { generateRandomSKU } from "@/lib/utils";
+import { auth } from "@clerk/nextjs";
+import { NextResponse } from "next/server";
 
 type SortOption =
-  | 'default'
-  | 'dateAdded'
-  | 'priceLowToHigh'
-  | 'priceHighToLow'
-  | 'name'
-  | 'featuredFirst'
+  | "default"
+  | "dateAdded"
+  | "priceLowToHigh"
+  | "priceHighToLow"
+  | "name"
+  | "featuredFirst";
 
 type PriceRanges =
-  | '[0,5000]'
-  | '[5000,10000]'
-  | '[10000,20000]'
-  | '[20000,50000]'
-  | '[50000,99999999]'
+  | "[0,5000]"
+  | "[5000,10000]"
+  | "[10000,20000]"
+  | "[20000,50000]"
+  | "[50000,99999999]";
 
 export async function POST(
   req: Request,
-  { params }: { params: { storeId: string } }
+  { params }: { params: { storeId: string } },
 ) {
-  const { userId } = auth()
+  const { userId } = auth();
   if (!userId)
-    return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
   if (!params.storeId)
-    return NextResponse.json({ error: 'Store ID is required' }, { status: 400 })
+    return NextResponse.json(
+      { error: "Store ID is required" },
+      { status: 400 },
+    );
   try {
-    const body = await req.json()
+    const body = await req.json();
     const {
       name,
       price,
@@ -40,48 +43,48 @@ export async function POST(
       stock,
       images,
       isArchived,
-      isFeatured
-    } = body
+      isFeatured,
+    } = body;
     const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId }
-    })
+      where: { id: params.storeId, userId },
+    });
     if (!storeByUserId)
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     if (!name)
-      return NextResponse.json({ error: 'Name is required' }, { status: 400 })
+      return NextResponse.json({ error: "Name is required" }, { status: 400 });
     if (!images || !images.length)
       return NextResponse.json(
-        { error: 'Images are required' },
-        { status: 400 }
-      )
+        { error: "Images are required" },
+        { status: 400 },
+      );
     if (!price)
-      return NextResponse.json({ error: 'Price is required' }, { status: 400 })
+      return NextResponse.json({ error: "Price is required" }, { status: 400 });
     if (!categoryId)
       return NextResponse.json(
-        { error: 'Category ID is required' },
-        { status: 400 }
-      )
+        { error: "Category ID is required" },
+        { status: 400 },
+      );
     if (!sizeId)
       return NextResponse.json(
-        { error: 'Size ID is required' },
-        { status: 400 }
-      )
+        { error: "Size ID is required" },
+        { status: 400 },
+      );
     if (!colorId)
       return NextResponse.json(
-        { error: 'Color ID is required' },
-        { status: 400 }
-      )
+        { error: "Color ID is required" },
+        { status: 400 },
+      );
     if (!designId)
       return NextResponse.json(
-        { error: 'Design ID is required' },
-        { status: 400 }
-      )
+        { error: "Design ID is required" },
+        { status: 400 },
+      );
     if (stock && stock < 0)
       return NextResponse.json(
-        { error: 'Stock must be 0 or greater' },
-        { status: 400 }
-      )
-    const sku = generateRandomSKU()
+        { error: "Stock must be 0 or greater" },
+        { status: 400 },
+      );
+    const sku = generateRandomSKU();
     const product = await prismadb.product.create({
       data: {
         name,
@@ -97,78 +100,81 @@ export async function POST(
         sku,
         images: {
           createMany: {
-            data: [...images.map((image: { url: string }) => image)]
-          }
+            data: [...images.map((image: { url: string }) => image)],
+          },
         },
-        storeId: params.storeId
-      }
-    })
-    return NextResponse.json(product)
+        storeId: params.storeId,
+      },
+    });
+    return NextResponse.json(product);
   } catch (error) {
-    console.log('[PRODUCTS_POST]', error)
+    console.log("[PRODUCTS_POST]", error);
     return NextResponse.json(
-      { error: 'Internal Server Error' },
-      { status: 500 }
-    )
+      { error: "Internal Server Error" },
+      { status: 500 },
+    );
   }
 }
 
 export async function GET(
   req: Request,
-  { params }: { params: { storeId: string } }
+  { params }: { params: { storeId: string } },
 ) {
   if (!params.storeId)
-    return NextResponse.json({ error: 'Store ID is required' }, { status: 400 })
+    return NextResponse.json(
+      { error: "Store ID is required" },
+      { status: 400 },
+    );
   try {
-    const { searchParams } = new URL(req.url)
-    const page = Number(searchParams.get('page')) || 1
-    const itemsPerPage = Number(searchParams.get('itemsPerPage')) || 52
-    const typeId = searchParams.get('typeId')?.split(',') || []
-    const categoryId = searchParams.get('categoryId')?.split(',') || []
-    const colorId = searchParams.get('colorId')?.split(',') || []
-    const sizeId = searchParams.get('sizeId')?.split(',') || []
-    const designId = searchParams.get('designId')?.split(',') || []
-    const isFeatured = searchParams.get('isFeatured')
-    const onlyNew = searchParams.get('onlyNew') || undefined
-    const fromShop = searchParams.get('fromShop') || undefined
-    const limit = Number(searchParams.get('limit'))
-    const sortOption = searchParams.get('sortOption') || 'default'
-    const priceRange = searchParams.get('priceRange') || undefined
-    const excludeProducts = searchParams.get('excludeProducts') || undefined
-    let categoriesIds: string[] = []
+    const { searchParams } = new URL(req.url);
+    const page = Number(searchParams.get("page")) || 1;
+    const itemsPerPage = Number(searchParams.get("itemsPerPage")) || 52;
+    const typeId = searchParams.get("typeId")?.split(",") || [];
+    const categoryId = searchParams.get("categoryId")?.split(",") || [];
+    const colorId = searchParams.get("colorId")?.split(",") || [];
+    const sizeId = searchParams.get("sizeId")?.split(",") || [];
+    const designId = searchParams.get("designId")?.split(",") || [];
+    const isFeatured = searchParams.get("isFeatured");
+    const onlyNew = searchParams.get("onlyNew") || undefined;
+    const fromShop = searchParams.get("fromShop") || undefined;
+    const limit = Number(searchParams.get("limit"));
+    const sortOption = searchParams.get("sortOption") || "default";
+    const priceRange = searchParams.get("priceRange") || undefined;
+    const excludeProducts = searchParams.get("excludeProducts") || undefined;
+    let categoriesIds: string[] = [];
     if (typeId.length > 0) {
       const categoriesForType = await prismadb.category.findMany({
         where: {
           typeId: typeId.length > 0 ? { in: typeId } : undefined,
-          storeId: params.storeId
+          storeId: params.storeId,
         },
         select: {
-          id: true
-        }
-      })
-      categoriesIds = categoriesForType.map((category) => category.id)
+          id: true,
+        },
+      });
+      categoriesIds = categoriesForType.map((category) => category.id);
     }
-    let products
-    const sort: Record<SortOption, Record<string, 'asc' | 'desc'>> = {
-      default: { createdAt: 'desc' },
-      dateAdded: { createdAt: 'desc' },
-      priceLowToHigh: { price: 'asc' },
-      priceHighToLow: { price: 'desc' },
-      name: { name: 'asc' },
-      featuredFirst: { isFeatured: 'desc' }
-    }
+    let products;
+    const sort: Record<SortOption, Record<string, "asc" | "desc">> = {
+      default: { createdAt: "desc" },
+      dateAdded: { createdAt: "desc" },
+      priceLowToHigh: { price: "asc" },
+      priceHighToLow: { price: "desc" },
+      name: { name: "asc" },
+      featuredFirst: { isFeatured: "desc" },
+    };
     const priceRanges = {
-      '[0,5000]': { gte: 0, lte: 5000 },
-      '[5000,10000]': { gte: 5000, lte: 10000 },
-      '[10000,20000]': { gte: 10000, lte: 20000 },
-      '[20000,50000]': { gte: 20000, lte: 50000 },
-      '[50000,99999999]': { gte: 50000 }
-    }
+      "[0,5000]": { gte: 0, lte: 5000 },
+      "[5000,10000]": { gte: 5000, lte: 10000 },
+      "[10000,20000]": { gte: 10000, lte: 20000 },
+      "[20000,50000]": { gte: 20000, lte: 50000 },
+      "[50000,99999999]": { gte: 50000 },
+    };
     if (onlyNew) {
       products = await prismadb.product.findMany({
         where: {
           storeId: params.storeId,
-          isArchived: false
+          isArchived: false,
         },
         include: {
           images: true,
@@ -177,14 +183,14 @@ export async function GET(
           design: true,
           size: true,
           reviews: {
-            orderBy: { createdAt: 'desc' }
-          }
+            orderBy: { createdAt: "desc" },
+          },
         },
         orderBy: {
-          createdAt: 'desc'
+          createdAt: "desc",
         },
-        take: limit || undefined
-      })
+        take: limit || undefined,
+      });
     } else {
       products = await prismadb.product.findMany({
         where: {
@@ -193,19 +199,21 @@ export async function GET(
             categoryId.length > 0
               ? { in: categoryId }
               : categoriesIds.length > 0
-              ? { in: categoriesIds }
-              : undefined,
+                ? { in: categoriesIds }
+                : undefined,
           colorId: colorId.length > 0 ? { in: colorId } : undefined,
           sizeId: sizeId.length > 0 ? { in: sizeId } : undefined,
           designId: designId.length > 0 ? { in: designId } : undefined,
-          isFeatured: isFeatured !== null ? isFeatured === 'true' : undefined,
+          isFeatured: isFeatured !== null ? isFeatured === "true" : undefined,
           isArchived: false,
           price: priceRange
             ? priceRanges[priceRange as PriceRanges]
             : undefined,
           NOT: {
-            id: excludeProducts ? { in: excludeProducts.split(',') } : undefined
-          }
+            id: excludeProducts
+              ? { in: excludeProducts.split(",") }
+              : undefined,
+          },
         },
         include: {
           images: true,
@@ -214,31 +222,31 @@ export async function GET(
           design: true,
           size: true,
           reviews: {
-            orderBy: { createdAt: 'desc' }
-          }
+            orderBy: { createdAt: "desc" },
+          },
         },
         orderBy: sort[sortOption as SortOption],
         skip: fromShop ? (page - 1) * itemsPerPage : undefined,
-        take: limit || (fromShop ? itemsPerPage : undefined)
-      })
+        take: limit || (fromShop ? itemsPerPage : undefined),
+      });
     }
     const totalItems = await prismadb.product.count({
       where: {
         storeId: params.storeId,
-        isArchived: false
-      }
-    })
-    const totalPages = fromShop ? Math.ceil(totalItems / itemsPerPage) : 1
+        isArchived: false,
+      },
+    });
+    const totalPages = fromShop ? Math.ceil(totalItems / itemsPerPage) : 1;
     return NextResponse.json({
       products,
       totalItems,
-      totalPages: fromShop ? totalPages : 1
-    })
+      totalPages: fromShop ? totalPages : 1,
+    });
   } catch (error) {
-    console.log('[PRODUCTS_GET]', error)
+    console.log("[PRODUCTS_GET]", error);
     return NextResponse.json(
-      { error: 'Internal Server Error' },
-      { status: 500 }
-    )
+      { error: "Internal Server Error" },
+      { status: 500 },
+    );
   }
 }

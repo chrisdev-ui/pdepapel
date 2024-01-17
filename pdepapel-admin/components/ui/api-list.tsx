@@ -1,22 +1,22 @@
-'use client'
+"use client";
 
-import { ApiAlert } from '@/components/ui/api-alert'
-import { useOrigin } from '@/hooks/use-origin'
-import { useParams } from 'next/navigation'
+import { ApiAlert } from "@/components/ui/api-alert";
+import { useOrigin } from "@/hooks/use-origin";
+import { useParams } from "next/navigation";
 
 interface ApiListProps {
-  entityName: string
-  entityIdName: string
+  entityName: string;
+  entityIdName: string;
 }
 
 export const ApiList: React.FC<ApiListProps> = ({
   entityIdName,
-  entityName
+  entityName,
 }) => {
-  const params = useParams()
-  const origin = useOrigin()
+  const params = useParams();
+  const origin = useOrigin();
 
-  const baseUrl = `${origin}/api/${params.storeId}`
+  const baseUrl = `${origin}/api/${params.storeId}`;
   return (
     <>
       <ApiAlert
@@ -45,5 +45,5 @@ export const ApiList: React.FC<ApiListProps> = ({
         description={`${baseUrl}/${entityName}/{${entityIdName}}`}
       />
     </>
-  )
-}
+  );
+};

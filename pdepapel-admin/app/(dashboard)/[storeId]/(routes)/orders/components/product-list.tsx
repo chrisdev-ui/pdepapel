@@ -1,25 +1,25 @@
-'use client'
+"use client";
 
-import { Button } from '@/components/ui/button'
+import { Button } from "@/components/ui/button";
 import {
   Popover,
   PopoverContent,
-  PopoverTrigger
-} from '@/components/ui/popover'
-import { useEffect, useState } from 'react'
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { useEffect, useState } from "react";
 
 interface ProductListProps {
-  products: string[]
+  products: string[];
 }
 
 export const ProductList: React.FC<ProductListProps> = ({ products }) => {
-  const [isMounted, setIsMounted] = useState(false)
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
-    setIsMounted(true)
-  }, [])
+    setIsMounted(true);
+  }, []);
 
-  if (!isMounted) return null
+  if (!isMounted) return null;
 
   return (
     <Popover>
@@ -34,5 +34,5 @@ export const ProductList: React.FC<ProductListProps> = ({ products }) => {
         </div>
       </PopoverContent>
     </Popover>
-  )
-}
+  );
+};

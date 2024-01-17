@@ -1,65 +1,65 @@
-'use client'
+"use client";
 
-import { AlertModal } from '@/components/modals/alert-modal'
-import { Button } from '@/components/ui/button'
+import { AlertModal } from "@/components/modals/alert-modal";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
-import { useToast } from '@/hooks/use-toast'
-import axios from 'axios'
-import { Copy, Edit, MoreHorizontal, Trash } from 'lucide-react'
-import { useParams, useRouter } from 'next/navigation'
-import { useState } from 'react'
-import { BannerColumn, MainBannerColumn } from './columns'
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useToast } from "@/hooks/use-toast";
+import axios from "axios";
+import { Copy, Edit, MoreHorizontal, Trash } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
+import { BannerColumn, MainBannerColumn } from "./columns";
 
 interface CellActionProps {
-  data: BannerColumn | MainBannerColumn
-  source: 'banners' | 'mainBanner'
+  data: BannerColumn | MainBannerColumn;
+  source: "banners" | "mainBanner";
 }
 
 export const CellAction: React.FC<CellActionProps> = ({ data, source }) => {
-  const { toast } = useToast()
-  const router = useRouter()
-  const params = useParams()
-  const [loading, setLoading] = useState(false)
-  const [open, setOpen] = useState(false)
+  const { toast } = useToast();
+  const router = useRouter();
+  const params = useParams();
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
 
   const onCopy = (id: string) => {
-    navigator.clipboard.writeText(id)
+    navigator.clipboard.writeText(id);
     toast({
-      description: 'ID del banner copiado al portapapeles',
-      variant: 'success'
-    })
-  }
+      description: "ID del banner copiado al portapapeles",
+      variant: "success",
+    });
+  };
 
   const onDelete = async () => {
     try {
-      setLoading(true)
-      if (source === 'banners') {
-        await axios.delete(`/api/${params.storeId}/banners/${data.id}`)
+      setLoading(true);
+      if (source === "banners") {
+        await axios.delete(`/api/${params.storeId}/banners/${data.id}`);
       } else {
-        await axios.delete(`/api/${params.storeId}/main-banner/${data.id}`)
+        await axios.delete(`/api/${params.storeId}/main-banner/${data.id}`);
       }
-      router.refresh()
+      router.refresh();
       toast({
-        description: 'Banner eliminado',
-        variant: 'success'
-      })
+        description: "Banner eliminado",
+        variant: "success",
+      });
     } catch (error) {
       toast({
         description:
-          'Ups! Hubo un error al intentar eliminar el banner, intenta de nuevo más tarde',
-        variant: 'destructive'
-      })
+          "Ups! Hubo un error al intentar eliminar el banner, intenta de nuevo más tarde",
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false)
-      setOpen(false)
+      setLoading(false);
+      setOpen(false);
     }
-  }
+  };
 
   return (
     <>
@@ -84,10 +84,10 @@ export const CellAction: React.FC<CellActionProps> = ({ data, source }) => {
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => {
-              if (source === 'banners') {
-                router.push(`/${params.storeId}/banners/${data.id}`)
+              if (source === "banners") {
+                router.push(`/${params.storeId}/banners/${data.id}`);
               } else {
-                router.push(`/${params.storeId}/banners/main/${data.id}`)
+                router.push(`/${params.storeId}/banners/main/${data.id}`);
               }
             }}
           >
@@ -101,5 +101,5 @@ export const CellAction: React.FC<CellActionProps> = ({ data, source }) => {
         </DropdownMenuContent>
       </DropdownMenu>
     </>
-  )
-}
+  );
+};

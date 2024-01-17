@@ -1,23 +1,23 @@
-import prismadb from '@/lib/prismadb'
-import { format } from 'date-fns'
-import { ReviewsClient } from './components/client'
-import { ReviewsColumn } from './components/columns'
+import prismadb from "@/lib/prismadb";
+import { format } from "date-fns";
+import { ReviewsClient } from "./components/client";
+import { ReviewsColumn } from "./components/columns";
 
 export default async function ReviewsPage({
-  params
+  params,
 }: {
   params: {
-    storeId: string
-  }
+    storeId: string;
+  };
 }) {
   const reviews = await prismadb.review.findMany({
     where: {
-      storeId: params.storeId
+      storeId: params.storeId,
     },
     orderBy: {
-      createdAt: 'desc'
-    }
-  })
+      createdAt: "desc",
+    },
+  });
 
   const formattedReviews: ReviewsColumn[] = reviews.map((review) => ({
     id: review.id,
@@ -26,8 +26,8 @@ export default async function ReviewsPage({
     name: review.name,
     rating: String(review.rating),
     comment: review.comment,
-    createdAt: format(review.createdAt, 'MMMM d, yyyy')
-  }))
+    createdAt: format(review.createdAt, "MMMM d, yyyy"),
+  }));
 
   return (
     <div className="flex-col">
@@ -35,5 +35,5 @@ export default async function ReviewsPage({
         <ReviewsClient data={formattedReviews} />
       </div>
     </div>
-  )
+  );
 }

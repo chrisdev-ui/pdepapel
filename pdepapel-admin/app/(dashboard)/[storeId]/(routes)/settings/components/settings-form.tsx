@@ -1,92 +1,92 @@
-'use client'
+"use client";
 
-import { zodResolver } from '@hookform/resolvers/zod'
-import { Store } from '@prisma/client'
-import { Trash } from 'lucide-react'
-import { useForm } from 'react-hook-form'
-import z from 'zod'
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Store } from "@prisma/client";
+import { Trash } from "lucide-react";
+import { useForm } from "react-hook-form";
+import z from "zod";
 
-import { AlertModal } from '@/components/modals/alert-modal'
-import { ApiAlert } from '@/components/ui/api-alert'
-import { Button } from '@/components/ui/button'
+import { AlertModal } from "@/components/modals/alert-modal";
+import { ApiAlert } from "@/components/ui/api-alert";
+import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
   FormField,
   FormItem,
   FormLabel,
-  FormMessage
-} from '@/components/ui/form'
-import { Heading } from '@/components/ui/heading'
-import { Input } from '@/components/ui/input'
-import { Separator } from '@/components/ui/separator'
-import { useOrigin } from '@/hooks/use-origin'
-import { useToast } from '@/hooks/use-toast'
-import axios from 'axios'
-import { useParams, useRouter } from 'next/navigation'
-import { useState } from 'react'
+  FormMessage,
+} from "@/components/ui/form";
+import { Heading } from "@/components/ui/heading";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
+import { useOrigin } from "@/hooks/use-origin";
+import { useToast } from "@/hooks/use-toast";
+import axios from "axios";
+import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
 
 interface SettingsFormProps {
-  initialData: Store
+  initialData: Store;
 }
 
 const formSchema = z.object({
-  name: z.string().min(1, 'El nombre de la tienda no puede estar vacío')
-})
+  name: z.string().min(1, "El nombre de la tienda no puede estar vacío"),
+});
 
-type SettingsFormValues = z.infer<typeof formSchema>
+type SettingsFormValues = z.infer<typeof formSchema>;
 
 export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
-  const params = useParams()
-  const router = useRouter()
-  const [open, setOpen] = useState(false)
-  const origin = useOrigin()
-  const [loading, setLoading] = useState(false)
-  const { toast } = useToast()
+  const params = useParams();
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const origin = useOrigin();
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
   const form = useForm<SettingsFormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: initialData
-  })
+    defaultValues: initialData,
+  });
   const onSubmit = async (values: SettingsFormValues) => {
     try {
-      setLoading(true)
-      await axios.patch(`/api/stores/${params.storeId}`, values)
-      router.refresh()
+      setLoading(true);
+      await axios.patch(`/api/stores/${params.storeId}`, values);
+      router.refresh();
       toast({
-        description: '¡Listo! Los cambios se han guardado correctamente.',
-        variant: 'success'
-      })
+        description: "¡Listo! Los cambios se han guardado correctamente.",
+        variant: "success",
+      });
     } catch (error) {
       toast({
         description:
-          '¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.',
-        variant: 'destructive'
-      })
+          "¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
   const onDelete = async () => {
     try {
-      setLoading(true)
-      await axios.delete(`/api/stores/${params.storeId}`)
-      router.refresh()
-      router.push('/')
+      setLoading(true);
+      await axios.delete(`/api/stores/${params.storeId}`);
+      router.refresh();
+      router.push("/");
       toast({
-        description: 'La tienda se ha eliminado correctamente.',
-        variant: 'success'
-      })
+        description: "La tienda se ha eliminado correctamente.",
+        variant: "success",
+      });
     } catch (error) {
       toast({
         description:
-          'Asegúrate de haber eliminado todos los productos y categorías primero.',
-        variant: 'destructive'
-      })
+          "Asegúrate de haber eliminado todos los productos y categorías primero.",
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false)
-      setOpen(false)
+      setLoading(false);
+      setOpen(false);
     }
-  }
+  };
   return (
     <>
       <AlertModal
@@ -113,7 +113,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit(onSubmit)}
-          className="space-y-8 w-full"
+          className="w-full space-y-8"
         >
           <div className="grid grid-cols-3 gap-8">
             <FormField
@@ -142,9 +142,9 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
       <Separator />
       <ApiAlert
         title="NEXT_PUBLIC_API_URL"
-        description={origin ? `${origin}/api/${params.storeId}` : ''}
+        description={origin ? `${origin}/api/${params.storeId}` : ""}
         variant="public"
       />
     </>
-  )
-}
+  );
+};

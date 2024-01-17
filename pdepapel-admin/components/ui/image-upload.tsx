@@ -1,59 +1,59 @@
-'use client'
+"use client";
 
-import { Button } from '@/components/ui/button'
-import { useToast } from '@/hooks/use-toast'
-import { env } from '@/lib/env.mjs'
-import axios from 'axios'
-import { ImagePlus, Trash } from 'lucide-react'
-import { CldUploadWidget } from 'next-cloudinary'
-import Image from 'next/image'
-import { useParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { env } from "@/lib/env.mjs";
+import axios from "axios";
+import { ImagePlus, Trash } from "lucide-react";
+import { CldUploadWidget } from "next-cloudinary";
+import Image from "next/image";
+import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
 
 interface ImageUploadProps {
-  disabled?: boolean
-  onChange: (value: string) => void
-  onRemove: (value: string) => void
-  value: string[]
+  disabled?: boolean;
+  onChange: (value: string) => void;
+  onRemove: (value: string) => void;
+  value: string[];
 }
 
 export const ImageUpload: React.FC<ImageUploadProps> = ({
   disabled,
   onChange,
   onRemove,
-  value
+  value,
 }) => {
-  const [isMounted, setIsMounted] = useState(false)
-  const [isDeleting, setIsDeleting] = useState(false)
-  const { toast } = useToast()
-  const params = useParams()
+  const [isMounted, setIsMounted] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const { toast } = useToast();
+  const params = useParams();
 
   useEffect(() => {
-    setIsMounted(true)
-  }, [])
+    setIsMounted(true);
+  }, []);
 
   const onUpload = (result: any) => {
-    onChange(result.info.secure_url)
-  }
+    onChange(result.info.secure_url);
+  };
 
   const handleRemove = async (url: string) => {
     try {
-      setIsDeleting(true)
-      await axios.post(`/api/${params.storeId}/cloudinary`, { imageUrl: url })
+      setIsDeleting(true);
+      await axios.post(`/api/${params.storeId}/cloudinary`, { imageUrl: url });
     } catch (error) {
       toast({
         description:
-          '¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.',
-        variant: 'destructive'
-      })
+          "¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        variant: "destructive",
+      });
     } finally {
-      setIsDeleting(false)
-      onRemove(url)
+      setIsDeleting(false);
+      onRemove(url);
     }
-  }
+  };
 
   if (!isMounted) {
-    return null
+    return null;
   }
 
   return (
@@ -62,9 +62,9 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
         {value.map((url) => (
           <div
             key={url}
-            className="relative w-[200px] h-[200px] rounded-md overflow-hidden"
+            className="relative h-[200px] w-[200px] overflow-hidden rounded-md"
           >
-            <div className="z-10 absolute top-2 right-2">
+            <div className="absolute right-2 top-2 z-10">
               <Button
                 type="button"
                 onClick={() => handleRemove(url)}
@@ -82,8 +82,8 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
               src={url}
             />
             {isDeleting && (
-              <div className="w-full h-full backdrop-brightness-50 absolute top-0 left-0 flex justify-center items-center">
-                <span className="text-xs animate-pulse backdrop-brightness-50 text-white">
+              <div className="absolute left-0 top-0 flex h-full w-full items-center justify-center backdrop-brightness-50">
+                <span className="animate-pulse text-xs text-white backdrop-brightness-50">
                   Eliminando...
                 </span>
               </div>
@@ -97,20 +97,20 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
         options={
           env.NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME
             ? {
-                folder: env.NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME
+                folder: env.NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME,
               }
             : {}
         }
       >
         {({ open }) => {
           const onClick = (
-            e: React.MouseEvent<HTMLButtonElement, MouseEvent>
+            e: React.MouseEvent<HTMLButtonElement, MouseEvent>,
           ) => {
-            e.preventDefault()
-            open()
-          }
+            e.preventDefault();
+            open();
+          };
           if (!open) {
-            return <div>Cargando...</div>
+            return <div>Cargando...</div>;
           }
           return (
             <Button
@@ -119,12 +119,12 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
               variant="secondary"
               onClick={onClick}
             >
-              <ImagePlus className="h-4 w-4 mr-2" />
+              <ImagePlus className="mr-2 h-4 w-4" />
               Cargar una imagen
             </Button>
-          )
+          );
         }}
       </CldUploadWidget>
     </div>
-  )
-}
+  );
+};

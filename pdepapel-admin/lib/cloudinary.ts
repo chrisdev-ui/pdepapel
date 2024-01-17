@@ -1,12 +1,12 @@
-import cloudinaryInstance from 'cloudinary'
+import cloudinaryInstance from "cloudinary";
 
-import { env } from '@/lib/env.mjs'
+import { env } from "@/lib/env.mjs";
 
 cloudinaryInstance.v2.config({
   cloud_name: env.CLOUDINARY_CLOUD_NAME,
   api_key: env.CLOUDINARY_API_KEY,
   api_secret: env.CLOUDINARY_API_SECRET,
-  secure: true
-})
+  secure: true,
+});
 
-export default cloudinaryInstance
+export default cloudinaryInstance;

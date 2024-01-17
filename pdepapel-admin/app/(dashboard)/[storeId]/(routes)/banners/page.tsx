@@ -1,50 +1,50 @@
-import prismadb from '@/lib/prismadb'
-import { format } from 'date-fns'
-import { BannerClient } from './components/client'
-import { BannerColumn, MainBannerColumn } from './components/columns'
+import prismadb from "@/lib/prismadb";
+import { format } from "date-fns";
+import { BannerClient } from "./components/client";
+import { BannerColumn, MainBannerColumn } from "./components/columns";
 
 export default async function BannersPage({
-  params
+  params,
 }: {
   params: {
-    storeId: string
-  }
+    storeId: string;
+  };
 }) {
   const mainBanner = await prismadb.mainBanner.findFirst({
     where: {
-      storeId: params.storeId
-    }
-  })
+      storeId: params.storeId,
+    },
+  });
   const banners = await prismadb.banner.findMany({
     where: {
-      storeId: params.storeId
+      storeId: params.storeId,
     },
     orderBy: {
-      createdAt: 'desc'
-    }
-  })
+      createdAt: "desc",
+    },
+  });
 
   const formattedMainBanner: MainBannerColumn[] = mainBanner
     ? [
         {
           id: mainBanner.id,
-          title: mainBanner.title ?? 'Sin definir',
-          label1: mainBanner.label1 ?? 'Sin definir',
-          highlight: mainBanner.highlight ?? 'Sin definir',
-          label2: mainBanner.label2 ?? 'Sin definir',
+          title: mainBanner.title ?? "Sin definir",
+          label1: mainBanner.label1 ?? "Sin definir",
+          highlight: mainBanner.highlight ?? "Sin definir",
+          label2: mainBanner.label2 ?? "Sin definir",
           imageUrl: mainBanner.imageUrl,
           callToAction: mainBanner.callToAction,
-          createdAt: format(mainBanner.createdAt, 'MMMM d, yyyy')
-        }
+          createdAt: format(mainBanner.createdAt, "MMMM d, yyyy"),
+        },
       ]
-    : []
+    : [];
 
   const formattedBanners: BannerColumn[] = banners.map((banner) => ({
     id: banner.id,
     imageUrl: banner.imageUrl,
     callToAction: banner.callToAction,
-    createdAt: format(banner.createdAt, 'MMMM d, yyyy')
-  }))
+    createdAt: format(banner.createdAt, "MMMM d, yyyy"),
+  }));
 
   return (
     <div className="flex-col">
@@ -55,5 +55,5 @@ export default async function BannersPage({
         />
       </div>
     </div>
-  )
+  );
 }

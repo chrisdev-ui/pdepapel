@@ -1,57 +1,57 @@
-'use client'
+"use client";
 
-import { useStoreModal } from '@/hooks/use-store-modal'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { useState } from 'react'
-import { useForm } from 'react-hook-form'
-import * as z from 'zod'
+import { useStoreModal } from "@/hooks/use-store-modal";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import * as z from "zod";
 
-import { Button } from '@/components/ui/button'
+import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
   FormField,
   FormItem,
   FormLabel,
-  FormMessage
-} from '@/components/ui/form'
-import { Input } from '@/components/ui/input'
-import { Modal } from '@/components/ui/modal'
-import { useToast } from '@/hooks/use-toast'
-import axios from 'axios'
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Modal } from "@/components/ui/modal";
+import { useToast } from "@/hooks/use-toast";
+import axios from "axios";
 
 const formSchema = z.object({
-  name: z.string().min(1, 'El nombre debe tener al menos un caracter')
-})
+  name: z.string().min(1, "El nombre debe tener al menos un caracter"),
+});
 
 export function StoreModal() {
-  const storeModal = useStoreModal()
-  const { toast } = useToast()
+  const storeModal = useStoreModal();
+  const { toast } = useToast();
 
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: ''
-    }
-  })
+      name: "",
+    },
+  });
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
-      setLoading(true)
-      const response = await axios.post('/api/stores', values)
-      window.location.assign(`/${response.data.id}`)
+      setLoading(true);
+      const response = await axios.post("/api/stores", values);
+      window.location.assign(`/${response.data.id}`);
     } catch (error) {
       toast({
         description:
-          '¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.',
-        variant: 'destructive'
-      })
+          "¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
   return (
     <Modal
       title="Crea una tienda"
@@ -80,7 +80,7 @@ export function StoreModal() {
                   </FormItem>
                 )}
               />
-              <div className="pt-6 space-x-2 flex items-center justify-end w-full">
+              <div className="flex w-full items-center justify-end space-x-2 pt-6">
                 <Button
                   disabled={loading}
                   variant="outline"
@@ -97,5 +97,5 @@ export function StoreModal() {
         </div>
       </div>
     </Modal>
-  )
+  );
 }

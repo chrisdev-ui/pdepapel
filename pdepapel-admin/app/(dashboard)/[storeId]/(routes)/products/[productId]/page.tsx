@@ -1,45 +1,45 @@
-import prismadb from '@/lib/prismadb'
-import { format } from 'date-fns'
-import { ReviewColumn } from './components/columns'
-import { ProductForm } from './components/product-form'
+import prismadb from "@/lib/prismadb";
+import { format } from "date-fns";
+import { ReviewColumn } from "./components/columns";
+import { ProductForm } from "./components/product-form";
 
 export default async function ProductPage({
-  params
+  params,
 }: {
-  params: { productId: string; storeId: string }
+  params: { productId: string; storeId: string };
 }) {
   const product = await prismadb.product.findUnique({
     where: {
-      id: params.productId
+      id: params.productId,
     },
     include: {
       images: true,
-      reviews: true
-    }
-  })
+      reviews: true,
+    },
+  });
   const categories = await prismadb.category.findMany({
     where: {
-      storeId: params.storeId
+      storeId: params.storeId,
     },
     include: {
-      type: true
-    }
-  })
+      type: true,
+    },
+  });
   const sizes = await prismadb.size.findMany({
     where: {
-      storeId: params.storeId
-    }
-  })
+      storeId: params.storeId,
+    },
+  });
   const colors = await prismadb.color.findMany({
     where: {
-      storeId: params.storeId
-    }
-  })
+      storeId: params.storeId,
+    },
+  });
   const designs = await prismadb.design.findMany({
     where: {
-      storeId: params.storeId
-    }
-  })
+      storeId: params.storeId,
+    },
+  });
 
   const formattedReviews: ReviewColumn[] =
     product?.reviews.map((review) => ({
@@ -48,9 +48,9 @@ export default async function ProductPage({
       name: review.name,
       userId: review.userId,
       rating: String(review.rating),
-      comment: review.comment || '',
-      createdAt: format(product.createdAt, 'MMMM d, yyyy')
-    })) || []
+      comment: review.comment || "",
+      createdAt: format(product.createdAt, "MMMM d, yyyy"),
+    })) || [];
 
   return (
     <div className="flex-col">
@@ -65,5 +65,5 @@ export default async function ProductPage({
         />
       </div>
     </div>
-  )
+  );
 }

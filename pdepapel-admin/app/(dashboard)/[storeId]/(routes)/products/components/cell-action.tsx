@@ -1,62 +1,62 @@
-'use client'
+"use client";
 
-import { AlertModal } from '@/components/modals/alert-modal'
-import { Button } from '@/components/ui/button'
+import { AlertModal } from "@/components/modals/alert-modal";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
-import { useToast } from '@/hooks/use-toast'
-import axios from 'axios'
-import { Copy, Edit, MoreHorizontal, Trash } from 'lucide-react'
-import { useParams, useRouter } from 'next/navigation'
-import { useState } from 'react'
-import { ProductColumn } from './columns'
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useToast } from "@/hooks/use-toast";
+import axios from "axios";
+import { Copy, Edit, MoreHorizontal, Trash } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
+import { ProductColumn } from "./columns";
 
 interface CellActionProps {
-  data: ProductColumn
+  data: ProductColumn;
 }
 
 export const CellAction: React.FC<CellActionProps> = ({ data }) => {
-  const { toast } = useToast()
-  const router = useRouter()
-  const params = useParams()
-  const [loading, setLoading] = useState(false)
-  const [open, setOpen] = useState(false)
+  const { toast } = useToast();
+  const router = useRouter();
+  const params = useParams();
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
 
   const onCopy = (id: string, isSku = false) => {
-    navigator.clipboard.writeText(id)
+    navigator.clipboard.writeText(id);
     toast({
       description: isSku
-        ? 'SKU del producto copiado al portapapeles'
-        : 'ID del producto copiado al portapapeles',
-      variant: 'success'
-    })
-  }
+        ? "SKU del producto copiado al portapapeles"
+        : "ID del producto copiado al portapapeles",
+      variant: "success",
+    });
+  };
 
   const onDelete = async () => {
     try {
-      setLoading(true)
-      await axios.delete(`/api/${params.storeId}/products/${data.id}`)
-      router.refresh()
+      setLoading(true);
+      await axios.delete(`/api/${params.storeId}/products/${data.id}`);
+      router.refresh();
       toast({
-        description: 'Producto eliminado',
-        variant: 'success'
-      })
+        description: "Producto eliminado",
+        variant: "success",
+      });
     } catch (error) {
       toast({
         description:
-          'Ups! Algo salió mal, por favor intenta de nuevo más tarde',
-        variant: 'destructive'
-      })
+          "Ups! Algo salió mal, por favor intenta de nuevo más tarde",
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false)
-      setOpen(false)
+      setLoading(false);
+      setOpen(false);
     }
-  }
+  };
 
   return (
     <>
@@ -98,5 +98,5 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
         </DropdownMenuContent>
       </DropdownMenu>
     </>
-  )
-}
+  );
+};

@@ -1,21 +1,21 @@
-'use client'
+"use client";
 
-import { ApiList } from '@/components/ui/api-list'
-import { Button } from '@/components/ui/button'
-import { DataTable } from '@/components/ui/data-table'
-import { Heading } from '@/components/ui/heading'
-import { Separator } from '@/components/ui/separator'
-import { Plus } from 'lucide-react'
-import { useParams, useRouter } from 'next/navigation'
-import { BillboardColumn, columns } from './columns'
+import { ApiList } from "@/components/ui/api-list";
+import { Button } from "@/components/ui/button";
+import { DataTable } from "@/components/ui/data-table";
+import { Heading } from "@/components/ui/heading";
+import { Separator } from "@/components/ui/separator";
+import { Plus } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { BillboardColumn, columns } from "./columns";
 
 interface BillboardClientProps {
-  data: BillboardColumn[]
+  data: BillboardColumn[];
 }
 
 export const BillboardClient = ({ data }: BillboardClientProps) => {
-  const router = useRouter()
-  const params = useParams()
+  const router = useRouter();
+  const params = useParams();
   return (
     <>
       <div className="flex items-center justify-between">
@@ -36,5 +36,5 @@ export const BillboardClient = ({ data }: BillboardClientProps) => {
       <Separator />
       <ApiList entityName="billboards" entityIdName="billboardId" />
     </>
-  )
-}
+  );
+};

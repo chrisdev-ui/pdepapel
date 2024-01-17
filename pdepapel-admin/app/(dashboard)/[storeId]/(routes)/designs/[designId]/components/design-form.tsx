@@ -1,106 +1,108 @@
-'use client'
+"use client";
 
-import { zodResolver } from '@hookform/resolvers/zod'
-import { Design } from '@prisma/client'
-import { Trash } from 'lucide-react'
-import { useForm } from 'react-hook-form'
-import z from 'zod'
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Design } from "@prisma/client";
+import { Trash } from "lucide-react";
+import { useForm } from "react-hook-form";
+import z from "zod";
 
-import { AlertModal } from '@/components/modals/alert-modal'
-import { Button } from '@/components/ui/button'
+import { AlertModal } from "@/components/modals/alert-modal";
+import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
   FormField,
   FormItem,
   FormLabel,
-  FormMessage
-} from '@/components/ui/form'
-import { Heading } from '@/components/ui/heading'
-import { Input } from '@/components/ui/input'
-import { Separator } from '@/components/ui/separator'
-import { useToast } from '@/hooks/use-toast'
-import axios from 'axios'
-import { useParams, useRouter } from 'next/navigation'
-import { useState } from 'react'
+  FormMessage,
+} from "@/components/ui/form";
+import { Heading } from "@/components/ui/heading";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast";
+import axios from "axios";
+import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
 
 const formSchema = z.object({
-  name: z.string().min(1, 'El nombre del tamaño no puede estar vacío')
-})
+  name: z.string().min(1, "El nombre del tamaño no puede estar vacío"),
+});
 
-type DesignFormValues = z.infer<typeof formSchema>
+type DesignFormValues = z.infer<typeof formSchema>;
 
 interface DesignFormProps {
-  initialData: Design | null
+  initialData: Design | null;
 }
 
 export const DesignForm: React.FC<DesignFormProps> = ({ initialData }) => {
-  const params = useParams()
-  const router = useRouter()
-  const { toast } = useToast()
+  const params = useParams();
+  const router = useRouter();
+  const { toast } = useToast();
 
-  const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const title = initialData ? 'Editar diseño' : 'Crear diseño'
-  const description = initialData ? 'Editar un diseño' : 'Crear un nuevo diseño'
-  const toastMessage = initialData ? 'Diseño actualizado' : 'Diseño creado'
-  const action = initialData ? 'Guardar cambios' : 'Crear'
+  const title = initialData ? "Editar diseño" : "Crear diseño";
+  const description = initialData
+    ? "Editar un diseño"
+    : "Crear un nuevo diseño";
+  const toastMessage = initialData ? "Diseño actualizado" : "Diseño creado";
+  const action = initialData ? "Guardar cambios" : "Crear";
 
   const form = useForm<DesignFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: initialData || {
-      name: ''
-    }
-  })
+      name: "",
+    },
+  });
   const onSubmit = async (data: DesignFormValues) => {
     try {
-      setLoading(true)
+      setLoading(true);
       if (initialData) {
         await axios.patch(
           `/api/${params.storeId}/designs/${params.designId}`,
-          data
-        )
+          data,
+        );
       } else {
-        await axios.post(`/api/${params.storeId}/designs`, data)
+        await axios.post(`/api/${params.storeId}/designs`, data);
       }
-      router.refresh()
-      router.push(`/${params.storeId}/designs`)
+      router.refresh();
+      router.push(`/${params.storeId}/designs`);
       toast({
         description: toastMessage,
-        variant: 'success'
-      })
+        variant: "success",
+      });
     } catch (error) {
       toast({
         description:
-          '¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.',
-        variant: 'destructive'
-      })
+          "¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
   const onDelete = async () => {
     try {
-      setLoading(true)
-      await axios.delete(`/api/${params.storeId}/designs/${params.designId}`)
-      router.refresh()
-      router.push(`/${params.storeId}/designs`)
+      setLoading(true);
+      await axios.delete(`/api/${params.storeId}/designs/${params.designId}`);
+      router.refresh();
+      router.push(`/${params.storeId}/designs`);
       toast({
-        description: 'Diseño eliminado',
-        variant: 'success'
-      })
+        description: "Diseño eliminado",
+        variant: "success",
+      });
     } catch (error) {
       toast({
         description:
-          'Asegúrate de haber eliminado todos los productos que usen este diseño primero.',
-        variant: 'destructive'
-      })
+          "Asegúrate de haber eliminado todos los productos que usen este diseño primero.",
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false)
-      setOpen(false)
+      setLoading(false);
+      setOpen(false);
     }
-  }
+  };
   return (
     <>
       <AlertModal
@@ -126,7 +128,7 @@ export const DesignForm: React.FC<DesignFormProps> = ({ initialData }) => {
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit(onSubmit)}
-          className="space-y-8 w-full"
+          className="w-full space-y-8"
         >
           <div className="grid grid-cols-3 gap-8">
             <FormField
@@ -153,5 +155,5 @@ export const DesignForm: React.FC<DesignFormProps> = ({ initialData }) => {
         </form>
       </Form>
     </>
-  )
-}
+  );
+};

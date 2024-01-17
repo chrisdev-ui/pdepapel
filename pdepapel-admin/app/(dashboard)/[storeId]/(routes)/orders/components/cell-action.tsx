@@ -1,61 +1,61 @@
-'use client'
+"use client";
 
-import axios from 'axios'
-import { Copy, Edit, MoreHorizontal, Trash } from 'lucide-react'
-import { useParams, useRouter } from 'next/navigation'
-import { useState } from 'react'
+import axios from "axios";
+import { Copy, Edit, MoreHorizontal, Trash } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
 
-import { AlertModal } from '@/components/modals/alert-modal'
-import { Button } from '@/components/ui/button'
+import { AlertModal } from "@/components/modals/alert-modal";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
-import { useToast } from '@/hooks/use-toast'
-import { OrderColumn } from './columns'
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useToast } from "@/hooks/use-toast";
+import { OrderColumn } from "./columns";
 
 interface CellActionProps {
-  data: OrderColumn
+  data: OrderColumn;
 }
 
 export const CellAction: React.FC<CellActionProps> = ({ data }) => {
-  const { toast } = useToast()
-  const router = useRouter()
-  const params = useParams()
-  const [loading, setLoading] = useState(false)
-  const [open, setOpen] = useState(false)
+  const { toast } = useToast();
+  const router = useRouter();
+  const params = useParams();
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
 
   const onCopy = (id: string, message: string) => {
-    navigator.clipboard.writeText(id)
+    navigator.clipboard.writeText(id);
     toast({
       description: message,
-      variant: 'success'
-    })
-  }
+      variant: "success",
+    });
+  };
 
   const onDelete = async () => {
     try {
-      setLoading(true)
-      await axios.delete(`/api/${params.storeId}/orders/${data.id}`)
-      router.refresh()
+      setLoading(true);
+      await axios.delete(`/api/${params.storeId}/orders/${data.id}`);
+      router.refresh();
       toast({
-        description: 'Orden eliminada',
-        variant: 'success'
-      })
+        description: "Orden eliminada",
+        variant: "success",
+      });
     } catch (error) {
       toast({
         description:
-          'Ups! Algo salió mal, por favor intenta de nuevo más tarde',
-        variant: 'destructive'
-      })
+          "Ups! Algo salió mal, por favor intenta de nuevo más tarde",
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false)
-      setOpen(false)
+      setLoading(false);
+      setOpen(false);
     }
-  }
+  };
 
   return (
     <>
@@ -76,7 +76,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
           <DropdownMenuLabel>Acciones</DropdownMenuLabel>
           <DropdownMenuItem
             onClick={() =>
-              onCopy(data.id, 'ID de la orden copiada la portapapeles')
+              onCopy(data.id, "ID de la orden copiada la portapapeles")
             }
           >
             <Copy className="mr-2 h-4 w-4" />
@@ -86,7 +86,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
             onClick={() =>
               onCopy(
                 data.orderNumber,
-                'Número de la orden copiado al portapapeles'
+                "Número de la orden copiado al portapapeles",
               )
             }
           >
@@ -106,5 +106,5 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
         </DropdownMenuContent>
       </DropdownMenu>
     </>
-  )
-}
+  );
+};

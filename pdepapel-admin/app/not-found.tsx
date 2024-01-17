@@ -1,10 +1,10 @@
-import Link from 'next/link'
+import Link from "next/link";
 
 export default function NotFound() {
   return (
-    <div className="grid h-screen px-4 bg-white place-content-center">
+    <div className="grid h-screen place-content-center bg-white px-4">
       <div className="text-center">
-        <h1 className="font-black text-gray-200 text-9xl">404</h1>
+        <h1 className="text-9xl font-black text-gray-200">404</h1>
 
         <p className="text-2xl font-bold tracking-tight text-gray-900 sm:text-4xl">
           ¡Página no encontrada!
@@ -16,11 +16,11 @@ export default function NotFound() {
 
         <Link
           href="/"
-          className="inline-block px-5 py-3 mt-6 text-sm font-medium bg-black text-white hover:bg-slate-700 rounded focus:outline-none focus:ring"
+          className="mt-6 inline-block rounded bg-black px-5 py-3 text-sm font-medium text-white hover:bg-slate-700 focus:outline-none focus:ring"
         >
           Regresar al inicio
         </Link>
       </div>
     </div>
-  )
+  );
 }

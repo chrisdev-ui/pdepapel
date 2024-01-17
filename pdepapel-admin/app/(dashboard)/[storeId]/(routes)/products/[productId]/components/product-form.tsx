@@ -1,14 +1,14 @@
-'use client'
+"use client";
 
-import { zodResolver } from '@hookform/resolvers/zod'
-import { DollarSign, PackageCheckIcon, Trash } from 'lucide-react'
-import { useForm } from 'react-hook-form'
-import z from 'zod'
+import { zodResolver } from "@hookform/resolvers/zod";
+import { DollarSign, PackageCheckIcon, Trash } from "lucide-react";
+import { useForm } from "react-hook-form";
+import z from "zod";
 
-import { AlertModal } from '@/components/modals/alert-modal'
-import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { DataTable } from '@/components/ui/data-table'
+import { AlertModal } from "@/components/modals/alert-modal";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { DataTable } from "@/components/ui/data-table";
 import {
   Form,
   FormControl,
@@ -16,21 +16,21 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormMessage
-} from '@/components/ui/form'
-import { Heading } from '@/components/ui/heading'
-import { ImageUpload } from '@/components/ui/image-upload'
-import { Input } from '@/components/ui/input'
+  FormMessage,
+} from "@/components/ui/form";
+import { Heading } from "@/components/ui/heading";
+import { ImageUpload } from "@/components/ui/image-upload";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
-import { Separator } from '@/components/ui/separator'
-import { Textarea } from '@/components/ui/textarea'
-import { useToast } from '@/hooks/use-toast'
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
 import {
   Category,
   Color,
@@ -38,40 +38,40 @@ import {
   Image,
   Product,
   Size,
-  Type
-} from '@prisma/client'
-import axios from 'axios'
-import { useParams, useRouter } from 'next/navigation'
-import { useState } from 'react'
-import { ReviewColumn, columns } from './columns'
+  Type,
+} from "@prisma/client";
+import axios from "axios";
+import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
+import { ReviewColumn, columns } from "./columns";
 
 const formSchema = z.object({
-  name: z.string().min(1, 'El nombre del producto no puede estar vacío'),
+  name: z.string().min(1, "El nombre del producto no puede estar vacío"),
   description: z.string().optional(),
-  stock: z.coerce.number().min(0, 'El stock no puede ser menor a 0'),
+  stock: z.coerce.number().min(0, "El stock no puede ser menor a 0"),
   images: z.object({ url: z.string() }).array(),
-  price: z.coerce.number().min(1, 'El precio debe ser mayor a 0'),
+  price: z.coerce.number().min(1, "El precio debe ser mayor a 0"),
   categoryId: z.string().min(1),
   colorId: z.string().min(1),
   sizeId: z.string().min(1),
   designId: z.string().min(1),
   isFeatured: z.boolean().default(false).optional(),
-  isArchived: z.boolean().default(false).optional()
-})
+  isArchived: z.boolean().default(false).optional(),
+});
 
-type ProductFormValues = z.infer<typeof formSchema>
+type ProductFormValues = z.infer<typeof formSchema>;
 
 type Categories = Category & {
-  type: Type
-}
+  type: Type;
+};
 
 interface ProductFormProps {
-  initialData: (Product & { images: Image[] }) | null
-  categories: Categories[]
-  sizes: Size[]
-  colors: Color[]
-  designs: Design[]
-  reviews?: ReviewColumn[]
+  initialData: (Product & { images: Image[] }) | null;
+  categories: Categories[];
+  sizes: Size[];
+  colors: Color[];
+  designs: Design[];
+  reviews?: ReviewColumn[];
 }
 
 export const ProductForm: React.FC<ProductFormProps> = ({
@@ -80,86 +80,86 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   sizes,
   colors,
   designs,
-  reviews
+  reviews,
 }) => {
-  const params = useParams()
-  const router = useRouter()
-  const { toast } = useToast()
+  const params = useParams();
+  const router = useRouter();
+  const { toast } = useToast();
 
-  const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const title = initialData ? 'Editar producto' : 'Crear producto'
+  const title = initialData ? "Editar producto" : "Crear producto";
   const description = initialData
-    ? 'Editar un producto'
-    : 'Crear un nuevo producto'
-  const toastMessage = initialData ? 'Producto actualizado' : 'Producto creado'
-  const action = initialData ? 'Guardar cambios' : 'Crear'
+    ? "Editar un producto"
+    : "Crear un nuevo producto";
+  const toastMessage = initialData ? "Producto actualizado" : "Producto creado";
+  const action = initialData ? "Guardar cambios" : "Crear";
 
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: initialData || {
-      name: '',
-      description: '',
+      name: "",
+      description: "",
       stock: 0,
       images: [],
       price: 0,
-      categoryId: '',
-      colorId: '',
-      sizeId: '',
-      designId: '',
+      categoryId: "",
+      colorId: "",
+      sizeId: "",
+      designId: "",
       isFeatured: false,
-      isArchived: false
-    }
-  })
+      isArchived: false,
+    },
+  });
   const onSubmit = async (data: ProductFormValues) => {
     try {
-      setLoading(true)
+      setLoading(true);
       if (initialData) {
         await axios.patch(
           `/api/${params.storeId}/products/${params.productId}`,
-          data
-        )
+          data,
+        );
       } else {
-        await axios.post(`/api/${params.storeId}/products`, data)
+        await axios.post(`/api/${params.storeId}/products`, data);
       }
-      router.refresh()
-      router.push(`/${params.storeId}/products`)
+      router.refresh();
+      router.push(`/${params.storeId}/products`);
       toast({
         description: toastMessage,
-        variant: 'success'
-      })
+        variant: "success",
+      });
     } catch (error) {
       toast({
         description:
-          '¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.',
-        variant: 'destructive'
-      })
+          "¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
   const onDelete = async () => {
     try {
-      setLoading(true)
-      await axios.delete(`/api/${params.storeId}/products/${params.productId}`)
-      router.refresh()
-      router.push(`/${params.storeId}/products`)
+      setLoading(true);
+      await axios.delete(`/api/${params.storeId}/products/${params.productId}`);
+      router.refresh();
+      router.push(`/${params.storeId}/products`);
       toast({
-        description: 'Producto eliminado',
-        variant: 'success'
-      })
+        description: "Producto eliminado",
+        variant: "success",
+      });
     } catch (error) {
       toast({
         description:
-          '¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.',
-        variant: 'destructive'
-      })
+          "¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false)
-      setOpen(false)
+      setLoading(false);
+      setOpen(false);
     }
-  }
+  };
   return (
     <>
       <AlertModal
@@ -185,7 +185,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit(onSubmit)}
-          className="space-y-8 w-full"
+          className="w-full space-y-8"
         >
           <FormField
             control={form.control}
@@ -202,7 +202,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                     }
                     onRemove={(url) =>
                       field.onChange([
-                        ...field.value.filter((current) => current.url !== url)
+                        ...field.value.filter((current) => current.url !== url),
                       ])
                     }
                   />
@@ -237,7 +237,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   <FormLabel>Precio</FormLabel>
                   <FormControl>
                     <div className="relative">
-                      <DollarSign className="h-4 w-4 absolute left-3 top-3" />
+                      <DollarSign className="absolute left-3 top-3 h-4 w-4" />
                       <Input
                         type="number"
                         disabled={loading}
@@ -259,7 +259,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   <FormLabel>Cantidad</FormLabel>
                   <FormControl>
                     <div className="relative">
-                      <PackageCheckIcon className="h-4 w-4 absolute left-3 top-3" />
+                      <PackageCheckIcon className="absolute left-3 top-3 h-4 w-4" />
                       <Input
                         type="number"
                         disabled={loading}
@@ -465,7 +465,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               control={form.control}
               name="isFeatured"
               render={({ field }) => (
-                <FormItem className="flex items-start space-x-3 space-y-0 rounded-md border p-4 h-fit mt-auto">
+                <FormItem className="mt-auto flex h-fit items-start space-x-3 space-y-0 rounded-md border p-4">
                   <FormControl>
                     <Checkbox
                       checked={field.value}
@@ -485,7 +485,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               control={form.control}
               name="isArchived"
               render={({ field }) => (
-                <FormItem className="flex items-start space-x-3 space-y-0 rounded-md border p-4 h-fit">
+                <FormItem className="flex h-fit items-start space-x-3 space-y-0 rounded-md border p-4">
                   <FormControl>
                     <Checkbox
                       checked={field.value}
@@ -513,5 +513,5 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       <Separator />
       <DataTable searchKey="name" columns={columns} data={reviews ?? []} />
     </>
-  )
-}
+  );
+};

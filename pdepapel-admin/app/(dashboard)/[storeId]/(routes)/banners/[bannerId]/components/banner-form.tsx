@@ -1,109 +1,111 @@
-'use client'
+"use client";
 
-import { zodResolver } from '@hookform/resolvers/zod'
-import { Trash } from 'lucide-react'
-import { useForm } from 'react-hook-form'
-import z from 'zod'
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Trash } from "lucide-react";
+import { useForm } from "react-hook-form";
+import z from "zod";
 
-import { AlertModal } from '@/components/modals/alert-modal'
-import { Button } from '@/components/ui/button'
+import { AlertModal } from "@/components/modals/alert-modal";
+import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
   FormField,
   FormItem,
   FormLabel,
-  FormMessage
-} from '@/components/ui/form'
-import { Heading } from '@/components/ui/heading'
-import { ImageUpload } from '@/components/ui/image-upload'
-import { Input } from '@/components/ui/input'
-import { Separator } from '@/components/ui/separator'
-import { useToast } from '@/hooks/use-toast'
-import { Banner } from '@prisma/client'
-import axios from 'axios'
-import { useParams, useRouter } from 'next/navigation'
-import { useState } from 'react'
+  FormMessage,
+} from "@/components/ui/form";
+import { Heading } from "@/components/ui/heading";
+import { ImageUpload } from "@/components/ui/image-upload";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast";
+import { Banner } from "@prisma/client";
+import axios from "axios";
+import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
 
 const formSchema = z.object({
-  callToAction: z.string().min(1, 'La URL de redirección no puede estar vacía'),
-  imageUrl: z.string().min(1, 'La URL de la imagen no puede estar vacía')
-})
+  callToAction: z.string().min(1, "La URL de redirección no puede estar vacía"),
+  imageUrl: z.string().min(1, "La URL de la imagen no puede estar vacía"),
+});
 
-type BannerFormValues = z.infer<typeof formSchema>
+type BannerFormValues = z.infer<typeof formSchema>;
 
 interface BannerFormProps {
-  initialData: Banner | null
+  initialData: Banner | null;
 }
 
 export const BannerForm: React.FC<BannerFormProps> = ({ initialData }) => {
-  const params = useParams()
-  const router = useRouter()
-  const { toast } = useToast()
+  const params = useParams();
+  const router = useRouter();
+  const { toast } = useToast();
 
-  const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const title = initialData ? 'Editar banner' : 'Crear banner'
-  const description = initialData ? 'Editar un banner' : 'Crear un nuevo banner'
-  const toastMessage = initialData ? 'Banner actualizado' : 'Banner creado'
-  const action = initialData ? 'Guardar cambios' : 'Crear'
+  const title = initialData ? "Editar banner" : "Crear banner";
+  const description = initialData
+    ? "Editar un banner"
+    : "Crear un nuevo banner";
+  const toastMessage = initialData ? "Banner actualizado" : "Banner creado";
+  const action = initialData ? "Guardar cambios" : "Crear";
 
   const form = useForm<BannerFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: initialData || {
-      callToAction: '',
-      imageUrl: ''
-    }
-  })
+      callToAction: "",
+      imageUrl: "",
+    },
+  });
   const onSubmit = async (data: BannerFormValues) => {
     try {
-      setLoading(true)
+      setLoading(true);
       if (initialData) {
         await axios.patch(
           `/api/${params.storeId}/banners/${params.bannerId}`,
-          data
-        )
+          data,
+        );
       } else {
-        await axios.post(`/api/${params.storeId}/banners`, data)
+        await axios.post(`/api/${params.storeId}/banners`, data);
       }
-      router.refresh()
-      router.push(`/${params.storeId}/banners`)
+      router.refresh();
+      router.push(`/${params.storeId}/banners`);
       toast({
         description: toastMessage,
-        variant: 'success'
-      })
+        variant: "success",
+      });
     } catch (error) {
       toast({
         description:
-          '¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.',
-        variant: 'destructive'
-      })
+          "¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
   const onDelete = async () => {
     try {
-      setLoading(true)
-      await axios.delete(`/api/${params.storeId}/banners/${params.bannerId}`)
-      router.refresh()
-      router.push(`/${params.storeId}/banners`)
+      setLoading(true);
+      await axios.delete(`/api/${params.storeId}/banners/${params.bannerId}`);
+      router.refresh();
+      router.push(`/${params.storeId}/banners`);
       toast({
-        description: 'Banner eliminado',
-        variant: 'success'
-      })
+        description: "Banner eliminado",
+        variant: "success",
+      });
     } catch (error) {
       toast({
         description:
-          'Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.',
-        variant: 'destructive'
-      })
+          "Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false)
-      setOpen(false)
+      setLoading(false);
+      setOpen(false);
     }
-  }
+  };
   return (
     <>
       <AlertModal
@@ -129,7 +131,7 @@ export const BannerForm: React.FC<BannerFormProps> = ({ initialData }) => {
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit(onSubmit)}
-          className="space-y-8 w-full"
+          className="w-full space-y-8"
         >
           <FormField
             control={form.control}
@@ -142,7 +144,7 @@ export const BannerForm: React.FC<BannerFormProps> = ({ initialData }) => {
                     value={field.value ? [field.value] : []}
                     disabled={loading}
                     onChange={(url) => field.onChange(url)}
-                    onRemove={() => field.onChange('')}
+                    onRemove={() => field.onChange("")}
                   />
                 </FormControl>
                 <FormMessage />
@@ -174,5 +176,5 @@ export const BannerForm: React.FC<BannerFormProps> = ({ initialData }) => {
         </form>
       </Form>
     </>
-  )
-}
+  );
+};

@@ -1,33 +1,33 @@
-import prismadb from '@/lib/prismadb'
-import { OrderForm } from './components/order-form'
+import prismadb from "@/lib/prismadb";
+import { OrderForm } from "./components/order-form";
 
 export default async function OrderPage({
-  params
+  params,
 }: {
-  params: { orderId: string; storeId: string }
+  params: { orderId: string; storeId: string };
 }) {
   const order = await prismadb.order.findUnique({
     where: {
-      id: params.orderId
+      id: params.orderId,
     },
     include: {
       orderItems: true,
       payment: true,
-      shipping: true
-    }
-  })
+      shipping: true,
+    },
+  });
   const products = await prismadb.product.findMany({
     where: {
       storeId: params.storeId,
-      isArchived: false
-    }
-  })
+      isArchived: false,
+    },
+  });
 
   const formattedProducts = products.map((product) => ({
     value: product.id,
     label: product.name,
-    price: product.price
-  }))
+    price: product.price,
+  }));
 
   return (
     <div className="flex-col">
@@ -35,5 +35,5 @@ export default async function OrderPage({
         <OrderForm products={formattedProducts} initialData={order} />
       </div>
     </div>
-  )
+  );
 }

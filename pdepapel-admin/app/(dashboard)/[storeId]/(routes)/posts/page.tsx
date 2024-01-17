@@ -1,30 +1,30 @@
-import prismadb from '@/lib/prismadb'
-import { format } from 'date-fns'
-import { PostClient } from './components/client'
-import { PostColumn } from './components/columns'
+import prismadb from "@/lib/prismadb";
+import { format } from "date-fns";
+import { PostClient } from "./components/client";
+import { PostColumn } from "./components/columns";
 
 export default async function PostsPage({
-  params
+  params,
 }: {
   params: {
-    storeId: string
-  }
+    storeId: string;
+  };
 }) {
   const posts = await prismadb.post.findMany({
     where: {
-      storeId: params.storeId
+      storeId: params.storeId,
     },
     orderBy: {
-      createdAt: 'desc'
-    }
-  })
+      createdAt: "desc",
+    },
+  });
 
   const formattedPosts: PostColumn[] = posts.map((post) => ({
     id: post.id,
     social: post.social,
     postId: post.postId,
-    createdAt: format(post.createdAt, 'MMMM d, yyyy')
-  }))
+    createdAt: format(post.createdAt, "MMMM d, yyyy"),
+  }));
 
   return (
     <div className="flex-col">
@@ -32,5 +32,5 @@ export default async function PostsPage({
         <PostClient data={formattedPosts} />
       </div>
     </div>
-  )
+  );
 }

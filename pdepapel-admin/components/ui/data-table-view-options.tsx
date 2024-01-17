@@ -1,24 +1,24 @@
-'use client'
+"use client";
 
-import { DropdownMenuTrigger } from '@radix-ui/react-dropdown-menu'
-import { Table } from '@tanstack/react-table'
+import { DropdownMenuTrigger } from "@radix-ui/react-dropdown-menu";
+import { Table } from "@tanstack/react-table";
 
-import { Button } from '@/components/ui/button'
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuLabel,
-  DropdownMenuSeparator
-} from '@/components/ui/dropdown-menu'
-import { Icons } from './icons'
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { Icons } from "./icons";
 
 interface DataTableViewOptionsProps<TData> {
-  table: Table<TData>
+  table: Table<TData>;
 }
 
 export function DataTableViewOptions<TData>({
-  table
+  table,
 }: DataTableViewOptionsProps<TData>) {
   return (
     <DropdownMenu>
@@ -39,7 +39,7 @@ export function DataTableViewOptions<TData>({
           .getAllColumns()
           .filter(
             (column) =>
-              typeof column.accessorFn !== 'undefined' && column.getCanHide()
+              typeof column.accessorFn !== "undefined" && column.getCanHide(),
           )
           .map((column) => {
             return (
@@ -51,9 +51,9 @@ export function DataTableViewOptions<TData>({
               >
                 {column.id}
               </DropdownMenuCheckboxItem>
-            )
+            );
           })}
       </DropdownMenuContent>
     </DropdownMenu>
-  )
+  );
 }

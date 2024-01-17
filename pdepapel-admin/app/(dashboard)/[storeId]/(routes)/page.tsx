@@ -1,23 +1,23 @@
-import { getGraphRevenue } from '@/actions/get-graph-revenue'
-import { getSalesCount } from '@/actions/get-sales-count'
-import { getStockCount } from '@/actions/get-stock-count'
-import { getTotalRevenue } from '@/actions/get-total-revenue'
-import { Overview } from '@/components/overview'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Heading } from '@/components/ui/heading'
-import { Separator } from '@/components/ui/separator'
-import { formatter } from '@/lib/utils'
-import { CreditCard, DollarSign, Package } from 'lucide-react'
+import { getGraphRevenue } from "@/actions/get-graph-revenue";
+import { getSalesCount } from "@/actions/get-sales-count";
+import { getStockCount } from "@/actions/get-stock-count";
+import { getTotalRevenue } from "@/actions/get-total-revenue";
+import { Overview } from "@/components/overview";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Heading } from "@/components/ui/heading";
+import { Separator } from "@/components/ui/separator";
+import { formatter } from "@/lib/utils";
+import { CreditCard, DollarSign, Package } from "lucide-react";
 
 interface DashboardPageProps {
-  params: { storeId: string }
+  params: { storeId: string };
 }
 
 export default async function DashboardPage({ params }: DashboardPageProps) {
-  const graphRevenue = await getGraphRevenue(params.storeId)
-  const salesCount = await getSalesCount(params.storeId)
-  const stockCount = await getStockCount(params.storeId)
-  const totalRevenue = await getTotalRevenue(params.storeId)
+  const graphRevenue = await getGraphRevenue(params.storeId);
+  const salesCount = await getSalesCount(params.storeId);
+  const stockCount = await getStockCount(params.storeId);
+  const totalRevenue = await getTotalRevenue(params.storeId);
   return (
     <div className="flex-col">
       <div className="flex-1 space-y-4 p-8 pt-6">
@@ -26,7 +26,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
           description="Resumen de tu tienda"
         />
         <Separator />
-        <div className="grid gap-4 grid-cols-3">
+        <div className="grid grid-cols-3 gap-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
@@ -71,5 +71,5 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
         </Card>
       </div>
     </div>
-  )
+  );
 }

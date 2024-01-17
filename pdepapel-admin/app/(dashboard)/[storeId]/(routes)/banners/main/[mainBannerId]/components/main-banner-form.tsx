@@ -1,135 +1,135 @@
-'use client'
+"use client";
 
-import { zodResolver } from '@hookform/resolvers/zod'
-import { Trash } from 'lucide-react'
-import { useForm } from 'react-hook-form'
-import z from 'zod'
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Trash } from "lucide-react";
+import { useForm } from "react-hook-form";
+import z from "zod";
 
-import { AlertModal } from '@/components/modals/alert-modal'
-import { Button } from '@/components/ui/button'
+import { AlertModal } from "@/components/modals/alert-modal";
+import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
   FormField,
   FormItem,
   FormLabel,
-  FormMessage
-} from '@/components/ui/form'
-import { Heading } from '@/components/ui/heading'
-import { ImageUpload } from '@/components/ui/image-upload'
-import { Input } from '@/components/ui/input'
-import { Separator } from '@/components/ui/separator'
-import { useToast } from '@/hooks/use-toast'
-import { MainBanner } from '@prisma/client'
-import axios from 'axios'
-import { useParams, useRouter } from 'next/navigation'
-import { useState } from 'react'
+  FormMessage,
+} from "@/components/ui/form";
+import { Heading } from "@/components/ui/heading";
+import { ImageUpload } from "@/components/ui/image-upload";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast";
+import { MainBanner } from "@prisma/client";
+import axios from "axios";
+import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
 
 const formSchema = z.object({
   title: z.string().optional(),
   label1: z.string().optional(),
   highlight: z.string().optional(),
   label2: z.string().optional(),
-  callToAction: z.string().min(1, 'La URL de redirección no puede estar vacía'),
-  imageUrl: z.string().min(1, 'La URL de la imagen no puede estar vacía')
-})
+  callToAction: z.string().min(1, "La URL de redirección no puede estar vacía"),
+  imageUrl: z.string().min(1, "La URL de la imagen no puede estar vacía"),
+});
 
-type MainBannerFormValues = z.infer<typeof formSchema>
+type MainBannerFormValues = z.infer<typeof formSchema>;
 
 interface MainBannerFormProps {
-  initialData: MainBanner | null
+  initialData: MainBanner | null;
 }
 
 export const MainBannerForm: React.FC<MainBannerFormProps> = ({
-  initialData
+  initialData,
 }) => {
-  const params = useParams()
-  const router = useRouter()
-  const { toast } = useToast()
+  const params = useParams();
+  const router = useRouter();
+  const { toast } = useToast();
 
-  const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const title = initialData
-    ? 'Editar banner principal'
-    : 'Crear banner principal'
+    ? "Editar banner principal"
+    : "Crear banner principal";
   const description = initialData
-    ? 'Editar un banner principal'
-    : 'Crear un nuevo banner principal'
+    ? "Editar un banner principal"
+    : "Crear un nuevo banner principal";
   const toastMessage = initialData
-    ? 'Banner principal actualizado'
-    : 'Banner principal creado'
-  const action = initialData ? 'Guardar cambios' : 'Crear'
+    ? "Banner principal actualizado"
+    : "Banner principal creado";
+  const action = initialData ? "Guardar cambios" : "Crear";
 
   const form = useForm<MainBannerFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: initialData
       ? {
           ...initialData,
-          title: initialData.title || '',
-          label1: initialData.label1 || '',
-          label2: initialData.label2 || '',
-          highlight: initialData.highlight || ''
+          title: initialData.title || "",
+          label1: initialData.label1 || "",
+          label2: initialData.label2 || "",
+          highlight: initialData.highlight || "",
         }
       : {
-          title: '',
-          label1: '',
-          label2: '',
-          highlight: '',
-          callToAction: '',
-          imageUrl: ''
-        }
-  })
+          title: "",
+          label1: "",
+          label2: "",
+          highlight: "",
+          callToAction: "",
+          imageUrl: "",
+        },
+  });
   const onSubmit = async (data: MainBannerFormValues) => {
     try {
-      setLoading(true)
+      setLoading(true);
       if (initialData) {
         await axios.patch(
           `/api/${params.storeId}/main-banner/${params.mainBannerId}`,
-          data
-        )
+          data,
+        );
       } else {
-        await axios.post(`/api/${params.storeId}/main-banner`, data)
+        await axios.post(`/api/${params.storeId}/main-banner`, data);
       }
-      router.refresh()
-      router.push(`/${params.storeId}/banners`)
+      router.refresh();
+      router.push(`/${params.storeId}/banners`);
       toast({
         description: toastMessage,
-        variant: 'success'
-      })
+        variant: "success",
+      });
     } catch (error) {
       toast({
         description:
-          '¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.',
-        variant: 'destructive'
-      })
+          "¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
   const onDelete = async () => {
     try {
-      setLoading(true)
+      setLoading(true);
       await axios.delete(
-        `/api/${params.storeId}/main-banner/${params.mainBannerId}`
-      )
-      router.refresh()
-      router.push(`/${params.storeId}/banners`)
+        `/api/${params.storeId}/main-banner/${params.mainBannerId}`,
+      );
+      router.refresh();
+      router.push(`/${params.storeId}/banners`);
       toast({
-        description: 'Banner eliminado',
-        variant: 'success'
-      })
+        description: "Banner eliminado",
+        variant: "success",
+      });
     } catch (error) {
       toast({
         description:
-          'Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.',
-        variant: 'destructive'
-      })
+          "Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false)
-      setOpen(false)
+      setLoading(false);
+      setOpen(false);
     }
-  }
+  };
   return (
     <>
       <AlertModal
@@ -155,7 +155,7 @@ export const MainBannerForm: React.FC<MainBannerFormProps> = ({
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit(onSubmit)}
-          className="space-y-8 w-full"
+          className="w-full space-y-8"
         >
           <FormField
             control={form.control}
@@ -168,7 +168,7 @@ export const MainBannerForm: React.FC<MainBannerFormProps> = ({
                     value={field.value ? [field.value] : []}
                     disabled={loading}
                     onChange={(url) => field.onChange(url)}
-                    onRemove={() => field.onChange('')}
+                    onRemove={() => field.onChange("")}
                   />
                 </FormControl>
                 <FormMessage />
@@ -268,5 +268,5 @@ export const MainBannerForm: React.FC<MainBannerFormProps> = ({
         </form>
       </Form>
     </>
-  )
-}
+  );
+};

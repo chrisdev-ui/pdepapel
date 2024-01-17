@@ -1,30 +1,30 @@
-'use client'
+"use client";
 
-import { DataTableColumnHeader } from '@/components/ui/data-table-column-header'
-import { ColumnDef } from '@tanstack/react-table'
-import { CellAction } from './cell-action'
+import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
+import { ColumnDef } from "@tanstack/react-table";
+import { CellAction } from "./cell-action";
 
 export type TypeColumn = {
-  id: string
-  name: string
-  createdAt: string
-}
+  id: string;
+  name: string;
+  createdAt: string;
+};
 
 export const columns: ColumnDef<TypeColumn>[] = [
   {
-    accessorKey: 'name',
+    accessorKey: "name",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Nombre" />
-    )
+    ),
   },
   {
-    accessorKey: 'createdAt',
+    accessorKey: "createdAt",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Fecha de creación" />
-    )
+    ),
   },
   {
-    id: 'actions',
-    cell: ({ row }) => <CellAction data={row.original} />
-  }
-]
+    id: "actions",
+    cell: ({ row }) => <CellAction data={row.original} />,
+  },
+];

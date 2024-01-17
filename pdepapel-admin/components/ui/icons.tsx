@@ -1,4 +1,4 @@
-import { LucideProps } from 'lucide-react'
+import { LucideProps } from "lucide-react";
 
 export const Icons = {
   sortUp: (props: LucideProps) => (
@@ -103,5 +103,5 @@ export const Icons = {
         clipRule="evenodd"
       ></path>
     </svg>
-  )
-}
+  ),
+};

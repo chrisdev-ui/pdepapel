@@ -1,103 +1,106 @@
-'use client'
+"use client";
 
-import { zodResolver } from '@hookform/resolvers/zod'
-import { Trash } from 'lucide-react'
-import { useForm } from 'react-hook-form'
-import z from 'zod'
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Trash } from "lucide-react";
+import { useForm } from "react-hook-form";
+import z from "zod";
 
-import { AlertModal } from '@/components/modals/alert-modal'
-import { Button } from '@/components/ui/button'
+import { AlertModal } from "@/components/modals/alert-modal";
+import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
   FormField,
   FormItem,
   FormLabel,
-  FormMessage
-} from '@/components/ui/form'
-import { Heading } from '@/components/ui/heading'
-import { Input } from '@/components/ui/input'
-import { Separator } from '@/components/ui/separator'
-import { useToast } from '@/hooks/use-toast'
-import { Type } from '@prisma/client'
-import axios from 'axios'
-import { useParams, useRouter } from 'next/navigation'
-import { useState } from 'react'
+  FormMessage,
+} from "@/components/ui/form";
+import { Heading } from "@/components/ui/heading";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast";
+import { Type } from "@prisma/client";
+import axios from "axios";
+import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
 
 const formSchema = z.object({
-  name: z.string().min(1, 'El nombre del tipo no puede estar vacío')
-})
+  name: z.string().min(1, "El nombre del tipo no puede estar vacío"),
+});
 
-type TypeFormValues = z.infer<typeof formSchema>
+type TypeFormValues = z.infer<typeof formSchema>;
 
 interface TypeFormProps {
-  initialData: Type | null
+  initialData: Type | null;
 }
 
 export const TypeForm: React.FC<TypeFormProps> = ({ initialData }) => {
-  const params = useParams()
-  const router = useRouter()
-  const { toast } = useToast()
+  const params = useParams();
+  const router = useRouter();
+  const { toast } = useToast();
 
-  const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const title = initialData ? 'Editar tipo' : 'Crear tipo'
-  const description = initialData ? 'Editar un tipo' : 'Crear un nuevo tipo'
-  const toastMessage = initialData ? 'Tipo actualizado' : 'Tipo creado'
-  const action = initialData ? 'Guardar cambios' : 'Crear'
+  const title = initialData ? "Editar tipo" : "Crear tipo";
+  const description = initialData ? "Editar un tipo" : "Crear un nuevo tipo";
+  const toastMessage = initialData ? "Tipo actualizado" : "Tipo creado";
+  const action = initialData ? "Guardar cambios" : "Crear";
 
   const form = useForm<TypeFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: initialData || {
-      name: ''
-    }
-  })
+      name: "",
+    },
+  });
   const onSubmit = async (data: TypeFormValues) => {
     try {
-      setLoading(true)
+      setLoading(true);
       if (initialData) {
-        await axios.patch(`/api/${params.storeId}/types/${params.typeId}`, data)
+        await axios.patch(
+          `/api/${params.storeId}/types/${params.typeId}`,
+          data,
+        );
       } else {
-        await axios.post(`/api/${params.storeId}/types`, data)
+        await axios.post(`/api/${params.storeId}/types`, data);
       }
-      router.refresh()
-      router.push(`/${params.storeId}/types`)
+      router.refresh();
+      router.push(`/${params.storeId}/types`);
       toast({
         description: toastMessage,
-        variant: 'success'
-      })
+        variant: "success",
+      });
     } catch (error) {
       toast({
         description:
-          '¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.',
-        variant: 'destructive'
-      })
+          "¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
   const onDelete = async () => {
     try {
-      setLoading(true)
-      await axios.delete(`/api/${params.storeId}/types/${params.typeId}`)
-      router.refresh()
-      router.push(`/${params.storeId}/types`)
+      setLoading(true);
+      await axios.delete(`/api/${params.storeId}/types/${params.typeId}`);
+      router.refresh();
+      router.push(`/${params.storeId}/types`);
       toast({
-        description: 'Tipo eliminado',
-        variant: 'success'
-      })
+        description: "Tipo eliminado",
+        variant: "success",
+      });
     } catch (error) {
       toast({
         description:
-          'Asegúrate de haber eliminado todas las categorías que usen este tipo primero.',
-        variant: 'destructive'
-      })
+          "Asegúrate de haber eliminado todas las categorías que usen este tipo primero.",
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false)
-      setOpen(false)
+      setLoading(false);
+      setOpen(false);
     }
-  }
+  };
   return (
     <>
       <AlertModal
@@ -123,7 +126,7 @@ export const TypeForm: React.FC<TypeFormProps> = ({ initialData }) => {
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit(onSubmit)}
-          className="space-y-8 w-full"
+          className="w-full space-y-8"
         >
           <div className="grid grid-cols-3 gap-8">
             <FormField
@@ -150,5 +153,5 @@ export const TypeForm: React.FC<TypeFormProps> = ({ initialData }) => {
         </form>
       </Form>
     </>
-  )
-}
+  );
+};

@@ -1,5 +1,5 @@
-import million from 'million/compiler'
-import './lib/env.mjs'
+import million from "million/compiler";
+import "./lib/env.mjs";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -7,16 +7,16 @@ const nextConfig = {
   images: {
     remotePatterns: [
       {
-        protocol: 'https',
-        hostname: 'res.cloudinary.com',
-        port: ''
-      }
-    ]
-  }
-}
+        protocol: "https",
+        hostname: "res.cloudinary.com",
+        port: "",
+      },
+    ],
+  },
+};
 
 const millionConfig = {
-  auto: { rsc: true }
-}
+  auto: { rsc: true },
+};
 
-export default million.next(nextConfig, millionConfig)
+export default million.next(nextConfig, millionConfig);

@@ -1,44 +1,44 @@
-'use client'
+"use client";
 
-import { DataTableColumnHeader } from '@/components/ui/data-table-column-header'
-import { ColumnDef } from '@tanstack/react-table'
-import { CellAction } from './cell-action'
+import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
+import { ColumnDef } from "@tanstack/react-table";
+import { CellAction } from "./cell-action";
 
 export type BillboardColumn = {
-  id: string
-  label: string
-  title?: string
-  redirectUrl?: string
-  createdAt: string
-}
+  id: string;
+  label: string;
+  title?: string;
+  redirectUrl?: string;
+  createdAt: string;
+};
 
 export const columns: ColumnDef<BillboardColumn>[] = [
   {
-    accessorKey: 'label',
+    accessorKey: "label",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Etiqueta" />
-    )
+    ),
   },
   {
-    accessorKey: 'title',
+    accessorKey: "title",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Título" />
-    )
+    ),
   },
   {
-    accessorKey: 'redirectUrl',
+    accessorKey: "redirectUrl",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Link de redirección" />
-    )
+    ),
   },
   {
-    accessorKey: 'createdAt',
+    accessorKey: "createdAt",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Fecha de creación" />
-    )
+    ),
   },
   {
-    id: 'actions',
-    cell: ({ row }) => <CellAction data={row.original} />
-  }
-]
+    id: "actions",
+    cell: ({ row }) => <CellAction data={row.original} />,
+  },
+];

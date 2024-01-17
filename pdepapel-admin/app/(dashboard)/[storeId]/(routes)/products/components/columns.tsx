@@ -1,58 +1,58 @@
-'use client'
+"use client";
 
-import { Badge } from '@/components/ui/badge'
-import { DataTableColumnHeader } from '@/components/ui/data-table-column-header'
-import { ColumnDef } from '@tanstack/react-table'
-import { CellAction } from './cell-action'
+import { Badge } from "@/components/ui/badge";
+import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
+import { ColumnDef } from "@tanstack/react-table";
+import { CellAction } from "./cell-action";
 
 export type ProductColumn = {
-  id: string
-  sku: string
-  name: string
-  price: string
-  size: string
-  category: string
-  color: string
-  stock: string
-  design: string
-  isFeatured: boolean
-  isArchived: boolean
-  createdAt: string
-}
+  id: string;
+  sku: string;
+  name: string;
+  price: string;
+  size: string;
+  category: string;
+  color: string;
+  stock: string;
+  design: string;
+  isFeatured: boolean;
+  isArchived: boolean;
+  createdAt: string;
+};
 
 export const columns: ColumnDef<ProductColumn>[] = [
   {
-    accessorKey: 'sku',
+    accessorKey: "sku",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="SKU" />
-    )
+    ),
   },
   {
-    accessorKey: 'name',
+    accessorKey: "name",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Nombre" />
-    )
+    ),
   },
   {
-    accessorKey: 'price',
+    accessorKey: "price",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Precio" />
-    )
+    ),
   },
   {
-    accessorKey: 'category',
+    accessorKey: "category",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Categoría" />
-    )
+    ),
   },
   {
-    accessorKey: 'size',
+    accessorKey: "size",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Tamaño" />
-    )
+    ),
   },
   {
-    accessorKey: 'color',
+    accessorKey: "color",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Color" />
     ),
@@ -64,50 +64,50 @@ export const columns: ColumnDef<ProductColumn>[] = [
           style={{ backgroundColor: row.original.color }}
         ></div>
       </div>
-    )
+    ),
   },
   {
-    accessorKey: 'stock',
+    accessorKey: "stock",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Stock" />
-    )
+    ),
   },
   {
-    accessorKey: 'design',
+    accessorKey: "design",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Diseño" />
-    )
+    ),
   },
   {
-    accessorKey: 'isArchived',
+    accessorKey: "isArchived",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Archivado" />
     ),
     cell: ({ row }) => (
-      <Badge variant={row.original.isArchived ? 'destructive' : 'success'}>
-        {row.original.isArchived ? 'Sí' : 'No'}
+      <Badge variant={row.original.isArchived ? "destructive" : "success"}>
+        {row.original.isArchived ? "Sí" : "No"}
       </Badge>
-    )
+    ),
   },
   {
-    accessorKey: 'isFeatured',
+    accessorKey: "isFeatured",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Destacado" />
     ),
     cell: ({ row }) => (
-      <Badge variant={row.original.isFeatured ? 'success' : 'outline'}>
-        {row.original.isFeatured ? 'Sí' : 'No'}
+      <Badge variant={row.original.isFeatured ? "success" : "outline"}>
+        {row.original.isFeatured ? "Sí" : "No"}
       </Badge>
-    )
+    ),
   },
   {
-    accessorKey: 'createdAt',
+    accessorKey: "createdAt",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Fecha de creación" />
-    )
+    ),
   },
   {
-    id: 'actions',
-    cell: ({ row }) => <CellAction data={row.original} />
-  }
-]
+    id: "actions",
+    cell: ({ row }) => <CellAction data={row.original} />,
+  },
+];

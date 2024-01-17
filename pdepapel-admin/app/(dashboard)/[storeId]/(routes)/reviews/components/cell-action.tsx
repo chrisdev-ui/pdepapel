@@ -1,62 +1,62 @@
-'use client'
+"use client";
 
-import { AlertModal } from '@/components/modals/alert-modal'
-import { Button } from '@/components/ui/button'
+import { AlertModal } from "@/components/modals/alert-modal";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
-import { useToast } from '@/hooks/use-toast'
-import axios from 'axios'
-import { Copy, MoreHorizontal, Trash } from 'lucide-react'
-import { useParams, useRouter } from 'next/navigation'
-import { useState } from 'react'
-import { ReviewsColumn } from './columns'
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useToast } from "@/hooks/use-toast";
+import axios from "axios";
+import { Copy, MoreHorizontal, Trash } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
+import { ReviewsColumn } from "./columns";
 
 interface CellActionProps {
-  data: ReviewsColumn
+  data: ReviewsColumn;
 }
 
 export const CellAction: React.FC<CellActionProps> = ({ data }) => {
-  const { toast } = useToast()
-  const router = useRouter()
-  const params = useParams()
-  const [loading, setLoading] = useState(false)
-  const [open, setOpen] = useState(false)
+  const { toast } = useToast();
+  const router = useRouter();
+  const params = useParams();
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
 
   const onCopy = (id: string) => {
-    navigator.clipboard.writeText(id)
+    navigator.clipboard.writeText(id);
     toast({
-      description: 'ID de la reseña copiado al portapapeles',
-      variant: 'success'
-    })
-  }
+      description: "ID de la reseña copiado al portapapeles",
+      variant: "success",
+    });
+  };
 
   const onDelete = async () => {
     try {
-      setLoading(true)
+      setLoading(true);
       await axios.delete(
-        `/api/${params.storeId}/products/${data.productId}/reviews/${data.id}`
-      )
-      router.refresh()
+        `/api/${params.storeId}/products/${data.productId}/reviews/${data.id}`,
+      );
+      router.refresh();
       toast({
-        description: 'Reseña eliminada',
-        variant: 'success'
-      })
+        description: "Reseña eliminada",
+        variant: "success",
+      });
     } catch (error) {
       toast({
         description:
-          'Hubo un error al eliminar la reseña, por favor intenta de nuevo',
-        variant: 'destructive'
-      })
+          "Hubo un error al eliminar la reseña, por favor intenta de nuevo",
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false)
-      setOpen(false)
+      setLoading(false);
+      setOpen(false);
     }
-  }
+  };
 
   return (
     <>
@@ -86,5 +86,5 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
         </DropdownMenuContent>
       </DropdownMenu>
     </>
-  )
-}
+  );
+};

@@ -1,125 +1,125 @@
-'use client'
+"use client";
 
-import { zodResolver } from '@hookform/resolvers/zod'
-import { Category, Type } from '@prisma/client'
-import { Trash } from 'lucide-react'
-import { useForm } from 'react-hook-form'
-import z from 'zod'
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Category, Type } from "@prisma/client";
+import { Trash } from "lucide-react";
+import { useForm } from "react-hook-form";
+import z from "zod";
 
-import { AlertModal } from '@/components/modals/alert-modal'
-import { Button } from '@/components/ui/button'
+import { AlertModal } from "@/components/modals/alert-modal";
+import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
   FormField,
   FormItem,
   FormLabel,
-  FormMessage
-} from '@/components/ui/form'
-import { Heading } from '@/components/ui/heading'
-import { Input } from '@/components/ui/input'
+  FormMessage,
+} from "@/components/ui/form";
+import { Heading } from "@/components/ui/heading";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
-import { Separator } from '@/components/ui/separator'
-import { useToast } from '@/hooks/use-toast'
-import axios from 'axios'
-import { useParams, useRouter } from 'next/navigation'
-import { useState } from 'react'
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast";
+import axios from "axios";
+import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
 
 const formSchema = z.object({
-  name: z.string().min(1, 'El nombre de la categoria no puede estar vacío'),
-  typeId: z.string().min(1)
-})
+  name: z.string().min(1, "El nombre de la categoria no puede estar vacío"),
+  typeId: z.string().min(1),
+});
 
-type CategoryFormValues = z.infer<typeof formSchema>
+type CategoryFormValues = z.infer<typeof formSchema>;
 
 interface CategoryFormProps {
-  initialData: Category | null
-  types: Type[]
+  initialData: Category | null;
+  types: Type[];
 }
 
 export const CategoryForm: React.FC<CategoryFormProps> = ({
   initialData,
-  types
+  types,
 }) => {
-  const params = useParams()
-  const router = useRouter()
-  const { toast } = useToast()
+  const params = useParams();
+  const router = useRouter();
+  const { toast } = useToast();
 
-  const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const title = initialData ? 'Editar categoría' : 'Crear categoría'
+  const title = initialData ? "Editar categoría" : "Crear categoría";
   const description = initialData
-    ? 'Editar una categoría'
-    : 'Crear una nueva categoría'
+    ? "Editar una categoría"
+    : "Crear una nueva categoría";
   const toastMessage = initialData
-    ? 'Categoría actualizada'
-    : 'Categoría creada'
-  const action = initialData ? 'Guardar cambios' : 'Crear'
+    ? "Categoría actualizada"
+    : "Categoría creada";
+  const action = initialData ? "Guardar cambios" : "Crear";
 
   const form = useForm<CategoryFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: initialData || {
-      name: '',
-      typeId: ''
-    }
-  })
+      name: "",
+      typeId: "",
+    },
+  });
   const onSubmit = async (data: CategoryFormValues) => {
     try {
-      setLoading(true)
+      setLoading(true);
       if (initialData) {
         await axios.patch(
           `/api/${params.storeId}/categories/${params.categoryId}`,
-          data
-        )
+          data,
+        );
       } else {
-        await axios.post(`/api/${params.storeId}/categories`, data)
+        await axios.post(`/api/${params.storeId}/categories`, data);
       }
-      router.refresh()
-      router.push(`/${params.storeId}/categories`)
+      router.refresh();
+      router.push(`/${params.storeId}/categories`);
       toast({
         description: toastMessage,
-        variant: 'success'
-      })
+        variant: "success",
+      });
     } catch (error) {
       toast({
         description:
-          '¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.',
-        variant: 'destructive'
-      })
+          "¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
   const onDelete = async () => {
     try {
-      setLoading(true)
+      setLoading(true);
       await axios.delete(
-        `/api/${params.storeId}/categories/${params.categoryId}`
-      )
-      router.refresh()
-      router.push(`/${params.storeId}/categories`)
+        `/api/${params.storeId}/categories/${params.categoryId}`,
+      );
+      router.refresh();
+      router.push(`/${params.storeId}/categories`);
       toast({
-        description: 'Categoría eliminada',
-        variant: 'success'
-      })
+        description: "Categoría eliminada",
+        variant: "success",
+      });
     } catch (error) {
       toast({
         description:
-          'Asegúrate de haber eliminado todas las productos que usen esta categoría primero.',
-        variant: 'destructive'
-      })
+          "Asegúrate de haber eliminado todas las productos que usen esta categoría primero.",
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false)
-      setOpen(false)
+      setLoading(false);
+      setOpen(false);
     }
-  }
+  };
   return (
     <>
       <AlertModal
@@ -145,7 +145,7 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit(onSubmit)}
-          className="space-y-8 w-full"
+          className="w-full space-y-8"
         >
           <div className="grid grid-cols-3 gap-8">
             <FormField
@@ -204,5 +204,5 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
         </form>
       </Form>
     </>
-  )
-}
+  );
+};

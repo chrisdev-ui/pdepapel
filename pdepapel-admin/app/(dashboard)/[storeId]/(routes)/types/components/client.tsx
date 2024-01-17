@@ -1,21 +1,21 @@
-'use client'
+"use client";
 
-import { ApiList } from '@/components/ui/api-list'
-import { Button } from '@/components/ui/button'
-import { DataTable } from '@/components/ui/data-table'
-import { Heading } from '@/components/ui/heading'
-import { Separator } from '@/components/ui/separator'
-import { Plus } from 'lucide-react'
-import { useParams, useRouter } from 'next/navigation'
-import { TypeColumn, columns } from './columns'
+import { ApiList } from "@/components/ui/api-list";
+import { Button } from "@/components/ui/button";
+import { DataTable } from "@/components/ui/data-table";
+import { Heading } from "@/components/ui/heading";
+import { Separator } from "@/components/ui/separator";
+import { Plus } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { TypeColumn, columns } from "./columns";
 
 interface TypeClientProps {
-  data: TypeColumn[]
+  data: TypeColumn[];
 }
 
 export const TypeClient = ({ data }: TypeClientProps) => {
-  const router = useRouter()
-  const params = useParams()
+  const router = useRouter();
+  const params = useParams();
   return (
     <>
       <div className="flex items-center justify-between">
@@ -34,5 +34,5 @@ export const TypeClient = ({ data }: TypeClientProps) => {
       <Separator />
       <ApiList entityName="types" entityIdName="typeId" />
     </>
-  )
-}
+  );
+};

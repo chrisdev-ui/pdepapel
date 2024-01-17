@@ -1,21 +1,21 @@
-'use client'
+"use client";
 
-import { ApiList } from '@/components/ui/api-list'
-import { Button } from '@/components/ui/button'
-import { DataTable } from '@/components/ui/data-table'
-import { Heading } from '@/components/ui/heading'
-import { Separator } from '@/components/ui/separator'
-import { Plus } from 'lucide-react'
-import { useParams, useRouter } from 'next/navigation'
-import { PostColumn, columns } from './columns'
+import { ApiList } from "@/components/ui/api-list";
+import { Button } from "@/components/ui/button";
+import { DataTable } from "@/components/ui/data-table";
+import { Heading } from "@/components/ui/heading";
+import { Separator } from "@/components/ui/separator";
+import { Plus } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { PostColumn, columns } from "./columns";
 
 interface PostClientProps {
-  data: PostColumn[]
+  data: PostColumn[];
 }
 
 export const PostClient = ({ data }: PostClientProps) => {
-  const router = useRouter()
-  const params = useParams()
+  const router = useRouter();
+  const params = useParams();
   return (
     <>
       <div className="flex items-center justify-between">
@@ -34,5 +34,5 @@ export const PostClient = ({ data }: PostClientProps) => {
       <Separator />
       <ApiList entityName="posts" entityIdName="postId" />
     </>
-  )
-}
+  );
+};

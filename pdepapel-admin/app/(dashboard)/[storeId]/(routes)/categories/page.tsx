@@ -1,33 +1,33 @@
-import prismadb from '@/lib/prismadb'
-import { format } from 'date-fns'
-import { CategoryClient } from './components/client'
-import { CategoryColumn } from './components/columns'
+import prismadb from "@/lib/prismadb";
+import { format } from "date-fns";
+import { CategoryClient } from "./components/client";
+import { CategoryColumn } from "./components/columns";
 
 export default async function CategoriesPage({
-  params
+  params,
 }: {
   params: {
-    storeId: string
-  }
+    storeId: string;
+  };
 }) {
   const categories = await prismadb.category.findMany({
     where: {
-      storeId: params.storeId
+      storeId: params.storeId,
     },
     include: {
-      type: true
+      type: true,
     },
     orderBy: {
-      createdAt: 'desc'
-    }
-  })
+      createdAt: "desc",
+    },
+  });
 
   const formattedCategories: CategoryColumn[] = categories.map((category) => ({
     id: category.id,
     name: category.name,
     typeName: category.type.name,
-    createdAt: format(category.createdAt, 'MMMM d, yyyy')
-  }))
+    createdAt: format(category.createdAt, "MMMM d, yyyy"),
+  }));
 
   return (
     <div className="flex-col">
@@ -35,5 +35,5 @@ export default async function CategoriesPage({
         <CategoryClient data={formattedCategories} />
       </div>
     </div>
-  )
+  );
 }

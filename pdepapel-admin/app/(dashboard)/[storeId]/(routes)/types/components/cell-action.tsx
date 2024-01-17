@@ -1,60 +1,60 @@
-'use client'
+"use client";
 
-import { AlertModal } from '@/components/modals/alert-modal'
-import { Button } from '@/components/ui/button'
+import { AlertModal } from "@/components/modals/alert-modal";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
-import { useToast } from '@/hooks/use-toast'
-import axios from 'axios'
-import { Copy, Edit, MoreHorizontal, Trash } from 'lucide-react'
-import { useParams, useRouter } from 'next/navigation'
-import { useState } from 'react'
-import { TypeColumn } from './columns'
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useToast } from "@/hooks/use-toast";
+import axios from "axios";
+import { Copy, Edit, MoreHorizontal, Trash } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
+import { TypeColumn } from "./columns";
 
 interface CellActionProps {
-  data: TypeColumn
+  data: TypeColumn;
 }
 
 export const CellAction: React.FC<CellActionProps> = ({ data }) => {
-  const { toast } = useToast()
-  const router = useRouter()
-  const params = useParams()
-  const [loading, setLoading] = useState(false)
-  const [open, setOpen] = useState(false)
+  const { toast } = useToast();
+  const router = useRouter();
+  const params = useParams();
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
 
   const onCopy = (id: string) => {
-    navigator.clipboard.writeText(id)
+    navigator.clipboard.writeText(id);
     toast({
-      description: 'ID del tipo copiado al portapapeles',
-      variant: 'success'
-    })
-  }
+      description: "ID del tipo copiado al portapapeles",
+      variant: "success",
+    });
+  };
 
   const onDelete = async () => {
     try {
-      setLoading(true)
-      await axios.delete(`/api/${params.storeId}/types/${data.id}`)
-      router.refresh()
+      setLoading(true);
+      await axios.delete(`/api/${params.storeId}/types/${data.id}`);
+      router.refresh();
       toast({
-        description: 'Tipo eliminado',
-        variant: 'success'
-      })
+        description: "Tipo eliminado",
+        variant: "success",
+      });
     } catch (error) {
       toast({
         description:
-          'Asegúrate de haber eliminado todas las categorías que usen este tipo primero.',
-        variant: 'destructive'
-      })
+          "Asegúrate de haber eliminado todas las categorías que usen este tipo primero.",
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false)
-      setOpen(false)
+      setLoading(false);
+      setOpen(false);
     }
-  }
+  };
 
   return (
     <>
@@ -90,5 +90,5 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
         </DropdownMenuContent>
       </DropdownMenu>
     </>
-  )
-}
+  );
+};

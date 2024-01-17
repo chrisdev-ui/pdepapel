@@ -1,25 +1,25 @@
-'use client'
+"use client";
 
-import { DataTableColumnHeader } from '@/components/ui/data-table-column-header'
-import { ColumnDef } from '@tanstack/react-table'
-import { CellAction } from './cell-action'
+import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
+import { ColumnDef } from "@tanstack/react-table";
+import { CellAction } from "./cell-action";
 
 export type ColorColumn = {
-  id: string
-  name: string
-  value: string
-  createdAt: string
-}
+  id: string;
+  name: string;
+  value: string;
+  createdAt: string;
+};
 
 export const columns: ColumnDef<ColorColumn>[] = [
   {
-    accessorKey: 'name',
+    accessorKey: "name",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Nombre" />
-    )
+    ),
   },
   {
-    accessorKey: 'value',
+    accessorKey: "value",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Valor" />
     ),
@@ -31,16 +31,16 @@ export const columns: ColumnDef<ColorColumn>[] = [
           style={{ backgroundColor: row.original.value }}
         />
       </div>
-    )
+    ),
   },
   {
-    accessorKey: 'createdAt',
+    accessorKey: "createdAt",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Fecha de creación" />
-    )
+    ),
   },
   {
-    id: 'actions',
-    cell: ({ row }) => <CellAction data={row.original} />
-  }
-]
+    id: "actions",
+    cell: ({ row }) => <CellAction data={row.original} />,
+  },
+];

@@ -1,1 +1,1 @@
-export const DEFAULT_COUNTRY = 'CO'
+export const DEFAULT_COUNTRY = "CO";
