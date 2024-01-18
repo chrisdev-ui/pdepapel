@@ -66,28 +66,17 @@ export function useInputMask({
     });
   };
 
-  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+  const onKeyPress = (event: KeyboardEvent<HTMLInputElement>) => {
     const value = event.key;
     const input = event.target as HTMLInputElement;
     const currentMaskIndex = rawValue.length;
     const currentMaskChar = filteredMask[currentMaskIndex];
-    // Select whole input if user presses Ctrl+A
-    if (event.ctrlKey && event.key.toLowerCase() === "a") {
-      event.preventDefault();
-      input.setSelectionRange(0, mask.length);
-      return;
-    }
+
     if (value === "Tab" || value === "Enter") {
       return;
     }
 
     event.preventDefault();
-
-    if (value === "Backspace" && rawValue.length > 0) {
-      const isWholeSelected = isWholeInputSelected(input, mask);
-      const newValue = isWholeSelected ? "" : rawValue.slice(0, -1);
-      return setMaskValues(newValue, input, event);
-    }
 
     const isValid = isValidInput({
       value,
@@ -106,11 +95,31 @@ export function useInputMask({
     setMaskValues(newValue, input, event);
   };
 
+  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    const value = event.key;
+    const input = event.target as HTMLInputElement;
+
+    // Select whole input if user presses Ctrl+A
+    if (event.ctrlKey && event.key.toLowerCase() === "a") {
+      event.preventDefault();
+      input.setSelectionRange(0, mask.length);
+      return;
+    }
+
+    if (value === "Backspace" && rawValue.length > 0) {
+      event.preventDefault();
+      const isWholeSelected = isWholeInputSelected(input, mask);
+      const newValue = isWholeSelected ? "" : rawValue.slice(0, -1);
+      return setMaskValues(newValue, input, event);
+    }
+  };
+
   const getInputProps = () => {
     if (!mask) return {};
     return {
       value: maskValue,
       onKeyDown,
+      onKeyPress,
     };
   };
 
