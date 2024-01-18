@@ -258,8 +258,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                         <Input
                           className="bg-green-leaf/20 invalid:bg-pink-froly/20"
                           disabled={isLoading}
-                          placeholder="+(57) 999 999 9999"
-                          mask="+(57) 999 999 9999"
+                          placeholder="ex: 321 629 9845"
                           {...field}
                         />
                       </FormControl>
