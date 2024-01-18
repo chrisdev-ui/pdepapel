@@ -1,5 +1,7 @@
 import { esES } from "@clerk/localizations";
 import { ClerkProvider } from "@clerk/nextjs";
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata } from "next";
 
 import { Footer } from "@/components/footer";
@@ -91,6 +93,8 @@ export default function RootLayout({
           {children}
           <Footer />
           <Toaster />
+          <Analytics />
+          <SpeedInsights />
         </body>
       </html>
     </ClerkProvider>

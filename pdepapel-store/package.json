@@ -28,6 +28,8 @@
     "@radix-ui/react-tooltip": "^1.0.7",
     "@t3-oss/env-nextjs": "^0.7.1",
     "@tanstack/react-table": "^8.10.7",
+    "@vercel/analytics": "^1.1.1",
+    "@vercel/speed-insights": "^1.0.4",
     "axios": "^1.5.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
