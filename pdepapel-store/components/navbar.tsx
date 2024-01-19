@@ -84,7 +84,7 @@ export const Navbar: React.FC<{}> = () => {
             </SignedIn>
             <SignedOut>
               <Link
-                href={`/login?redirectUrl=${pathname}`}
+                href={`/sign-in?redirectUrl=${pathname}`}
                 className="hover:opacity-75"
               >
                 <Icons.user className="h-6 w-6" />
