@@ -1,5 +1,5 @@
+import { SignUp } from "@clerk/nextjs";
 import { Metadata } from "next";
-import { Register } from "./components/register";
 
 export const metadata: Metadata = {
   title: "Registrarse",
@@ -10,5 +10,5 @@ export const metadata: Metadata = {
 };
 
 export default function RegisterPage() {
-  <Register />;
+  <SignUp />;
 }
