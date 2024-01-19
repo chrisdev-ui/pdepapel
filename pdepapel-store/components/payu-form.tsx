@@ -39,14 +39,7 @@ export const PayUForm: React.FC<PayUFormProps> = (props) => {
     }
   }, [formRef, requiredProps]);
 
-  const getProductListString = (products: formattedProduct[]) => {
-    return products
-      .map((product) => `${product.quantity}x ${product.name}`)
-      .join(", ");
-  };
-  const productListDescription = `¡Gracias por tu compra en Papelería P de Papel! Tus productos son: ${getProductListString(
-    products,
-  )}. ¡Estamos emocionados de que adquieras estos fantásticos productos! 😻 ❤️`;
+  const productListDescription = `¡Gracias por tu compra en Papelería P de Papel! Esperamos que disfrutes tus productos. 😻 ❤️`;
 
   return (
     <form
