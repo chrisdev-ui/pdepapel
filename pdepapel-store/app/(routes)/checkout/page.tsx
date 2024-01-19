@@ -35,7 +35,7 @@ export default async function CheckoutPage() {
           <SignedOut>
             <div className="flex items-center gap-3">
               <span>Tienes una cuenta?</span>
-              <Link href="/login?redirect_url=/checkout">
+              <Link href="/sign-in?redirect_url=/checkout">
                 <Button className="bg-pink-froly">
                   <User2 className="mr-2 h-4 w-4" /> Inicia sesión
                 </Button>

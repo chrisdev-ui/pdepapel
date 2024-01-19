@@ -20,11 +20,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: new Date(),
     },
     {
-      url: `${baseUrl}/login`,
+      url: `${baseUrl}/sign-in`,
       lastModified: new Date(),
     },
     {
-      url: `${baseUrl}/register`,
+      url: `${baseUrl}/sign-up`,
       lastModified: new Date(),
     },
     {

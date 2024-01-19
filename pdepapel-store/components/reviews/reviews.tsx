@@ -118,7 +118,7 @@ export const Reviews: React.FC<ReviewsProps> = ({
           </div>
         </SignedIn>
         <SignedOut>
-          <Link href={`/login?redirect_url=${pathname}`}>
+          <Link href={`/sign-in?redirect_url=${pathname}`}>
             <Button className="my-4">
               Inicia sesión para dejar un comentario
             </Button>

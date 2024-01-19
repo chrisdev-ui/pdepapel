@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   title: "Registrarse",
   description: "Registrarse en el sitio de Papelería P de Papel",
   alternates: {
-    canonical: "/register",
+    canonical: "/sign-up",
   },
 };
 
