@@ -35,6 +35,8 @@ export const Filter: React.FC<FilterProps> = ({
   const handleSelected = (id: string) => {
     const current = qs.parse(searchParams.toString(), { arrayFormat: "comma" });
 
+    delete current.page;
+
     let currentValues = current[valueKey];
     if (!Array.isArray(currentValues)) {
       currentValues = currentValues ? [currentValues] : [];

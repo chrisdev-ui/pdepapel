@@ -1,3 +1,5 @@
+import { PriceRange } from "@/types";
+
 export const DELAY = 5000;
 export const TOAST_DURATION = 2000;
 export const KAWAII_FACE_EXCITED = `(,,>﹏<,,)`;
@@ -73,3 +75,19 @@ export const DOTS = "...";
 
 export const LETTER_REGEX = /^[a-zA-Z]*$/;
 export const DIGIT_REGEX = /^[0-9]*$/;
+
+export const SORT_OPTIONS = [
+  { value: SortOptions.dateAdded, label: "Los más nuevos" },
+  { value: SortOptions.priceLowToHigh, label: "Menor precio" },
+  { value: SortOptions.priceHighToLow, label: "Mayor precio" },
+  { value: SortOptions.name, label: "Nombre de producto" },
+  { value: SortOptions.featuredFirst, label: "Destacados" },
+];
+
+export const PRICES: PriceRange[] = [
+  { id: "[0,5000]", name: "Menos de $5,000" },
+  { id: "[5000,10000]", name: "Entre $5,000 y $10,000" },
+  { id: "[10000,20000]", name: "Entre $10,000 y $20,000" },
+  { id: "[20000,50000]", name: "Entre $20,000 y $50,000" },
+  { id: "[50000,99999999]", name: "Más de $50,000" },
+];

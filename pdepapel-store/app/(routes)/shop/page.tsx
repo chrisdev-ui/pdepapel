@@ -13,8 +13,7 @@ import { Newsletter } from "@/components/newsletter";
 import { Container } from "@/components/ui/container";
 import { NoResults } from "@/components/ui/no-results";
 import { ProductCard } from "@/components/ui/product-card";
-import { KAWAII_FACE_SAD, SortOptions } from "@/constants";
-import { PriceRange } from "@/types";
+import { KAWAII_FACE_SAD, PRICES, SORT_OPTIONS } from "@/constants";
 import { Paginator } from "./components/paginator";
 import { SortSelector } from "./components/sort-selector";
 
@@ -65,22 +64,6 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
     ]);
   let categories = await getCategories();
 
-  const sortOptions = [
-    { value: SortOptions.dateAdded, label: "Los más nuevos" },
-    { value: SortOptions.priceLowToHigh, label: "Menor precio" },
-    { value: SortOptions.priceHighToLow, label: "Mayor precio" },
-    { value: SortOptions.name, label: "Nombre de producto" },
-    { value: SortOptions.featuredFirst, label: "Destacados" },
-  ];
-
-  const prices: PriceRange[] = [
-    { id: "[0,5000]", name: "Menos de $5,000" },
-    { id: "[5000,10000]", name: "Entre $5,000 y $10,000" },
-    { id: "[10000,20000]", name: "Entre $10,000 y $20,000" },
-    { id: "[20000,50000]", name: "Entre $20,000 y $50,000" },
-    { id: "[50000,99999999]", name: "Más de $50,000" },
-  ];
-
   if (searchParams.typeId && types.length > 0) {
     categories =
       types.find((type) => type.id === searchParams.typeId)?.categories ?? [];
@@ -126,7 +109,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
               valueKey="priceRange"
               name="Precios"
               emptyMessage="No hay precios disponibles"
-              data={products.length > 0 ? prices : []}
+              data={products.length > 0 ? PRICES : []}
             />
           </div>
           <div className="mt-6 space-y-8 lg:col-span-4 lg:mt-0">
@@ -135,7 +118,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
                 Todos los productos
               </h2>
               <SortSelector
-                options={sortOptions}
+                options={SORT_OPTIONS}
                 isDisabled={products.length === 0}
               />
             </div>
@@ -144,7 +127,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
               categories={categories}
               sizes={sizes}
               colors={colors}
-              pricesRanges={prices}
+              pricesRanges={PRICES}
               designs={designs}
             />
             {products.length === 0 && (
