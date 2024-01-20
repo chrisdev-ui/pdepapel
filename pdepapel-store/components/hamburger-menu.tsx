@@ -6,7 +6,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { SignOutButton } from "@clerk/nextjs";
+import { SignInButton, SignOutButton } from "@clerk/nextjs";
 import {
   Contact,
   Heart,
@@ -34,37 +34,37 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-72" align="end" sideOffset={48}>
         <DropdownMenuItem className="flex w-full px-6 py-3 text-xl hover:bg-green-leaf hover:text-white">
-          <Link className="flex items-center gap-6" href="/">
+          <Link className="flex w-full items-center gap-6" href="/">
             <Home className="h-6 w-6" />
             Inicio
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem className="flex w-full px-6 py-3 text-xl hover:bg-green-leaf hover:text-white">
-          <Link className="flex items-center gap-6" href="/shop">
+          <Link className="flex w-full items-center gap-6" href="/shop">
             <Store className="h-6 w-6" />
             Tienda
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem className="flex w-full px-6 py-3 text-xl hover:bg-green-leaf hover:text-white">
-          <Link className="flex items-center gap-6" href="/about">
+          <Link className="flex w-full items-center gap-6" href="/about">
             <Info className="h-6 w-6" />
             Nosotros
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem className="flex w-full px-6 py-3 text-xl hover:bg-green-leaf hover:text-white">
-          <Link className="flex items-center gap-6" href="/contact">
+          <Link className="flex w-full items-center gap-6" href="/contact">
             <Contact className="h-6 w-6" />
             Contacto
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem className="flex w-full px-6 py-3 text-xl hover:bg-green-leaf hover:text-white">
-          <Link className="flex items-center gap-6" href="/wishlist">
+          <Link className="flex w-full items-center gap-6" href="/wishlist">
             <Heart className="h-6 w-6" />
             Lista de deseos
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem className="flex w-full px-6 py-3 text-xl hover:bg-green-leaf hover:text-white xs:hidden">
-          <Link className="flex items-center gap-6" href="/cart">
+          <Link className="flex w-full items-center gap-6" href="/cart">
             <ShoppingCart className="h-6 w-6" />
             Carrito
           </Link>
@@ -73,15 +73,17 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
         {isUserLoggedIn && (
           <DropdownMenuItem className="flex w-full gap-6 px-6 py-3 text-xl hover:bg-green-leaf hover:text-white">
             <LogOut className="h-6 w-6" />
-            <SignOutButton />
+            <SignOutButton>
+              <button className="w-full text-left">Cerrar sesión</button>
+            </SignOutButton>
           </DropdownMenuItem>
         )}
         {!isUserLoggedIn && (
           <DropdownMenuItem className="flex w-full gap-6 px-6 py-3 text-xl hover:bg-green-leaf hover:text-white">
-            <Link className="flex items-center gap-6" href="/sign-in">
-              <LogIn className="h-6 w-6" />
-              Inicia sesión
-            </Link>
+            <LogIn className="h-6 w-6" />
+            <SignInButton>
+              <button className="w-full text-left">Inicia sesión</button>
+            </SignInButton>
           </DropdownMenuItem>
         )}
       </DropdownMenuContent>

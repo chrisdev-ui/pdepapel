@@ -3,13 +3,15 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata } from "next";
+import dynamic from "next/dynamic";
 
 import { Footer } from "@/components/footer";
-import { Navbar } from "@/components/navbar";
 import { caudex, comingSoon, martelSans, roboto } from "@/lib/fonts";
 import { ModalProvider } from "@/providers/modal-provider";
 import { Toaster } from "@/providers/toaster";
 import "./globals.css";
+
+const Navbar = dynamic(() => import("@/components/navbar"), { ssr: false });
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://papeleriapdepapel.com"),

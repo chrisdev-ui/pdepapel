@@ -16,7 +16,7 @@ import { useScrollPosition } from "@/hooks/use-scroll-position";
 import { cn } from "@/lib/utils";
 import { usePathname } from "next/navigation";
 
-export const Navbar: React.FC<{}> = () => {
+const Navbar: React.FC<{}> = () => {
   const { isSignedIn } = useAuth();
   const scrollPosition = useScrollPosition();
   const pathname = usePathname();
@@ -99,3 +99,5 @@ export const Navbar: React.FC<{}> = () => {
     </header>
   );
 };
+
+export default Navbar;
