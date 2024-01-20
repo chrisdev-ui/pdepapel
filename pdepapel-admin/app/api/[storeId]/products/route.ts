@@ -155,6 +155,7 @@ export async function GET(
       categoriesIds = categoriesForType.map((category) => category.id);
     }
     let products;
+    let totalItems: number = 0;
     const sort: Record<SortOption, Record<string, "asc" | "desc">> = {
       default: { createdAt: "desc" },
       dateAdded: { createdAt: "desc" },
@@ -191,6 +192,7 @@ export async function GET(
         },
         take: limit || undefined,
       });
+      totalItems = products.length;
     } else {
       products = await prismadb.product.findMany({
         where: {
@@ -229,8 +231,31 @@ export async function GET(
         skip: fromShop ? (page - 1) * itemsPerPage : undefined,
         take: limit || (fromShop ? itemsPerPage : undefined),
       });
+      totalItems = await prismadb.product.count({
+        where: {
+          storeId: params.storeId,
+          categoryId:
+            categoryId.length > 0
+              ? { in: categoryId }
+              : categoriesIds.length > 0
+                ? { in: categoriesIds }
+                : undefined,
+          colorId: colorId.length > 0 ? { in: colorId } : undefined,
+          sizeId: sizeId.length > 0 ? { in: sizeId } : undefined,
+          designId: designId.length > 0 ? { in: designId } : undefined,
+          isFeatured: isFeatured !== null ? isFeatured === "true" : undefined,
+          isArchived: false,
+          price: priceRange
+            ? priceRanges[priceRange as PriceRanges]
+            : undefined,
+          NOT: {
+            id: excludeProducts
+              ? { in: excludeProducts.split(",") }
+              : undefined,
+          },
+        },
+      });
     }
-    const totalItems = products.length;
     const totalPages = fromShop ? Math.ceil(totalItems / itemsPerPage) : 1;
     return NextResponse.json({
       products,
