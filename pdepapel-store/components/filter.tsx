@@ -2,12 +2,12 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import qs from "query-string";
+import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { Category, Color, Design, PriceRange, Size, Type } from "@/types";
-import { useMemo } from "react";
 
 interface FilterProps {
   valueKey: string;
@@ -32,21 +32,28 @@ export const Filter: React.FC<FilterProps> = ({
     return [...data].sort((a, b) => a.name.localeCompare(b.name));
   }, [data]);
 
+  const [selectedValues, setSelectedValues] = useState(new Set());
+
   const handleSelected = (id: string) => {
+    setSelectedValues((prevValues) => {
+      const newValues = new Set(prevValues);
+      if (newValues.has(id)) {
+        newValues.delete(id);
+      } else {
+        newValues.add(id);
+      }
+      return newValues;
+    });
+  };
+
+  useEffect(() => {
     const current = qs.parse(searchParams.toString(), { arrayFormat: "comma" });
 
     delete current.page;
 
-    let currentValues = current[valueKey];
-    if (!Array.isArray(currentValues)) {
-      currentValues = currentValues ? [currentValues] : [];
-    }
-
     const query = {
       ...current,
-      [valueKey]: currentValues.includes(id)
-        ? currentValues.filter((value) => value !== id)
-        : [...currentValues, id],
+      [valueKey]: Array.from(selectedValues).map(String),
     };
 
     const url = qs.stringifyUrl(
@@ -58,7 +65,8 @@ export const Filter: React.FC<FilterProps> = ({
     );
 
     router.push(url);
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedValues]);
 
   return (
     <div className="mb-8">
