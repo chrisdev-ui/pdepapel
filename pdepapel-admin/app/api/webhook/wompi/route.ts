@@ -1,11 +1,6 @@
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
-import {
-  OrderItem,
-  OrderStatus,
-  PaymentMethod,
-  ShippingStatus,
-} from "@prisma/client";
+import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
 import crypto from "crypto";
 import { NextResponse } from "next/server";
 
@@ -155,83 +150,83 @@ function isPaymentValid(order: any, transaction: any): boolean {
 async function updateOrderData(order: any, transaction: any) {
   try {
     const currentStatus = applyStatus(transaction.status);
-    await prismadb.$transaction([
-      prismadb.order.update({
-        where: {
-          id: order.id,
-        },
-        data: {
-          status: currentStatus,
-        },
-      }),
-      ...(currentStatus === OrderStatus.PAID
-        ? order.orderItems.map((orderItem: OrderItem) =>
-            prismadb.product.update({
-              where: {
-                id: orderItem.productId,
+    await prismadb.order.update({
+      where: {
+        id: order.id,
+      },
+      data: {
+        status: currentStatus,
+      },
+    });
+    if (currentStatus === OrderStatus.PAID) {
+      await Promise.all(
+        order.orderItems.map((orderItem: any) =>
+          prismadb.product.update({
+            where: {
+              id: orderItem.productId,
+            },
+            data: {
+              stock: {
+                decrement: orderItem.quantity,
               },
-              data: {
-                stock: {
-                  decrement: orderItem.quantity,
-                },
-              },
-            }),
-          )
-        : []),
-      prismadb.paymentDetails.upsert({
-        where: {
-          orderId: order.id,
-        },
-        update: {
-          transactionId: transaction.id,
-          details: `customer_email: ${
-            transaction?.customer_email ?? "undefined"
-          } | payment_method_type: ${
-            transaction?.payment_method_type ?? "undefined"
-          }`,
-        },
-        create: {
-          method: PaymentMethod.Wompi,
-          transactionId: transaction.id,
-          details: `customer_email: ${
-            transaction?.customer_email ?? "undefined"
-          } | payment_method_type: ${
-            transaction?.payment_method_type ?? "undefined"
-          }`,
-          store: {
-            connect: {
-              id: order.storeId,
             },
-          },
-          order: {
-            connect: {
-              id: order.id,
-            },
+          }),
+        ),
+      );
+    }
+    await prismadb.paymentDetails.upsert({
+      where: {
+        orderId: order.id,
+      },
+      update: {
+        transactionId: transaction.id,
+        details: `customer_email: ${
+          transaction?.customer_email ?? "undefined"
+        } | payment_method_type: ${
+          transaction?.payment_method_type ?? "undefined"
+        }`,
+      },
+      create: {
+        method: PaymentMethod.Wompi,
+        transactionId: transaction.id,
+        details: `customer_email: ${
+          transaction?.customer_email ?? "undefined"
+        } | payment_method_type: ${
+          transaction?.payment_method_type ?? "undefined"
+        }`,
+        store: {
+          connect: {
+            id: order.storeId,
           },
         },
-      }),
-      prismadb.shipping.upsert({
-        where: {
-          orderId: order.id,
-        },
-        update: {
-          status: ShippingStatus.Preparing,
-        },
-        create: {
-          status: ShippingStatus.Preparing,
-          store: {
-            connect: {
-              id: order.storeId,
-            },
-          },
-          order: {
-            connect: {
-              id: order.id,
-            },
+        order: {
+          connect: {
+            id: order.id,
           },
         },
-      }),
-    ]);
+      },
+    });
+    await prismadb.shipping.upsert({
+      where: {
+        orderId: order.id,
+      },
+      update: {
+        status: ShippingStatus.Preparing,
+      },
+      create: {
+        status: ShippingStatus.Preparing,
+        store: {
+          connect: {
+            id: order.storeId,
+          },
+        },
+        order: {
+          connect: {
+            id: order.id,
+          },
+        },
+      },
+    });
     return NextResponse.json(null, { status: 200 });
   } catch (error: any) {
     return NextResponse.json(

@@ -2,7 +2,7 @@ import { EmailTemplate } from "@/components/email-template";
 import prismadb from "@/lib/prismadb";
 import { resend } from "@/lib/resend";
 import { generateOrderNumber, getLastOrderTimestamp } from "@/lib/utils";
-import { clerkClient } from "@clerk/nextjs";
+import { auth, clerkClient } from "@clerk/nextjs";
 import { OrderStatus } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -34,6 +34,7 @@ export async function POST(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
+  const { userId: userLogged } = auth();
   if (!params.storeId)
     return NextResponse.json(
       { error: "Store ID is required" },
@@ -52,8 +53,8 @@ export async function POST(
       userId,
       guestId,
     } = body;
-    let authenticatedUserId = null;
-    if (userId) {
+    let authenticatedUserId = userLogged;
+    if (userId && !userLogged) {
       const user = await clerkClient.users.getUser(userId);
       if (user) {
         authenticatedUserId = user.id;
@@ -129,25 +130,30 @@ export async function POST(
         create: { ...shipping, storeId: params.storeId },
       };
     }
-    const [order] = await prismadb.$transaction([
-      prismadb.order.create({
-        data: orderData,
-      }),
-      ...(status === OrderStatus.PAID
-        ? orderItems.map((orderItem: { productId: string; quantity: number }) =>
-            prismadb.product.update({
-              where: {
-                id: orderItem.productId,
+    const order = await prismadb.order.create({
+      data: orderData,
+      include: {
+        orderItems: true,
+      },
+    });
+
+    if (status && status === OrderStatus.PAID) {
+      await Promise.all(
+        order.orderItems.map((orderItem) =>
+          prismadb.product.update({
+            where: {
+              id: orderItem.productId,
+            },
+            data: {
+              stock: {
+                decrement: orderItem.quantity,
               },
-              data: {
-                stock: {
-                  decrement: orderItem.quantity,
-                },
-              },
-            }),
-          )
-        : []),
-    ]);
+            },
+          }),
+        ),
+      );
+    }
+
     if (!storeOwner) {
       await resend.emails.send({
         from: "Orders <onboarding@resend.dev>",

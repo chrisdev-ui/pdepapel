@@ -150,83 +150,83 @@ async function updateOrderData({
 }) {
   try {
     const currentStatus = applyStatus(transaction.statePol);
-    await prismadb.$transaction([
-      prismadb.order.update({
-        where: {
-          id: order.id,
-        },
-        data: {
-          status: currentStatus,
-        },
-      }),
-      ...(currentStatus === OrderStatus.PAID
-        ? order.orderItems.map((orderItem: OrderItem) =>
-            prismadb.product.update({
-              where: {
-                id: orderItem.productId,
+    await prismadb.order.update({
+      where: {
+        id: order.id,
+      },
+      data: {
+        status: currentStatus,
+      },
+    });
+    if (currentStatus === OrderStatus.PAID) {
+      await Promise.all(
+        order.orderItems.map((orderItem) =>
+          prismadb.product.update({
+            where: {
+              id: orderItem.productId,
+            },
+            data: {
+              stock: {
+                decrement: orderItem.quantity,
               },
-              data: {
-                stock: {
-                  decrement: orderItem.quantity,
-                },
-              },
-            }),
-          )
-        : []),
-      prismadb.paymentDetails.upsert({
-        where: {
-          orderId: order.id,
-        },
-        update: {
-          transactionId: transaction.id,
-          details: `customer_email: ${
-            transaction?.customer_email ?? "undefined"
-          } | payment_method_type: ${
-            transaction?.payment_method_name ?? "undefined"
-          } | reference_pol: ${transaction?.reference_pol ?? "undefined"}`,
-        },
-        create: {
-          method: PaymentMethod.PayU,
-          transactionId: transaction.id,
-          details: `customer_email: ${
-            transaction?.customer_email ?? "undefined"
-          } | payment_method_type: ${
-            transaction?.payment_method_name ?? "undefined"
-          } | reference_pol: ${transaction?.reference_pol ?? "undefined"}`,
-          store: {
-            connect: {
-              id: order.storeId,
             },
-          },
-          order: {
-            connect: {
-              id: order.id,
-            },
+          }),
+        ),
+      );
+    }
+    await prismadb.paymentDetails.upsert({
+      where: {
+        orderId: order.id,
+      },
+      update: {
+        transactionId: transaction.id,
+        details: `customer_email: ${
+          transaction?.customer_email ?? "undefined"
+        } | payment_method_type: ${
+          transaction?.payment_method_name ?? "undefined"
+        } | reference_pol: ${transaction?.reference_pol ?? "undefined"}`,
+      },
+      create: {
+        method: PaymentMethod.PayU,
+        transactionId: transaction.id,
+        details: `customer_email: ${
+          transaction?.customer_email ?? "undefined"
+        } | payment_method_type: ${
+          transaction?.payment_method_name ?? "undefined"
+        } | reference_pol: ${transaction?.reference_pol ?? "undefined"}`,
+        store: {
+          connect: {
+            id: order.storeId,
           },
         },
-      }),
-      prismadb.shipping.upsert({
-        where: {
-          orderId: order.id,
-        },
-        update: {
-          status: ShippingStatus.Preparing,
-        },
-        create: {
-          status: ShippingStatus.Preparing,
-          store: {
-            connect: {
-              id: order.storeId,
-            },
-          },
-          order: {
-            connect: {
-              id: order.id,
-            },
+        order: {
+          connect: {
+            id: order.id,
           },
         },
-      }),
-    ]);
+      },
+    });
+    await prismadb.shipping.upsert({
+      where: {
+        orderId: order.id,
+      },
+      update: {
+        status: ShippingStatus.Preparing,
+      },
+      create: {
+        status: ShippingStatus.Preparing,
+        store: {
+          connect: {
+            id: order.storeId,
+          },
+        },
+        order: {
+          connect: {
+            id: order.id,
+          },
+        },
+      },
+    });
     return NextResponse.json(null, { status: 200 });
   } catch (error: any) {
     return NextResponse.json(

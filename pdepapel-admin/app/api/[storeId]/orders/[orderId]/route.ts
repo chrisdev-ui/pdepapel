@@ -101,71 +101,73 @@ export async function PATCH(
         { error: "Order items are required" },
         { status: 400 },
       );
-    // Delete related order items first
-    const [_, order] = await prismadb.$transaction([
-      prismadb.orderItem.deleteMany({
-        where: { orderId: params.orderId },
-      }),
-      prismadb.order.update({
-        where: { id: params.orderId },
-        data: {
-          fullName,
-          phone,
-          address,
-          userId,
-          guestId,
-          orderItems: {
-            create: orderItems.map(
-              (orderItem: { productId: string; quantity: number }) => ({
-                product: { connect: { id: orderItem.productId } },
-                quantity: orderItem.quantity ?? 1,
-              }),
-            ),
-          },
-          ...(status && { status }),
-          payment: payment
-            ? {
-                upsert: {
-                  create: {
-                    ...payment,
-                    store: { connect: { id: params.storeId } },
-                  },
-                  update: {
-                    ...payment,
-                  },
-                },
-              }
-            : undefined,
-          shipping: shipping
-            ? {
-                upsert: {
-                  create: {
-                    ...shipping,
-                    store: { connect: { id: params.storeId } },
-                  },
-                  update: {
-                    ...shipping,
-                  },
-                },
-              }
-            : undefined,
-        },
-      }),
-      ...(status === OrderStatus.PAID
-        ? orderItems.map((orderItem: { productId: string; quantity: number }) =>
-            prismadb.product.update({
-              where: {
-                id: orderItem.productId,
-              },
-              data: {
-                stock: {
-                  decrement: orderItem.quantity,
-                },
-              },
+    await prismadb.orderItem.deleteMany({
+      where: { orderId: params.orderId },
+    });
+    const order = await prismadb.order.update({
+      where: { id: params.orderId },
+      data: {
+        fullName,
+        phone,
+        address,
+        userId,
+        guestId,
+        orderItems: {
+          create: orderItems.map(
+            (orderItem: { productId: string; quantity: number }) => ({
+              product: { connect: { id: orderItem.productId } },
+              quantity: orderItem.quantity ?? 1,
             }),
-          )
-        : []),
-    ]);
+          ),
+        },
+        ...(status && { status }),
+        payment: payment
+          ? {
+              upsert: {
+                create: {
+                  ...payment,
+                  store: { connect: { id: params.storeId } },
+                },
+                update: {
+                  ...payment,
+                },
+              },
+            }
+          : undefined,
+        shipping: shipping
+          ? {
+              upsert: {
+                create: {
+                  ...shipping,
+                  store: { connect: { id: params.storeId } },
+                },
+                update: {
+                  ...shipping,
+                },
+              },
+            }
+          : undefined,
+      },
+      include: {
+        orderItems: true,
+      },
+    });
+    if (status === OrderStatus.PAID) {
+      await Promise.all(
+        order.orderItems.map((orderItem) =>
+          prismadb.product.update({
+            where: {
+              id: orderItem.productId,
+            },
+            data: {
+              stock: {
+                decrement: orderItem.quantity,
+              },
+            },
+          }),
+        ),
+      );
+    }
     return NextResponse.json(order);
   } catch (error) {
     console.log("[ORDER_PATCH]", error);
