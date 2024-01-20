@@ -80,7 +80,7 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
           <DropdownMenuItem className="flex w-full gap-6 px-6 py-3 text-xl hover:bg-green-leaf hover:text-white">
             <Link className="flex items-center gap-6" href="/sign-in">
               <LogIn className="h-6 w-6" />
-              Tienda
+              Inicia sesión
             </Link>
           </DropdownMenuItem>
         )}
