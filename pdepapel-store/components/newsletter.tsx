@@ -79,7 +79,7 @@ export const Newsletter: React.FC<{}> = () => {
                     <FormControl>
                       <Input
                         disabled={loading}
-                        className="w-full rounded rounded-br-none rounded-tr-none border border-solid border-transparent px-5 py-0 text-sm outline-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-transparent focus-visible:ring-offset-0 sm:w-80"
+                        className="h-10 w-full rounded rounded-br-none rounded-tr-none border border-solid border-transparent bg-white px-5 py-0 text-sm outline-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-transparent focus-visible:ring-offset-0 sm:w-80"
                         placeholder="Tu dirección de correo electrónico"
                         {...field}
                       />

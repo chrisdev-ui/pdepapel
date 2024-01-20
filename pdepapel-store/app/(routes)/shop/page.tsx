@@ -131,7 +131,10 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
               designs={designs}
             />
             {products.length === 0 && (
-              <NoResults message={`No hay productos ${KAWAII_FACE_SAD}`} />
+              <NoResults
+                className="h-96"
+                message={`No hay productos ${KAWAII_FACE_SAD}`}
+              />
             )}
             {!!products.length && (
               <div className="grid grid-cols-2 gap-1 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
@@ -140,9 +143,11 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
                 ))}
               </div>
             )}
-            <div className="flex w-full items-center">
-              <Paginator totalPages={totalPages} />
-            </div>
+            {totalPages && (
+              <div className="flex w-full items-center">
+                <Paginator totalPages={totalPages} />
+              </div>
+            )}
           </div>
         </div>
       </Container>
