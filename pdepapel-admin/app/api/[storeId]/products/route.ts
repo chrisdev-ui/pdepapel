@@ -230,12 +230,7 @@ export async function GET(
         take: limit || (fromShop ? itemsPerPage : undefined),
       });
     }
-    const totalItems = await prismadb.product.count({
-      where: {
-        storeId: params.storeId,
-        isArchived: false,
-      },
-    });
+    const totalItems = products.length;
     const totalPages = fromShop ? Math.ceil(totalItems / itemsPerPage) : 1;
     return NextResponse.json({
       products,
