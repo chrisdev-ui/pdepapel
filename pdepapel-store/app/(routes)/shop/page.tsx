@@ -143,7 +143,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
                 ))}
               </div>
             )}
-            {totalPages && (
+            {totalPages > 0 && (
               <div className="flex w-full items-center">
                 <Paginator totalPages={totalPages} />
               </div>
