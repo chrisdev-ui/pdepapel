@@ -1,9 +1,8 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 
-import { Loader } from "@/components/loader";
 import { Container } from "@/components/ui/container";
 import { NoResults } from "@/components/ui/no-results";
 import { ProductCard } from "@/components/ui/product-card";
@@ -40,19 +39,15 @@ export const FeaturedProducts: React.FC<FeaturedProductsProps> = ({
           {KAWAII_FACE_EXCITED}
         </p>
       </div>
-      <Suspense fallback={<Loader />}>
-        {featureProducts.length === 0 ? (
-          <NoResults
-            message={`No hay productos destacados ${KAWAII_FACE_SAD}`}
-          />
-        ) : (
-          <div className="grid grid-cols-2 gap-1 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
-            {featureProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
-        )}
-      </Suspense>
+      {featureProducts.length === 0 ? (
+        <NoResults message={`No hay productos destacados ${KAWAII_FACE_SAD}`} />
+      ) : (
+        <div className="grid grid-cols-2 gap-1 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
+          {featureProducts.map((product) => (
+            <ProductCard key={product.id} product={product} />
+          ))}
+        </div>
+      )}
     </Container>
   );
 };
