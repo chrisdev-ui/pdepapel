@@ -1,5 +1,8 @@
 "use client";
 
+import qs from "query-string";
+import { useEffect, useState } from "react";
+
 import {
   Select,
   SelectContent,
@@ -10,7 +13,6 @@ import {
 import { SortOptions } from "@/constants";
 import { XCircle } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import qs from "query-string";
 
 type Option = {
   value: SortOptions;
@@ -30,14 +32,16 @@ const SortSelector: React.FC<SortSelectorProps> = ({
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const selectedValue = searchParams.get("sortOption");
+  const [selectedSortOption, setSelectedSortOption] = useState(
+    searchParams.get("sortOption") || "",
+  );
 
-  const onSelectOption = (option: string | null) => {
+  useEffect(() => {
     const current = qs.parse(searchParams.toString());
 
     const query = {
       ...current,
-      sortOption: option,
+      sortOption: selectedSortOption || undefined,
     };
 
     const url = qs.stringifyUrl(
@@ -47,19 +51,29 @@ const SortSelector: React.FC<SortSelectorProps> = ({
       },
       { skipNull: true, skipEmptyString: true },
     );
+
     router.push(url);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, router, selectedSortOption]);
+
+  const onSelectOption = (option: string) => {
+    setSelectedSortOption(option);
+  };
+
+  const onClearSortOption = () => {
+    setSelectedSortOption("");
   };
 
   return (
     <div className="flex w-auto min-w-fit items-center gap-2 sm:w-44 md:w-52 lg:w-64">
-      {selectedValue && (
-        <button onClick={() => onSelectOption(null)}>
+      {selectedSortOption && (
+        <button onClick={onClearSortOption}>
           <XCircle className="h-6 w-6" />
         </button>
       )}
       <Select
-        value={selectedValue || ""}
-        defaultValue={selectedValue || ""}
+        value={selectedSortOption || ""}
+        defaultValue={selectedSortOption || ""}
         onValueChange={onSelectOption}
         disabled={isDisabled}
       >
