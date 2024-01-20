@@ -6,7 +6,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { SignInButton, SignOutButton } from "@clerk/nextjs";
+import { SignOutButton } from "@clerk/nextjs";
 import {
   Contact,
   Heart,
@@ -79,7 +79,7 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
         {!isUserLoggedIn && (
           <DropdownMenuItem className="flex w-full gap-6 px-6 py-3 text-xl hover:bg-green-leaf hover:text-white">
             <LogIn className="h-6 w-6" />
-            <SignInButton />
+            <Link href="/sign-in">Iniciar Sesión</Link>
           </DropdownMenuItem>
         )}
       </DropdownMenuContent>
