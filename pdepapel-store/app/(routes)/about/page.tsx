@@ -1,13 +1,17 @@
 import { BookHeartIcon, Facebook, Instagram } from "lucide-react";
 import { Metadata } from "next";
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
 
 import { getPosts } from "@/actions/get-posts";
 import { Icons } from "@/components/icons";
-import { Newsletter } from "@/components/newsletter";
 import { Container } from "@/components/ui/container";
 import { SocialMedia } from "./components/social-media";
+
+const Newsletter = dynamic(() => import("@/components/newsletter"), {
+  ssr: false,
+});
 
 export const revalidate = 0;
 

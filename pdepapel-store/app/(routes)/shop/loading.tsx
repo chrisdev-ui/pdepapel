@@ -1,11 +1,17 @@
-import { Features } from "@/components/features";
-import { Newsletter } from "@/components/newsletter";
+import dynamic from "next/dynamic";
+
 import { Container } from "@/components/ui/container";
 import {
   FilterSkeleton,
   ProductCardSkeleton,
   SortSelectorSkeleton,
 } from "./components/skeletons";
+
+const Newsletter = dynamic(() => import("@/components/newsletter"), {
+  ssr: false,
+});
+
+const Features = dynamic(() => import("@/components/features"), { ssr: false });
 
 export default function loading() {
   return (

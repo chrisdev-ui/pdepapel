@@ -12,7 +12,7 @@ interface HeroSliderProps {
   data: Billboard[];
 }
 
-export const HeroSlider: React.FC<HeroSliderProps> = ({ data }) => {
+const HeroSlider: React.FC<HeroSliderProps> = ({ data }) => {
   const [index, setIndex] = useState(0);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const router = useRouter();
@@ -101,3 +101,5 @@ export const HeroSlider: React.FC<HeroSliderProps> = ({ data }) => {
     </div>
   );
 };
+
+export default HeroSlider;

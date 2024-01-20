@@ -23,7 +23,7 @@ const formSchema = z.object({
 
 type NewsletterFormValues = z.infer<typeof formSchema>;
 
-export const Newsletter: React.FC<{}> = () => {
+const Newsletter: React.FC<{}> = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
 
@@ -101,3 +101,5 @@ export const Newsletter: React.FC<{}> = () => {
     </Container>
   );
 };
+
+export default Newsletter;

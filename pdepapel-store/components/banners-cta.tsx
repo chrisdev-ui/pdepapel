@@ -8,7 +8,7 @@ interface BannersCtaProps {
   banners: Banner[];
 }
 
-export const BannersCta: React.FC<BannersCtaProps> = ({ banners }) => {
+const BannersCta: React.FC<BannersCtaProps> = ({ banners }) => {
   if (!banners.length) return null;
 
   const numberOfBanners = banners.length;
@@ -57,3 +57,5 @@ export const BannersCta: React.FC<BannersCtaProps> = ({ banners }) => {
     </Container>
   );
 };
+
+export default BannersCta;

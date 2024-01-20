@@ -1,14 +1,18 @@
 "use client";
 
 import { Star } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 
-import { Newsletter } from "@/components/newsletter";
 import { Container } from "@/components/ui/container";
 import { DataTable } from "@/components/ui/data-table";
 import { KAWAII_FACE_HAPPY, KAWAII_FACE_SAD } from "@/constants";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { WishlistColumn, columns } from "./columns";
+
+const Newsletter = dynamic(() => import("@/components/newsletter"), {
+  ssr: false,
+});
 
 export function Wishlist() {
   const { items } = useWishlist();

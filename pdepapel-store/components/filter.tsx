@@ -16,7 +16,7 @@ interface FilterProps {
   data: (Type | Category | Size | Color | Design | PriceRange)[];
 }
 
-export const Filter: React.FC<FilterProps> = ({
+const Filter: React.FC<FilterProps> = ({
   valueKey,
   name,
   data,
@@ -98,3 +98,5 @@ export const Filter: React.FC<FilterProps> = ({
     </div>
   );
 };
+
+export default Filter;

@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import dynamic from "next/dynamic";
 
 import { getCategories } from "@/actions/get-categories";
 import { getColors } from "@/actions/get-colors";
@@ -6,16 +7,35 @@ import { getDesigns } from "@/actions/get-designs";
 import { getProducts } from "@/actions/get-products";
 import { getSizes } from "@/actions/get-sizes";
 import { getTypes } from "@/actions/get-types";
-import { Features } from "@/components/features";
-import { Filter } from "@/components/filter";
-import { MobileFilters } from "@/components/mobile-filters";
-import { Newsletter } from "@/components/newsletter";
 import { Container } from "@/components/ui/container";
 import { NoResults } from "@/components/ui/no-results";
-import { ProductCard } from "@/components/ui/product-card";
 import { KAWAII_FACE_SAD, PRICES, SORT_OPTIONS } from "@/constants";
-import { Paginator } from "./components/paginator";
-import { SortSelector } from "./components/sort-selector";
+
+const SortSelector = dynamic(() => import("./components/sort-selector"), {
+  ssr: false,
+});
+
+const Paginator = dynamic(() => import("./components/paginator"), {
+  ssr: false,
+});
+
+const ProductCard = dynamic(() => import("@/components/ui/product-card"), {
+  ssr: false,
+});
+
+const MobileFilters = dynamic(() => import("@/components/mobile-filters"), {
+  ssr: false,
+});
+
+const Filter = dynamic(() => import("@/components/filter"), {
+  ssr: false,
+});
+
+const Features = dynamic(() => import("@/components/features"), { ssr: false });
+
+const Newsletter = dynamic(() => import("@/components/newsletter"), {
+  ssr: false,
+});
 
 export const revalidate = 0;
 

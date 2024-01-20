@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
 
 import { Container } from "@/components/ui/container";
 import { NoResults } from "@/components/ui/no-results";
-import { ProductCard } from "@/components/ui/product-card";
+import ProductCard from "@/components/ui/product-card";
 import { KAWAII_FACE_EXCITED, KAWAII_FACE_SAD } from "@/constants";
 import { Product } from "@/types";
 
@@ -13,7 +13,7 @@ interface FeaturedProductsProps {
   featureProducts: Product[];
 }
 
-export const FeaturedProducts: React.FC<FeaturedProductsProps> = ({
+const FeaturedProducts: React.FC<FeaturedProductsProps> = ({
   featureProducts,
 }) => {
   const searchParams = useSearchParams();
@@ -51,3 +51,5 @@ export const FeaturedProducts: React.FC<FeaturedProductsProps> = ({
     </Container>
   );
 };
+
+export default FeaturedProducts;

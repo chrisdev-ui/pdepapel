@@ -22,7 +22,7 @@ interface SortSelectorProps {
   isDisabled?: boolean;
 }
 
-export const SortSelector: React.FC<SortSelectorProps> = ({
+const SortSelector: React.FC<SortSelectorProps> = ({
   options,
   isDisabled = false,
 }) => {
@@ -81,3 +81,5 @@ export const SortSelector: React.FC<SortSelectorProps> = ({
     </div>
   );
 };
+
+export default SortSelector;

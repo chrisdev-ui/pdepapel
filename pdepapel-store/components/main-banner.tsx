@@ -6,7 +6,7 @@ interface MainBannerProps {
   data: MainBannerType;
 }
 
-export const MainBanner: React.FC<MainBannerProps> = ({ data }) => {
+const MainBanner: React.FC<MainBannerProps> = ({ data }) => {
   return (
     data && (
       <div
@@ -32,3 +32,5 @@ export const MainBanner: React.FC<MainBannerProps> = ({ data }) => {
     )
   );
 };
+
+export default MainBanner;

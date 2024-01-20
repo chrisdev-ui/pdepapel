@@ -1,7 +1,12 @@
+import dynamic from "next/dynamic";
+
 import { NoResults } from "@/components/ui/no-results";
-import { ProductCard } from "@/components/ui/product-card";
 import { KAWAII_FACE_SAD } from "@/constants";
 import { Product } from "@/types";
+
+const ProductCard = dynamic(() => import("@/components/ui/product-card"), {
+  ssr: false,
+});
 
 interface ProductListProps {
   title: string;

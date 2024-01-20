@@ -2,7 +2,7 @@
 
 import { Plus } from "lucide-react";
 
-import { Filter } from "@/components/filter";
+import Filter from "@/components/filter";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Category, Color, Design, PriceRange, Size, Type } from "@/types";
@@ -16,7 +16,7 @@ interface MobileFiltersProps {
   pricesRanges: PriceRange[];
 }
 
-export const MobileFilters: React.FC<MobileFiltersProps> = ({
+const MobileFilters: React.FC<MobileFiltersProps> = ({
   types,
   categories,
   sizes,
@@ -75,3 +75,5 @@ export const MobileFilters: React.FC<MobileFiltersProps> = ({
     </Sheet>
   );
 };
+
+export default MobileFilters;

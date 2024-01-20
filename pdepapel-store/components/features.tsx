@@ -39,7 +39,7 @@ const features: Feature[] = [
   },
 ];
 
-export const Features: React.FC<{}> = () => {
+const Features: React.FC<{}> = () => {
   const [index, setIndex] = useState(0);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -113,3 +113,5 @@ export const Features: React.FC<{}> = () => {
     </Container>
   );
 };
+
+export default Features;

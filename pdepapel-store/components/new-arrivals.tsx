@@ -6,7 +6,7 @@ import { Suspense, useEffect, useRef } from "react";
 import { Loader } from "@/components/loader";
 import { Container } from "@/components/ui/container";
 import { NoResults } from "@/components/ui/no-results";
-import { ProductCard } from "@/components/ui/product-card";
+import ProductCard from "@/components/ui/product-card";
 import { KAWAII_FACE_HAPPY, KAWAII_FACE_SAD } from "@/constants";
 import { Product } from "@/types";
 
@@ -14,7 +14,7 @@ interface NewArrivalsProps {
   newProducts: Product[];
 }
 
-export const NewArrivals: React.FC<NewArrivalsProps> = ({ newProducts }) => {
+const NewArrivals: React.FC<NewArrivalsProps> = ({ newProducts }) => {
   const searchParams = useSearchParams();
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -52,3 +52,5 @@ export const NewArrivals: React.FC<NewArrivalsProps> = ({ newProducts }) => {
     </Container>
   );
 };
+
+export default NewArrivals;

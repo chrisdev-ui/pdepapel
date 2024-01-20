@@ -18,7 +18,7 @@ interface PaginatorProps {
   totalPages: number;
 }
 
-export const Paginator: React.FC<PaginatorProps> = ({ totalPages }) => {
+const Paginator: React.FC<PaginatorProps> = ({ totalPages }) => {
   const [isMounted, setIsMounted] = useState(false);
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -174,3 +174,5 @@ export const Paginator: React.FC<PaginatorProps> = ({ totalPages }) => {
     </Pagination>
   );
 };
+
+export default Paginator;

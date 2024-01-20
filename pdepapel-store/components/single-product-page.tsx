@@ -1,15 +1,19 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useRef } from "react";
 
 import { Gallery } from "@/components/gallery";
-import { Newsletter } from "@/components/newsletter";
 import { ProductInfo } from "@/components/product-info";
 import { ProductList } from "@/components/product-list";
 import { Reviews } from "@/components/reviews/reviews";
 import { Container } from "@/components/ui/container";
 import { Separator } from "@/components/ui/separator";
 import { Product } from "@/types";
+
+const Newsletter = dynamic(() => import("@/components/newsletter"), {
+  ssr: false,
+});
 
 interface SingleProductPageProps {
   product: Product;

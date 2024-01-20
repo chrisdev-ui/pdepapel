@@ -20,7 +20,7 @@ interface ProductCardProps {
   isNew?: boolean;
 }
 
-export const ProductCard: React.FC<ProductCardProps> = ({
+const ProductCard: React.FC<ProductCardProps> = ({
   product,
   isNew = false,
 }) => {
@@ -133,3 +133,5 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     </div>
   );
 };
+
+export default ProductCard;

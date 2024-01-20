@@ -6,46 +6,27 @@ import { getBillboards } from "@/actions/get-billboards";
 import { getMainBanner } from "@/actions/get-main-banner";
 import { getProducts } from "@/actions/get-products";
 
-const HeroSlider = dynamic(
-  () => import("@/components/hero-slider").then((mod) => mod.HeroSlider),
-  { ssr: false },
-);
-const Features = dynamic(
-  () => import("@/components/features").then((mod) => mod.Features),
-  { ssr: false },
-);
+const HeroSlider = dynamic(() => import("@/components/hero-slider"), {
+  ssr: false,
+});
+const Features = dynamic(() => import("@/components/features"), { ssr: false });
 const FeaturedProducts = dynamic(
-  () =>
-    import("@/components/featured-products").then(
-      (mod) => mod.FeaturedProducts,
-    ),
+  () => import("@/components/featured-products"),
   { ssr: false },
 );
-const MainBanner = dynamic(
-  () => import("@/components/main-banner").then((mod) => mod.MainBanner),
-  {
-    ssr: false,
-  },
-);
-const NewArrivals = dynamic(
-  () => import("@/components/new-arrivals").then((mod) => mod.NewArrivals),
-  {
-    ssr: false,
-  },
-);
-const BannersCta = dynamic(
-  () => import("@/components/banners-cta").then((mod) => mod.BannersCta),
-  {
-    ssr: false,
-  },
-);
+const MainBanner = dynamic(() => import("@/components/main-banner"), {
+  ssr: false,
+});
+const NewArrivals = dynamic(() => import("@/components/new-arrivals"), {
+  ssr: false,
+});
+const BannersCta = dynamic(() => import("@/components/banners-cta"), {
+  ssr: false,
+});
 
-const Newsletter = dynamic(
-  () => import("@/components/newsletter").then((mod) => mod.Newsletter),
-  {
-    ssr: false,
-  },
-);
+const Newsletter = dynamic(() => import("@/components/newsletter"), {
+  ssr: false,
+});
 
 export const revalidate = 0;
 
