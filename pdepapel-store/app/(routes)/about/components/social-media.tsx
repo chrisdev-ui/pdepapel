@@ -16,7 +16,7 @@ interface SocialMediaProps {
   data: Post[];
 }
 
-export const SocialMedia: React.FC<SocialMediaProps> = ({ data }) => {
+const SocialMedia: React.FC<SocialMediaProps> = ({ data }) => {
   const [posts, setPosts] = useState<Record<Social, Post[]> | null>(null);
 
   useEffect(() => {
@@ -99,3 +99,5 @@ export const SocialMedia: React.FC<SocialMediaProps> = ({ data }) => {
     </div>
   );
 };
+
+export default SocialMedia;

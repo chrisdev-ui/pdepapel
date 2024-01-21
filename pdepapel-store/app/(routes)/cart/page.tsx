@@ -1,6 +1,7 @@
 import { Metadata } from "next";
+import dynamic from "next/dynamic";
 
-import { Cart } from "./components/cart";
+const Cart = dynamic(() => import("./components/cart"), { ssr: false });
 
 export const metadata: Metadata = {
   title: "Tu carrito de compras",

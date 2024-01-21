@@ -12,7 +12,7 @@ import Link from "next/link";
 import { CartItem } from "./cart-item";
 import { Summary } from "./summary";
 
-export function Cart() {
+const Cart: React.FC<{}> = () => {
   const cart = useCart();
   const [isMounted, setIsMounted] = useState(false);
 
@@ -62,4 +62,6 @@ export function Cart() {
       </Container>
     </>
   );
-}
+};
+
+export default Cart;

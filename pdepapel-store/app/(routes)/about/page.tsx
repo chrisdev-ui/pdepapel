@@ -7,7 +7,10 @@ import Link from "next/link";
 import { getPosts } from "@/actions/get-posts";
 import { Icons } from "@/components/icons";
 import { Container } from "@/components/ui/container";
-import { SocialMedia } from "./components/social-media";
+
+const SocialMedia = dynamic(() => import("./components/social-media"), {
+  ssr: false,
+});
 
 const Newsletter = dynamic(() => import("@/components/newsletter"), {
   ssr: false,
