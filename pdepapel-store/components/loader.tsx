@@ -13,8 +13,10 @@ export const Loader: React.FC<LoaderProps> = ({ label }) => {
           src="/images/no-text-transparent-bg.webp"
           width={200}
           height={200}
-          alt="Loader logo"
+          alt="Logo Papelería P de Papel sin texto"
           className="h-28 w-28 rounded-full"
+          priority
+          sizes="(max-width: 640px) 100vw, 640px"
         />
         {label && (
           <div className="absolute -bottom-8 text-blue-yankees">

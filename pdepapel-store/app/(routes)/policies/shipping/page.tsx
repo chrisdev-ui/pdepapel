@@ -29,10 +29,9 @@ export default function ShippingPolicyPage() {
             En{" "}
             <Image
               src="/images/text-beside-transparent-bg.webp"
-              alt="logo"
+              alt="Logo Papelería P de Papel con nombre en un costado"
               width={80}
               height={20}
-              quality={100}
               title="P de Papel"
               className="inline-flex object-contain"
             />

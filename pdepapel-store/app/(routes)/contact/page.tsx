@@ -42,10 +42,9 @@ export default function ContactPage() {
                 En{" "}
                 <Image
                   src="/images/text-beside-transparent-bg.webp"
-                  alt="logo"
+                  alt="Logo Papelería P de Papel"
                   width={80}
                   height={20}
-                  quality={100}
                   title="P de Papel"
                   className="inline-flex object-contain"
                 />

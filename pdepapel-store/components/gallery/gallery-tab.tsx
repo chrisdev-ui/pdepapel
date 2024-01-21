@@ -18,10 +18,9 @@ export const GalleryTab: React.FC<GalleryTabProps> = ({ image }) => {
         <span className="absolute inset-0 aspect-square h-full w-full overflow-hidden rounded-md">
           <Image
             src={image.url}
-            alt="Tab Image"
+            alt="Imagen del producto"
             fill
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-            quality={100}
             priority
             className="object-cover object-center"
           />

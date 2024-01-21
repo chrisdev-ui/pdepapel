@@ -103,9 +103,10 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
                   >
                     <Image
                       src={item.images[0].url}
-                      alt={item.id}
+                      alt={item.name ?? "Imagen del producto"}
                       fill
                       sizes="(max-width: 640px) 80px, 120px"
+                      priority
                       className="rounded-md"
                     />
                     <span className="absolute right-0 top-0 flex h-4 w-4 items-center justify-center rounded-full bg-blue-yankees font-serif text-xs text-white">

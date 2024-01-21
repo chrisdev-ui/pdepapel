@@ -34,10 +34,9 @@ export const Forbidden: React.FC<ForbiddenProps> = ({
           <Image
             src="/images/text-below-transparent-bg.webp"
             fill
-            alt="text-below"
+            alt="Logo Papelería P de Papel con nombre debajo"
             sizes="(max-width: 640px) 100vw, 640px"
             priority
-            quality={100}
             className="object-cover"
           />
         </div>

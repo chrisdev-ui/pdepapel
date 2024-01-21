@@ -28,9 +28,9 @@ export const Gallery: React.FC<GalleryProps> = ({ images = [] }) => {
                 <Image
                   fill
                   src={image.url}
-                  alt="Image"
+                  alt="Imagen principal del producto"
                   sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                  quality={100}
+                  priority
                   className="object-cover object-center"
                 />
               </div>

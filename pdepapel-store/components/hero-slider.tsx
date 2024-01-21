@@ -66,10 +66,9 @@ const HeroSlider: React.FC<HeroSliderProps> = ({ data }) => {
             >
               <Image
                 src={imageUrl}
-                alt="Hero Image"
+                alt={title ?? "Imagen de la promoción"}
                 fill
                 className="h-full w-full object-cover"
-                quality={100}
                 sizes="(max-width: 640px) 640px, 1280px"
                 priority
               />

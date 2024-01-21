@@ -422,7 +422,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                     >
                       <Image
                         src={item.images[0].url}
-                        alt={item.id}
+                        alt={item.name ?? "Imagen del producto"}
                         fill
                         sizes="(max-width: 640px) 80px, 120px"
                         className="rounded-md"

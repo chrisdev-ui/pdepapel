@@ -41,7 +41,7 @@ export default async function AboutPage() {
             <div className="relative h-[15vh] w-full bg-[#ffe5ee] transition-all duration-700 ease-in-out hover:scale-105 hover:cursor-zoom-in sm:h-[40vh] xl:h-[30vh]">
               <Image
                 src="/images/text-beside-lightpink-bg.webp"
-                alt="logo"
+                alt="Logo Papelería P de Papel con fondo rosado"
                 fill
                 sizes="(max-width: 640px) 100vw, 640px"
                 className="rounded-lg object-contain shadow-lg"

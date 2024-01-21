@@ -16,7 +16,7 @@ export const Footer: React.FC<{}> = () => {
             <div className="relative flex h-32 w-full items-center justify-center sm:w-64">
               <Image
                 src="/images/text-beside-transparent-bg.webp"
-                alt="Footer Image"
+                alt="Logo Papelería P de Papel con nombre al lado"
                 sizes="(max-width: 640px) 100vw, 640px"
                 className="object-cover"
                 priority

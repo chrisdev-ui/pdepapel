@@ -27,9 +27,10 @@ export const CartItem: React.FC<CartItemProps> = ({ item }) => {
         <Image
           fill
           src={item?.images[0]?.url}
-          alt="Product Image"
+          alt={item?.name ?? "Imagen del producto"}
           sizes="(max-width: 640px) 100vw, 640px"
           className="object-cover object-center"
+          priority
         />
       </div>
       <div className="relative ml-4 flex flex-1 flex-col justify-between sm:ml-6">

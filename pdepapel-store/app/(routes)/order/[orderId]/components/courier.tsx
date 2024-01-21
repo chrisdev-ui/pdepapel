@@ -21,11 +21,10 @@ export const Courier: React.FC<CourierProps> = ({ name }) => {
           <div className="relative h-10 w-10">
             <Image
               src={getCourierIcon(name)}
-              alt={name}
+              alt={name ?? "Logo de compañía de envíos"}
               fill
               className="rounded-md object-cover transition-all duration-300 ease-in-out hover:scale-105"
               sizes="(max-width: 640px) 100vw, 640px"
-              quality={100}
             />
           </div>
         </TooltipTrigger>

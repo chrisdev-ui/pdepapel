@@ -252,10 +252,9 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
             <div className="relative h-20 w-20">
               <Image
                 src="/images/no-text-lightpink-bg.webp"
-                alt="Logo P de Papel No Text"
+                alt="Logo Papelería P de Papel con fondo rosado"
                 fill
                 sizes="(max-width: 640px) 100vw, 640px"
-                quality={100}
                 className="rounded-full object-cover"
               />
             </div>
@@ -443,10 +442,10 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                         <div className="relative h-20 w-20">
                           <Image
                             src={product.images?.[0].url}
-                            alt={product.images?.[0].id}
+                            alt={product.name ?? "Imagen del producto"}
                             fill
                             sizes="(max-width: 640px) 100vw, 640px"
-                            quality={100}
+                            priority
                             className="rounded-md object-cover"
                           />
                         </div>

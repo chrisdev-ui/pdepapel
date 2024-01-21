@@ -48,7 +48,7 @@ const Navbar: React.FC<{}> = () => {
           <Link href="/" className="relative h-24 w-48">
             <Image
               src="/images/text-beside-transparent-bg.webp"
-              alt="Navbar Logo"
+              alt="Logo Papelería P de Papel con nombre al lado"
               fill
               sizes="(max-width: 640px) 100vw, 640px"
               priority
