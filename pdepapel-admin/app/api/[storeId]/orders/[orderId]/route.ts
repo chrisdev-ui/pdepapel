@@ -152,7 +152,7 @@ export async function PATCH(
         orderItems: true,
       },
     });
-    if (status === OrderStatus.PAID) {
+    if (order.status === OrderStatus.PAID) {
       await prismadb.$transaction(async (tx) => {
         for (const orderItem of order.orderItems) {
           const product = await tx.product.findUnique({

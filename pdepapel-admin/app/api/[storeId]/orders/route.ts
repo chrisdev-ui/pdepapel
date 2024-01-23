@@ -137,7 +137,7 @@ export async function POST(
       },
     });
 
-    if (status && status === OrderStatus.PAID) {
+    if (order.status && status === OrderStatus.PAID) {
       await prismadb.$transaction(async (tx) => {
         for (const orderItem of order.orderItems) {
           const product = await tx.product.findUnique({
