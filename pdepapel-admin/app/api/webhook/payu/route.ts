@@ -159,20 +159,32 @@ async function updateOrderData({
       },
     });
     if (currentStatus === OrderStatus.PAID) {
-      await Promise.all(
-        order.orderItems.map((orderItem) =>
-          prismadb.product.update({
-            where: {
-              id: orderItem.productId,
-            },
-            data: {
-              stock: {
-                decrement: orderItem.quantity,
+      await prismadb.$transaction(async (tx) => {
+        for (const orderItem of order.orderItems) {
+          const product = await tx.product.findUnique({
+            where: { id: orderItem.productId },
+          });
+
+          if (!product) {
+            throw new Error(`Product ${orderItem.productId} not found.`);
+          }
+
+          if (product.stock >= orderItem.quantity) {
+            await tx.product.update({
+              where: { id: orderItem.productId },
+              data: {
+                stock: {
+                  decrement: orderItem.quantity,
+                },
               },
-            },
-          }),
-        ),
-      );
+            });
+          } else {
+            throw new Error(
+              `Product ${product.name} is out of stock. Please contact the store owner.`,
+            );
+          }
+        }
+      });
     }
     await prismadb.paymentDetails.upsert({
       where: {
