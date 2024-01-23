@@ -101,10 +101,16 @@ export async function PATCH(
         { error: "Order items are required" },
         { status: 400 },
       );
-    await prismadb.orderItem.deleteMany({
-      where: { orderId: params.orderId },
+    const order = await prismadb.order.findUnique({
+      where: { id: params.orderId },
+      include: {
+        orderItems: true,
+      },
     });
-    const order = await prismadb.order.update({
+    if (!order)
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+
+    await prismadb.order.update({
       where: { id: params.orderId },
       data: {
         fullName,
@@ -112,14 +118,6 @@ export async function PATCH(
         address,
         userId,
         guestId,
-        orderItems: {
-          create: orderItems.map(
-            (orderItem: { productId: string; quantity: number }) => ({
-              product: { connect: { id: orderItem.productId } },
-              quantity: orderItem.quantity ?? 1,
-            }),
-          ),
-        },
         ...(status && { status }),
         payment: payment
           ? {
@@ -148,13 +146,34 @@ export async function PATCH(
             }
           : undefined,
       },
-      include: {
-        orderItems: true,
-      },
     });
-    if (order.status === OrderStatus.PAID) {
+    await prismadb.$transaction(async (tx) => {
+      for (const orderItem of orderItems) {
+        const existingOrderItem = order.orderItems.find(
+          (item) => item.productId === orderItem.productId,
+        );
+
+        if (existingOrderItem) {
+          await tx.orderItem.update({
+            where: { id: existingOrderItem.id },
+            data: {
+              quantity: orderItem.quantity ?? 1,
+            },
+          });
+        } else {
+          await tx.orderItem.create({
+            data: {
+              order: { connect: { id: params.orderId } },
+              product: { connect: { id: orderItem.productId } },
+              quantity: orderItem.quantity ?? 1,
+            },
+          });
+        }
+      }
+    });
+    if (status === OrderStatus.PAID) {
       await prismadb.$transaction(async (tx) => {
-        for (const orderItem of order.orderItems) {
+        for (const orderItem of orderItems) {
           const product = await tx.product.findUnique({
             where: { id: orderItem.productId },
           });
@@ -181,7 +200,20 @@ export async function PATCH(
       });
     }
 
-    return NextResponse.json(order);
+    const updatedOrder = await prismadb.order.findUnique({
+      where: { id: params.orderId },
+      include: {
+        orderItems: {
+          include: {
+            product: true,
+          },
+        },
+        payment: true,
+        shipping: true,
+      },
+    });
+
+    return NextResponse.json(updatedOrder);
   } catch (error) {
     console.log("[ORDER_PATCH]", error);
     return NextResponse.json({ error: "Internal Error" }, { status: 500 });
