@@ -1,19 +1,6 @@
+import { SortOption } from "@/lib/types";
+
 export const DEFAULT_COUNTRY = "CO";
-
-export type SortOption =
-  | "default"
-  | "dateAdded"
-  | "priceLowToHigh"
-  | "priceHighToLow"
-  | "name"
-  | "featuredFirst";
-
-export type PriceRanges =
-  | "[0,5000]"
-  | "[5000,10000]"
-  | "[10000,20000]"
-  | "[20000,50000]"
-  | "[50000,99999999]";
 
 export const SORT_OPTIONS: Record<
   SortOption,
@@ -33,3 +20,5 @@ export const PRICE_RANGES = {
   "[20000,50000]": { gte: 20000, lte: 50000 },
   "[50000,99999999]": { gte: 50000 },
 };
+
+export const MINIMUM_TIME_BETWEEN_ORDERS_IN_MINUTES = 3;

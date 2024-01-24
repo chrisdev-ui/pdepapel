@@ -1,122 +1,85 @@
-import cloudinaryInstance from "@/lib/cloudinary";
-import prismadb from "@/lib/prismadb";
-import { getPublicIdFromCloudinaryUrl } from "@/lib/utils";
-import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
-export async function GET(
-  _req: Request,
-  { params }: { params: { bannerId: string } },
-) {
+import { getUserId, isUserAuthorized } from "@/helpers/auth";
+import {
+  deleteBannerById,
+  getBannerById,
+  updateBannerById,
+} from "@/helpers/banners-actions";
+import { deleteResources, getPublicId } from "@/helpers/cloudinary";
+import { handleErrorResponse, handleSuccessResponse } from "@/helpers/response";
+import { validateMandatoryFields } from "@/helpers/validation";
+import { BannersBody } from "@/lib/types";
+
+interface Params {
+  storeId: string;
+  bannerId: string;
+}
+
+export async function GET(_req: Request, { params }: { params: Params }) {
   if (!params.bannerId)
-    return NextResponse.json(
-      { error: "Banner ID is required" },
-      { status: 400 },
-    );
+    return handleErrorResponse("Banner ID is required", 400);
+  if (!params.storeId) return handleErrorResponse("Store ID is required", 400);
   try {
-    const banner = await prismadb.banner.findUnique({
-      where: { id: params.bannerId },
-    });
+    const banner = await getBannerById(params.bannerId);
+    if (!banner) return handleErrorResponse("Banner not found", 404);
     return NextResponse.json(banner);
   } catch (error) {
     console.log("[BANNER_GET]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse("[BANNER_GET_ERROR]", 500);
   }
 }
 
-export async function PATCH(
-  req: Request,
-  { params }: { params: { storeId: string; bannerId: string } },
-) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+export async function PATCH(req: Request, { params }: { params: Params }) {
+  const userId = getUserId();
+  if (!userId) return handleErrorResponse("Unauthenticated", 401);
+  if (!params.storeId) return handleErrorResponse("Store ID is required", 400);
   if (!params.bannerId)
-    return NextResponse.json(
-      { error: "Banner ID is required" },
-      { status: 400 },
-    );
+    return handleErrorResponse("Banner ID is required", 400);
   try {
-    const body = await req.json();
-    const { callToAction, imageUrl } = body;
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    if (!imageUrl)
-      return NextResponse.json(
-        { error: "Image URL is required" },
-        { status: 400 },
+    const body: BannersBody = await req.json();
+    const missingFields = validateMandatoryFields(body, [
+      "callToAction",
+      "imageUrl",
+    ]);
+    if (missingFields)
+      return handleErrorResponse(
+        `Missing mandatory fields: ${missingFields.join(", ")}`,
+        400,
       );
-    if (!callToAction) {
-      return NextResponse.json(
-        { error: "Call to action is required" },
-        { status: 400 },
-      );
+    const isAuthorized = isUserAuthorized(userId, params.storeId);
+    if (!isAuthorized) return handleErrorResponse("Unauthorized", 403);
+    const bannerToUpdate = await getBannerById(params.bannerId);
+    if (!bannerToUpdate) return handleErrorResponse("Banner not found", 404);
+    const publicId = getPublicId(bannerToUpdate.imageUrl);
+    if (publicId && body.imageUrl !== bannerToUpdate.imageUrl) {
+      await deleteResources([publicId]);
     }
-    const bannerToUpdate = await prismadb.banner.findUnique({
-      where: { id: params.bannerId },
-    });
-    if (!bannerToUpdate)
-      return NextResponse.json({ error: "Banner not found" }, { status: 404 });
-    const publicId = getPublicIdFromCloudinaryUrl(bannerToUpdate.imageUrl);
-    if (publicId && imageUrl !== bannerToUpdate.imageUrl) {
-      await cloudinaryInstance.v2.api.delete_resources([publicId], {
-        type: "upload",
-        resource_type: "image",
-      });
-    }
-    const updatedBanner = await prismadb.banner.updateMany({
-      where: { id: params.bannerId },
-      data: {
-        callToAction,
-        imageUrl,
-      },
-    });
+    const updatedBanner = await updateBannerById(params.bannerId, body);
     return NextResponse.json(updatedBanner);
   } catch (error) {
     console.log("[BANNER_PATCH]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse("[BANNER_PATCH_ERROR]", 500);
   }
 }
 
-export async function DELETE(
-  _req: Request,
-  { params }: { params: { storeId: string; bannerId: string } },
-) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-
+export async function DELETE(_req: Request, { params }: { params: Params }) {
+  const userId = getUserId();
+  if (!userId) return handleErrorResponse("Unauthenticated", 401);
   if (!params.bannerId)
-    return NextResponse.json(
-      { error: "Banner ID is required" },
-      { status: 400 },
-    );
+    return handleErrorResponse("Banner ID is required", 400);
+  if (!params.storeId) return handleErrorResponse("Store ID is required", 400);
   try {
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    const bannerToDelete = await prismadb.banner.findUnique({
-      where: { id: params.bannerId },
-    });
-    if (!bannerToDelete)
-      return NextResponse.json({ error: "Banner not found" }, { status: 404 });
-    const publicId = getPublicIdFromCloudinaryUrl(bannerToDelete.imageUrl);
-    if (publicId)
-      await cloudinaryInstance.v2.api.delete_resources([publicId], {
-        type: "upload",
-        resource_type: "image",
-      });
-    const deletedBanner = await prismadb.banner.deleteMany({
-      where: { id: params.bannerId },
-    });
-    return NextResponse.json(deletedBanner);
+    const isAuthorized = await isUserAuthorized(userId, params.storeId);
+    if (!isAuthorized) return handleErrorResponse("Unauthorized", 403);
+    const bannerToDelete = await getBannerById(params.bannerId);
+    if (!bannerToDelete) return handleErrorResponse("Banner not found", 404);
+    const publicId = getPublicId(bannerToDelete.imageUrl);
+    if (publicId) await deleteResources([publicId]);
+    await deleteBannerById(params.bannerId);
+    return handleSuccessResponse("Banner was successfully deleted!");
   } catch (error) {
     console.log("[BANNER_DELETE]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse("[BANNER_DELETE_ERROR]", 500);
   }
 }

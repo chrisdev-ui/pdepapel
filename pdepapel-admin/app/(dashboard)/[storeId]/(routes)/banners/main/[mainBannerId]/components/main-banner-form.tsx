@@ -169,6 +169,7 @@ export const MainBannerForm: React.FC<MainBannerFormProps> = ({
                     disabled={loading}
                     onChange={(url) => field.onChange(url)}
                     onRemove={() => field.onChange("")}
+                    tags={["main-banner"]}
                   />
                 </FormControl>
                 <FormMessage />

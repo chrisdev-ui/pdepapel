@@ -205,6 +205,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                         ...field.value.filter((current) => current.url !== url),
                       ])
                     }
+                    tags={["product"]}
                   />
                 </FormControl>
                 <FormMessage />

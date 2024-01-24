@@ -1,11 +1,8 @@
 import prismadb from "@/lib/prismadb";
+import { CheckoutOrder } from "@/lib/types";
 import { OrderStatus, PaymentMethod } from "@prisma/client";
 import { NextResponse } from "next/server";
-import {
-  CheckoutOrder,
-  generatePayUPayment,
-  generateWompiPayment,
-} from "../route";
+import { generatePayUPayment, generateWompiPayment } from "../route";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,14 +10,16 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
+interface Params {
+  storeId: string;
+  orderId: string;
+}
+
 export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
 }
 
-export async function POST(
-  req: Request,
-  { params }: { params: { storeId: string; orderId: string } },
-) {
+export async function POST(_req: Request, { params }: { params: Params }) {
   if (!params.storeId)
     return NextResponse.json(
       { error: "Store ID is required" },
@@ -40,8 +39,14 @@ export async function POST(
         orderItems: {
           include: {
             product: true,
+            variant: {
+              include: {
+                discount: true,
+              },
+            },
           },
         },
+        coupon: true,
         payment: true,
       },
     });
@@ -59,7 +64,7 @@ export async function POST(
       );
 
     if (order.payment?.method === PaymentMethod.PayU) {
-      const payUData = generatePayUPayment(order);
+      const payUData = generatePayUPayment(order as CheckoutOrder);
 
       return NextResponse.json(
         {

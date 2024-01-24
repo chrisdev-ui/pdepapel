@@ -2,12 +2,14 @@ import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
 import { formatPayUValue, generatePayUSignature } from "@/lib/utils";
 import {
+  Discount,
   Order,
   OrderItem,
   OrderStatus,
   PaymentDetails,
   PaymentMethod,
   Product,
+  ProductVariant,
   ShippingStatus,
 } from "@prisma/client";
 import { NextResponse } from "next/server";
@@ -64,6 +66,11 @@ async function processWebhookPayment(formData: FormData) {
           orderItems: {
             include: {
               product: true,
+              variant: {
+                include: {
+                  discount: true,
+                },
+              },
             },
           },
           payment: true,
@@ -137,6 +144,9 @@ async function updateOrderData({
   order: Order & {
     orderItems: (OrderItem & {
       product: Product;
+      variant: ProductVariant & {
+        discount: Discount | null;
+      };
     })[];
     payment: PaymentDetails | null;
   };

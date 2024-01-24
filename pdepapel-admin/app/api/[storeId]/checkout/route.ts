@@ -1,12 +1,5 @@
 import { clerkClient } from "@clerk/nextjs";
-import {
-  Order,
-  OrderItem,
-  OrderStatus,
-  PaymentDetails,
-  PaymentMethod,
-  Product,
-} from "@prisma/client";
+import { DiscountType, OrderStatus, PaymentMethod } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { EmailTemplate } from "@/components/email-template";
@@ -14,11 +7,12 @@ import { DEFAULT_COUNTRY } from "@/constants";
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
 import { resend } from "@/lib/resend";
+import { CheckoutOrder } from "@/lib/types";
 import {
+  calculateTotalAmount,
   generateIntegritySignature,
   generateOrderNumber,
   generatePayUSignature,
-  getLastOrderTimestamp,
   parseAndSplitAddress,
 } from "@/lib/utils";
 
@@ -28,12 +22,26 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
-export interface CheckoutOrder extends Order {
-  orderItems: CheckoutOrderItem[];
-  payment?: PaymentDetails | null;
+export interface CheckoutBody {
+  fullName: string;
+  phone: string;
+  address: string;
+  orderItems: {
+    productId: string;
+    variantId: string;
+    quantity?: number;
+  }[];
+  payment?: {
+    method: PaymentMethod;
+  };
+  userId: string;
+  guestId: string;
+  couponId?: string;
 }
 
-type CheckoutOrderItem = OrderItem & { product: Product };
+interface Params {
+  storeId: string;
+}
 
 interface PayUResponse {
   referenceCode: string;
@@ -54,18 +62,24 @@ export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
 }
 
-export async function POST(
-  req: Request,
-  { params }: { params: { storeId: string } },
-) {
+export async function POST(req: Request, { params }: { params: Params }) {
   if (!params.storeId)
     return NextResponse.json(
       { error: "Store ID is required" },
       { status: 400, headers: corsHeaders },
     );
   try {
-    const { fullName, phone, address, orderItems, userId, guestId, payment } =
-      await req.json();
+    const body: CheckoutBody = await req.json();
+    const {
+      fullName,
+      phone,
+      address,
+      orderItems,
+      payment,
+      userId,
+      guestId,
+      couponId,
+    } = body;
 
     let authenticatedUserId = null;
     if (userId) {
@@ -114,15 +128,37 @@ export async function POST(
     const errors: string[] = [];
     const orderItemsData = [];
 
-    const productIds = orderItems.map(
-      (item: { productId: string }) => item.productId,
-    );
+    const productIds = orderItems.map((item) => item.productId);
+    const variantIds = orderItems.map((item) => item.variantId);
     const products = await prismadb.product.findMany({
       where: { id: { in: productIds } },
     });
+    const variants = await prismadb.productVariant.findMany({
+      where: { id: { in: variantIds } },
+      include: {
+        discount: true,
+      },
+    });
 
-    for (const { productId, quantity = 1 } of orderItems) {
+    for (const { productId, variantId, quantity = 1 } of orderItems) {
       const product = products.find((product) => product.id === productId);
+      const variant = variants.find((variant) => variant.id === variantId);
+      let newQuantity = quantity;
+
+      if (!variant) {
+        errors.push(`Variant ${variantId} not found`);
+        continue;
+      }
+
+      if (variant.stock < quantity) {
+        errors.push(`Variant ${variantId} out of stock`);
+        continue;
+      }
+
+      if (variant.stock - quantity < 0) {
+        errors.push(`Variant ${variantId} stock would become negative`);
+        continue;
+      }
 
       if (!product) {
         errors.push(`Product ${productId} not found`);
@@ -139,9 +175,28 @@ export async function POST(
         continue;
       }
 
+      if (
+        variant.discount &&
+        variant.discount.type === DiscountType.BUY_X_GET_Y
+      ) {
+        const { x, y } = variant.discount;
+        if (x && y && quantity >= x) {
+          const discountQuantity = Math.floor(quantity / x) * y;
+          if (variant.stock - discountQuantity < 0) {
+            errors.push(
+              `Variant ${variantId} stock would become negative with discount`,
+            );
+            continue;
+          } else {
+            newQuantity = discountQuantity;
+          }
+        }
+      }
+
       orderItemsData.push({
         product: { connect: { id: productId } },
-        quantity,
+        variant: { connect: { id: variantId } },
+        quantity: newQuantity,
       });
     }
 
@@ -163,11 +218,12 @@ export async function POST(
           fullName,
           phone,
           address,
+          couponId,
           orderItems: { create: orderItemsData },
           payment: {
             create: {
               storeId: params.storeId,
-              method: payment.method,
+              method: payment?.method,
             },
           },
         },
@@ -175,9 +231,39 @@ export async function POST(
           orderItems: {
             include: {
               product: true,
+              variant: {
+                include: {
+                  discount: true,
+                },
+              },
             },
           },
+          payment: true,
+          coupon: true,
         },
+      }),
+      ...orderItems.map(({ variantId, quantity = 1 }) => {
+        return prismadb.inventory.upsert({
+          where: {
+            variantId,
+            storeId: params.storeId,
+          },
+          update: {
+            onHold: {
+              increment: quantity,
+            },
+            quantity: {
+              decrement: quantity,
+            },
+          },
+          create: {
+            variantId,
+            storeId: params.storeId,
+            quantity,
+            sold: 0,
+            onHold: quantity,
+          },
+        });
       }),
     ]);
 
@@ -190,12 +276,12 @@ export async function POST(
         phone,
         address,
         orderNumber,
-        paymentMethod: payment.method,
+        paymentMethod: payment?.method as string,
       }) as React.ReactElement,
     });
 
-    if (payment.method === PaymentMethod.PayU) {
-      const payUData = generatePayUPayment(order);
+    if (payment?.method === PaymentMethod.PayU) {
+      const payUData = generatePayUPayment(order as CheckoutOrder);
 
       return NextResponse.json(
         {
@@ -205,7 +291,7 @@ export async function POST(
       );
     }
 
-    const url = await generateWompiPayment(order);
+    const url = await generateWompiPayment(order as CheckoutOrder);
 
     return NextResponse.json({ url }, { headers: corsHeaders });
   } catch (error: any) {
@@ -227,7 +313,7 @@ export async function generateWompiPayment(
     new Date().setHours(new Date().getHours() + 1),
   ).toISOString();
 
-  const amountInCents = calculateTotalAmount(order.orderItems) * 100;
+  const amountInCents = calculateTotalAmount(order) * 100;
 
   const signatureIntegrity = await generateIntegritySignature({
     reference: order.id,
@@ -243,7 +329,7 @@ export async function generateWompiPayment(
 }
 
 export function generatePayUPayment(order: CheckoutOrder): PayUResponse {
-  const amount = calculateTotalAmount(order.orderItems);
+  const amount = calculateTotalAmount(order);
   const { shippingAddress, shippingCity } = parseAndSplitAddress(order.address);
   return {
     referenceCode: order.id,
@@ -267,11 +353,4 @@ export function generatePayUPayment(order: CheckoutOrder): PayUResponse {
     shippingCity,
     shippingCountry: DEFAULT_COUNTRY,
   };
-}
-
-function calculateTotalAmount(orderItems: CheckoutOrderItem[]): number {
-  return orderItems.reduce(
-    (acc, item) => acc + Number(item.product.price) * item.quantity,
-    0,
-  );
 }

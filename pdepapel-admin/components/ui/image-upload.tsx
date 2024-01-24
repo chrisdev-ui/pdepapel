@@ -1,5 +1,3 @@
-"use client";
-
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { env } from "@/lib/env.mjs";
@@ -15,6 +13,7 @@ interface ImageUploadProps {
   onChange: (value: string) => void;
   onRemove: (value: string) => void;
   value: string[];
+  tags?: string[];
 }
 
 export const ImageUpload: React.FC<ImageUploadProps> = ({
@@ -39,7 +38,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
   const handleRemove = async (url: string) => {
     try {
       setIsDeleting(true);
-      await axios.post(`/api/${params.storeId}/cloudinary`, { imageUrl: url });
+      await axios.delete(`/api/${params.storeId}/cloudinary/${url}`);
     } catch (error) {
       toast({
         description:

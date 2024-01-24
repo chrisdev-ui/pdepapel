@@ -1,8 +1,9 @@
-import prismadb from "@/lib/prismadb";
+import { CouponType, DiscountType } from "@prisma/client";
 import { clsx, type ClassValue } from "clsx";
 import crypto from "crypto";
 import { twMerge } from "tailwind-merge";
 import { v4 as uuidv4 } from "uuid";
+import { CheckoutOrder } from "./types";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -22,8 +23,10 @@ export const generateGuestId = () => `guest_${uuidv4()}`;
 export const generateOrderNumber = () =>
   `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-export const generateRandomSKU = () =>
-  `SKU-${String(Date.now()).slice(-5)}-${Math.floor(Math.random() * 10000)}`;
+export const generateRandomSKU = (source?: string) =>
+  `SKU-${source ? `${source}-` : ""}${String(Date.now()).slice(
+    -5,
+  )}-${Math.floor(Math.random() * 10000)}`;
 
 export function getPublicIdFromCloudinaryUrl(url: string) {
   // Use a regex pattern to match the structure of the URL and extract the public ID
@@ -128,20 +131,6 @@ export function parseAndSplitAddress(address: string): {
   };
 }
 
-export async function getLastOrderTimestamp(
-  userId: string | null | undefined,
-  guestId: string | null | undefined,
-  storeId: string,
-) {
-  if (!userId && !guestId && !storeId) return null;
-  const lastOrder = await prismadb.order.findFirst({
-    where: { OR: [{ userId }, { guestId }], storeId },
-    orderBy: { createdAt: "desc" },
-  });
-
-  return lastOrder?.createdAt;
-}
-
 export function formatPayUValue(value: string): string {
   const valueNumber = parseFloat(value);
   let formattedValue = valueNumber.toFixed(2);
@@ -151,4 +140,67 @@ export function formatPayUValue(value: string): string {
   }
 
   return formattedValue;
+}
+
+export function calculateTotalAmount(order: CheckoutOrder): number {
+  const { orderItems, coupon } = order;
+  const currentDate = new Date();
+  const totalAmount = orderItems.reduce((acc, orderItem) => {
+    const discount = orderItem.variant.discount;
+    const price = Number(orderItem.variant.price);
+    const quantity = orderItem.quantity;
+    let subtotal = price * quantity;
+    if (
+      discount &&
+      discount.startDate &&
+      discount.endDate &&
+      discount.startDate <= currentDate &&
+      discount.endDate >= currentDate
+    ) {
+      switch (discount.type) {
+        case DiscountType.PERCENTAGE:
+          subtotal -= price * (discount.amount / 100) * quantity;
+          break;
+        case DiscountType.FIXED:
+          subtotal -= discount.amount * quantity;
+          break;
+        case DiscountType.BUY_X_GET_Y: {
+          const { x, y } = discount;
+          if (x && y && quantity >= x) {
+            const freeItems = y - x;
+            const itemsToCollect = Math.abs(
+              Math.floor(quantity - y) * freeItems,
+            );
+            const discountQuantity = quantity - itemsToCollect;
+            subtotal -= price * discountQuantity;
+          }
+          break;
+        }
+        default:
+          break;
+      }
+    }
+    return acc + subtotal;
+  }, 0);
+
+  if (coupon) {
+    const { validFrom, validUntil } = coupon;
+    if (
+      validFrom &&
+      validUntil &&
+      validFrom <= currentDate &&
+      validUntil >= currentDate
+    ) {
+      switch (coupon.type) {
+        case CouponType.PERCENTAGE:
+          return totalAmount - totalAmount * (coupon.amount / 100);
+        case CouponType.FIXED:
+          return totalAmount - coupon.amount;
+        default:
+          return totalAmount;
+      }
+    }
+  }
+
+  return totalAmount;
 }

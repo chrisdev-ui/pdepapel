@@ -1,24 +1,19 @@
 import { EmailTemplate } from "@/components/email-template";
+import { authenticateUser, isUserAuthorized } from "@/helpers/auth";
+import {
+  createOrder,
+  isUserAuthorizedToCreateNewOrder,
+} from "@/helpers/orders-actions";
+import { handleErrorResponse, handleSuccessResponse } from "@/helpers/response";
+import { validateMandatoryFields } from "@/helpers/validation";
 import prismadb from "@/lib/prismadb";
 import { resend } from "@/lib/resend";
-import { generateOrderNumber, getLastOrderTimestamp } from "@/lib/utils";
-import { auth, clerkClient } from "@clerk/nextjs";
-import { OrderStatus } from "@prisma/client";
+import { OrderBody } from "@/lib/types";
 import { NextRequest, NextResponse } from "next/server";
 
-type OrderData = {
+interface Params {
   storeId: string;
-  userId: string | null;
-  guestId: string | null;
-  orderNumber: string;
-  fullName: string;
-  phone: string;
-  address: string;
-  orderItems: { create: any };
-  status?: any;
-  payment?: { create: any };
-  shipping?: { create: any };
-};
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,170 +25,65 @@ export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
 }
 
-export async function POST(
-  req: Request,
-  { params }: { params: { storeId: string } },
-) {
-  const { userId: userLogged } = auth();
+export async function POST(req: Request, { params }: { params: Params }) {
   if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400, headers: corsHeaders },
-    );
+    return handleErrorResponse("Store ID is required", 400, corsHeaders);
   try {
-    const body = await req.json();
-    const {
-      fullName,
-      phone,
-      address,
-      orderItems,
-      status,
-      payment,
-      shipping,
-      userId,
-      guestId,
-    } = body;
-    let authenticatedUserId = userLogged;
-    if (userId && !userLogged) {
-      const user = await clerkClient.users.getUser(userId);
-      if (user) {
-        authenticatedUserId = user.id;
-      } else {
-        return NextResponse.json(
-          { error: "Unauthenticated" },
-          { status: 401, headers: corsHeaders },
-        );
-      }
-    }
-    if (!fullName)
-      return NextResponse.json(
-        { error: "Full name is required" },
-        { status: 400, headers: corsHeaders },
+    const body: OrderBody = await req.json();
+    const missingFields = validateMandatoryFields(body, [
+      "fullName",
+      "phone",
+      "address",
+      "orderItems",
+    ]);
+    if (missingFields)
+      return handleErrorResponse(
+        `Missing fields: ${missingFields.join(", ")}`,
+        400,
+        corsHeaders,
       );
-    if (!phone)
-      return NextResponse.json(
-        { error: "Phone is required" },
-        { status: 400, headers: corsHeaders },
-      );
-    if (!address)
-      return NextResponse.json(
-        { error: "Address is required" },
-        { status: 400, headers: corsHeaders },
-      );
-    if (!orderItems || orderItems.length === 0)
-      return NextResponse.json(
-        { error: "Order items are required" },
-        { status: 400, headers: corsHeaders },
-      );
-    const storeOwner = await isStoreOwner(authenticatedUserId, params.storeId);
-    if (!storeOwner) {
-      const lastOrderTimestamp = await getLastOrderTimestamp(
+    const authenticatedUserId = await authenticateUser(
+      body.userId as string | null,
+      body.guestId as string | null,
+    );
+    if (!authenticatedUserId)
+      return handleErrorResponse("Unauthenticated", 401, corsHeaders);
+    const isStoreOwner = isUserAuthorized(authenticatedUserId, params.storeId);
+    if (!isStoreOwner) {
+      const isAuthorized = await isUserAuthorizedToCreateNewOrder(
         authenticatedUserId,
-        guestId,
         params.storeId,
       );
-      const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000);
-      if (lastOrderTimestamp && lastOrderTimestamp > threeMinutesAgo)
-        return NextResponse.json(
-          { error: "Too many orders" },
-          { status: 429, headers: corsHeaders },
-        );
+      if (!isAuthorized)
+        return handleErrorResponse("Too many orders", 429, corsHeaders);
     }
-    const orderNumber = generateOrderNumber();
-    const orderData: OrderData = {
+    const order = await createOrder({
+      ...body,
+      userId: body?.userId || authenticatedUserId,
       storeId: params.storeId,
-      userId: authenticatedUserId,
-      guestId: !authenticatedUserId ? guestId : null,
-      orderNumber,
-      fullName,
-      phone,
-      address,
-      orderItems: {
-        create: orderItems.map(
-          (product: { productId: string; quantity: number }) => ({
-            product: { connect: { id: product.productId } },
-            quantity: product.quantity ?? 1,
-          }),
-        ),
-      },
-    };
-    if (status) {
-      orderData.status = status;
-    }
-    if (payment) {
-      orderData.payment = {
-        create: { ...payment, storeId: params.storeId },
-      };
-    }
-    if (shipping) {
-      orderData.shipping = {
-        create: { ...shipping, storeId: params.storeId },
-      };
-    }
-    const order = await prismadb.order.create({
-      data: orderData,
-      include: {
-        orderItems: true,
-      },
     });
-
-    if (order.status && status === OrderStatus.PAID) {
-      await prismadb.$transaction(async (tx) => {
-        for (const orderItem of order.orderItems) {
-          const product = await tx.product.findUnique({
-            where: { id: orderItem.productId },
-          });
-
-          if (!product) {
-            throw new Error(`Product ${orderItem.productId} not found.`);
-          }
-
-          if (product.stock >= orderItem.quantity) {
-            await tx.product.update({
-              where: { id: orderItem.productId },
-              data: {
-                stock: {
-                  decrement: orderItem.quantity,
-                },
-              },
-            });
-          } else {
-            throw new Error(
-              `Product ${product.name} is out of stock. Please contact the store owner.`,
-            );
-          }
-        }
-      });
-    }
-
-    if (!storeOwner) {
+    if (!isStoreOwner) {
       await resend.emails.send({
         from: "Orders <admin@papeleriapdepapel.com>",
         to: ["web.christian.dev@gmail.com", "papeleria.pdepapel@gmail.com"],
-        subject: `Nueva orden de compra - ${fullName}`,
+        subject: `Nueva orden de compra - ${body.fullName}`,
         react: EmailTemplate({
-          name: fullName,
-          phone,
-          address,
-          orderNumber,
+          name: order.fullName,
+          phone: order.phone,
+          address: order.address,
+          orderNumber: order.orderNumber,
           paymentMethod: "Transferencia bancaria o contra entrega",
         }) as React.ReactElement,
       });
     }
-    return NextResponse.json(order, { headers: corsHeaders });
+    return handleSuccessResponse(order, 200, corsHeaders);
   } catch (error) {
     console.log("[ORDERS_POST]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500, headers: corsHeaders },
-    );
+    return handleErrorResponse("[ORDERS_POST_ERROR]", 500, corsHeaders);
   }
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { storeId: string } },
-) {
+export async function GET(req: NextRequest, { params }: { params: Params }) {
   if (!params.storeId)
     return NextResponse.json(
       { error: "Store ID is required" },
@@ -219,6 +109,7 @@ export async function GET(
         orderItems: {
           include: {
             product: true,
+            variant: true,
           },
         },
         payment: true,

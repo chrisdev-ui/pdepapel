@@ -1,23 +1,28 @@
-import prismadb from "@/lib/prismadb";
-import { auth } from "@clerk/nextjs";
+import { getUserId } from "@/helpers/auth";
+import { handleErrorResponse } from "@/helpers/response";
+import { createNewStore } from "@/helpers/stores-actions";
+import { validateMandatoryFields } from "@/helpers/validation";
+import { StoreBody } from "@/lib/types";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
-    const { userId } = auth();
-    const body = await req.json();
-    const { name } = body;
-    if (!userId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (!name)
-      return NextResponse.json({ error: "Name is required" }, { status: 400 });
-    const store = await prismadb.store.create({ data: { name, userId } });
+    const userId = getUserId();
+    if (!userId) return handleErrorResponse("Unauthenticated", 401);
+    const body: StoreBody = await req.json();
+    const missingFields = validateMandatoryFields(body, ["name"]);
+    if (missingFields)
+      return handleErrorResponse(
+        `Missing mandatory fields: ${missingFields.join(", ")}`,
+        400,
+      );
+    const store = await createNewStore({
+      ...body,
+      userId,
+    });
     return NextResponse.json(store);
   } catch (error) {
     console.log("[STORES_POST]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleErrorResponse("[STORES_POST_ERROR]", 500);
   }
 }

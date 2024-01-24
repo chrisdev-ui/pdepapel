@@ -1,7 +1,20 @@
-import prismadb from "@/lib/prismadb";
-import { auth, clerkClient } from "@clerk/nextjs";
-import { Review } from "@prisma/client";
+import { getUserById, getUserId, isUserAuthorized } from "@/helpers/auth";
+import { handleErrorResponse, handleSuccessResponse } from "@/helpers/response";
+import {
+  deleteReviewById,
+  getReviewById,
+  getReviewOfProductById,
+  updateReviewById,
+} from "@/helpers/reviews-actions";
+import { validateMandatoryFields } from "@/helpers/validation";
+import { ReviewBody } from "@/lib/types";
 import { NextResponse } from "next/server";
+
+interface Params {
+  storeId: string;
+  productId: string;
+  reviewId: string;
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,169 +26,81 @@ export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
 }
 
-export async function GET(
-  _req: Request,
-  {
-    params,
-  }: { params: { storeId: string; productId: string; reviewId: string } },
-) {
-  if (!params.reviewId)
-    return NextResponse.json(
-      { error: "Review ID is required" },
-      { status: 400 },
-    );
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400 },
-    );
+export async function GET(_req: Request, { params }: { params: Params }) {
+  if (!params.storeId) return handleErrorResponse("Store ID is required", 400);
   if (!params.productId)
-    return NextResponse.json(
-      { error: "Product ID is required" },
-      { status: 400 },
-    );
+    return handleErrorResponse("Product ID is required", 400);
+  if (!params.reviewId)
+    return handleErrorResponse("Review ID is required", 400);
   try {
-    const review = await prismadb.review.findUnique({
-      where: { id: params.reviewId },
-    });
-    if (!review)
-      return NextResponse.json({ error: "Review not found" }, { status: 404 });
-
+    const review = await getReviewById(params.reviewId);
+    if (!review) return handleErrorResponse("Review ID is required", 400);
     return NextResponse.json(review);
   } catch (error) {
     console.log("[REVIEW_GET]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse("[REVIEW_GET_ERROR]", 500);
   }
 }
 
-export async function PATCH(
-  req: Request,
-  {
-    params,
-  }: { params: { storeId: string; productId: string; reviewId: string } },
-) {
-  if (!params.reviewId)
-    return NextResponse.json(
-      { error: "Review ID is required" },
-      { status: 400, headers: corsHeaders },
-    );
-  if (!params.productId)
-    return NextResponse.json(
-      { error: "Product ID is required" },
-      { status: 400, headers: corsHeaders },
-    );
+export async function PATCH(req: Request, { params }: { params: Params }) {
   if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400, headers: corsHeaders },
-    );
+    return handleErrorResponse("Store ID is required", 400, corsHeaders);
+  if (!params.productId)
+    return handleErrorResponse("Product ID is required", 400, corsHeaders);
+  if (!params.reviewId)
+    return handleErrorResponse("Review ID is required", 400, corsHeaders);
   try {
-    const body = await req.json();
-    const { rating, comment, userId } = body;
-    const user = await clerkClient.users.getUser(userId);
-    if (!user)
-      return NextResponse.json(
-        { error: "Unauthenticated" },
-        { status: 401, headers: corsHeaders },
+    const body: ReviewBody = await req.json();
+    const { userId, ...bodyWithoutUserId } = body;
+    const missingFields = validateMandatoryFields(body, ["rating", "userId"]);
+    if (missingFields)
+      return handleErrorResponse(
+        `Missing mandatory fields: ${missingFields.join(", ")}`,
+        400,
+        corsHeaders,
       );
-    if (!rating || isNaN(rating))
-      return NextResponse.json(
-        { error: "Rating is required" },
-        { status: 400, headers: corsHeaders },
-      );
-    const existingReview = await prismadb.review.findUnique({
-      where: { id: params.reviewId },
-    });
+    const user = await getUserById(userId);
+    if (!user) return handleErrorResponse("User not found", 404, corsHeaders);
+    const existingReview = await getReviewById(params.reviewId);
     if (!existingReview)
-      return NextResponse.json(
-        { error: "Review not found" },
-        { status: 404, headers: corsHeaders },
-      );
+      return handleErrorResponse("Review not found", 404, corsHeaders);
     if (existingReview.userId !== userId)
-      return NextResponse.json(
-        { error: "Unauthorized to perform this action" },
-        { status: 403, headers: corsHeaders },
-      );
-
-    let updateData: Partial<Review> = {
-      rating,
-      comment: comment ?? "",
-    };
-
-    if (
-      existingReview.name !== `${user.firstName ?? ""} ${user.lastName ?? ""}`
-    ) {
-      updateData.name = `${user.firstName ?? ""} ${user.lastName ?? ""}`;
-    }
-    const updatedReview = await prismadb.review.update({
-      where: {
-        id: params.reviewId,
-        productId: params.productId,
-        userId,
-      },
-      data: updateData,
-    });
-    return NextResponse.json(updatedReview, {
-      status: 200,
-      headers: corsHeaders,
-    });
+      return handleErrorResponse("Unauthorized", 403, corsHeaders);
+    const updatedReview = await updateReviewById(
+      user,
+      params.reviewId,
+      params.productId,
+      bodyWithoutUserId,
+    );
+    return handleSuccessResponse(updatedReview, 200, corsHeaders);
   } catch (error) {
     console.log("[REVIEW_PATCH]", error);
-    return NextResponse.json(
-      { error: "Internal Error" },
-      { status: 500, headers: corsHeaders },
-    );
+    return handleErrorResponse("[REVIEW_PATCH_ERROR]", 500, corsHeaders);
   }
 }
 
-export async function DELETE(
-  _req: Request,
-  {
-    params,
-  }: { params: { storeId: string; reviewId: string; productId: string } },
-) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-
-  if (!params.reviewId)
-    return NextResponse.json(
-      { error: "Review ID is required" },
-      { status: 400 },
-    );
+export async function DELETE(_req: Request, { params }: { params: Params }) {
+  const userId = getUserId();
+  if (!userId) return handleErrorResponse("Unauthenticated", 401);
+  if (!params.storeId) return handleErrorResponse("Store ID is required", 400);
   if (!params.productId)
-    return NextResponse.json(
-      { error: "Product ID is required" },
-      { status: 400 },
-    );
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400 },
-    );
+    return handleErrorResponse("Product ID is required", 400);
+  if (!params.reviewId)
+    return handleErrorResponse("Review ID is required", 400);
   try {
-    const reviewToDelete = await prismadb.review.findUnique({
-      where: {
-        id: params.reviewId,
-        productId: params.productId,
-      },
-    });
-    if (!reviewToDelete)
-      return NextResponse.json({ error: "Review not found" }, { status: 404 });
+    const reviewToDelete = await getReviewOfProductById(
+      params.productId,
+      params.reviewId,
+    );
+    if (!reviewToDelete) return handleErrorResponse("Review not found", 404);
     const isAuthor = userId === reviewToDelete.userId;
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    const isStoreOwner = !!storeByUserId;
-    if (!isStoreOwner && !isAuthor)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-
-    const deletedReview = await prismadb.review.delete({
-      where: { id: params.reviewId },
-    });
-    return NextResponse.json(deletedReview);
+    const isAuthorized = await isUserAuthorized(userId, params.storeId);
+    if (!isAuthorized && !isAuthor)
+      return handleErrorResponse("Unauthorized", 403);
+    await deleteReviewById(params.reviewId);
+    return handleSuccessResponse("Review was successfully deleted!");
   } catch (error) {
     console.log("[REVIEW_DELETE]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse("[REVIEW_DELETE_ERROR]", 500);
   }
 }

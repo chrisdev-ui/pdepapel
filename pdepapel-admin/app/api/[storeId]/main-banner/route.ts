@@ -1,79 +1,52 @@
-import prismadb from "@/lib/prismadb";
-import { auth } from "@clerk/nextjs";
+import { getUserId, isUserAuthorized } from "@/helpers/auth";
+import {
+  createNewMainBanner,
+  getMainBannersByStoreId,
+} from "@/helpers/main-banner-actions";
+import { handleErrorResponse } from "@/helpers/response";
+import { validateMandatoryFields } from "@/helpers/validation";
+import { MainBannerBody } from "@/lib/types";
 import { NextResponse } from "next/server";
 
-export async function POST(
-  req: Request,
-  { params }: { params: { storeId: string } },
-) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400 },
-    );
-  try {
-    const body = await req.json();
-    const { title, label1, label2, highlight, callToAction, imageUrl } = body;
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    if (!imageUrl)
-      return NextResponse.json(
-        { error: "Image URL is required" },
-        { status: 400 },
-      );
-    if (!callToAction) {
-      return NextResponse.json(
-        { error: "Call to action is required" },
-        { status: 400 },
-      );
-    }
+interface Params {
+  storeId: string;
+}
 
-    const mainBanner = await prismadb.mainBanner.create({
-      data: {
-        title,
-        label1,
-        label2,
-        highlight,
-        callToAction,
-        imageUrl,
-        storeId: params.storeId,
-      },
+export async function POST(req: Request, { params }: { params: Params }) {
+  const userId = getUserId();
+  if (!userId) return handleErrorResponse("Unauthenticated", 401);
+  if (!params.storeId) return handleErrorResponse("Store ID is required", 400);
+  try {
+    const body: MainBannerBody = await req.json();
+    const missingFields = validateMandatoryFields(body, [
+      "callToAction",
+      "imageUrl",
+    ]);
+    if (missingFields)
+      return handleErrorResponse(
+        `Missing mandatory fields: ${missingFields.join(", ")}`,
+        400,
+      );
+    const isAuthorized = await isUserAuthorized(userId, params.storeId);
+    if (!isAuthorized) return handleErrorResponse("Unauthorized", 403);
+    const mainBanner = await createNewMainBanner({
+      ...body,
+      storeId: params.storeId,
     });
     return NextResponse.json(mainBanner);
   } catch (error) {
     console.log("[MAIN_BANNERS_POST]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleErrorResponse("[MAIN_BANNERS_POST_ERROR]", 500);
   }
 }
 
-export async function GET(
-  req: Request,
-  { params }: { params: { storeId: string } },
-) {
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400 },
-    );
+export async function GET(_req: Request, { params }: { params: Params }) {
+  if (!params.storeId) return handleErrorResponse("Store ID is required", 400);
   try {
-    const mainBanner = await prismadb.mainBanner.findFirst({
-      where: { storeId: params.storeId },
-    });
+    const mainBanner = await getMainBannersByStoreId(params.storeId);
     return NextResponse.json(mainBanner);
   } catch (error) {
     console.log("[MAIN_BANNERS_GET]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleErrorResponse("[MAIN_BANNERS_GET_ERROR]", 500);
   }
 }

@@ -1,57 +1,36 @@
-import prismadb from "@/lib/prismadb";
-import { auth } from "@clerk/nextjs";
+import { getUserId } from "@/helpers/auth";
+import { handleErrorResponse, handleSuccessResponse } from "@/helpers/response";
+import { deleteStoreById, updateStoreById } from "@/helpers/stores-actions";
+import { StoreBody } from "@/lib/types";
 import { NextResponse } from "next/server";
 
-export async function PATCH(
-  req: Request,
-  { params }: { params: { storeId: string } },
-) {
+interface Params {
+  storeId: string;
+}
+
+export async function PATCH(req: Request, { params }: { params: Params }) {
+  const userId = getUserId();
+  if (!userId) return handleErrorResponse("Unauthenticated", 401);
+  if (!params.storeId) return handleErrorResponse("Store ID is required", 400);
   try {
-    const { userId } = auth();
-    const body = await req.json();
-    const { name } = body;
-    if (!userId)
-      return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-    if (!name)
-      return NextResponse.json({ error: "Name is required" }, { status: 400 });
-    if (!params.storeId)
-      return NextResponse.json(
-        { error: "Store ID is required" },
-        { status: 400 },
-      );
-    const store = await prismadb.store.updateMany({
-      where: { id: params.storeId, userId },
-      data: {
-        name,
-      },
-    });
+    const body: StoreBody = await req.json();
+    const store = await updateStoreById(params.storeId, body);
     return NextResponse.json(store);
   } catch (error) {
     console.log("[STORE_PATCH]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse("[STORE_PATCH_ERROR]", 500);
   }
 }
 
-export async function DELETE(
-  _req: Request,
-  { params }: { params: { storeId: string } },
-) {
+export async function DELETE(_req: Request, { params }: { params: Params }) {
+  const userId = getUserId();
+  if (!userId) return handleErrorResponse("Unauthenticated", 401);
+  if (!params.storeId) return handleErrorResponse("Store ID is required", 400);
   try {
-    const { userId } = auth();
-    if (!userId)
-      return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-
-    if (!params.storeId)
-      return NextResponse.json(
-        { error: "Store ID is required" },
-        { status: 400 },
-      );
-    const store = await prismadb.store.deleteMany({
-      where: { id: params.storeId, userId },
-    });
-    return NextResponse.json(store);
+    await deleteStoreById(params.storeId);
+    return handleSuccessResponse("Store was successfully deleted!");
   } catch (error) {
     console.log("[STORE_DELETE]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse("[STORE_DELETE_ERROR]", 500);
   }
 }

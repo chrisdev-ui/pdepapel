@@ -1,63 +1,46 @@
-import prismadb from "@/lib/prismadb";
-import { auth } from "@clerk/nextjs";
+import { getUserId, isUserAuthorized } from "@/helpers/auth";
+import { createNewColor, getColorsByStoreId } from "@/helpers/colors-actions";
+import { handleErrorResponse } from "@/helpers/response";
+import { validateMandatoryFields } from "@/helpers/validation";
+import { ColorBody } from "@/lib/types";
 import { NextResponse } from "next/server";
 
-export async function POST(
-  req: Request,
-  { params }: { params: { storeId: string } },
-) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400 },
-    );
+interface Params {
+  storeId: string;
+}
+
+export async function POST(req: Request, { params }: { params: Params }) {
+  const userId = getUserId();
+  if (!userId) return handleErrorResponse("Unauthenticated", 401);
+  if (!params.storeId) return handleErrorResponse("Store ID is required", 400);
   try {
-    const body = await req.json();
-    const { name, value } = body;
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    if (!name)
-      return NextResponse.json({ error: "Name is required" }, { status: 400 });
-    if (!value)
-      return NextResponse.json({ error: "Value is required" }, { status: 400 });
-    const color = await prismadb.color.create({
-      data: { name, value, storeId: params.storeId },
+    const body: ColorBody = await req.json();
+    const missingFields = validateMandatoryFields(body, ["name", "value"]);
+    if (missingFields)
+      return handleErrorResponse(
+        `Missing mandatory fields: ${missingFields.join(", ")}`,
+        400,
+      );
+    const isAuthorized = await isUserAuthorized(userId, params.storeId);
+    if (!isAuthorized) return handleErrorResponse("Unauthorized", 403);
+    const color = await createNewColor({
+      ...body,
+      storeId: params.storeId,
     });
     return NextResponse.json(color);
   } catch (error) {
     console.log("[COLORS_POST]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleErrorResponse("[COLORS_POST_ERROR]", 500);
   }
 }
 
-export async function GET(
-  req: Request,
-  { params }: { params: { storeId: string } },
-) {
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400 },
-    );
+export async function GET(_req: Request, { params }: { params: Params }) {
+  if (!params.storeId) return handleErrorResponse("Store ID is required", 400);
   try {
-    const colors = await prismadb.color.findMany({
-      where: { storeId: params.storeId },
-    });
+    const colors = await getColorsByStoreId(params.storeId);
     return NextResponse.json(colors);
   } catch (error) {
     console.log("[COLORS_GET]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleErrorResponse("[COLORS_GET_ERROR]", 500);
   }
 }

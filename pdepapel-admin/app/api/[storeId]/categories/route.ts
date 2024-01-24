@@ -1,66 +1,49 @@
-import prismadb from "@/lib/prismadb";
-import { auth } from "@clerk/nextjs";
+import { getUserId, isUserAuthorized } from "@/helpers/auth";
+import {
+  createNewCategory,
+  getCategoriesByStoreId,
+} from "@/helpers/categories-actions";
+import { handleErrorResponse } from "@/helpers/response";
+import { validateMandatoryFields } from "@/helpers/validation";
+import { CategoryBody } from "@/lib/types";
 import { NextResponse } from "next/server";
 
-export async function POST(
-  req: Request,
-  { params }: { params: { storeId: string } },
-) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400 },
-    );
+interface Params {
+  storeId: string;
+}
+
+export async function POST(req: Request, { params }: { params: Params }) {
+  const userId = getUserId();
+  if (!userId) return handleErrorResponse("Unauthenticated", 401);
+  if (!params.storeId) return handleErrorResponse("Store ID is required", 400);
   try {
-    const body = await req.json();
-    const { name, typeId } = body;
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    if (!name)
-      return NextResponse.json({ error: "Name is required" }, { status: 400 });
-    if (!typeId)
-      return NextResponse.json(
-        { error: "Type ID is required" },
-        { status: 400 },
+    const body: CategoryBody = await req.json();
+    const missingFields = validateMandatoryFields(body, ["name", "typeId"]);
+    if (missingFields)
+      return handleErrorResponse(
+        `Missing mandatory fields: ${missingFields.join(", ")}`,
+        400,
       );
-    const category = await prismadb.category.create({
-      data: { name, typeId, storeId: params.storeId },
+    const isAuthorized = await isUserAuthorized(userId, params.storeId);
+    if (!isAuthorized) return handleErrorResponse("Unauthorized", 403);
+    const category = await createNewCategory({
+      ...body,
+      storeId: params.storeId,
     });
     return NextResponse.json(category);
   } catch (error) {
     console.log("[CATEGORIES_POST]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleErrorResponse("[CATEGORIES_POST_ERROR]", 500);
   }
 }
 
-export async function GET(
-  req: Request,
-  { params }: { params: { storeId: string } },
-) {
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400 },
-    );
+export async function GET(_req: Request, { params }: { params: Params }) {
+  if (!params.storeId) return handleErrorResponse("Store ID is required", 400);
   try {
-    const categories = await prismadb.category.findMany({
-      where: { storeId: params.storeId },
-    });
+    const categories = await getCategoriesByStoreId(params.storeId);
     return NextResponse.json(categories);
   } catch (error) {
     console.log("[CATEGORIES_GET]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleErrorResponse("[CATEGORIES_GET_ERROR]", 500);
   }
 }

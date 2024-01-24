@@ -1,85 +1,66 @@
-import prismadb from "@/lib/prismadb";
-import { auth } from "@clerk/nextjs";
+import { getUserId, isUserAuthorized } from "@/helpers/auth";
+import {
+  deletePostById,
+  getPostById,
+  updatePostById,
+} from "@/helpers/posts-actions";
+import { handleErrorResponse, handleSuccessResponse } from "@/helpers/response";
+import { validateMandatoryFields } from "@/helpers/validation";
+import { PostBody } from "@/lib/types";
 import { NextResponse } from "next/server";
 
-export async function GET(
-  _req: Request,
-  { params }: { params: { postId: string } },
-) {
-  if (!params.postId)
-    return NextResponse.json({ error: "Post ID is required" }, { status: 400 });
+interface Params {
+  storeId: string;
+  postId: string;
+}
+
+export async function GET(_req: Request, { params }: { params: Params }) {
+  if (!params.storeId) return handleErrorResponse("Store ID is required", 400);
+  if (!params.postId) return handleErrorResponse("Post ID is required", 400);
   try {
-    const post = await prismadb.post.findUnique({
-      where: { id: params.postId },
-    });
+    const post = await getPostById(params.postId);
     return NextResponse.json(post);
   } catch (error) {
     console.log("[POST_GET]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse("[POST_GET_ERROR]", 500);
   }
 }
 
-export async function PATCH(
-  req: Request,
-  { params }: { params: { storeId: string; postId: string } },
-) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  if (!params.postId)
-    return NextResponse.json({ error: "Post ID is required" }, { status: 400 });
+export async function PATCH(req: Request, { params }: { params: Params }) {
+  const userId = getUserId();
+  if (!userId) return handleErrorResponse("Unauthenticated", 401);
+  if (!params.storeId) return handleErrorResponse("Store ID is required", 400);
+  if (!params.postId) return handleErrorResponse("Post ID is required", 400);
   try {
-    const body = await req.json();
-    const { social, postId } = body;
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    if (!social)
-      return NextResponse.json(
-        { error: "Social Network is required" },
-        { status: 400 },
+    const body: PostBody = await req.json();
+    const missingFields = validateMandatoryFields(body, ["social", "postId"]);
+    if (missingFields)
+      return handleErrorResponse(
+        `Missing mandatory fields: ${missingFields.join(", ")}`,
+        400,
       );
-    if (!postId)
-      return NextResponse.json({ error: "ID is required" }, { status: 400 });
-
-    const post = await prismadb.post.update({
-      where: { id: params.postId },
-      data: {
-        social,
-        postId,
-      },
-    });
+    const isAuthorized = await isUserAuthorized(userId, params.storeId);
+    if (!isAuthorized) return handleErrorResponse("Unauthorized", 403);
+    const post = await updatePostById(params.postId, body);
     return NextResponse.json(post);
   } catch (error) {
     console.log("[POST_PATCH]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse("[POST_PATCH_ERROR]", 500);
   }
 }
 
-export async function DELETE(
-  _req: Request,
-  { params }: { params: { storeId: string; postId: string } },
-) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-
-  if (!params.postId)
-    return NextResponse.json({ error: "Post ID is required" }, { status: 400 });
+export async function DELETE(_req: Request, { params }: { params: Params }) {
+  const userId = getUserId();
+  if (!userId) return handleErrorResponse("Unauthenticated", 401);
+  if (!params.storeId) return handleErrorResponse("Store ID is required", 400);
+  if (!params.postId) return handleErrorResponse("Post ID is required", 400);
   try {
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    const post = await prismadb.type.deleteMany({
-      where: { id: params.postId },
-    });
-    return NextResponse.json(post);
+    const isAuthorized = await isUserAuthorized(userId, params.storeId);
+    if (!isAuthorized) return handleErrorResponse("Unauthorized", 403);
+    await deletePostById(params.postId);
+    return handleSuccessResponse("Post was successfully deleted!");
   } catch (error) {
     console.log("[POST_DELETE]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse("[POST_DELETE_ERROR]", 500);
   }
 }

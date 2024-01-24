@@ -1,199 +1,95 @@
-import cloudinaryInstance from "@/lib/cloudinary";
-import prismadb from "@/lib/prismadb";
-import { getPublicIdFromCloudinaryUrl } from "@/lib/utils";
-import { auth } from "@clerk/nextjs";
+import { getUserId, isUserAuthorized } from "@/helpers/auth";
+import { deleteResources, getPublicId } from "@/helpers/cloudinary";
+import {
+  deleteProductById,
+  getProductById,
+  updateProductById,
+} from "@/helpers/product-actions";
+import { handleErrorResponse, handleSuccessResponse } from "@/helpers/response";
+import { validateMandatoryFields } from "@/helpers/validation";
+import { ProductBody } from "@/lib/types";
 import { NextResponse } from "next/server";
 
-export async function GET(
-  _req: Request,
-  { params }: { params: { productId: string } },
-) {
+interface Params {
+  storeId: string;
+  productId: string;
+}
+
+export async function GET(_req: Request, { params }: { params: Params }) {
+  if (!params.storeId) return handleErrorResponse("Store ID is required", 400);
   if (!params.productId)
-    return NextResponse.json(
-      { error: "Product ID is required" },
-      { status: 400 },
-    );
+    return handleErrorResponse("Product ID is required", 400);
   try {
-    const product = await prismadb.product.findUnique({
-      where: { id: params.productId },
-      include: {
-        images: true,
-        category: true,
-        size: true,
-        color: true,
-        design: true,
-        reviews: {
-          orderBy: { createdAt: "desc" },
-        },
-      },
-    });
+    const product = await getProductById(params.productId, {}, true);
     return NextResponse.json(product);
   } catch (error) {
     console.log("[PRODUCT_GET]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse("[PRODUCT_GET_ERROR]", 500);
   }
 }
 
-export async function PATCH(
-  req: Request,
-  { params }: { params: { storeId: string; productId: string } },
-) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+export async function PATCH(req: Request, { params }: { params: Params }) {
+  const userId = getUserId();
+  if (!userId) return handleErrorResponse("Unauthenticated", 401);
+  if (!params.storeId) return handleErrorResponse("Store ID is required", 400);
   if (!params.productId)
-    return NextResponse.json(
-      { error: "Product ID is required" },
-      { status: 400 },
-    );
+    return handleErrorResponse("Product ID is required", 400);
   try {
-    const body = await req.json();
-    const {
-      name,
-      price,
-      categoryId,
-      colorId,
-      sizeId,
-      designId,
-      description,
-      stock,
-      images,
-      isArchived,
-      isFeatured,
-    } = body;
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    if (!name)
-      return NextResponse.json({ error: "Name is required" }, { status: 400 });
-    if (!images || !images.length)
-      return NextResponse.json(
-        { error: "Images are required" },
-        { status: 400 },
-      );
-    if (!price)
-      return NextResponse.json({ error: "Price is required" }, { status: 400 });
-    if (!categoryId)
-      return NextResponse.json(
-        { error: "Category ID is required" },
-        { status: 400 },
-      );
-    if (!sizeId)
-      return NextResponse.json(
-        { error: "Size ID is required" },
-        { status: 400 },
-      );
-    if (!colorId)
-      return NextResponse.json(
-        { error: "Color ID is required" },
-        { status: 400 },
-      );
-    if (!designId)
-      return NextResponse.json(
-        { error: "Design ID is required" },
-        { status: 400 },
-      );
-    if (stock && stock < 0)
-      return NextResponse.json(
-        { error: "Stock must be 0 or greater" },
-        { status: 400 },
-      );
-    const productToUpdate = await prismadb.product.findUnique({
-      where: { id: params.productId },
-      include: { images: true },
-    });
-    if (!productToUpdate)
-      return NextResponse.json({ error: "Product not found" }, { status: 404 });
-    const currentImageUrls = productToUpdate.images.map((image) => image.url);
-    const newImageUrls = images.map((image: { url: string }) => image.url);
-    const imagesToDelete = currentImageUrls.filter(
-      (url) => !newImageUrls.includes(url),
-    );
-    const publicIds = imagesToDelete.map(
-      (url) => getPublicIdFromCloudinaryUrl(url) ?? "",
-    );
-    if (publicIds.length)
-      await cloudinaryInstance.v2.api.delete_resources(publicIds, {
-        type: "upload",
-        resource_type: "image",
-      });
-    const [_, updatedProduct] = await prismadb.$transaction([
-      prismadb.product.update({
-        where: { id: params.productId },
-        data: {
-          name,
-          price,
-          categoryId,
-          colorId,
-          sizeId,
-          designId,
-          isArchived,
-          isFeatured,
-          stock,
-          description,
-          images: {
-            deleteMany: {},
-          },
-        },
-      }),
-      prismadb.product.update({
-        where: { id: params.productId },
-        data: {
-          images: {
-            createMany: {
-              data: [...images.map((image: { url: string }) => image)],
-            },
-          },
-        },
-      }),
+    const body: ProductBody = await req.json();
+    const missingFields = validateMandatoryFields(body, [
+      "name",
+      "price",
+      "categoryId",
+      "colorId",
+      "sizeId",
+      "designId",
+      "images",
+      "stock",
     ]);
+    if (missingFields)
+      return handleErrorResponse(
+        `Missing mandatory fields or invalid values: ${missingFields.join(", ")}`,
+        400,
+      );
+    const isAuthorized = await isUserAuthorized(userId, params.storeId);
+    if (!isAuthorized) return handleErrorResponse("Unauthorized", 403);
+    const productToUpdate = await getProductById(params.productId, {
+      images: true,
+    });
+    if (!productToUpdate) return handleErrorResponse("Product not found", 404);
+    const updatedProduct = await updateProductById(
+      params.productId,
+      body,
+      productToUpdate.images,
+    );
     return NextResponse.json(updatedProduct);
   } catch (error) {
     console.log("[PRODUCT_PATCH]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse("[PRODUCT_PATCH_ERROR]", 500);
   }
 }
 
-export async function DELETE(
-  _req: Request,
-  { params }: { params: { storeId: string; productId: string } },
-) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-
+export async function DELETE(_req: Request, { params }: { params: Params }) {
+  const userId = getUserId();
+  if (!userId) return handleErrorResponse("Unauthenticated", 401);
+  if (!params.storeId) return handleErrorResponse("Store ID is required", 400);
   if (!params.productId)
-    return NextResponse.json(
-      { error: "Product ID is required" },
-      { status: 400 },
-    );
+    return handleErrorResponse("Product ID is required", 400);
   try {
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
+    const isAuthorized = await isUserAuthorized(userId, params.storeId);
+    if (!isAuthorized) return handleErrorResponse("Unauthorized", 403);
+    const productToDelete = await getProductById(params.productId, {
+      images: true,
     });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    const productToDelete = await prismadb.product.findUnique({
-      where: { id: params.productId },
-      include: { images: true },
-    });
-    if (!productToDelete)
-      return NextResponse.json({ error: "Product not found" }, { status: 404 });
+    if (!productToDelete) return handleErrorResponse("Product not found", 404);
     const publicIds = productToDelete.images.map(
-      (image) => getPublicIdFromCloudinaryUrl(image.url) ?? "",
+      (image) => getPublicId(image.url) ?? "",
     );
-    await cloudinaryInstance.v2.api.delete_resources(publicIds, {
-      type: "upload",
-      resource_type: "image",
-    });
-    const deletedProduct = await prismadb.product.deleteMany({
-      where: { id: params.productId },
-    });
-    return NextResponse.json(deletedProduct);
+    if (publicIds.length > 0) await deleteResources(publicIds);
+    await deleteProductById(params.productId);
+    return handleSuccessResponse("Product was successfully deleted!");
   } catch (error) {
     console.log("[PRODUCT_DELETE]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse("[PRODUCT_DELETE_ERROR]", 500);
   }
 }

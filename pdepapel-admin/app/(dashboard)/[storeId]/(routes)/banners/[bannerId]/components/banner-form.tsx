@@ -145,6 +145,7 @@ export const BannerForm: React.FC<BannerFormProps> = ({ initialData }) => {
                     disabled={loading}
                     onChange={(url) => field.onChange(url)}
                     onRemove={() => field.onChange("")}
+                    tags={["banner"]}
                   />
                 </FormControl>
                 <FormMessage />

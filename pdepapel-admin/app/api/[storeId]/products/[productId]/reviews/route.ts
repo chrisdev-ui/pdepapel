@@ -1,6 +1,17 @@
-import prismadb from "@/lib/prismadb";
-import { clerkClient } from "@clerk/nextjs";
+import { getUserById } from "@/helpers/auth";
+import { handleErrorResponse, handleSuccessResponse } from "@/helpers/response";
+import {
+  createNewReview,
+  getReviewsOfProductByStore,
+} from "@/helpers/reviews-actions";
+import { validateMandatoryFields } from "@/helpers/validation";
+import { ReviewBody } from "@/lib/types";
 import { NextResponse } from "next/server";
+
+interface Params {
+  storeId: string;
+  productId: string;
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,74 +23,47 @@ export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
 }
 
-export async function POST(
-  req: Request,
-  { params }: { params: { storeId: string; productId: string } },
-) {
+export async function POST(req: Request, { params }: { params: Params }) {
   if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400, headers: corsHeaders },
-    );
+    return handleErrorResponse("Store ID is required", 400, corsHeaders);
   if (!params.productId)
-    return NextResponse.json(
-      { error: "Product ID is required" },
-      { status: 400, headers: corsHeaders },
-    );
+    return handleErrorResponse("Product ID is required", 400, corsHeaders);
   try {
-    const body = await req.json();
-    const { rating, comment, userId } = body;
-    const user = await clerkClient.users.getUser(userId);
-    if (!user)
-      return NextResponse.json(
-        { error: "Unauthenticated" },
-        { status: 401, headers: corsHeaders },
+    const body: ReviewBody = await req.json();
+    const { userId, ...bodyWithoutUserId } = body;
+    const missingFields = validateMandatoryFields(body, ["rating", "userId"]);
+    if (missingFields)
+      return handleErrorResponse(
+        `Missing mandatory fields: ${missingFields.join(", ")}`,
+        400,
+        corsHeaders,
       );
-    if (!rating)
-      return NextResponse.json(
-        { error: "Rating is required" },
-        { status: 400, headers: corsHeaders },
-      );
-    const review = await prismadb.review.create({
-      data: {
-        userId,
-        name: `${user.firstName ?? ""} ${user.lastName ?? ""}`,
-        storeId: params.storeId,
-        productId: params.productId,
-        rating,
-        comment: comment ?? "",
-      },
+    const user = await getUserById(userId);
+    if (!user) return handleErrorResponse("User not found", 404);
+    const review = await createNewReview(user, {
+      ...bodyWithoutUserId,
+      storeId: params.storeId,
+      productId: params.productId,
     });
-    return NextResponse.json(review, { status: 200, headers: corsHeaders });
+    return handleSuccessResponse(review, 200, corsHeaders);
   } catch (error) {
     console.log("[REVIEWS_POST]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500, headers: corsHeaders },
-    );
+    return handleErrorResponse("[REVIEWS_POST_ERROR]", 500, corsHeaders);
   }
 }
 
-export async function GET(
-  req: Request,
-  { params }: { params: { storeId: string; productId: string } },
-) {
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400 },
-    );
+export async function GET(_req: Request, { params }: { params: Params }) {
+  if (!params.storeId) return handleErrorResponse("Store ID is required", 400);
+  if (!params.productId)
+    return handleErrorResponse("Product ID is required", 400);
   try {
-    const reviews = await prismadb.review.findMany({
-      where: { storeId: params.storeId, productId: params.productId },
-      orderBy: { createdAt: "desc" },
-    });
+    const reviews = await getReviewsOfProductByStore(
+      params.storeId,
+      params.productId,
+    );
     return NextResponse.json(reviews);
   } catch (error) {
     console.log("[REVIEWS_GET]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleErrorResponse("[REVIEWS_GET_ERROR]", 500);
   }
 }

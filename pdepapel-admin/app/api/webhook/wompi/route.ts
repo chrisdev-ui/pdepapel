@@ -1,5 +1,7 @@
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
+import { CheckoutOrder } from "@/lib/types";
+import { calculateTotalAmount } from "@/lib/utils";
 import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
 import crypto from "crypto";
 import { NextResponse } from "next/server";
@@ -55,8 +57,14 @@ async function processWebhookPayment(response: any) {
             orderItems: {
               include: {
                 product: true,
+                variant: {
+                  include: {
+                    discount: true,
+                  },
+                },
               },
             },
+            coupon: true,
             payment: true,
           },
         });
@@ -134,14 +142,9 @@ function createHash(
 }
 
 function isPaymentValid(order: any, transaction: any): boolean {
-  const { orderItems, payment } = order;
+  const { payment } = order;
   const { amount_in_cents: amountInCents } = transaction;
-  const totalAmount =
-    orderItems.reduce(
-      (acc: number, item: any) =>
-        acc + Number(item.product.price) * item.quantity,
-      0,
-    ) * 100;
+  const totalAmount = calculateTotalAmount(order as CheckoutOrder) * 100;
   return (
     payment.method === PaymentMethod.Wompi && amountInCents === totalAmount
   );

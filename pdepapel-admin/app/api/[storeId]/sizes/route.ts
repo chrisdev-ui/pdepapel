@@ -1,63 +1,46 @@
-import prismadb from "@/lib/prismadb";
-import { auth } from "@clerk/nextjs";
+import { getUserId, isUserAuthorized } from "@/helpers/auth";
+import { handleErrorResponse } from "@/helpers/response";
+import { createNewSize, getSizesByStoreId } from "@/helpers/sizes-actions";
+import { validateMandatoryFields } from "@/helpers/validation";
+import { SizeBody } from "@/lib/types";
 import { NextResponse } from "next/server";
 
-export async function POST(
-  req: Request,
-  { params }: { params: { storeId: string } },
-) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400 },
-    );
+interface Params {
+  storeId: string;
+}
+
+export async function POST(req: Request, { params }: { params: Params }) {
+  const userId = getUserId();
+  if (!userId) return handleErrorResponse("Unauthenticated", 401);
+  if (!params.storeId) return handleErrorResponse("Store ID is required", 400);
   try {
-    const body = await req.json();
-    const { name, value } = body;
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    if (!name)
-      return NextResponse.json({ error: "Name is required" }, { status: 400 });
-    if (!value)
-      return NextResponse.json({ error: "Value is required" }, { status: 400 });
-    const size = await prismadb.size.create({
-      data: { name, value, storeId: params.storeId },
+    const body: SizeBody = await req.json();
+    const missingFields = validateMandatoryFields(body, ["name", "value"]);
+    if (missingFields)
+      return handleErrorResponse(
+        `Missing mandatory fields: ${missingFields.join(", ")}`,
+        400,
+      );
+    const isAuthorized = await isUserAuthorized(userId, params.storeId);
+    if (!isAuthorized) return handleErrorResponse("Unauthorized", 403);
+    const size = await createNewSize({
+      ...body,
+      storeId: params.storeId,
     });
     return NextResponse.json(size);
   } catch (error) {
     console.log("[SIZES_POST]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleErrorResponse("[SIZES_POST_ERROR]", 500);
   }
 }
 
-export async function GET(
-  req: Request,
-  { params }: { params: { storeId: string } },
-) {
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400 },
-    );
+export async function GET(_req: Request, { params }: { params: Params }) {
+  if (!params.storeId) return handleErrorResponse("Store ID is required", 400);
   try {
-    const sizes = await prismadb.size.findMany({
-      where: { storeId: params.storeId },
-    });
+    const sizes = await getSizesByStoreId(params.storeId);
     return NextResponse.json(sizes);
   } catch (error) {
     console.log("[SIZES_GET]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleErrorResponse("[SIZES_GET_ERROR]", 500);
   }
 }

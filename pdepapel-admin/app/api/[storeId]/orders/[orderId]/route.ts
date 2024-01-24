@@ -1,7 +1,13 @@
 import prismadb from "@/lib/prismadb";
+import { OrderBody } from "@/lib/types";
 import { auth } from "@clerk/nextjs";
 import { OrderStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
+
+interface Params {
+  storeId: string;
+  orderId: string;
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,10 +19,7 @@ export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
 }
 
-export async function GET(
-  _req: Request,
-  { params }: { params: { orderId: string } },
-) {
+export async function GET(_req: Request, { params }: { params: Params }) {
   if (!params.orderId)
     return NextResponse.json(
       { error: "Order ID is required" },
@@ -29,6 +32,11 @@ export async function GET(
         orderItems: {
           include: {
             product: {
+              include: {
+                images: true,
+              },
+            },
+            variant: {
               include: {
                 images: true,
               },
@@ -54,10 +62,7 @@ export async function GET(
   }
 }
 
-export async function PATCH(
-  req: Request,
-  { params }: { params: { storeId: string; orderId: string } },
-) {
+export async function PATCH(req: Request, { params }: { params: Params }) {
   const { userId: ownerId } = auth();
   if (!ownerId)
     return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
@@ -66,8 +71,13 @@ export async function PATCH(
       { error: "Order ID is required" },
       { status: 400 },
     );
+  if (!params.storeId)
+    return NextResponse.json(
+      { error: "Store ID is required" },
+      { status: 400 },
+    );
   try {
-    const body = await req.json();
+    const body: OrderBody = await req.json();
     const {
       fullName,
       phone,
@@ -77,6 +87,7 @@ export async function PATCH(
       payment,
       shipping,
       userId,
+      couponId,
       guestId,
     } = body;
     const storeByUserId = await prismadb.store.findFirst({
@@ -124,12 +135,11 @@ export async function PATCH(
           userId,
           guestId,
           orderItems: {
-            create: orderItems.map(
-              (orderItem: { productId: string; quantity?: number }) => ({
-                product: { connect: { id: orderItem.productId } },
-                quantity: orderItem.quantity ?? 1,
-              }),
-            ),
+            create: orderItems.map((orderItem) => ({
+              product: { connect: { id: orderItem.productId } },
+              variant: { connect: { id: orderItem.variantId } },
+              quantity: orderItem.quantity ?? 1,
+            })),
           },
           ...(status && { status }),
           payment: payment
@@ -221,10 +231,7 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
-  _req: Request,
-  { params }: { params: { storeId: string; orderId: string } },
-) {
+export async function DELETE(_req: Request, { params }: { params: Params }) {
   const { userId } = auth();
   if (!userId)
     return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });

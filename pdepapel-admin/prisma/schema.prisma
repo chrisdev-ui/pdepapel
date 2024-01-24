@@ -9,6 +9,17 @@ generator client {
   previewFeatures = ["fullTextIndex", "fullTextSearch"]
 }
 
+enum DiscountType {
+  FIXED
+  PERCENTAGE
+  BUY_X_GET_Y
+}
+
+enum CouponType {
+  FIXED
+  PERCENTAGE
+}
+
 enum OrderStatus {
   CREATED
   PENDING
@@ -52,12 +63,18 @@ model Store {
   colors      Color[]     @relation("StoreToColor")
   designs     Design[]    @relation("StoreToDesign")
   products    Product[]   @relation("StoreToProduct")
+  variants    ProductVariant[] @relation("StoreToVariant")
   orders      Order[]     @relation("StoreToOrder")
   mainBanner  MainBanner? @relation("StoreToMainBanner")
   banners     Banner[]    @relation("StoreToBanner")
   reviews     Review[]    @relation("StoreToReview")
   shippings   Shipping[]  @relation("StoreToShipping")
   payments    PaymentDetails[] @relation("StoreToPaymentDetails")
+  discounts   Discount[]  @relation("StoreToDiscount")
+  coupons     Coupon[]    @relation("StoreToCoupon")
+  inventories Inventory[] @relation("StoreToInventory")
+  tags        Tag[]       @relation("StoreToTag")
+  productTags ProductTag[] @relation("StoreToProductTag")
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 }
@@ -122,6 +139,7 @@ model Size {
   name        String
   value       String
   products    Product[]   
+  variants    ProductVariant[]
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
@@ -135,6 +153,7 @@ model Color {
   name        String
   value       String
   products    Product[]
+  variants    ProductVariant[]
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
@@ -147,6 +166,7 @@ model Design {
   store       Store       @relation("StoreToDesign", fields: [storeId], references: [id])
   name        String
   products    Product[]
+  variants    ProductVariant[]
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
@@ -174,7 +194,10 @@ model Product {
   images      Image[]
   orderItems  OrderItem[]
   reviews     Review[]
+  variants    ProductVariant[]
+  tags        ProductTag[]
   sku         String      @unique
+  slug        String?     @unique
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
@@ -188,6 +211,38 @@ model Product {
   @@index([designId])
 }
 
+model ProductVariant {
+  id          String      @id @default(uuid())
+  storeId     String
+  store       Store       @relation("StoreToVariant", fields: [storeId], references: [id])
+  productId   String
+  product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sizeId      String?
+  size        Size?        @relation(fields: [sizeId], references: [id])
+  colorId     String?
+  color       Color?       @relation(fields: [colorId], references: [id])
+  designId    String?
+  design      Design?      @relation(fields: [designId], references: [id])
+  discountId  String?
+  discount    Discount?    @relation("VariantToDiscount", fields: [discountId], references: [id])
+  name        String
+  stock       Int
+  price       Float
+  sku         String      @unique 
+  images      ImageVariant[]
+  orderItems  OrderItem[]
+  inventory   Inventory?  @relation("VariantToInventory")
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([storeId])
+  @@index([productId])
+  @@index([sizeId])
+  @@index([colorId])
+  @@index([designId])
+  @@index([discountId])
+}
+
 model Image {
   id          String      @id @default(uuid())
   productId   String
@@ -197,6 +252,17 @@ model Image {
   updatedAt   DateTime    @updatedAt
 
   @@index([productId])
+}
+
+model ImageVariant {
+  id          String      @id @default(uuid())
+  variantId   String
+  variant     ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  url         String
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([variantId])
 }
 
 model Order {
@@ -213,10 +279,13 @@ model Order {
   fullName    String      @default("")
   phone       String      @default("")
   address     String      @default("")
+  couponId    String?
+  coupon      Coupon?     @relation("OrderToCoupon", fields: [couponId], references: [id])
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
   @@index([storeId])
+  @@index([couponId])
 }
 
 model OrderItem {
@@ -225,10 +294,13 @@ model OrderItem {
   order       Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
   productId   String
   product     Product     @relation(fields: [productId], references: [id])
+  variantId   String
+  variant     ProductVariant @relation(fields: [variantId], references: [id])
   quantity    Int
 
   @@index([orderId])
   @@index([productId])
+  @@index([variantId])
 }
 
 model MainBanner {
@@ -301,7 +373,7 @@ model PaymentDetails {
   order         Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
   method        PaymentMethod   @default(BankTransfer)         
   transactionId String?
-  details       String?          @default("")
+  details       String?         @default("")
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 
@@ -309,4 +381,82 @@ model PaymentDetails {
   @@index([storeId])
 }
 
+model Inventory {
+  id          String          @id @default(uuid())
+  storeId     String
+  store       Store           @relation("StoreToInventory", fields: [storeId], references: [id])
+  variantId   String          @unique
+  variant     ProductVariant  @relation("VariantToInventory", fields: [variantId], references: [id], onDelete: Cascade)
+  quantity    Int             @default(0)
+  sold        Int             @default(0)
+  onHold      Int             @default(0)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
+  @@index([variantId])
+  @@index([storeId])
+}
+
+model Discount {
+  id          String            @id @default(uuid())
+  storeId     String
+  store       Store             @relation("StoreToDiscount", fields: [storeId], references: [id])
+  name        String
+  type        DiscountType
+  amount      Float
+  x           Int?
+  y           Int?
+  variants    ProductVariant[]  @relation("VariantToDiscount")
+  startDate   DateTime
+  endDate     DateTime
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([storeId])
+}
+
+model Coupon {
+  id              String            @id @default(uuid())
+  storeId         String
+  store           Store             @relation("StoreToCoupon", fields: [storeId], references: [id])
+  orders          Order[]           @relation("OrderToCoupon")
+  name            String
+  code            String            @unique
+  type            CouponType
+  amount          Float
+  validFrom       DateTime
+  validUntil      DateTime
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([storeId])
+}
+
+model Tag {
+  id          String      @id @default(uuid())
+  storeId     String
+  store       Store       @relation("StoreToTag", fields: [storeId], references: [id])
+  name        String      @unique
+  products    ProductTag[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([name], map: "FULLTEXT")
+  @@index([storeId])
+}
+
+model ProductTag {
+  id          String      @id @default(uuid())
+  storeId     String
+  store       Store       @relation("StoreToProductTag", fields: [storeId], references: [id])
+  productId   String
+  product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tagId       String
+  tag         Tag         @relation(fields: [tagId], references: [id])
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([productId])
+  @@index([tagId])
+  @@index([storeId])
+}
