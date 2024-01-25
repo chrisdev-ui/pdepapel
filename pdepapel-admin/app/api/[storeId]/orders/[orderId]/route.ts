@@ -172,7 +172,10 @@ export async function PATCH(
     });
 
     if (updatedOrder) {
-      if (updatedOrder.status === OrderStatus.PAID) {
+      if (
+        updatedOrder.status === OrderStatus.PAID &&
+        order.status !== OrderStatus.PAID
+      ) {
         await prismadb.$transaction(async (tx) => {
           for (const orderItem of updatedOrder.orderItems) {
             const product = orderItem.product;
@@ -190,6 +193,23 @@ export async function PATCH(
                 `Product ${product.name} is out of stock. Please contact the store owner.`,
               );
             }
+          }
+        });
+      } else if (
+        updatedOrder.status !== OrderStatus.PAID &&
+        order.status === OrderStatus.PAID
+      ) {
+        await prismadb.$transaction(async (tx) => {
+          for (const orderItem of updatedOrder.orderItems) {
+            const product = orderItem.product;
+            await tx.product.update({
+              where: { id: product.id },
+              data: {
+                stock: {
+                  increment: orderItem.quantity,
+                },
+              },
+            });
           }
         });
       }
