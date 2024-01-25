@@ -1,3 +1,7 @@
+import { getUserId, isUserAuthorized } from "@/helpers/auth";
+import { getOrderById } from "@/helpers/orders-actions";
+import { handleErrorResponse, handleSuccessResponse } from "@/helpers/response";
+import { validateMandatoryFields } from "@/helpers/validation";
 import prismadb from "@/lib/prismadb";
 import { OrderBody } from "@/lib/types";
 import { auth } from "@clerk/nextjs";
@@ -21,97 +25,54 @@ export async function OPTIONS() {
 
 export async function GET(_req: Request, { params }: { params: Params }) {
   if (!params.orderId)
-    return NextResponse.json(
-      { error: "Order ID is required" },
-      { status: 400, headers: corsHeaders },
-    );
+    return handleErrorResponse("Order ID is required", 400, corsHeaders);
+  if (!params.storeId)
+    return handleErrorResponse("Store ID is required", 400, corsHeaders);
   try {
-    const order = await prismadb.order.findUnique({
-      where: { id: params.orderId },
-      include: {
-        orderItems: {
-          include: {
-            product: {
-              include: {
-                images: true,
-              },
-            },
-            variant: {
-              include: {
-                images: true,
-              },
-            },
-          },
-        },
-        payment: true,
-        shipping: true,
-      },
-    });
-    if (!order)
-      return NextResponse.json(
-        { error: "Order not found" },
-        { status: 404, headers: corsHeaders },
-      );
-    return NextResponse.json(order, { headers: corsHeaders });
+    const order = await getOrderById(params.orderId);
+    if (!order) return handleErrorResponse("Order not found", 404, corsHeaders);
+    return handleSuccessResponse(order, 200, corsHeaders);
   } catch (error) {
     console.log("[ORDER_GET]", error);
-    return NextResponse.json(
-      { error: "Internal Error" },
-      { status: 500, headers: corsHeaders },
-    );
+    return handleErrorResponse("[ORDER_GET_ERROR]", 500, corsHeaders);
   }
 }
 
 export async function PATCH(req: Request, { params }: { params: Params }) {
-  const { userId: ownerId } = auth();
-  if (!ownerId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+  const ownerId = getUserId();
+  if (!ownerId) return handleErrorResponse("Unauthenticated", 401);
   if (!params.orderId)
-    return NextResponse.json(
-      { error: "Order ID is required" },
-      { status: 400 },
-    );
+    return handleErrorResponse("Order ID is required", 400, corsHeaders);
   if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400 },
-    );
+    return handleErrorResponse("Store ID is required", 400, corsHeaders);
   try {
     const body: OrderBody = await req.json();
     const {
       fullName,
       phone,
       address,
+      userId,
+      guestId,
       orderItems,
       status,
       payment,
       shipping,
-      userId,
-      couponId,
-      guestId,
     } = body;
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId: ownerId },
-    });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    if (!fullName)
-      return NextResponse.json(
-        { error: "Full name is required" },
-        { status: 400 },
+    const missingFields = validateMandatoryFields(body, [
+      "fullName",
+      "phone",
+      "address",
+      "orderItems",
+    ]);
+    if (missingFields)
+      return handleErrorResponse(
+        `Missing fields: ${missingFields.join(", ")}`,
+        400,
+        corsHeaders,
       );
-    if (!phone)
-      return NextResponse.json({ error: "Phone is required" }, { status: 400 });
-    if (!address)
-      return NextResponse.json(
-        { error: "Address is required" },
-        { status: 400 },
-      );
-    if (!orderItems || orderItems.length === 0)
-      return NextResponse.json(
-        { error: "Order items are required" },
-        { status: 400 },
-      );
+    const isAuthorized = await isUserAuthorized(ownerId, params.storeId);
+    if (!isAuthorized)
+      return handleErrorResponse("Unauthorized", 403, corsHeaders);
     const order = await prismadb.order.findUnique({
       where: { id: params.orderId },
       include: {

@@ -304,3 +304,37 @@ export async function getOrdersByStoreId(
 
   return orders;
 }
+
+/**
+ * Retrieves an order by its ID.
+ *
+ * @param orderId - The ID of the order to retrieve.
+ * @returns The order object, including its order items, payment details, and shipping information.
+ */
+export async function getOrderById(orderId: string) {
+  const order = await prismadb.order.findUnique({
+    where: {
+      id: orderId,
+    },
+    include: {
+      orderItems: {
+        include: {
+          product: {
+            include: {
+              images: true,
+            },
+          },
+          variant: {
+            include: {
+              images: true,
+            },
+          },
+        },
+      },
+      payment: true,
+      shipping: true,
+    },
+  });
+
+  return order;
+}
