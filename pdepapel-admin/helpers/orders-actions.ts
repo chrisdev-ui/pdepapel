@@ -4,6 +4,7 @@ import { OrderBody } from "@/lib/types";
 import { generateOrderNumber } from "@/lib/utils";
 import { DiscountType, OrderStatus } from "@prisma/client";
 import { differenceInMinutes } from "date-fns";
+import { getUserId, isUserAuthorized } from "./auth";
 import {
   calculateDiscountQuantity,
   isValidDiscount,
@@ -256,4 +257,50 @@ export async function createOrder(data: OrderBody & { storeId: string }) {
 
     return order;
   });
+}
+
+/**
+ * Retrieves orders from the database based on the store ID.
+ * @param storeId - The ID of the store for which to retrieve orders.
+ * @param userId - The ID of the user for whom to retrieve orders. Optional.
+ * @param guestId - The ID of the guest for whom to retrieve orders. Optional.
+ * @returns An array of orders with their associated order items, payment, and shipping information.
+ */
+export async function getOrdersByStoreId(
+  storeId: string,
+  userId: string | null,
+  guestId: string | null,
+) {
+  const authUserId = getUserId();
+  const isStoreOwner = await isUserAuthorized(authUserId as string, storeId);
+
+  const whereClause: { storeId: string; userId?: string; guestId?: string } = {
+    storeId,
+  };
+
+  if (!isStoreOwner) {
+    if (userId) {
+      whereClause.userId = userId;
+    } else if (guestId) {
+      whereClause.guestId = guestId;
+    } else {
+      return [];
+    }
+  }
+
+  const orders = await prismadb.order.findMany({
+    where: whereClause,
+    include: {
+      orderItems: {
+        include: {
+          product: true,
+          variant: true,
+        },
+      },
+      payment: true,
+      shipping: true,
+    },
+  });
+
+  return orders;
 }

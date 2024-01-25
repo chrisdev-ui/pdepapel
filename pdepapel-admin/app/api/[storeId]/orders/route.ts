@@ -2,11 +2,11 @@ import { EmailTemplate } from "@/components/email-template";
 import { authenticateUser, isUserAuthorized } from "@/helpers/auth";
 import {
   createOrder,
+  getOrdersByStoreId,
   isUserAuthorizedToCreateNewOrder,
 } from "@/helpers/orders-actions";
 import { handleErrorResponse, handleSuccessResponse } from "@/helpers/response";
 import { validateMandatoryFields } from "@/helpers/validation";
-import prismadb from "@/lib/prismadb";
 import { resend } from "@/lib/resend";
 import { OrderBody } from "@/lib/types";
 import { NextRequest, NextResponse } from "next/server";
@@ -85,54 +85,14 @@ export async function POST(req: Request, { params }: { params: Params }) {
 
 export async function GET(req: NextRequest, { params }: { params: Params }) {
   if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400, headers: corsHeaders },
-    );
+    return handleErrorResponse("Store ID is required", 400, corsHeaders);
   try {
     const userId = req.nextUrl.searchParams.get("userId");
     const guestId = req.nextUrl.searchParams.get("guestId");
-    const whereClause: { storeId: string; userId?: string; guestId?: string } =
-      {
-        storeId: params.storeId,
-      };
-
-    if (userId) {
-      whereClause.userId = userId;
-    } else if (guestId) {
-      whereClause.guestId = guestId;
-    }
-
-    const orders = await prismadb.order.findMany({
-      where: whereClause,
-      include: {
-        orderItems: {
-          include: {
-            product: true,
-            variant: true,
-          },
-        },
-        payment: true,
-        shipping: true,
-      },
-    });
-    return NextResponse.json(orders, { headers: corsHeaders });
+    const orders = await getOrdersByStoreId(params.storeId, userId, guestId);
+    return handleSuccessResponse(orders, 200, corsHeaders);
   } catch (error) {
     console.log("[ORDERS_GET]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500, headers: corsHeaders },
-    );
+    return handleErrorResponse("[ORDERS_GET_ERROR]", 500, corsHeaders);
   }
-}
-
-async function isStoreOwner(userId: string | null, storeId: string) {
-  if (!userId) return false;
-  const storeByUserId = await prismadb.store.findFirst({
-    where: {
-      id: storeId,
-      userId,
-    },
-  });
-  return !!storeByUserId;
 }
