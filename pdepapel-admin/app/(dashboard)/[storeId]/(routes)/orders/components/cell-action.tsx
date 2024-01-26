@@ -15,7 +15,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
-import { env } from "@/lib/env.mjs";
 import { OrderColumn } from "./columns";
 
 interface CellActionProps {
@@ -88,7 +87,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
             className="cursor-pointer"
             onClick={() =>
               onCopy(
-                `${env.NEXT_PUBLIC_FRONTEND_STORE_URL}/order/${data.id}`,
+                `https://papeleriapdepapel.com/order/${data.id}`,
                 "URL de la orden copiada la portapapeles",
               )
             }
