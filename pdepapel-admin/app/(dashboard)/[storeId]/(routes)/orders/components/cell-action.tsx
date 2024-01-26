@@ -76,6 +76,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
         <DropdownMenuContent align="end">
           <DropdownMenuLabel>Acciones</DropdownMenuLabel>
           <DropdownMenuItem
+            className="cursor-pointer"
             onClick={() =>
               onCopy(data.id, "ID de la orden copiada la portapapeles")
             }
@@ -84,9 +85,10 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
             Copiar ID
           </DropdownMenuItem>
           <DropdownMenuItem
+            className="cursor-pointer"
             onClick={() =>
               onCopy(
-                `${env.FRONTEND_STORE_URL}/order/${data.id}`,
+                `${env.NEXT_PUBLIC_FRONTEND_STORE_URL}/order/${data.id}`,
                 "URL de la orden copiada la portapapeles",
               )
             }
@@ -95,6 +97,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
             Copiar URL de la orden
           </DropdownMenuItem>
           <DropdownMenuItem
+            className="cursor-pointer"
             onClick={() =>
               onCopy(
                 data.orderNumber,
@@ -106,12 +109,16 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
             Copiar Número de orden
           </DropdownMenuItem>
           <DropdownMenuItem
+            className="cursor-pointer"
             onClick={() => router.push(`/${params.storeId}/orders/${data.id}`)}
           >
             <Edit className="mr-2 h-4 w-4" />
             Actualizar
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setOpen(true)}>
+          <DropdownMenuItem
+            className="cursor-pointer"
+            onClick={() => setOpen(true)}
+          >
             <Trash className="mr-2 h-4 w-4" />
             Eliminar
           </DropdownMenuItem>
