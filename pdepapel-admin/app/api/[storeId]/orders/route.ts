@@ -168,7 +168,7 @@ export async function POST(
 
     if (!storeOwner) {
       await resend.emails.send({
-        from: "Orders <onboarding@resend.dev>",
+        from: "Orders <admin@papeleriapdepapel.com>",
         to: ["web.christian.dev@gmail.com", "papeleria.pdepapel@gmail.com"],
         subject: `Nueva orden de compra - ${fullName}`,
         react: EmailTemplate({

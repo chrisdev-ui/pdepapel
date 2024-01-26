@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
+import { env } from "@/lib/env.mjs";
 import { OrderColumn } from "./columns";
 
 interface CellActionProps {
@@ -81,6 +82,17 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
           >
             <Copy className="mr-2 h-4 w-4" />
             Copiar ID
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() =>
+              onCopy(
+                `${env.FRONTEND_STORE_URL}/order/${data.id}`,
+                "URL de la orden copiada la portapapeles",
+              )
+            }
+          >
+            <Copy className="mr-2 h-4 w-4" />
+            Copiar URL de la orden
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() =>
