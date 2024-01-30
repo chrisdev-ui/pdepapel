@@ -10,6 +10,7 @@ import { getTypes } from "@/actions/get-types";
 import { Container } from "@/components/ui/container";
 import { NoResults } from "@/components/ui/no-results";
 import { KAWAII_FACE_SAD, PRICES, SORT_OPTIONS } from "@/constants";
+import { ShopSearchBar } from "./components/shop-search-bar";
 
 const SortSelector = dynamic(() => import("./components/sort-selector"), {
   ssr: false,
@@ -59,6 +60,7 @@ interface ShopPageProps {
     priceRange: string;
     page: number;
     itemsPerPage: number;
+    search: string;
   };
 }
 
@@ -76,6 +78,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
         fromShop: true,
         page: searchParams.page,
         itemsPerPage: searchParams.itemsPerPage,
+        search: searchParams.search,
       }),
       getTypes(),
       getSizes(),
@@ -137,10 +140,13 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
               <h2 className="font-serif text-3xl font-bold">
                 Todos los productos
               </h2>
-              <SortSelector
-                options={SORT_OPTIONS}
-                isDisabled={products.length === 0}
-              />
+              <section className="flex w-full items-center gap-4 md:w-auto">
+                <ShopSearchBar className="hidden md:flex" />
+                <SortSelector
+                  options={SORT_OPTIONS}
+                  isDisabled={products.length === 0}
+                />
+              </section>
             </div>
             <MobileFilters
               types={types}
@@ -150,6 +156,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
               pricesRanges={PRICES}
               designs={designs}
             />
+            <ShopSearchBar className="md:hidden" />
             {products.length === 0 && (
               <NoResults
                 className="h-96"

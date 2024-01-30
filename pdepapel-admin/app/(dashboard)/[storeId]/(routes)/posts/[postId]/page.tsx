@@ -1,5 +1,5 @@
 import prismadb from "@/lib/prismadb";
-import { PostForm } from "./components/type-form";
+import { PostForm } from "./components/post-form";
 
 export default async function PostPage({
   params,

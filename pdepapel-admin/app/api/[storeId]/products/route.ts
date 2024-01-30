@@ -1,22 +1,13 @@
+import {
+  PRICE_RANGES,
+  PriceRanges,
+  SORT_OPTIONS,
+  SortOption,
+} from "@/constants";
 import prismadb from "@/lib/prismadb";
 import { generateRandomSKU } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
-
-type SortOption =
-  | "default"
-  | "dateAdded"
-  | "priceLowToHigh"
-  | "priceHighToLow"
-  | "name"
-  | "featuredFirst";
-
-type PriceRanges =
-  | "[0,5000]"
-  | "[5000,10000]"
-  | "[10000,20000]"
-  | "[20000,50000]"
-  | "[50000,99999999]";
 
 export async function POST(
   req: Request,
@@ -138,6 +129,7 @@ export async function GET(
     const onlyNew = searchParams.get("onlyNew") || undefined;
     const fromShop = searchParams.get("fromShop") || undefined;
     const limit = Number(searchParams.get("limit"));
+    const search = searchParams.get("search") || "";
     const sortOption = searchParams.get("sortOption") || "default";
     const priceRange = searchParams.get("priceRange") || undefined;
     const excludeProducts = searchParams.get("excludeProducts") || undefined;
@@ -156,21 +148,7 @@ export async function GET(
     }
     let products;
     let totalItems: number = 0;
-    const sort: Record<SortOption, Record<string, "asc" | "desc">> = {
-      default: { createdAt: "desc" },
-      dateAdded: { createdAt: "desc" },
-      priceLowToHigh: { price: "asc" },
-      priceHighToLow: { price: "desc" },
-      name: { name: "asc" },
-      featuredFirst: { isFeatured: "desc" },
-    };
-    const priceRanges = {
-      "[0,5000]": { gte: 0, lte: 5000 },
-      "[5000,10000]": { gte: 5000, lte: 10000 },
-      "[10000,20000]": { gte: 10000, lte: 20000 },
-      "[20000,50000]": { gte: 20000, lte: 50000 },
-      "[50000,99999999]": { gte: 50000 },
-    };
+
     if (onlyNew) {
       products = await prismadb.product.findMany({
         where: {
@@ -206,10 +184,24 @@ export async function GET(
           colorId: colorId.length > 0 ? { in: colorId } : undefined,
           sizeId: sizeId.length > 0 ? { in: sizeId } : undefined,
           designId: designId.length > 0 ? { in: designId } : undefined,
+          OR: [
+            { name: search ? { search } : undefined },
+            { description: search ? { search } : undefined },
+            {
+              name: {
+                contains: search,
+              },
+            },
+            {
+              description: {
+                contains: search,
+              },
+            },
+          ],
           isFeatured: isFeatured !== null ? isFeatured === "true" : undefined,
           isArchived: false,
           price: priceRange
-            ? priceRanges[priceRange as PriceRanges]
+            ? PRICE_RANGES[priceRange as PriceRanges]
             : undefined,
           NOT: {
             id: excludeProducts
@@ -227,7 +219,7 @@ export async function GET(
             orderBy: { createdAt: "desc" },
           },
         },
-        orderBy: sort[sortOption as SortOption],
+        orderBy: SORT_OPTIONS[sortOption as SortOption],
         skip: fromShop ? (page - 1) * itemsPerPage : undefined,
         take: limit || (fromShop ? itemsPerPage : undefined),
       });
@@ -243,10 +235,24 @@ export async function GET(
           colorId: colorId.length > 0 ? { in: colorId } : undefined,
           sizeId: sizeId.length > 0 ? { in: sizeId } : undefined,
           designId: designId.length > 0 ? { in: designId } : undefined,
+          OR: [
+            { name: search ? { search } : undefined },
+            { description: search ? { search } : undefined },
+            {
+              name: {
+                contains: search,
+              },
+            },
+            {
+              description: {
+                contains: search,
+              },
+            },
+          ],
           isFeatured: isFeatured !== null ? isFeatured === "true" : undefined,
           isArchived: false,
           price: priceRange
-            ? priceRanges[priceRange as PriceRanges]
+            ? PRICE_RANGES[priceRange as PriceRanges]
             : undefined,
           NOT: {
             id: excludeProducts

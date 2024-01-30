@@ -8,6 +8,7 @@ import dynamic from "next/dynamic";
 import { Footer } from "@/components/footer";
 import { caudex, comingSoon, martelSans, roboto } from "@/lib/fonts";
 import { ModalProvider } from "@/providers/modal-provider";
+import { ReactQueryProvider } from "@/providers/query-client-provider";
 import { Toaster } from "@/providers/toaster";
 import "./globals.css";
 
@@ -90,13 +91,15 @@ export default function RootLayout({
         <body
           className={`${caudex.variable} ${comingSoon.variable} ${martelSans.variable} ${roboto.variable}`}
         >
-          <ModalProvider />
-          <Navbar />
-          {children}
-          <Footer />
-          <Toaster />
-          <Analytics />
-          <SpeedInsights />
+          <ReactQueryProvider>
+            <ModalProvider />
+            <Navbar />
+            {children}
+            <Footer />
+            <Toaster />
+            <Analytics />
+            <SpeedInsights />
+          </ReactQueryProvider>
         </body>
       </html>
     </ClerkProvider>

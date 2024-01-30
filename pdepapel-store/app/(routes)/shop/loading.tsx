@@ -32,7 +32,10 @@ export default function loading() {
               <h2 className="font-serif text-3xl font-bold">
                 Todos los productos
               </h2>
-              <SortSelectorSkeleton />
+              <div className="flex items-center gap-4">
+                <SortSelectorSkeleton />
+                <SortSelectorSkeleton />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-1 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
               {Array(8)

@@ -30,9 +30,9 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Menu className="mr-6 h-10 w-10 self-center sm:mr-12 sm:h-6 sm:w-6 lg:hidden" />
+        <Menu className="h-6 w-6 md:h-10 md:w-10 lg:hidden" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-72" align="end" sideOffset={48}>
+      <DropdownMenuContent className="w-72" align="end" sideOffset={10}>
         <DropdownMenuItem className="flex w-full px-6 py-3 text-xl hover:bg-green-leaf hover:text-white">
           <Link className="flex w-full items-center gap-6" href="/">
             <Home className="h-6 w-6" />

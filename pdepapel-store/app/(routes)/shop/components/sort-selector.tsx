@@ -65,7 +65,7 @@ const SortSelector: React.FC<SortSelectorProps> = ({
   };
 
   return (
-    <div className="flex w-auto min-w-fit items-center gap-2 sm:w-44 md:w-52 lg:w-64">
+    <div className="flex w-full min-w-full items-center gap-2 sm:w-44 sm:min-w-fit md:w-52 lg:w-64">
       {selectedSortOption && (
         <button onClick={onClearSortOption}>
           <XCircle className="h-6 w-6" />
@@ -82,11 +82,7 @@ const SortSelector: React.FC<SortSelectorProps> = ({
         </SelectTrigger>
         <SelectContent>
           {options.map((option) => (
-            <SelectItem
-              key={option.value}
-              value={option.value}
-              onClick={() => console.log("hey")}
-            >
+            <SelectItem key={option.value} value={option.value}>
               {option.label}
             </SelectItem>
           ))}

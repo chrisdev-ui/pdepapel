@@ -6,6 +6,7 @@ datasource db {
 
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["fullTextIndex", "fullTextSearch"]
 }
 
 enum OrderStatus {
@@ -177,6 +178,9 @@ model Product {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
+  @@fulltext([name])
+  @@fulltext([name, description])
+  
   @@index([storeId])
   @@index([categoryId])
   @@index([sizeId])

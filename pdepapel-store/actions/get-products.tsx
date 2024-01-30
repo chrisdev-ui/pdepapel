@@ -19,6 +19,7 @@ interface Query {
   sortOption?: string;
   priceRange?: string;
   excludeProducts?: string;
+  search?: string;
 }
 
 export const getProducts = async (query: Query): Promise<ProductsResponse> => {
@@ -39,6 +40,7 @@ export const getProducts = async (query: Query): Promise<ProductsResponse> => {
       page: query.page,
       itemsPerPage: query.itemsPerPage,
       fromShop: query.fromShop,
+      search: query.search,
     },
   });
 
