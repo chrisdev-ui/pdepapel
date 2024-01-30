@@ -1,3 +1,4 @@
+import { handleErrorResponse } from "@/helpers/response";
 import prismadb from "@/lib/prismadb";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -16,10 +17,7 @@ export async function GET(
   { params }: { params: { storeId: string } },
 ) {
   if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400, headers: corsHeaders },
-    );
+    return handleErrorResponse("Store ID is required", 400, corsHeaders);
   try {
     const search = req.nextUrl.searchParams.get("search") || "";
     const page = Number(req.nextUrl.searchParams.get("page")) || 1;

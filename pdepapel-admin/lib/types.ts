@@ -132,6 +132,7 @@ export interface ParsedQueryParams {
   sortOption: string;
   priceRange: string | undefined;
   excludeProducts: string | undefined;
+  search: string;
 }
 
 export type SortOption =

@@ -64,6 +64,7 @@ export function parseQueryParams(url: string): ParsedQueryParams {
     sortOption: searchParams.get("sortOption") || "default",
     priceRange: searchParams.get("priceRange") || undefined,
     excludeProducts: searchParams.get("excludeProducts") || undefined,
+    search: searchParams.get("search") || "",
   };
 }
 
@@ -105,6 +106,7 @@ export async function buildProductQuery(
     itemsPerPage,
     limit,
     onlyNew,
+    search,
   } = queryParams;
 
   const where = onlyNew
@@ -125,6 +127,20 @@ export async function buildProductQuery(
         designId: designId.length > 0 ? { in: designId } : undefined,
         isFeatured,
         isArchived: false,
+        OR: [
+          { name: search ? { search } : undefined },
+          { description: search ? { search } : undefined },
+          {
+            name: {
+              contains: search,
+            },
+          },
+          {
+            description: {
+              contains: search,
+            },
+          },
+        ],
         price: priceRange ? PRICE_RANGES[priceRange as PriceRanges] : undefined,
         NOT: {
           id: excludeProducts ? { in: excludeProducts.split(",") } : undefined,
@@ -142,11 +158,12 @@ export async function buildProductQuery(
     },
   };
 
-  const orderBy: Prisma.ProductOrderByWithRelationInput = onlyNew
-    ? {
-        createdAt: "desc",
-      }
-    : SORT_OPTIONS[sortOption as SortOption];
+  const orderBy: Prisma.ProductOrderByWithRelationAndSearchRelevanceInput =
+    onlyNew
+      ? {
+          createdAt: "desc",
+        }
+      : SORT_OPTIONS[sortOption as SortOption];
 
   const skip = onlyNew
     ? undefined
@@ -356,4 +373,46 @@ export async function fetchProductsAndVariants(
   });
 
   return products;
+}
+
+export async function searchProductsByTerm(
+  term: string,
+  storeId: string,
+  limit: number,
+) {
+  return await prismadb.product.findMany({
+    where: {
+      storeId,
+      isArchived: false,
+      OR: [
+        {
+          name: term ? { search: term } : undefined,
+        },
+        {
+          description: term ? { search: term } : undefined,
+        },
+        {
+          name: {
+            contains: term,
+          },
+        },
+        {
+          description: {
+            contains: term,
+          },
+        },
+      ],
+    },
+    orderBy: {
+      _relevance: {
+        fields: ["name", "description"],
+        search: term,
+        sort: "asc",
+      },
+    },
+    take: limit,
+    include: {
+      images: true,
+    },
+  });
 }
