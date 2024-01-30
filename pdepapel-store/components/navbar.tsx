@@ -43,10 +43,10 @@ const Navbar: React.FC<{}> = () => {
 
   return (
     <header className="fixed left-0 top-0 z-50 mx-auto" ref={navBarRef}>
-      <nav className="flex w-screen items-center justify-between gap-4 bg-white-rock pr-5 md:pr-12 lg:pr-0">
+      <nav className="flex w-screen items-center justify-between gap-4 bg-white-rock">
         <div
           className={cn(
-            "flex w-full items-center px-5 py-3 transition-all duration-300 lg:py-6 xl:px-12",
+            "flex items-center p-3 transition-all duration-300 md:w-full lg:py-6 xl:px-12",
             {
               "lg:py-0": scrollPosition > 120,
               "w-0 px-0 lg:w-full lg:px-5": displaySearchbox,
@@ -56,7 +56,7 @@ const Navbar: React.FC<{}> = () => {
           <Link
             href="/"
             className={cn(
-              "relative h-24 w-48 transition-all duration-500 ease-in-out",
+              "relative hidden transition-all duration-500 ease-in-out md:block md:h-24 md:w-48",
               {
                 "md:w-0 xl:w-48": displaySearchbox,
               },
@@ -65,6 +65,23 @@ const Navbar: React.FC<{}> = () => {
             <Image
               src="/images/text-beside-transparent-bg.webp"
               alt="Logo Papelería P de Papel con nombre al lado"
+              fill
+              sizes="(max-width: 640px) 100vw, 640px"
+              priority
+            />
+          </Link>
+          <Link
+            href="/"
+            className={cn(
+              "relative h-24 w-24 transition-all duration-500 ease-in-out md:hidden",
+              {
+                "w-0": displaySearchbox,
+              },
+            )}
+          >
+            <Image
+              src="/images/no-text-transparent-bg.webp"
+              alt="Logo Papelería P de Papel"
               fill
               sizes="(max-width: 640px) 100vw, 640px"
               priority
@@ -113,13 +130,19 @@ const Navbar: React.FC<{}> = () => {
           </div>
         </div>
         {/* Responsive navbar */}
-        <SearchBar
-          displaySearchbox={displaySearchbox}
-          toggleSearch={toggleSearch}
-          className="hidden xs:flex lg:hidden"
-        />
-        <NavbarCart className="hidden self-center xs:flex lg:hidden" />
-        <HamburgerMenu isUserLoggedIn={!!isSignedIn} />
+        <div
+          className={cn("flex items-center gap-3 px-6 lg:hidden", {
+            "gap-2 px-2": displaySearchbox,
+          })}
+        >
+          <SearchBar
+            displaySearchbox={displaySearchbox}
+            toggleSearch={toggleSearch}
+            className="flex lg:hidden"
+          />
+          <NavbarCart className="hidden self-center xs:flex lg:hidden" />
+          <HamburgerMenu isUserLoggedIn={!!isSignedIn} />
+        </div>
       </nav>
     </header>
   );
