@@ -1,5 +1,7 @@
 import { Metadata } from "next";
-import dynamic from "next/dynamic";
+import nextDynamic from "next/dynamic";
+import { Suspense } from "react";
+import { v4 as uuidv4 } from "uuid";
 
 import { getCategories } from "@/actions/get-categories";
 import { getColors } from "@/actions/get-colors";
@@ -7,34 +9,36 @@ import { getDesigns } from "@/actions/get-designs";
 import { getProducts } from "@/actions/get-products";
 import { getSizes } from "@/actions/get-sizes";
 import { getTypes } from "@/actions/get-types";
+import Await from "@/components/await";
 import { Container } from "@/components/ui/container";
-import { NoResults } from "@/components/ui/no-results";
-import { KAWAII_FACE_SAD, PRICES, SORT_OPTIONS } from "@/constants";
-import { ShopSearchBar } from "./components/shop-search-bar";
+import { PRICES, SORT_OPTIONS } from "@/constants";
+import Products from "./components/products";
+import { ProductsContainerSkeleton } from "./components/skeletons";
 
-const SortSelector = dynamic(() => import("./components/sort-selector"), {
+const ShopSearchBar = nextDynamic(
+  () => import("./components/shop-search-bar"),
+  {
+    ssr: false,
+  },
+);
+
+const SortSelector = nextDynamic(() => import("./components/sort-selector"), {
   ssr: false,
 });
 
-const Paginator = dynamic(() => import("./components/paginator"), {
+const MobileFilters = nextDynamic(() => import("@/components/mobile-filters"), {
   ssr: false,
 });
 
-const ProductCard = dynamic(() => import("@/components/ui/product-card"), {
+const Filter = nextDynamic(() => import("@/components/filter"), {
   ssr: false,
 });
 
-const MobileFilters = dynamic(() => import("@/components/mobile-filters"), {
+const Features = nextDynamic(() => import("@/components/features"), {
   ssr: false,
 });
 
-const Filter = dynamic(() => import("@/components/filter"), {
-  ssr: false,
-});
-
-const Features = dynamic(() => import("@/components/features"), { ssr: false });
-
-const Newsletter = dynamic(() => import("@/components/newsletter"), {
+const Newsletter = nextDynamic(() => import("@/components/newsletter"), {
   ssr: false,
 });
 
@@ -65,26 +69,26 @@ interface ShopPageProps {
 }
 
 export default async function ShopPage({ searchParams }: ShopPageProps) {
-  const [{ products, totalPages }, types, sizes, colors, designs] =
-    await Promise.all([
-      getProducts({
-        typeId: searchParams.typeId,
-        categoryId: searchParams.categoryId,
-        colorId: searchParams.colorId,
-        sizeId: searchParams.sizeId,
-        designId: searchParams.designId,
-        sortOption: searchParams.sortOption,
-        priceRange: searchParams.priceRange,
-        fromShop: true,
-        page: searchParams.page,
-        itemsPerPage: searchParams.itemsPerPage,
-        search: searchParams.search,
-      }),
-      getTypes(),
-      getSizes(),
-      getColors(),
-      getDesigns(),
-    ]);
+  const getProductsAsync = getProducts({
+    typeId: searchParams.typeId,
+    categoryId: searchParams.categoryId,
+    colorId: searchParams.colorId,
+    sizeId: searchParams.sizeId,
+    designId: searchParams.designId,
+    sortOption: searchParams.sortOption,
+    priceRange: searchParams.priceRange,
+    fromShop: true,
+    page: searchParams.page,
+    itemsPerPage: searchParams.itemsPerPage,
+    search: searchParams.search,
+  });
+
+  const [types, sizes, colors, designs] = await Promise.all([
+    getTypes(),
+    getSizes(),
+    getColors(),
+    getDesigns(),
+  ]);
   let categories = await getCategories();
 
   if (searchParams.typeId && types.length > 0) {
@@ -132,7 +136,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
               valueKey="priceRange"
               name="Precios"
               emptyMessage="No hay precios disponibles"
-              data={products.length > 0 ? PRICES : []}
+              data={PRICES}
             />
           </div>
           <div className="mt-6 space-y-8 lg:col-span-4 lg:mt-0">
@@ -142,10 +146,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
               </h2>
               <section className="flex w-full items-center gap-4 md:w-auto">
                 <ShopSearchBar className="hidden md:flex" />
-                <SortSelector
-                  options={SORT_OPTIONS}
-                  isDisabled={products.length === 0}
-                />
+                <SortSelector options={SORT_OPTIONS} />
               </section>
             </div>
             <MobileFilters
@@ -157,24 +158,13 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
               designs={designs}
             />
             <ShopSearchBar className="md:hidden" />
-            {products.length === 0 && (
-              <NoResults
-                className="h-96"
-                message={`No hay productos ${KAWAII_FACE_SAD}`}
-              />
-            )}
-            {!!products.length && (
-              <div className="grid grid-cols-2 gap-1 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
-                {products.map((product) => (
-                  <ProductCard key={product.id} product={product} />
-                ))}
-              </div>
-            )}
-            {totalPages > 0 && (
-              <div className="flex w-full items-center">
-                <Paginator totalPages={totalPages} />
-              </div>
-            )}
+            <Suspense key={uuidv4()} fallback={<ProductsContainerSkeleton />}>
+              <Await promise={getProductsAsync}>
+                {({ products, totalPages }) => (
+                  <Products products={products} totalPages={totalPages} />
+                )}
+              </Await>
+            </Suspense>
           </div>
         </div>
       </Container>

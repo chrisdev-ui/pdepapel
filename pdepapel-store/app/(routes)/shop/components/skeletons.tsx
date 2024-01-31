@@ -51,3 +51,58 @@ export const ProductCardSkeleton: React.FC = () => {
     </div>
   );
 };
+
+export const ProductsContainerSkeleton: React.FC = () => (
+  <>
+    <div className="grid grid-cols-2 gap-1 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+      {Array(8)
+        .fill(0)
+        .map((_, index) => (
+          <ProductCardSkeleton key={`product_${index}`} />
+        ))}
+    </div>
+    <PaginatorSkeleton />
+  </>
+);
+
+export const PaginatorSkeleton: React.FC = () => {
+  return (
+    <div className="flex w-full items-center justify-center gap-4">
+      <Skeleton className="h-10 w-10" />
+      <Skeleton className="h-10 w-10" />
+      <Skeleton className="h-10 w-10" />
+      <Skeleton className="h-10 w-10" />
+    </div>
+  );
+};
+
+export const MobileFiltersSkeleton: React.FC = () => {
+  return (
+    <div className="flex flex-col gap-4 lg:hidden">
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-6 w-16" />
+        <Skeleton className="h-6 w-16" />
+      </div>
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-6 w-16" />
+        <Skeleton className="h-6 w-16" />
+      </div>
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-6 w-16" />
+        <Skeleton className="h-6 w-16" />
+      </div>
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-6 w-16" />
+        <Skeleton className="h-6 w-16" />
+      </div>
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-6 w-16" />
+        <Skeleton className="h-6 w-16" />
+      </div>
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-6 w-16" />
+        <Skeleton className="h-6 w-16" />
+      </div>
+    </div>
+  );
+};

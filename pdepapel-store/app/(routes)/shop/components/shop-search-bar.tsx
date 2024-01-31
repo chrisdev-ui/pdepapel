@@ -13,11 +13,14 @@ interface ShopSearchBarProps {
   className?: string;
 }
 
-export const ShopSearchBar: React.FC<ShopSearchBarProps> = ({ className }) => {
-  const [searchTerm, setSearchTerm] = useState<string>("");
+const ShopSearchBar: React.FC<ShopSearchBarProps> = ({ className }) => {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+
+  const [searchTerm, setSearchTerm] = useState<string>(
+    searchParams.get("search") || "",
+  );
 
   const debouncedSearch = useDebounce(searchTerm, 300);
 
@@ -63,3 +66,5 @@ export const ShopSearchBar: React.FC<ShopSearchBarProps> = ({ className }) => {
     </div>
   );
 };
+
+export default ShopSearchBar;

@@ -3,7 +3,8 @@ import dynamic from "next/dynamic";
 import { Container } from "@/components/ui/container";
 import {
   FilterSkeleton,
-  ProductCardSkeleton,
+  MobileFiltersSkeleton,
+  ProductsContainerSkeleton,
   SortSelectorSkeleton,
 } from "./components/skeletons";
 
@@ -32,18 +33,16 @@ export default function loading() {
               <h2 className="font-serif text-3xl font-bold">
                 Todos los productos
               </h2>
-              <div className="flex items-center gap-4">
+              <section className="flex w-full items-center gap-4 md:w-auto">
                 <SortSelectorSkeleton />
                 <SortSelectorSkeleton />
-              </div>
+              </section>
             </div>
-            <div className="grid grid-cols-2 gap-1 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
-              {Array(8)
-                .fill(0)
-                .map((_, index) => (
-                  <ProductCardSkeleton key={`product_${index}`} />
-                ))}
+            <MobileFiltersSkeleton />
+            <div className="flex w-full md:hidden">
+              <SortSelectorSkeleton />
             </div>
+            <ProductsContainerSkeleton />
           </div>
         </div>
       </Container>

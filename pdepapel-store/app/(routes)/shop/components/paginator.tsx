@@ -138,12 +138,10 @@ const Paginator: React.FC<PaginatorProps> = ({ totalPages }) => {
   return (
     <Pagination>
       <PaginationContent>
-        <PaginationItem>
-          <PaginationPrevious
-            onClick={goToPreviousPage}
-            disabled={currentPage === 1}
-          />
-        </PaginationItem>
+        <PaginationPrevious
+          onClick={goToPreviousPage}
+          disabled={currentPage === 1}
+        />
         {pagesToShow.map((page) => {
           if (page === DOTS) {
             return (
@@ -152,24 +150,20 @@ const Paginator: React.FC<PaginatorProps> = ({ totalPages }) => {
               </PaginationItem>
             );
           }
-
           return (
-            <PaginationItem key={page}>
-              <PaginationLink
-                isActive={page === currentPage}
-                onClick={() => goToPage(page as number)}
-              >
-                {page}
-              </PaginationLink>
-            </PaginationItem>
+            <PaginationLink
+              key={page}
+              isActive={page === currentPage}
+              onClick={() => goToPage(page as number)}
+            >
+              {page}
+            </PaginationLink>
           );
         })}
-        <PaginationItem>
-          <PaginationNext
-            onClick={goToNextPage}
-            disabled={currentPage === totalPages}
-          />
-        </PaginationItem>
+        <PaginationNext
+          onClick={goToNextPage}
+          disabled={currentPage === totalPages}
+        />
       </PaginationContent>
     </Pagination>
   );
