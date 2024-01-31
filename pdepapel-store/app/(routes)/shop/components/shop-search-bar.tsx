@@ -42,7 +42,8 @@ export const ShopSearchBar: React.FC<ShopSearchBarProps> = ({ className }) => {
     );
 
     router.push(url);
-  }, [debouncedSearch, pathname, router, searchParams]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, pathname, router]);
 
   return (
     <div
