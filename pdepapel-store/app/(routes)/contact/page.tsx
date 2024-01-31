@@ -82,7 +82,7 @@ export default function ContactPage() {
                   <span className="font-serif font-medium">Teléfono:</span>
                   <span>(+57) 321 629 9845</span>
                   <span className="text-xs">
-                    Aceptamos ordenes por medio telefónico
+                    Aceptamos órdenes por medio telefónico
                   </span>
                 </div>
                 <div className="flex flex-1 items-center justify-start gap-x-5">
