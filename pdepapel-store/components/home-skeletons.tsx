@@ -23,7 +23,7 @@ export const HeroSliderSkeleton: React.FC = () => (
 );
 
 export const FeaturedProductsSkeleton: React.FC = () => (
-  <Container className="mt-8 flex flex-col gap-y-8">
+  <Container component="section" className="mt-8 flex flex-col gap-y-8">
     <div className="space-y-4 text-center">
       <h2 className="font-serif text-4xl font-extrabold">
         Productos destacados
@@ -38,7 +38,7 @@ export const FeaturedProductsSkeleton: React.FC = () => (
 );
 
 export const NewArrivalsSkeleton: React.FC = () => (
-  <Container className="mt-8 flex flex-col gap-y-8">
+  <Container component="section" className="mt-8 flex flex-col gap-y-8">
     <div className="space-y-4 text-center">
       <h2 className="font-serif text-4xl font-extrabold">
         Productos agregados recientemente
@@ -85,7 +85,7 @@ export const MainBannerSkeleton: React.FC = () => (
 );
 
 export const BannersCtaSkeleton: React.FC = () => (
-  <Container>
+  <Container component="section">
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
       {[...Array(2)].map((_, index) => (
         <div key={index} className="relative h-40 sm:h-60 md:h-80">

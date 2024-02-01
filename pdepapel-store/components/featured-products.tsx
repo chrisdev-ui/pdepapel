@@ -28,9 +28,9 @@ const FeaturedProducts: React.FC<FeaturedProductsProps> = ({
   }, [searchParams]);
 
   return (
-    <Container className="mt-8 flex flex-col gap-y-8">
+    <Container component="section" className="mt-8 flex flex-col gap-y-8">
       <div id="featured-products" ref={containerRef} />
-      <div className="space-y-4 text-center">
+      <section className="space-y-4 text-center">
         <h2 className="font-serif text-4xl font-extrabold">
           Productos destacados
         </h2>
@@ -38,7 +38,7 @@ const FeaturedProducts: React.FC<FeaturedProductsProps> = ({
           Los favoritos de nuestra colección, ¡no puedes perdértelos!{" "}
           {KAWAII_FACE_EXCITED}
         </p>
-      </div>
+      </section>
       {featureProducts.length === 0 ? (
         <NoResults message={`No hay productos destacados ${KAWAII_FACE_SAD}`} />
       ) : (

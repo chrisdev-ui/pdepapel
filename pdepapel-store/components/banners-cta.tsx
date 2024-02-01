@@ -30,7 +30,7 @@ const BannersCta: React.FC<BannersCtaProps> = ({ banners }) => {
   }
 
   return (
-    <Container>
+    <Container component="section">
       <div className={cn("grid gap-x-8 gap-y-4", gridCols)}>
         {banners.map((banner, index) => (
           <Link

@@ -64,7 +64,7 @@ const Features: React.FC<{}> = () => {
   }, [index]);
 
   return (
-    <Container>
+    <Container component="section">
       <section className="mx-auto my-0 overflow-hidden rounded-xl p-4 sm:p-6 lg:hidden lg:p-8">
         <div className="overflow-hidden">
           <div

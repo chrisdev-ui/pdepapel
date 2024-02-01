@@ -9,7 +9,7 @@ interface MainBannerProps {
 const MainBanner: React.FC<MainBannerProps> = ({ data }) => {
   return (
     data && (
-      <div
+      <section
         className="mx-0 my-10 flex w-full flex-col items-center justify-center space-y-3 bg-cover bg-center bg-no-repeat py-10 text-center xl:py-20"
         style={{
           backgroundImage: `url('${data?.imageUrl}')`,
@@ -28,7 +28,7 @@ const MainBanner: React.FC<MainBannerProps> = ({ data }) => {
             Explora
           </Button>
         </Link>
-      </div>
+      </section>
     )
   );
 };
