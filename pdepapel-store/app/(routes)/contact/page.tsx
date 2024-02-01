@@ -25,8 +25,8 @@ export default function ContactPage() {
           <MailCheck className="ml-2 h-8 w-8" />
         </h1>
         <Separator className="my-10" />
-        <div className="grid w-full grid-cols-1 gap-20 md:grid-cols-2">
-          <div className="flex flex-col gap-y-6">
+        <section className="grid w-full grid-cols-1 gap-20 md:grid-cols-2">
+          <section className="flex flex-col gap-y-6">
             <div className="flex w-full items-center justify-start py-2">
               <h2 className="font-serif text-xl font-semibold">
                 Háblanos de tus Ideas Kawaii
@@ -34,10 +34,10 @@ export default function ContactPage() {
               <span className="ml-5 flex-1 border-t" />
             </div>
             <ContactForm />
-          </div>
-          <div>
+          </section>
+          <section>
             <div className="flex w-full p-8" />
-            <div className="flex w-full flex-col gap-y-5">
+            <article className="flex w-full flex-col gap-y-5">
               <p>
                 En{" "}
                 <Image
@@ -103,9 +103,9 @@ export default function ContactPage() {
                   </span>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
+            </article>
+          </section>
+        </section>
       </Container>
     </>
   );

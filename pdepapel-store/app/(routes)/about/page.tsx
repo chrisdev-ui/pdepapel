@@ -5,8 +5,10 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { getPosts } from "@/actions/get-posts";
+import Await from "@/components/await";
 import { Icons } from "@/components/icons";
 import { Container } from "@/components/ui/container";
+import { Suspense } from "react";
 
 const SocialMedia = dynamic(() => import("./components/social-media"), {
   ssr: false,
@@ -15,8 +17,6 @@ const SocialMedia = dynamic(() => import("./components/social-media"), {
 const Newsletter = dynamic(() => import("@/components/newsletter"), {
   ssr: false,
 });
-
-export const revalidate = 0;
 
 export const metadata: Metadata = {
   title: "Nuestra historia",
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
 };
 
 export default async function AboutPage() {
-  const posts = await getPosts();
+  const postsAsync = getPosts();
   return (
     <>
       <Container>
@@ -36,7 +36,7 @@ export default async function AboutPage() {
           Nuestra historia
           <BookHeartIcon className="ml-2 h-8 w-8" />
         </h1>
-        <div className="mt-12 flex flex-col gap-6 lg:grid lg:grid-cols-8 lg:items-start lg:gap-x-6 xl:gap-x-12">
+        <section className="mt-12 flex flex-col gap-6 lg:grid lg:grid-cols-8 lg:items-start lg:gap-x-6 xl:gap-x-12">
           <div className="col-span-3">
             <div className="relative h-[15vh] w-full bg-[#ffe5ee] transition-all duration-700 ease-in-out hover:scale-105 hover:cursor-zoom-in sm:h-[40vh] xl:h-[30vh]">
               <Image
@@ -46,12 +46,12 @@ export default async function AboutPage() {
                 sizes="(max-width: 640px) 100vw, 640px"
                 className="rounded-lg object-contain shadow-lg"
               />
-              <div className="absolute bottom-1 left-1 z-20 animate-bounce font-serif font-semibold sm:bottom-6 sm:left-4 sm:text-2xl lg:bottom-auto lg:left-auto lg:right-4 lg:top-6">
+              <h2 className="absolute bottom-1 left-1 z-20 animate-bounce font-serif font-semibold sm:bottom-6 sm:left-4 sm:text-2xl lg:bottom-auto lg:left-auto lg:right-4 lg:top-6">
                 ¿Quiénes somos?
-              </div>
+              </h2>
             </div>
           </div>
-          <div className="col-span-5 flex flex-col gap-2">
+          <article className="col-span-5 flex flex-col gap-2">
             <p>
               Somos una tienda de papelería en línea especializada en productos
               kawaii, esos adorables artículos que no solo alegran tu día, sino
@@ -81,9 +81,9 @@ export default async function AboutPage() {
               nuestra tienda está pensado para despertar tu imaginación y
               animarte a expresarte.
             </p>
-          </div>
-        </div>
-        <div className="mt-6 flex w-full flex-col gap-2">
+          </article>
+        </section>
+        <article className="mt-6 flex w-full flex-col gap-2">
           <p>
             Nos sentimos orgullosos de ser parte de una comunidad tan vibrante y
             acogedora. Nuestros clientes no solo son compradores; son amigos que
@@ -132,8 +132,12 @@ export default async function AboutPage() {
               <Icons.tiktok className="h-12 w-12" />
             </Link>
           </div>
-        </div>
-        <SocialMedia data={posts} />
+        </article>
+        <Suspense>
+          <Await promise={postsAsync}>
+            {(posts) => <SocialMedia data={posts} />}
+          </Await>
+        </Suspense>
       </Container>
       <Newsletter />
     </>

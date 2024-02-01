@@ -65,7 +65,7 @@ const Features: React.FC<{}> = () => {
 
   return (
     <Container>
-      <div className="mx-auto my-0 overflow-hidden rounded-xl p-4 sm:p-6 lg:hidden lg:p-8">
+      <section className="mx-auto my-0 overflow-hidden rounded-xl p-4 sm:p-6 lg:hidden lg:p-8">
         <div className="overflow-hidden">
           <div
             className="whitespace-nowrap"
@@ -89,8 +89,8 @@ const Features: React.FC<{}> = () => {
             ))}
           </div>
         </div>
-      </div>
-      <div className="hidden w-full flex-wrap items-center justify-between gap-y-6 sm:gap-y-0 lg:flex">
+      </section>
+      <section className="hidden w-full flex-wrap items-center justify-between gap-y-6 sm:gap-y-0 lg:flex">
         {features.map(({ title, description, icon }, index) => (
           <div
             key={title}
@@ -109,7 +109,7 @@ const Features: React.FC<{}> = () => {
             </div>
           </div>
         ))}
-      </div>
+      </section>
     </Container>
   );
 };
