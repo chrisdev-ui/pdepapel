@@ -51,7 +51,7 @@ export async function GET(
       },
       orderBy: {
         _relevance: {
-          fields: ["name", "description"],
+          fields: ["name"],
           search,
           sort: "asc",
         },
