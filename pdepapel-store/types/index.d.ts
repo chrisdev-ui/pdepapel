@@ -1,4 +1,4 @@
-import { Social } from "@/constants";
+import { PaymentMethod, Social } from "@/constants";
 
 export interface Billboard {
   id: string;
@@ -154,4 +154,25 @@ export interface PayUFormProps {
   shippingAddress: string;
   shippingCity: string;
   shippingCountry: string;
+}
+
+export interface WompiResponse {
+  url: string;
+}
+
+export type CheckoutByOrderResponse = PayUFormState | WompiResponse;
+
+export interface CheckoutOrder {
+  fullName: string;
+  phone: string;
+  address: string;
+  userId: string | null | undefined;
+  guestId: string | null;
+  orderItems: {
+    productId: string;
+    quantity: number | undefined;
+  }[];
+  payment: {
+    method: PaymentMethod;
+  };
 }

@@ -93,6 +93,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
             />
             <IconButton
               onClick={onPreview}
+              className="hidden sm:flex"
               icon={<Expand className="h-5 w-5 text-gray-600" />}
             />
             <IconButton

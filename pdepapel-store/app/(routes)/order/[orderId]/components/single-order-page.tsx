@@ -29,19 +29,42 @@ import { Container } from "@/components/ui/container";
 import { Currency } from "@/components/ui/currency";
 import { OrderStatus, PaymentMethod, ShippingStatus, steps } from "@/constants";
 import { useCart } from "@/hooks/use-cart";
+import useCheckoutOrder from "@/hooks/use-checkout-order";
 import { useGuestUser } from "@/hooks/use-guest-user";
 import { useToast } from "@/hooks/use-toast";
-import { env } from "@/lib/env.mjs";
 import { cn, formatPhoneNumber } from "@/lib/utils";
-import { Order, PayUFormState } from "@/types";
-import axios from "axios";
+import { Order, PayUFormState, WompiResponse } from "@/types";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Courier } from "./courier";
 
 interface SingleOrderPageProps {
   order: Order;
 }
+
+const STATUS: {
+  [key in OrderStatus]: {
+    text: string;
+    icon: React.ReactNode;
+  };
+} = {
+  [OrderStatus.CREATED]: {
+    text: "Estamos listos para procesar su pedido tan pronto como recibamos su pago.",
+    icon: <Hourglass className="h-8 w-8" />,
+  },
+  [OrderStatus.PENDING]: {
+    text: "Su pago está siendo procesado con la mayor seguridad y eficiencia.",
+    icon: <SearchCheck className="h-8 w-8" />,
+  },
+  [OrderStatus.PAID]: {
+    text: "Gracias por su pago. ¡Esperamos que disfrute su compra!",
+    icon: <Receipt className="h-8 w-8" />,
+  },
+  [OrderStatus.CANCELLED]: {
+    text: "Lamentamos cualquier inconveniente. Estamos aquí para ayudar con cualquier pregunta o inquietud.",
+    icon: <X className="h-8 w-8" />,
+  },
+};
 
 const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
   const searchParams = useSearchParams();
@@ -49,9 +72,28 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
   const { userId } = useAuth();
   const { toast } = useToast();
   const guestId = useGuestUser((state) => state.guestId ?? "");
-  const [isLoading, setIsLoading] = useState(false);
   const [payUformData, setPayUformData] = useState<PayUFormState>();
   const removeAll = useCart((state) => state.removeAll);
+
+  const { mutate, status } = useCheckoutOrder({
+    orderId: order.id,
+    onError(err) {
+      console.error(err);
+      toast({
+        title: "Error",
+        description: "Ha ocurrido un error creando tu orden, intenta de nuevo",
+        variant: "destructive",
+      });
+    },
+    onSuccess(data) {
+      if (data && order.payment.method === PaymentMethod.PayU) {
+        setPayUformData(data as PayUFormState);
+      } else if (data && order.payment.method === PaymentMethod.Wompi) {
+        const { url } = data as WompiResponse;
+        window.location.href = url;
+      }
+    },
+  });
 
   useEffect(() => {
     if (
@@ -178,71 +220,31 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
     }
   }, [order, removeAll, searchParams, toast]);
 
-  const addresses = order?.address?.split(",");
-  const shippingStatus = steps.slice(
-    0,
-    Object.values(ShippingStatus).indexOf(
-      (order?.shipping?.status as ShippingStatus) ?? ShippingStatus.Preparing,
-    ) + 1,
+  const addresses = useMemo(() => order?.address?.split(","), [order]);
+  const shippingStatus = useMemo(
+    () =>
+      steps.slice(
+        0,
+        Object.values(ShippingStatus).indexOf(
+          (order?.shipping?.status as ShippingStatus) ??
+            ShippingStatus.Preparing,
+        ) + 1,
+      ),
+    [order],
   );
-  const status: {
-    [key in OrderStatus]: {
-      text: string;
-      icon: React.ReactNode;
-    };
-  } = {
-    [OrderStatus.CREATED]: {
-      text: "Estamos listos para procesar su pedido tan pronto como recibamos su pago.",
-      icon: <Hourglass className="h-8 w-8" />,
-    },
-    [OrderStatus.PENDING]: {
-      text: "Su pago está siendo procesado con la mayor seguridad y eficiencia.",
-      icon: <SearchCheck className="h-8 w-8" />,
-    },
-    [OrderStatus.PAID]: {
-      text: "Gracias por su pago. ¡Esperamos que disfrute su compra!",
-      icon: <Receipt className="h-8 w-8" />,
-    },
-    [OrderStatus.CANCELLED]: {
-      text: "Lamentamos cualquier inconveniente. Estamos aquí para ayudar con cualquier pregunta o inquietud.",
-      icon: <X className="h-8 w-8" />,
-    },
-  };
 
-  const orderItemsTotal = order?.orderItems?.reduce(
-    (sum, item) => sum + Number(item.product.price) * item.quantity,
-    0,
+  const orderItemsTotal = useMemo(
+    () =>
+      order?.orderItems?.reduce(
+        (sum, item) => sum + Number(item.product.price) * item.quantity,
+        0,
+      ),
+    [order],
   );
 
   const hasAccess = userId
     ? userId === order?.userId
     : guestId === order?.guestId;
-
-  const onSubmitPayment = async () => {
-    try {
-      setIsLoading(true);
-      if (order?.payment.method === PaymentMethod.Wompi) {
-        const response = await axios.post(
-          `${env.NEXT_PUBLIC_API_URL}/checkout/${order.id}`,
-        );
-        window.location = response.data.url;
-      } else if (order?.payment.method === PaymentMethod.PayU) {
-        const response = await axios.post(
-          `${env.NEXT_PUBLIC_API_URL}/checkout/${order.id}`,
-        );
-        setPayUformData(response.data as PayUFormState);
-      }
-    } catch (error) {
-      console.error(error);
-      toast({
-        title: "Error",
-        description: "Ha ocurrido un error creando tu orden, intenta de nuevo",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   return (
     <>
@@ -384,27 +386,29 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                       },
                     )}
                   >
-                    {status[order?.status as OrderStatus].icon}
-                    <span>{status[order?.status as OrderStatus].text}</span>
+                    {STATUS[order?.status as OrderStatus].icon}
+                    <span>{STATUS[order?.status as OrderStatus].text}</span>
                   </div>
                   {order.status !== OrderStatus.PAID &&
                     order?.payment?.method === PaymentMethod.Wompi && (
                       <Button
                         className="flex items-center justify-center gap-2 font-serif"
-                        disabled={isLoading}
-                        onClick={onSubmitPayment}
+                        disabled={status === "pending"}
+                        onClick={() => mutate()}
                       >
-                        Pagar con <Icons.payments.wompi className="w-20" />
+                        {status === "pending" ? "Pagando con..." : "Pagar con"}{" "}
+                        <Icons.payments.wompi className="w-20" />
                       </Button>
                     )}
                   {order.status !== OrderStatus.PAID &&
                     order?.payment?.method === PaymentMethod.PayU && (
                       <Button
                         className="flex items-center justify-center gap-2 font-serif"
-                        disabled={isLoading}
-                        onClick={onSubmitPayment}
+                        disabled={status === "pending"}
+                        onClick={() => mutate()}
                       >
-                        Pagar con <Icons.payments.payu className="w-10" />
+                        {status === "pending" ? "Pagando con..." : "Pagar con"}{" "}
+                        <Icons.payments.payu className="w-10" />
                       </Button>
                     )}
 

@@ -26,14 +26,18 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { KAWAII_FACE_SAD, PaymentMethod } from "@/constants";
 import { useCart } from "@/hooks/use-cart";
+import useCheckout from "@/hooks/use-checkout";
 import { useGuestUser } from "@/hooks/use-guest-user";
 import { useToast } from "@/hooks/use-toast";
-import { env } from "@/lib/env.mjs";
 import { generateGuestId } from "@/lib/utils";
-import { PayUFormState } from "@/types";
+import {
+  CheckoutByOrderResponse,
+  Order,
+  PayUFormState,
+  WompiResponse,
+} from "@/types";
 import { useAuth } from "@clerk/nextjs";
 import { zodResolver } from "@hookform/resolvers/zod";
-import axios from "axios";
 import { ArrowLeft, CreditCard, Info, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { InfoCountryTooltip } from "./info-country-tooltip";
@@ -69,10 +73,10 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
   const cart = useCart();
   const [isMounted, setIsMounted] = useState(false);
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
     PaymentMethod.BankTransfer,
   );
+
   const form = useForm<CheckoutFormValue>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -83,6 +87,43 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
       address2: "",
       city: "",
       state: "",
+    },
+  });
+
+  const { mutate, status } = useCheckout({
+    onError(err) {
+      console.error(err);
+      toast({
+        title: "Error",
+        description:
+          "Ha ocurrido un error creando tu orden, intenta de nuevo más tarde.",
+        variant: "destructive",
+      });
+    },
+    onSuccess(data) {
+      if ((data as Order).id !== undefined) {
+        const order = data as Order;
+        toast({
+          title: "Orden creada",
+          description: `Tu orden #${order.id} ha sido creada exitosamente`,
+          variant: "success",
+        });
+        router.push(`/order/${order.id}`);
+        cart.removeAll();
+        form.reset();
+        if (userId) clearGuestId();
+      } else if (
+        (data as CheckoutByOrderResponse as WompiResponse).url !== undefined
+      ) {
+        const { url } = data as CheckoutByOrderResponse as WompiResponse;
+        window.location.href = url;
+      } else if (
+        (data as CheckoutByOrderResponse as PayUFormState).referenceCode !==
+        undefined
+      ) {
+        const payUData = data as CheckoutByOrderResponse as PayUFormState;
+        setPayUformData(payUData);
+      }
     },
   });
 
@@ -105,7 +146,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
     0,
   );
 
-  const onSubmit = async (data: CheckoutFormValue) => {
+  const onSubmit = (data: CheckoutFormValue) => {
     const orderItems = cart.items.map((item) => ({
       productId: item.id,
       quantity: item.quantity,
@@ -131,58 +172,8 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
         method: paymentMethod,
       },
     };
-    try {
-      setIsLoading(true);
-      if (
-        paymentMethod === PaymentMethod.BankTransfer ||
-        paymentMethod === PaymentMethod.COD
-      ) {
-        const order = await axios.post(
-          `${env.NEXT_PUBLIC_API_URL}/orders`,
-          formattedData,
-        );
-        if (order) {
-          toast({
-            title: "Orden creada",
-            description: `Tu orden #${order.data.id} ha sido creada exitosamente`,
-            variant: "success",
-          });
-          cart.removeAll();
-          form.reset();
-          if (userId) clearGuestId();
-          router.push(`/order/${order.data.id}`);
-        } else {
-          toast({
-            title: "Error",
-            description:
-              "Ha ocurrido un error creando tu orden, inténtalo de nuevo más tarde...",
-            variant: "destructive",
-          });
-        }
-      } else if (paymentMethod === PaymentMethod.Wompi) {
-        const response = await axios.post(
-          `${env.NEXT_PUBLIC_API_URL}/checkout`,
-          formattedData,
-        );
-        window.location = response.data.url;
-      } else if (paymentMethod === PaymentMethod.PayU) {
-        const { data } = await axios.post(
-          `${env.NEXT_PUBLIC_API_URL}/checkout`,
-          formattedData,
-        );
-        setPayUformData(data as PayUFormState);
-      }
-    } catch (error) {
-      console.error(error);
-      toast({
-        title: "Error",
-        description:
-          "Ha ocurrido un error creando tu orden, intenta de nuevo más tarde.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
+
+    mutate(formattedData);
   };
 
   return (
@@ -221,7 +212,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                       <FormControl>
                         <Input
                           className="bg-green-leaf/20 invalid:bg-pink-froly/20"
-                          disabled={isLoading}
+                          disabled={status === "pending"}
                           placeholder="Nombres"
                           {...field}
                         />
@@ -239,7 +230,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                       <FormControl>
                         <Input
                           className="bg-green-leaf/20 invalid:bg-pink-froly/20"
-                          disabled={isLoading}
+                          disabled={status === "pending"}
                           placeholder="Apellidos"
                           {...field}
                         />
@@ -257,7 +248,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                       <FormControl>
                         <Input
                           className="bg-green-leaf/20 invalid:bg-pink-froly/20"
-                          disabled={isLoading}
+                          disabled={status === "pending"}
                           placeholder="ex: 321 629 9845"
                           {...field}
                         />
@@ -275,7 +266,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                       <FormControl>
                         <Input
                           className="bg-green-leaf/20 invalid:bg-pink-froly/20"
-                          disabled={isLoading}
+                          disabled={status === "pending"}
                           placeholder="Calle 1 # 2 - 3"
                           {...field}
                         />
@@ -289,12 +280,12 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                   name="address2"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Dirección 2</FormLabel>
+                      <FormLabel>Dirección detallada</FormLabel>
                       <FormControl>
                         <Input
                           className="bg-green-leaf/20 invalid:bg-pink-froly/20"
-                          disabled={isLoading}
-                          placeholder="Edificio, Apto, Casa, Lote, etc. (Opcional)"
+                          disabled={status === "pending"}
+                          placeholder="Edificio, Apto, Casa, Lote, Barrio, etc."
                           {...field}
                         />
                       </FormControl>
@@ -312,7 +303,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                       <FormControl>
                         <Input
                           className="bg-green-leaf/20 invalid:bg-pink-froly/20"
-                          disabled={isLoading}
+                          disabled={status === "pending"}
                           placeholder="ex: Medellín"
                           {...field}
                         />
@@ -330,7 +321,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                       <FormControl>
                         <Input
                           className="bg-green-leaf/20 invalid:bg-pink-froly/20"
-                          disabled={isLoading}
+                          disabled={status === "pending"}
                           placeholder="ex: Antioquia"
                           {...field}
                         />
@@ -450,10 +441,13 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                 <Currency className="text-xl" value={totalPrice} />
               </div>
               <Separator className="my-6" />
+              <div className="mb-5 flex w-full items-center">
+                <h2 className="font-serif text-lg font-bold">Método de pago</h2>
+              </div>
               <RadioGroup
                 defaultValue={PaymentMethod.BankTransfer}
                 value={paymentMethod}
-                disabled={cart.items.length === 0 || isLoading}
+                disabled={cart.items.length === 0 || status === "pending"}
                 onValueChange={(value) =>
                   setPaymentMethod(value as PaymentMethod)
                 }
@@ -487,7 +481,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                     Paga a través de PayU
                   </Label>
                 </div>
-                <div>
+                {/* <div>
                   <RadioGroupItem
                     value={PaymentMethod.COD}
                     id={PaymentMethod.COD}
@@ -500,7 +494,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                     <Icons.payments.cashOnDelivery className="h-6 w-6" />
                     Pago contraentrega
                   </Label>
-                </div>
+                </div> */}
                 <div>
                   <RadioGroupItem
                     value={PaymentMethod.Wompi}
@@ -518,14 +512,18 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
               </RadioGroup>
               <Button
                 type="submit"
-                disabled={cart.items.length === 0 || isLoading}
+                disabled={cart.items.length === 0 || status === "pending"}
                 className="group relative mt-6 w-full overflow-hidden rounded-full bg-blue-yankees font-serif text-base font-bold uppercase text-white hover:bg-blue-yankees"
               >
                 <CreditCard className="absolute left-0 h-5 w-5 -translate-x-full transform transition-transform duration-500 ease-out group-hover:translate-x-52" />
                 <span className="transition-opacity duration-150 group-hover:opacity-0">
-                  {`${isLoading ? "Finalizando" : "Finalizar"} compra`}
+                  {`${
+                    status === "pending" ? "Finalizando" : "Finalizar"
+                  } compra`}
                 </span>
-                {isLoading && <Loader2 className="ml-3 h-5 w-5 animate-spin" />}
+                {status === "pending" && (
+                  <Loader2 className="ml-3 h-5 w-5 animate-spin" />
+                )}
               </Button>
               <div className="mt-5">
                 <small className="text-xxs">
