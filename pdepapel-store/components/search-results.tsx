@@ -54,7 +54,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
             })}
           </div>
         ) : null}
-        {isSuccess && products.length === 0 ? (
+        {isSuccess && products.length === 0 && !isFetchingNextPage ? (
           <div className="flex w-full items-center justify-center rounded p-2.5">
             <span className="font-serif text-xs tracking-tight">
               No se encontraron resultados.
@@ -64,7 +64,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
         {isFetchingNextPage && hasNextPage ? (
           <SearchItemsSkeleton items={3} />
         ) : null}
-        {!hasNextPage ? (
+        {isSuccess && products.length > 0 && !hasNextPage ? (
           <div className="flex w-full items-center justify-center rounded p-2.5">
             <span className="font-serif text-xs tracking-tight">
               No hay más resultados.
