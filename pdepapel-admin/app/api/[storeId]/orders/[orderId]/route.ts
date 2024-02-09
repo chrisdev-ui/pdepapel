@@ -1,11 +1,11 @@
 import { getUserId, isUserAuthorized } from "@/helpers/auth";
-import { getOrderById } from "@/helpers/orders-actions";
+import { getOrder, getOrderById, updateOrder } from "@/helpers/orders-actions";
+import { updateVariantStock } from "@/helpers/product-variants-actions";
 import { handleErrorResponse, handleSuccessResponse } from "@/helpers/response";
 import { validateMandatoryFields } from "@/helpers/validation";
 import prismadb from "@/lib/prismadb";
 import { OrderBody } from "@/lib/types";
 import { auth } from "@clerk/nextjs";
-import { OrderStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 interface Params {
@@ -47,17 +47,6 @@ export async function PATCH(req: Request, { params }: { params: Params }) {
     return handleErrorResponse("Store ID is required", 400, corsHeaders);
   try {
     const body: OrderBody = await req.json();
-    const {
-      fullName,
-      phone,
-      address,
-      userId,
-      guestId,
-      orderItems,
-      status,
-      payment,
-      shipping,
-    } = body;
     const missingFields = validateMandatoryFields(body, [
       "fullName",
       "phone",
@@ -73,119 +62,13 @@ export async function PATCH(req: Request, { params }: { params: Params }) {
     const isAuthorized = await isUserAuthorized(ownerId, params.storeId);
     if (!isAuthorized)
       return handleErrorResponse("Unauthorized", 403, corsHeaders);
-    const order = await prismadb.order.findUnique({
-      where: { id: params.orderId },
-      include: {
-        orderItems: true,
-      },
-    });
-    if (!order)
-      return NextResponse.json({ error: "Order not found" }, { status: 404 });
-
-    const updatedOrder = await prismadb.$transaction(async (tx) => {
-      await tx.orderItem.deleteMany({
-        where: { orderId: order.id },
-      });
-
-      return await tx.order.update({
-        where: { id: params.orderId },
-        data: {
-          fullName,
-          phone,
-          address,
-          userId,
-          guestId,
-          orderItems: {
-            create: orderItems.map((orderItem) => ({
-              product: { connect: { id: orderItem.productId } },
-              variant: { connect: { id: orderItem.variantId } },
-              quantity: orderItem.quantity ?? 1,
-            })),
-          },
-          ...(status && { status }),
-          payment: payment
-            ? {
-                upsert: {
-                  create: {
-                    ...payment,
-                    store: { connect: { id: params.storeId } },
-                  },
-                  update: {
-                    ...payment,
-                  },
-                },
-              }
-            : undefined,
-          shipping: shipping
-            ? {
-                upsert: {
-                  create: {
-                    ...shipping,
-                    store: { connect: { id: params.storeId } },
-                  },
-                  update: {
-                    ...shipping,
-                  },
-                },
-              }
-            : undefined,
-        },
-        include: {
-          orderItems: {
-            include: {
-              product: true,
-            },
-          },
-          payment: true,
-          shipping: true,
-        },
-      });
-    });
-
+    const order = await getOrder(params.orderId);
+    if (!order) return handleErrorResponse("Order not found", 404, corsHeaders);
+    const updatedOrder = await updateOrder(order.id, params.storeId, body);
     if (updatedOrder) {
-      if (
-        updatedOrder.status === OrderStatus.PAID &&
-        order.status !== OrderStatus.PAID
-      ) {
-        await prismadb.$transaction(async (tx) => {
-          for (const orderItem of updatedOrder.orderItems) {
-            const product = orderItem.product;
-            if (product.stock >= orderItem.quantity) {
-              await tx.product.update({
-                where: { id: product.id },
-                data: {
-                  stock: {
-                    decrement: orderItem.quantity,
-                  },
-                },
-              });
-            } else {
-              throw new Error(
-                `Product ${product.name} is out of stock. Please contact the store owner.`,
-              );
-            }
-          }
-        });
-      } else if (
-        updatedOrder.status !== OrderStatus.PAID &&
-        order.status === OrderStatus.PAID
-      ) {
-        await prismadb.$transaction(async (tx) => {
-          for (const orderItem of updatedOrder.orderItems) {
-            const product = orderItem.product;
-            await tx.product.update({
-              where: { id: product.id },
-              data: {
-                stock: {
-                  increment: orderItem.quantity,
-                },
-              },
-            });
-          }
-        });
-      }
+      await updateVariantStock(updatedOrder, order);
     }
-    return NextResponse.json(updatedOrder);
+    return handleSuccessResponse(updatedOrder);
   } catch (error) {
     console.log("[ORDER_PATCH]", error);
     return NextResponse.json({ error: "Internal Error" }, { status: 500 });

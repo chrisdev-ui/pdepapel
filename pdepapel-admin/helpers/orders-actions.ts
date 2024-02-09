@@ -1,6 +1,6 @@
 import { MINIMUM_TIME_BETWEEN_ORDERS_IN_MINUTES } from "@/constants";
 import prismadb from "@/lib/prismadb";
-import { OrderBody } from "@/lib/types";
+import { OrderBody, OrderWithItems } from "@/lib/types";
 import { generateOrderNumber } from "@/lib/utils";
 import { DiscountType, OrderStatus } from "@prisma/client";
 import { differenceInMinutes } from "date-fns";
@@ -83,6 +83,14 @@ export async function createOrder(data: OrderBody & { storeId: string }) {
       data: {
         ...otherData,
         orderNumber,
+        orderItems: {
+          create: orderItems.map((orderItem) => ({
+            product: { connect: { id: orderItem.productId } },
+            variant: { connect: { id: orderItem.variantId } },
+            quantity: orderItem.quantity ?? 1,
+            discountApplied: orderItem.discountApplied,
+          })),
+        },
       },
       include: {
         orderItems: {
@@ -122,8 +130,14 @@ export async function createOrder(data: OrderBody & { storeId: string }) {
       });
     }
 
-    // 4. Create Order Items in the database
-    for (const { productId, variantId, quantity = 1 } of orderItems) {
+    // 4. Update stock and inventory
+    for (const {
+      id,
+      productId,
+      variantId,
+      quantity = 1,
+      discountApplied,
+    } of order.orderItems) {
       let newQuantity = quantity;
       const product = products.find((p) => p.id === productId);
       const variant = product?.variants.find((v) => v.id === variantId);
@@ -135,6 +149,7 @@ export async function createOrder(data: OrderBody & { storeId: string }) {
 
       // 4.1 Calculate new quantity if discount is active
       if (
+        !discountApplied &&
         variant.discount &&
         variant.discount.type === DiscountType.BUY_X_GET_Y &&
         isValidDiscount(variant.discount.startDate, variant.discount.endDate)
@@ -145,6 +160,13 @@ export async function createOrder(data: OrderBody & { storeId: string }) {
           y as number,
           quantity,
         );
+        await tx.orderItem.update({
+          where: { id },
+          data: {
+            quantity: newQuantity,
+            discountApplied: true,
+          },
+        });
       }
 
       if (
@@ -220,18 +242,7 @@ export async function createOrder(data: OrderBody & { storeId: string }) {
           break;
         }
         default: {
-          updateData = {
-            stock: {
-              decrement: newQuantity,
-            },
-            inventory: {
-              update: {
-                quantity: {
-                  decrement: newQuantity,
-                },
-              },
-            },
-          };
+          updateData = {};
           break;
         }
       }
@@ -337,4 +348,126 @@ export async function getOrderById(orderId: string) {
   });
 
   return order;
+}
+
+/**
+ * Retrieves an order with its associated items, payment details, and shipping information.
+ *
+ * @param orderId - The ID of the order to retrieve.
+ * @returns A Promise that resolves to the order with items, payment details, and shipping information, or null if the order is not found.
+ */
+export async function getOrder(
+  orderId: string,
+): Promise<OrderWithItems | null> {
+  return await prismadb.order.findUnique({
+    where: {
+      id: orderId,
+    },
+    include: {
+      orderItems: {
+        include: {
+          product: true,
+          variant: {
+            include: {
+              discount: true,
+            },
+          },
+        },
+      },
+      payment: true,
+      shipping: true,
+    },
+  });
+}
+
+/**
+ * Updates an order with the specified orderId and storeId.
+ *
+ * @param {string} orderId - The ID of the order to be updated.
+ * @param {string} storeId - The ID of the store associated with the order.
+ * @param {Partial<OrderBody>} data - The partial data to update the order with.
+ * @returns {Promise<OrderWithItems | null>} - A promise that resolves to the updated order with items, or null if the order does not exist.
+ */
+export async function updateOrder(
+  orderId: string,
+  storeId: string,
+  data: Partial<OrderBody>,
+): Promise<OrderWithItems | null> {
+  const {
+    fullName,
+    phone,
+    address,
+    userId,
+    guestId,
+    orderItems,
+    status,
+    payment,
+    shipping,
+  } = data;
+
+  return await prismadb.$transaction(async (tx) => {
+    await tx.orderItem.deleteMany({
+      where: { orderId },
+    });
+
+    return await tx.order.update({
+      where: { id: orderId },
+      data: {
+        fullName,
+        phone,
+        address,
+        userId,
+        guestId,
+        orderItems: {
+          create: orderItems?.map((orderItem) => ({
+            product: { connect: { id: orderItem.productId } },
+            variant: { connect: { id: orderItem.variantId } },
+            quantity: orderItem.quantity ?? 1,
+            discountApplied: orderItem.discountApplied,
+          })),
+        },
+        ...(status && { status }),
+        payment: payment
+          ? {
+              upsert: {
+                create: {
+                  ...payment,
+                  store: { connect: { id: storeId } },
+                },
+                update: {
+                  ...payment,
+                },
+              },
+            }
+          : undefined,
+        shipping: shipping
+          ? {
+              upsert: {
+                create: {
+                  ...shipping,
+                  store: { connect: { id: storeId } },
+                },
+                update: {
+                  ...shipping,
+                },
+              },
+            }
+          : undefined,
+      },
+      include: {
+        orderItems: {
+          include: {
+            product: true,
+            variant: {
+              include: {
+                discount: true,
+              },
+            },
+          },
+        },
+        payment: true,
+        shipping: true,
+      },
+    });
+  });
 }

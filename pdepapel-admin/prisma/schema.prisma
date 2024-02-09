@@ -212,28 +212,28 @@ model Product {
 }
 
 model ProductVariant {
-  id          String      @id @default(uuid())
+  id          String        @id @default(uuid())
   storeId     String
-  store       Store       @relation("StoreToVariant", fields: [storeId], references: [id])
+  store       Store         @relation("StoreToVariant", fields: [storeId], references: [id])
   productId   String
-  product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product     Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
   sizeId      String?
-  size        Size?        @relation(fields: [sizeId], references: [id])
+  size        Size?         @relation(fields: [sizeId], references: [id])
   colorId     String?
-  color       Color?       @relation(fields: [colorId], references: [id])
+  color       Color?        @relation(fields: [colorId], references: [id])
   designId    String?
-  design      Design?      @relation(fields: [designId], references: [id])
+  design      Design?       @relation(fields: [designId], references: [id])
   discountId  String?
-  discount    Discount?    @relation("VariantToDiscount", fields: [discountId], references: [id])
+  discount    Discount?     @relation("VariantToDiscount", fields: [discountId], references: [id])
   name        String
   stock       Int
   price       Float
-  sku         String      @unique 
+  sku         String        @unique 
   images      ImageVariant[]
   orderItems  OrderItem[]
-  inventory   Inventory?  @relation("VariantToInventory")
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  inventory   Inventory?    @relation("VariantToInventory")
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   @@index([storeId])
   @@index([productId])
@@ -281,6 +281,7 @@ model Order {
   address     String      @default("")
   couponId    String?
   coupon      Coupon?     @relation("OrderToCoupon", fields: [couponId], references: [id])
+  couponApplied Boolean   @default(false)
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
@@ -289,13 +290,14 @@ model Order {
 }
 
 model OrderItem {
-  id          String      @id @default(uuid())
+  id          String          @id @default(uuid())
   orderId     String
-  order       Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order       Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
   productId   String
-  product     Product     @relation(fields: [productId], references: [id])
+  product     Product         @relation(fields: [productId], references: [id])
   variantId   String
-  variant     ProductVariant @relation(fields: [variantId], references: [id])
+  variant     ProductVariant  @relation(fields: [variantId], references: [id])
+  discountApplied Boolean     @default(false)
   quantity    Int
 
   @@index([orderId])

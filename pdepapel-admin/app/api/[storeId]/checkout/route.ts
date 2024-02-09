@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 
 import { EmailTemplate } from "@/components/email-template";
 import { DEFAULT_COUNTRY } from "@/constants";
+import { getLastOrderTimestamp } from "@/helpers/orders-actions";
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
 import { resend } from "@/lib/resend";
@@ -115,8 +116,7 @@ export async function POST(req: Request, { params }: { params: Params }) {
       );
 
     const lastOrderTimestamp = await getLastOrderTimestamp(
-      authenticatedUserId,
-      guestId,
+      authenticatedUserId as string,
       params.storeId,
     );
     const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000);

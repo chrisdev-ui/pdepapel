@@ -5,6 +5,7 @@ import {
   PriceRanges,
   ProductBody,
   ProductIncludeOptions,
+  QueryParamConfig,
   SortOption,
 } from "@/lib/types";
 import { Image, Prisma, Product } from "@prisma/client";
@@ -42,30 +43,26 @@ export async function createNewProduct(
 }
 
 /**
- * Parses the query parameters from a URL and returns an object containing the parsed values.
- * @param url - The URL string to parse.
- * @returns An object containing the parsed query parameters.
+ * Parses the query parameters from a URL and returns an object with the parsed values.
+ *
+ * @param {string} url - The URL containing the query parameters.
+ * @param {QueryParamConfig} paramConfig - The configuration object for the query parameters.
+ * @returns {ParsedQueryParams} - An object with the parsed query parameters.
  */
-export function parseQueryParams(url: string): ParsedQueryParams {
+export function parseQueryParams(
+  url: string,
+  paramConfig: QueryParamConfig,
+): ParsedQueryParams {
   const { searchParams } = new URL(url);
+  const parsedParams: Record<string, any> = {};
 
-  return {
-    page: Number(searchParams.get("page")) || 1,
-    itemsPerPage: Number(searchParams.get("itemsPerPage")) || 52,
-    typeId: searchParams.get("typeId")?.split(",") || [],
-    categoryId: searchParams.get("categoryId")?.split(",") || [],
-    colorId: searchParams.get("colorId")?.split(",") || [],
-    sizeId: searchParams.get("sizeId")?.split(",") || [],
-    designId: searchParams.get("designId")?.split(",") || [],
-    isFeatured: Boolean(searchParams.get("isFeatured")) || false,
-    onlyNew: Boolean(searchParams.get("onlyNew")) || false,
-    fromShop: Boolean(searchParams.get("fromShop")) || false,
-    limit: Number(searchParams.get("limit")) || undefined,
-    sortOption: searchParams.get("sortOption") || "default",
-    priceRange: searchParams.get("priceRange") || undefined,
-    excludeProducts: searchParams.get("excludeProducts") || undefined,
-    search: searchParams.get("search") || "",
-  };
+  Object.entries(paramConfig).forEach(([key, config]) => {
+    const value = searchParams.get(key);
+    parsedParams[key] =
+      value !== null ? config.parser?.(value) ?? value : config.defaultValue;
+  });
+
+  return parsedParams as ParsedQueryParams;
 }
 
 /**
@@ -375,21 +372,32 @@ export async function fetchProductsAndVariants(
   return products;
 }
 
+/**
+ * Searches for products by a given term.
+ *
+ * @param term - The search term to match against product names and descriptions.
+ * @param storeId - The ID of the store to search within.
+ * @param page - The page number of the search results.
+ * @param limit - The maximum number of products to return per page. Default is 10.
+ * @returns A promise that resolves to an array of products matching the search term.
+ */
 export async function searchProductsByTerm(
   term: string,
   storeId: string,
-  limit: number,
+  page: number,
+  limit: number = 10,
 ) {
+  const skip = (page - 1) * limit;
   return await prismadb.product.findMany({
     where: {
       storeId,
       isArchived: false,
       OR: [
         {
-          name: term ? { search: term } : undefined,
+          name: term !== "" ? { search: term } : undefined,
         },
         {
-          description: term ? { search: term } : undefined,
+          description: term !== "" ? { search: term } : undefined,
         },
         {
           name: {
@@ -411,6 +419,7 @@ export async function searchProductsByTerm(
       },
     },
     take: limit,
+    skip,
     include: {
       images: true,
     },

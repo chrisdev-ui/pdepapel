@@ -12,6 +12,7 @@ import {
   PrismaClient,
   Product,
   ProductVariant,
+  Shipping,
   ShippingStatus,
   Social,
 } from "@prisma/client";
@@ -135,6 +136,13 @@ export interface ParsedQueryParams {
   search: string;
 }
 
+export interface QueryParamConfig {
+  [key: string]: {
+    defaultValue: any;
+    parser?: (value: string) => any;
+  };
+}
+
 export type SortOption =
   | "default"
   | "dateAdded"
@@ -208,7 +216,12 @@ export interface OrderBody {
   fullName: string;
   phone: string;
   address: string;
-  orderItems: { productId: string; variantId: string; quantity?: number }[];
+  orderItems: {
+    productId: string;
+    variantId: string;
+    quantity?: number;
+    discountApplied?: boolean;
+  }[];
   couponId?: string;
   status?: OrderStatus;
   payment?: {
@@ -244,3 +257,14 @@ export type IPrismaClient = Omit<
   PrismaClient<Prisma.PrismaClientOptions, never, DefaultArgs>,
   "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
 >;
+
+export type OrderWithItems = Order & {
+  orderItems: (OrderItem & {
+    product: Product;
+    variant: ProductVariant & {
+      discount: Discount | null;
+    };
+  })[];
+  payment: PaymentDetails | null;
+  shipping: Shipping | null;
+};

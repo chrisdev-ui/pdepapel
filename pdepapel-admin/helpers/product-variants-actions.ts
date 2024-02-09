@@ -1,7 +1,21 @@
 import prismadb from "@/lib/prismadb";
-import { ProductVariantBody, ProductVariantIncludeOptions } from "@/lib/types";
-import { ImageVariant, Prisma, ProductVariant } from "@prisma/client";
+import {
+  OrderWithItems,
+  ProductVariantBody,
+  ProductVariantIncludeOptions,
+} from "@/lib/types";
+import {
+  DiscountType,
+  ImageVariant,
+  OrderStatus,
+  Prisma,
+  ProductVariant,
+} from "@prisma/client";
 import { deleteResources, getPublicId } from "./cloudinary";
+import {
+  calculateDiscountQuantity,
+  isValidDiscount,
+} from "./discounts-actions";
 import { createInventory } from "./inventories-actions";
 
 /**
@@ -204,5 +218,326 @@ export async function updateProductVariantAndStock(
     });
 
     return updatedVariant;
+  });
+}
+
+/**
+ * Updates the stock of product variants based on the status of an order.
+ *
+ * @param newOrder - The new order object.
+ * @param oldOrder - The old order object.
+ * @returns Promise<void>
+ */
+export async function updateVariantStock(
+  newOrder: OrderWithItems,
+  oldOrder: OrderWithItems,
+) {
+  if (
+    newOrder.status === OrderStatus.PAID &&
+    oldOrder.status !== OrderStatus.PAID
+  ) {
+    await updateVariantStockWhenPaid(newOrder);
+  } else if (
+    newOrder.status !== OrderStatus.PAID &&
+    oldOrder.status === OrderStatus.PAID
+  ) {
+    await updateVariantStockWhenNotPaid(newOrder);
+  } else {
+    await updateVariantStockWhenModified(newOrder, oldOrder);
+  }
+}
+
+/**
+ * Updates the stock of product variants when an order is marked as paid.
+ *
+ * @param order - The order object containing the order items.
+ * @throws Error - If a product variant is out of stock.
+ * @returns Promise<void>
+ */
+async function updateVariantStockWhenPaid(order: OrderWithItems) {
+  await prismadb.$transaction(async (tx) => {
+    for (const orderItem of order.orderItems) {
+      const product = orderItem.product;
+      const variant = orderItem.variant;
+      let newQuantity = orderItem.quantity;
+
+      if (
+        !orderItem.discountApplied &&
+        variant.discount &&
+        variant.discount.type === DiscountType.BUY_X_GET_Y &&
+        isValidDiscount(variant.discount.startDate, variant.discount.endDate)
+      ) {
+        const { x, y } = variant.discount;
+        newQuantity = calculateDiscountQuantity(
+          x as number,
+          y as number,
+          orderItem.quantity,
+        );
+
+        await tx.orderItem.update({
+          where: { id: orderItem.id },
+          data: {
+            quantity: newQuantity,
+            discountApplied: true,
+          },
+        });
+      }
+
+      if (product.stock >= newQuantity || variant.stock >= newQuantity) {
+        await tx.product.update({
+          where: { id: product.id },
+          data: {
+            stock: {
+              decrement: newQuantity,
+            },
+          },
+        });
+
+        await tx.productVariant.update({
+          where: { id: variant.id },
+          data: {
+            stock: {
+              decrement: newQuantity,
+            },
+            inventory: {
+              update: {
+                quantity: {
+                  decrement: newQuantity,
+                },
+                sold: {
+                  increment: newQuantity,
+                },
+                onHold: {
+                  decrement: newQuantity,
+                },
+              },
+            },
+          },
+        });
+      } else {
+        throw new Error(
+          `Product ${product.name} is out of stock. Please contact the store owner.`,
+        );
+      }
+    }
+  });
+}
+
+/**
+ * Updates the variant stock when the order is not paid.
+ *
+ * @param order - The order with items.
+ * @returns A promise that resolves when the variant stock is updated.
+ */
+async function updateVariantStockWhenNotPaid(order: OrderWithItems) {
+  await prismadb.$transaction(async (tx) => {
+    for (const orderItem of order.orderItems) {
+      const product = orderItem.product;
+      const variant = orderItem.variant;
+      let newQuantity = orderItem.quantity;
+
+      if (
+        !orderItem.discountApplied &&
+        variant.discount &&
+        variant.discount.type === DiscountType.BUY_X_GET_Y &&
+        isValidDiscount(variant.discount.startDate, variant.discount.endDate)
+      ) {
+        const { x, y } = variant.discount;
+        newQuantity = calculateDiscountQuantity(
+          x as number,
+          y as number,
+          orderItem.quantity,
+        );
+        await tx.orderItem.update({
+          where: { id: orderItem.id },
+          data: {
+            quantity: newQuantity,
+            discountApplied: true,
+          },
+        });
+      }
+
+      await tx.product.update({
+        where: { id: product.id },
+        data: {
+          stock: {
+            increment: orderItem.quantity,
+          },
+        },
+      });
+
+      switch (order.status) {
+        case OrderStatus.CREATED:
+        case OrderStatus.PENDING:
+          await tx.productVariant.update({
+            where: { id: variant.id },
+            data: {
+              inventory: {
+                update: {
+                  sold: {
+                    decrement: orderItem.quantity,
+                  },
+                  onHold: {
+                    increment: orderItem.quantity,
+                  },
+                },
+              },
+            },
+          });
+          break;
+        case OrderStatus.CANCELLED:
+          await tx.productVariant.update({
+            where: { id: variant.id },
+            data: {
+              stock: {
+                increment: orderItem.quantity,
+              },
+              inventory: {
+                update: {
+                  quantity: {
+                    increment: orderItem.quantity,
+                  },
+                  sold: {
+                    decrement: orderItem.quantity,
+                  },
+                  onHold: {
+                    decrement: orderItem.quantity,
+                  },
+                },
+              },
+            },
+          });
+          break;
+      }
+    }
+  });
+}
+
+/**
+ * Updates the stock of product variants when an order is modified.
+ *
+ * @param newOrder - The new order object.
+ * @param oldOrder - The old order object.
+ * @returns Promise<void>
+ */
+async function updateVariantStockWhenModified(
+  newOrder: OrderWithItems,
+  oldOrder: OrderWithItems,
+) {
+  await prismadb.$transaction(async (tx) => {
+    for (const newOrderItem of newOrder.orderItems) {
+      const oldOrderItem = oldOrder.orderItems.find(
+        (item) => item.variantId === newOrderItem.variantId,
+      );
+
+      if (!oldOrderItem) {
+        throw new Error(
+          `Order item with variant ID ${newOrderItem.variantId} not found in the old order.`,
+        );
+      }
+
+      const product = newOrderItem.product;
+      const variant = newOrderItem.variant;
+      let newQuantity = newOrderItem.quantity;
+
+      if (
+        !newOrderItem.discountApplied &&
+        variant.discount &&
+        variant.discount.type === DiscountType.BUY_X_GET_Y &&
+        isValidDiscount(variant.discount.startDate, variant.discount.endDate)
+      ) {
+        const { x, y } = variant.discount;
+        newQuantity = calculateDiscountQuantity(
+          x as number,
+          y as number,
+          newOrderItem.quantity,
+        );
+        await tx.orderItem.update({
+          where: { id: newOrderItem.id },
+          data: {
+            quantity: newQuantity,
+            discountApplied: true,
+          },
+        });
+      }
+
+      const oldQuantity = oldOrderItem.quantity;
+      const quantityDifference = newQuantity - oldQuantity;
+
+      if (quantityDifference > 0) {
+        if (
+          product.stock >= quantityDifference ||
+          variant.stock >= quantityDifference
+        ) {
+          await tx.product.update({
+            where: { id: product.id },
+            data: {
+              stock: {
+                decrement: quantityDifference,
+              },
+            },
+          });
+
+          await tx.productVariant.update({
+            where: { id: variant.id },
+            data: {
+              stock: {
+                decrement: quantityDifference,
+              },
+              inventory: {
+                update: {
+                  quantity: {
+                    decrement: quantityDifference,
+                  },
+                  sold: {
+                    increment: quantityDifference,
+                  },
+                  onHold: {
+                    decrement: quantityDifference,
+                  },
+                },
+              },
+            },
+          });
+        } else {
+          throw new Error(
+            `Product ${product.name} is out of stock. Please contact the store owner.`,
+          );
+        }
+      } else if (quantityDifference < 0) {
+        await tx.product.update({
+          where: { id: product.id },
+          data: {
+            stock: {
+              increment: Math.abs(quantityDifference),
+            },
+          },
+        });
+
+        await tx.productVariant.update({
+          where: {
+            id: variant.id,
+          },
+          data: {
+            stock: {
+              increment: Math.abs(quantityDifference),
+            },
+            inventory: {
+              update: {
+                quantity: {
+                  increment: Math.abs(quantityDifference),
+                },
+                sold: {
+                  decrement: Math.abs(quantityDifference),
+                },
+                onHold: {
+                  decrement: Math.abs(quantityDifference),
+                },
+              },
+            },
+          },
+        });
+      }
+    }
   });
 }

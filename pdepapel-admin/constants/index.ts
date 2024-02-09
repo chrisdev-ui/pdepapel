@@ -1,4 +1,4 @@
-import { SortOption } from "@/lib/types";
+import { QueryParamConfig, SortOption } from "@/lib/types";
 
 export const DEFAULT_COUNTRY = "CO";
 
@@ -22,3 +22,27 @@ export const PRICE_RANGES = {
 };
 
 export const MINIMUM_TIME_BETWEEN_ORDERS_IN_MINUTES = 3;
+
+export const FULL_QUERY_PARAMS_CONFIG: QueryParamConfig = {
+  page: { defaultValue: 1, parser: Number },
+  itemsPerPage: { defaultValue: 52, parser: Number },
+  typeId: { defaultValue: [], parser: (value) => value?.split(",") },
+  categoryId: { defaultValue: [], parser: (value) => value?.split(",") },
+  colorId: { defaultValue: [], parser: (value) => value?.split(",") },
+  sizeId: { defaultValue: [], parser: (value) => value?.split(",") },
+  designId: { defaultValue: [], parser: (value) => value?.split(",") },
+  isFeatured: { defaultValue: false, parser: Boolean },
+  onlyNew: { defaultValue: false, parser: Boolean },
+  fromShop: { defaultValue: false, parser: Boolean },
+  limit: { defaultValue: undefined, parser: Number },
+  sortOption: { defaultValue: "default" },
+  priceRange: { defaultValue: undefined },
+  excludeProducts: { defaultValue: undefined },
+  search: { defaultValue: "" },
+};
+
+export const SEARCH_QUERY_PARAMS_CONFIG: QueryParamConfig = {
+  page: { defaultValue: 1, parser: Number },
+  limit: { defaultValue: 10, parser: Number },
+  search: { defaultValue: "" },
+};

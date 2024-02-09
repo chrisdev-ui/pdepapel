@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { FULL_QUERY_PARAMS_CONFIG } from "@/constants";
 import { getUserId, isUserAuthorized } from "@/helpers/auth";
 import {
   createNewProduct,
@@ -54,7 +55,7 @@ export async function POST(req: Request, { params }: { params: Params }) {
 export async function GET(req: Request, { params }: { params: Params }) {
   if (!params.storeId) return handleErrorResponse("Store ID is required", 400);
   try {
-    const queryParams = parseQueryParams(req.url);
+    const queryParams = parseQueryParams(req.url, FULL_QUERY_PARAMS_CONFIG);
     const { itemsPerPage, fromShop } = queryParams;
     const { products, totalItems } = await fetchFilteredProducts(
       queryParams,

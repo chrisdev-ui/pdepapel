@@ -1,5 +1,5 @@
-import { EmailTemplate } from "@/components/email-template";
 import { authenticateUser, isUserAuthorized } from "@/helpers/auth";
+import { sendOrderEmail } from "@/helpers/email-actions";
 import {
   createOrder,
   getOrdersByStoreId,
@@ -7,7 +7,6 @@ import {
 } from "@/helpers/orders-actions";
 import { handleErrorResponse, handleSuccessResponse } from "@/helpers/response";
 import { validateMandatoryFields } from "@/helpers/validation";
-import { resend } from "@/lib/resend";
 import { OrderBody } from "@/lib/types";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -63,18 +62,7 @@ export async function POST(req: Request, { params }: { params: Params }) {
       storeId: params.storeId,
     });
     if (!isStoreOwner) {
-      await resend.emails.send({
-        from: "Orders <admin@papeleriapdepapel.com>",
-        to: ["web.christian.dev@gmail.com", "papeleria.pdepapel@gmail.com"],
-        subject: `Nueva orden de compra - ${body.fullName}`,
-        react: EmailTemplate({
-          name: order.fullName,
-          phone: order.phone,
-          address: order.address,
-          orderNumber: order.orderNumber,
-          paymentMethod: "Transferencia bancaria o contra entrega",
-        }) as React.ReactElement,
-      });
+      await sendOrderEmail(body.fullName, { ...order });
     }
     return handleSuccessResponse(order, 200, corsHeaders);
   } catch (error) {
