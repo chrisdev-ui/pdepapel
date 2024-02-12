@@ -469,15 +469,6 @@ async function updateVariantStockWhenModified(
           product.stock >= quantityDifference ||
           variant.stock >= quantityDifference
         ) {
-          await tx.product.update({
-            where: { id: product.id },
-            data: {
-              stock: {
-                decrement: quantityDifference,
-              },
-            },
-          });
-
           await tx.productVariant.update({
             where: { id: variant.id },
             data: {
@@ -489,11 +480,8 @@ async function updateVariantStockWhenModified(
                   quantity: {
                     decrement: quantityDifference,
                   },
-                  sold: {
-                    increment: quantityDifference,
-                  },
                   onHold: {
-                    decrement: quantityDifference,
+                    increment: quantityDifference,
                   },
                 },
               },
@@ -505,15 +493,6 @@ async function updateVariantStockWhenModified(
           );
         }
       } else if (quantityDifference < 0) {
-        await tx.product.update({
-          where: { id: product.id },
-          data: {
-            stock: {
-              increment: Math.abs(quantityDifference),
-            },
-          },
-        });
-
         await tx.productVariant.update({
           where: {
             id: variant.id,
@@ -526,9 +505,6 @@ async function updateVariantStockWhenModified(
               update: {
                 quantity: {
                   increment: Math.abs(quantityDifference),
-                },
-                sold: {
-                  decrement: Math.abs(quantityDifference),
                 },
                 onHold: {
                   decrement: Math.abs(quantityDifference),
