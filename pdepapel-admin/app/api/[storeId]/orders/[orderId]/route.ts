@@ -1,11 +1,14 @@
 import { getUserId, isUserAuthorized } from "@/helpers/auth";
-import { getOrder, getOrderById, updateOrder } from "@/helpers/orders-actions";
+import {
+  deleteOrderById,
+  getOrder,
+  getOrderById,
+  updateOrder,
+} from "@/helpers/orders-actions";
 import { updateVariantStock } from "@/helpers/product-variants-actions";
 import { handleErrorResponse, handleSuccessResponse } from "@/helpers/response";
 import { validateMandatoryFields } from "@/helpers/validation";
-import prismadb from "@/lib/prismadb";
 import { OrderBody } from "@/lib/types";
-import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
 interface Params {
@@ -71,34 +74,24 @@ export async function PATCH(req: Request, { params }: { params: Params }) {
     return handleSuccessResponse(updatedOrder);
   } catch (error) {
     console.log("[ORDER_PATCH]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse("[ORDER_PATCH_ERROR]", 500);
   }
 }
 
 export async function DELETE(_req: Request, { params }: { params: Params }) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-
+  const userId = getUserId();
+  if (!userId) return handleErrorResponse("Unauthenticated", 401);
   if (!params.orderId)
-    return NextResponse.json(
-      { error: "Order ID is required" },
-      { status: 400 },
-    );
+    return handleErrorResponse("Order ID is required", 400, corsHeaders);
+  if (!params.storeId)
+    return handleErrorResponse("Store ID is required", 400, corsHeaders);
   try {
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    const order = await prismadb.order.delete({
-      where: { id: params.orderId },
-    });
-    if (!order)
-      return NextResponse.json({ error: "Order not found" }, { status: 404 });
-    return NextResponse.json(order);
+    const isAuthorized = await isUserAuthorized(userId, params.storeId);
+    if (!isAuthorized) return handleErrorResponse("Unauthorized", 403);
+    await deleteOrderById(params.orderId, params.storeId);
+    return handleSuccessResponse("Order was successfully deleted!");
   } catch (error) {
     console.log("[ORDER_DELETE]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse("[ORDER_DELETE_ERROR]", 500);
   }
 }

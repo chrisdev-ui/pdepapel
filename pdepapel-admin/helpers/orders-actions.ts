@@ -271,6 +271,25 @@ export async function createOrder(data: OrderBody & { storeId: string }) {
 }
 
 /**
+ * Deletes an order by its ID.
+ *
+ * @param {string} orderId - The ID of the order to delete.
+ * @param {string} storeId - The ID of the store the order belongs to.
+ * @returns {Promise<void>} - A promise that resolves when the order is deleted.
+ */
+export async function deleteOrderById(
+  orderId: string,
+  storeId: string,
+): Promise<void> {
+  await prismadb.order.delete({
+    where: {
+      id: orderId,
+      storeId,
+    },
+  });
+}
+
+/**
  * Retrieves orders from the database based on the store ID.
  * @param storeId - The ID of the store for which to retrieve orders.
  * @param userId - The ID of the user for whom to retrieve orders. Optional.
