@@ -18,6 +18,9 @@
 # vscode
 /.vscode/
 
+# Database sensible info
+/pscale_dump_pdepapel-admin_main/
+
 # misc
 .DS_Store
 *.pem
