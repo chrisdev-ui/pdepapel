@@ -1,4 +1,4 @@
-import { CircleDollarSign, Truck } from "lucide-react";
+import { Truck } from "lucide-react";
 import { Metadata } from "next";
 import Image from "next/image";
 
@@ -39,17 +39,6 @@ export default function ShippingPolicyPage() {
             confiable. Aquí detallamos nuestras políticas para asegurar una
             experiencia de compra satisfactoria.
           </p>
-          <h3 className="font-serif text-lg font-semibold">
-            Condiciones de envío gratuito:
-          </h3>
-          <ul className="list-disc space-y-3 pl-5">
-            <li>
-              Para pedidos con un valor superior a{" "}
-              <CircleDollarSign className="inline-flex h-4 w-4 text-green-500" />
-              150.000 COP, el envío será gratuito. Queremos que disfrutes de
-              nuestros productos kawaii sin preocuparte por el costo del envío.
-            </li>
-          </ul>
           <h3 className="font-serif text-lg font-semibold">
             Tiempos de Entrega:
           </h3>
