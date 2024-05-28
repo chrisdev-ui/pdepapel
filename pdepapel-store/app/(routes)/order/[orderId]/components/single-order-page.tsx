@@ -27,15 +27,22 @@ import { PayUForm } from "@/components/payu-form";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { Currency } from "@/components/ui/currency";
-import { OrderStatus, PaymentMethod, ShippingStatus, steps } from "@/constants";
+import {
+  INTERRAPIDISIMO_PASSWORD,
+  INTERRAPIDISIMO_URL,
+  OrderStatus,
+  PaymentMethod,
+  ShippingStatus,
+  steps,
+} from "@/constants";
 import { useCart } from "@/hooks/use-cart";
 import useCheckoutOrder from "@/hooks/use-checkout-order";
 import { useGuestUser } from "@/hooks/use-guest-user";
 import { useToast } from "@/hooks/use-toast";
-import { cn, formatPhoneNumber } from "@/lib/utils";
+import { cn, encrypt, formatPhoneNumber } from "@/lib/utils";
 import { Order, PayUFormState, WompiResponse } from "@/types";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Courier } from "./courier";
 
 interface SingleOrderPageProps {
@@ -233,6 +240,19 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
     [order],
   );
 
+  const redirectGuideUrl = useCallback(() => {
+    const encryptedGuide = encrypt(
+      order.shipping?.trackingCode as string,
+      INTERRAPIDISIMO_PASSWORD,
+    );
+
+    const encodedURL =
+      INTERRAPIDISIMO_URL +
+      encodeURIComponent(encryptedGuide).replace(/%/g, "_");
+
+    return encodedURL;
+  }, [order?.shipping?.trackingCode]);
+
   const orderItemsTotal = useMemo(
     () =>
       order?.orderItems?.reduce(
@@ -322,9 +342,9 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                       <span>Empresa transportadora:</span>
                       <div className="flex w-full flex-wrap items-center gap-2">
                         <Courier name={order.shipping?.courier ?? ""} />
-                        <span>
+                        <Link href={redirectGuideUrl()}>
                           No. guía: {order.shipping?.trackingCode ?? "N/D"}
-                        </span>
+                        </Link>
                       </div>
                     </div>
                   )}

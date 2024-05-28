@@ -91,3 +91,12 @@ export const PRICES: PriceRange[] = [
   { id: "[20000,50000]", name: "Entre $20,000 y $50,000" },
   { id: "[50000,99999999]", name: "Más de $50,000" },
 ];
+
+export const INTERRAPIDISIMO_URL =
+  "https://www3.interrapidisimo.com:8082/SiguetuEnvio/shipment/";
+
+export const INTERRAPIDISIMO_KEYSIZE = 256;
+export const INTERRAPIDISIMO_IVSIZE = 128;
+export const INTERRAPIDISIMO_SALTSIZE = 256;
+export const INTERRAPIDISIMO_ITERATIONS = 1000;
+export const INTERRAPIDISIMO_PASSWORD = "Int3rr4p1d1s1m0Cl4S33ncr1pc10nPt2022";
