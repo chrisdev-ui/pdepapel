@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { Currency } from "@/components/ui/currency";
 import {
+  ADMIN_USER_IDS,
   INTERRAPIDISIMO_PASSWORD,
   INTERRAPIDISIMO_URL,
   OrderStatus,
@@ -262,9 +263,11 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
     [order],
   );
 
+  const isAdmin = (user: string) => ADMIN_USER_IDS.includes(user);
+
   const hasAccess = userId
-    ? userId === order?.userId
-    : guestId === order?.guestId;
+    ? userId === order?.userId || isAdmin(userId)
+    : guestId === order?.guestId || isAdmin(guestId);
 
   return (
     <>
