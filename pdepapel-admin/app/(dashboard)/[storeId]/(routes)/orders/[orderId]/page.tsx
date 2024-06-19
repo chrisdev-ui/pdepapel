@@ -19,7 +19,6 @@ export default async function OrderPage({
   const products = await prismadb.product.findMany({
     where: {
       storeId: params.storeId,
-      isArchived: false,
     },
   });
 
