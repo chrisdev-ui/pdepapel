@@ -100,6 +100,8 @@ export const ADMIN_USER_IDS = [
   "user_2edvPcKn4XDbCYSobmXRNJpGq9U",
 ];
 
+export const LIMIT_PER_ITEMS = 16;
+
 export const INTERRAPIDISIMO_KEYSIZE = 256;
 export const INTERRAPIDISIMO_IVSIZE = 128;
 export const INTERRAPIDISIMO_SALTSIZE = 256;

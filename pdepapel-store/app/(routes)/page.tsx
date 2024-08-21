@@ -14,6 +14,7 @@ import {
   MainBannerSkeleton,
   NewArrivalsSkeleton,
 } from "@/components/home-skeletons";
+import { LIMIT_PER_ITEMS } from "@/constants";
 
 const HeroSlider = dynamic(() => import("@/components/hero-slider"), {
   ssr: false,
@@ -50,8 +51,14 @@ export const metadata: Metadata = {
 
 export default async function HomePage() {
   const billboardsAsync = getBillboards();
-  const featureProductsAsync = getProducts({ isFeatured: true, limit: 8 });
-  const newArrivalsAsync = getProducts({ onlyNew: true, limit: 8 });
+  const featureProductsAsync = getProducts({
+    isFeatured: true,
+    limit: LIMIT_PER_ITEMS,
+  });
+  const newArrivalsAsync = getProducts({
+    onlyNew: true,
+    limit: LIMIT_PER_ITEMS,
+  });
   const mainBannerAsync = getMainBanner();
   const bannersAsync = getBanners();
 
