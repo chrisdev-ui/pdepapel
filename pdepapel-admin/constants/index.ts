@@ -33,3 +33,5 @@ export const PRICE_RANGES = {
   "[20000,50000]": { gte: 20000, lte: 50000 },
   "[50000,99999999]": { gte: 50000 },
 };
+
+export const START_YEAR = 2023;

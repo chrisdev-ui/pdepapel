@@ -7,16 +7,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { START_YEAR } from "@/constants";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 const currentYear = new Date().getFullYear();
-const years = [
-  currentYear,
-  currentYear - 1,
-  currentYear - 2,
-  currentYear - 3,
-  currentYear - 4,
-];
+const years = Array.from(
+  { length: currentYear - START_YEAR + 1 },
+  (_, i) => START_YEAR + i,
+).sort((a, b) => b - a);
 
 export function YearSelector({ selected }: { selected: string }) {
   const router = useRouter();
@@ -41,7 +39,7 @@ export function YearSelector({ selected }: { selected: string }) {
   return (
     <Select onValueChange={onYearChange} value={selected}>
       <SelectTrigger className="w-[180px]">
-        <SelectValue placeholder="Select year" />
+        <SelectValue placeholder="Selecciona un año" />
       </SelectTrigger>
       <SelectContent>
         {years.map((year) => (
