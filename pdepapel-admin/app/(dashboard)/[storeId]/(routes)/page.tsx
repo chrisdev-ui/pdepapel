@@ -6,15 +6,23 @@ import { Overview } from "@/components/overview";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
+import { YearSelector } from "@/components/year-selector";
 import { formatter } from "@/lib/utils";
 import { CreditCard, DollarSign, Package } from "lucide-react";
 
 interface DashboardPageProps {
   params: { storeId: string };
+  searchParams: { year?: string };
 }
 
-export default async function DashboardPage({ params }: DashboardPageProps) {
-  const graphRevenue = await getGraphRevenue(params.storeId);
+export default async function DashboardPage({
+  params,
+  searchParams,
+}: DashboardPageProps) {
+  const year = searchParams.year
+    ? parseInt(searchParams.year)
+    : new Date().getFullYear();
+  const graphRevenue = await getGraphRevenue(params.storeId, year);
   const salesCount = await getSalesCount(params.storeId);
   const stockCount = await getStockCount(params.storeId);
   const totalRevenue = await getTotalRevenue(params.storeId);
@@ -64,6 +72,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
         <Card className="col-span-4">
           <CardHeader>
             <CardTitle>Overview</CardTitle>
+            <YearSelector selected={year.toString()} />
           </CardHeader>
           <CardContent className="pl-2">
             <Overview data={graphRevenue} />

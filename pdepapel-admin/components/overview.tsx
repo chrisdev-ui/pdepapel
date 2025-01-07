@@ -1,9 +1,17 @@
 "use client";
 
-import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import { getGraphRevenue } from "@/actions/get-graph-revenue";
+import {
+  Bar,
+  BarChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 interface OverviewProps {
-  data: any[];
+  data: Awaited<ReturnType<typeof getGraphRevenue>>;
 }
 
 export const Overview: React.FC<OverviewProps> = ({ data }) => {
@@ -16,6 +24,10 @@ export const Overview: React.FC<OverviewProps> = ({ data }) => {
           fontSize={12}
           tickLine={false}
           axisLine={false}
+          interval={2}
+          angle={-45}
+          textAnchor="end"
+          height={70}
         />
         <YAxis
           stroke="#888888"
@@ -23,6 +35,10 @@ export const Overview: React.FC<OverviewProps> = ({ data }) => {
           tickLine={false}
           axisLine={false}
           tickFormatter={(value) => `$${value}`}
+        />
+        <Tooltip
+          formatter={(value: number) => [`$${value}`, "Ganancia"]}
+          labelFormatter={(label) => `${label}`}
         />
         <Bar dataKey="total" fill="#3498db" radius={[4, 4, 0, 0]} />
       </BarChart>
