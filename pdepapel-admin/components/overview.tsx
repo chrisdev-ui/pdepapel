@@ -13,9 +13,18 @@ import {
 
 interface OverviewProps {
   data: Awaited<ReturnType<typeof getGraphRevenue>>;
+  year: number;
 }
 
-export const Overview: React.FC<OverviewProps> = ({ data }) => {
+const yearColors = {
+  2025: "#AD8FE1",
+  default: "#3498DB",
+};
+
+export const Overview: React.FC<OverviewProps> = ({ data, year }) => {
+  const barColor =
+    yearColors[year as keyof typeof yearColors] || yearColors.default;
+
   return (
     <ResponsiveContainer width="100%" height={350}>
       <BarChart data={data}>
@@ -37,7 +46,7 @@ export const Overview: React.FC<OverviewProps> = ({ data }) => {
           formatter={(value: number) => [formatter.format(value), "Ganancia"]}
           labelFormatter={(label) => `${label}`}
         />
-        <Bar dataKey="total" fill="#3498db" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="total" fill={barColor} radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );
