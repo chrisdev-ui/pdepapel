@@ -8,8 +8,7 @@ import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
 import { YearSelector } from "@/components/year-selector";
 import { formatter } from "@/lib/utils";
-import { CreditCard, DollarSign, Loader2, Package } from "lucide-react";
-import { Suspense } from "react";
+import { CreditCard, DollarSign, Package } from "lucide-react";
 
 interface DashboardPageProps {
   params: { storeId: string };
@@ -44,18 +43,9 @@ export default async function DashboardPage({
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <Suspense
-                key={year}
-                fallback={
-                  <div className="text-2xl font-bold">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  </div>
-                }
-              >
-                <div className="text-2xl font-bold">
-                  {formatter.format(totalRevenue)}
-                </div>
-              </Suspense>
+              <div className="text-2xl font-bold">
+                {formatter.format(totalRevenue)}
+              </div>
             </CardContent>
           </Card>
           <Card>
