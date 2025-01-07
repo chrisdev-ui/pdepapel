@@ -75,7 +75,7 @@ export default async function DashboardPage({
             <YearSelector selected={year.toString()} />
           </CardHeader>
           <CardContent className="pl-2">
-            <Overview data={graphRevenue} />
+            <Overview data={graphRevenue} year={year} />
           </CardContent>
         </Card>
       </div>
