@@ -1,11 +1,18 @@
 import prismadb from "@/lib/prismadb";
 import { OrderStatus } from "@prisma/client";
 
-export const getTotalRevenue = async (storeId: string) => {
+export const getTotalRevenue = async (storeId: string, year: number) => {
+  const startDate = new Date(year, 0, 1);
+  const endDate = new Date(year + 1, 0, 1);
+
   const paidOrders = await prismadb.order.findMany({
     where: {
       storeId,
       status: OrderStatus.PAID,
+      createdAt: {
+        gte: startDate,
+        lt: endDate,
+      },
     },
     include: {
       orderItems: {

@@ -23,9 +23,9 @@ export default async function DashboardPage({
     ? parseInt(searchParams.year)
     : new Date().getFullYear();
   const graphRevenue = await getGraphRevenue(params.storeId, year);
-  const salesCount = await getSalesCount(params.storeId);
+  const salesCount = await getSalesCount(params.storeId, year);
   const stockCount = await getStockCount(params.storeId);
-  const totalRevenue = await getTotalRevenue(params.storeId);
+  const totalRevenue = await getTotalRevenue(params.storeId, year);
   return (
     <div className="flex-col">
       <div className="flex-1 space-y-4 p-8 pt-6">
