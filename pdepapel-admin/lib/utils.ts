@@ -8,13 +8,19 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export const formatter = new Intl.NumberFormat("en-US", {
+export const formatter = new Intl.NumberFormat("es-CO", {
   style: "currency",
   currency: "COP",
-  currencyDisplay: "narrowSymbol",
   minimumFractionDigits: 0,
   maximumFractionDigits: 0,
   useGrouping: true,
+});
+
+export const shortFormatter = new Intl.NumberFormat("es-CO", {
+  style: "currency",
+  currency: "COP",
+  notation: "compact",
+  compactDisplay: "short",
 });
 
 export const generateGuestId = () => `guest_${uuidv4()}`;

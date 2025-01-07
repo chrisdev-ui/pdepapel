@@ -1,6 +1,7 @@
 "use client";
 
 import { getGraphRevenue } from "@/actions/get-graph-revenue";
+import { formatter, shortFormatter } from "@/lib/utils";
 import {
   Bar,
   BarChart,
@@ -30,10 +31,10 @@ export const Overview: React.FC<OverviewProps> = ({ data }) => {
           fontSize={12}
           tickLine={false}
           axisLine={false}
-          tickFormatter={(value) => `$${value}`}
+          tickFormatter={(value: number) => shortFormatter.format(value)}
         />
         <Tooltip
-          formatter={(value: number) => [`$${value}`, "Ganancia"]}
+          formatter={(value: number) => [formatter.format(value), "Ganancia"]}
           labelFormatter={(label) => `${label}`}
         />
         <Bar dataKey="total" fill="#3498db" radius={[4, 4, 0, 0]} />
