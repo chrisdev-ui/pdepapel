@@ -24,10 +24,6 @@ export const Overview: React.FC<OverviewProps> = ({ data }) => {
           fontSize={12}
           tickLine={false}
           axisLine={false}
-          interval={2}
-          angle={-45}
-          textAnchor="end"
-          height={70}
         />
         <YAxis
           stroke="#888888"
