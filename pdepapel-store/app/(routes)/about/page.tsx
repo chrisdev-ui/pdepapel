@@ -25,6 +25,8 @@ export const metadata: Metadata = {
   },
 };
 
+export const revalidate = 0;
+
 export default async function AboutPage() {
   const posts = await getPosts();
   return (
