@@ -1,7 +1,5 @@
 import { Metadata } from "next";
 import nextDynamic from "next/dynamic";
-import { Suspense } from "react";
-import { v4 as uuidv4 } from "uuid";
 
 import { getCategories } from "@/actions/get-categories";
 import { getColors } from "@/actions/get-colors";
@@ -9,11 +7,9 @@ import { getDesigns } from "@/actions/get-designs";
 import { getProducts } from "@/actions/get-products";
 import { getSizes } from "@/actions/get-sizes";
 import { getTypes } from "@/actions/get-types";
-import Await from "@/components/await";
 import { Container } from "@/components/ui/container";
 import { PRICES, SORT_OPTIONS } from "@/constants";
 import Products from "./components/products";
-import { ProductsContainerSkeleton } from "./components/skeletons";
 
 const ShopSearchBar = nextDynamic(
   () => import("./components/shop-search-bar"),
@@ -69,7 +65,7 @@ interface ShopPageProps {
 }
 
 export default async function ShopPage({ searchParams }: ShopPageProps) {
-  const getProductsAsync = getProducts({
+  const { products, totalPages } = await getProducts({
     typeId: searchParams.typeId,
     categoryId: searchParams.categoryId,
     colorId: searchParams.colorId,
@@ -158,13 +154,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
               designs={designs}
             />
             <ShopSearchBar className="md:hidden" />
-            <Suspense key={uuidv4()} fallback={<ProductsContainerSkeleton />}>
-              <Await promise={getProductsAsync}>
-                {({ products, totalPages }) => (
-                  <Products products={products} totalPages={totalPages} />
-                )}
-              </Await>
-            </Suspense>
+            <Products products={products} totalPages={totalPages} />
           </div>
         </div>
       </Container>

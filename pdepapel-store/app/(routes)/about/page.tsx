@@ -5,10 +5,8 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { getPosts } from "@/actions/get-posts";
-import Await from "@/components/await";
 import { Icons } from "@/components/icons";
 import { Container } from "@/components/ui/container";
-import { Suspense } from "react";
 
 const SocialMedia = dynamic(() => import("./components/social-media"), {
   ssr: false,
@@ -28,7 +26,7 @@ export const metadata: Metadata = {
 };
 
 export default async function AboutPage() {
-  const postsAsync = getPosts();
+  const posts = await getPosts();
   return (
     <>
       <Container>
@@ -38,17 +36,14 @@ export default async function AboutPage() {
         </h1>
         <section className="mt-12 flex flex-col gap-6 lg:grid lg:grid-cols-8 lg:items-start lg:gap-x-6 xl:gap-x-12">
           <div className="col-span-3">
-            <div className="relative h-[15vh] w-full bg-[#ffe5ee] transition-all duration-700 ease-in-out hover:scale-105 hover:cursor-zoom-in sm:h-[40vh] xl:h-[30vh]">
+            <div className="relative h-[15vh] w-full rounded-md bg-[#ffe5ee] transition-all duration-700 ease-in-out hover:scale-105 hover:cursor-zoom-in sm:h-[40vh] xl:h-[30vh]">
               <Image
                 src="/images/text-beside-lightpink-bg.webp"
                 alt="Logo Papelería P de Papel con fondo rosado"
                 fill
                 sizes="(max-width: 640px) 100vw, 640px"
-                className="rounded-lg object-contain shadow-lg"
+                className="rounded-md object-contain shadow-lg"
               />
-              <h2 className="absolute bottom-1 left-1 z-20 animate-bounce font-serif font-semibold sm:bottom-6 sm:left-4 sm:text-2xl lg:bottom-auto lg:left-auto lg:right-4 lg:top-6">
-                ¿Quiénes somos?
-              </h2>
             </div>
           </div>
           <article className="col-span-5 flex flex-col gap-2">
@@ -133,11 +128,7 @@ export default async function AboutPage() {
             </Link>
           </div>
         </article>
-        <Suspense>
-          <Await promise={postsAsync}>
-            {(posts) => <SocialMedia data={posts} />}
-          </Await>
-        </Suspense>
+        <SocialMedia data={posts} />
       </Container>
       <Newsletter />
     </>

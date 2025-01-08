@@ -1,19 +1,10 @@
 import { Metadata } from "next";
 import dynamic from "next/dynamic";
-import { Suspense } from "react";
 
 import { getBanners } from "@/actions/get-banners";
 import { getBillboards } from "@/actions/get-billboards";
 import { getMainBanner } from "@/actions/get-main-banner";
 import { getProducts } from "@/actions/get-products";
-import Await from "@/components/await";
-import {
-  BannersCtaSkeleton,
-  FeaturedProductsSkeleton,
-  HeroSliderSkeleton,
-  MainBannerSkeleton,
-  NewArrivalsSkeleton,
-} from "@/components/home-skeletons";
 import { LIMIT_PER_ITEMS } from "@/constants";
 
 const HeroSlider = dynamic(() => import("@/components/hero-slider"), {
@@ -50,50 +41,26 @@ export const metadata: Metadata = {
 };
 
 export default async function HomePage() {
-  const billboardsAsync = getBillboards();
-  const featureProductsAsync = getProducts({
+  const billboards = await getBillboards();
+  const { products: featureProducts } = await getProducts({
     isFeatured: true,
     limit: LIMIT_PER_ITEMS,
   });
-  const newArrivalsAsync = getProducts({
+  const { products: newProducts } = await getProducts({
     onlyNew: true,
     limit: LIMIT_PER_ITEMS,
   });
-  const mainBannerAsync = getMainBanner();
-  const bannersAsync = getBanners();
+  const mainBanner = await getMainBanner();
+  const banners = await getBanners();
 
   return (
     <>
-      <Suspense fallback={<HeroSliderSkeleton />}>
-        <Await promise={billboardsAsync}>
-          {(billboards) => <HeroSlider data={billboards} />}
-        </Await>
-      </Suspense>
+      <HeroSlider data={billboards} />
       <Features />
-      <Suspense fallback={<FeaturedProductsSkeleton />}>
-        <Await promise={featureProductsAsync}>
-          {({ products: featureProducts }) => (
-            <FeaturedProducts featureProducts={featureProducts} />
-          )}
-        </Await>
-      </Suspense>
-      <Suspense fallback={<MainBannerSkeleton />}>
-        <Await promise={mainBannerAsync}>
-          {(mainBanner) => <MainBanner data={mainBanner} />}
-        </Await>
-      </Suspense>
-      <Suspense fallback={<NewArrivalsSkeleton />}>
-        <Await promise={newArrivalsAsync}>
-          {({ products: newProducts }) => (
-            <NewArrivals newProducts={newProducts} />
-          )}
-        </Await>
-      </Suspense>
-      <Suspense fallback={<BannersCtaSkeleton />}>
-        <Await promise={bannersAsync}>
-          {(banners) => <BannersCta banners={banners} />}
-        </Await>
-      </Suspense>
+      <FeaturedProducts featureProducts={featureProducts} />
+      <MainBanner data={mainBanner} />
+      <NewArrivals newProducts={newProducts} />
+      <BannersCta banners={banners} />
       <Newsletter />
     </>
   );
