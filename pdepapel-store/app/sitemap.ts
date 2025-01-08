@@ -1,69 +1,62 @@
-import { getOrders } from "@/actions/get-orders";
 import { getProducts } from "@/actions/get-products";
+import { BASE_URL } from "@/constants";
 import { MetadataRoute } from "next";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = "https://papeleriapdepapel.com";
-  const orders = await getOrders({});
   const { products } = await getProducts({});
   const productsUrls = products?.map((product) => ({
-    url: `${baseUrl}/product/${product.id}`,
-    lastModified: new Date(),
-  }));
-  const ordersUrls = orders?.map((order) => ({
-    url: `${baseUrl}/order/${order.id}`,
+    url: `${BASE_URL}/product/${product.id}`,
     lastModified: new Date(),
   }));
   return [
     {
-      url: baseUrl,
+      url: BASE_URL,
       lastModified: new Date(),
     },
     {
-      url: `${baseUrl}/sign-in`,
+      url: `${BASE_URL}/sign-in`,
       lastModified: new Date(),
     },
     {
-      url: `${baseUrl}/sign-up`,
+      url: `${BASE_URL}/sign-up`,
       lastModified: new Date(),
     },
     {
-      url: `${baseUrl}/about`,
+      url: `${BASE_URL}/about`,
       lastModified: new Date(),
     },
     {
-      url: `${baseUrl}/cart`,
+      url: `${BASE_URL}/cart`,
       lastModified: new Date(),
     },
     {
-      url: `${baseUrl}/checkout`,
+      url: `${BASE_URL}/checkout`,
       lastModified: new Date(),
     },
     {
-      url: `${baseUrl}/contact`,
+      url: `${BASE_URL}/contact`,
       lastModified: new Date(),
     },
     {
-      url: `${baseUrl}/policies/data`,
+      url: `${BASE_URL}/policies/data`,
       lastModified: new Date(),
     },
     {
-      url: `${baseUrl}/policies/returns`,
+      url: `${BASE_URL}/policies/returns`,
       lastModified: new Date(),
     },
     {
-      url: `${baseUrl}/policies/shipping`,
+      url: `${BASE_URL}/policies/shipping`,
       lastModified: new Date(),
     },
     {
-      url: `${baseUrl}/shop`,
+      url: `${BASE_URL}/shop`,
       lastModified: new Date(),
     },
     {
-      url: `${baseUrl}/wishlist`,
+      url: `${BASE_URL}/wishlist`,
       lastModified: new Date(),
     },
     ...productsUrls,
-    ...ordersUrls,
   ];
 }

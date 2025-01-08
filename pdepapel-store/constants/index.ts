@@ -73,6 +73,8 @@ export const MAX_PAGES = 4;
 export const MAX_ITEMS_PER_PAGE = 52;
 export const DOTS = "...";
 
+export const BASE_URL = "https://papeleriapdepapel.com";
+
 export const LETTER_REGEX = /^[a-zA-Z]*$/;
 export const DIGIT_REGEX = /^[0-9]*$/;
 

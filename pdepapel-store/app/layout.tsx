@@ -47,6 +47,7 @@ export const metadata: Metadata = {
     { name: "Christian Torres", url: "https://github.com/chrisdev-ui" },
   ],
   creator: "Christian Torres Martínez",
+  generator: "Next.js",
   publisher: "Vercel",
   formatDetection: {
     telephone: true,

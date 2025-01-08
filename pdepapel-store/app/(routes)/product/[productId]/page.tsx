@@ -25,6 +25,8 @@ export async function generateMetadata({
     };
   }
 
+  const images = product.images.map((image) => image.url);
+
   return {
     title: product.name,
     description:
@@ -32,6 +34,20 @@ export async function generateMetadata({
       `Descubre ${product.name} en Papelería P de Papel. Este artículo kawaii/oficina es perfecto para añadir un toque especial a tu espacio. Detalles, especificaciones, y todo lo que necesitas saber para tomar la mejor decisión. Calidad y diseño se unen para ofrecerte lo mejor en papelería.`,
     alternates: {
       canonical: `/product/${params.productId}`,
+    },
+    openGraph: {
+      title: product.name,
+      description: product.description,
+      url: `https://papeleriapdepapel.com/product/${params.productId}`,
+      siteName: "Papelería P de Papel",
+      images,
+    },
+    twitter: {
+      title: product.name,
+      description: product.description,
+      card: "summary_large_image",
+      site: "Papelería P de Papel",
+      images,
     },
   };
 }
