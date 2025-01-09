@@ -126,7 +126,8 @@ export const Footer: React.FC<{}> = () => {
         </div>
       </div>
       <div className="py-6 text-center text-sm">
-        &copy; 2023 Papelería P de Papel Co. Todos los derechos reservados.
+        &copy; {new Date().getFullYear()} P de papel. Todos los derechos
+        reservados.
       </div>
     </footer>
   );

@@ -126,7 +126,7 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
                 }}
               >
                 {/* Footer  */}
-                &copy; 2023 Papelería P de Papel Co. Todos los derechos
+                &copy; {new Date().getFullYear()} P de papel. Todos los derechos
                 reservados.
               </td>
             </tr>
