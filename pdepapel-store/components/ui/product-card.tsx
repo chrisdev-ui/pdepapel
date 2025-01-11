@@ -1,10 +1,10 @@
 "use client";
 
 import { Expand, Heart, ShoppingCart } from "lucide-react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { MouseEventHandler, useEffect, useState } from "react";
 
+import { CldImage } from "@/components/ui/CldImage";
 import { Currency } from "@/components/ui/currency";
 import { IconButton } from "@/components/ui/icon-button";
 import { ProductCardBadge } from "@/components/ui/product-cart-badge";
@@ -73,14 +73,13 @@ const ProductCard: React.FC<ProductCardProps> = ({
       className="group relative flex cursor-pointer flex-col justify-between space-y-4 rounded-xl border border-solid border-white-rock px-3 py-2.5 shadow-card [transition:0.2s_ease] hover:shadow-card-hover"
     >
       <div className="relative aspect-square rounded-xl bg-gray-100">
-        <Image
+        <CldImage
           src={mainImage.url}
           alt={product.name ?? "Imagen principal del producto"}
           fill
           sizes="(max-width: 640px) 100vw, 640px"
           priority
           className="aspect-square rounded-md object-cover"
-          unoptimized
         />
         <div className="absolute bottom-5 w-full px-6 opacity-0 transition group-hover:opacity-100">
           <div className="flex justify-center gap-x-6">

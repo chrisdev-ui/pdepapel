@@ -1,9 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import { CldImage } from "@/components/ui/CldImage";
 import { DELAY } from "@/constants";
 import { cn } from "@/lib/utils";
 import { Billboard } from "@/types";
@@ -64,15 +64,13 @@ const HeroSlider: React.FC<HeroSliderProps> = ({ data }) => {
               )}
               onClick={() => handleClick(redirectUrl)}
             >
-              <Image
+              <CldImage
                 src={imageUrl}
                 alt={title ?? "Imagen de la promoción"}
                 fill
                 className="h-full w-full object-cover"
                 sizes="(max-width: 640px) 640px, 1280px"
                 priority
-                unoptimized
-                loading="lazy"
               />
               {title && (
                 <article className="relative z-10 flex h-full w-full flex-col items-center justify-center gap-y-8 break-all text-center">

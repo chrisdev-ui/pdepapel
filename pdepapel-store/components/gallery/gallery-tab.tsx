@@ -1,8 +1,8 @@
 "use client";
 
+import { CldImage } from "@/components/ui/CldImage";
 import { TabsTrigger } from "@/components/ui/tabs";
 import { Image as ImageType } from "@/types";
-import Image from "next/image";
 
 interface GalleryTabProps {
   image: ImageType;
@@ -16,7 +16,7 @@ export const GalleryTab: React.FC<GalleryTabProps> = ({ image }) => {
     >
       <div>
         <span className="absolute inset-0 aspect-square h-full w-full overflow-hidden rounded-md">
-          <Image
+          <CldImage
             src={image.url}
             alt="Imagen del producto"
             fill
