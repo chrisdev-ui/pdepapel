@@ -253,7 +253,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               name="price"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Precio</FormLabel>
+                  <FormLabel>Precio de venta</FormLabel>
                   <FormControl>
                     <div className="relative">
                       <DollarSign className="absolute left-3 top-3 h-4 w-4" />
@@ -288,6 +288,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                       />
                     </div>
                   </FormControl>
+                  <FormDescription>Este campo es opcional</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -521,6 +522,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                         ))}
                     </SelectContent>
                   </Select>
+                  <FormDescription>Este campo es opcional</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
