@@ -57,7 +57,7 @@ const formSchema = z.object({
       message: "Debe haber exactamente una imagen principal",
     }),
   price: z.coerce.number().min(1, "El precio debe ser mayor a 0"),
-  acqPrice: z.coerce.number().min(1, "El precio de compra debe ser mayor a 0"),
+  acqPrice: z.coerce.number().optional(),
   categoryId: z.string().min(1),
   colorId: z.string().min(1),
   sizeId: z.string().min(1),
