@@ -1,6 +1,6 @@
 import { Icons } from "@/components/icons";
-import { CldImage } from "@/components/ui/CldImage";
 import { CalendarDays, Mail, Phone } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 
 export const Footer: React.FC<{}> = () => {
@@ -14,7 +14,7 @@ export const Footer: React.FC<{}> = () => {
             className="flex justify-center space-x-3 lg:justify-start"
           >
             <div className="relative flex h-32 w-full items-center justify-center sm:w-64">
-              <CldImage
+              <Image
                 src="/images/text-beside-transparent-bg.webp"
                 alt="Logo Papelería P de Papel con nombre al lado"
                 sizes="(max-width: 640px) 100vw, 640px"

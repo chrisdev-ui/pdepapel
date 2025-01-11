@@ -13,7 +13,6 @@ import { NavbarCart } from "@/components/navbar-cart";
 import { NavigationLink } from "@/components/navigation-link";
 import { OrderHistory } from "@/components/order-history";
 import { SearchBar } from "@/components/search-bar";
-import { CldImage } from "@/components/ui/CldImage";
 import { WishlistButton } from "@/components/wishlist-button";
 import { useScrollPosition } from "@/hooks/use-scroll-position";
 import { cn } from "@/lib/utils";
@@ -63,7 +62,7 @@ const Navbar: React.FC<{}> = () => {
               },
             )}
           >
-            <CldImage
+            <Image
               src="/images/text-beside-transparent-bg.webp"
               alt="Logo Papelería P de Papel con nombre al lado"
               fill

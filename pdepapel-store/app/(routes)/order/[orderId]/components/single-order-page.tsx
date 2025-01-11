@@ -25,6 +25,7 @@ import { Forbidden } from "@/components/forbidden";
 import { Icons } from "@/components/icons";
 import { PayUForm } from "@/components/payu-form";
 import { Button } from "@/components/ui/button";
+import { CldImage } from "@/components/ui/CldImage";
 import { Container } from "@/components/ui/container";
 import { Currency } from "@/components/ui/currency";
 import {
@@ -468,7 +469,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                     <div className="flex items-start justify-start gap-2 lg:gap-8">
                       <Link href={`/product/${product.id}`}>
                         <div className="relative h-20 w-20">
-                          <Image
+                          <CldImage
                             src={
                               product.images.find((image) => image.isMain)
                                 ?.url ?? product.images[0].url
@@ -478,7 +479,6 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                             sizes="(max-width: 640px) 100vw, 640px"
                             priority
                             className="rounded-md object-cover"
-                            unoptimized
                           />
                         </div>
                       </Link>

@@ -1,10 +1,10 @@
+import { CldImage } from "@/components/ui/CldImage";
 import { Currency } from "@/components/ui/currency";
 import { IconButton } from "@/components/ui/icon-button";
 import { QuantitySelector } from "@/components/ui/quantity-selector";
 import { useCart } from "@/hooks/use-cart";
 import { Product } from "@/types";
 import { X } from "lucide-react";
-import Image from "next/image";
 
 interface CartItemProps {
   item: Product;
@@ -27,14 +27,13 @@ export const CartItem: React.FC<CartItemProps> = ({ item }) => {
   return (
     <li className="flex border-b py-6">
       <div className="relative h-24 w-24 overflow-hidden rounded-md sm:h-48 sm:w-48">
-        <Image
+        <CldImage
           fill
           src={mainImage.url}
           alt={item?.name ?? "Imagen del producto"}
           sizes="(max-width: 640px) 100vw, 640px"
           className="object-cover object-center"
           priority
-          unoptimized
         />
       </div>
       <div className="relative ml-4 flex flex-1 flex-col justify-between sm:ml-6">

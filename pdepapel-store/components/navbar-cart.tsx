@@ -1,11 +1,11 @@
 "use client";
 
 import { CreditCard, ShoppingBag, ShoppingCart, X } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { CldImage } from "@/components/ui/CldImage";
 import { Currency } from "@/components/ui/currency";
 import { NoResults } from "@/components/ui/no-results";
 import {
@@ -101,7 +101,7 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
                     href={`/product/${item.id}`}
                     className="relative h-20 w-20"
                   >
-                    <Image
+                    <CldImage
                       src={
                         item.images.find((image) => image.isMain)?.url ??
                         item.images[0].url
@@ -111,7 +111,6 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
                       sizes="(max-width: 640px) 80px, 120px"
                       priority
                       className="rounded-md"
-                      unoptimized
                     />
                     <span className="absolute right-0 top-0 flex h-4 w-4 items-center justify-center rounded-full bg-blue-yankees font-serif text-xs text-white">
                       {item.quantity}

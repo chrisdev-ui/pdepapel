@@ -4,9 +4,9 @@ import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { BadgeAlert, BadgeCheck } from "lucide-react";
-import Image from "next/image";
 
 import { Checkbox } from "@/components/ui/checkbox";
+import { CldImage } from "@/components/ui/CldImage";
 import { Currency } from "@/components/ui/currency";
 import { cn } from "@/lib/utils";
 import { AddToCartButton } from "./add-to-cart-button";
@@ -50,14 +50,13 @@ export const columns: ColumnDef<WishlistColumn>[] = [
     header: "",
     cell: ({ row }) => (
       <div className="relative h-12 w-12 overflow-hidden rounded-md sm:h-24 sm:w-24">
-        <Image
+        <CldImage
           fill
           src={row.original.imageUrl}
           alt={row.original.name ?? "Imagen del producto"}
           sizes="(max-width: 640px) 100vw, 640px"
           className="object-cover object-center"
           priority
-          unoptimized
         />
       </div>
     ),
