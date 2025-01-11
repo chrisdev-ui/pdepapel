@@ -224,14 +224,6 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                         ...field.value.filter((current) => current.url !== url),
                       ])
                     }
-                    onSelectMainImage={(url) =>
-                      field.onChange([
-                        ...field.value.map((image) => ({
-                          ...image,
-                          isMain: image.url === url,
-                        })),
-                      ])
-                    }
                   />
                 </FormControl>
                 <FormMessage />

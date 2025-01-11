@@ -15,7 +15,6 @@ interface ImageUploadProps {
   disabled?: boolean;
   onChange: (value: Image[]) => void;
   onRemove: (value: string) => void;
-  onSelectMainImage?: (value: string) => void;
   value: Image[];
 }
 
@@ -23,11 +22,13 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
   disabled,
   onChange,
   onRemove,
-  onSelectMainImage,
   value,
 }) => {
   const [isMounted, setIsMounted] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [mainImageUrl, setMainImageUrl] = useState<string | null>(
+    value.find((image) => image.isMain)?.url ?? null,
+  );
   const { toast } = useToast();
   const params = useParams();
 
@@ -35,14 +36,35 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
     setIsMounted(true);
   }, []);
 
+  useEffect(() => {
+    const mainImage = value.find((img) => img.isMain);
+    setMainImageUrl(mainImage ? mainImage.url : null);
+  }, [value]);
+
   const onUpload = (result: any) => {
-    onChange([...value, { url: result.info.secure_url, isMain: false }]);
+    const newImage = {
+      url: result.info.secure_url,
+      isMain: value.length === 0,
+    };
+    const updatedImages = [...value, newImage];
+    onChange(updatedImages);
+    if (value.length === 0) {
+      setMainImageUrl(newImage.url);
+    }
   };
 
   const handleRemove = async (url: string) => {
     try {
       setIsDeleting(true);
       await axios.post(`/api/${params.storeId}/cloudinary`, { imageUrl: url });
+      const filteredImages = value.filter((image) => image.url !== url);
+      if (filteredImages.length === 1) {
+        filteredImages[0].isMain = true;
+        setMainImageUrl(filteredImages[0].url);
+      } else if (url === mainImageUrl) {
+        setMainImageUrl(null);
+      }
+      onChange(filteredImages);
     } catch (error) {
       toast({
         description:
@@ -56,12 +78,12 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
   };
 
   const handleSelectMainImage = (url: string) => {
+    setMainImageUrl(url);
     const updatedImages = value.map((image) => ({
       ...image,
       isMain: image.url === url,
     }));
     onChange(updatedImages);
-    onSelectMainImage?.(url);
   };
 
   if (!isMounted) {
@@ -99,10 +121,16 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
                 onClick={() => handleSelectMainImage(image.url)}
                 variant="ghost"
                 size="icon"
+                className={cn({
+                  "bg-yellow-100 hover:bg-yellow-200":
+                    image.url === mainImageUrl,
+                })}
               >
                 <Star
                   className={cn("h-4 w-4", {
-                    "text-yellow-star": image.isMain,
+                    "fill-yellow-500 text-yellow-500":
+                      image.url === mainImageUrl,
+                    "text-gray-500": image.url !== mainImageUrl,
                   })}
                 />
               </Button>
