@@ -71,6 +71,7 @@ const HeroSlider: React.FC<HeroSliderProps> = ({ data }) => {
                 className="h-full w-full object-cover"
                 sizes="(max-width: 640px) 640px, 1280px"
                 priority
+                unoptimized
               />
               {title && (
                 <article className="relative z-10 flex h-full w-full flex-col items-center justify-center gap-y-8 break-all text-center">
