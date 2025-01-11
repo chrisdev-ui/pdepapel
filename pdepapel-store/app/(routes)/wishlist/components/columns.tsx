@@ -57,6 +57,7 @@ export const columns: ColumnDef<WishlistColumn>[] = [
           sizes="(max-width: 640px) 100vw, 640px"
           className="object-cover object-center"
           priority
+          unoptimized
         />
       </div>
     ),

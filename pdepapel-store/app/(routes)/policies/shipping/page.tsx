@@ -34,6 +34,7 @@ export default function ShippingPolicyPage() {
               height={20}
               title="P de Papel"
               className="inline-flex object-contain"
+              unoptimized
             />
             , nos esforzamos por ofrecerte un servicio de entrega eficiente y
             confiable. Aquí detallamos nuestras políticas para asegurar una

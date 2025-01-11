@@ -38,6 +38,7 @@ export const Forbidden: React.FC<ForbiddenProps> = ({
             sizes="(max-width: 640px) 100vw, 640px"
             priority
             className="object-cover"
+            unoptimized
           />
         </div>
         <h2 className="mt-6 text-center font-serif text-3xl font-extrabold text-pink-froly">

@@ -40,6 +40,11 @@ export default async function ProductPage({
       storeId: params.storeId,
     },
   });
+  const suppliers = await prismadb.supplier.findMany({
+    where: {
+      storeId: params.storeId,
+    },
+  });
 
   const formattedReviews: ReviewColumn[] =
     product?.reviews.map((review) => ({
@@ -62,6 +67,7 @@ export default async function ProductPage({
           designs={designs}
           initialData={product}
           reviews={formattedReviews}
+          suppliers={suppliers}
         />
       </div>
     </div>

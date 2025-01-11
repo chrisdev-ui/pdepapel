@@ -1,6 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Supplier } from "@prisma/client";
 import { Trash } from "lucide-react";
 import { useForm } from "react-hook-form";
 import z from "zod";
@@ -16,27 +17,24 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Heading } from "@/components/ui/heading";
-import { ImageUpload } from "@/components/ui/image-upload";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { Banner } from "@prisma/client";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 
 const formSchema = z.object({
-  callToAction: z.string().min(1, "La URL de redirección no puede estar vacía"),
-  imageUrl: z.string().min(1, "La URL de la imagen no puede estar vacía"),
+  name: z.string().min(1, "El nombre del proveedor no puede estar vacío"),
 });
 
-type BannerFormValues = z.infer<typeof formSchema>;
+type SupplierFormValues = z.infer<typeof formSchema>;
 
-interface BannerFormProps {
-  initialData: Banner | null;
+interface SupplierFormProps {
+  initialData: Supplier | null;
 }
 
-export const BannerForm: React.FC<BannerFormProps> = ({ initialData }) => {
+export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData }) => {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
@@ -44,33 +42,34 @@ export const BannerForm: React.FC<BannerFormProps> = ({ initialData }) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const title = initialData ? "Editar banner" : "Crear banner";
+  const title = initialData ? "Editar proveedor" : "Crear proveedor";
   const description = initialData
-    ? "Editar un banner"
-    : "Crear un nuevo banner";
-  const toastMessage = initialData ? "Banner actualizado" : "Banner creado";
+    ? "Editar un proveedor"
+    : "Crear un nuevo proveedor";
+  const toastMessage = initialData
+    ? "Proveedor actualizado"
+    : "Proveedor creado";
   const action = initialData ? "Guardar cambios" : "Crear";
 
-  const form = useForm<BannerFormValues>({
+  const form = useForm<SupplierFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: initialData || {
-      callToAction: "",
-      imageUrl: "",
+      name: "",
     },
   });
-  const onSubmit = async (data: BannerFormValues) => {
+  const onSubmit = async (data: SupplierFormValues) => {
     try {
       setLoading(true);
       if (initialData) {
         await axios.patch(
-          `/api/${params.storeId}/banners/${params.bannerId}`,
+          `/api/${params.storeId}/suppliers/${params.supplierId}`,
           data,
         );
       } else {
-        await axios.post(`/api/${params.storeId}/banners`, data);
+        await axios.post(`/api/${params.storeId}/suppliers`, data);
       }
       router.refresh();
-      router.push(`/${params.storeId}/banners`);
+      router.push(`/${params.storeId}/suppliers`);
       toast({
         description: toastMessage,
         variant: "success",
@@ -88,17 +87,19 @@ export const BannerForm: React.FC<BannerFormProps> = ({ initialData }) => {
   const onDelete = async () => {
     try {
       setLoading(true);
-      await axios.delete(`/api/${params.storeId}/banners/${params.bannerId}`);
+      await axios.delete(
+        `/api/${params.storeId}/suppliers/${params.supplierId}`,
+      );
       router.refresh();
-      router.push(`/${params.storeId}/banners`);
+      router.push(`/${params.storeId}/suppliers`);
       toast({
-        description: "Banner eliminado",
+        description: "Proveedor eliminado",
         variant: "success",
       });
     } catch (error) {
       toast({
         description:
-          "Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+          "Asegúrate de haber eliminado todos las productos que usen este proveedor primero.",
         variant: "destructive",
       });
     } finally {
@@ -133,37 +134,17 @@ export const BannerForm: React.FC<BannerFormProps> = ({ initialData }) => {
           onSubmit={form.handleSubmit(onSubmit)}
           className="w-full space-y-8"
         >
-          <FormField
-            control={form.control}
-            name="imageUrl"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Background image</FormLabel>
-                <FormControl>
-                  <ImageUpload
-                    value={
-                      field.value ? [{ url: field.value, isMain: true }] : []
-                    }
-                    disabled={loading}
-                    onChange={(images) => field.onChange(images[0].url)}
-                    onRemove={() => field.onChange("")}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
           <div className="grid grid-cols-3 gap-8">
             <FormField
               control={form.control}
-              name="callToAction"
+              name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>URL de redirección para la publicidad</FormLabel>
+                  <FormLabel>Nombre del proveedor</FormLabel>
                   <FormControl>
                     <Input
                       disabled={loading}
-                      placeholder="URL de redirección"
+                      placeholder="Nombre del proveedor"
                       {...field}
                     />
                   </FormControl>

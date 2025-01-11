@@ -22,6 +22,7 @@ export async function GET(
         size: true,
         color: true,
         design: true,
+        supplier: true,
         reviews: {
           orderBy: { createdAt: "desc" },
         },
@@ -51,10 +52,12 @@ export async function PATCH(
     const {
       name,
       price,
+      acqPrice,
       categoryId,
       colorId,
       sizeId,
       designId,
+      supplierId,
       description,
       stock,
       images,
@@ -125,10 +128,12 @@ export async function PATCH(
         data: {
           name,
           price,
+          acqPrice,
           categoryId,
           colorId,
           sizeId,
           designId,
+          supplierId,
           isArchived,
           isFeatured,
           stock,
@@ -143,7 +148,12 @@ export async function PATCH(
         data: {
           images: {
             createMany: {
-              data: [...images.map((image: { url: string }) => image)],
+              data: [
+                ...images.map((image: { url: string; isMain?: boolean }) => ({
+                  url: image.url,
+                  isMain: image.isMain ?? false,
+                })),
+              ],
             },
           },
         },

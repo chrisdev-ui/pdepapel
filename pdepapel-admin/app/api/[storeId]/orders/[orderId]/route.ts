@@ -78,6 +78,7 @@ export async function PATCH(
       shipping,
       userId,
       guestId,
+      documentId,
     } = body;
     const storeByUserId = await prismadb.store.findFirst({
       where: { id: params.storeId, userId: ownerId },
@@ -123,6 +124,7 @@ export async function PATCH(
           address,
           userId,
           guestId,
+          documentId,
           orderItems: {
             create: orderItems.map(
               (orderItem: { productId: string; quantity?: number }) => ({

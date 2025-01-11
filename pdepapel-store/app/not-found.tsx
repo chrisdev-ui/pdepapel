@@ -16,6 +16,7 @@ export default function NotFound() {
             sizes="(max-width: 640px) 100vw, 640px"
             priority
             className="object-cover"
+            unoptimized
           />
         </div>
         <h1 className="text-center font-serif text-9xl font-black text-pink-froly">

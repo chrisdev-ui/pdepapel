@@ -57,6 +57,7 @@ export interface Design {
 export interface Image {
   id: string;
   url: string;
+  isMain: boolean;
 }
 
 export interface MainBanner {
@@ -168,6 +169,7 @@ export interface CheckoutOrder {
   address: string;
   userId: string | null | undefined;
   guestId: string | null;
+  documentId: string | null | undefined;
   orderItems: {
     productId: string;
     quantity: number | undefined;

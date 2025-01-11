@@ -35,6 +35,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import {
+  detailsTitleOptions,
+  paymentMethodsByOption,
+  paymentOptions,
+  shippingOptions,
+  statusOptions,
+} from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { formatter, generateGuestId, parseOrderDetails } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -75,6 +82,7 @@ const formSchema = z.object({
   status: z.nativeEnum(OrderStatus),
   payment: paymentSchema,
   shipping: shippingSchema,
+  documentId: z.string().default(""),
 });
 
 type OrderFormValues = z.infer<typeof formSchema>;
@@ -83,17 +91,6 @@ type ProductOption = {
   value: string;
   label: string;
   price?: number;
-};
-
-type WompiPaymentMethods = {
-  [key in
-    | "CARD"
-    | "BANCOLOMBIA_TRANSFER"
-    | "BANCOLOMBIA_QR"
-    | "NEQUI"
-    | "PSE"
-    | "PCOL"
-    | string]: string;
 };
 
 interface OrderFormProps {
@@ -151,50 +148,6 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   );
   const [loading, setLoading] = useState(false);
 
-  const statusOptions = {
-    [OrderStatus.CREATED]: "Creada",
-    [OrderStatus.PENDING]: "Pendiente",
-    [OrderStatus.PAID]: "Pagada",
-    [OrderStatus.CANCELLED]: "Cancelada",
-  };
-
-  const paymentOptions = {
-    [PaymentMethod.BankTransfer]: "Transferencia bancaria",
-    [PaymentMethod.COD]: "Contra entrega",
-    [PaymentMethod.PayU]: "PayU",
-    [PaymentMethod.Wompi]: "Wompi",
-  };
-
-  const shippingOptions = {
-    [ShippingStatus.Preparing]: "En preparación",
-    [ShippingStatus.Shipped]: "Enviada",
-    [ShippingStatus.InTransit]: "En tránsito",
-    [ShippingStatus.Delivered]: "Entregada",
-    [ShippingStatus.Returned]: "Devuelta",
-  };
-
-  const detailsTitleOptions: { [key: string]: string } = {
-    customer_email: "Correo electrónico del cliente",
-    payment_method_type: "Tipo de método de pago",
-    reference_pol: "Número de orden",
-  };
-
-  const paymentMethodsByOption: {
-    [P in PaymentMethod]: WompiPaymentMethods | null;
-  } = {
-    [PaymentMethod.Wompi]: {
-      CARD: "Tarjeta de crédito",
-      BANCOLOMBIA_TRANSFER: "Transferencia bancaria Bancolombia",
-      BANCOLOMBIA_QR: "Código QR",
-      NEQUI: "Nequi",
-      PSE: "PSE",
-      PCOL: "Puntos Colombia",
-    },
-    [PaymentMethod.PayU]: null,
-    [PaymentMethod.BankTransfer]: null,
-    [PaymentMethod.COD]: null,
-  };
-
   const title = initialData ? "Editar orden" : "Crear orden";
   const description = initialData
     ? "Editar una orden"
@@ -209,6 +162,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           ...initialData,
           userId: initialData.userId || "",
           guestId: initialData.guestId || "",
+          documentId: initialData.documentId || "",
           orderItems: initialData.orderItems.map((item) => ({
             productId: item.productId,
             quantity: item.quantity,
@@ -231,6 +185,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           orderItems: [],
           phone: "",
           address: "",
+          documentId: "",
           status: OrderStatus.CREATED,
           payment: {},
           shipping: {},
@@ -456,6 +411,23 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                     <Input
                       disabled={loading}
                       placeholder="Nombre completo"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="documentId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Documento de identidad</FormLabel>
+                  <FormControl>
+                    <Input
+                      disabled={loading}
+                      placeholder="Documento de identidad"
                       {...field}
                     />
                   </FormControl>

@@ -165,9 +165,11 @@ export const MainBannerForm: React.FC<MainBannerFormProps> = ({
                 <FormLabel>Background image</FormLabel>
                 <FormControl>
                   <ImageUpload
-                    value={field.value ? [field.value] : []}
+                    value={
+                      field.value ? [{ url: field.value, isMain: true }] : []
+                    }
                     disabled={loading}
-                    onChange={(url) => field.onChange(url)}
+                    onChange={(images) => field.onChange(images[0].url)}
                     onRemove={() => field.onChange("")}
                   />
                 </FormControl>

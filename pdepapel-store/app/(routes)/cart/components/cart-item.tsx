@@ -13,6 +13,9 @@ interface CartItemProps {
 export const CartItem: React.FC<CartItemProps> = ({ item }) => {
   const cart = useCart();
 
+  const mainImage =
+    item?.images.find((image) => image.isMain) ?? item?.images[0];
+
   const onRemove = () => {
     cart.removeItem(item.id);
   };
@@ -26,11 +29,12 @@ export const CartItem: React.FC<CartItemProps> = ({ item }) => {
       <div className="relative h-24 w-24 overflow-hidden rounded-md sm:h-48 sm:w-48">
         <Image
           fill
-          src={item?.images[0]?.url}
+          src={mainImage.url}
           alt={item?.name ?? "Imagen del producto"}
           sizes="(max-width: 640px) 100vw, 640px"
           className="object-cover object-center"
           priority
+          unoptimized
         />
       </div>
       <div className="relative ml-4 flex flex-1 flex-col justify-between sm:ml-6">

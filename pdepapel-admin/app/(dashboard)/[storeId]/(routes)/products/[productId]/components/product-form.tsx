@@ -38,6 +38,7 @@ import {
   Image,
   Product,
   Size,
+  Supplier,
   Type,
 } from "@prisma/client";
 import axios from "axios";
@@ -49,12 +50,19 @@ const formSchema = z.object({
   name: z.string().min(1, "El nombre del producto no puede estar vacío"),
   description: z.string().optional(),
   stock: z.coerce.number().min(0, "El stock no puede ser menor a 0"),
-  images: z.object({ url: z.string() }).array(),
+  images: z
+    .object({ url: z.string(), isMain: z.boolean() })
+    .array()
+    .refine((images) => images.filter((img) => img.isMain).length === 1, {
+      message: "Debe haber exactamente una imagen principal",
+    }),
   price: z.coerce.number().min(1, "El precio debe ser mayor a 0"),
+  acqPrice: z.coerce.number().min(1, "El precio de compra debe ser mayor a 0"),
   categoryId: z.string().min(1),
   colorId: z.string().min(1),
   sizeId: z.string().min(1),
   designId: z.string().min(1),
+  supplierId: z.string().optional(),
   isFeatured: z.boolean().default(false).optional(),
   isArchived: z.boolean().default(false).optional(),
 });
@@ -72,6 +80,7 @@ interface ProductFormProps {
   colors: Color[];
   designs: Design[];
   reviews?: ReviewColumn[];
+  suppliers: Supplier[];
 }
 
 export const ProductForm: React.FC<ProductFormProps> = ({
@@ -81,6 +90,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   colors,
   designs,
   reviews,
+  suppliers,
 }) => {
   const params = useParams();
   const router = useRouter();
@@ -98,19 +108,30 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: initialData || {
-      name: "",
-      description: "",
-      stock: 0,
-      images: [],
-      price: 0,
-      categoryId: "",
-      colorId: "",
-      sizeId: "",
-      designId: "",
-      isFeatured: false,
-      isArchived: false,
-    },
+    defaultValues: initialData
+      ? {
+          ...initialData,
+          acqPrice: initialData.acqPrice || 0,
+          supplierId: initialData.supplierId || "",
+          images: initialData.images.map((image, idx) => ({
+            ...image,
+            isMain: idx === 0,
+          })),
+        }
+      : {
+          name: "",
+          description: "",
+          stock: 0,
+          images: [],
+          price: 0,
+          categoryId: "",
+          colorId: "",
+          sizeId: "",
+          designId: "",
+          supplierId: "",
+          isFeatured: false,
+          isArchived: false,
+        },
   });
   const onSubmit = async (data: ProductFormValues) => {
     try {
@@ -195,14 +216,20 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 <FormLabel>Imágenes</FormLabel>
                 <FormControl>
                   <ImageUpload
-                    value={field.value.map((image) => image.url)}
+                    value={field.value}
                     disabled={loading}
-                    onChange={(url) =>
-                      field.onChange([...field.value, { url }])
-                    }
+                    onChange={(images) => field.onChange(images)}
                     onRemove={(url) =>
                       field.onChange([
                         ...field.value.filter((current) => current.url !== url),
+                      ])
+                    }
+                    onSelectMainImage={(url) =>
+                      field.onChange([
+                        ...field.value.map((image) => ({
+                          ...image,
+                          isMain: image.url === url,
+                        })),
                       ])
                     }
                   />
@@ -235,6 +262,28 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Precio</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <DollarSign className="absolute left-3 top-3 h-4 w-4" />
+                      <Input
+                        type="number"
+                        disabled={loading}
+                        placeholder="1000"
+                        className="pl-8"
+                        {...field}
+                      />
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="acqPrice"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Precio de compra</FormLabel>
                   <FormControl>
                     <div className="relative">
                       <DollarSign className="absolute left-3 top-3 h-4 w-4" />
@@ -433,6 +482,47 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                       )}
                       {designs?.length > 0 &&
                         designs.map((design) => (
+                          <SelectItem key={design.id} value={design.id}>
+                            {design.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="supplierId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Proveedor</FormLabel>
+                  <Select
+                    disabled={loading}
+                    onValueChange={field.onChange}
+                    value={field.value}
+                    defaultValue={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue
+                          defaultValue={field.value}
+                          placeholder="Selecciona un proveedor"
+                        />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {suppliers?.length === 0 && (
+                        <button
+                          disabled
+                          className="relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                        >
+                          No hay resultados
+                        </button>
+                      )}
+                      {suppliers?.length > 0 &&
+                        suppliers.map((design) => (
                           <SelectItem key={design.id} value={design.id}>
                             {design.name}
                           </SelectItem>

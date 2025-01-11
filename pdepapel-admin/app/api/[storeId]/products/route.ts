@@ -26,10 +26,12 @@ export async function POST(
     const {
       name,
       price,
+      acqPrice,
       categoryId,
       colorId,
       sizeId,
       designId,
+      supplierId,
       description,
       stock,
       images,
@@ -80,6 +82,7 @@ export async function POST(
       data: {
         name,
         price,
+        acqPrice,
         description,
         stock,
         isArchived,
@@ -88,10 +91,16 @@ export async function POST(
         sizeId,
         colorId,
         designId,
+        supplierId,
         sku,
         images: {
           createMany: {
-            data: [...images.map((image: { url: string }) => image)],
+            data: [
+              ...images.map((image: { url: string; isMain?: boolean }) => ({
+                url: image.url,
+                isMain: image.isMain ?? false,
+              })),
+            ],
           },
         },
         storeId: params.storeId,
@@ -126,6 +135,7 @@ export async function GET(
     const sizeId = searchParams.get("sizeId")?.split(",") || [];
     const designId = searchParams.get("designId")?.split(",") || [];
     const isFeatured = searchParams.get("isFeatured");
+    const includeSupplier = searchParams.get("includeSupplier") || false;
     const onlyNew = searchParams.get("onlyNew") || undefined;
     const fromShop = searchParams.get("fromShop") || undefined;
     const limit = Number(searchParams.get("limit"));
@@ -161,6 +171,7 @@ export async function GET(
           color: true,
           design: true,
           size: true,
+          supplier: includeSupplier ? true : undefined,
           reviews: {
             orderBy: { createdAt: "desc" },
           },
@@ -215,6 +226,7 @@ export async function GET(
           color: true,
           design: true,
           size: true,
+          supplier: includeSupplier ? true : undefined,
           reviews: {
             orderBy: { createdAt: "desc" },
           },

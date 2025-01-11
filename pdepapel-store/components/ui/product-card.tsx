@@ -36,6 +36,9 @@ const ProductCard: React.FC<ProductCardProps> = ({
 
   if (!isMounted) return null;
 
+  const mainImage =
+    product?.images.find((image) => image.isMain) ?? product?.images[0];
+
   const handleClick = () => {
     router.push(`/product/${product.id}`);
   };
@@ -71,12 +74,13 @@ const ProductCard: React.FC<ProductCardProps> = ({
     >
       <div className="relative aspect-square rounded-xl bg-gray-100">
         <Image
-          src={product?.images?.[0].url}
+          src={mainImage.url}
           alt={product.name ?? "Imagen principal del producto"}
           fill
           sizes="(max-width: 640px) 100vw, 640px"
           priority
           className="aspect-square rounded-md object-cover"
+          unoptimized
         />
         <div className="absolute bottom-5 w-full px-6 opacity-0 transition group-hover:opacity-100">
           <div className="flex justify-center gap-x-6">

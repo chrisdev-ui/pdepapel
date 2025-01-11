@@ -35,6 +35,7 @@ export default async function OrdersPage({
     fullname: order.fullName,
     phone: order.phone,
     address: order.address,
+    documentId: order.documentId,
     products: order.orderItems.map((orderItem) => orderItem.product.name),
     totalPrice: formatter.format(
       order.orderItems.reduce(

@@ -14,6 +14,7 @@ type OrderData = {
   fullName: string;
   phone: string;
   address: string;
+  documentId?: string | null;
   orderItems: { create: any };
   status?: any;
   payment?: { create: any };
@@ -52,6 +53,7 @@ export async function POST(
       shipping,
       userId,
       guestId,
+      documentId,
     } = body;
     let authenticatedUserId = userLogged;
     if (userId && !userLogged) {
@@ -108,6 +110,7 @@ export async function POST(
       fullName,
       phone,
       address,
+      documentId,
       orderItems: {
         create: orderItems.map(
           (product: { productId: string; quantity: number }) => ({

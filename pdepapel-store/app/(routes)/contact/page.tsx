@@ -47,6 +47,7 @@ export default function ContactPage() {
                   height={20}
                   title="P de Papel"
                   className="inline-flex object-contain"
+                  unoptimized
                 />
                 , nos encanta estar en contacto contigo. Si tienes alguna duda o
                 simplemente quieres decir hola, no dudes en enviarnos un correo

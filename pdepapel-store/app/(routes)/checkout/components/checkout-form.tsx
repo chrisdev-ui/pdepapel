@@ -56,6 +56,7 @@ const formSchema = z.object({
   address2: z.string().max(50).optional(),
   city: z.string().min(1, "Por favor, escribe tu ciudad").max(50),
   state: z.string().min(1, "Por favor, escribe tu departamento").max(30),
+  documentId: z.string().optional(),
 });
 
 type CheckoutFormValue = z.infer<typeof formSchema>;
@@ -83,6 +84,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
       firstName: currentUser?.firstName ?? "",
       lastName: currentUser?.lastName ?? "",
       telephone: currentUser?.telephone ?? "",
+      documentId: "",
       address1: "",
       address2: "",
       city: "",
@@ -151,8 +153,16 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
       productId: item.id,
       quantity: item.quantity,
     }));
-    const { firstName, lastName, telephone, address1, address2, city, state } =
-      data;
+    const {
+      firstName,
+      lastName,
+      telephone,
+      address1,
+      address2,
+      city,
+      state,
+      documentId,
+    } = data;
     const isUserLoggedIn = Boolean(userId);
     let guestUserId = guestId;
     if (!isUserLoggedIn && !guestUserId) {
@@ -167,6 +177,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
         .join(", "),
       userId: isUserLoggedIn ? userId : null,
       guestId: isUserLoggedIn ? null : guestUserId,
+      documentId,
       orderItems,
       payment: {
         method: paymentMethod,
@@ -235,6 +246,25 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                           {...field}
                         />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="documentId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Documento de identidad</FormLabel>
+                      <FormControl>
+                        <Input
+                          className="bg-green-leaf/20 invalid:bg-pink-froly/20"
+                          disabled={status === "pending"}
+                          placeholder="CC, DNI, Pasaporte, etc."
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>Este campo es opcional</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -412,11 +442,15 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                       className="relative h-20 w-20"
                     >
                       <Image
-                        src={item.images[0].url}
+                        src={
+                          item.images.find((image) => image.isMain)?.url ??
+                          item.images[0].url
+                        }
                         alt={item.name ?? "Imagen del producto"}
                         fill
                         sizes="(max-width: 640px) 80px, 120px"
                         className="rounded-md"
+                        unoptimized
                       />
                       <span className="absolute right-0 top-0 flex h-4 w-4 items-center justify-center rounded-full bg-blue-yankees font-serif text-xs text-white">
                         {item.quantity}

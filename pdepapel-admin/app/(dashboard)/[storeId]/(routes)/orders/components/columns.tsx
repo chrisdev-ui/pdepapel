@@ -15,6 +15,7 @@ export type OrderColumn = {
   address: string;
   products: string[];
   totalPrice: string;
+  documentId: string | null;
   status: OrderStatus | undefined;
   shippingStatus: ShippingStatus | undefined;
   createdAt: string;

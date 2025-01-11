@@ -35,6 +35,7 @@ export default function ReturnsPolicyPage() {
               height={20}
               title="P de Papel"
               className="inline-flex object-contain"
+              unoptimized
             />
             , queremos que estés completamente satisfecho con cada compra.
             Entendemos que a veces puede ser necesario devolver o cambiar un

@@ -281,6 +281,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                 fill
                 sizes="(max-width: 640px) 100vw, 640px"
                 className="rounded-full object-cover"
+                unoptimized
               />
             </div>
             <h1 className="font-serif text-3xl font-extrabold">
@@ -468,12 +469,16 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                       <Link href={`/product/${product.id}`}>
                         <div className="relative h-20 w-20">
                           <Image
-                            src={product.images?.[0].url}
+                            src={
+                              product.images.find((image) => image.isMain)
+                                ?.url ?? product.images[0].url
+                            }
                             alt={product.name ?? "Imagen del producto"}
                             fill
                             sizes="(max-width: 640px) 100vw, 640px"
                             priority
                             className="rounded-md object-cover"
+                            unoptimized
                           />
                         </div>
                       </Link>

@@ -17,6 +17,7 @@ export const Loader: React.FC<LoaderProps> = ({ label }) => {
           className="h-28 w-28 rounded-full"
           priority
           sizes="(max-width: 640px) 100vw, 640px"
+          unoptimized
         />
         {label && (
           <div className="absolute -bottom-8 text-blue-yankees">
