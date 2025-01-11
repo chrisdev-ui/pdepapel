@@ -1,12 +1,280 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextIndex", "fullTextSearch"]
+}
+
 datasource db {
   provider     = "mysql"
   url          = env("DATABASE_URL")
   relationMode = "prisma"
 }
 
-generator client {
-  provider = "prisma-client-js"
-  previewFeatures = ["fullTextIndex", "fullTextSearch"]
+model Store {
+  id         String           @id @default(uuid())
+  name       String
+  userId     String
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  types      Type[]           @relation("StoreToType")
+  billboards Billboard[]      @relation("StoreToBillboard")
+  posts      Post[]           @relation("StoreToPost")
+  categories Category[]       @relation("StoreToCategory")
+  sizes      Size[]           @relation("StoreToSize")
+  colors     Color[]          @relation("StoreToColor")
+  designs    Design[]         @relation("StoreToDesign")
+  products   Product[]        @relation("StoreToProduct")
+  orders     Order[]          @relation("StoreToOrder")
+  mainBanner MainBanner?      @relation("StoreToMainBanner")
+  banners    Banner[]         @relation("StoreToBanner")
+  reviews    Review[]         @relation("StoreToReview")
+  shippings  Shipping[]       @relation("StoreToShipping")
+  payments   PaymentDetails[] @relation("StoreToPaymentDetails")
+}
+
+model Billboard {
+  id          String   @id @default(uuid())
+  storeId     String
+  label       String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  imageUrl    String
+  redirectUrl String?
+  title       String?
+  store       Store    @relation("StoreToBillboard", fields: [storeId], references: [id])
+
+  @@index([storeId])
+}
+
+model Post {
+  id        String   @id @default(uuid())
+  storeId   String
+  social    Social
+  postId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  store     Store    @relation("StoreToPost", fields: [storeId], references: [id])
+
+  @@index([storeId])
+}
+
+model Type {
+  id         String     @id @default(uuid())
+  storeId    String
+  name       String
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  store      Store      @relation("StoreToType", fields: [storeId], references: [id])
+  categories Category[]
+
+  @@index([storeId])
+}
+
+model Category {
+  id        String    @id @default(uuid())
+  storeId   String
+  typeId    String
+  name      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  store     Store     @relation("StoreToCategory", fields: [storeId], references: [id])
+  type      Type      @relation(fields: [typeId], references: [id])
+  products  Product[] @relation("CategoryToProduct")
+
+  @@index([storeId])
+  @@index([typeId])
+}
+
+model Size {
+  id        String    @id @default(uuid())
+  storeId   String
+  name      String
+  value     String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  store     Store     @relation("StoreToSize", fields: [storeId], references: [id])
+  products  Product[]
+
+  @@index([storeId])
+}
+
+model Color {
+  id        String    @id @default(uuid())
+  storeId   String
+  name      String
+  value     String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  store     Store     @relation("StoreToColor", fields: [storeId], references: [id])
+  products  Product[]
+
+  @@index([storeId])
+}
+
+model Design {
+  id        String    @id @default(uuid())
+  storeId   String
+  name      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  store     Store     @relation("StoreToDesign", fields: [storeId], references: [id])
+  products  Product[]
+
+  @@index([storeId])
+}
+
+model Product {
+  id          String      @id @default(uuid())
+  storeId     String
+  categoryId  String
+  name        String
+  description String      @db.Text
+  stock       Int
+  price       Float
+  isFeatured  Boolean     @default(false)
+  isArchived  Boolean     @default(false)
+  sizeId      String
+  colorId     String
+  designId    String
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  sku         String      @unique
+  store       Store       @relation("StoreToProduct", fields: [storeId], references: [id])
+  category    Category    @relation("CategoryToProduct", fields: [categoryId], references: [id])
+  size        Size        @relation(fields: [sizeId], references: [id])
+  color       Color       @relation(fields: [colorId], references: [id])
+  design      Design      @relation(fields: [designId], references: [id])
+  images      Image[]
+  orderItems  OrderItem[]
+  reviews     Review[]
+
+  @@index([storeId])
+  @@index([categoryId])
+  @@index([sizeId])
+  @@index([colorId])
+  @@index([designId])
+  @@fulltext([name])
+  @@fulltext([name, description])
+}
+
+model Image {
+  id        String   @id @default(uuid())
+  productId String
+  url       String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+}
+
+model Order {
+  id          String          @id @default(uuid())
+  storeId     String
+  phone       String          @default("")
+  address     String          @default("")
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  orderNumber String          @unique
+  fullName    String          @default("")
+  status      OrderStatus     @default(CREATED)
+  userId      String?         @default("")
+  guestId     String?         @default("")
+  store       Store           @relation("StoreToOrder", fields: [storeId], references: [id])
+  orderItems  OrderItem[]
+  shipping    Shipping?
+  payment     PaymentDetails?
+
+  @@index([storeId])
+}
+
+model OrderItem {
+  id        String  @id @default(uuid())
+  orderId   String
+  productId String
+  quantity  Int
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model MainBanner {
+  id           String   @id @default(uuid())
+  storeId      String   @unique
+  title        String?  @default("")
+  label1       String?  @default("")
+  highlight    String?  @default("")
+  label2       String?  @default("")
+  imageUrl     String
+  callToAction String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  store        Store    @relation("StoreToMainBanner", fields: [storeId], references: [id])
+
+  @@index([storeId])
+}
+
+model Banner {
+  id           String   @id @default(uuid())
+  storeId      String
+  imageUrl     String
+  callToAction String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  store        Store    @relation("StoreToBanner", fields: [storeId], references: [id])
+
+  @@index([storeId])
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  productId String
+  userId    String
+  rating    Float
+  comment   String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  storeId   String
+  name      String
+  store     Store    @relation("StoreToReview", fields: [storeId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([storeId])
+}
+
+model Shipping {
+  id           String         @id @default(uuid())
+  orderId      String         @unique
+  status       ShippingStatus @default(Preparing)
+  courier      String?
+  cost         Float?
+  trackingCode String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  storeId      String
+  store        Store          @relation("StoreToShipping", fields: [storeId], references: [id])
+  order        Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([storeId])
+}
+
+model PaymentDetails {
+  id            String        @id @default(uuid())
+  orderId       String        @unique
+  method        PaymentMethod @default(BankTransfer)
+  transactionId String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  storeId       String
+  details       String?       @default("")
+  store         Store         @relation("StoreToPaymentDetails", fields: [storeId], references: [id])
+  order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([storeId])
 }
 
 enum OrderStatus {
@@ -39,274 +307,3 @@ enum Social {
   Pinterest
   Youtube
 }
-
-model Store {
-  id          String      @id @default(uuid())
-  name        String
-  userId      String
-  types       Type[]      @relation("StoreToType")
-  billboards  Billboard[] @relation("StoreToBillboard")
-  posts       Post[]      @relation("StoreToPost")
-  categories  Category[]  @relation("StoreToCategory")
-  sizes       Size[]      @relation("StoreToSize")
-  colors      Color[]     @relation("StoreToColor")
-  designs     Design[]    @relation("StoreToDesign")
-  products    Product[]   @relation("StoreToProduct")
-  orders      Order[]     @relation("StoreToOrder")
-  mainBanner  MainBanner? @relation("StoreToMainBanner")
-  banners     Banner[]    @relation("StoreToBanner")
-  reviews     Review[]    @relation("StoreToReview")
-  shippings   Shipping[]  @relation("StoreToShipping")
-  payments    PaymentDetails[] @relation("StoreToPaymentDetails")
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-}
-
-model Billboard {
-  id          String      @id @default(uuid())
-  storeId     String
-  store       Store       @relation("StoreToBillboard", fields: [storeId], references: [id])
-  label       String
-  imageUrl    String
-  title       String?
-  redirectUrl String?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-
-  @@index([storeId])
-}
-
-model Post {
-  id          String      @id @default(uuid())
-  storeId     String
-  store       Store       @relation("StoreToPost", fields: [storeId], references: [id])
-  social      Social
-  postId      String      
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-
-  @@index([storeId])
-}
-
-model Type {
-  id          String      @id @default(uuid())
-  storeId     String
-  store       Store       @relation("StoreToType", fields: [storeId], references: [id])
-  name        String
-  categories  Category[]
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-
-  @@index([storeId])
-}
-
-model Category {
-  id          String      @id @default(uuid())
-  storeId     String
-  store       Store       @relation("StoreToCategory", fields: [storeId], references: [id])
-  typeId      String
-  type        Type        @relation(fields: [typeId], references: [id])
-  products    Product[]   @relation("CategoryToProduct")
-  name        String
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-
-  @@index([storeId])
-  @@index([typeId])
-}
-
-model Size {
-  id          String      @id @default(uuid())
-  storeId     String
-  store       Store       @relation("StoreToSize", fields: [storeId], references: [id])
-  name        String
-  value       String
-  products    Product[]   
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-
-  @@index([storeId])
-}
-
-model Color {
-  id          String      @id @default(uuid())
-  storeId     String
-  store       Store       @relation("StoreToColor", fields: [storeId], references: [id])
-  name        String
-  value       String
-  products    Product[]
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-
-  @@index([storeId])
-}
-
-model Design {
-  id          String      @id @default(uuid())
-  storeId     String
-  store       Store       @relation("StoreToDesign", fields: [storeId], references: [id])
-  name        String
-  products    Product[]
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-
-  @@index([storeId])
-}
-
-model Product {
-  id          String      @id @default(uuid())
-  storeId     String
-  store       Store       @relation("StoreToProduct", fields: [storeId], references: [id])
-  categoryId  String
-  category    Category    @relation("CategoryToProduct", fields: [categoryId], references: [id])
-  name        String
-  description String      @db.Text
-  stock       Int
-  price       Float
-  isFeatured  Boolean     @default(false)
-  isArchived  Boolean     @default(false)
-  sizeId      String
-  size        Size        @relation(fields: [sizeId], references: [id])
-  colorId     String
-  color       Color       @relation(fields: [colorId], references: [id])
-  designId    String
-  design      Design      @relation(fields: [designId], references: [id])
-  images      Image[]
-  orderItems  OrderItem[]
-  reviews     Review[]
-  sku         String      @unique
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-
-  @@fulltext([name])
-  @@fulltext([name, description])
-  
-  @@index([storeId])
-  @@index([categoryId])
-  @@index([sizeId])
-  @@index([colorId])
-  @@index([designId])
-}
-
-model Image {
-  id          String      @id @default(uuid())
-  productId   String
-  product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
-  url         String
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-
-  @@index([productId])
-}
-
-model Order {
-  id          String      @id @default(uuid())
-  orderNumber String      @unique
-  userId      String?     @default("")
-  guestId     String?     @default("")
-  storeId     String
-  store       Store       @relation("StoreToOrder", fields: [storeId], references: [id])
-  status      OrderStatus @default(CREATED)
-  orderItems  OrderItem[]
-  shipping    Shipping?   
-  payment     PaymentDetails?
-  fullName    String      @default("")
-  phone       String      @default("")
-  address     String      @default("")
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-
-  @@index([storeId])
-}
-
-model OrderItem {
-  id          String      @id @default(uuid())
-  orderId     String
-  order       Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  productId   String
-  product     Product     @relation(fields: [productId], references: [id])
-  quantity    Int
-
-  @@index([orderId])
-  @@index([productId])
-}
-
-model MainBanner {
-  id            String    @id @default(uuid())
-  storeId       String    @unique
-  store         Store     @relation("StoreToMainBanner", fields: [storeId], references: [id])
-  title         String?   @default("")
-  label1        String?   @default("")
-  highlight     String?   @default("")
-  label2        String?   @default("")
-  imageUrl      String
-  callToAction  String
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  @@index([storeId])
-}
-
-model Banner {
-  id            String    @id @default(uuid())
-  storeId       String
-  store         Store     @relation("StoreToBanner", fields: [storeId], references: [id])
-  imageUrl      String
-  callToAction  String
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  @@index([storeId])
-}
-
-model Review {
-  id          String      @id @default(uuid())
-  storeId     String
-  store       Store       @relation("StoreToReview", fields: [storeId], references: [id])
-  productId   String
-  product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
-  userId      String
-  name        String
-  rating      Float
-  comment     String?     @db.Text
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-
-  @@index([productId])
-  @@index([storeId])
-}
-
-model Shipping {
-  id            String          @id @default(uuid())
-  storeId       String
-  store         Store           @relation("StoreToShipping", fields: [storeId], references: [id])
-  orderId       String          @unique
-  order         Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  status        ShippingStatus  @default(Preparing)
-  courier       String?
-  cost          Float?
-  trackingCode  String?
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-
-  @@index([orderId])
-  @@index([storeId])
-}
-
-model PaymentDetails {
-  id            String          @id @default(uuid())
-  storeId       String
-  store         Store           @relation("StoreToPaymentDetails", fields: [storeId], references: [id])
-  orderId       String          @unique
-  order         Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  method        PaymentMethod   @default(BankTransfer)         
-  transactionId String?
-  details       String?          @default("")
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-
-  @@index([orderId])
-  @@index([storeId])
-}
-
-

@@ -20,6 +20,7 @@
 
 # Database sensible info
 /pscale_dump_pdepapel-admin_main/
+db/*
 
 # misc
 .DS_Store
