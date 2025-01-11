@@ -29,6 +29,7 @@ model Store {
   reviews    Review[]         @relation("StoreToReview")
   shippings  Shipping[]       @relation("StoreToShipping")
   payments   PaymentDetails[] @relation("StoreToPaymentDetails")
+  suppliers Supplier[]        @relation("StoreToSupplier")
 }
 
 model Billboard {
@@ -130,6 +131,7 @@ model Product {
   description String      @db.Text
   stock       Int
   price       Float
+  acqPrice    Float?      @default(0)
   isFeatured  Boolean     @default(false)
   isArchived  Boolean     @default(false)
   sizeId      String
@@ -146,14 +148,29 @@ model Product {
   images      Image[]
   orderItems  OrderItem[]
   reviews     Review[]
+  supplierId  String?
+  supplier    Supplier?   @relation(fields: [supplierId], references: [id])
 
   @@index([storeId])
   @@index([categoryId])
   @@index([sizeId])
   @@index([colorId])
   @@index([designId])
+  @@index([supplierId])
   @@fulltext([name])
   @@fulltext([name, description])
+}
+
+model Supplier {
+  id        String   @id @default(uuid())
+  storeId   String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  store     Store    @relation("StoreToSupplier", fields: [storeId], references: [id])
+  products  Product[]
+
+  @@index([storeId])
 }
 
 model Image {
@@ -163,6 +180,7 @@ model Image {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  isMain    Boolean  @default(false)
 
   @@index([productId])
 }
@@ -176,6 +194,7 @@ model Order {
   updatedAt   DateTime        @updatedAt
   orderNumber String          @unique
   fullName    String          @default("")
+  documentId  String?         @default("")
   status      OrderStatus     @default(CREATED)
   userId      String?         @default("")
   guestId     String?         @default("")
