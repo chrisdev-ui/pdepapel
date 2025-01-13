@@ -1,11 +1,19 @@
-import { formatter } from "@/lib/utils";
 import { PrismaClient } from "@prisma/client";
 import { createObjectCsvWriter } from "csv-writer";
+
+const formatter = new Intl.NumberFormat("es-CO", {
+  style: "currency",
+  currency: "COP",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+  useGrouping: true,
+});
 
 const prismadb = new PrismaClient();
 
 async function exportProdcutsToCSV() {
   try {
+    console.log("Fetching products from the database...");
     const products = await prismadb.product.findMany({
       include: {
         store: true,
@@ -16,6 +24,8 @@ async function exportProdcutsToCSV() {
         images: true,
       },
     });
+
+    console.log(`Found ${products.length} products. Preparing CSV data...`);
 
     const csvWriter = createObjectCsvWriter({
       path: "products_export.csv",
@@ -56,6 +66,7 @@ async function exportProdcutsToCSV() {
       updatedAt: product.updatedAt.toISOString(),
     }));
 
+    console.log("Writing CSV data to file...");
     await csvWriter.writeRecords(records);
 
     console.log("CSV file has been created successfully!");

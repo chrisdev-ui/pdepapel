@@ -21,6 +21,7 @@
 # Database sensible info
 /pscale_dump_pdepapel-admin_main/
 db/*
+products_export.csv
 
 # misc
 .DS_Store
