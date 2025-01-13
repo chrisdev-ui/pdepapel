@@ -1,15 +1,24 @@
 import { PrismaClient } from "@prisma/client";
 import { createObjectCsvWriter } from "csv-writer";
 
-const formatter = new Intl.NumberFormat("es-CO", {
-  style: "currency",
-  currency: "COP",
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-  useGrouping: true,
-});
-
 const prismadb = new PrismaClient();
+
+function generateUniqueName(baseName = "file") {
+  const now = new Date();
+
+  const dateString =
+    now.getFullYear().toString() +
+    (now.getMonth() + 1).toString().padStart(2, "0") +
+    now.getDate().toString().padStart(2, "0") +
+    "_" +
+    now.getHours().toString().padStart(2, "0") +
+    now.getMinutes().toString().padStart(2, "0") +
+    now.getSeconds().toString().padStart(2, "0") +
+    "_" +
+    now.getMilliseconds().toString().padStart(3, "0");
+
+  return `${baseName}_${dateString}`;
+}
 
 async function exportProdcutsToCSV() {
   try {
@@ -28,7 +37,7 @@ async function exportProdcutsToCSV() {
     console.log(`Found ${products.length} products. Preparing CSV data...`);
 
     const csvWriter = createObjectCsvWriter({
-      path: "products_export.csv",
+      path: `${generateUniqueName("products_export")}.csv`,
       header: [
         { id: "id", title: "ID" },
         { id: "name", title: "Nombre" },
@@ -53,7 +62,10 @@ async function exportProdcutsToCSV() {
       name: product.name,
       description: product.description,
       stock: `${product.stock} unidades`,
-      price: formatter.format(product.price),
+      price: new Intl.NumberFormat("es-CO", {
+        style: "currency",
+        currency: "COP",
+      }).format(product.price),
       isFeatured: product.isFeatured ? "Sí" : "No",
       isArchived: product.isArchived ? "Sí" : "No",
       sku: product.sku,
