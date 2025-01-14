@@ -40,6 +40,7 @@ export const BannerClient = ({ banners, mainBanner }: BannerClientProps) => {
       </div>
       <Separator />
       <DataTable
+        tableKey="main-banner"
         searchKey="title"
         columns={mainBannerColumns}
         data={mainBanner}
@@ -57,6 +58,7 @@ export const BannerClient = ({ banners, mainBanner }: BannerClientProps) => {
       </div>
       <Separator />
       <DataTable
+        tableKey="banners"
         searchKey="callToAction"
         columns={bannerColumns}
         data={banners}

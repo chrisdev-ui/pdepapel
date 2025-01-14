@@ -29,7 +29,12 @@ export const SizesClient = ({ data }: SizesClientProps) => {
         </Button>
       </div>
       <Separator />
-      <DataTable searchKey="name" columns={columns} data={data} />
+      <DataTable
+        tableKey="sizes"
+        searchKey="name"
+        columns={columns}
+        data={data}
+      />
       <Heading title="API" description="API calls para los tamaños" />
       <Separator />
       <ApiList entityName="sizes" entityIdName="sizeId" />

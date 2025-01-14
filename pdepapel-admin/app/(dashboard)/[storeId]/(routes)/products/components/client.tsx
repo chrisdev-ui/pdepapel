@@ -29,7 +29,12 @@ export const ProductClient = ({ data }: ProductClientProps) => {
         </Button>
       </div>
       <Separator />
-      <DataTable searchKey="name" columns={columns} data={data} />
+      <DataTable
+        tableKey="products"
+        searchKey="name"
+        columns={columns}
+        data={data}
+      />
       <Heading title="API" description="API calls para los productos" />
       <Separator />
       <ApiList entityName="products" entityIdName="productId" />

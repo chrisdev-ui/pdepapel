@@ -29,7 +29,12 @@ export const ColorsClient = ({ data }: ColorsClientProps) => {
         </Button>
       </div>
       <Separator />
-      <DataTable searchKey="name" columns={columns} data={data} />
+      <DataTable
+        tableKey="colors"
+        searchKey="name"
+        columns={columns}
+        data={data}
+      />
       <Heading title="API" description="API calls para los colores" />
       <Separator />
       <ApiList entityName="colors" entityIdName="colorId" />

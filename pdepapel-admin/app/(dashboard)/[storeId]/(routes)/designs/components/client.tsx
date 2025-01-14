@@ -29,7 +29,12 @@ export const DesignsClient = ({ data }: DesignsClientProps) => {
         </Button>
       </div>
       <Separator />
-      <DataTable searchKey="name" columns={columns} data={data} />
+      <DataTable
+        tableKey="designs"
+        searchKey="name"
+        columns={columns}
+        data={data}
+      />
       <Heading title="API" description="API calls para los diseños" />
       <Separator />
       <ApiList entityName="designs" entityIdName="designId" />

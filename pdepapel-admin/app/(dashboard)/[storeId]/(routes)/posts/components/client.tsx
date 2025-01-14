@@ -29,7 +29,12 @@ export const PostClient = ({ data }: PostClientProps) => {
         </Button>
       </div>
       <Separator />
-      <DataTable searchKey="social" columns={columns} data={data} />
+      <DataTable
+        tableKey="posts"
+        searchKey="social"
+        columns={columns}
+        data={data}
+      />
       <Heading title="API" description="API calls para los posts" />
       <Separator />
       <ApiList entityName="posts" entityIdName="postId" />

@@ -29,7 +29,12 @@ export const TypeClient = ({ data }: TypeClientProps) => {
         </Button>
       </div>
       <Separator />
-      <DataTable searchKey="name" columns={columns} data={data} />
+      <DataTable
+        tableKey="types"
+        searchKey="name"
+        columns={columns}
+        data={data}
+      />
       <Heading title="API" description="API calls para los tipos" />
       <Separator />
       <ApiList entityName="types" entityIdName="typeId" />

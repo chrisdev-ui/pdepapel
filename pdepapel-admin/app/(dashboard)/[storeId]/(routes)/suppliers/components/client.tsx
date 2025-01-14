@@ -29,7 +29,12 @@ export const SupplierClient = ({ data }: SupplierClientProps) => {
         </Button>
       </div>
       <Separator />
-      <DataTable searchKey="name" columns={columns} data={data} />
+      <DataTable
+        tableKey="suppliers"
+        searchKey="name"
+        columns={columns}
+        data={data}
+      />
       <Heading title="API" description="API calls para los proveedores" />
       <Separator />
       <ApiList entityName="suppliers" entityIdName="supplierId" />

@@ -23,22 +23,42 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useState } from "react";
+import { useTableStore } from "@/hooks/use-table-store";
+import { useEffect, useState } from "react";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   searchKey: string;
+  tableKey: string;
 }
 
 export function DataTable<TData, TValue>({
   columns,
   data,
   searchKey,
+  tableKey,
 }: DataTableProps<TData, TValue>) {
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const { tables, updateTableState } = useTableStore();
+  const tableState = tables[tableKey] || {
+    pagination: { pageIndex: 0, pageSize: 10 },
+    sorting: [],
+    columnFilters: [],
+    columnVisibility: {},
+  };
+
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(
+    tableState.columnFilters,
+  );
+  const [sorting, setSorting] = useState<SortingState>(tableState.sorting);
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
+    tableState.columnVisibility,
+  );
+  const [{ pageIndex, pageSize }, setPagination] = useState<{
+    pageIndex: number;
+    pageSize: number;
+  }>(tableState.pagination);
+
   const table = useReactTable({
     data,
     columns,
@@ -53,8 +73,27 @@ export function DataTable<TData, TValue>({
       sorting,
       columnFilters,
       columnVisibility,
+      pagination: { pageIndex, pageSize },
     },
+    onPaginationChange: setPagination,
   });
+
+  useEffect(() => {
+    updateTableState(tableKey, {
+      pagination: { pageIndex, pageSize },
+      sorting,
+      columnFilters,
+      columnVisibility,
+    });
+  }, [
+    tableKey,
+    pageIndex,
+    pageSize,
+    sorting,
+    columnFilters,
+    columnVisibility,
+    updateTableState,
+  ]);
 
   return (
     <div>
