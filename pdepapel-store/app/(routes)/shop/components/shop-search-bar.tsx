@@ -58,7 +58,7 @@ const ShopSearchBar: React.FC<ShopSearchBarProps> = ({ className }) => {
       <Search className="absolute left-2 h-5 w-5 text-blue-yankees" />
       <Input
         type="text"
-        className="h-10 items-center border-white-rock bg-background py-2 pl-9 pr-3 text-base"
+        className="h-10 items-center border-blue-baby bg-background py-2 pl-9 pr-3 text-base"
         placeholder="Buscar un producto"
         value={searchTerm}
         onChange={handleSearchChange}

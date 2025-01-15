@@ -81,7 +81,7 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
         variant="cart"
         className="flex w-full max-w-full flex-col p-0 sm:max-w-sm lg:max-w-md"
       >
-        <SheetTitle className="flex w-full items-center justify-center bg-white-rock p-5 font-serif">
+        <SheetTitle className="flex w-full items-center justify-center bg-blue-baby p-5 font-serif">
           Carrito de compras
         </SheetTitle>
         <div className="flex grow flex-col justify-between overflow-y-auto overflow-x-hidden px-6 py-0">
@@ -126,7 +126,7 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
                       <Currency className="text-lg" value={item.price} />
                     </div>
                     <button
-                      className="group h-8 w-8 rounded-full bg-gray-200 text-blue-yankees/50 hover:bg-white-rock hover:text-blue-yankees"
+                      className="group h-8 w-8 rounded-full bg-gray-200 text-blue-yankees/50 hover:bg-blue-baby hover:text-blue-yankees"
                       onClick={() => onRemove(item.id)}
                     >
                       <X className="m-auto h-4 w-4" />

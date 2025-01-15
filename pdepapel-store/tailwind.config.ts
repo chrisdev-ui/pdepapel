@@ -73,6 +73,7 @@ const config: Config = {
 
         blue: {
           yankees: "hsl(var(--yankees-blue) / <alpha-value>)",
+          baby: "hsl(var(--baby-blue) / <alpha-value>)",
         },
 
         border: "hsl(var(--border) / <alpha-value>)",

@@ -20,7 +20,7 @@ export const Summary: React.FC<{}> = () => {
   );
 
   return (
-    <div className="mt-16 rounded-lg bg-white-rock/20 px-4 py-6 sm:p-6 lg:col-span-5 lg:mt-0 lg:p-8">
+    <div className="mt-16 rounded-lg bg-blue-baby/20 px-4 py-6 sm:p-6 lg:col-span-5 lg:mt-0 lg:p-8">
       <h2 className="font-serif text-lg font-medium">Resumen del pedido</h2>
       <div className="mt-6 space-y-4">
         <div className="flex items-center justify-between border-t border-gray-200 pt-4">

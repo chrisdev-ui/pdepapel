@@ -27,7 +27,7 @@ export const FilterSkeleton: React.FC<{ name: string; items: number }> = ({
 export const SortSelectorSkeleton: React.FC = () => {
   return (
     <div className="flex w-auto min-w-fit items-center gap-2 sm:w-44 md:w-52 lg:w-64">
-      <div className="flex h-10 w-full items-center justify-between rounded-md border border-white-rock bg-background px-3 py-2 text-sm">
+      <div className="flex h-10 w-full items-center justify-between rounded-md border border-blue-baby bg-background px-3 py-2 text-sm">
         <Skeleton className="h-2 w-full" />
       </div>
     </div>
@@ -36,7 +36,7 @@ export const SortSelectorSkeleton: React.FC = () => {
 
 export const ProductCardSkeleton: React.FC = () => {
   return (
-    <div className="flex flex-col justify-between space-y-4 rounded-xl border border-solid border-white-rock px-3 py-2.5 shadow-card">
+    <div className="flex flex-col justify-between space-y-4 rounded-xl border border-solid border-blue-baby px-3 py-2.5 shadow-card">
       <div className="relative aspect-square rounded-xl">
         <Skeleton className="aspect-square h-[254.8px] w-full rounded-md object-cover" />
       </div>

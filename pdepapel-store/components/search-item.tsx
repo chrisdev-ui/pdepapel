@@ -24,7 +24,7 @@ export const SearchItem: React.FC<SearchItemProps> = ({
     <Link
       ref={innerRef}
       href={`/product/${id}`}
-      className="grid grid-cols-[40px_1fr] gap-2.5 rounded p-1 hover:bg-white-rock/50 hover:ring-1 hover:ring-slate-200"
+      className="grid grid-cols-[40px_1fr] gap-2.5 rounded p-1 hover:bg-blue-baby/50 hover:ring-1 hover:ring-slate-200"
       onClick={closeAll}
     >
       <div className="relative h-10 w-10">

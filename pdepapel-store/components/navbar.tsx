@@ -43,7 +43,7 @@ const Navbar: React.FC<{}> = () => {
 
   return (
     <header className="fixed left-0 top-0 z-50 mx-auto" ref={navBarRef}>
-      <nav className="flex w-screen items-center justify-between gap-4 bg-white-rock">
+      <nav className="flex w-screen items-center justify-between gap-4 bg-blue-baby">
         <div
           className={cn(
             "flex items-center p-3 transition-all duration-300 md:w-full lg:py-6 xl:px-12",
