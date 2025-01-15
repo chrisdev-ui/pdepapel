@@ -58,7 +58,7 @@ const Newsletter: React.FC<{}> = () => {
       component="section"
       className="mx-0 my-6 max-w-full p-0 sm:p-0 lg:p-0"
     >
-      <div className="flex w-full flex-wrap items-center justify-between gap-5 bg-pink-froly bg-[url('/images/pdp-signup.png')] bg-[20%_30%] bg-no-repeat px-2 py-10 sm:px-20 xl:gap-0">
+      <div className="flex w-full flex-wrap items-center justify-between gap-5 bg-pink-shell bg-[url('/images/pdp-signup.png')] bg-[20%_30%] bg-no-repeat px-2 py-10 sm:px-20 xl:gap-0">
         <div>
           <h4 className="font-serif text-3xl font-bold text-white">
             Suscríbete para recibir nuestras novedades
