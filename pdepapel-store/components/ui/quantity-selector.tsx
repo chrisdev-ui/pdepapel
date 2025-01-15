@@ -89,7 +89,7 @@ const QuantitySelector = React.forwardRef<
       <div
         ref={ref}
         className={cn(
-          "flex rounded-md border border-green-leaf bg-white shadow-sm",
+          "flex rounded-md border border-blue-purple bg-white shadow-sm",
           className,
         )}
         {...props}

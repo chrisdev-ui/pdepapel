@@ -222,7 +222,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                       <FormLabel>Nombre</FormLabel>
                       <FormControl>
                         <Input
-                          className="bg-green-leaf/20 invalid:bg-pink-froly/20"
+                          className="bg-blue-purple/20 invalid:bg-pink-froly/20"
                           disabled={status === "pending"}
                           placeholder="Nombres"
                           {...field}
@@ -240,7 +240,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                       <FormLabel>Apellidos</FormLabel>
                       <FormControl>
                         <Input
-                          className="bg-green-leaf/20 invalid:bg-pink-froly/20"
+                          className="bg-blue-purple/20 invalid:bg-pink-froly/20"
                           disabled={status === "pending"}
                           placeholder="Apellidos"
                           {...field}
@@ -258,7 +258,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                       <FormLabel>Documento de identidad</FormLabel>
                       <FormControl>
                         <Input
-                          className="bg-green-leaf/20 invalid:bg-pink-froly/20"
+                          className="bg-blue-purple/20 invalid:bg-pink-froly/20"
                           disabled={status === "pending"}
                           placeholder="CC, DNI, Pasaporte, etc."
                           {...field}
@@ -277,7 +277,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                       <FormLabel>Teléfono</FormLabel>
                       <FormControl>
                         <Input
-                          className="bg-green-leaf/20 invalid:bg-pink-froly/20"
+                          className="bg-blue-purple/20 invalid:bg-pink-froly/20"
                           disabled={status === "pending"}
                           placeholder="ex: 321 629 9845"
                           {...field}
@@ -295,7 +295,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                       <FormLabel>Dirección</FormLabel>
                       <FormControl>
                         <Input
-                          className="bg-green-leaf/20 invalid:bg-pink-froly/20"
+                          className="bg-blue-purple/20 invalid:bg-pink-froly/20"
                           disabled={status === "pending"}
                           placeholder="Calle 1 # 2 - 3"
                           {...field}
@@ -313,7 +313,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                       <FormLabel>Dirección detallada</FormLabel>
                       <FormControl>
                         <Input
-                          className="bg-green-leaf/20 invalid:bg-pink-froly/20"
+                          className="bg-blue-purple/20 invalid:bg-pink-froly/20"
                           disabled={status === "pending"}
                           placeholder="Edificio, Apto, Casa, Lote, Barrio, etc."
                           {...field}
@@ -332,7 +332,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                       <FormLabel>Ciudad</FormLabel>
                       <FormControl>
                         <Input
-                          className="bg-green-leaf/20 invalid:bg-pink-froly/20"
+                          className="bg-blue-purple/20 invalid:bg-pink-froly/20"
                           disabled={status === "pending"}
                           placeholder="ex: Medellín"
                           {...field}
@@ -350,7 +350,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                       <FormLabel>Departamento</FormLabel>
                       <FormControl>
                         <Input
-                          className="bg-green-leaf/20 invalid:bg-pink-froly/20"
+                          className="bg-blue-purple/20 invalid:bg-pink-froly/20"
                           disabled={status === "pending"}
                           placeholder="ex: Antioquia"
                           {...field}
@@ -381,7 +381,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                   <Separator className="my-6" />
                   <div className="w-full">
                     <ol className="flex flex-wrap">
-                      <li className="flex flex-1 flex-col text-center before:relative before:z-[1] before:mx-auto before:mb-4 before:mt-0 before:block before:h-12 before:w-12 before:rounded-full before:bg-green-leaf before:content-[''] after:relative after:left-[calc(50%_+_calc(var(--circle-size)_/_2_+_var(--spacing)))] after:top-[calc(var(--circle-size)_/_2)] after:-order-1 after:h-0.5 after:w-[calc(100%_-_var(--circle-size)_-_calc(var(--spacing)_*_2))] after:bg-green-leaf/50 after:content-['']">
+                      <li className="flex flex-1 flex-col text-center before:relative before:z-[1] before:mx-auto before:mb-4 before:mt-0 before:block before:h-12 before:w-12 before:rounded-full before:bg-blue-purple before:content-[''] after:relative after:left-[calc(50%_+_calc(var(--circle-size)_/_2_+_var(--spacing)))] after:top-[calc(var(--circle-size)_/_2)] after:-order-1 after:h-0.5 after:w-[calc(100%_-_var(--circle-size)_-_calc(var(--spacing)_*_2))] after:bg-blue-purple/50 after:content-['']">
                         <h3 className="mb-2 text-base font-bold md:text-[4w]">
                           Paso 1
                         </h3>
@@ -390,7 +390,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                           <strong>finalizar</strong> tu orden
                         </p>
                       </li>
-                      <li className="flex flex-1 flex-col text-center before:relative before:z-[1] before:mx-auto before:mb-4 before:mt-0 before:block before:h-12 before:w-12 before:rounded-full before:bg-green-leaf before:content-[''] after:relative after:left-[calc(50%_+_calc(var(--circle-size)_/_2_+_var(--spacing)))] after:top-[calc(var(--circle-size)_/_2)] after:-order-1 after:h-0.5 after:w-[calc(100%_-_var(--circle-size)_-_calc(var(--spacing)_*_2))] after:bg-green-leaf/50 after:content-['']">
+                      <li className="flex flex-1 flex-col text-center before:relative before:z-[1] before:mx-auto before:mb-4 before:mt-0 before:block before:h-12 before:w-12 before:rounded-full before:bg-blue-purple before:content-[''] after:relative after:left-[calc(50%_+_calc(var(--circle-size)_/_2_+_var(--spacing)))] after:top-[calc(var(--circle-size)_/_2)] after:-order-1 after:h-0.5 after:w-[calc(100%_-_var(--circle-size)_-_calc(var(--spacing)_*_2))] after:bg-blue-purple/50 after:content-['']">
                         <h3 className="mb-2 text-base font-bold md:text-[4w]">
                           Paso 2
                         </h3>
@@ -401,7 +401,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                           <strong>236-000036-64</strong>
                         </p>
                       </li>
-                      <li className="flex flex-1 flex-col text-center before:relative before:z-[1] before:mx-auto before:mb-4 before:mt-0 before:block before:h-12 before:w-12 before:rounded-full before:bg-green-leaf before:content-['']">
+                      <li className="flex flex-1 flex-col text-center before:relative before:z-[1] before:mx-auto before:mb-4 before:mt-0 before:block before:h-12 before:w-12 before:rounded-full before:bg-blue-purple before:content-['']">
                         <h3 className="mb-2 text-base font-bold md:text-[4w]">
                           Paso 3
                         </h3>

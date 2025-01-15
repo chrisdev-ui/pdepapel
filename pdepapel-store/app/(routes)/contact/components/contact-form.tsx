@@ -116,7 +116,7 @@ export const ContactForm: React.FC = () => {
               </FormLabel>
               <FormControl>
                 <Input
-                  className="bg-green-leaf/20 invalid:bg-pink-froly/20"
+                  className="bg-blue-purple/20 invalid:bg-pink-froly/20"
                   disabled={isLoading}
                   placeholder="Escribe tu nombre"
                   {...field}
@@ -136,7 +136,7 @@ export const ContactForm: React.FC = () => {
               </FormLabel>
               <FormControl>
                 <Input
-                  className="bg-green-leaf/20 invalid:bg-pink-froly/20"
+                  className="bg-blue-purple/20 invalid:bg-pink-froly/20"
                   disabled={isLoading}
                   placeholder="Escribe tu correo electrónico"
                   {...field}
@@ -154,7 +154,7 @@ export const ContactForm: React.FC = () => {
               <FormLabel>Asunto</FormLabel>
               <FormControl>
                 <Input
-                  className="bg-green-leaf/20 invalid:bg-pink-froly/20"
+                  className="bg-blue-purple/20 invalid:bg-pink-froly/20"
                   disabled={isLoading}
                   placeholder="Escribe tu el asunto de tu mensaje"
                   {...field}
@@ -173,7 +173,7 @@ export const ContactForm: React.FC = () => {
               <FormControl>
                 <Textarea
                   placeholder="Escribe tu mensaje"
-                  className="resize-none bg-green-leaf/20 invalid:bg-pink-froly/20"
+                  className="resize-none bg-blue-purple/20 invalid:bg-pink-froly/20"
                   {...field}
                 />
               </FormControl>

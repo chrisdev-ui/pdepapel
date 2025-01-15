@@ -144,14 +144,14 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
             </Button>
           )}
         </div>
-        <SheetFooter className="grid w-full grid-cols-1 grid-rows-2 gap-6 border-t border-green-leaf p-6 sm:space-x-0">
+        <SheetFooter className="grid w-full grid-cols-1 grid-rows-2 gap-6 border-t border-blue-purple p-6 sm:space-x-0">
           <div className="flex w-full items-center justify-between text-2xl">
             <span>Subtotal</span>
             <Currency value={totalPrice} />
           </div>
           <div className="flex w-full flex-col gap-3 lg:flex-row">
             <Button
-              className="group relative w-full overflow-hidden bg-green-leaf font-serif text-base font-bold uppercase text-white hover:bg-green-leaf lg:w-1/2"
+              className="group relative w-full overflow-hidden bg-blue-purple font-serif text-base font-bold uppercase text-white hover:bg-blue-purple lg:w-1/2"
               onClick={onGoToCart}
             >
               <ShoppingCart className="absolute left-0 h-5 w-5 -translate-x-full transform transition-transform duration-500 ease-out group-hover:translate-x-20" />

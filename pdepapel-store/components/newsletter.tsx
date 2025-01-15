@@ -63,7 +63,7 @@ const Newsletter: React.FC<{}> = () => {
           <h4 className="font-serif text-3xl font-bold text-white">
             Suscríbete para recibir nuestras novedades
           </h4>
-          <p className="font-serif text-sm font-semibold text-green-leaf">
+          <p className="font-serif text-sm font-semibold text-blue-purple">
             Recibe actualizaciones por correo electrónico sobre nuestra tienda y{" "}
             <span className="text-blue-yankees">ofertas especiales.</span>
           </p>

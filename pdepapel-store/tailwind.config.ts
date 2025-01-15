@@ -62,10 +62,6 @@ const config: Config = {
           star: "hsl(var(--yellow-star) / <alpha-value>)",
         },
 
-        green: {
-          leaf: "hsl(var(--pale-leaf) / <alpha-value>)",
-        },
-
         pink: {
           shell: "hsl(var(--clam-shell) / <alpha-value>)",
           froly: "hsl(var(--froly) / <alpha-value>)",
@@ -74,6 +70,7 @@ const config: Config = {
         blue: {
           yankees: "hsl(var(--yankees-blue) / <alpha-value>)",
           baby: "hsl(var(--baby-blue) / <alpha-value>)",
+          purple: "hsl(var(--blue-purple) / <alpha-value>)",
         },
 
         border: "hsl(var(--border) / <alpha-value>)",
