@@ -32,7 +32,7 @@ const MobileFilters: React.FC<MobileFiltersProps> = ({
           <Plus className="h-5 w-5" />
         </Button>
       </SheetTrigger>
-      <SheetContent className="lg:hidden">
+      <SheetContent className="max-h-screen overflow-y-auto lg:hidden">
         <div className="p-4">
           <Filter
             valueKey="typeId"

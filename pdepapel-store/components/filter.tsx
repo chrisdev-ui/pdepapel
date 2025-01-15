@@ -81,9 +81,9 @@ const Filter: React.FC<FilterProps> = ({
             <div key={filter?.id} className="flex items-center">
               <Button
                 className={cn(
-                  "rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-800 hover:bg-blue-yankees hover:text-white",
+                  "rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-800 hover:bg-blue-baby hover:text-white",
                   {
-                    "bg-blue-yankees text-white": selectedValue?.includes(
+                    "bg-blue-baby text-white": selectedValue?.includes(
                       filter?.id,
                     ),
                   },
