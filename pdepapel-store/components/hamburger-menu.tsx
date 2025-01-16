@@ -6,7 +6,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { SignInButton, SignOutButton } from "@clerk/nextjs";
+import {
+  SignedIn,
+  SignedOut,
+  SignInButton,
+  SignOutButton,
+  UserButton,
+} from "@clerk/nextjs";
 import {
   Contact,
   Heart,
@@ -19,14 +25,10 @@ import {
   Store,
 } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
-interface HamburgerMenuProps {
-  isUserLoggedIn: boolean;
-}
-
-export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
-  isUserLoggedIn,
-}) => {
+export const HamburgerMenu: React.FC = () => {
+  const pathname = usePathname();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -70,22 +72,40 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        {isUserLoggedIn && (
+        <SignedIn>
+          <DropdownMenuItem className="flex w-full px-6 py-3 text-xl hover:bg-blue-purple hover:text-white">
+            <UserButton
+              afterSignOutUrl="/"
+              showName
+              appearance={{
+                elements: {
+                  rootBox: "w-full",
+                  userButtonBox: "flex items-center gap-6 flex-row-reverse",
+                },
+              }}
+            />
+          </DropdownMenuItem>
+          <DropdownMenuItem className="flex w-full px-6 py-3 text-xl hover:bg-blue-purple hover:text-white">
+            <Link className="flex w-full items-center gap-6" href="/my-orders">
+              <Contact className="h-6 w-6" />
+              Mis órdenes
+            </Link>
+          </DropdownMenuItem>
           <DropdownMenuItem className="flex w-full gap-6 px-6 py-3 text-xl hover:bg-blue-purple hover:text-white">
             <LogOut className="h-6 w-6" />
             <SignOutButton>
               <button className="w-full text-left">Cerrar sesión</button>
             </SignOutButton>
           </DropdownMenuItem>
-        )}
-        {!isUserLoggedIn && (
+        </SignedIn>
+        <SignedOut>
           <DropdownMenuItem className="flex w-full gap-6 px-6 py-3 text-xl hover:bg-blue-purple hover:text-white">
             <LogIn className="h-6 w-6" />
             <SignInButton>
               <button className="w-full text-left">Inicia sesión</button>
             </SignInButton>
           </DropdownMenuItem>
-        )}
+        </SignedOut>
       </DropdownMenuContent>
     </DropdownMenu>
   );
