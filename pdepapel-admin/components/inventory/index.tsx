@@ -76,7 +76,7 @@ export const Inventory: React.FC<InventoryProps> = async ({ params }) => {
           </Link>
         </Card>
       </div>
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <ScrollArea className="grid max-h-screen grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Inventario de productos</CardTitle>
@@ -110,7 +110,7 @@ export const Inventory: React.FC<InventoryProps> = async ({ params }) => {
             </Table>
           </CardContent>
         </Card>
-      </div>
+      </ScrollArea>
     </div>
   );
 };
