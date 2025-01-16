@@ -81,7 +81,7 @@ export const HamburgerMenu: React.FC = () => {
                 elements: {
                   rootBox: "w-full",
                   userButtonBox:
-                    "flex items-center justify-start flex-row-reverse",
+                    "flex items-center justify-end flex-row-reverse",
                 },
               }}
             />
