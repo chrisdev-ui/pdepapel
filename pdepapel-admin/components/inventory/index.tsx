@@ -76,7 +76,7 @@ export const Inventory: React.FC<InventoryProps> = async ({ params }) => {
           </Link>
         </Card>
       </div>
-      <ScrollArea className="grid max-h-screen grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid max-h-screen grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Inventario de productos</CardTitle>
@@ -92,25 +92,27 @@ export const Inventory: React.FC<InventoryProps> = async ({ params }) => {
             <CardTitle>Inventario por categoría</CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Categoría</TableHead>
-                  <TableHead className="text-right">Stock</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {stockData.map((item) => (
-                  <TableRow key={item.category}>
-                    <TableCell>{item.category}</TableCell>
-                    <TableCell className="text-right">{item.stock}</TableCell>
+            <ScrollArea className="h-[300px] md:h-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Categoría</TableHead>
+                    <TableHead className="text-right">Stock</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {stockData.map((item) => (
+                    <TableRow key={item.category}>
+                      <TableCell>{item.category}</TableCell>
+                      <TableCell className="text-right">{item.stock}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
           </CardContent>
         </Card>
-      </ScrollArea>
+      </div>
     </div>
   );
 };
