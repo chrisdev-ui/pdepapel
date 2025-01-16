@@ -1,6 +1,6 @@
 "use client";
 
-import { SignedIn, SignedOut, UserButton, useAuth } from "@clerk/nextjs";
+import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import { FileSearch } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -18,7 +18,6 @@ import { useScrollPosition } from "@/hooks/use-scroll-position";
 import { cn } from "@/lib/utils";
 
 const Navbar: React.FC<{}> = () => {
-  const { isSignedIn } = useAuth();
   const scrollPosition = useScrollPosition();
   const pathname = usePathname();
 
@@ -141,7 +140,7 @@ const Navbar: React.FC<{}> = () => {
             className="flex lg:hidden"
           />
           <NavbarCart className="hidden self-center xs:flex lg:hidden" />
-          <HamburgerMenu isUserLoggedIn={!!isSignedIn} />
+          <HamburgerMenu />
         </div>
       </nav>
     </header>
