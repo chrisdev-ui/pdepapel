@@ -26,7 +26,7 @@ export const Inventory: React.FC<InventoryProps> = ({
   lowStockCount,
   outOfStockCount,
 }) => {
-  const categories = Array.from(new Set(products.map((p) => p.category)));
+  const categories = [...new Set(products.map((p) => p.category))];
 
   const stockData = categories.map((category) => ({
     category,
