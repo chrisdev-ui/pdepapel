@@ -1,48 +1,35 @@
-"use client";
-
+import { getLowStockCount } from "@/actions/get-low-stock-count";
+import { getOutOfStockCount } from "@/actions/get-out-of-stock-count";
 import { getProducts } from "@/actions/get-products";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { formatter } from "@/lib/utils";
-import { AlertTriangle, Package } from "lucide-react";
 import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { AlertTriangle, Package } from "lucide-react";
 import { InventoryClient } from "./client";
 
 interface InventoryProps {
-  products: Awaited<ReturnType<typeof getProducts>>;
-  lowStockCount: number;
-  outOfStockCount: number;
+  params: { storeId: string };
 }
 
-export const Inventory: React.FC<InventoryProps> = ({
-  products,
-  lowStockCount,
-  outOfStockCount,
-}) => {
+export const Inventory: React.FC<InventoryProps> = async ({ params }) => {
+  const products = await getProducts(params.storeId);
+  const outOfStockCount = await getOutOfStockCount(params.storeId);
+  const lowStockCount = await getLowStockCount(params.storeId);
+
   const categories = Array.from(new Set(products.map((p) => p.category)));
 
   const stockData = categories.map((category) => ({
     category,
     stock: products
       .filter((p) => p.category === category)
-      .reduce((sum, p) => sum + p.stock, 0),
-  }));
-
-  const tableProducts = products.map((product) => ({
-    id: product.id,
-    name: product.name,
-    category: product.category.name,
-    stock: String(product.stock),
-    price: formatter.format(product.price),
+      .reduce((sum, p) => sum + Number(p.stock), 0),
   }));
 
   return (
@@ -84,30 +71,36 @@ export const Inventory: React.FC<InventoryProps> = ({
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>Stock by Category</CardTitle>
+          <CardTitle>Inventario por categoría</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={stockData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="category" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="stock" fill="#AD8FE1" />
-            </BarChart>
-          </ResponsiveContainer>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Categoría</TableHead>
+                <TableHead className="text-right">Stock</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {stockData.map((item) => (
+                <TableRow key={item.category}>
+                  <TableCell>{item.category}</TableCell>
+                  <TableCell className="text-right">{item.stock}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Product Inventory</CardTitle>
+          <CardTitle>Inventario de productos</CardTitle>
         </CardHeader>
         <CardContent>
           <ScrollArea className="h-[300px] md:h-auto">
             <div className="space-y-4 pb-4 md:pb-0">
               <div className="rounded-md border">
-                <InventoryClient data={tableProducts} />
+                <InventoryClient data={products} />
               </div>
             </div>
           </ScrollArea>
