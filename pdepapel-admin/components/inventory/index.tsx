@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { AlertTriangle, Package } from "lucide-react";
+import { AlertCircle, AlertTriangle, Package } from "lucide-react";
 import Link from "next/link";
 import { InventoryClient } from "./client";
 
@@ -68,7 +68,7 @@ export const Inventory: React.FC<InventoryProps> = async ({ params }) => {
               <CardTitle className="text-sm font-medium">
                 Productos por agotarse
               </CardTitle>
-              <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+              <AlertCircle className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{lowStockCount}</div>

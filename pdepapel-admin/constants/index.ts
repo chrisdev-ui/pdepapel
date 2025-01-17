@@ -92,3 +92,7 @@ export const paymentMethodsByOption: {
   [PaymentMethod.BankTransfer]: null,
   [PaymentMethod.COD]: null,
 };
+
+export const INITIAL_PERCENTAGE_INCREASE = 100;
+export const INITIAL_TRANSPORTATION_COST = 500;
+export const INITIAL_MISC_COST = 500;

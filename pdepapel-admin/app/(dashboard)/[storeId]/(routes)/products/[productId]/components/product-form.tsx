@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { DollarSign, PackageCheckIcon, Trash } from "lucide-react";
+import { DollarSign, PackageCheckIcon, Percent, Trash } from "lucide-react";
 import { useForm } from "react-hook-form";
 import z from "zod";
 
@@ -30,6 +30,11 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  INITIAL_MISC_COST,
+  INITIAL_PERCENTAGE_INCREASE,
+  INITIAL_TRANSPORTATION_COST,
+} from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import {
   Category,
@@ -43,7 +48,7 @@ import {
 } from "@prisma/client";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ReviewColumn, columns } from "./columns";
 
 const formSchema = z.object({
@@ -56,8 +61,17 @@ const formSchema = z.object({
     .refine((images) => images.filter((img) => img.isMain).length === 1, {
       message: "Debe haber exactamente una imagen principal",
     }),
-  price: z.coerce.number().min(1, "El precio debe ser mayor a 0"),
-  acqPrice: z.coerce.number().optional(),
+  acqPrice: z.coerce.number().min(1, "El precio de compra debe ser mayor a 0"),
+  percentageIncrease: z.coerce
+    .number()
+    .min(0, "El porcentaje de incremento no puede ser negativo"),
+  transportationCost: z.coerce
+    .number()
+    .min(0, "El costo de transporte no puede ser negativo"),
+  miscCost: z.coerce
+    .number()
+    .min(0, "El costo de misceláneo no puede ser negativo"),
+  price: z.coerce.number().min(1, "El precio de venta debe ser mayor a 0"),
   categoryId: z.string().min(1),
   colorId: z.string().min(1),
   sizeId: z.string().min(1),
@@ -99,68 +113,138 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const title = initialData ? "Editar producto" : "Crear producto";
-  const description = initialData
-    ? "Editar un producto"
-    : "Crear un nuevo producto";
-  const toastMessage = initialData ? "Producto actualizado" : "Producto creado";
-  const action = initialData ? "Guardar cambios" : "Crear";
+  const { title, description, toastMessage, action } = useMemo(
+    () => ({
+      title: initialData ? "Editar producto" : "Crear producto",
+      description: initialData
+        ? "Editar un producto"
+        : "Crear un nuevo producto",
+      toastMessage: initialData ? "Producto actualizado" : "Producto creado",
+      action: initialData ? "Guardar cambios" : "Crear",
+    }),
+    [initialData],
+  );
+
+  const defaultValues = useMemo(
+    () =>
+      initialData
+        ? {
+            ...initialData,
+            acqPrice: initialData.acqPrice || 0,
+            supplierId: initialData.supplierId || "",
+            images: initialData.images.map((image, idx) => ({
+              ...image,
+              isMain: idx === 0,
+            })),
+            percentageIncrease: INITIAL_PERCENTAGE_INCREASE,
+            transportationCost: INITIAL_TRANSPORTATION_COST,
+            miscCost: INITIAL_MISC_COST,
+          }
+        : {
+            name: "",
+            description: "",
+            stock: 0,
+            images: [],
+            price: 0,
+            categoryId: "",
+            colorId: "",
+            sizeId: "",
+            designId: "",
+            supplierId: "",
+            isFeatured: false,
+            isArchived: false,
+            percentageIncrease: INITIAL_PERCENTAGE_INCREASE,
+            transportationCost: INITIAL_TRANSPORTATION_COST,
+            miscCost: INITIAL_MISC_COST,
+          },
+    [initialData],
+  );
 
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: initialData
-      ? {
-          ...initialData,
-          acqPrice: initialData.acqPrice || 0,
-          supplierId: initialData.supplierId || "",
-          images: initialData.images.map((image, idx) => ({
-            ...image,
-            isMain: idx === 0,
-          })),
-        }
-      : {
-          name: "",
-          description: "",
-          stock: 0,
-          images: [],
-          price: 0,
-          categoryId: "",
-          colorId: "",
-          sizeId: "",
-          designId: "",
-          supplierId: "",
-          isFeatured: false,
-          isArchived: false,
-        },
+    defaultValues,
   });
-  const onSubmit = async (data: ProductFormValues) => {
-    try {
-      setLoading(true);
-      if (initialData) {
-        await axios.patch(
-          `/api/${params.storeId}/products/${params.productId}`,
-          data,
-        );
-      } else {
-        await axios.post(`/api/${params.storeId}/products`, data);
-      }
-      router.refresh();
-      router.push(`/${params.storeId}/products`);
-      toast({
-        description: toastMessage,
-        variant: "success",
-      });
-    } catch (error) {
-      toast({
-        description:
-          "¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
+
+  const calculatePrice = useCallback((values: Partial<ProductFormValues>) => {
+    const { acqPrice, percentageIncrease, transportationCost, miscCost } =
+      values;
+    if (acqPrice && acqPrice > 0) {
+      return Number(
+        (
+          acqPrice * (1 + (percentageIncrease || 0) / 100) +
+          (transportationCost || 0) +
+          (miscCost || 0)
+        ).toFixed(2),
+      );
     }
-  };
-  const onDelete = async () => {
+    return 0;
+  }, []);
+
+  useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+      const watchedFields = [
+        "acqPrice",
+        "percentageIncrease",
+        "transportationCost",
+        "miscCost",
+      ];
+
+      if (name && watchedFields.includes(name)) {
+        const values = form.getValues();
+        const newPrice = calculatePrice({
+          acqPrice: values.acqPrice,
+          percentageIncrease: values.percentageIncrease,
+          transportationCost: values.transportationCost,
+          miscCost: values.miscCost,
+        });
+
+        if (newPrice > 0) {
+          form.setValue("price", newPrice);
+        }
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [form, calculatePrice]);
+
+  const onSubmit = useCallback(
+    async (data: ProductFormValues) => {
+      try {
+        setLoading(true);
+        if (initialData) {
+          await axios.patch(
+            `/api/${params.storeId}/products/${params.productId}`,
+            data,
+          );
+        } else {
+          await axios.post(`/api/${params.storeId}/products`, data);
+        }
+        router.refresh();
+        router.push(`/${params.storeId}/products`);
+        toast({
+          description: toastMessage,
+          variant: "success",
+        });
+      } catch (error) {
+        toast({
+          description:
+            "¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    },
+    [
+      params.storeId,
+      params.productId,
+      router,
+      toast,
+      initialData,
+      toastMessage,
+    ],
+  );
+  const onDelete = useCallback(async () => {
     try {
       setLoading(true);
       await axios.delete(`/api/${params.storeId}/products/${params.productId}`);
@@ -180,7 +264,35 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       setLoading(false);
       setOpen(false);
     }
-  };
+  }, [params.storeId, params.productId, router, toast]);
+
+  const selectOptions = useMemo(
+    () => ({
+      categories: categories.map((category) => ({
+        value: category.id,
+        label: category.name,
+      })),
+      sizes: sizes.map((size) => ({
+        value: size.id,
+        label: size.name,
+      })),
+      colors: colors.map((color) => ({
+        value: color.id,
+        label: color.name,
+        color: color.value,
+      })),
+      designs: designs.map((design) => ({
+        value: design.id,
+        label: design.name,
+      })),
+      suppliers: suppliers.map((supplier) => ({
+        value: supplier.id,
+        label: supplier.name,
+      })),
+    }),
+    [categories, sizes, colors, designs, suppliers],
+  );
+
   return (
     <>
       <AlertModal
@@ -250,28 +362,6 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             />
             <FormField
               control={form.control}
-              name="price"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Precio de venta</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <DollarSign className="absolute left-3 top-3 h-4 w-4" />
-                      <Input
-                        type="number"
-                        disabled={loading}
-                        placeholder="1000"
-                        className="pl-8"
-                        {...field}
-                      />
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
               name="acqPrice"
               render={({ field }) => (
                 <FormItem>
@@ -289,6 +379,94 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                     </div>
                   </FormControl>
                   <FormDescription>Este campo es opcional</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="percentageIncrease"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Porcentaje de incremento</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <Percent className="absolute left-3 top-3 h-4 w-4" />
+                      <Input
+                        type="number"
+                        disabled={loading}
+                        placeholder="30"
+                        className="pl-8"
+                        {...field}
+                      />
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="transportationCost"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Costo de transporte</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <DollarSign className="absolute left-3 top-3 h-4 w-4" />
+                      <Input
+                        type="number"
+                        disabled={loading}
+                        placeholder="0"
+                        className="pl-8"
+                        {...field}
+                      />
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="miscCost"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Costos misceláneos</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <DollarSign className="absolute left-3 top-3 h-4 w-4" />
+                      <Input
+                        type="number"
+                        disabled={loading}
+                        placeholder="0"
+                        className="pl-8"
+                        {...field}
+                      />
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="price"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Precio de venta (calculado)</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <DollarSign className="absolute left-3 top-3 h-4 w-4" />
+                      <Input
+                        type="number"
+                        disabled={loading}
+                        placeholder="1000"
+                        className="pl-8"
+                        {...field}
+                      />
+                    </div>
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -344,7 +522,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                           No hay resultados
                         </button>
                       )}
-                      {categories?.length > 0 &&
+                      {selectOptions.categories?.length > 0 &&
                         categories.map((category) => (
                           <SelectItem key={category.id} value={category.id}>
                             {category.name}
@@ -377,7 +555,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {sizes?.length === 0 && (
+                      {selectOptions.sizes?.length === 0 && (
                         <button
                           disabled
                           className="relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
@@ -418,7 +596,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {colors?.length === 0 && (
+                      {selectOptions.colors?.length === 0 && (
                         <button
                           disabled
                           className="relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
@@ -465,7 +643,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {designs?.length === 0 && (
+                      {selectOptions.designs?.length === 0 && (
                         <button
                           disabled
                           className="relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
@@ -506,7 +684,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {suppliers?.length === 0 && (
+                      {selectOptions.suppliers?.length === 0 && (
                         <button
                           disabled
                           className="relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
