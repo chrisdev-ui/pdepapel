@@ -45,6 +45,12 @@ const getRandomDesignId = async (prismadb: PrismaClient, storeId: string) => {
   return designs[randomIndex].id;
 };
 
+const getRandomSupplierId = async (prismadb: PrismaClient, storeId: string) => {
+  const suppliers = await prismadb.supplier.findMany({ where: { storeId } });
+  const randomIndex = Math.floor(Math.random() * suppliers.length);
+  return suppliers[randomIndex].id;
+};
+
 const getProductData = async (
   prismadb: PrismaClient,
   storeId: string,
@@ -68,25 +74,33 @@ const getProductData = async (
     const sizeId = await getRandomSizeId(prismadb, storeId);
     const colorId = await getRandomColorId(prismadb, storeId);
     const designId = await getRandomDesignId(prismadb, storeId);
+    const supplierId = await getRandomSupplierId(prismadb, storeId);
     const name = Array.from(productsSet)[i].name;
     const sku = Array.from(productsSet)[i].sku;
+
+    const acqPrice = Number(
+      faker.commerce.price({
+        min: 3500,
+        max: 100000,
+        dec: 0,
+      }),
+    );
+
+    const price = acqPrice + simpleFaker.number.int({ min: 1, max: 100000 });
+
     products.push({
       name,
       description: faker.commerce.productDescription(),
-      price: Number(
-        faker.commerce.price({
-          min: 3500,
-          max: 100000,
-          dec: 0,
-        }),
-      ),
+      acqPrice,
+      price,
       stock: simpleFaker.number.int(100),
-      isArchived: false,
+      isArchived: getRandomBoolean(),
       isFeatured: getRandomBoolean(),
       categoryId,
       sizeId,
       colorId,
       designId,
+      supplierId,
       sku,
       storeId,
     });

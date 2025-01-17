@@ -18,6 +18,7 @@ export async function clearDB(storeId: string, prismadb: PrismaClient) {
   await prismadb.design.deleteMany(where);
   await prismadb.category.deleteMany(where);
   await prismadb.type.deleteMany(where);
+  await prismadb.supplier.deleteMany(where);
   await prismadb.review.deleteMany(where);
   await prismadb.mainBanner.deleteMany(where);
   await prismadb.banner.deleteMany(where);

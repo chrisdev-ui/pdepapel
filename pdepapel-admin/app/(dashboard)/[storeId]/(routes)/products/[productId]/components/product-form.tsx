@@ -166,14 +166,17 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   });
 
   const calculatePrice = useCallback((values: Partial<ProductFormValues>) => {
-    const { acqPrice, percentageIncrease, transportationCost, miscCost } =
-      values;
-    if (acqPrice && acqPrice > 0) {
+    const acqPrice = Number(values.acqPrice) || 0;
+    const percentageIncrease = Number(values.percentageIncrease) || 0;
+    const transportationCost = Number(values.transportationCost) || 0;
+    const miscCost = Number(values.miscCost) || 0;
+
+    if (acqPrice > 0) {
       return Number(
         (
-          acqPrice * (1 + (percentageIncrease || 0) / 100) +
-          (transportationCost || 0) +
-          (miscCost || 0)
+          acqPrice * (1 + percentageIncrease / 100) +
+          transportationCost +
+          miscCost
         ).toFixed(2),
       );
     }
@@ -192,10 +195,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       if (name && watchedFields.includes(name)) {
         const values = form.getValues();
         const newPrice = calculatePrice({
-          acqPrice: values.acqPrice,
-          percentageIncrease: values.percentageIncrease,
-          transportationCost: values.transportationCost,
-          miscCost: values.miscCost,
+          acqPrice: values.acqPrice ?? 0,
+          percentageIncrease: values.percentageIncrease ?? 0,
+          transportationCost: values.transportationCost ?? 0,
+          miscCost: values.miscCost ?? 0,
         });
 
         if (newPrice > 0) {
@@ -378,7 +381,6 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                       />
                     </div>
                   </FormControl>
-                  <FormDescription>Este campo es opcional</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
