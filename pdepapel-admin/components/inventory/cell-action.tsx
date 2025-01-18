@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, Edit, MoreHorizontal } from "lucide-react";
+import { Copy, Link, MoreHorizontal } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { InventoryProductColumn } from "./columns";
 
@@ -47,7 +47,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
         <DropdownMenuItem
           onClick={() => router.push(`/${params.storeId}/products/${data.id}`)}
         >
-          <Edit className="mr-2 h-4 w-4" />
+          <Link className="mr-2 h-4 w-4" />
           Ir a la página del producto
         </DropdownMenuItem>
       </DropdownMenuContent>

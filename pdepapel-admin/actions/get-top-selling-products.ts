@@ -23,7 +23,7 @@ export const getTopSellingProducts = async (storeId: string, year: number) => {
         _count: "desc",
       },
     },
-    take: 5,
+    take: 10,
     select: {
       id: true,
       name: true,

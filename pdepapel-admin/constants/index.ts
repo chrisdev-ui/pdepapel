@@ -96,3 +96,8 @@ export const paymentMethodsByOption: {
 export const INITIAL_PERCENTAGE_INCREASE = 100;
 export const INITIAL_TRANSPORTATION_COST = 500;
 export const INITIAL_MISC_COST = 500;
+
+export const yearColors = {
+  2025: "#AD8FE1",
+  default: "#3498DB",
+};

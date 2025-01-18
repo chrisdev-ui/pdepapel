@@ -1,6 +1,7 @@
 "use client";
 
 import { getGraphRevenue } from "@/actions/get-graph-revenue";
+import { yearColors } from "@/constants";
 import { formatter, shortFormatter } from "@/lib/utils";
 import {
   Bar,
@@ -15,11 +16,6 @@ interface OverviewProps {
   data: Awaited<ReturnType<typeof getGraphRevenue>>;
   year: number;
 }
-
-const yearColors = {
-  2025: "#AD8FE1",
-  default: "#3498DB",
-};
 
 export const Overview: React.FC<OverviewProps> = ({ data, year }) => {
   const barColor =

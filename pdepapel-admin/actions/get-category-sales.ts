@@ -1,4 +1,10 @@
 import prismadb from "@/lib/prismadb";
+import { formatter } from "@/lib/utils";
+
+interface CategoryStats {
+  sales: number;
+  orders: number;
+}
 
 export async function getCategorySales(storeId: string, year: number) {
   const startDate = new Date(year, 0, 1);
@@ -31,17 +37,22 @@ export async function getCategorySales(storeId: string, year: number) {
       sale.orderItems.forEach((item) => {
         const category = item.product.category.name;
         if (!acc[category]) {
-          acc[category] = 0;
+          acc[category] = {
+            sales: 0,
+            orders: 0,
+          };
         }
-        acc[category] += item.product.price * item.quantity;
+        acc[category].sales += item.product.price * item.quantity;
+        acc[category].orders += item.quantity;
       });
       return acc;
     },
-    {} as Record<string, number>,
+    {} as Record<string, CategoryStats>,
   );
 
-  return Object.entries(categorySales).map(([category, sales]) => ({
+  return Object.entries(categorySales).map(([category, stats]) => ({
     category,
-    sales,
+    sales: formatter.format(stats.sales),
+    orders: stats.orders,
   }));
 }

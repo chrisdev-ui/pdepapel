@@ -8,6 +8,7 @@ import { Overview } from "@/components/overview";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
+import { SpinnerButton } from "@/components/ui/spinner-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { YearSelector } from "@/components/year-selector";
 import { formatter } from "@/lib/utils";
@@ -95,24 +96,12 @@ export default async function DashboardPage({
             </div>
           </TabsContent>
           <TabsContent value="inventory">
-            <Suspense
-              fallback={
-                <div className="flex h-full w-full items-center justify-center">
-                  Cargando...
-                </div>
-              }
-            >
+            <Suspense fallback={<SpinnerButton />}>
               <Inventory params={params} />
             </Suspense>
           </TabsContent>
           <TabsContent value="analytics">
-            <Suspense
-              fallback={
-                <div className="flex h-full w-full items-center justify-center">
-                  Cargando...
-                </div>
-              }
-            >
+            <Suspense fallback={<SpinnerButton />}>
               <Analytics params={params} year={year} />
             </Suspense>
           </TabsContent>

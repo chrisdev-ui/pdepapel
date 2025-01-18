@@ -1,18 +1,21 @@
 import { getLowStockCount } from "@/actions/get-low-stock-count";
 import { getOutOfStockCount } from "@/actions/get-out-of-stock-count";
+import { getPotentialProfit } from "@/actions/get-potential-profit";
+import { getPotentialRevenue } from "@/actions/get-potential-revenue";
 import { getProducts } from "@/actions/get-products";
+import { getTotalCost } from "@/actions/get-total-cost";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { formatter } from "@/lib/utils";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { AlertCircle, AlertTriangle, Package } from "lucide-react";
+  AlertCircle,
+  AlertTriangle,
+  DollarSign,
+  Package,
+  Wallet,
+} from "lucide-react";
 import Link from "next/link";
+import { InventoryByCategory } from "../inventory-by-category";
 import { InventoryClient } from "./client";
 
 interface InventoryProps {
@@ -23,6 +26,10 @@ export const Inventory: React.FC<InventoryProps> = async ({ params }) => {
   const products = await getProducts(params.storeId);
   const outOfStockCount = await getOutOfStockCount(params.storeId);
   const lowStockCount = await getLowStockCount(params.storeId);
+
+  const totalCost = await getTotalCost(params.storeId);
+  const potentialRevenue = await getPotentialRevenue(params.storeId);
+  const potentialProfit = await getPotentialProfit(params.storeId);
 
   const categories = Array.from(new Set(products.map((p) => p.category)));
 
@@ -91,28 +98,49 @@ export const Inventory: React.FC<InventoryProps> = async ({ params }) => {
           <CardHeader>
             <CardTitle>Inventario por categoría</CardTitle>
           </CardHeader>
-          <CardContent>
-            <ScrollArea className="h-[300px] md:h-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Categoría</TableHead>
-                    <TableHead className="text-right">Stock</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {stockData.map((item) => (
-                    <TableRow key={item.category}>
-                      <TableCell>{item.category}</TableCell>
-                      <TableCell className="text-right">{item.stock}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </ScrollArea>
+          <CardContent className="h-[70vh] max-h-screen w-full">
+            <InventoryByCategory data={stockData} />
           </CardContent>
         </Card>
       </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Métricas del inventario actual</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Wallet className="h-4 w-4 text-muted-foreground" />
+                <h3 className="text-lg font-semibold">
+                  Costo total del inventario
+                </h3>
+              </div>
+              <p className="text-3xl font-bold">
+                {formatter.format(totalCost)}
+              </p>
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+                <h3 className="text-lg font-semibold">Ingresos potenciales</h3>
+              </div>
+              <p className="text-3xl font-bold">
+                {formatter.format(potentialRevenue)}
+              </p>
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                <h3 className="text-lg font-semibold">Ganancia potencial</h3>
+              </div>
+              <p className="text-3xl font-bold">
+                {formatter.format(potentialProfit)}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
