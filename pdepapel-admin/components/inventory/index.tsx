@@ -98,7 +98,7 @@ export const Inventory: React.FC<InventoryProps> = async ({ params }) => {
           <CardHeader>
             <CardTitle>Inventario por categoría</CardTitle>
           </CardHeader>
-          <CardContent className="h-screen max-h-screen w-full">
+          <CardContent className="h-[300px] max-h-[92vh] md:h-[70vh] lg:h-[92vh]">
             <InventoryByCategory data={stockData} />
           </CardContent>
         </Card>
