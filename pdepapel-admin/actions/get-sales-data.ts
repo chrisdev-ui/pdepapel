@@ -1,4 +1,5 @@
 import prismadb from "@/lib/prismadb";
+import { compareAsc, parseISO } from "date-fns";
 
 export async function getSalesData(storeId: string, year: number) {
   const startDate = new Date(year, 0, 1);
@@ -20,6 +21,9 @@ export async function getSalesData(storeId: string, year: number) {
         },
       },
     },
+    orderBy: {
+      createdAt: "asc",
+    },
   });
 
   const salesByDate = sales.reduce(
@@ -38,9 +42,11 @@ export async function getSalesData(storeId: string, year: number) {
     {} as Record<string, { revenue: number; orders: number }>,
   );
 
-  return Object.entries(salesByDate).map(([date, data]) => ({
-    date,
-    revenue: data.revenue,
-    orders: data.orders,
-  }));
+  return Object.entries(salesByDate)
+    .sort(([dateA], [dateB]) => compareAsc(parseISO(dateA), parseISO(dateB)))
+    .map(([date, data]) => ({
+      date,
+      revenue: data.revenue,
+      orders: data.orders,
+    }));
 }
