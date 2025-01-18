@@ -1,3 +1,4 @@
+import { CAPSULAS_SORPRESA_ID } from "@/constants";
 import prismadb from "@/lib/prismadb";
 
 export const getOutOfStockCount = async (storeId: string) => {
@@ -5,6 +6,9 @@ export const getOutOfStockCount = async (storeId: string) => {
     where: {
       storeId,
       stock: 0,
+      categoryId: {
+        not: CAPSULAS_SORPRESA_ID,
+      },
     },
   });
 

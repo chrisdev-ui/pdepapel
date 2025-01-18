@@ -1,3 +1,4 @@
+import { CAPSULAS_SORPRESA_ID } from "@/constants";
 import prismadb from "@/lib/prismadb";
 
 export async function getTotalCost(storeId: string) {
@@ -5,6 +6,9 @@ export async function getTotalCost(storeId: string) {
     where: {
       storeId,
       isArchived: false,
+      categoryId: {
+        not: CAPSULAS_SORPRESA_ID,
+      },
     },
     select: {
       stock: true,

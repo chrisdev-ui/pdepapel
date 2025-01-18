@@ -1,3 +1,4 @@
+import { CAPSULAS_SORPRESA_ID } from "@/constants";
 import prismadb from "@/lib/prismadb";
 import { formatter } from "@/lib/utils";
 
@@ -5,6 +6,9 @@ export async function getProducts(storeId: string) {
   const products = await prismadb.product.findMany({
     where: {
       storeId: storeId,
+      categoryId: {
+        not: CAPSULAS_SORPRESA_ID,
+      },
     },
     include: {
       category: true,

@@ -101,3 +101,5 @@ export const yearColors = {
   2025: "#AD8FE1",
   default: "#3498DB",
 };
+
+export const CAPSULAS_SORPRESA_ID = "3825ae1d-be71-493f-aaf3-32916c2d18b9";

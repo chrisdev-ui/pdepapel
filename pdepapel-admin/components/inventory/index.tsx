@@ -85,13 +85,13 @@ export const Inventory: React.FC<InventoryProps> = async ({ params }) => {
           </Link>
         </Card>
       </div>
-      <div className="grid max-h-screen grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card className="flex flex-col">
           <CardHeader>
             <CardTitle>Inventario de productos</CardTitle>
           </CardHeader>
-          <CardContent>
-            <ScrollArea className="h-[300px] md:h-auto">
+          <CardContent className="flex-grow overflow-hidden">
+            <ScrollArea className="h-[300px] md:h-[400px] lg:h-[500px] xl:h-[600px]">
               <InventoryClient data={products} />
             </ScrollArea>
           </CardContent>
@@ -100,8 +100,10 @@ export const Inventory: React.FC<InventoryProps> = async ({ params }) => {
           <CardHeader>
             <CardTitle>Inventario por categoría</CardTitle>
           </CardHeader>
-          <CardContent className="h-[300px] max-h-[92vh] md:h-[70vh] lg:h-[92vh]">
-            <InventoryByCategory data={stockData} />
+          <CardContent className="flex-grow overflow-hidden">
+            <ScrollArea className="h-[300px] md:h-[400px] lg:h-[500px] xl:h-[600px]">
+              <InventoryByCategory data={stockData} />
+            </ScrollArea>
           </CardContent>
         </Card>
       </div>
