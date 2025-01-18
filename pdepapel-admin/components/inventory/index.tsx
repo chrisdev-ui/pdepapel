@@ -33,12 +33,14 @@ export const Inventory: React.FC<InventoryProps> = async ({ params }) => {
 
   const categories = Array.from(new Set(products.map((p) => p.category)));
 
-  const stockData = categories.map((category) => ({
-    category,
-    stock: products
-      .filter((p) => p.category === category)
-      .reduce((sum, p) => sum + Number(p.stock), 0),
-  }));
+  const stockData = categories
+    .map((category) => ({
+      category,
+      stock: products
+        .filter((p) => p.category === category)
+        .reduce((sum, p) => sum + Number(p.stock), 0),
+    }))
+    .filter(({ stock }) => stock > 0);
 
   return (
     <div className="flex flex-col space-y-4">
