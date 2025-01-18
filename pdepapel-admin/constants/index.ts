@@ -103,3 +103,4 @@ export const yearColors = {
 };
 
 export const CAPSULAS_SORPRESA_ID = "3825ae1d-be71-493f-aaf3-32916c2d18b9";
+export const KITS_ID = "6fd0c357-45c3-4d61-84b1-78921cfb1f21";

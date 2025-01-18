@@ -1,4 +1,4 @@
-import { CAPSULAS_SORPRESA_ID } from "@/constants";
+import { CAPSULAS_SORPRESA_ID, KITS_ID } from "@/constants";
 import prismadb from "@/lib/prismadb";
 import { formatter } from "@/lib/utils";
 
@@ -7,7 +7,7 @@ export async function getProducts(storeId: string) {
     where: {
       storeId: storeId,
       categoryId: {
-        not: CAPSULAS_SORPRESA_ID,
+        notIn: [CAPSULAS_SORPRESA_ID, KITS_ID],
       },
     },
     include: {

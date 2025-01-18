@@ -1,4 +1,4 @@
-import { CAPSULAS_SORPRESA_ID } from "@/constants";
+import { CAPSULAS_SORPRESA_ID, KITS_ID } from "@/constants";
 import prismadb from "@/lib/prismadb";
 
 export const getStockCount = async (storeId: string) => {
@@ -7,7 +7,7 @@ export const getStockCount = async (storeId: string) => {
       storeId,
       isArchived: false,
       categoryId: {
-        not: CAPSULAS_SORPRESA_ID,
+        notIn: [CAPSULAS_SORPRESA_ID, KITS_ID],
       },
     },
   });

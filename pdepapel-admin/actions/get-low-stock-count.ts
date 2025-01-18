@@ -1,4 +1,4 @@
-import { CAPSULAS_SORPRESA_ID } from "@/constants";
+import { CAPSULAS_SORPRESA_ID, KITS_ID } from "@/constants";
 import prismadb from "@/lib/prismadb";
 
 export const getLowStockCount = async (
@@ -12,7 +12,7 @@ export const getLowStockCount = async (
         lte: treshold,
       },
       categoryId: {
-        not: CAPSULAS_SORPRESA_ID,
+        notIn: [CAPSULAS_SORPRESA_ID, KITS_ID],
       },
     },
   });
