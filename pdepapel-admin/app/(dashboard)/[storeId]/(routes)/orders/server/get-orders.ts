@@ -1,7 +1,7 @@
 "use server";
 
 import prismadb from "@/lib/prismadb";
-import { currencyFormatter } from "@/lib/utils";
+import { currencyFormatter, formatPhoneNumber } from "@/lib/utils";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -32,7 +32,7 @@ export async function getOrders(storeId: string) {
     id: order.id,
     orderNumber: order.orderNumber,
     fullname: order.fullName,
-    phone: order.phone,
+    phone: formatPhoneNumber(order.phone),
     address: order.address,
     documentId: order.documentId,
     products: order.orderItems.map((orderItem) => ({

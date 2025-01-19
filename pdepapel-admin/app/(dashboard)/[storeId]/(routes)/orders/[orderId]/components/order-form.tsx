@@ -35,6 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { WhatsappButton } from "@/components/whatsapp-button";
 import {
   detailsTitleOptions,
   paymentMethodsByOption,
@@ -443,11 +444,16 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 <FormItem>
                   <FormLabel>Teléfono</FormLabel>
                   <FormControl>
-                    <Input
-                      disabled={loading}
-                      placeholder="Número de teléfono"
-                      {...field}
-                    />
+                    <div className="flex items-center gap-x-1">
+                      {field.value && (
+                        <WhatsappButton phone={field.value} size="md" />
+                      )}
+                      <Input
+                        disabled={loading}
+                        placeholder="Número de teléfono"
+                        {...field}
+                      />
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>

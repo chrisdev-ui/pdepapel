@@ -69,7 +69,13 @@ export async function seedOrders(storeId: string, prismadb: PrismaClient) {
         storeId,
         status: getRandomEnumValue(orderStatusOptions),
         fullName: faker.person.fullName(),
-        phone: faker.phone.number(),
+        phone: (() => {
+          const secondDigit = Math.random() < 0.5 ? "1" : "2";
+          const remainingDigits = Array.from({ length: 8 }, () =>
+            Math.floor(Math.random() * 10),
+          ).join("");
+          return `3${secondDigit}${remainingDigits}`;
+        })(),
         address: faker.location.streetAddress(),
       },
     });

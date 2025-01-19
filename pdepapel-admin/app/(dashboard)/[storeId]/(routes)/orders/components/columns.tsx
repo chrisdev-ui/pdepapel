@@ -3,6 +3,7 @@
 import { Badge } from "@/components/ui/badge";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { Icons } from "@/components/ui/icons";
+import { WhatsappButton } from "@/components/whatsapp-button";
 import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
 import { ColumnDef } from "@tanstack/react-table";
 import { getOrders } from "../server/get-orders";
@@ -26,7 +27,10 @@ export const columns: ColumnDef<OrderColumn>[] = [
   {
     accessorKey: "phone",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Teléfono" />
+      <DataTableColumnHeader column={column} title="Ir a WhatsApp" />
+    ),
+    cell: ({ row }) => (
+      <WhatsappButton phone={row.original.phone as string} withText />
     ),
   },
   {
