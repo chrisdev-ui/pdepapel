@@ -10,7 +10,20 @@ export type ReviewsColumn = Awaited<ReturnType<typeof getReviews>>[number];
 
 export const columns: ColumnDef<ReviewsColumn>[] = [
   {
-    accessorKey: "product",
+    accessorKey: "productImage",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Imagen del producto" />
+    ),
+    cell: ({ row }) => (
+      <DataTableCellImage
+        src={row.original.productImage}
+        alt={row.original.productName}
+        ratio={1 / 1}
+      />
+    ),
+  },
+  {
+    accessorKey: "productName",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Producto" />
     ),

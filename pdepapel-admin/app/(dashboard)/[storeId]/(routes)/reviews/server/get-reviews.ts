@@ -31,7 +31,11 @@ export async function getReviews(storeId: string) {
     const userImage = user?.hasImage ? user.imageUrl : undefined;
     return {
       id: review.id,
-      product: review.product.name,
+      productId: review.productId,
+      productImage:
+        review.product.images.find((image) => image.isMain)?.url ??
+        review.product.images[0].url,
+      productName: review.product.name,
       userId: review.userId,
       userImage,
       name: review.name,
