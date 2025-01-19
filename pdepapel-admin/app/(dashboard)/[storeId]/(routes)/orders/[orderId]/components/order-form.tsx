@@ -446,7 +446,20 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   <FormControl>
                     <div className="flex items-center gap-x-1">
                       {field.value && (
-                        <WhatsappButton phone={field.value} size="md" />
+                        <WhatsappButton
+                          order={{
+                            orderNumber: initialData?.orderNumber as string,
+                            status: initialData?.status as OrderStatus,
+                            fullName: initialData?.fullName as string,
+                            phone: field.value as string,
+                            totalPrice,
+                            products: productsSelected.map((product) => ({
+                              name: product.label,
+                              quantity: quantities[product.value] || 1,
+                            })),
+                          }}
+                          size="md"
+                        />
                       )}
                       <Input
                         disabled={loading}

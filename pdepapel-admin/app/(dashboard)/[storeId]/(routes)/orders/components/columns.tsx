@@ -30,7 +30,20 @@ export const columns: ColumnDef<OrderColumn>[] = [
       <DataTableColumnHeader column={column} title="Ir a WhatsApp" />
     ),
     cell: ({ row }) => (
-      <WhatsappButton phone={row.original.phone as string} withText />
+      <WhatsappButton
+        order={{
+          orderNumber: row.original.orderNumber,
+          status: row.original.status,
+          fullName: row.original.fullname,
+          phone: row.original.phone as string,
+          totalPrice: row.original.totalPrice,
+          products: row.original.products.map((product) => ({
+            name: product.name,
+            quantity: product.quantity,
+          })),
+        }}
+        withText
+      />
     ),
   },
   {
