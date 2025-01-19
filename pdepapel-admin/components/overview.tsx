@@ -2,7 +2,7 @@
 
 import { getGraphRevenue } from "@/actions/get-graph-revenue";
 import { yearColors } from "@/constants";
-import { formatter, shortFormatter } from "@/lib/utils";
+import { currencyFormatter, shortCurrencyFormatter } from "@/lib/utils";
 import {
   Bar,
   BarChart,
@@ -36,10 +36,15 @@ export const Overview: React.FC<OverviewProps> = ({ data, year }) => {
           fontSize={12}
           tickLine={false}
           axisLine={false}
-          tickFormatter={(value: number) => shortFormatter.format(value)}
+          tickFormatter={(value: number) =>
+            shortCurrencyFormatter.format(value)
+          }
         />
         <Tooltip
-          formatter={(value: number) => [formatter.format(value), "Ganancia"]}
+          formatter={(value: number) => [
+            currencyFormatter.format(value),
+            "Ganancia",
+          ]}
           labelFormatter={(label) => `${label}`}
         />
         <Bar dataKey="total" fill={barColor} radius={[4, 4, 0, 0]} />

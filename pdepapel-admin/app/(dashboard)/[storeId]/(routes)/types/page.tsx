@@ -1,7 +1,5 @@
-import prismadb from "@/lib/prismadb";
-import { format } from "date-fns";
 import { TypeClient } from "./components/client";
-import { TypeColumn } from "./components/columns";
+import { getTypes } from "./server/get-types";
 
 export default async function TypesPage({
   params,
@@ -10,25 +8,12 @@ export default async function TypesPage({
     storeId: string;
   };
 }) {
-  const types = await prismadb.type.findMany({
-    where: {
-      storeId: params.storeId,
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
-
-  const formattedTypes: TypeColumn[] = types.map((type) => ({
-    id: type.id,
-    name: type.name,
-    createdAt: format(type.createdAt, "MMMM d, yyyy"),
-  }));
+  const types = await getTypes(params.storeId);
 
   return (
     <div className="flex-col">
       <div className="flex-1 space-y-4 p-8 pt-6">
-        <TypeClient data={formattedTypes} />
+        <TypeClient data={types} />
       </div>
     </div>
   );

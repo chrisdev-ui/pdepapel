@@ -43,11 +43,16 @@ import {
   statusOptions,
 } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
-import { formatter, generateGuestId, parseOrderDetails } from "@/lib/utils";
+import {
+  currencyFormatter,
+  generateGuestId,
+  parseOrderDetails,
+} from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import axios from "axios";
 import { DollarSign, ShoppingBasket, Trash } from "lucide-react";
 import { useForm } from "react-hook-form";
+import { getOrder } from "../server/get-order";
 
 const paymentSchema = z
   .object({
@@ -87,11 +92,7 @@ const formSchema = z.object({
 
 type OrderFormValues = z.infer<typeof formSchema>;
 
-type ProductOption = {
-  value: string;
-  label: string;
-  price?: number;
-};
+type ProductOption = Awaited<ReturnType<typeof getOrder>>["products"][number];
 
 interface OrderFormProps {
   initialData:
@@ -290,7 +291,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   <ShoppingBasket className="h-4 w-4" />
                   <AlertTitle>{product.label}</AlertTitle>
                   <AlertDescription>
-                    {formatter.format(product.price || 0)} x{" "}
+                    {currencyFormatter.format(product.price || 0)} x{" "}
                     <Input
                       type="number"
                       min={1}
@@ -318,7 +319,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 </Alert>
               ))}
             <div className="ml-auto text-lg font-semibold">
-              Total: {formatter.format(totalPrice)}
+              Total: {currencyFormatter.format(totalPrice)}
             </div>
           </div>
           <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
@@ -344,7 +345,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                         const newTotal = selectedOptions.reduce(
                           (sum, option) =>
                             sum +
-                            Number(option?.price) *
+                            Number(option.price) *
                               (quantities[option.value] || 1),
                           0,
                         );

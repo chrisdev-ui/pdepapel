@@ -1,5 +1,5 @@
 import prismadb from "@/lib/prismadb";
-import { formatter } from "@/lib/utils";
+import { currencyFormatter } from "@/lib/utils";
 
 interface CategoryStats {
   sales: number;
@@ -52,7 +52,7 @@ export async function getCategorySales(storeId: string, year: number) {
 
   return Object.entries(categorySales).map(([category, stats]) => ({
     category,
-    sales: formatter.format(stats.sales),
+    sales: currencyFormatter.format(stats.sales),
     orders: stats.orders,
   }));
 }

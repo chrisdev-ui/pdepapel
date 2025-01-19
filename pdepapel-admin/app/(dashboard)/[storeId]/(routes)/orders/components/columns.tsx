@@ -2,24 +2,14 @@
 
 import { Badge } from "@/components/ui/badge";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
-import { OrderStatus, ShippingStatus } from "@prisma/client";
+import { Icons } from "@/components/ui/icons";
+import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
 import { ColumnDef } from "@tanstack/react-table";
+import { getOrders } from "../server/get-orders";
 import { CellAction } from "./cell-action";
 import { ProductList } from "./product-list";
 
-export type OrderColumn = {
-  id: string;
-  orderNumber: string;
-  fullname: string;
-  phone: string;
-  address: string;
-  products: string[];
-  totalPrice: string;
-  documentId: string | null;
-  status: OrderStatus | undefined;
-  shippingStatus: ShippingStatus | undefined;
-  createdAt: string;
-};
+export type OrderColumn = Awaited<ReturnType<typeof getOrders>>[number];
 
 export const columns: ColumnDef<OrderColumn>[] = [
   {
@@ -31,7 +21,7 @@ export const columns: ColumnDef<OrderColumn>[] = [
   {
     accessorKey: "products",
     header: "Productos",
-    cell: ({ row }) => <ProductList products={row.getValue("products")} />,
+    cell: ({ row }) => <ProductList products={row.original.products} />,
   },
   {
     accessorKey: "phone",
@@ -49,6 +39,28 @@ export const columns: ColumnDef<OrderColumn>[] = [
         {row.original.address}
       </div>
     ),
+  },
+  {
+    accessorKey: "paymentMethod",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Método de pago" />
+    ),
+    cell: ({ row }) => {
+      const paymentMethod = row.original.paymentMethod;
+      if (!paymentMethod) return null;
+      switch (paymentMethod) {
+        case PaymentMethod.BankTransfer:
+          return <Icons.bancolombia className="h-8 w-8" />;
+        case PaymentMethod.COD:
+          return <Icons.cashOnDelivery className="h-8 w-8" />;
+        case PaymentMethod.PayU:
+          return <Icons.payu className="h-12 w-12" />;
+        case PaymentMethod.Wompi:
+          return <Icons.wompi className="h-auto w-16" />;
+        default:
+          return null;
+      }
+    },
   },
   {
     accessorKey: "totalPrice",

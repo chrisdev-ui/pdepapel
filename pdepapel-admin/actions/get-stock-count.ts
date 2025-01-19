@@ -2,7 +2,7 @@ import { CAPSULAS_SORPRESA_ID, KITS_ID } from "@/constants";
 import prismadb from "@/lib/prismadb";
 
 export const getStockCount = async (storeId: string) => {
-  const stockCount = await prismadb.product.count({
+  const products = await prismadb.product.findMany({
     where: {
       storeId,
       isArchived: false,
@@ -10,7 +10,15 @@ export const getStockCount = async (storeId: string) => {
         notIn: [CAPSULAS_SORPRESA_ID, KITS_ID],
       },
     },
+    select: {
+      stock: true,
+    },
   });
+
+  const stockCount = products.reduce(
+    (total, product) => total + (product.stock || 0),
+    0,
+  );
 
   return stockCount;
 };

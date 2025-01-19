@@ -11,12 +11,12 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn, formatter } from "@/lib/utils";
+import { cn, currencyFormatter } from "@/lib/utils";
 
 export type Option = {
   value: string;
   label: string;
-  price?: number;
+  price: number;
 } & { [key: string]: string | number | undefined };
 
 type AutoCompleteProps = {
@@ -159,7 +159,7 @@ export const AutoComplete = ({
                         </div>
                         {option.price && (
                           <span className="text-slate-500">
-                            {formatter.format(option.price)}
+                            {currencyFormatter.format(option.price)}
                           </span>
                         )}
                       </CommandItem>

@@ -1,6 +1,7 @@
 "use client";
 
 import { yearColors } from "@/constants";
+import { numberFormatter } from "@/lib/utils";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { Legend, Pie, PieChart, ResponsiveContainer, Sector } from "recharts";
@@ -73,7 +74,7 @@ const renderActiveShape = (props: any) => {
         y={ey}
         textAnchor={textAnchor}
         fill={yearColors[2025]}
-      >{`${value} unidades`}</text>
+      >{`${numberFormatter.format(value)} unidades`}</text>
       <text
         x={ex + (cos >= 0 ? 1 : -1) * 12}
         y={ey}

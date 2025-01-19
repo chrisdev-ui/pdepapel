@@ -1,15 +1,12 @@
 "use client";
 
+import { DataTableCellColor } from "@/components/ui/data-table-cell-color";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { ColumnDef } from "@tanstack/react-table";
+import { getColors } from "../server/get-colors";
 import { CellAction } from "./cell-action";
 
-export type ColorColumn = {
-  id: string;
-  name: string;
-  value: string;
-  createdAt: string;
-};
+export type ColorColumn = Awaited<ReturnType<typeof getColors>>[number];
 
 export const columns: ColumnDef<ColorColumn>[] = [
   {
@@ -23,15 +20,7 @@ export const columns: ColumnDef<ColorColumn>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Valor" />
     ),
-    cell: ({ row }) => (
-      <div className="flex items-center gap-x-2">
-        {row.original.value}
-        <div
-          className="h-6 w-6 rounded-full border"
-          style={{ backgroundColor: row.original.value }}
-        />
-      </div>
-    ),
+    cell: ({ row }) => <DataTableCellColor color={row.original.value} />,
   },
   {
     accessorKey: "createdAt",

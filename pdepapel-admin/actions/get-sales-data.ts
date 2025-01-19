@@ -1,5 +1,5 @@
 import prismadb from "@/lib/prismadb";
-import { compareAsc, parseISO } from "date-fns";
+import { compareAsc, format, parseISO } from "date-fns";
 
 export async function getSalesData(storeId: string, year: number) {
   const startDate = new Date(year, 0, 1);
@@ -28,7 +28,7 @@ export async function getSalesData(storeId: string, year: number) {
 
   const salesByDate = sales.reduce(
     (acc, sale) => {
-      const date = sale.createdAt.toISOString().split("T")[0];
+      const date = format(sale.createdAt, "yyyy-MM-dd");
       if (!acc[date]) {
         acc[date] = { revenue: 0, orders: 0 };
       }

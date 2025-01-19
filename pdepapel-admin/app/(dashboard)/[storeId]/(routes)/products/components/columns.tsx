@@ -1,31 +1,29 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
+import { DataTableCellColor } from "@/components/ui/data-table-cell-color";
+import { DataTableCellImage } from "@/components/ui/data-table-cell-image";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { ColumnDef } from "@tanstack/react-table";
+import { getProducts } from "../server/get-products";
 import { CellAction } from "./cell-action";
 
-export type ProductColumn = {
-  id: string;
-  sku: string;
-  name: string;
-  price: string;
-  size: string;
-  category: string;
-  color: string;
-  stock: string;
-  design: string;
-  isFeatured: boolean;
-  isArchived: boolean;
-  createdAt: string;
-};
+export type ProductColumn = Awaited<ReturnType<typeof getProducts>>[number];
 
 export const columns: ColumnDef<ProductColumn>[] = [
   {
-    accessorKey: "sku",
+    accessorKey: "image",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="SKU" />
+      <DataTableColumnHeader column={column} title="Imagen" />
     ),
+    cell: ({ row }) =>
+      row.original.image && (
+        <DataTableCellImage
+          src={row.original.image}
+          alt={row.original.name}
+          ratio={1 / 1}
+        />
+      ),
   },
   {
     accessorKey: "name",
@@ -56,15 +54,7 @@ export const columns: ColumnDef<ProductColumn>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Color" />
     ),
-    cell: ({ row }) => (
-      <div className="flex items-center gap-x-2">
-        {row.original.color}
-        <div
-          className="h-6 w-6 rounded-full border"
-          style={{ backgroundColor: row.original.color }}
-        ></div>
-      </div>
-    ),
+    cell: ({ row }) => <DataTableCellColor color={row.original.color} />,
   },
   {
     accessorKey: "stock",

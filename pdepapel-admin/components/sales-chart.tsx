@@ -1,6 +1,12 @@
 "use client";
 
-import { shortFormatter } from "@/lib/utils";
+import {
+  currencyFormatter,
+  numberFormatter,
+  shortCurrencyFormatter,
+} from "@/lib/utils";
+import { format, parseISO } from "date-fns";
+import { es } from "date-fns/locale";
 import React, { useMemo } from "react";
 import {
   Bar,
@@ -29,10 +35,7 @@ export const SalesChart: React.FC<SalesChartProps> = ({ data }) => {
     () =>
       data.map((item) => ({
         ...item,
-        date: new Date(item.date).toLocaleDateString("es-ES", {
-          month: "short",
-          day: "numeric",
-        }),
+        date: format(parseISO(item.date), "dd MMM", { locale: es }),
       })),
     [data],
   );
@@ -49,7 +52,7 @@ export const SalesChart: React.FC<SalesChartProps> = ({ data }) => {
           <YAxis
             yAxisId="revenue"
             orientation="left"
-            tickFormatter={(value) => shortFormatter.format(value)}
+            tickFormatter={(value) => shortCurrencyFormatter.format(value)}
             className="text-sm"
             tickLine={false}
           />
@@ -70,10 +73,12 @@ export const SalesChart: React.FC<SalesChartProps> = ({ data }) => {
                   <div className="rounded-lg border bg-white p-4 shadow-lg">
                     <p className="font-semibold">{label}</p>
                     <p className="text-[#a5c3ff]">
-                      Ganancia: ${payload[0]?.value?.toLocaleString()}
+                      Ganancia:{" "}
+                      {currencyFormatter.format(Number(payload[0]?.value ?? 0))}
                     </p>
                     <p className="text-[#fea4c3]">
-                      Número de órdenes: {payload[1].value}
+                      Número de órdenes:{" "}
+                      {numberFormatter.format(Number(payload[1].value ?? 0))}
                     </p>
                   </div>
                 );

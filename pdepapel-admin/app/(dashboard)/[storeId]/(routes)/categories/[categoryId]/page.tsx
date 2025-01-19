@@ -1,22 +1,15 @@
-import prismadb from "@/lib/prismadb";
 import { CategoryForm } from "./components/category-form";
+import { getCategoryTypes } from "./server/get-category-types";
 
 export default async function CategoryPage({
   params,
 }: {
   params: { categoryId: string; storeId: string };
 }) {
-  const category = await prismadb.category.findUnique({
-    where: {
-      id: params.categoryId,
-    },
-  });
-
-  const types = await prismadb.type.findMany({
-    where: {
-      storeId: params.storeId,
-    },
-  });
+  const { category, types } = await getCategoryTypes(
+    params.storeId,
+    params.categoryId,
+  );
 
   return (
     <div className="flex-col">

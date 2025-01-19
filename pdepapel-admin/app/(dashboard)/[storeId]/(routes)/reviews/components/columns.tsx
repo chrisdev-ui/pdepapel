@@ -1,24 +1,31 @@
 "use client";
 
+import { DataTableCellImage } from "@/components/ui/data-table-cell-image";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { ColumnDef } from "@tanstack/react-table";
+import { getReviews } from "../server/get-reviews";
 import { CellAction } from "./cell-action";
 
-export type ReviewsColumn = {
-  id: string;
-  productId: string;
-  userId: string;
-  name: string;
-  rating: string;
-  comment: string | null;
-  createdAt: string;
-};
+export type ReviewsColumn = Awaited<ReturnType<typeof getReviews>>[number];
 
 export const columns: ColumnDef<ReviewsColumn>[] = [
   {
-    accessorKey: "productId",
+    accessorKey: "product",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="ID del producto" />
+      <DataTableColumnHeader column={column} title="Producto" />
+    ),
+  },
+  {
+    accessorKey: "userImage",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Imagen del usuario" />
+    ),
+    cell: ({ row }) => (
+      <DataTableCellImage
+        src={row.original.userImage ?? ""}
+        alt={row.original.name}
+        ratio={1 / 1}
+      />
     ),
   },
   {
@@ -37,6 +44,11 @@ export const columns: ColumnDef<ReviewsColumn>[] = [
     accessorKey: "comment",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Comentarios" />
+    ),
+    cell: ({ row }) => (
+      <div className="flex max-w-xs flex-col">
+        <p className="text-sm">{row.original.comment}</p>
+      </div>
     ),
   },
   {

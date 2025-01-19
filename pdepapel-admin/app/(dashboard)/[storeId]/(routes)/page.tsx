@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { SpinnerButton } from "@/components/ui/spinner-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { YearSelector } from "@/components/year-selector";
-import { formatter } from "@/lib/utils";
+import { currencyFormatter, numberFormatter } from "@/lib/utils";
 import { CreditCard, DollarSign, Package } from "lucide-react";
 import { Suspense } from "react";
 
@@ -57,7 +57,7 @@ export default async function DashboardPage({
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">
-                      {formatter.format(totalRevenue)}
+                      {currencyFormatter.format(totalRevenue)}
                     </div>
                   </CardContent>
                 </Card>
@@ -69,7 +69,9 @@ export default async function DashboardPage({
                     <CreditCard className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">+{salesCount}</div>
+                    <div className="text-2xl font-bold">
+                      +{numberFormatter.format(salesCount)}
+                    </div>
                   </CardContent>
                 </Card>
                 <Card>
@@ -80,14 +82,16 @@ export default async function DashboardPage({
                     <Package className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{stockCount}</div>
+                    <div className="text-2xl font-bold">
+                      {numberFormatter.format(stockCount)}
+                    </div>
                   </CardContent>
                 </Card>
               </div>
               <Card className="col-span-4">
-                <CardHeader>
-                  <CardTitle>Overview</CardTitle>
-                  <YearSelector selected={year.toString()} />
+                <CardHeader className="flex flex-col gap-3">
+                  <CardTitle>Gráfico de ventas por año</CardTitle>
+                  <YearSelector />
                 </CardHeader>
                 <CardContent className="pl-2">
                   <Overview data={graphRevenue} year={year} />

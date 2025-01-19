@@ -1,6 +1,6 @@
 import { CAPSULAS_SORPRESA_ID, KITS_ID } from "@/constants";
 import prismadb from "@/lib/prismadb";
-import { formatter } from "@/lib/utils";
+import { currencyFormatter } from "@/lib/utils";
 
 export async function getProducts(storeId: string) {
   const products = await prismadb.product.findMany({
@@ -19,7 +19,7 @@ export async function getProducts(storeId: string) {
     id: product.id,
     name: product.name,
     stock: String(product.stock),
-    price: formatter.format(product.price),
+    price: currencyFormatter.format(product.price),
     category: product.category.name,
   }));
 }

@@ -2,14 +2,10 @@
 
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { ColumnDef } from "@tanstack/react-table";
+import { getCategories } from "../server/get-categories";
 import { CellAction } from "./cell-action";
 
-export type CategoryColumn = {
-  id: string;
-  name: string;
-  typeName: string;
-  createdAt: string;
-};
+export type CategoryColumn = Awaited<ReturnType<typeof getCategories>>[number];
 
 export const columns: ColumnDef<CategoryColumn>[] = [
   {

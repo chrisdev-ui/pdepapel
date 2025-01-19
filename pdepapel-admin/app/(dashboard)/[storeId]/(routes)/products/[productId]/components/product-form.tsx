@@ -36,19 +36,11 @@ import {
   INITIAL_TRANSPORTATION_COST,
 } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
-import {
-  Category,
-  Color,
-  Design,
-  Image,
-  Product,
-  Size,
-  Supplier,
-  Type,
-} from "@prisma/client";
+import { Color, Design, Size, Supplier } from "@prisma/client";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { getProduct } from "../server/get-product";
 import { ReviewColumn, columns } from "./columns";
 
 const formSchema = z.object({
@@ -83,12 +75,12 @@ const formSchema = z.object({
 
 type ProductFormValues = z.infer<typeof formSchema>;
 
-type Categories = Category & {
-  type: Type;
-};
+type Categories = Awaited<ReturnType<typeof getProduct>>["categories"][number];
+
+type InitialData = Awaited<ReturnType<typeof getProduct>>["product"];
 
 interface ProductFormProps {
-  initialData: (Product & { images: Image[] }) | null;
+  initialData: InitialData | null;
   categories: Categories[];
   sizes: Size[];
   colors: Color[];

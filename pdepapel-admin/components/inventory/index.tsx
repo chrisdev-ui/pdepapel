@@ -6,7 +6,7 @@ import { getProducts } from "@/actions/get-products";
 import { getTotalCost } from "@/actions/get-total-cost";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { formatter } from "@/lib/utils";
+import { currencyFormatter } from "@/lib/utils";
 import {
   AlertCircle,
   AlertTriangle,
@@ -121,7 +121,7 @@ export const Inventory: React.FC<InventoryProps> = async ({ params }) => {
                 </h3>
               </div>
               <p className="text-3xl font-bold">
-                {formatter.format(totalCost)}
+                {currencyFormatter.format(totalCost)}
               </p>
             </div>
             <div>
@@ -130,7 +130,7 @@ export const Inventory: React.FC<InventoryProps> = async ({ params }) => {
                 <h3 className="text-lg font-semibold">Ingresos potenciales</h3>
               </div>
               <p className="text-3xl font-bold">
-                {formatter.format(potentialRevenue)}
+                {currencyFormatter.format(potentialRevenue)}
               </p>
             </div>
             <div>
@@ -139,7 +139,7 @@ export const Inventory: React.FC<InventoryProps> = async ({ params }) => {
                 <h3 className="text-lg font-semibold">Ganancia potencial</h3>
               </div>
               <p className="text-3xl font-bold">
-                {formatter.format(potentialProfit)}
+                {currencyFormatter.format(potentialProfit)}
               </p>
             </div>
           </div>

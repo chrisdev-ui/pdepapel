@@ -1,16 +1,12 @@
-import prismadb from "@/lib/prismadb";
 import { SupplierForm } from "./components/supplier-form";
+import { getSupplier } from "./server/get-supplier";
 
 export default async function SupplierPage({
   params,
 }: {
   params: { supplierId: string; storeId: string };
 }) {
-  const supplier = await prismadb.supplier.findUnique({
-    where: {
-      id: params.supplierId,
-    },
-  });
+  const supplier = await getSupplier(params.supplierId);
 
   return (
     <div className="flex-col">

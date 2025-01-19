@@ -8,7 +8,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export const formatter = new Intl.NumberFormat("es-CO", {
+export const currencyFormatter = new Intl.NumberFormat("es-CO", {
   style: "currency",
   currency: "COP",
   minimumFractionDigits: 0,
@@ -16,7 +16,13 @@ export const formatter = new Intl.NumberFormat("es-CO", {
   useGrouping: true,
 });
 
-export const shortFormatter = new Intl.NumberFormat("es-CO", {
+export const numberFormatter = new Intl.NumberFormat("es-CO", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+  useGrouping: true,
+});
+
+export const shortCurrencyFormatter = new Intl.NumberFormat("es-CO", {
   style: "currency",
   currency: "COP",
   notation: "compact",
@@ -158,3 +164,13 @@ export function formatPayUValue(value: string): string {
 
   return formattedValue;
 }
+
+export const capitalizeFirstLetter = (string: string) => {
+  return string.charAt(0).toUpperCase() + string.slice(1);
+};
+
+export const formattedDate = (date: string) =>
+  date.replace(
+    /(\d{2} de )(\w+)( de \d{4})/,
+    (match, p1, p2, p3) => `${p1}${capitalizeFirstLetter(p2)}${p3}`,
+  );

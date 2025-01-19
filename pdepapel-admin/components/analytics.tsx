@@ -7,7 +7,7 @@ import { SalesChart } from "@/components/sales-chart";
 import { TopProductsTable } from "@/components/top-products-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { YearSelector } from "@/components/year-selector";
-import { formatter } from "@/lib/utils";
+import { currencyFormatter } from "@/lib/utils";
 
 interface AnalyticsProps {
   params: { storeId: string };
@@ -27,7 +27,7 @@ export const Analytics: React.FC<AnalyticsProps> = async ({ params, year }) => {
           <CardTitle>Resumen de ventas</CardTitle>
         </CardHeader>
         <CardContent>
-          <YearSelector selected={year.toString()} />
+          <YearSelector />
           <SalesChart data={salesData} />
         </CardContent>
       </Card>
@@ -60,13 +60,13 @@ export const Analytics: React.FC<AnalyticsProps> = async ({ params, year }) => {
                 Valor promedio de una órden
               </h3>
               <p className="text-3xl font-bold">
-                {formatter.format(averageOrderValue)}
+                {currencyFormatter.format(averageOrderValue)}
               </p>
             </div>
             <div>
               <h3 className="text-lg font-semibold">Ventas totales</h3>
               <p className="text-3xl font-bold">
-                {formatter.format(
+                {currencyFormatter.format(
                   salesData.reduce((sum, data) => sum + data.revenue, 0),
                 )}
               </p>

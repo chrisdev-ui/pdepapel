@@ -1,38 +1,37 @@
 "use client";
 
+import { DataTableCellImage } from "@/components/ui/data-table-cell-image";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { ColumnDef } from "@tanstack/react-table";
+import { getBanners } from "../server/get-banners";
+import { getMainBanner } from "../server/get-main-banner";
 import { CellAction } from "./cell-action";
 
-export type BannerColumn = {
-  id: string;
-  imageUrl: string;
-  callToAction: string;
-  createdAt: string;
-};
+export type BannerColumn = Awaited<ReturnType<typeof getBanners>>[number];
 
-export type MainBannerColumn = {
-  id: string;
-  title: string;
-  label1: string;
-  highlight: string;
-  label2: string;
-  imageUrl: string;
-  callToAction: string;
-  createdAt: string;
-};
+export type MainBannerColumn = Awaited<
+  ReturnType<typeof getMainBanner>
+>[number];
 
 export const bannerColumns: ColumnDef<BannerColumn>[] = [
-  {
-    accessorKey: "callToAction",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="URL de redirección" />
-    ),
-  },
   {
     accessorKey: "imageUrl",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Dirección de la imágen" />
+    ),
+    cell: ({ row }) => (
+      <DataTableCellImage
+        className="w-24"
+        src={row.original.imageUrl}
+        alt={row.original.id}
+        ratio={16 / 9}
+      />
+    ),
+  },
+  {
+    accessorKey: "callToAction",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="URL de redirección" />
     ),
   },
   {
@@ -48,6 +47,20 @@ export const bannerColumns: ColumnDef<BannerColumn>[] = [
 ];
 
 export const mainBannerColumns: ColumnDef<MainBannerColumn>[] = [
+  {
+    accessorKey: "imageUrl",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Imagen" />
+    ),
+    cell: ({ row }) => (
+      <DataTableCellImage
+        className="w-24"
+        src={row.original.imageUrl}
+        alt={row.original.id}
+        ratio={16 / 9}
+      />
+    ),
+  },
   {
     accessorKey: "title",
     header: ({ column }) => (

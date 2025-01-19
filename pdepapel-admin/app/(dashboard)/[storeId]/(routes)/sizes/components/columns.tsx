@@ -2,14 +2,10 @@
 
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { ColumnDef } from "@tanstack/react-table";
+import { getSizes } from "../server/get-sizes";
 import { CellAction } from "./cell-action";
 
-export type SizeColumn = {
-  id: string;
-  name: string;
-  value: string;
-  createdAt: string;
-};
+export type SizeColumn = Awaited<ReturnType<typeof getSizes>>[number];
 
 export const columns: ColumnDef<SizeColumn>[] = [
   {
