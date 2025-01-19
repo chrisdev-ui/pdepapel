@@ -3,7 +3,14 @@
 import { Badge } from "@/components/ui/badge";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { Icons } from "@/components/ui/icons";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { WhatsappButton } from "@/components/whatsapp-button";
+import { paymentNames } from "@/constants";
 import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
 import { ColumnDef } from "@tanstack/react-table";
 import { getOrders } from "../server/get-orders";
@@ -65,18 +72,33 @@ export const columns: ColumnDef<OrderColumn>[] = [
     cell: ({ row }) => {
       const paymentMethod = row.original.paymentMethod;
       if (!paymentMethod) return null;
-      switch (paymentMethod) {
-        case PaymentMethod.BankTransfer:
-          return <Icons.bancolombia className="h-8 w-8" />;
-        case PaymentMethod.COD:
-          return <Icons.cashOnDelivery className="h-8 w-8" />;
-        case PaymentMethod.PayU:
-          return <Icons.payu className="h-12 w-12" />;
-        case PaymentMethod.Wompi:
-          return <Icons.wompi className="h-auto w-16" />;
-        default:
-          return null;
-      }
+      const PaymentIcon = () => {
+        switch (paymentMethod) {
+          case PaymentMethod.BankTransfer:
+            return <Icons.bancolombia className="h-8 w-8" />;
+          case PaymentMethod.COD:
+            return <Icons.cashOnDelivery className="h-8 w-8" />;
+          case PaymentMethod.PayU:
+            return <Icons.payu className="h-12 w-12" />;
+          case PaymentMethod.Wompi:
+            return <Icons.wompi className="h-auto w-16" />;
+          default:
+            return null;
+        }
+      };
+
+      return (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger>
+              <PaymentIcon />
+            </TooltipTrigger>
+            <TooltipContent>
+              <p className="text-xs">{paymentNames[paymentMethod]}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
     },
   },
   {
