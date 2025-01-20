@@ -42,24 +42,19 @@ export const WhatsappButton: React.FC<WhatsappButtonProps> = ({
       : order.totalPrice || "";
   }, [order.totalPrice]);
 
-  const encodeEmoji = (str: string) => {
-    return str
-      .split("")
-      .map((char) => {
-        const code = char.codePointAt(0);
-        return code && code > 127
-          ? `%${code.toString(16).toUpperCase()}`
-          : encodeURIComponent(char);
-      })
-      .join("");
-  };
-
   const getMessage = useMemo(() => {
     const productsList = order.products
       ?.map((p) => `- ${p.name} (${p.quantity} unidad/es)`)
       .join("\n");
 
-    const baseMessage = `¡Hola ${firstName}! 👋\n\n`;
+    const WAVE = "\u{1F44B}";
+    const SHOPPING_BAGS = "\u{1F6CD}";
+    const CAMERA = "\u{1F4F8}";
+    const PARTY = "\u{1F389}";
+    const PACKAGE = "\u{1F4E6}";
+    const SMILE = "\u{1F60A}";
+
+    const baseMessage = `¡Hola ${firstName}! ${WAVE}\n\n`;
 
     let message: string;
     switch (order.status) {
@@ -68,7 +63,7 @@ export const WhatsappButton: React.FC<WhatsappButtonProps> = ({
           `${baseMessage}Te escribo respecto a tu orden #${order.orderNumber} en P de Papel.\n\n` +
           `Tu pedido incluye:\n${productsList}\n\n` +
           `Total a pagar: ${orderPrice}\n\n` +
-          `¿Te puedo ayudar a finalizar tu compra? 🛍️`;
+          `¿Te puedo ayudar a finalizar tu compra? ${SHOPPING_BAGS}`;
         break;
 
       case OrderStatus.CREATED:
@@ -76,34 +71,35 @@ export const WhatsappButton: React.FC<WhatsappButtonProps> = ({
           `${baseMessage}Te escribo respecto a tu orden #${order.orderNumber} en P de Papel.\n\n` +
           `Estamos esperando la confirmación de tu pago para proceder con el envío de:\n${productsList}\n\n` +
           `Total: ${orderPrice}\n\n` +
-          `¿Ya realizaste el pago? Puedes enviarnos el comprobante por este medio 📸`;
+          `¿Ya realizaste el pago? Puedes enviarnos el comprobante por este medio ${CAMERA}`;
         break;
 
       case OrderStatus.PAID:
         message =
-          `${baseMessage}¡Gracias por tu compra en P de Papel! 🎉\n\n` +
+          `${baseMessage}¡Gracias por tu compra en P de Papel! ${PARTY}\n\n` +
           `Tu orden #${order.orderNumber} está confirmada y pronto será despachada.\n\n` +
           `Productos:\n${productsList}\n\n` +
-          `Te mantendremos informado sobre el estado de tu envío 📦`;
+          `Te mantendremos informado sobre el estado de tu envío ${PACKAGE}`;
         break;
 
       case OrderStatus.CANCELLED:
         message =
           `${baseMessage}Te escribo respecto a tu orden #${order.orderNumber} en P de Papel.\n\n` +
-          `Notamos que tu orden fue cancelada. ¿Te gustaría comentarnos el motivo?\n` +
-          `Nos ayudaría mucho tu retroalimentación para mejorar nuestro servicio 🙏`;
+          `Lamentamos informarte que tu orden fue cancelada. Esto puede suceder cuando hay problemas con el procesamiento del pago en línea.\n\n` +
+          `¿Te gustaría intentar nuevamente tu compra? Podemos ayudarte a procesar tu orden con un método de pago alternativo ${SHOPPING_BAGS}\n\n` +
+          `¡Estamos aquí para ayudarte! ${SMILE}`;
         break;
 
       default:
         message =
           `${baseMessage}Te escribo respecto a tu orden #${order.orderNumber} en P de Papel.\n\n` +
-          `¿En qué te puedo ayudar? 😊`;
+          `¿En qué te puedo ayudar? ${SMILE}`;
         break;
     }
-    return encodeEmoji(message);
+    return encodeURIComponent(message);
   }, [order, firstName, orderPrice]);
 
-  const whatsappUrl = `https://wa.me/${formattedPhone}?text=${getMessage}`;
+  const whatsappUrl = `whatsapp://send?phone=${formattedPhone}&text=${getMessage}`;
   return (
     <Button variant="link" className={cn("px-1", className)} asChild>
       <Link href={whatsappUrl} target="_blank">
