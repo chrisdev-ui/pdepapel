@@ -3,7 +3,7 @@ import prismadb from "@/lib/prismadb";
 import { resend } from "@/lib/resend";
 import { generateOrderNumber, getLastOrderTimestamp } from "@/lib/utils";
 import { auth, clerkClient } from "@clerk/nextjs";
-import { OrderStatus } from "@prisma/client";
+import { OrderStatus, Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 type OrderData = {
@@ -55,6 +55,20 @@ export async function POST(
       guestId,
       documentId,
     } = body;
+
+    if (
+      !fullName ||
+      !phone ||
+      !address ||
+      !orderItems ||
+      orderItems.length === 0
+    ) {
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400, headers: corsHeaders },
+      );
+    }
+
     let authenticatedUserId = userLogged;
     if (userId && !userLogged) {
       const user = await clerkClient.users.getUser(userId);
@@ -67,26 +81,7 @@ export async function POST(
         );
       }
     }
-    if (!fullName)
-      return NextResponse.json(
-        { error: "Full name is required" },
-        { status: 400, headers: corsHeaders },
-      );
-    if (!phone)
-      return NextResponse.json(
-        { error: "Phone is required" },
-        { status: 400, headers: corsHeaders },
-      );
-    if (!address)
-      return NextResponse.json(
-        { error: "Address is required" },
-        { status: 400, headers: corsHeaders },
-      );
-    if (!orderItems || orderItems.length === 0)
-      return NextResponse.json(
-        { error: "Order items are required" },
-        { status: 400, headers: corsHeaders },
-      );
+
     const storeOwner = await isStoreOwner(authenticatedUserId, params.storeId);
     if (!storeOwner) {
       const lastOrderTimestamp = await getLastOrderTimestamp(
@@ -101,74 +96,88 @@ export async function POST(
           { status: 429, headers: corsHeaders },
         );
     }
-    const orderNumber = generateOrderNumber();
-    const orderData: OrderData = {
-      storeId: params.storeId,
-      userId: authenticatedUserId,
-      guestId: !authenticatedUserId ? guestId : null,
-      orderNumber,
-      fullName,
-      phone,
-      address,
-      documentId,
-      orderItems: {
-        create: orderItems.map(
-          (product: { productId: string; quantity: number }) => ({
-            product: { connect: { id: product.productId } },
-            quantity: product.quantity ?? 1,
-          }),
-        ),
-      },
-    };
-    if (status) {
-      orderData.status = status;
-    }
-    if (payment) {
-      orderData.payment = {
-        create: { ...payment, storeId: params.storeId },
-      };
-    }
-    if (shipping) {
-      orderData.shipping = {
-        create: { ...shipping, storeId: params.storeId },
-      };
-    }
-    const order = await prismadb.order.create({
-      data: orderData,
-      include: {
-        orderItems: true,
-      },
-    });
 
-    if (order.status && status === OrderStatus.PAID) {
-      await prismadb.$transaction(async (tx) => {
-        for (const orderItem of order.orderItems) {
+    const order = await prismadb.$transaction(
+      async (tx) => {
+        // First, verify stock availability for all products
+        for (const item of orderItems) {
           const product = await tx.product.findUnique({
-            where: { id: orderItem.productId },
+            where: { id: item.productId },
           });
 
           if (!product) {
-            throw new Error(`Product ${orderItem.productId} not found.`);
+            throw new Error(`Product ${item.productId} not found`);
           }
 
-          if (product.stock >= orderItem.quantity) {
-            await tx.product.update({
-              where: { id: orderItem.productId },
-              data: {
-                stock: {
-                  decrement: orderItem.quantity,
-                },
-              },
-            });
-          } else {
+          if (product.stock < (item.quantity ?? 1)) {
             throw new Error(
-              `Product ${product.name} is out of stock. Please contact the store owner.`,
+              `Product ${product.name} does not have enough stock. Available: ${product.stock}, Requested: ${item.quantity ?? 1}`,
             );
           }
         }
-      });
-    }
 
+        // Create the order
+        const orderNumber = generateOrderNumber();
+        const orderData: OrderData = {
+          storeId: params.storeId,
+          userId: authenticatedUserId,
+          guestId: !authenticatedUserId ? guestId : null,
+          orderNumber,
+          fullName,
+          phone,
+          address,
+          documentId,
+          orderItems: {
+            create: orderItems.map(
+              (product: { productId: string; quantity: number }) => ({
+                product: { connect: { id: product.productId } },
+                quantity: product.quantity ?? 1,
+              }),
+            ),
+          },
+        };
+
+        if (status) orderData.status = status;
+        if (payment)
+          orderData.payment = {
+            create: { ...payment, storeId: params.storeId },
+          };
+        if (shipping)
+          orderData.shipping = {
+            create: { ...shipping, storeId: params.storeId },
+          };
+
+        const createdOrder = await tx.order.create({
+          data: orderData,
+          include: {
+            orderItems: true,
+          },
+        });
+
+        // If order is paid, update stock levels
+        if (status === OrderStatus.PAID) {
+          for (const item of createdOrder.orderItems) {
+            await tx.product.update({
+              where: { id: item.productId },
+              data: {
+                stock: {
+                  decrement: item.quantity,
+                },
+              },
+            });
+          }
+        }
+
+        return createdOrder;
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        maxWait: 10000,
+        timeout: 20000,
+      },
+    );
+
+    // Send email notification outside the transaction
     if (!storeOwner) {
       await resend.emails.send({
         from: "Orders <admin@papeleriapdepapel.com>",
@@ -178,11 +187,12 @@ export async function POST(
           name: fullName,
           phone,
           address,
-          orderNumber,
+          orderNumber: order.orderNumber,
           paymentMethod: "Transferencia bancaria o contra entrega",
         }) as React.ReactElement,
       });
     }
+
     return NextResponse.json(order, { headers: corsHeaders });
   } catch (error) {
     console.log("[ORDERS_POST]", error);
