@@ -31,7 +31,7 @@ export const OrderClient = ({ data }: OrderClientProps) => {
       <Separator />
       <DataTable
         tableKey="orders"
-        searchKey="orderNumber"
+        searchKey="phone"
         columns={columns}
         data={data}
       />
