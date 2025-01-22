@@ -2,8 +2,6 @@
 
 import prismadb from "@/lib/prismadb";
 import { currencyFormatter, formatPhoneNumber } from "@/lib/utils";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
 
 export async function getOrders(storeId: string) {
   const orders = await prismadb.order.findMany({
@@ -53,8 +51,6 @@ export async function getOrders(storeId: string) {
     status: order.status,
     shippingStatus: order?.shipping?.status,
     paymentMethod: order?.payment?.method,
-    createdAt: format(order.createdAt, "dd 'de' MMMM 'de' yyyy", {
-      locale: es,
-    }),
+    createdAt: order.createdAt,
   }));
 }

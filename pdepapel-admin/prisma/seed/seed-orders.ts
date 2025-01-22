@@ -6,6 +6,8 @@ import {
   ShippingStatus,
 } from "@prisma/client";
 
+const NUMBER_OF_ORDERS = 300;
+
 // Arrays of enum options
 const orderStatusOptions = Object.values(OrderStatus);
 const paymentMethodOptions = Object.values(PaymentMethod);
@@ -59,10 +61,11 @@ const createPaymentDetails = () => {
 
 export async function seedOrders(storeId: string, prismadb: PrismaClient) {
   const orderNumberSets = new Set<string>();
-  while (orderNumberSets.size < 20) {
+  while (orderNumberSets.size < NUMBER_OF_ORDERS) {
     orderNumberSets.add(faker.string.alphanumeric(10));
   }
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < NUMBER_OF_ORDERS; i++) {
+    const createdAt = faker.date.past();
     const order = await prismadb.order.create({
       data: {
         orderNumber: Array.from(orderNumberSets)[i],
@@ -77,6 +80,8 @@ export async function seedOrders(storeId: string, prismadb: PrismaClient) {
           return `3${secondDigit}${remainingDigits}`;
         })(),
         address: faker.location.streetAddress(),
+        createdAt,
+        updatedAt: createdAt,
       },
     });
 

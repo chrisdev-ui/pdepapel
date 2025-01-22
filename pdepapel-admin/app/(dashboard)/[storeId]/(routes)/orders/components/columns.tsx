@@ -13,6 +13,8 @@ import { WhatsappButton } from "@/components/whatsapp-button";
 import { paymentNames } from "@/constants";
 import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
 import { ColumnDef } from "@tanstack/react-table";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
 import { getOrders } from "../server/get-orders";
 import { CellAction } from "./cell-action";
 import { ProductList } from "./product-list";
@@ -196,6 +198,13 @@ export const columns: ColumnDef<OrderColumn>[] = [
     accessorKey: "createdAt",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Fecha de creación" />
+    ),
+    cell: ({ row }) => (
+      <div>
+        {format(row.original.createdAt, "dd 'de' MMMM 'de' yyyy", {
+          locale: es,
+        })}
+      </div>
     ),
   },
   {
