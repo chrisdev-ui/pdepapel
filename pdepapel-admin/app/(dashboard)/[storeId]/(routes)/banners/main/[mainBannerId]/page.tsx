@@ -1,5 +1,9 @@
-import { MainBannerForm } from "./components/main-banner-form";
+import dynamic from "next/dynamic";
 import { getMainBannerById } from "./server/get-main-banner-by-id";
+
+const MainBannerForm = dynamic(() => import("./components/main-banner-form"), {
+  ssr: false,
+});
 
 export default async function MainBannerPage({
   params,

@@ -19,6 +19,7 @@ import {
 import { Heading } from "@/components/ui/heading";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
@@ -62,14 +63,14 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData }) => {
       setLoading(true);
       if (initialData) {
         await axios.patch(
-          `/api/${params.storeId}/colors/${params.colorId}`,
+          `/api/${params.storeId}/${Models.Colors}/${params.colorId}`,
           data,
         );
       } else {
-        await axios.post(`/api/${params.storeId}/colors`, data);
+        await axios.post(`/api/${params.storeId}/${Models.Colors}`, data);
       }
       router.refresh();
-      router.push(`/${params.storeId}/colors`);
+      router.push(`/${params.storeId}/${Models.Colors}`);
       toast({
         description: toastMessage,
         variant: "success",
@@ -87,9 +88,11 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData }) => {
   const onDelete = async () => {
     try {
       setLoading(true);
-      await axios.delete(`/api/${params.storeId}/colors/${params.colorId}`);
+      await axios.delete(
+        `/api/${params.storeId}/${Models.Colors}/${params.colorId}`,
+      );
       router.refresh();
-      router.push(`/${params.storeId}/colors`);
+      router.push(`/${params.storeId}/${Models.Colors}`);
       toast({
         description: "Color eliminado",
         variant: "success",

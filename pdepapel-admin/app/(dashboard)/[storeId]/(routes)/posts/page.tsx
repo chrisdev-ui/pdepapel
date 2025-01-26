@@ -1,5 +1,11 @@
-import { PostClient } from "./components/client";
+import dynamic from "next/dynamic";
 import { getPosts } from "./server/get-posts";
+
+const PostClient = dynamic(() => import("./components/client"), {
+  ssr: false,
+});
+
+export const revalidate = 0;
 
 export default async function PostsPage({
   params,

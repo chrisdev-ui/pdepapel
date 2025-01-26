@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { Post, Social } from "@prisma/client";
 import axios from "axios";
@@ -68,14 +69,14 @@ export const PostForm: React.FC<PostFormProps> = ({ initialData }) => {
       setLoading(true);
       if (initialData) {
         await axios.patch(
-          `/api/${params.storeId}/posts/${params.postId}`,
+          `/api/${params.storeId}/${Models.Posts}/${params.postId}`,
           data,
         );
       } else {
-        await axios.post(`/api/${params.storeId}/posts`, data);
+        await axios.post(`/api/${params.storeId}/${Models.Posts}`, data);
       }
       router.refresh();
-      router.push(`/${params.storeId}/posts`);
+      router.push(`/${params.storeId}/${Models.Posts}`);
       toast({
         description: toastMessage,
         variant: "success",
@@ -93,9 +94,11 @@ export const PostForm: React.FC<PostFormProps> = ({ initialData }) => {
   const onDelete = async () => {
     try {
       setLoading(true);
-      await axios.delete(`/api/${params.storeId}/posts/${params.postId}`);
+      await axios.delete(
+        `/api/${params.storeId}/${Models.Posts}/${params.postId}`,
+      );
       router.refresh();
-      router.push(`/${params.storeId}/posts`);
+      router.push(`/${params.storeId}/${Models.Posts}`);
       toast({
         description: "Post eliminado",
         variant: "success",

@@ -15,6 +15,7 @@ import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
 import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { Receipt } from "lucide-react";
 import { getOrders } from "../server/get-orders";
 import { CellAction } from "./cell-action";
 import { ProductList } from "./product-list";
@@ -25,7 +26,19 @@ export const columns: ColumnDef<OrderColumn>[] = [
   {
     accessorKey: "orderNumber",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Número de orden" />
+      <DataTableColumnHeader column={column} title="Orden" />
+    ),
+    cell: ({ row }) => (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger>
+            <Receipt className="h-8 w-8" />
+          </TooltipTrigger>
+          <TooltipContent>
+            <p className="text-xs">{row.original.orderNumber}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     ),
   },
   {

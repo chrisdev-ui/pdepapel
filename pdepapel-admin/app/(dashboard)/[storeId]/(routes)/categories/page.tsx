@@ -1,5 +1,11 @@
-import { CategoryClient } from "./components/client";
+import dynamic from "next/dynamic";
 import { getCategories } from "./server/get-categories";
+
+const CategoryClient = dynamic(() => import("./components/client"), {
+  ssr: false,
+});
+
+export const revalidate = 0;
 
 export default async function CategoriesPage({
   params,

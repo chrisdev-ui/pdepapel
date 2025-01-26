@@ -9,6 +9,16 @@ export async function getDesigns(storeId: string) {
     where: {
       storeId,
     },
+    select: {
+      id: true,
+      name: true,
+      createdAt: true,
+      _count: {
+        select: {
+          products: true,
+        },
+      },
+    },
     orderBy: {
       createdAt: "desc",
     },
@@ -17,10 +27,8 @@ export async function getDesigns(storeId: string) {
   return designs.map((design) => ({
     id: design.id,
     name: design.name,
+    products: design._count.products,
     createdAt: format(design.createdAt, "dd 'de' MMMM 'de' yyyy", {
-      locale: es,
-    }),
-    updatedAt: format(design.updatedAt, "dd 'de' MMMM 'de' yyyy", {
       locale: es,
     }),
   }));

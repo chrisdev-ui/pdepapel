@@ -1,5 +1,11 @@
 import { getOutOfStock } from "@/actions/get-out-of-stock-count";
-import { OutOfStockClient } from "./components/client";
+import dynamic from "next/dynamic";
+
+const OutOfStockClient = dynamic(() => import("./components/client"), {
+  ssr: false,
+});
+
+export const revalidate = 0;
 
 export default async function OutOfStockPage({
   params,

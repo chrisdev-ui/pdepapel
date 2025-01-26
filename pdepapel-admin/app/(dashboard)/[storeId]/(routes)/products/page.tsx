@@ -1,5 +1,11 @@
-import { ProductClient } from "./components/client";
+import dynamic from "next/dynamic";
 import { getProducts } from "./server/get-products";
+
+const ProductClient = dynamic(() => import("./components/client"), {
+  ssr: false,
+});
+
+export const revalidate = 0;
 
 export default async function ProductsPage({
   params,

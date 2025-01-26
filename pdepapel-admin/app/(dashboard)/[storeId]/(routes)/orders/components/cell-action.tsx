@@ -14,6 +14,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { OrderColumn } from "./columns";
 
@@ -39,7 +40,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const onDelete = async () => {
     try {
       setLoading(true);
-      await axios.delete(`/api/${params.storeId}/orders/${data.id}`);
+      await axios.delete(`/api/${params.storeId}/${Models.Orders}/${data.id}`);
       router.refresh();
       toast({
         description: "Orden eliminada",
@@ -109,7 +110,9 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
           </DropdownMenuItem>
           <DropdownMenuItem
             className="cursor-pointer"
-            onClick={() => router.push(`/${params.storeId}/orders/${data.id}`)}
+            onClick={() =>
+              router.push(`/${params.storeId}/${Models.Orders}/${data.id}`)
+            }
           >
             <Edit className="mr-2 h-4 w-4" />
             Actualizar

@@ -5,15 +5,17 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
+import { Models } from "@/constants";
 import { Plus } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
+import React from "react";
 import { ProductColumn, columns } from "./columns";
 
 interface ProductClientProps {
   data: ProductColumn[];
 }
 
-export const ProductClient = ({ data }: ProductClientProps) => {
+const ProductClient: React.FC<ProductClientProps> = ({ data }) => {
   const router = useRouter();
   const params = useParams();
   return (
@@ -23,21 +25,27 @@ export const ProductClient = ({ data }: ProductClientProps) => {
           title={`Productos (${data.length})`}
           description="Maneja los productos para tu tienda"
         />
-        <Button onClick={() => router.push(`/${params.storeId}/products/new`)}>
+        <Button
+          onClick={() =>
+            router.push(`/${params.storeId}/${Models.Products}/new`)
+          }
+        >
           <Plus className="mr-2 h-4 w-4" />
           Crear producto
         </Button>
       </div>
       <Separator />
       <DataTable
-        tableKey="products"
+        tableKey={Models.Products}
         searchKey="name"
         columns={columns}
         data={data}
       />
       <Heading title="API" description="API calls para los productos" />
       <Separator />
-      <ApiList entityName="products" entityIdName="productId" />
+      <ApiList entityName={Models.Products} entityIdName="productId" />
     </>
   );
 };
+
+export default ProductClient;

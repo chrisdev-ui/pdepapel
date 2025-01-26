@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
+import { Models } from "@/constants";
 import { Plus } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { ColorColumn, columns } from "./columns";
@@ -13,7 +14,7 @@ interface ColorsClientProps {
   data: ColorColumn[];
 }
 
-export const ColorsClient = ({ data }: ColorsClientProps) => {
+const ColorsClient: React.FC<ColorsClientProps> = ({ data }) => {
   const router = useRouter();
   const params = useParams();
   return (
@@ -23,21 +24,25 @@ export const ColorsClient = ({ data }: ColorsClientProps) => {
           title={`Colores (${data.length})`}
           description="Maneja los colores para tu tienda"
         />
-        <Button onClick={() => router.push(`/${params.storeId}/colors/new`)}>
+        <Button
+          onClick={() => router.push(`/${params.storeId}/${Models.Colors}/new`)}
+        >
           <Plus className="mr-2 h-4 w-4" />
           Crear color
         </Button>
       </div>
       <Separator />
       <DataTable
-        tableKey="colors"
+        tableKey={Models.Colors}
         searchKey="name"
         columns={columns}
         data={data}
       />
       <Heading title="API" description="API calls para los colores" />
       <Separator />
-      <ApiList entityName="colors" entityIdName="colorId" />
+      <ApiList entityName={Models.Colors} entityIdName="colorId" />
     </>
   );
 };
+
+export default ColorsClient;

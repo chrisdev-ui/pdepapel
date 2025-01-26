@@ -15,15 +15,18 @@ export const columns: ColumnDef<DesignColumn>[] = [
     ),
   },
   {
-    accessorKey: "createdAt",
+    accessorKey: "products",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Fecha de creación" />
+      <DataTableColumnHeader
+        column={column}
+        title="Productos con este diseño"
+      />
     ),
   },
   {
-    accessorKey: "updatedAt",
+    accessorKey: "createdAt",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Última actualización" />
+      <DataTableColumnHeader column={column} title="Fecha de creación" />
     ),
   },
   {

@@ -22,6 +22,15 @@ export const columns: ColumnDef<CategoryColumn>[] = [
     cell: ({ row }) => row.original.typeName,
   },
   {
+    accessorKey: "products",
+    header: ({ column }) => (
+      <DataTableColumnHeader
+        column={column}
+        title="Productos en esta categoría"
+      />
+    ),
+  },
+  {
     accessorKey: "createdAt",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Fecha de creación" />

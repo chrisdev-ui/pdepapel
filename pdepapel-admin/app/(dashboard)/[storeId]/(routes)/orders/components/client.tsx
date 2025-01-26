@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
+import { Models } from "@/constants";
 import { Plus } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { OrderColumn, columns } from "./columns";
@@ -13,7 +14,7 @@ interface OrderClientProps {
   data: OrderColumn[];
 }
 
-export const OrderClient = ({ data }: OrderClientProps) => {
+const OrderClient: React.FC<OrderClientProps> = ({ data }) => {
   const router = useRouter();
   const params = useParams();
   return (
@@ -23,21 +24,25 @@ export const OrderClient = ({ data }: OrderClientProps) => {
           title={`Órdenes (${data.length})`}
           description="Maneja las órdenes de tu tienda"
         />
-        <Button onClick={() => router.push(`/${params.storeId}/orders/new`)}>
+        <Button
+          onClick={() => router.push(`/${params.storeId}/${Models.Orders}/new`)}
+        >
           <Plus className="mr-2 h-4 w-4" />
           Crear orden
         </Button>
       </div>
       <Separator />
       <DataTable
-        tableKey="orders"
+        tableKey={Models.Orders}
         searchKey="phone"
         columns={columns}
         data={data}
       />
       <Heading title="API" description="API calls para las órdenes" />
       <Separator />
-      <ApiList entityName="orders" entityIdName="orderId" />
+      <ApiList entityName={Models.Orders} entityIdName="orderId" />
     </>
   );
 };
+
+export default OrderClient;

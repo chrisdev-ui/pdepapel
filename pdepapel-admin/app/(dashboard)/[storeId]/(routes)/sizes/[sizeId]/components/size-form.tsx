@@ -19,6 +19,7 @@ import {
 import { Heading } from "@/components/ui/heading";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
@@ -62,14 +63,14 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
       setLoading(true);
       if (initialData) {
         await axios.patch(
-          `/api/${params.storeId}/sizes/${params.sizeId}`,
+          `/api/${params.storeId}/${Models.Sizes}/${params.sizeId}`,
           data,
         );
       } else {
-        await axios.post(`/api/${params.storeId}/sizes`, data);
+        await axios.post(`/api/${params.storeId}/${Models.Sizes}`, data);
       }
       router.refresh();
-      router.push(`/${params.storeId}/sizes`);
+      router.push(`/${params.storeId}/${Models.Sizes}`);
       toast({
         description: toastMessage,
         variant: "success",
@@ -87,9 +88,11 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
   const onDelete = async () => {
     try {
       setLoading(true);
-      await axios.delete(`/api/${params.storeId}/sizes/${params.sizeId}`);
+      await axios.delete(
+        `/api/${params.storeId}/${Models.Sizes}/${params.sizeId}`,
+      );
       router.refresh();
-      router.push(`/${params.storeId}/sizes`);
+      router.push(`/${params.storeId}/${Models.Sizes}`);
       toast({
         description: "Tamaño eliminado",
         variant: "success",

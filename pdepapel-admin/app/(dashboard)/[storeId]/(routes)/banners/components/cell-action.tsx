@@ -9,6 +9,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import axios from "axios";
 import { Copy, Edit, MoreHorizontal, Trash } from "lucide-react";
@@ -18,7 +19,7 @@ import { BannerColumn, MainBannerColumn } from "./columns";
 
 interface CellActionProps {
   data: BannerColumn | MainBannerColumn;
-  source: "banners" | "mainBanner";
+  source: Models.Banners | Models.MainBanner;
 }
 
 export const CellAction: React.FC<CellActionProps> = ({ data, source }) => {
@@ -39,20 +40,16 @@ export const CellAction: React.FC<CellActionProps> = ({ data, source }) => {
   const onDelete = async () => {
     try {
       setLoading(true);
-      if (source === "banners") {
-        await axios.delete(`/api/${params.storeId}/banners/${data.id}`);
-      } else {
-        await axios.delete(`/api/${params.storeId}/main-banner/${data.id}`);
-      }
+      await axios.delete(`/api/${params.storeId}/${source}/${data.id}`);
       router.refresh();
       toast({
-        description: "Banner eliminado",
+        description: `${source === Models.Banners ? "Banner" : "Publicación"} eliminada/o`,
         variant: "success",
       });
     } catch (error) {
       toast({
         description:
-          "Ups! Hubo un error al intentar eliminar el banner, intenta de nuevo más tarde",
+          "Ups! Hubo un error al intentar eliminar el elemento, intenta de nuevo más tarde",
         variant: "destructive",
       });
     } finally {
@@ -84,10 +81,12 @@ export const CellAction: React.FC<CellActionProps> = ({ data, source }) => {
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => {
-              if (source === "banners") {
-                router.push(`/${params.storeId}/banners/${data.id}`);
+              if (source === Models.Banners) {
+                router.push(`/${params.storeId}/${Models.Banners}/${data.id}`);
               } else {
-                router.push(`/${params.storeId}/banners/main/${data.id}`);
+                router.push(
+                  `/${params.storeId}/${Models.Banners}/main/${data.id}`,
+                );
               }
             }}
           >

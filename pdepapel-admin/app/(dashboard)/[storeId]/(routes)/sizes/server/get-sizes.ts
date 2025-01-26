@@ -9,6 +9,17 @@ export async function getSizes(storeId: string) {
     where: {
       storeId,
     },
+    select: {
+      id: true,
+      name: true,
+      value: true,
+      createdAt: true,
+      _count: {
+        select: {
+          products: true,
+        },
+      },
+    },
     orderBy: {
       createdAt: "desc",
     },
@@ -16,10 +27,8 @@ export async function getSizes(storeId: string) {
 
   return sizes.map((size) => ({
     ...size,
+    products: size._count.products,
     createdAt: format(size.createdAt, "dd 'de' MMMM 'de' yyyy", {
-      locale: es,
-    }),
-    updatedAt: format(size.updatedAt, "dd 'de' MMMM 'de' yyyy", {
       locale: es,
     }),
   }));

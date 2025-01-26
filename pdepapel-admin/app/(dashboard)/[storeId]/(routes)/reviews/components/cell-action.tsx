@@ -9,6 +9,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import axios from "axios";
 import { Copy, MoreHorizontal, Trash } from "lucide-react";
@@ -39,7 +40,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
     try {
       setLoading(true);
       await axios.delete(
-        `/api/${params.storeId}/products/${data.productId}/reviews/${data.id}`,
+        `/api/${params.storeId}/${Models.Products}/${data.productId}/${Models.Reviews}/${data.id}`,
       );
       router.refresh();
       toast({

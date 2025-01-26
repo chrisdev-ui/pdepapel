@@ -9,6 +9,16 @@ export async function getSuppliers(storeId: string) {
     where: {
       storeId,
     },
+    select: {
+      id: true,
+      name: true,
+      createdAt: true,
+      _count: {
+        select: {
+          products: true,
+        },
+      },
+    },
     orderBy: {
       name: "asc",
     },
@@ -16,10 +26,8 @@ export async function getSuppliers(storeId: string) {
 
   return suppliers.map((supplier) => ({
     ...supplier,
+    products: supplier._count.products,
     createdAt: format(supplier.createdAt, "dd 'de' MMMM 'de' yyyy", {
-      locale: es,
-    }),
-    updatedAt: format(supplier.updatedAt, "dd 'de' MMMM 'de' yyyy", {
       locale: es,
     }),
   }));

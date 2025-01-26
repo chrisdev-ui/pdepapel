@@ -1,5 +1,5 @@
 import { Column } from "@tanstack/react-table";
-import { ArrowDownIcon, ArrowUpIcon, EyeOffIcon } from "lucide-react";
+import { ArrowDownIcon, ArrowUpIcon, EyeOffIcon, RotateCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -54,6 +54,10 @@ export function DataTableColumnHeader<TData, TValue>({
           <DropdownMenuItem onClick={() => column.toggleSorting(true)}>
             <ArrowDownIcon className="mr-2 h-3.5 w-3.5 text-muted-foreground/70" />
             Desc
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => column.clearSorting()}>
+            <RotateCw className="mr-2 h-3.5 w-3.5 text-muted-foreground/70" />
+            Reset
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => column.toggleVisibility(false)}>

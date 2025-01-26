@@ -5,15 +5,17 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
+import { Models } from "@/constants";
 import { Plus } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
+import React from "react";
 import { BillboardColumn, columns } from "./columns";
 
 interface BillboardClientProps {
   data: BillboardColumn[];
 }
 
-export const BillboardClient = ({ data }: BillboardClientProps) => {
+const BillboardClient: React.FC<BillboardClientProps> = ({ data }) => {
   const router = useRouter();
   const params = useParams();
   return (
@@ -24,7 +26,9 @@ export const BillboardClient = ({ data }: BillboardClientProps) => {
           description="Maneja las publicaciones para tu tienda"
         />
         <Button
-          onClick={() => router.push(`/${params.storeId}/billboards/new`)}
+          onClick={() =>
+            router.push(`/${params.storeId}/${Models.Billboards}/new`)
+          }
         >
           <Plus className="mr-2 h-4 w-4" />
           Crear publicación
@@ -32,14 +36,16 @@ export const BillboardClient = ({ data }: BillboardClientProps) => {
       </div>
       <Separator />
       <DataTable
-        tableKey="billboards"
+        tableKey={Models.Billboards}
         searchKey="label"
         columns={columns}
         data={data}
       />
       <Heading title="API" description="API calls para las publicaciones" />
       <Separator />
-      <ApiList entityName="billboards" entityIdName="billboardId" />
+      <ApiList entityName={Models.Billboards} entityIdName="billboardId" />
     </>
   );
 };
+
+export default BillboardClient;

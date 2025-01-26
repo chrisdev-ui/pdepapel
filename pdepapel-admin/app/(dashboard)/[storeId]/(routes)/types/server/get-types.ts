@@ -9,6 +9,16 @@ export async function getTypes(storeId: string) {
     where: {
       storeId,
     },
+    select: {
+      id: true,
+      name: true,
+      createdAt: true,
+      _count: {
+        select: {
+          categories: true,
+        },
+      },
+    },
     orderBy: {
       createdAt: "desc",
     },
@@ -16,10 +26,8 @@ export async function getTypes(storeId: string) {
 
   return types.map((type) => ({
     ...type,
+    categories: type._count.categories,
     createdAt: format(type.createdAt, "dd 'de' MMMM 'de' yyyy", {
-      locale: es,
-    }),
-    updatedAt: format(type.updatedAt, "dd 'de' MMMM 'de' yyyy", {
       locale: es,
     }),
   }));

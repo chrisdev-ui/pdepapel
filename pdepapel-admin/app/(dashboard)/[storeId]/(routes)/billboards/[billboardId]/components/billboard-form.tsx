@@ -19,6 +19,7 @@ import { Heading } from "@/components/ui/heading";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { Billboard } from "@prisma/client";
 import axios from "axios";
@@ -77,14 +78,14 @@ export const BillboardForm: React.FC<BillboardFormProps> = ({
       setLoading(true);
       if (initialData) {
         await axios.patch(
-          `/api/${params.storeId}/billboards/${params.billboardId}`,
+          `/api/${params.storeId}/${Models.Billboards}/${params.billboardId}`,
           data,
         );
       } else {
-        await axios.post(`/api/${params.storeId}/billboards`, data);
+        await axios.post(`/api/${params.storeId}/${Models.Billboards}`, data);
       }
       router.refresh();
-      router.push(`/${params.storeId}/billboards`);
+      router.push(`/${params.storeId}/${Models.Billboards}`);
       toast({
         description: toastMessage,
         variant: "success",
@@ -103,10 +104,10 @@ export const BillboardForm: React.FC<BillboardFormProps> = ({
     try {
       setLoading(true);
       await axios.delete(
-        `/api/${params.storeId}/billboards/${params.billboardId}`,
+        `/api/${params.storeId}/${Models.Billboards}/${params.billboardId}`,
       );
       router.refresh();
-      router.push(`/${params.storeId}/billboards`);
+      router.push(`/${params.storeId}/${Models.Billboards}`);
       toast({
         description: "Publicación eliminada",
         variant: "success",

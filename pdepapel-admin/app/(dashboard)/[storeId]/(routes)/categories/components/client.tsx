@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
+import { Models } from "@/constants";
 import { Plus } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { CategoryColumn, columns } from "./columns";
@@ -13,7 +14,7 @@ interface CategoryClientProps {
   data: CategoryColumn[];
 }
 
-export const CategoryClient = ({ data }: CategoryClientProps) => {
+const CategoryClient: React.FC<CategoryClientProps> = ({ data }) => {
   const router = useRouter();
   const params = useParams();
   return (
@@ -24,7 +25,9 @@ export const CategoryClient = ({ data }: CategoryClientProps) => {
           description="Maneja las categorías para tu tienda"
         />
         <Button
-          onClick={() => router.push(`/${params.storeId}/categories/new`)}
+          onClick={() =>
+            router.push(`/${params.storeId}/${Models.Categories}/new`)
+          }
         >
           <Plus className="mr-2 h-4 w-4" />
           Crear categoría
@@ -32,14 +35,16 @@ export const CategoryClient = ({ data }: CategoryClientProps) => {
       </div>
       <Separator />
       <DataTable
-        tableKey="categories"
+        tableKey={Models.Categories}
         searchKey="name"
         columns={columns}
         data={data}
       />
       <Heading title="API" description="API calls para las categorías" />
       <Separator />
-      <ApiList entityName="categories" entityIdName="categoryId" />
+      <ApiList entityName={Models.Categories} entityIdName="categoryId" />
     </>
   );
 };
+
+export default CategoryClient;

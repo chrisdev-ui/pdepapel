@@ -9,6 +9,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import axios from "axios";
 import { Copy, Edit, MoreHorizontal, Trash } from "lucide-react";
@@ -38,7 +39,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const onDelete = async () => {
     try {
       setLoading(true);
-      await axios.delete(`/api/${params.storeId}/types/${data.id}`);
+      await axios.delete(`/api/${params.storeId}/${Models.Types}/${data.id}`);
       router.refresh();
       toast({
         description: "Tipo eliminado",
@@ -78,7 +79,9 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
             Copiar ID
           </DropdownMenuItem>
           <DropdownMenuItem
-            onClick={() => router.push(`/${params.storeId}/types/${data.id}`)}
+            onClick={() =>
+              router.push(`/${params.storeId}/${Models.Types}/${data.id}`)
+            }
           >
             <Edit className="mr-2 h-4 w-4" />
             Actualizar

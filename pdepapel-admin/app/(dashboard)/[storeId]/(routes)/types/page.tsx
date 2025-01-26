@@ -1,5 +1,11 @@
-import { TypeClient } from "./components/client";
+import dynamic from "next/dynamic";
 import { getTypes } from "./server/get-types";
+
+const TypeClient = dynamic(() => import("./components/client"), {
+  ssr: false,
+});
+
+export const revalidate = 0;
 
 export default async function TypesPage({
   params,

@@ -6,6 +6,7 @@ import { getProducts } from "@/actions/get-products";
 import { getTotalCost } from "@/actions/get-total-cost";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { ModelLabels, Models } from "@/constants";
 import { currencyFormatter } from "@/lib/utils";
 import {
   AlertCircle,
@@ -46,7 +47,7 @@ export const Inventory: React.FC<InventoryProps> = async ({ params }) => {
     <div className="flex flex-col space-y-4">
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
-          <Link href={`/${params.storeId}/products`}>
+          <Link href={`/${params.storeId}/${Models.Products}`}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
                 Total de productos en inventario
@@ -59,10 +60,10 @@ export const Inventory: React.FC<InventoryProps> = async ({ params }) => {
           </Link>
         </Card>
         <Card>
-          <Link href={`/${params.storeId}/out-of-stock`}>
+          <Link href={`/${params.storeId}/${Models.OutOfStock}`}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
-                Productos agotados
+                {ModelLabels[Models.OutOfStock]}
               </CardTitle>
               <AlertTriangle className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
@@ -72,10 +73,10 @@ export const Inventory: React.FC<InventoryProps> = async ({ params }) => {
           </Link>
         </Card>
         <Card>
-          <Link href={`/${params.storeId}/low-stock`}>
+          <Link href={`/${params.storeId}/${Models.LowStock}`}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
-                Productos por agotarse
+                {ModelLabels[Models.LowStock]}
               </CardTitle>
               <AlertCircle className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
@@ -91,7 +92,7 @@ export const Inventory: React.FC<InventoryProps> = async ({ params }) => {
             <CardTitle>Inventario de productos</CardTitle>
           </CardHeader>
           <CardContent className="flex-grow overflow-hidden">
-            <ScrollArea className="h-[300px] md:h-[400px] lg:h-[500px] xl:h-[840px]">
+            <ScrollArea className="h-[300px] md:h-[400px] lg:h-[500px] xl:h-[870px]">
               <InventoryClient data={products} />
             </ScrollArea>
           </CardContent>
@@ -101,7 +102,7 @@ export const Inventory: React.FC<InventoryProps> = async ({ params }) => {
             <CardTitle>Inventario por categoría</CardTitle>
           </CardHeader>
           <CardContent className="flex-grow overflow-hidden">
-            <ScrollArea className="h-[300px] md:h-[400px] lg:h-[500px] xl:h-[840px]">
+            <ScrollArea className="h-[300px] md:h-[400px] lg:h-[500px] xl:h-[870px]">
               <InventoryByCategory data={stockData} />
             </ScrollArea>
           </CardContent>

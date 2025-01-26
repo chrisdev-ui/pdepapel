@@ -1,5 +1,11 @@
 import { getLowStock } from "@/actions/get-low-stock-count";
-import { LowStockClient } from "./components/client";
+import dynamic from "next/dynamic";
+
+const LowStockClient = dynamic(() => import("./components/client"), {
+  ssr: false,
+});
+
+export const revalidate = 0;
 
 export default async function LowStockPage({
   params,

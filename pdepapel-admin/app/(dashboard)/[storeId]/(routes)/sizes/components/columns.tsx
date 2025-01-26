@@ -21,6 +21,15 @@ export const columns: ColumnDef<SizeColumn>[] = [
     ),
   },
   {
+    accessorKey: "products",
+    header: ({ column }) => (
+      <DataTableColumnHeader
+        column={column}
+        title="Productos con este tamaño"
+      />
+    ),
+  },
+  {
     accessorKey: "createdAt",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Fecha de creación" />

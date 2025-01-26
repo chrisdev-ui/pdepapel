@@ -59,3 +59,51 @@ export async function GET(
     );
   }
 }
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: { storeId: string } },
+) {
+  const { userId } = auth();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+  }
+
+  try {
+    const { ids }: { ids: string[] } = await req.json();
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return NextResponse.json(
+        { error: "Supplier ID(s) are required and must be an array" },
+        { status: 400 },
+      );
+    }
+
+    const storeByUserId = await prismadb.store.findFirst({
+      where: { id: params.storeId, userId },
+    });
+    if (!storeByUserId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
+    const result = await prismadb.$transaction(async (tx) => {
+      const deletedSuppliers = await tx.supplier.deleteMany({
+        where: {
+          storeId: params.storeId,
+          id: {
+            in: ids,
+          },
+        },
+      });
+
+      return {
+        deletedSuppliers,
+      };
+    });
+
+    return NextResponse.json(result);
+  } catch (error) {
+    console.log("[SUPPLIERS_DELETE]", error);
+    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+  }
+}

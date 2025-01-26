@@ -9,8 +9,20 @@ export async function getCategories(storeId: string) {
     where: {
       storeId,
     },
-    include: {
-      type: true,
+    select: {
+      id: true,
+      name: true,
+      createdAt: true,
+      type: {
+        select: {
+          name: true,
+        },
+      },
+      _count: {
+        select: {
+          products: true,
+        },
+      },
     },
     orderBy: {
       createdAt: "desc",
@@ -21,6 +33,7 @@ export async function getCategories(storeId: string) {
     id: category.id,
     name: category.name,
     typeName: category.type.name,
+    products: category._count.products,
     createdAt: format(category.createdAt, "dd 'de' MMMM 'de' yyyy", {
       locale: es,
     }),

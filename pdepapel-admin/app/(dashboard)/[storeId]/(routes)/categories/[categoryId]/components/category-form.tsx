@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
@@ -75,14 +76,14 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
       setLoading(true);
       if (initialData) {
         await axios.patch(
-          `/api/${params.storeId}/categories/${params.categoryId}`,
+          `/api/${params.storeId}/${Models.Categories}/${params.categoryId}`,
           data,
         );
       } else {
-        await axios.post(`/api/${params.storeId}/categories`, data);
+        await axios.post(`/api/${params.storeId}/${Models.Categories}`, data);
       }
       router.refresh();
-      router.push(`/${params.storeId}/categories`);
+      router.push(`/${params.storeId}/${Models.Categories}`);
       toast({
         description: toastMessage,
         variant: "success",
@@ -101,10 +102,10 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
     try {
       setLoading(true);
       await axios.delete(
-        `/api/${params.storeId}/categories/${params.categoryId}`,
+        `/api/${params.storeId}/${Models.Categories}/${params.categoryId}`,
       );
       router.refresh();
-      router.push(`/${params.storeId}/categories`);
+      router.push(`/${params.storeId}/${Models.Categories}`);
       toast({
         description: "Categoría eliminada",
         variant: "success",

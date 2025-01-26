@@ -23,6 +23,12 @@ export const columns: ColumnDef<ColorColumn>[] = [
     cell: ({ row }) => <DataTableCellColor color={row.original.value} />,
   },
   {
+    accessorKey: "products",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Productos con este color" />
+    ),
+  },
+  {
     accessorKey: "createdAt",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Fecha de creación" />

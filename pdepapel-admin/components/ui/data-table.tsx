@@ -13,6 +13,8 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 
+import { Checkbox } from "@/components/ui/checkbox";
+import { DataTableActionOptions } from "@/components/ui/data-table-action-options";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import { Input } from "@/components/ui/input";
 import {
@@ -23,14 +25,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Models } from "@/constants";
 import { useTableStore } from "@/hooks/use-table-store";
 import { useEffect, useState } from "react";
+import { DataTableViewOptions } from "./data-table-view-options";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   searchKey: string;
-  tableKey: string;
+  tableKey: Models;
 }
 
 export function DataTable<TData, TValue>({
@@ -51,6 +55,7 @@ export function DataTable<TData, TValue>({
     tableState.columnFilters,
   );
   const [sorting, setSorting] = useState<SortingState>(tableState.sorting);
+  const [rowSelection, setRowSelection] = useState({});
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
     tableState.columnVisibility,
   );
@@ -61,7 +66,33 @@ export function DataTable<TData, TValue>({
 
   const table = useReactTable({
     data,
-    columns,
+    columns: [
+      {
+        id: "select",
+        header: ({ table }) => (
+          <Checkbox
+            checked={
+              table.getIsAllPageRowsSelected() ||
+              (table.getIsSomePageRowsSelected() && "indeterminate")
+            }
+            onCheckedChange={(value) =>
+              table.toggleAllPageRowsSelected(!!value)
+            }
+            aria-label="Seleccionar todas las filas"
+          />
+        ),
+        cell: ({ row }) => (
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(value) => row.toggleSelected(!!value)}
+            aria-label="Seleccionar fila"
+          />
+        ),
+        enableSorting: false,
+        enableHiding: false,
+      },
+      ...columns,
+    ],
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     onColumnFiltersChange: setColumnFilters,
@@ -69,10 +100,12 @@ export function DataTable<TData, TValue>({
     onColumnVisibilityChange: setColumnVisibility,
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    onRowSelectionChange: setRowSelection,
     state: {
       sorting,
       columnFilters,
       columnVisibility,
+      rowSelection,
       pagination: { pageIndex, pageSize },
     },
     onPaginationChange: setPagination,
@@ -97,7 +130,7 @@ export function DataTable<TData, TValue>({
 
   return (
     <div>
-      <div className="flex items-center py-4">
+      <div className="flex items-center justify-between py-4">
         <Input
           placeholder="Escribe para buscar..."
           value={(table.getColumn(searchKey)?.getFilterValue() as string) ?? ""}
@@ -106,6 +139,10 @@ export function DataTable<TData, TValue>({
           }
           className="max-w-sm"
         />
+        <div className="flex items-center gap-x-2">
+          <DataTableViewOptions table={table} model={tableKey} />
+          <DataTableActionOptions table={table} model={tableKey} />
+        </div>
       </div>
       <div className="rounded-md border">
         <Table>
@@ -114,7 +151,7 @@ export function DataTable<TData, TValue>({
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
                   return (
-                    <TableHead key={header.id}>
+                    <TableHead key={header.id} colSpan={header.colSpan}>
                       {header.isPlaceholder
                         ? null
                         : flexRender(

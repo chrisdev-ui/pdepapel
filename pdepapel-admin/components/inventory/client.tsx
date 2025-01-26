@@ -1,6 +1,7 @@
 "use client";
 
 import { DataTable } from "@/components/ui/data-table";
+import { Models } from "@/constants";
 import { columns, InventoryProductColumn } from "./columns";
 
 interface InventoryClientProps {
@@ -10,7 +11,7 @@ interface InventoryClientProps {
 export const InventoryClient: React.FC<InventoryClientProps> = ({ data }) => {
   return (
     <DataTable
-      tableKey="inventory"
+      tableKey={Models.Inventory}
       searchKey="name"
       columns={columns}
       data={data}

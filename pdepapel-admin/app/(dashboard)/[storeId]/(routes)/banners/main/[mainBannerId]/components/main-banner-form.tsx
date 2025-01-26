@@ -19,6 +19,7 @@ import { Heading } from "@/components/ui/heading";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { MainBanner } from "@prisma/client";
 import axios from "axios";
@@ -40,9 +41,7 @@ interface MainBannerFormProps {
   initialData: MainBanner | null;
 }
 
-export const MainBannerForm: React.FC<MainBannerFormProps> = ({
-  initialData,
-}) => {
+const MainBannerForm: React.FC<MainBannerFormProps> = ({ initialData }) => {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
@@ -85,14 +84,14 @@ export const MainBannerForm: React.FC<MainBannerFormProps> = ({
       setLoading(true);
       if (initialData) {
         await axios.patch(
-          `/api/${params.storeId}/main-banner/${params.mainBannerId}`,
+          `/api/${params.storeId}/${Models.MainBanner}/${params.mainBannerId}`,
           data,
         );
       } else {
-        await axios.post(`/api/${params.storeId}/main-banner`, data);
+        await axios.post(`/api/${params.storeId}/${Models.MainBanner}`, data);
       }
       router.refresh();
-      router.push(`/${params.storeId}/banners`);
+      router.push(`/${params.storeId}/${Models.Banners}`);
       toast({
         description: toastMessage,
         variant: "success",
@@ -111,10 +110,10 @@ export const MainBannerForm: React.FC<MainBannerFormProps> = ({
     try {
       setLoading(true);
       await axios.delete(
-        `/api/${params.storeId}/main-banner/${params.mainBannerId}`,
+        `/api/${params.storeId}/${Models.MainBanner}/${params.mainBannerId}`,
       );
       router.refresh();
-      router.push(`/${params.storeId}/banners`);
+      router.push(`/${params.storeId}/${Models.Banners}`);
       toast({
         description: "Banner eliminado",
         variant: "success",
@@ -272,3 +271,5 @@ export const MainBannerForm: React.FC<MainBannerFormProps> = ({
     </>
   );
 };
+
+export default MainBannerForm;

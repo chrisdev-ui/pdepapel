@@ -19,6 +19,7 @@ import {
 import { Heading } from "@/components/ui/heading";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
@@ -62,14 +63,14 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData }) => {
       setLoading(true);
       if (initialData) {
         await axios.patch(
-          `/api/${params.storeId}/suppliers/${params.supplierId}`,
+          `/api/${params.storeId}/${Models.Suppliers}/${params.supplierId}`,
           data,
         );
       } else {
-        await axios.post(`/api/${params.storeId}/suppliers`, data);
+        await axios.post(`/api/${params.storeId}/${Models.Suppliers}`, data);
       }
       router.refresh();
-      router.push(`/${params.storeId}/suppliers`);
+      router.push(`/${params.storeId}/${Models.Suppliers}`);
       toast({
         description: toastMessage,
         variant: "success",
@@ -88,10 +89,10 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData }) => {
     try {
       setLoading(true);
       await axios.delete(
-        `/api/${params.storeId}/suppliers/${params.supplierId}`,
+        `/api/${params.storeId}/${Models.Suppliers}/${params.supplierId}`,
       );
       router.refresh();
-      router.push(`/${params.storeId}/suppliers`);
+      router.push(`/${params.storeId}/${Models.Suppliers}`);
       toast({
         description: "Proveedor eliminado",
         variant: "success",

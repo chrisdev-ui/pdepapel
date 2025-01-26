@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
+import { Models } from "@/constants";
 import { ArrowBigLeft } from "lucide-react";
 import Link from "next/link";
 import { columns, OutOfStockColumn } from "./columns";
@@ -12,7 +13,7 @@ interface OutOfStockClientProps {
   data: OutOfStockColumn[];
 }
 
-export const OutOfStockClient: React.FC<OutOfStockClientProps> = ({ data }) => {
+const OutOfStockClient: React.FC<OutOfStockClientProps> = ({ data }) => {
   return (
     <>
       <div className="flex items-center justify-between">
@@ -29,7 +30,7 @@ export const OutOfStockClient: React.FC<OutOfStockClientProps> = ({ data }) => {
       </div>
       <Separator />
       <DataTable
-        tableKey="out-of-stock"
+        tableKey={Models.OutOfStock}
         searchKey="name"
         columns={columns}
         data={data}
@@ -37,3 +38,5 @@ export const OutOfStockClient: React.FC<OutOfStockClientProps> = ({ data }) => {
     </>
   );
 };
+
+export default OutOfStockClient;

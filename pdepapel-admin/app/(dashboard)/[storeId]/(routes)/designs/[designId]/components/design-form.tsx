@@ -19,6 +19,7 @@ import {
 import { Heading } from "@/components/ui/heading";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
@@ -60,14 +61,14 @@ export const DesignForm: React.FC<DesignFormProps> = ({ initialData }) => {
       setLoading(true);
       if (initialData) {
         await axios.patch(
-          `/api/${params.storeId}/designs/${params.designId}`,
+          `/api/${params.storeId}/${Models.Designs}/${params.designId}`,
           data,
         );
       } else {
-        await axios.post(`/api/${params.storeId}/designs`, data);
+        await axios.post(`/api/${params.storeId}/${Models.Designs}`, data);
       }
       router.refresh();
-      router.push(`/${params.storeId}/designs`);
+      router.push(`/${params.storeId}/${Models.Designs}`);
       toast({
         description: toastMessage,
         variant: "success",
@@ -85,9 +86,11 @@ export const DesignForm: React.FC<DesignFormProps> = ({ initialData }) => {
   const onDelete = async () => {
     try {
       setLoading(true);
-      await axios.delete(`/api/${params.storeId}/designs/${params.designId}`);
+      await axios.delete(
+        `/api/${params.storeId}/${Models.Designs}/${params.designId}`,
+      );
       router.refresh();
-      router.push(`/${params.storeId}/designs`);
+      router.push(`/${params.storeId}/${Models.Designs}`);
       toast({
         description: "Diseño eliminado",
         variant: "success",

@@ -15,6 +15,15 @@ export const columns: ColumnDef<SupplierColumn>[] = [
     ),
   },
   {
+    accessorKey: "products",
+    header: ({ column }) => (
+      <DataTableColumnHeader
+        column={column}
+        title="Productos con este proveedor"
+      />
+    ),
+  },
+  {
     accessorKey: "createdAt",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Fecha de creación" />

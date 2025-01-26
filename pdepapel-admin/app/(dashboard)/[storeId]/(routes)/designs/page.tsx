@@ -1,5 +1,11 @@
-import { DesignsClient } from "./components/client";
+import dynamic from "next/dynamic";
 import { getDesigns } from "./server/get-designs";
+
+const DesignsClient = dynamic(() => import("./components/client"), {
+  ssr: false,
+});
+
+export const revalidate = 0;
 
 export default async function DesignsPage({
   params,

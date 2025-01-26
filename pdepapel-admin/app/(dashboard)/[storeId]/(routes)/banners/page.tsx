@@ -1,6 +1,12 @@
-import { BannerClient } from "./components/client";
+import dynamic from "next/dynamic";
 import { getBanners } from "./server/get-banners";
 import { getMainBanner } from "./server/get-main-banner";
+
+const BannerClient = dynamic(() => import("./components/client"), {
+  ssr: false,
+});
+
+export const revalidate = 0;
 
 export default async function BannersPage({
   params,

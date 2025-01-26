@@ -1,5 +1,11 @@
-import { OrderClient } from "./components/client";
+import dynamic from "next/dynamic";
 import { getOrders } from "./server/get-orders";
+
+const OrderClient = dynamic(() => import("./components/client"), {
+  ssr: false,
+});
+
+export const revalidate = 0;
 
 export default async function OrdersPage({
   params,

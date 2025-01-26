@@ -38,6 +38,7 @@ import { Separator } from "@/components/ui/separator";
 import { WhatsappButton } from "@/components/whatsapp-button";
 import {
   detailsTitleOptions,
+  Models,
   paymentMethodsByOption,
   paymentOptions,
   shippingOptions,
@@ -208,14 +209,17 @@ export const OrderForm: React.FC<OrderFormProps> = ({
       };
       if (initialData) {
         await axios.patch(
-          `/api/${params.storeId}/orders/${params.orderId}`,
+          `/api/${params.storeId}/${Models.Orders}/${params.orderId}`,
           updatedData,
         );
       } else {
-        await axios.post(`/api/${params.storeId}/orders`, updatedData);
+        await axios.post(
+          `/api/${params.storeId}/${Models.Orders}`,
+          updatedData,
+        );
       }
       router.refresh();
-      router.push(`/${params.storeId}/orders`);
+      router.push(`/${params.storeId}/${Models.Orders}`);
       toast({
         description: toastMessage,
         variant: "success",
@@ -234,9 +238,11 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   const onDelete = async () => {
     try {
       setLoading(true);
-      await axios.delete(`/api/${params.storeId}/orders/${params.orderId}`);
+      await axios.delete(
+        `/api/${params.storeId}/${Models.Orders}/${params.orderId}`,
+      );
       router.refresh();
-      router.push(`/${params.storeId}/orders`);
+      router.push(`/${params.storeId}/${Models.Orders}`);
       toast({
         description: "Orden eliminada",
         variant: "success",

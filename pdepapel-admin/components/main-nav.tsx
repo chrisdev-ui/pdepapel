@@ -1,5 +1,6 @@
 "use client";
 
+import { ModelLabels, Models } from "@/constants";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
@@ -17,64 +18,64 @@ export function MainNav({
       active: pathname === `/${params.storeId}`,
     },
     {
-      href: `/${params.storeId}/billboards`,
-      label: "Publicaciones",
-      active: pathname === `/${params.storeId}/billboards`,
+      href: `/${params.storeId}/${Models.Billboards}`,
+      label: ModelLabels[Models.Billboards],
+      active: pathname === `/${params.storeId}/${Models.Billboards}`,
     },
     {
-      href: `/${params.storeId}/banners`,
-      label: "Banners",
-      active: pathname === `/${params.storeId}/banners`,
+      href: `/${params.storeId}/${Models.Banners}`,
+      label: ModelLabels[Models.Banners],
+      active: pathname === `/${params.storeId}/${Models.Banners}`,
     },
     {
-      href: `/${params.storeId}/types`,
-      label: "Tipos",
-      active: pathname === `/${params.storeId}/types`,
+      href: `/${params.storeId}/${Models.Types}`,
+      label: ModelLabels[Models.Types],
+      active: pathname === `/${params.storeId}/${Models.Types}`,
     },
     {
-      href: `/${params.storeId}/categories`,
-      label: "Categorias",
-      active: pathname === `/${params.storeId}/categories`,
+      href: `/${params.storeId}/${Models.Categories}`,
+      label: ModelLabels[Models.Categories],
+      active: pathname === `/${params.storeId}/${Models.Categories}`,
     },
     {
-      href: `/${params.storeId}/sizes`,
-      label: "Tamaños",
-      active: pathname === `/${params.storeId}/sizes`,
+      href: `/${params.storeId}/${Models.Sizes}`,
+      label: ModelLabels[Models.Sizes],
+      active: pathname === `/${params.storeId}/${Models.Sizes}`,
     },
     {
-      href: `/${params.storeId}/colors`,
-      label: "Colores",
-      active: pathname === `/${params.storeId}/colors`,
+      href: `/${params.storeId}/${Models.Colors}`,
+      label: ModelLabels[Models.Colors],
+      active: pathname === `/${params.storeId}/${Models.Colors}`,
     },
     {
-      href: `/${params.storeId}/designs`,
-      label: "Diseños",
-      active: pathname === `/${params.storeId}/designs`,
+      href: `/${params.storeId}/${Models.Designs}`,
+      label: ModelLabels[Models.Designs],
+      active: pathname === `/${params.storeId}/${Models.Designs}`,
     },
     {
-      href: `/${params.storeId}/products`,
-      label: "Productos",
-      active: pathname === `/${params.storeId}/products`,
+      href: `/${params.storeId}/${Models.Products}`,
+      label: ModelLabels[Models.Products],
+      active: pathname === `/${params.storeId}/${Models.Products}`,
     },
     {
-      href: `/${params.storeId}/reviews`,
-      label: "Reseñas",
-      active: pathname === `/${params.storeId}/reviews`,
+      href: `/${params.storeId}/${Models.Reviews}`,
+      label: ModelLabels[Models.Reviews],
+      active: pathname === `/${params.storeId}/${Models.Reviews}`,
     },
     {
-      href: `/${params.storeId}/orders`,
-      label: "Órdenes",
-      active: pathname === `/${params.storeId}/orders`,
+      href: `/${params.storeId}/${Models.Orders}`,
+      label: ModelLabels[Models.Orders],
+      active: pathname === `/${params.storeId}/${Models.Orders}`,
     },
     {
-      href: `/${params.storeId}/posts`,
-      label: "Social",
-      active: pathname === `/${params.storeId}/posts`,
+      href: `/${params.storeId}/${Models.Posts}`,
+      label: ModelLabels[Models.Posts],
+      active: pathname === `/${params.storeId}/${Models.Posts}`,
     },
     {
-      href: `/${params.storeId}/suppliers`,
-      label: "Proveedores",
-      active: pathname === `/${params.storeId}/suppliers`,
+      href: `/${params.storeId}/${Models.Suppliers}`,
+      label: ModelLabels[Models.Suppliers],
+      active: pathname === `/${params.storeId}/${Models.Suppliers}`,
     },
     {
       href: `/${params.storeId}/settings`,

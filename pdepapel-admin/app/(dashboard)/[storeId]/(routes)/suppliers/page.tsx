@@ -1,5 +1,11 @@
-import { SupplierClient } from "./components/client";
+import dynamic from "next/dynamic";
 import { getSuppliers } from "./server/get-suppliers";
+
+const SupplierClient = dynamic(() => import("./components/client"), {
+  ssr: false,
+});
+
+export const revalidate = 0;
 
 export default async function SuppliersPage({
   params,

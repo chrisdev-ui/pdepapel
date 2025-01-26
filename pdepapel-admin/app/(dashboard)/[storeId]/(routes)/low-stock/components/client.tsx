@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
+import { Models } from "@/constants";
 import { ArrowBigLeft } from "lucide-react";
 import Link from "next/link";
 import { columns, LowStockColumn } from "./columns";
@@ -13,7 +14,7 @@ interface LowStockClientProps {
   data: LowStockColumn[];
 }
 
-export const LowStockClient: React.FC<LowStockClientProps> = ({ data }) => {
+const LowStockClient: React.FC<LowStockClientProps> = ({ data }) => {
   return (
     <>
       <div className="flex items-center justify-between">
@@ -37,7 +38,7 @@ export const LowStockClient: React.FC<LowStockClientProps> = ({ data }) => {
         <TresholdSelector />
       </div>
       <DataTable
-        tableKey="low-stock"
+        tableKey={Models.LowStock}
         searchKey="name"
         columns={columns}
         data={data}
@@ -45,3 +46,5 @@ export const LowStockClient: React.FC<LowStockClientProps> = ({ data }) => {
     </>
   );
 };
+
+export default LowStockClient;

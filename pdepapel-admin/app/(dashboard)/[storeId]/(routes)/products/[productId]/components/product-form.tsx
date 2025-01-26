@@ -34,6 +34,7 @@ import {
   INITIAL_MISC_COST,
   INITIAL_PERCENTAGE_INCREASE,
   INITIAL_TRANSPORTATION_COST,
+  Models,
 } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { Color, Design, Size, Supplier } from "@prisma/client";
@@ -208,14 +209,14 @@ export const ProductForm: React.FC<ProductFormProps> = ({
         setLoading(true);
         if (initialData) {
           await axios.patch(
-            `/api/${params.storeId}/products/${params.productId}`,
+            `/api/${params.storeId}/${Models.Products}/${params.productId}`,
             data,
           );
         } else {
-          await axios.post(`/api/${params.storeId}/products`, data);
+          await axios.post(`/api/${params.storeId}/${Models.Products}`, data);
         }
         router.refresh();
-        router.push(`/${params.storeId}/products`);
+        router.push(`/${params.storeId}/${Models.Products}`);
         toast({
           description: toastMessage,
           variant: "success",
@@ -242,9 +243,11 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   const onDelete = useCallback(async () => {
     try {
       setLoading(true);
-      await axios.delete(`/api/${params.storeId}/products/${params.productId}`);
+      await axios.delete(
+        `/api/${params.storeId}/${Models.Products}/${params.productId}`,
+      );
       router.refresh();
-      router.push(`/${params.storeId}/products`);
+      router.push(`/${params.storeId}/${Models.Products}`);
       toast({
         description: "Producto eliminado",
         variant: "success",
@@ -768,7 +771,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       <Heading title="Reseñas" description="Reseñas de este producto" />
       <Separator />
       <DataTable
-        tableKey="reviews"
+        tableKey={Models.Reviews}
         searchKey="name"
         columns={columns}
         data={reviews ?? []}

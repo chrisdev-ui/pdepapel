@@ -9,6 +9,17 @@ export async function getColors(storeId: string) {
     where: {
       storeId,
     },
+    select: {
+      id: true,
+      name: true,
+      value: true,
+      createdAt: true,
+      _count: {
+        select: {
+          products: true,
+        },
+      },
+    },
     orderBy: {
       createdAt: "desc",
     },
@@ -18,6 +29,7 @@ export async function getColors(storeId: string) {
     id: color.id,
     name: color.name,
     value: color.value,
+    products: color._count.products,
     createdAt: format(color.createdAt, "dd 'de' MMMM 'de' yyyy", {
       locale: es,
     }),

@@ -8,6 +8,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { Copy, Link, MoreHorizontal } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
@@ -45,7 +46,9 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
           Copiar ID
         </DropdownMenuItem>
         <DropdownMenuItem
-          onClick={() => router.push(`/${params.storeId}/products/${data.id}`)}
+          onClick={() =>
+            router.push(`/${params.storeId}/${Models.Products}/${data.id}`)
+          }
         >
           <Link className="mr-2 h-4 w-4" />
           Ir a la página del producto

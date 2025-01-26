@@ -1,6 +1,7 @@
 import { DataTable } from "@/components/ui/data-table";
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
+import { Models } from "@/constants";
 import { ReviewsColumn, columns } from "./columns";
 
 interface ReviewsClientProps {
@@ -16,7 +17,7 @@ export const ReviewsClient = ({ data }: ReviewsClientProps) => {
       />
       <Separator />
       <DataTable
-        tableKey="reviews"
+        tableKey={Models.Reviews}
         searchKey="name"
         columns={columns}
         data={data}

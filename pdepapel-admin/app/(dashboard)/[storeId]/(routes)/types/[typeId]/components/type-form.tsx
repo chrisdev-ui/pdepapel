@@ -18,6 +18,7 @@ import {
 import { Heading } from "@/components/ui/heading";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { Type } from "@prisma/client";
 import axios from "axios";
@@ -58,14 +59,14 @@ export const TypeForm: React.FC<TypeFormProps> = ({ initialData }) => {
       setLoading(true);
       if (initialData) {
         await axios.patch(
-          `/api/${params.storeId}/types/${params.typeId}`,
+          `/api/${params.storeId}/${Models.Types}/${params.typeId}`,
           data,
         );
       } else {
-        await axios.post(`/api/${params.storeId}/types`, data);
+        await axios.post(`/api/${params.storeId}/${Models.Types}`, data);
       }
       router.refresh();
-      router.push(`/${params.storeId}/types`);
+      router.push(`/${params.storeId}/${Models.Types}`);
       toast({
         description: toastMessage,
         variant: "success",
@@ -83,9 +84,11 @@ export const TypeForm: React.FC<TypeFormProps> = ({ initialData }) => {
   const onDelete = async () => {
     try {
       setLoading(true);
-      await axios.delete(`/api/${params.storeId}/types/${params.typeId}`);
+      await axios.delete(
+        `/api/${params.storeId}/${Models.Types}/${params.typeId}`,
+      );
       router.refresh();
-      router.push(`/${params.storeId}/types`);
+      router.push(`/${params.storeId}/${Models.Types}`);
       toast({
         description: "Tipo eliminado",
         variant: "success",

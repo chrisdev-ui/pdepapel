@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
+import { Models } from "@/constants";
 import { Plus } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { TypeColumn, columns } from "./columns";
@@ -13,7 +14,7 @@ interface TypeClientProps {
   data: TypeColumn[];
 }
 
-export const TypeClient = ({ data }: TypeClientProps) => {
+const TypeClient: React.FC<TypeClientProps> = ({ data }) => {
   const router = useRouter();
   const params = useParams();
   return (
@@ -23,21 +24,25 @@ export const TypeClient = ({ data }: TypeClientProps) => {
           title={`Tipos (${data.length})`}
           description="Maneja los tipos de productos para tu tienda"
         />
-        <Button onClick={() => router.push(`/${params.storeId}/types/new`)}>
+        <Button
+          onClick={() => router.push(`/${params.storeId}/${Models.Types}/new`)}
+        >
           <Plus className="mr-2 h-4 w-4" />
           Crear tipo
         </Button>
       </div>
       <Separator />
       <DataTable
-        tableKey="types"
+        tableKey={Models.Types}
         searchKey="name"
         columns={columns}
         data={data}
       />
       <Heading title="API" description="API calls para los tipos" />
       <Separator />
-      <ApiList entityName="types" entityIdName="typeId" />
+      <ApiList entityName={Models.Types} entityIdName="typeId" />
     </>
   );
 };
+
+export default TypeClient;

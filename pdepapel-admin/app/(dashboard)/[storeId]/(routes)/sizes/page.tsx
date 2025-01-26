@@ -1,5 +1,11 @@
-import { SizesClient } from "./components/client";
+import dynamic from "next/dynamic";
 import { getSizes } from "./server/get-sizes";
+
+const SizesClient = dynamic(() => import("./components/client"), {
+  ssr: false,
+});
+
+export const revalidate = 0;
 
 export default async function SizesPage({
   params,

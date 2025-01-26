@@ -3,7 +3,7 @@ import prismadb from "@/lib/prismadb";
 import { resend } from "@/lib/resend";
 import { generateOrderNumber, getLastOrderTimestamp } from "@/lib/utils";
 import { auth, clerkClient } from "@clerk/nextjs";
-import { OrderStatus, Prisma } from "@prisma/client";
+import { OrderStatus, Prisma, ShippingStatus } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 type OrderData = {
@@ -245,6 +245,187 @@ export async function GET(
       { error: "Internal Server Error" },
       { status: 500, headers: corsHeaders },
     );
+  }
+}
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: { storeId: string } },
+) {
+  const { userId } = auth();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+  }
+
+  try {
+    const { ids }: { ids: string[] } = await req.json();
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return NextResponse.json(
+        { error: "Order ID(s) are required and must be an array" },
+        { status: 400 },
+      );
+    }
+
+    const storeOwner = await isStoreOwner(userId, params.storeId);
+    if (!storeOwner) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
+    const result = await prismadb.$transaction(async (tx) => {
+      const deletedOrders = await tx.order.deleteMany({
+        where: {
+          storeId: params.storeId,
+          id: {
+            in: ids,
+          },
+        },
+      });
+
+      return {
+        deletedOrders,
+      };
+    });
+
+    return NextResponse.json(result);
+  } catch (error) {
+    console.log("[ORDERS_DELETE]", error);
+    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+  }
+}
+
+export async function PATCH(
+  req: Request,
+  { params }: { params: { storeId: string } },
+) {
+  const { userId } = auth();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+  }
+
+  try {
+    const body = await req.json();
+    const {
+      ids,
+      status,
+      shipping,
+    }: { ids: string[]; status?: OrderStatus; shipping?: ShippingStatus } =
+      body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return NextResponse.json(
+        { error: "Order ID(s) are required and must be an array" },
+        { status: 400 },
+      );
+    }
+
+    const storeOwner = await isStoreOwner(userId, params.storeId);
+    if (!storeOwner) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
+    const result = await prismadb.$transaction(
+      async (tx) => {
+        const orders = await tx.order.findMany({
+          where: {
+            id: {
+              in: ids,
+            },
+            storeId: params.storeId,
+          },
+          include: {
+            orderItems: {
+              include: {
+                product: true,
+              },
+            },
+          },
+        });
+
+        const updatedOrders = await Promise.all(
+          orders.map(async (order) => {
+            const updateData: {
+              status?: OrderStatus;
+              shipping?: ShippingStatus;
+            } = {};
+
+            if (status) {
+              const wasPaid = order.status === OrderStatus.PAID;
+              const willBePaid = status === OrderStatus.PAID;
+              updateData.status = status;
+
+              if (willBePaid && !wasPaid) {
+                const outOfStock = order.orderItems.find((item) => {
+                  return item.product.stock < item.quantity;
+                });
+
+                if (outOfStock) {
+                  throw new Error(
+                    `Product ${outOfStock.product.name} is out of stock. Please contact the store owner.`,
+                  );
+                }
+
+                await Promise.all(
+                  order.orderItems.map((item) =>
+                    tx.product.update({
+                      where: { id: item.productId },
+                      data: {
+                        stock: {
+                          decrement: item.quantity,
+                        },
+                      },
+                    }),
+                  ),
+                );
+              } else if (!willBePaid && wasPaid) {
+                await Promise.all(
+                  order.orderItems.map((item) =>
+                    tx.product.update({
+                      where: { id: item.productId },
+                      data: {
+                        stock: {
+                          increment: item.quantity,
+                        },
+                      },
+                    }),
+                  ),
+                );
+              }
+            }
+
+            if (shipping) {
+              updateData.shipping = shipping;
+            }
+
+            return await tx.order.update({
+              where: { id: order.id },
+              data: {
+                status: updateData.status,
+                shipping: {
+                  update: {
+                    data: {
+                      status: updateData.shipping,
+                    },
+                  },
+                },
+              },
+            });
+          }),
+        );
+
+        return updatedOrders;
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        maxWait: 10000,
+        timeout: 20000,
+      },
+    );
+
+    return NextResponse.json(result);
+  } catch (error) {
+    console.log("[ORDERS_PATCH]", error);
+    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
   }
 }
 

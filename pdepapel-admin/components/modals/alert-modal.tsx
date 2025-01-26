@@ -1,5 +1,3 @@
-"use client";
-
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { useEffect, useState } from "react";

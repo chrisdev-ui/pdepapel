@@ -19,6 +19,7 @@ import { Heading } from "@/components/ui/heading";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { Banner } from "@prisma/client";
 import axios from "axios";
@@ -63,14 +64,14 @@ export const BannerForm: React.FC<BannerFormProps> = ({ initialData }) => {
       setLoading(true);
       if (initialData) {
         await axios.patch(
-          `/api/${params.storeId}/banners/${params.bannerId}`,
+          `/api/${params.storeId}/${Models.Banners}/${params.bannerId}`,
           data,
         );
       } else {
-        await axios.post(`/api/${params.storeId}/banners`, data);
+        await axios.post(`/api/${params.storeId}/${Models.Banners}`, data);
       }
       router.refresh();
-      router.push(`/${params.storeId}/banners`);
+      router.push(`/${params.storeId}/${Models.Banners}`);
       toast({
         description: toastMessage,
         variant: "success",
@@ -88,9 +89,11 @@ export const BannerForm: React.FC<BannerFormProps> = ({ initialData }) => {
   const onDelete = async () => {
     try {
       setLoading(true);
-      await axios.delete(`/api/${params.storeId}/banners/${params.bannerId}`);
+      await axios.delete(
+        `/api/${params.storeId}/${Models.Banners}/${params.bannerId}`,
+      );
       router.refresh();
-      router.push(`/${params.storeId}/banners`);
+      router.push(`/${params.storeId}/${Models.Banners}`);
       toast({
         description: "Banner eliminado",
         variant: "success",

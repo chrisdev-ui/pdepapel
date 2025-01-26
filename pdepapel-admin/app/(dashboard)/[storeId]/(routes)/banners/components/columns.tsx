@@ -2,6 +2,7 @@
 
 import { DataTableCellImage } from "@/components/ui/data-table-cell-image";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
+import { Models } from "@/constants";
 import { ColumnDef } from "@tanstack/react-table";
 import { getBanners } from "../server/get-banners";
 import { getMainBanner } from "../server/get-main-banner";
@@ -17,7 +18,7 @@ export const bannerColumns: ColumnDef<BannerColumn>[] = [
   {
     accessorKey: "imageUrl",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Dirección de la imágen" />
+      <DataTableColumnHeader column={column} title="Imagen" />
     ),
     cell: ({ row }) => (
       <DataTableCellImage
@@ -42,7 +43,9 @@ export const bannerColumns: ColumnDef<BannerColumn>[] = [
   },
   {
     id: "actions",
-    cell: ({ row }) => <CellAction source="banners" data={row.original} />,
+    cell: ({ row }) => (
+      <CellAction source={Models.Banners} data={row.original} />
+    ),
   },
 ];
 
@@ -99,6 +102,8 @@ export const mainBannerColumns: ColumnDef<MainBannerColumn>[] = [
   },
   {
     id: "actions",
-    cell: ({ row }) => <CellAction source="mainBanner" data={row.original} />,
+    cell: ({ row }) => (
+      <CellAction source={Models.MainBanner} data={row.original} />
+    ),
   },
 ];

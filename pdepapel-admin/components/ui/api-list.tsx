@@ -1,11 +1,12 @@
 "use client";
 
 import { ApiAlert } from "@/components/ui/api-alert";
+import { Models } from "@/constants";
 import { useOrigin } from "@/hooks/use-origin";
 import { useParams } from "next/navigation";
 
 interface ApiListProps {
-  entityName: string;
+  entityName: Models;
   entityIdName: string;
 }
 

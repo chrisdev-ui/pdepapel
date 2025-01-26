@@ -1,5 +1,11 @@
-import { ColorsClient } from "./components/client";
+import dynamic from "next/dynamic";
 import { getColors } from "./server/get-colors";
+
+const ColorsClient = dynamic(() => import("./components/client"), {
+  ssr: false,
+});
+
+export const revalidate = 0;
 
 export default async function ColorsPage({
   params,
