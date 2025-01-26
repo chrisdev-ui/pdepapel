@@ -179,17 +179,19 @@ export const ModelsColumns: Record<Models, { [key: string]: string }> = {
   [Models.Categories]: {
     name: "Nombre",
     type: "Tipo",
+    products: "Productos en esta categoría",
     createdAt: "Fecha de creación",
   },
   [Models.Colors]: {
     name: "Nombre",
     value: "Valor",
+    products: "Productos con este color",
     createdAt: "Fecha de creación",
   },
   [Models.Designs]: {
     name: "Nombre",
+    products: "Productos con este diseño",
     createdAt: "Fecha de creación",
-    updatedAt: "Última actualización",
   },
   [Models.Orders]: {
     orderNumber: "Orden",
@@ -232,14 +234,17 @@ export const ModelsColumns: Record<Models, { [key: string]: string }> = {
   [Models.Sizes]: {
     name: "Nombre",
     value: "Valor",
+    products: "Productos con este tamaño",
     createdAt: "Fecha de creación",
   },
   [Models.Suppliers]: {
     name: "Nombre del proveedor",
+    products: "Productos con este proveedor",
     createdAt: "Fecha de creación",
   },
   [Models.Types]: {
     name: "Nombre",
+    categories: "Categorías con este tipo",
     createdAt: "Fecha de creación",
   },
   [Models.LowStock]: {
