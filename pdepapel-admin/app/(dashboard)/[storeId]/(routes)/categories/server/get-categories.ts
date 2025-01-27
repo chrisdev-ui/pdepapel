@@ -32,7 +32,7 @@ export async function getCategories(storeId: string) {
   return categories.map((category) => ({
     id: category.id,
     name: category.name,
-    typeName: category.type.name,
+    type: category.type.name,
     products: category._count.products,
     createdAt: format(category.createdAt, "dd 'de' MMMM 'de' yyyy", {
       locale: es,

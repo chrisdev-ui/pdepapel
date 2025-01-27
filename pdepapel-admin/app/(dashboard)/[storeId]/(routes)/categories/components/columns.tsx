@@ -19,7 +19,7 @@ export const columns: ColumnDef<CategoryColumn>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Tipo" />
     ),
-    cell: ({ row }) => row.original.typeName,
+    cell: ({ row }) => row.original.type,
   },
   {
     accessorKey: "products",

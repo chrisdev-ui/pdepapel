@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Models } from "@/constants";
+import { Models, ModelsColumns } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { makeApiCall } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,7 @@ import {
   ArchiveRestore,
   ChevronDown,
   Download,
+  ImageOff,
   Loader,
   Star,
   StarOff,
@@ -36,6 +37,7 @@ export type Action =
   | "export"
   | "feature"
   | "unfeature"
+  | "clear-images"
   | "mark-as-created"
   | "mark-as-pending"
   | "mark-as-paid"
@@ -111,6 +113,7 @@ export function DataTableActionOptions<TData>({
           "export",
           "feature",
           "unfeature",
+          "clear-images",
         ];
       case Models.Inventory:
       case Models.SalesByCategory:
@@ -188,6 +191,25 @@ export function DataTableActionOptions<TData>({
               .rows.map((row) => (row.original as { id: string }).id),
             isFeatured: action === "feature",
           });
+          router.refresh();
+          toast({
+            description: `${table.getFilteredSelectedRowModel().rows.length} elemento(s) ${getActionDescription(
+              action,
+            )}`,
+            variant: "success",
+          });
+          table.resetRowSelection();
+          break;
+        case "clear-images":
+          await makeApiCall<{ ids: string[] }>(
+            `/${params.storeId}/${MODEL_MAPPING[model] || model}/clear-images`,
+            "PATCH",
+            {
+              ids: table
+                .getFilteredSelectedRowModel()
+                .rows.map((row) => (row.original as { id: string }).id),
+            },
+          );
           router.refresh();
           toast({
             description: `${table.getFilteredSelectedRowModel().rows.length} elemento(s) ${getActionDescription(
@@ -280,8 +302,20 @@ export function DataTableActionOptions<TData>({
         return "destacado(s) con éxito";
       case "unfeature":
         return "quitado(s) de destacados con éxito";
+      case "clear-images":
+        return "eliminó o eliminaron sus imágenes con éxito";
       case "export":
         return "exportado(s) con éxito";
+      case "mark-as-created":
+      case "mark-as-pending":
+      case "mark-as-paid":
+      case "mark-as-cancelled":
+      case "mark-as-preparing":
+      case "mark-as-shipped":
+      case "mark-as-in-transit":
+      case "mark-as-delivered":
+      case "mark-as-returned":
+        return "cambiado(s) con éxito";
       default:
         return "acción no soportada";
     }
@@ -289,9 +323,19 @@ export function DataTableActionOptions<TData>({
 
   const generateCSV = useCallback(
     (rows: any[]) => {
-      const headers = Object.keys(rows[0].original).join(",");
+      const columnsDefs = ModelsColumns[model];
+      const keys = Object.keys(columnsDefs);
+      const displayNames = Object.values(columnsDefs);
+      const headers = displayNames.join(",");
       const rowsData = rows
-        .map((row) => Object.values(row.original).join(","))
+        .map((row) =>
+          keys
+            .map((key) => {
+              const value = row.original[key];
+              return typeof value === "string" ? `"${value}"` : value;
+            })
+            .join(","),
+        )
         .join("\n");
       const csvContent = `${headers}\n${rowsData}`;
 
@@ -438,6 +482,20 @@ export function DataTableActionOptions<TData>({
             >
               Quitar destacado
               <StarOff className="h-4 w-4" />
+            </DropdownMenuItem>
+          )}
+          {routeActions.includes("clear-images") && (
+            <DropdownMenuItem
+              className={cn(
+                "flex cursor-pointer items-center justify-between",
+                {
+                  "cursor-wait": isLoading,
+                },
+              )}
+              onClick={() => setAction("clear-images")}
+            >
+              Eliminar imágenes
+              <ImageOff className="h-4 w-4" />
             </DropdownMenuItem>
           )}
           {model === Models.Orders && (

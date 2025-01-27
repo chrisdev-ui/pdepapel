@@ -27,7 +27,8 @@ export async function getProducts(storeId: string) {
     sku: product.sku,
     image:
       product.images.find((image) => image.isMain)?.url ??
-      product.images[0].url,
+      product.images[0]?.url ??
+      "https://placehold.co/400",
     name: product.name,
     isFeatured: product.isFeatured,
     isArchived: product.isArchived,
