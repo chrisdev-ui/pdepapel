@@ -26,6 +26,7 @@ export const Courier: React.FC<CourierProps> = ({ name }) => {
               className="rounded-md object-cover transition-all duration-300 ease-in-out hover:scale-105"
               sizes="(max-width: 640px) 100vw, 640px"
               unoptimized
+              placeholder="blur"
             />
           </div>
         </TooltipTrigger>

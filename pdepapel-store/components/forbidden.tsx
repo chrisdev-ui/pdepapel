@@ -37,6 +37,7 @@ export const Forbidden: React.FC<ForbiddenProps> = ({
             alt="Logo Papelería P de Papel con nombre debajo"
             sizes="(max-width: 640px) 100vw, 640px"
             priority
+            placeholder="blur"
             className="object-cover"
             unoptimized
           />

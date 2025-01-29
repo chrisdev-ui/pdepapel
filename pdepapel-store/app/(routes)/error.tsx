@@ -25,6 +25,7 @@ export default function Error({
             fill
             alt="Logo Papelería P de Papel con nombre debajo"
             sizes="(max-width: 640px) 100vw, 640px"
+            placeholder="blur"
             priority
             className="object-cover"
             unoptimized

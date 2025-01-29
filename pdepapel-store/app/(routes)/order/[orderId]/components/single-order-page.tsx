@@ -283,6 +283,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                 sizes="(max-width: 640px) 100vw, 640px"
                 className="rounded-full object-cover"
                 unoptimized
+                placeholder="blur"
               />
             </div>
             <h1 className="font-serif text-3xl font-extrabold">

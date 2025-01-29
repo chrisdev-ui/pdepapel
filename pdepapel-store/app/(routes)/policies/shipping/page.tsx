@@ -33,6 +33,7 @@ export default function ShippingPolicyPage() {
               width={80}
               height={20}
               title="P de Papel"
+              placeholder="blur"
               className="inline-flex object-contain"
               unoptimized
             />

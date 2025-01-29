@@ -15,6 +15,7 @@ export const Loader: React.FC<LoaderProps> = ({ label }) => {
           height={200}
           alt="Logo Papelería P de Papel sin texto"
           className="h-28 w-28 rounded-full"
+          placeholder="blur"
           priority
           sizes="(max-width: 640px) 100vw, 640px"
           unoptimized
