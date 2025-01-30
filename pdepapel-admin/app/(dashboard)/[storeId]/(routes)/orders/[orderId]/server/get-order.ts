@@ -17,6 +17,18 @@ export async function getOrder(orderId: string, storeId: string) {
   const products = await prismadb.product.findMany({
     where: {
       storeId,
+      isArchived: false,
+      stock: {
+        gte: 1,
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      price: true,
+    },
+    orderBy: {
+      name: "asc",
     },
   });
 
