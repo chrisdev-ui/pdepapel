@@ -1,6 +1,8 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
+import { DataTableCellCurrency } from "@/components/ui/data-table-cell-currency";
+import { DataTableCellDate } from "@/components/ui/data-table-cell-date";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { Icons } from "@/components/ui/icons";
 import {
@@ -11,10 +13,9 @@ import {
 } from "@/components/ui/tooltip";
 import { WhatsappButton } from "@/components/whatsapp-button";
 import { paymentNames } from "@/constants";
+import { calculatePrice, currencyFormatter } from "@/lib/utils";
 import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
 import { ColumnDef } from "@tanstack/react-table";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
 import { Receipt } from "lucide-react";
 import { getOrders } from "../server/get-orders";
 import { CellAction } from "./cell-action";
@@ -42,9 +43,32 @@ export const columns: ColumnDef<OrderColumn>[] = [
     ),
   },
   {
-    accessorKey: "products",
-    header: "Productos",
-    cell: ({ row }) => <ProductList products={row.original.products} />,
+    id: "products",
+    accessorFn: (row) =>
+      row.orderItems.map((orderItem) => ({
+        id: orderItem.product.id,
+        name: orderItem.product.name,
+        quantity: orderItem.quantity,
+        image:
+          orderItem.product.images.find((image) => image.isMain)?.url ??
+          orderItem.product.images[0].url,
+      })),
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Productos" />
+    ),
+    cell: ({ row }) => (
+      <ProductList
+        products={row.original.orderItems.map((orderItem) => ({
+          id: orderItem.product.id,
+          name: orderItem.product.name,
+          quantity: orderItem.quantity,
+          image:
+            orderItem.product.images.find((image) => image.isMain)?.url ??
+            orderItem.product.images[0].url,
+        }))}
+      />
+    ),
+    enableSorting: false,
   },
   {
     accessorKey: "phone",
@@ -56,17 +80,20 @@ export const columns: ColumnDef<OrderColumn>[] = [
         order={{
           orderNumber: row.original.orderNumber,
           status: row.original.status,
-          fullName: row.original.fullname,
+          fullName: row.original.fullName,
           phone: row.original.phone as string,
-          totalPrice: row.original.totalPrice,
-          products: row.original.products.map((product) => ({
-            name: product.name,
-            quantity: product.quantity,
+          totalPrice: currencyFormatter.format(
+            calculatePrice(row.original.orderItems),
+          ),
+          products: row.original.orderItems.map((orderItem) => ({
+            name: orderItem.product.name,
+            quantity: orderItem.quantity,
           })),
         }}
         withText
       />
     ),
+    enableSorting: false,
   },
   {
     accessorKey: "address",
@@ -80,12 +107,13 @@ export const columns: ColumnDef<OrderColumn>[] = [
     ),
   },
   {
-    accessorKey: "paymentMethod",
+    id: "paymentMethod",
+    accessorKey: "payment.method",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Método de pago" />
     ),
     cell: ({ row }) => {
-      const paymentMethod = row.original.paymentMethod;
+      const paymentMethod = row.original.payment?.method;
       if (!paymentMethod) return null;
       const PaymentIcon = () => {
         switch (paymentMethod) {
@@ -117,9 +145,13 @@ export const columns: ColumnDef<OrderColumn>[] = [
     },
   },
   {
-    accessorKey: "totalPrice",
+    id: "totalPrice",
+    accessorFn: (row) => calculatePrice(row.orderItems),
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Precio total" />
+    ),
+    cell: ({ row }) => (
+      <DataTableCellCurrency value={calculatePrice(row.original.orderItems)} />
     ),
   },
   {
@@ -128,8 +160,7 @@ export const columns: ColumnDef<OrderColumn>[] = [
       <DataTableColumnHeader column={column} title="Estado de la orden" />
     ),
     cell: ({ row }) => {
-      const status = row.getValue("status") as OrderStatus | undefined;
-      if (!status) return null;
+      const status = row.original.status;
       const variants: Record<
         OrderStatus,
         {
@@ -158,14 +189,13 @@ export const columns: ColumnDef<OrderColumn>[] = [
     },
   },
   {
-    accessorKey: "shippingStatus",
+    id: "shippingStatus",
+    accessorKey: "shipping.status",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Estado del envío" />
     ),
     cell: ({ row }) => {
-      const status = row.getValue("shippingStatus") as
-        | ShippingStatus
-        | undefined;
+      const status = row.original.shipping?.status;
       if (!status) return null;
       const variants: Record<
         ShippingStatus,
@@ -212,13 +242,7 @@ export const columns: ColumnDef<OrderColumn>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Fecha de creación" />
     ),
-    cell: ({ row }) => (
-      <div>
-        {format(row.original.createdAt, "dd 'de' MMMM 'de' yyyy", {
-          locale: es,
-        })}
-      </div>
-    ),
+    cell: ({ row }) => <DataTableCellDate date={row.original.createdAt} />,
   },
   {
     id: "actions",

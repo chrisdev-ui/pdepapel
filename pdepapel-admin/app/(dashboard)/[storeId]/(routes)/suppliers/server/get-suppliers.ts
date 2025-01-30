@@ -1,11 +1,9 @@
 "use server";
 
 import prismadb from "@/lib/prismadb";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
 
 export async function getSuppliers(storeId: string) {
-  const suppliers = await prismadb.supplier.findMany({
+  return await prismadb.supplier.findMany({
     where: {
       storeId,
     },
@@ -23,12 +21,4 @@ export async function getSuppliers(storeId: string) {
       name: "asc",
     },
   });
-
-  return suppliers.map((supplier) => ({
-    ...supplier,
-    products: supplier._count.products,
-    createdAt: format(supplier.createdAt, "dd 'de' MMMM 'de' yyyy", {
-      locale: es,
-    }),
-  }));
 }

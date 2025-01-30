@@ -170,7 +170,7 @@ export const ModelsColumns: Record<Models, { [key: string]: string }> = {
     createdAt: "Fecha de creación",
   },
   [Models.Billboards]: {
-    image: "Imagen",
+    imageUrl: "Imagen",
     label: "Etiqueta",
     title: "Título",
     redirectUrl: "Link de redirección",

@@ -1,6 +1,8 @@
 "use client";
 
+import { DataTableCellDate } from "@/components/ui/data-table-cell-date";
 import { DataTableCellImage } from "@/components/ui/data-table-cell-image";
+import { DataTableCellRating } from "@/components/ui/data-table-cell-rating";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { ColumnDef } from "@tanstack/react-table";
 import { getReviews } from "../server/get-reviews";
@@ -52,6 +54,7 @@ export const columns: ColumnDef<ReviewsColumn>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Calificación" />
     ),
+    cell: ({ row }) => <DataTableCellRating value={row.original.rating} />,
   },
   {
     accessorKey: "comment",
@@ -69,6 +72,7 @@ export const columns: ColumnDef<ReviewsColumn>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Fecha de creación" />
     ),
+    cell: ({ row }) => <DataTableCellDate date={row.original.createdAt} />,
   },
   {
     id: "actions",

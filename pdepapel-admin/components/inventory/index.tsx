@@ -32,13 +32,13 @@ export const Inventory: React.FC<InventoryProps> = async ({ params }) => {
   const potentialRevenue = await getPotentialRevenue(params.storeId);
   const potentialProfit = await getPotentialProfit(params.storeId);
 
-  const categories = Array.from(new Set(products.map((p) => p.category)));
+  const categories = Array.from(new Set(products.map((p) => p.category.name)));
 
   const stockData = categories
     .map((category) => ({
       category,
       stock: products
-        .filter((p) => p.category === category)
+        .filter((p) => p.category.name === category)
         .reduce((sum, p) => sum + Number(p.stock), 0),
     }))
     .filter(({ stock }) => stock > 0);

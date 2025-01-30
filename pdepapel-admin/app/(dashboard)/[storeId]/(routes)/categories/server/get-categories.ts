@@ -1,11 +1,9 @@
 "use server";
 
 import prismadb from "@/lib/prismadb";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
 
 export async function getCategories(storeId: string) {
-  const categories = await prismadb.category.findMany({
+  return await prismadb.category.findMany({
     where: {
       storeId,
     },
@@ -28,14 +26,4 @@ export async function getCategories(storeId: string) {
       createdAt: "desc",
     },
   });
-
-  return categories.map((category) => ({
-    id: category.id,
-    name: category.name,
-    type: category.type.name,
-    products: category._count.products,
-    createdAt: format(category.createdAt, "dd 'de' MMMM 'de' yyyy", {
-      locale: es,
-    }),
-  }));
 }

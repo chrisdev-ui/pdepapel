@@ -1,11 +1,9 @@
 "use server";
 
 import prismadb from "@/lib/prismadb";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
 
 export async function getSizes(storeId: string) {
-  const sizes = await prismadb.size.findMany({
+  return await prismadb.size.findMany({
     where: {
       storeId,
     },
@@ -24,12 +22,4 @@ export async function getSizes(storeId: string) {
       createdAt: "desc",
     },
   });
-
-  return sizes.map((size) => ({
-    ...size,
-    products: size._count.products,
-    createdAt: format(size.createdAt, "dd 'de' MMMM 'de' yyyy", {
-      locale: es,
-    }),
-  }));
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { DataTableCellDate } from "@/components/ui/data-table-cell-date";
 import { DataTableCellImage } from "@/components/ui/data-table-cell-image";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { Models } from "@/constants";
@@ -40,6 +41,7 @@ export const bannerColumns: ColumnDef<BannerColumn>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Fecha de creación" />
     ),
+    cell: ({ row }) => <DataTableCellDate date={row.original.createdAt} />,
   },
   {
     id: "actions",
@@ -99,6 +101,7 @@ export const mainBannerColumns: ColumnDef<MainBannerColumn>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Fecha de creación" />
     ),
+    cell: ({ row }) => <DataTableCellDate date={row.original.createdAt} />,
   },
   {
     id: "actions",

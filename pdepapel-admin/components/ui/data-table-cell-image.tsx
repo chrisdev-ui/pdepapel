@@ -8,6 +8,7 @@ interface DataTableCellImageProps extends React.HTMLAttributes<HTMLDivElement> {
   ratio: AspectRatioProps["ratio"];
   src: React.ComponentProps<typeof Image>["src"];
   alt: React.ComponentProps<typeof Image>["alt"];
+  numberOfImages?: number;
 }
 
 export function DataTableCellImage({
@@ -15,19 +16,25 @@ export function DataTableCellImage({
   ratio,
   src,
   alt,
+  numberOfImages = 1,
   ...props
 }: DataTableCellImageProps) {
   return (
-    <div className={cn("w-16", className)} {...props}>
-      <AspectRatio ratio={ratio} className="bg-muted">
+    <div className={cn("relative w-16", className)} {...props}>
+      <AspectRatio ratio={ratio} className="relative z-10 bg-muted">
         <Image
-          src={src}
+          src={src || "/placeholder.svg"}
           fill
           alt={alt}
-          className="h-full w-full rounded-md object-cover"
+          className="rounded-md object-cover"
           unoptimized
         />
       </AspectRatio>
+      {numberOfImages > 1 && (
+        <div className="absolute -right-2 -top-2 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground shadow-md">
+          {numberOfImages}
+        </div>
+      )}
     </div>
   );
 }

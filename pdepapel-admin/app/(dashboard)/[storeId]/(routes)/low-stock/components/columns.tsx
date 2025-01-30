@@ -1,36 +1,35 @@
 "use client";
 
 import { getLowStock } from "@/actions/get-low-stock-count";
-import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Badge } from "@/components/ui/badge";
+import { DataTableCellDate } from "@/components/ui/data-table-cell-date";
+import { DataTableCellImage } from "@/components/ui/data-table-cell-image";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { ColumnDef } from "@tanstack/react-table";
 import { AlertOctagon } from "lucide-react";
-import Image from "next/image";
 import { CellAction } from "./cell-action";
 
 export type LowStockColumn = Awaited<ReturnType<typeof getLowStock>>[number];
 
 export const columns: ColumnDef<LowStockColumn>[] = [
   {
-    accessorKey: "image",
+    id: "image",
+    accessorFn: (row) =>
+      row.images.find((image) => image.isMain)?.url ?? row.images[0].url,
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Imagen" />
     ),
-    cell: ({ row }) =>
-      row.original.image && (
-        <div className="w-16">
-          <AspectRatio ratio={1 / 1} className="bg-muted">
-            <Image
-              src={row.original.image}
-              fill
-              alt={row.original.name}
-              className="h-full w-full rounded-md object-cover"
-              unoptimized
-            />
-          </AspectRatio>
-        </div>
-      ),
+    cell: ({ row }) => (
+      <DataTableCellImage
+        src={
+          row.original.images.find((image) => image.isMain)?.url ??
+          row.original.images[0].url
+        }
+        alt={row.original.name}
+        ratio={1 / 1}
+        numberOfImages={row.original.images.length}
+      />
+    ),
   },
   {
     accessorKey: "name",
@@ -39,7 +38,8 @@ export const columns: ColumnDef<LowStockColumn>[] = [
     ),
   },
   {
-    accessorKey: "category",
+    id: "category",
+    accessorKey: "category.name",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Categoría" />
     ),
@@ -79,10 +79,12 @@ export const columns: ColumnDef<LowStockColumn>[] = [
     ),
   },
   {
-    accessorKey: "lastUpdated",
+    id: "lastUpdated",
+    accessorKey: "updatedAt",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Última actualización" />
     ),
+    cell: ({ row }) => <DataTableCellDate date={row.original.updatedAt} />,
   },
   {
     id: "actions",

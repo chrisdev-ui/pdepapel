@@ -189,3 +189,27 @@ export const formatPhoneNumber = (phone: string) => {
 
   return null;
 };
+
+export const calculatePrice = (
+  orderItems: Array<{
+    product: {
+      name: string;
+      id: string;
+      price: number;
+      images: Array<{
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        productId: string;
+        url: string;
+        isMain: boolean;
+      }>;
+    };
+    quantity: number;
+  }>,
+) => {
+  return orderItems.reduce(
+    (sum, item) => sum + Number(item.product.price) * item.quantity,
+    0,
+  );
+};

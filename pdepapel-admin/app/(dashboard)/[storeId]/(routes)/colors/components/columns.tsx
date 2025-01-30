@@ -1,6 +1,7 @@
 "use client";
 
 import { DataTableCellColor } from "@/components/ui/data-table-cell-color";
+import { DataTableCellDate } from "@/components/ui/data-table-cell-date";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { ColumnDef } from "@tanstack/react-table";
 import { getColors } from "../server/get-colors";
@@ -14,6 +15,7 @@ export const columns: ColumnDef<ColorColumn>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Nombre" />
     ),
+    cell: ({ row }) => <div className="capitalize">{row.original.name}</div>,
   },
   {
     accessorKey: "value",
@@ -23,7 +25,8 @@ export const columns: ColumnDef<ColorColumn>[] = [
     cell: ({ row }) => <DataTableCellColor color={row.original.value} />,
   },
   {
-    accessorKey: "products",
+    id: "products",
+    accessorKey: "_count.products",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Productos con este color" />
     ),
@@ -33,6 +36,7 @@ export const columns: ColumnDef<ColorColumn>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Fecha de creación" />
     ),
+    cell: ({ row }) => <DataTableCellDate date={row.original.createdAt} />,
   },
   {
     id: "actions",

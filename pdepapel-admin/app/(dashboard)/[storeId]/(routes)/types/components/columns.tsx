@@ -1,5 +1,7 @@
 "use client";
 
+import { DataTableCellDate } from "@/components/ui/data-table-cell-date";
+import { DataTableCellNumber } from "@/components/ui/data-table-cell-number";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { ColumnDef } from "@tanstack/react-table";
 import { getTypes } from "../server/get-types";
@@ -15,9 +17,13 @@ export const columns: ColumnDef<TypeColumn>[] = [
     ),
   },
   {
-    accessorKey: "categories",
+    id: "categories",
+    accessorKey: "_count.categories",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Categorías con este tipo" />
+    ),
+    cell: ({ row }) => (
+      <DataTableCellNumber value={row.original._count.categories} />
     ),
   },
   {
@@ -25,6 +31,7 @@ export const columns: ColumnDef<TypeColumn>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Fecha de creación" />
     ),
+    cell: ({ row }) => <DataTableCellDate date={row.original.createdAt} />,
   },
   {
     id: "actions",

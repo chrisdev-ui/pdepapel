@@ -1,5 +1,6 @@
 "use client";
 
+import { DataTableCellDate } from "@/components/ui/data-table-cell-date";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { ColumnDef } from "@tanstack/react-table";
 import { getDesigns } from "../server/get-designs";
@@ -15,7 +16,8 @@ export const columns: ColumnDef<DesignColumn>[] = [
     ),
   },
   {
-    accessorKey: "products",
+    id: "products",
+    accessorKey: "_count.products",
     header: ({ column }) => (
       <DataTableColumnHeader
         column={column}
@@ -28,6 +30,7 @@ export const columns: ColumnDef<DesignColumn>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Fecha de creación" />
     ),
+    cell: ({ row }) => <DataTableCellDate date={row.original.createdAt} />,
   },
   {
     id: "actions",

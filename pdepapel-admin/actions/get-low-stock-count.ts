@@ -1,14 +1,11 @@
 import { CAPSULAS_SORPRESA_ID, KITS_ID, TRESHOLD_LOW_STOCK } from "@/constants";
 import prismadb from "@/lib/prismadb";
-import { numberFormatter } from "@/lib/utils";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
 
 export const getLowStockCount = async (
   storeId: string,
   treshold: number = TRESHOLD_LOW_STOCK,
 ) => {
-  const lowStockCount = await prismadb.product.count({
+  return await prismadb.product.count({
     where: {
       storeId,
       stock: {
@@ -20,15 +17,13 @@ export const getLowStockCount = async (
       },
     },
   });
-
-  return lowStockCount;
 };
 
 export const getLowStock = async (
   storeId: string,
   treshold: number = TRESHOLD_LOW_STOCK,
 ) => {
-  const products = await prismadb.product.findMany({
+  return await prismadb.product.findMany({
     where: {
       storeId,
       stock: {
@@ -63,19 +58,4 @@ export const getLowStock = async (
       updatedAt: "desc",
     },
   });
-
-  return products.map((product) => ({
-    id: product.id,
-    name: product.name,
-    stock: numberFormatter.format(product.stock),
-    category: product.category.name,
-    image:
-      product.images.find((image) => image.isMain)?.url ??
-      product.images[0].url,
-    isFeatured: product.isFeatured,
-    isArchived: product.isArchived,
-    lastUpdated: format(product.updatedAt, "dd 'de' MMMM 'de' yyyy hh:mm", {
-      locale: es,
-    }),
-  }));
 };

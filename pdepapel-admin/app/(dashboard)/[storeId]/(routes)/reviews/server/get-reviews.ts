@@ -2,8 +2,6 @@
 
 import prismadb from "@/lib/prismadb";
 import { clerkClient } from "@clerk/nextjs";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
 
 export async function getReviews(storeId: string) {
   const reviews = await prismadb.review.findMany({
@@ -34,16 +32,15 @@ export async function getReviews(storeId: string) {
       productId: review.productId,
       productImage:
         review.product.images.find((image) => image.isMain)?.url ??
-        review.product.images[0].url,
+        review.product.images[0].url ??
+        "https://placehold.co/400",
       productName: review.product.name,
       userId: review.userId,
       userImage,
       name: review.name,
-      rating: String(review.rating),
+      rating: review.rating,
       comment: review.comment,
-      createdAt: format(review.createdAt, "dd 'de' MMMM 'de' yyyy", {
-        locale: es,
-      }),
+      createdAt: review.createdAt,
     };
   });
 }
