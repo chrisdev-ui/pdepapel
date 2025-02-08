@@ -7,12 +7,12 @@ import { Inventory } from "@/components/inventory";
 import { Overview } from "@/components/overview";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Heading } from "@/components/ui/heading";
+import { SensitiveDataCard } from "@/components/ui/sensitive-data-card";
 import { Separator } from "@/components/ui/separator";
 import { SpinnerButton } from "@/components/ui/spinner-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { YearSelector } from "@/components/year-selector";
-import { currencyFormatter, numberFormatter } from "@/lib/utils";
-import { CreditCard, DollarSign, Package } from "lucide-react";
+import { CreditCard, Package } from "lucide-react";
 import { Suspense } from "react";
 
 interface DashboardPageProps {
@@ -48,45 +48,27 @@ export default async function DashboardPage({
           <TabsContent value="overview">
             <div className="space-y-4">
               <div className="grid grid-cols-3 gap-4">
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">
-                      Ingresos Totales
-                    </CardTitle>
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">
-                      {currencyFormatter.format(totalRevenue)}
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">
-                      Ventas
-                    </CardTitle>
+                <SensitiveDataCard
+                  id="total-revenue"
+                  title="Ingresos Totales"
+                  value={totalRevenue}
+                />
+                <SensitiveDataCard
+                  id="total-orders"
+                  title="Ventas"
+                  value={salesCount}
+                  format="number"
+                  icon={
                     <CreditCard className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">
-                      +{numberFormatter.format(salesCount)}
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">
-                      Productos en inventario
-                    </CardTitle>
-                    <Package className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">
-                      {numberFormatter.format(stockCount)}
-                    </div>
-                  </CardContent>
-                </Card>
+                  }
+                />
+                <SensitiveDataCard
+                  id="total-products"
+                  title="Productos en inventario"
+                  value={stockCount}
+                  format="number"
+                  icon={<Package className="h-4 w-4 text-muted-foreground" />}
+                />
               </div>
               <Card className="col-span-4">
                 <CardHeader className="flex flex-col gap-3">

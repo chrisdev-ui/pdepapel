@@ -1,24 +1,25 @@
+import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
+import { verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
 export async function GET(
   _req: Request,
-  { params }: { params: { categoryId: string } },
+  { params }: { params: { storeId: string; categoryId: string } },
 ) {
-  if (!params.categoryId)
-    return NextResponse.json(
-      { error: "Category ID is required" },
-      { status: 400 },
-    );
   try {
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    if (!params.categoryId)
+      throw ErrorFactory.InvalidRequest("Se requiere un ID de categoría");
+
     const category = await prismadb.category.findUnique({
-      where: { id: params.categoryId },
+      where: { id: params.categoryId, storeId: params.storeId },
     });
+
     return NextResponse.json(category);
   } catch (error) {
-    console.log("[CATEGORY_GET]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "CATEGORY_GET");
   }
 }
 
@@ -26,40 +27,57 @@ export async function PATCH(
   req: Request,
   { params }: { params: { storeId: string; categoryId: string } },
 ) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  if (!params.categoryId)
-    return NextResponse.json(
-      { error: "Category ID is required" },
-      { status: 400 },
-    );
   try {
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    if (!params.categoryId)
+      throw ErrorFactory.InvalidRequest("Se requiere un ID de categoría");
+
+    await verifyStoreOwner(userId, params.storeId);
+
     const body = await req.json();
     const { name, typeId } = body;
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+
     if (!name)
-      return NextResponse.json({ error: "Name is required" }, { status: 400 });
+      throw ErrorFactory.InvalidRequest("Se requiere un nombre de categoría");
+
     if (!typeId)
-      return NextResponse.json(
-        { error: "Type ID is required" },
-        { status: 400 },
+      throw ErrorFactory.InvalidRequest(
+        "Se requiere un tipo para la categoría",
       );
-    const category = await prismadb.category.updateMany({
-      where: { id: params.categoryId },
-      data: {
-        name,
-        typeId,
-      },
+
+    const updatedCategory = await prismadb.$transaction(async (tx) => {
+      const category = await tx.category.findUnique({
+        where: { id: params.categoryId, storeId: params.storeId },
+      });
+
+      if (!category)
+        throw ErrorFactory.NotFound(
+          `La categoría ${params.categoryId} no existe en esta tienda`,
+        );
+
+      const type = await tx.type.findUnique({
+        where: { id: typeId },
+      });
+
+      if (!type)
+        throw ErrorFactory.NotFound(
+          `El tipo ${typeId} no existe en esta tienda`,
+        );
+
+      return tx.category.update({
+        where: { id: params.categoryId, storeId: params.storeId },
+        data: {
+          name,
+          typeId,
+        },
+      });
     });
-    return NextResponse.json(category);
+
+    return NextResponse.json(updatedCategory);
   } catch (error) {
-    console.log("[CATEGORY_PATCH]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "CATEGORY_PATCH");
   }
 }
 
@@ -67,27 +85,48 @@ export async function DELETE(
   _req: Request,
   { params }: { params: { storeId: string; categoryId: string } },
 ) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-
-  if (!params.categoryId)
-    return NextResponse.json(
-      { error: "Category ID is required" },
-      { status: 400 },
-    );
   try {
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    if (!params.categoryId)
+      throw ErrorFactory.InvalidRequest("Se requiere un ID de categoría");
+
+    await verifyStoreOwner(userId, params.storeId);
+
+    const deletedCategory = await prismadb.$transaction(async (tx) => {
+      const category = await tx.category.findUnique({
+        where: { id: params.categoryId, storeId: params.storeId },
+      });
+
+      if (!category)
+        throw ErrorFactory.NotFound(
+          `La categoría ${params.categoryId} no existe en esta tienda`,
+        );
+
+      const products = await tx.product.count({
+        where: {
+          storeId: params.storeId,
+          categoryId: params.categoryId,
+        },
+      });
+
+      if (products > 0)
+        throw ErrorFactory.Conflict(
+          `No se puede eliminar la categoría ${category.name} porque tiene ${products} productos asociados. Elimina o reasigna los productos asociados primero`,
+          {
+            category: category.name,
+            products,
+          },
+        );
+
+      return await tx.category.delete({
+        where: { id: params.categoryId, storeId: params.storeId },
+      });
     });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    const category = await prismadb.category.deleteMany({
-      where: { id: params.categoryId },
-    });
-    return NextResponse.json(category);
+
+    return NextResponse.json(deletedCategory);
   } catch (error) {
-    console.log("[CATEGORY_DELETE]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "CATEGORY_DELETE");
   }
 }

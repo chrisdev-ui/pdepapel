@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/api-errors";
 import { env } from "@/lib/env.mjs";
 import { cn } from "@/lib/utils";
 import axios from "axios";
@@ -67,8 +68,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
       onChange(filteredImages);
     } catch (error) {
       toast({
-        description:
-          "¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {

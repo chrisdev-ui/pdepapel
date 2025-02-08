@@ -1,6 +1,13 @@
+import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
+import { checkIfStoreOwner, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
-import { OrderStatus, Prisma } from "@prisma/client";
+import {
+  OrderStatus,
+  PaymentMethod,
+  Prisma,
+  ShippingStatus,
+} from "@prisma/client";
 import { NextResponse } from "next/server";
 
 const corsHeaders = {
@@ -17,12 +24,10 @@ export async function GET(
   _req: Request,
   { params }: { params: { orderId: string } },
 ) {
-  if (!params.orderId)
-    return NextResponse.json(
-      { error: "Order ID is required" },
-      { status: 400, headers: corsHeaders },
-    );
   try {
+    if (!params.orderId)
+      throw ErrorFactory.InvalidRequest("Se requiere el ID de la orden");
+
     const order = await prismadb.order.findUnique({
       where: { id: params.orderId },
       include: {
@@ -40,17 +45,11 @@ export async function GET(
       },
     });
     if (!order)
-      return NextResponse.json(
-        { error: "Order not found" },
-        { status: 404, headers: corsHeaders },
-      );
+      throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
+
     return NextResponse.json(order, { headers: corsHeaders });
   } catch (error) {
-    console.log("[ORDER_GET]", error);
-    return NextResponse.json(
-      { error: "Internal Error" },
-      { status: 500, headers: corsHeaders },
-    );
+    return handleErrorResponse(error, "ORDER_GET", { headers: corsHeaders });
   }
 }
 
@@ -58,16 +57,13 @@ export async function PATCH(
   req: Request,
   { params }: { params: { storeId: string; orderId: string } },
 ) {
-  const { userId: ownerId } = auth();
-  if (!ownerId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  if (!params.orderId)
-    return NextResponse.json(
-      { error: "Order ID is required" },
-      { status: 400 },
-    );
+  const { userId } = auth();
 
   try {
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.orderId)
+      throw ErrorFactory.InvalidRequest("Se requiere el ID de la orden");
+
     const body = await req.json();
     const {
       fullName,
@@ -77,25 +73,20 @@ export async function PATCH(
       status,
       payment,
       shipping,
-      userId,
+      userId: requestUserId,
       guestId,
       documentId,
     } = body;
 
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId: ownerId },
-    });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-
-    // Validation checks (same as before)
+    const storeByUserId = await checkIfStoreOwner(userId, params.storeId);
+    if (!storeByUserId) throw ErrorFactory.Unauthorized();
 
     const order = await prismadb.order.findUnique({
       where: { id: params.orderId },
-      include: { orderItems: true },
+      include: { orderItems: true, shipping: true },
     });
     if (!order)
-      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+      throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
 
     const updatedOrder = await prismadb.$transaction(
       async (tx) => {
@@ -109,7 +100,7 @@ export async function PATCH(
             fullName,
             phone,
             address,
-            userId,
+            userId: requestUserId,
             guestId,
             documentId,
             orderItems: {
@@ -164,8 +155,10 @@ export async function PATCH(
           });
 
           if (outOfStock) {
-            throw new Error(
-              `Product ${outOfStock.product.name} is out of stock. Please contact the store owner.`,
+            throw ErrorFactory.InsufficientStock(
+              outOfStock.product.name,
+              outOfStock.product.stock,
+              outOfStock.quantity,
             );
           }
 
@@ -201,11 +194,7 @@ export async function PATCH(
 
     return NextResponse.json(updatedOrder);
   } catch (error) {
-    console.error("[ORDER_PATCH]", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Internal Error" },
-      { status: 500 },
-    );
+    return handleErrorResponse(error, "ORDER_PATCH");
   }
 }
 
@@ -214,28 +203,56 @@ export async function DELETE(
   { params }: { params: { storeId: string; orderId: string } },
 ) {
   const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
 
-  if (!params.orderId)
-    return NextResponse.json(
-      { error: "Order ID is required" },
-      { status: 400 },
-    );
   try {
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.orderId)
+      throw ErrorFactory.InvalidRequest("Se requiere el ID de la orden");
+
+    await verifyStoreOwner(userId, params.storeId);
+
+    const order = await prismadb.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { id: params.orderId },
+        include: { shipping: true, payment: true },
+      });
+      if (!order)
+        throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
+
+      if (order.status === OrderStatus.PAID) {
+        throw ErrorFactory.Conflict(
+          `La orden ${params.orderId} ya fue pagada y no puede ser eliminada`,
+        );
+      }
+
+      if (
+        order.shipping &&
+        order.shipping.status !== ShippingStatus.Preparing
+      ) {
+        throw ErrorFactory.Conflict(
+          `La orden ${order.orderNumber} no puede eliminarse porque el envío está en proceso`,
+        );
+      }
+
+      if (
+        order.payment &&
+        order.payment.method &&
+        order.payment.method !== PaymentMethod.COD
+      ) {
+        throw ErrorFactory.Conflict(
+          `La orden ${order.orderNumber} no puede eliminarse porque tiene una transacción bancaria registrada`,
+        );
+      }
+
+      const deletedOrder = await tx.order.delete({
+        where: { id: params.orderId, storeId: params.storeId },
+      });
+
+      return deletedOrder;
     });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    const order = await prismadb.order.delete({
-      where: { id: params.orderId },
-    });
-    if (!order)
-      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+
     return NextResponse.json(order);
   } catch (error) {
-    console.log("[ORDER_DELETE]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "ORDER_DELETE");
   }
 }

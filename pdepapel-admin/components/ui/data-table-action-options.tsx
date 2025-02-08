@@ -12,6 +12,7 @@ import {
 import { Models, ModelsColumns } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { makeApiCall } from "@/lib/api";
+import { getErrorMessage } from "@/lib/api-errors";
 import { cn } from "@/lib/utils";
 import { OrderStatus, ShippingStatus } from "@prisma/client";
 import { Table } from "@tanstack/react-table";
@@ -276,11 +277,9 @@ export function DataTableActionOptions<TData>({
           table.resetRowSelection();
           break;
       }
-    } catch (error: any) {
-      console.error("An error occurred while performing the action:", error);
+    } catch (error) {
       toast({
-        description:
-          "¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {

@@ -21,9 +21,10 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/api-errors";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 const formSchema = z.object({
   name: z.string().min(1, "El nombre del tamaño no puede estar vacío"),
@@ -44,12 +45,15 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const title = initialData ? "Editar tamaño" : "Crear tamaño";
-  const description = initialData
-    ? "Editar un tamaño"
-    : "Crear un nuevo tamaño";
-  const toastMessage = initialData ? "Tamaño actualizado" : "Tamaño creado";
-  const action = initialData ? "Guardar cambios" : "Crear";
+  const { title, description, toastMessage, action } = useMemo(
+    () => ({
+      title: initialData ? "Editar tamaño" : "Crear tamaño",
+      description: initialData ? "Editar un tamaño" : "Crear un nuevo tamaño",
+      toastMessage: initialData ? "Tamaño actualizado" : "Tamaño creado",
+      action: initialData ? "Guardar cambios" : "Crear",
+    }),
+    [initialData],
+  );
 
   const form = useForm<SizeFormValues>({
     resolver: zodResolver(formSchema),
@@ -77,8 +81,7 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
       });
     } catch (error) {
       toast({
-        description:
-          "¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {
@@ -99,8 +102,7 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
       });
     } catch (error) {
       toast({
-        description:
-          "Asegúrate de haber eliminado todos los productos que usen este tamaño primero.",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {

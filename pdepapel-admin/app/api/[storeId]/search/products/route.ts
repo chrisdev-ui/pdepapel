@@ -1,3 +1,4 @@
+import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -15,12 +16,9 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { storeId: string } },
 ) {
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400, headers: corsHeaders },
-    );
   try {
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+
     const search = req.nextUrl.searchParams.get("search") || "";
     const page = Number(req.nextUrl.searchParams.get("page")) || 1;
     const limit = Number(req.nextUrl.searchParams.get("limit")) || 10;
@@ -64,10 +62,8 @@ export async function GET(
     });
     return NextResponse.json(products, { headers: corsHeaders });
   } catch (error) {
-    console.log("[SEARCH_PRODUCTS]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500, headers: corsHeaders },
-    );
+    return handleErrorResponse(error, "SEARCH_PRODUCTS", {
+      headers: corsHeaders,
+    });
   }
 }

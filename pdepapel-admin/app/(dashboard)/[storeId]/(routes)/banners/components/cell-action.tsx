@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/api-errors";
 import axios from "axios";
 import { Copy, Edit, MoreHorizontal, Trash } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
@@ -48,8 +49,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data, source }) => {
       });
     } catch (error) {
       toast({
-        description:
-          "Ups! Hubo un error al intentar eliminar el elemento, intenta de nuevo más tarde",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {

@@ -1,21 +1,26 @@
+import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
+import { verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
 export async function GET(
   _req: Request,
-  { params }: { params: { sizeId: string } },
+  { params }: { params: { storeId: string; sizeId: string } },
 ) {
-  if (!params.sizeId)
-    return NextResponse.json({ error: "Size ID is required" }, { status: 400 });
   try {
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    if (!params.sizeId) {
+      throw ErrorFactory.InvalidRequest("El ID del tamaño es requerido");
+    }
+
     const size = await prismadb.size.findUnique({
-      where: { id: params.sizeId },
+      where: { id: params.sizeId, storeId: params.storeId },
     });
+
     return NextResponse.json(size);
   } catch (error) {
-    console.log("[SIZE_GET]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "SIZE_GET");
   }
 }
 
@@ -23,34 +28,52 @@ export async function PATCH(
   req: Request,
   { params }: { params: { storeId: string; sizeId: string } },
 ) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  if (!params.sizeId)
-    return NextResponse.json({ error: "Size ID is required" }, { status: 400 });
   try {
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    if (!params.sizeId) {
+      throw ErrorFactory.InvalidRequest("El ID del tamaño es requerido");
+    }
+
     const body = await req.json();
     const { name, value } = body;
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    if (!name)
-      return NextResponse.json({ error: "Name is required" }, { status: 400 });
-    if (!value)
-      return NextResponse.json({ error: "Value is required" }, { status: 400 });
-    const size = await prismadb.size.updateMany({
-      where: { id: params.sizeId },
-      data: {
-        name,
-        value,
+
+    await verifyStoreOwner(userId, params.storeId);
+
+    if (!name) {
+      throw ErrorFactory.InvalidRequest("El nombre del tamaño es requerido");
+    }
+    if (!value) {
+      throw ErrorFactory.InvalidRequest("El valor del tamaño es requerido");
+    }
+
+    const existingSize = await prismadb.size.findUnique({
+      where: {
+        id: params.sizeId,
+        storeId: params.storeId,
       },
     });
-    return NextResponse.json(size);
+
+    if (!existingSize) {
+      throw ErrorFactory.NotFound(
+        `El tamaño ${params.sizeId} no existe en esta tienda`,
+      );
+    }
+
+    const updatedSize = await prismadb.size.update({
+      where: {
+        id: params.sizeId,
+      },
+      data: {
+        name: name.trim(),
+        value: value.trim(),
+      },
+    });
+
+    return NextResponse.json(updatedSize);
   } catch (error) {
-    console.log("[SIZE_PATCH]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "SIZE_PATCH");
   }
 }
 
@@ -58,24 +81,54 @@ export async function DELETE(
   _req: Request,
   { params }: { params: { storeId: string; sizeId: string } },
 ) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-
-  if (!params.sizeId)
-    return NextResponse.json({ error: "Size ID is required" }, { status: 400 });
   try {
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    if (!params.sizeId) {
+      throw ErrorFactory.InvalidRequest("El ID del tamaño es requerido");
+    }
+
+    await verifyStoreOwner(userId, params.storeId);
+
+    const deletedSize = await prismadb.$transaction(async (tx) => {
+      const size = await tx.size.findUnique({
+        where: {
+          id: params.sizeId,
+          storeId: params.storeId,
+        },
+        include: {
+          products: {
+            select: {
+              id: true,
+            },
+          },
+        },
+      });
+
+      if (!size) {
+        throw ErrorFactory.NotFound("Tamaño no encontrado");
+      }
+
+      if (size.products.length > 0) {
+        throw ErrorFactory.Conflict(
+          `No se puede eliminar el tamaño ${size.name} porque tiene ${size.products.length} productos asociados. Elimina o reasigna los productos asociados primero`,
+          {
+            size: size.name,
+            products: size.products.length,
+          },
+        );
+      }
+
+      return await tx.size.delete({
+        where: {
+          id: params.sizeId,
+        },
+      });
     });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    const size = await prismadb.size.deleteMany({
-      where: { id: params.sizeId },
-    });
-    return NextResponse.json(size);
+
+    return NextResponse.json(deletedSize);
   } catch (error) {
-    console.log("[SIZE_DELETE]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "SIZE_DELETE");
   }
 }

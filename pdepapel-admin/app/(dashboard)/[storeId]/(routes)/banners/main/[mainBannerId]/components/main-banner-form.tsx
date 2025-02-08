@@ -21,10 +21,11 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/api-errors";
 import { MainBanner } from "@prisma/client";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 const formSchema = z.object({
   title: z.string().optional(),
@@ -49,16 +50,19 @@ const MainBannerForm: React.FC<MainBannerFormProps> = ({ initialData }) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const title = initialData
-    ? "Editar banner principal"
-    : "Crear banner principal";
-  const description = initialData
-    ? "Editar un banner principal"
-    : "Crear un nuevo banner principal";
-  const toastMessage = initialData
-    ? "Banner principal actualizado"
-    : "Banner principal creado";
-  const action = initialData ? "Guardar cambios" : "Crear";
+  const { title, description, toastMessage, action } = useMemo(
+    () => ({
+      title: initialData ? "Editar banner principal" : "Crear banner principal",
+      description: initialData
+        ? "Editar un banner principal"
+        : "Crear un nuevo banner principal",
+      toastMessage: initialData
+        ? "Banner principal actualizado"
+        : "Banner principal creado",
+      action: initialData ? "Guardar cambios" : "Crear",
+    }),
+    [initialData],
+  );
 
   const form = useForm<MainBannerFormValues>({
     resolver: zodResolver(formSchema),
@@ -98,8 +102,7 @@ const MainBannerForm: React.FC<MainBannerFormProps> = ({ initialData }) => {
       });
     } catch (error) {
       toast({
-        description:
-          "¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {
@@ -115,13 +118,12 @@ const MainBannerForm: React.FC<MainBannerFormProps> = ({ initialData }) => {
       router.refresh();
       router.push(`/${params.storeId}/${Models.Banners}`);
       toast({
-        description: "Banner eliminado",
+        description: "Banner principal eliminado",
         variant: "success",
       });
     } catch (error) {
       toast({
-        description:
-          "Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {

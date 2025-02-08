@@ -1,70 +1,75 @@
+import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
+import { verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
-import { NextResponse } from "next/server";
+import { Social } from "@prisma/client";
+import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400 },
-    );
   try {
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+
     const body = await req.json();
     const { social, postId } = body;
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
+
+    await verifyStoreOwner(userId, params.storeId);
+
+    if (!social || !Object.values(Social).includes(social)) {
+      throw ErrorFactory.InvalidRequest("La red social es inválida");
+    }
+    if (!postId) {
+      throw ErrorFactory.InvalidRequest("El ID de la publicación es requerido");
+    }
+
+    // Check if post already exists
+    const existingPost = await prismadb.post.findFirst({
+      where: {
+        storeId: params.storeId,
+        postId,
+        social,
+      },
     });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    if (!social)
-      return NextResponse.json(
-        { error: "Social Network is required" },
-        { status: 400 },
+
+    if (existingPost) {
+      throw ErrorFactory.Conflict(
+        "Ya existe una publicación con este ID para esta red social",
       );
-    if (!postId)
-      return NextResponse.json(
-        { error: "Post Id is required" },
-        { status: 400 },
-      );
+    }
+
     const post = await prismadb.post.create({
       data: { social, postId, storeId: params.storeId },
     });
+
     return NextResponse.json(post);
   } catch (error) {
-    console.log("[POSTS_POST]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleErrorResponse(error, "POSTS_POST");
   }
 }
 
 export async function GET(
-  req: Request,
+  req: NextRequest,
   { params }: { params: { storeId: string } },
 ) {
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400 },
-    );
   try {
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+
+    const social = req.nextUrl.searchParams.get("social") as Social | null;
+
     const posts = await prismadb.post.findMany({
-      where: { storeId: params.storeId },
+      where: { storeId: params.storeId, ...(social && { social }) },
+      orderBy: {
+        createdAt: "desc",
+      },
     });
+
     return NextResponse.json(posts);
   } catch (error) {
-    console.log("[POSTS_GET]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleErrorResponse(error, "POSTS_GET");
   }
 }
 
@@ -72,30 +77,23 @@ export async function DELETE(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
-  const { userId } = auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  }
-
   try {
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+
     const { ids }: { ids: string[] } = await req.json();
 
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      return NextResponse.json(
-        { error: "Post ID(s) are required and must be an array" },
-        { status: 400 },
+      throw ErrorFactory.InvalidRequest(
+        "Los IDs de las publicaciones son requeridos y deben estar en un arreglo",
       );
     }
 
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    if (!storeByUserId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
+    await verifyStoreOwner(userId, params.storeId);
 
     const result = await prismadb.$transaction(async (tx) => {
-      const deletedPosts = await tx.post.deleteMany({
+      const posts = await tx.post.findMany({
         where: {
           storeId: params.storeId,
           id: {
@@ -104,14 +102,24 @@ export async function DELETE(
         },
       });
 
-      return {
-        deletedPosts,
-      };
+      if (posts.length !== ids.length) {
+        throw ErrorFactory.InvalidRequest(
+          "Algunas publicaciones no existen o no pertenecen a esta tienda",
+        );
+      }
+
+      return await tx.post.deleteMany({
+        where: {
+          storeId: params.storeId,
+          id: {
+            in: ids,
+          },
+        },
+      });
     });
 
     return NextResponse.json(result);
   } catch (error) {
-    console.log("[POSTS_DELETE]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "POSTS_DELETE");
   }
 }

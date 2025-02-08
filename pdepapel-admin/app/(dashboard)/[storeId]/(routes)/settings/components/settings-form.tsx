@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useOrigin } from "@/hooks/use-origin";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/api-errors";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -58,8 +59,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
       });
     } catch (error) {
       toast({
-        description:
-          "¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {
@@ -78,8 +78,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
       });
     } catch (error) {
       toast({
-        description:
-          "Asegúrate de haber eliminado todos los productos y categorías primero.",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {

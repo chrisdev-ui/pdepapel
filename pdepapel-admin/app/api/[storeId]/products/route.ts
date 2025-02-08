@@ -4,9 +4,15 @@ import {
   SORT_OPTIONS,
   SortOption,
 } from "@/constants";
+import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import cloudinaryInstance from "@/lib/cloudinary";
 import prismadb from "@/lib/prismadb";
-import { generateRandomSKU, getPublicIdFromCloudinaryUrl } from "@/lib/utils";
+import {
+  generateRandomSKU,
+  getPublicIdFromCloudinaryUrl,
+  parseErrorDetails,
+  verifyStoreOwner,
+} from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
@@ -14,15 +20,13 @@ export async function POST(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400 },
-    );
   try {
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+
+    await verifyStoreOwner(userId, params.storeId);
+
     const body = await req.json();
     const {
       name,
@@ -39,46 +43,26 @@ export async function POST(
       isArchived,
       isFeatured,
     } = body;
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+
     if (!name)
-      return NextResponse.json({ error: "Name is required" }, { status: 400 });
+      throw ErrorFactory.InvalidRequest(
+        "El nombre del producto es obligatorio",
+      );
     if (!images || !images.length)
-      return NextResponse.json(
-        { error: "Images are required" },
-        { status: 400 },
-      );
-    if (!price)
-      return NextResponse.json({ error: "Price is required" }, { status: 400 });
+      throw ErrorFactory.InvalidRequest("Las imágenes son obligatorias");
+    if (!price) throw ErrorFactory.InvalidRequest("El precio es obligatorio");
     if (!categoryId)
-      return NextResponse.json(
-        { error: "Category ID is required" },
-        { status: 400 },
-      );
-    if (!sizeId)
-      return NextResponse.json(
-        { error: "Size ID is required" },
-        { status: 400 },
-      );
-    if (!colorId)
-      return NextResponse.json(
-        { error: "Color ID is required" },
-        { status: 400 },
-      );
+      throw ErrorFactory.InvalidRequest("La categoría es obligatoria");
+    if (!sizeId) throw ErrorFactory.InvalidRequest("El tamaño es obligatorio");
+    if (!colorId) throw ErrorFactory.InvalidRequest("El color es obligatorio");
     if (!designId)
-      return NextResponse.json(
-        { error: "Design ID is required" },
-        { status: 400 },
-      );
+      throw ErrorFactory.InvalidRequest("El diseño es obligatorio");
     if (stock && stock < 0)
-      return NextResponse.json(
-        { error: "Stock must be 0 or greater" },
-        { status: 400 },
+      throw ErrorFactory.InvalidRequest(
+        "El stock debe ser cero o mayor a cero",
       );
     const sku = generateRandomSKU();
+
     const product = await prismadb.product.create({
       data: {
         name,
@@ -107,13 +91,10 @@ export async function POST(
         storeId: params.storeId,
       },
     });
+
     return NextResponse.json(product);
   } catch (error) {
-    console.log("[PRODUCTS_POST]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleErrorResponse(error, "PRODUCTS_POST");
   }
 }
 
@@ -121,12 +102,9 @@ export async function GET(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400 },
-    );
   try {
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+
     const { searchParams } = new URL(req.url);
     const page = Number(searchParams.get("page")) || 1;
     const itemsPerPage = Number(searchParams.get("itemsPerPage")) || 52;
@@ -282,11 +260,7 @@ export async function GET(
       totalPages: fromShop ? totalPages : 1,
     });
   } catch (error) {
-    console.log("[PRODUCTS_GET]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleErrorResponse(error, "PRODUCTS_GET");
   }
 }
 
@@ -294,27 +268,19 @@ export async function DELETE(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
-  const { userId } = auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  }
-
   try {
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+
+    await verifyStoreOwner(userId, params.storeId);
+
     const { ids }: { ids: string[] } = await req.json();
 
-    if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      return NextResponse.json(
-        { error: "Product ID(s) are required and must be an array" },
-        { status: 400 },
+    if (!ids || !Array.isArray(ids) || ids.length === 0)
+      throw ErrorFactory.InvalidRequest(
+        "Se requieren IDs de productos válidos en formato de arreglo",
       );
-    }
-
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    if (!storeByUserId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
 
     const result = await prismadb.$transaction(async (tx) => {
       const products = await tx.product.findMany({
@@ -326,40 +292,68 @@ export async function DELETE(
         },
         include: {
           images: true,
+          orderItems: true,
+          reviews: true,
         },
       });
 
-      let publicIds: string[] = [];
+      if (products.length !== ids.length)
+        throw ErrorFactory.NotFound(
+          "Algunos productos no se han encontrado o no pertenecen a esta tienda",
+        );
 
-      if (products.length > 0) {
-        for (const product of products) {
-          const productImageIds = product.images
-            .map((image) => getPublicIdFromCloudinaryUrl(image.url))
-            .filter((id): id is string => id !== null && id !== undefined);
-          publicIds.push(...productImageIds);
-        }
-
-        if (publicIds.length > 0) {
-          try {
-            await cloudinaryInstance.v2.api.delete_resources(publicIds, {
-              type: "upload",
-              resource_type: "image",
-            });
-          } catch (cloudinaryError: any) {
-            throw new Error(
-              `Cloudinary deletion failed: ${cloudinaryError.message}`,
-            );
-          }
-        }
-
-        await tx.image.deleteMany({
-          where: {
-            productId: {
-              in: ids,
-            },
+      const productsWithOrders = products.filter(
+        (product) => product.orderItems.length > 0,
+      );
+      if (productsWithOrders.length > 0) {
+        throw ErrorFactory.Conflict(
+          "No se pueden eliminar productos con órdenes asociadas. Elimina o reasigna las órdenes asociadas primero",
+          {
+            ...parseErrorDetails(
+              "productsWithOrders",
+              productsWithOrders.map((p) => ({ id: p.id, name: p.name })),
+            ),
           },
-        });
+        );
       }
+
+      // Collect image public IDs for deletion
+      const publicIds = products.flatMap((product) =>
+        product.images
+          .map((image) => getPublicIdFromCloudinaryUrl(image.url))
+          .filter((id): id is string => id !== null && id !== undefined),
+      );
+
+      // Delete images from Cloudinary if any exist
+      if (publicIds.length > 0) {
+        try {
+          await cloudinaryInstance.v2.api.delete_resources(publicIds, {
+            type: "upload",
+            resource_type: "image",
+          });
+        } catch (cloudinaryError: any) {
+          throw ErrorFactory.CloudinaryError(
+            cloudinaryError,
+            "Ha ocurrido un error al intentar eliminar las imágenes en el servidor Cloudinary",
+          );
+        }
+      }
+
+      await tx.review.deleteMany({
+        where: {
+          productId: {
+            in: ids,
+          },
+        },
+      });
+
+      await tx.image.deleteMany({
+        where: {
+          productId: {
+            in: ids,
+          },
+        },
+      });
 
       const deletedProducts = await tx.product.deleteMany({
         where: {
@@ -378,8 +372,7 @@ export async function DELETE(
 
     return NextResponse.json(result);
   } catch (error) {
-    console.log("[PRODUCTS_DELETE]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "PRODUCTS_DELETE");
   }
 }
 
@@ -387,34 +380,57 @@ export async function PATCH(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
-  const { userId } = auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  }
-
   try {
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+
     const body = await req.json();
     const {
       ids,
       isArchived,
       isFeatured,
-    }: { ids: string[]; isArchived?: boolean; isFeatured?: boolean } = body;
+    }: {
+      ids: string[];
+      isArchived?: boolean;
+      isFeatured?: boolean;
+    } = body;
 
+    // Validate required fields
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      return NextResponse.json(
-        { error: "Product ID(s) are required and must be an array" },
-        { status: 400 },
+      throw ErrorFactory.InvalidRequest(
+        "Se requieren IDs de productos en formato de arreglo",
       );
     }
 
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    if (!storeByUserId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    // Validate at least one update field is provided
+    if (isArchived === undefined && isFeatured === undefined) {
+      throw ErrorFactory.InvalidRequest(
+        "Al menos un campo de actualización (archivado o destacado) debe ser proporcionado",
+      );
     }
 
+    // Verify store ownership
+    await verifyStoreOwner(userId, params.storeId);
+
     const result = await prismadb.$transaction(async (tx) => {
+      // Verify all products exist and belong to the store
+      const existingProducts = await tx.product.findMany({
+        where: {
+          storeId: params.storeId,
+          id: {
+            in: ids,
+          },
+        },
+      });
+
+      if (existingProducts.length !== ids.length) {
+        throw ErrorFactory.InvalidRequest(
+          "Algunos productos no se encontraron o no pertenecen a esta tienda",
+        );
+      }
+
+      // Update products
       return await tx.product.updateMany({
         where: {
           id: {
@@ -431,7 +447,6 @@ export async function PATCH(
 
     return NextResponse.json(result);
   } catch (error) {
-    console.log("[PRODUCTS_PATCH]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "PRODUCTS_PATCH");
   }
 }

@@ -37,6 +37,7 @@ import {
   Models,
 } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/api-errors";
 import { Color, Design, Size, Supplier } from "@prisma/client";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
@@ -223,8 +224,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
         });
       } catch (error) {
         toast({
-          description:
-            "¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+          description: getErrorMessage(error),
           variant: "destructive",
         });
       } finally {
@@ -254,8 +254,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       });
     } catch (error) {
       toast({
-        description:
-          "¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {

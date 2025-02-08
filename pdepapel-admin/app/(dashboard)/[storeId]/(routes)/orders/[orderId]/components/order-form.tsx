@@ -10,7 +10,7 @@ import {
   ShippingStatus,
 } from "@prisma/client";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import z from "zod";
 
 import { AlertModal } from "@/components/modals/alert-modal";
@@ -45,6 +45,7 @@ import {
   statusOptions,
 } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/api-errors";
 import {
   currencyFormatter,
   generateGuestId,
@@ -151,12 +152,15 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   );
   const [loading, setLoading] = useState(false);
 
-  const title = initialData ? "Editar orden" : "Crear orden";
-  const description = initialData
-    ? "Editar una orden"
-    : "Crear una nueva orden";
-  const toastMessage = initialData ? "Orden actualizada" : "Orden creada";
-  const action = initialData ? "Guardar cambios" : "Crear";
+  const { title, description, toastMessage, action } = useMemo(
+    () => ({
+      title: initialData ? "Editar orden" : "Crear orden",
+      description: initialData ? "Editar una orden" : "Crear una nueva orden",
+      toastMessage: initialData ? "Orden actualizada" : "Orden creada",
+      action: initialData ? "Guardar cambios" : "Crear",
+    }),
+    [initialData],
+  );
 
   const form = useForm<OrderFormValues>({
     resolver: zodResolver(formSchema),
@@ -226,8 +230,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
       });
     } catch (error) {
       toast({
-        description:
-          "¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {
@@ -246,12 +249,13 @@ export const OrderForm: React.FC<OrderFormProps> = ({
       toast({
         description: "Orden eliminada",
         variant: "success",
+        duration: 4000,
       });
     } catch (error) {
       toast({
-        description:
-          "¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        description: getErrorMessage(error),
         variant: "destructive",
+        duration: 4000,
       });
     } finally {
       setLoading(false);

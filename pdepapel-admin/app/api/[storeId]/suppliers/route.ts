@@ -1,4 +1,6 @@
+import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
+import { parseErrorDetails, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
@@ -6,34 +8,43 @@ export async function POST(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400 },
-    );
   try {
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+
     const body = await req.json();
     const { name } = body;
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
+
+    await verifyStoreOwner(userId, params.storeId);
+
+    if (!name?.trim()) {
+      throw ErrorFactory.InvalidRequest("El nombre del proveedor es requerido");
+    }
+
+    const existingSupplier = await prismadb.supplier.findFirst({
+      where: {
+        storeId: params.storeId,
+        name: {
+          equals: name.trim(),
+        },
+      },
     });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    if (!name)
-      return NextResponse.json({ error: "Name is required" }, { status: 400 });
+
+    if (existingSupplier) {
+      throw ErrorFactory.Conflict("Ya existe un proveedor con este nombre");
+    }
+
     const supplier = await prismadb.supplier.create({
-      data: { name, storeId: params.storeId },
+      data: {
+        name: name.trim(),
+        storeId: params.storeId,
+      },
     });
+
     return NextResponse.json(supplier);
   } catch (error) {
-    console.log("[SUPPLIERS_POST]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleErrorResponse(error, "SUPPLIERS_POST");
   }
 }
 
@@ -41,22 +52,19 @@ export async function GET(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400 },
-    );
   try {
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+
     const suppliers = await prismadb.supplier.findMany({
       where: { storeId: params.storeId },
+      orderBy: {
+        createdAt: "desc",
+      },
     });
+
     return NextResponse.json(suppliers);
   } catch (error) {
-    console.log("[SUPPLIERS_GET]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleErrorResponse(error, "SUPPLIERS_GET");
   }
 }
 
@@ -64,30 +72,66 @@ export async function DELETE(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
-  const { userId } = auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  }
-
   try {
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+
     const { ids }: { ids: string[] } = await req.json();
 
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      return NextResponse.json(
-        { error: "Supplier ID(s) are required and must be an array" },
-        { status: 400 },
+      throw ErrorFactory.InvalidRequest(
+        "Los IDs de los proveedores son requeridos y deben ser un array",
       );
     }
 
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    if (!storeByUserId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
+    await verifyStoreOwner(userId, params.storeId);
 
     const result = await prismadb.$transaction(async (tx) => {
-      const deletedSuppliers = await tx.supplier.deleteMany({
+      const suppliers = await tx.supplier.findMany({
+        where: {
+          storeId: params.storeId,
+          id: {
+            in: ids,
+          },
+        },
+        include: {
+          products: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      });
+
+      if (suppliers.length !== ids.length) {
+        throw ErrorFactory.InvalidRequest(
+          "Algunos proveedores no existen o no pertenecen a esta tienda",
+        );
+      }
+
+      const suppliersWithProducts = suppliers.filter(
+        (supplier) => supplier.products.length > 0,
+      );
+
+      if (suppliersWithProducts.length > 0) {
+        throw ErrorFactory.Conflict(
+          "No se pueden eliminar proveedores con productos asociados. Elimina o reasigna los productos asociados primero",
+          {
+            ...parseErrorDetails(
+              "suppliersWithProducts",
+              suppliersWithProducts.map((supplier) => ({
+                id: supplier.id,
+                name: supplier.name,
+                products: supplier.products.length,
+              })),
+            ),
+          },
+        );
+      }
+
+      return await tx.supplier.deleteMany({
         where: {
           storeId: params.storeId,
           id: {
@@ -95,15 +139,10 @@ export async function DELETE(
           },
         },
       });
-
-      return {
-        deletedSuppliers,
-      };
     });
 
     return NextResponse.json(result);
   } catch (error) {
-    console.log("[SUPPLIERS_DELETE]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "SUPPLIERS_DELETE");
   }
 }

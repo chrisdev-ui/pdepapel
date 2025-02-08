@@ -21,10 +21,11 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/api-errors";
 import { Banner } from "@prisma/client";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 const formSchema = z.object({
   callToAction: z.string().min(1, "La URL de redirección no puede estar vacía"),
@@ -45,12 +46,15 @@ export const BannerForm: React.FC<BannerFormProps> = ({ initialData }) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const title = initialData ? "Editar banner" : "Crear banner";
-  const description = initialData
-    ? "Editar un banner"
-    : "Crear un nuevo banner";
-  const toastMessage = initialData ? "Banner actualizado" : "Banner creado";
-  const action = initialData ? "Guardar cambios" : "Crear";
+  const { title, description, toastMessage, action } = useMemo(
+    () => ({
+      title: initialData ? "Editar banner" : "Crear banner",
+      description: initialData ? "Editar un banner" : "Crear un nuevo banner",
+      toastMessage: initialData ? "Banner actualizado" : "Banner creado",
+      action: initialData ? "Guardar cambios" : "Crear",
+    }),
+    [initialData],
+  );
 
   const form = useForm<BannerFormValues>({
     resolver: zodResolver(formSchema),
@@ -78,8 +82,7 @@ export const BannerForm: React.FC<BannerFormProps> = ({ initialData }) => {
       });
     } catch (error) {
       toast({
-        description:
-          "¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {
@@ -100,8 +103,7 @@ export const BannerForm: React.FC<BannerFormProps> = ({ initialData }) => {
       });
     } catch (error) {
       toast({
-        description:
-          "Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {

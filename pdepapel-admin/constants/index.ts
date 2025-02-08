@@ -2,6 +2,9 @@ import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
 
 export const DEFAULT_COUNTRY = "CO";
 
+export const GENERIC_ERROR =
+  "Ha ocurrido un error inesperado. Por favor, inténtalo de nuevo más tarde.";
+
 export type SortOption =
   | "default"
   | "dateAdded"
@@ -274,4 +277,20 @@ export const ModelsColumns: Record<Models, { [key: string]: string }> = {
     sales: "Ventas",
     orders: "Órdenes",
   },
+};
+
+export const ALLOWED_TRANSITIONS: Record<ShippingStatus, ShippingStatus[]> = {
+  [ShippingStatus.Preparing]: [ShippingStatus.Shipped, ShippingStatus.Returned],
+  [ShippingStatus.Shipped]: [ShippingStatus.InTransit, ShippingStatus.Returned],
+  [ShippingStatus.InTransit]: [
+    ShippingStatus.Delivered,
+    ShippingStatus.Returned,
+  ],
+  [ShippingStatus.Delivered]: [ShippingStatus.Returned],
+  [ShippingStatus.Returned]: [
+    ShippingStatus.Preparing,
+    ShippingStatus.Shipped,
+    ShippingStatus.InTransit,
+    ShippingStatus.Delivered,
+  ],
 };

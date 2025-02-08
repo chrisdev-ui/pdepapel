@@ -28,9 +28,10 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/api-errors";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 const formSchema = z.object({
   name: z.string().min(1, "El nombre de la categoria no puede estar vacío"),
@@ -55,14 +56,17 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const title = initialData ? "Editar categoría" : "Crear categoría";
-  const description = initialData
-    ? "Editar una categoría"
-    : "Crear una nueva categoría";
-  const toastMessage = initialData
-    ? "Categoría actualizada"
-    : "Categoría creada";
-  const action = initialData ? "Guardar cambios" : "Crear";
+  const { title, description, toastMessage, action } = useMemo(
+    () => ({
+      title: initialData ? "Editar categoría" : "Crear categoría",
+      description: initialData
+        ? "Editar una categoría"
+        : "Crear una nueva categoría",
+      toastMessage: initialData ? "Categoría actualizada" : "Categoría creada",
+      action: initialData ? "Guardar cambios" : "Crear",
+    }),
+    [initialData],
+  );
 
   const form = useForm<CategoryFormValues>({
     resolver: zodResolver(formSchema),
@@ -90,8 +94,7 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
       });
     } catch (error) {
       toast({
-        description:
-          "¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {
@@ -112,8 +115,7 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
       });
     } catch (error) {
       toast({
-        description:
-          "Asegúrate de haber eliminado todas las productos que usen esta categoría primero.",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {

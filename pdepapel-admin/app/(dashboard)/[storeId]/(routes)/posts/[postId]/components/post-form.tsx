@@ -28,10 +28,11 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/api-errors";
 import { Post, Social } from "@prisma/client";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 const formSchema = z.object({
   social: z.nativeEnum(Social),
@@ -52,10 +53,15 @@ export const PostForm: React.FC<PostFormProps> = ({ initialData }) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const title = initialData ? "Editar post" : "Crear post";
-  const description = initialData ? "Editar un post" : "Crear un nuevo post";
-  const toastMessage = initialData ? "Post actualizado" : "Post creado";
-  const action = initialData ? "Guardar cambios" : "Crear";
+  const { title, description, toastMessage, action } = useMemo(
+    () => ({
+      title: initialData ? "Editar post" : "Crear post",
+      description: initialData ? "Editar un post" : "Crear un nuevo post",
+      toastMessage: initialData ? "Post actualizado" : "Post creado",
+      action: initialData ? "Guardar cambios" : "Crear",
+    }),
+    [initialData],
+  );
 
   const form = useForm<PostFormValues>({
     resolver: zodResolver(formSchema),
@@ -83,8 +89,7 @@ export const PostForm: React.FC<PostFormProps> = ({ initialData }) => {
       });
     } catch (error) {
       toast({
-        description:
-          "¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {
@@ -105,8 +110,7 @@ export const PostForm: React.FC<PostFormProps> = ({ initialData }) => {
       });
     } catch (error) {
       toast({
-        description:
-          "¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {

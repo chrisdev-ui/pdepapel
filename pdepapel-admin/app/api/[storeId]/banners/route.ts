@@ -1,6 +1,7 @@
+import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import cloudinaryInstance from "@/lib/cloudinary";
 import prismadb from "@/lib/prismadb";
-import { getPublicIdFromCloudinaryUrl } from "@/lib/utils";
+import { getPublicIdFromCloudinaryUrl, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
@@ -8,31 +9,24 @@ export async function POST(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400 },
-    );
   try {
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+
+    await verifyStoreOwner(userId, params.storeId);
+
     const body = await req.json();
     const { callToAction, imageUrl } = body;
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+
     if (!imageUrl)
-      return NextResponse.json(
-        { error: "Image URL is required" },
-        { status: 400 },
+      throw ErrorFactory.InvalidRequest(
+        "Se requiere una imagen para el banner",
       );
+
     if (!callToAction)
-      return NextResponse.json(
-        { error: "Call to action is required" },
-        { status: 400 },
+      throw ErrorFactory.InvalidRequest(
+        "Se requiere una URL de redirección para el banner",
       );
 
     const banner = await prismadb.banner.create({
@@ -42,36 +36,27 @@ export async function POST(
         storeId: params.storeId,
       },
     });
+
     return NextResponse.json(banner);
   } catch (error) {
-    console.log("[BANNERS_POST]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleErrorResponse(error, "BANNERS_POST");
   }
 }
 
 export async function GET(
-  req: Request,
+  _req: Request,
   { params }: { params: { storeId: string } },
 ) {
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400 },
-    );
   try {
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+
     const banners = await prismadb.banner.findMany({
       where: { storeId: params.storeId },
     });
+
     return NextResponse.json(banners);
   } catch (error) {
-    console.log("[BANNERS_GET]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleErrorResponse(error, "BANNERS_GET");
   }
 }
 
@@ -79,29 +64,21 @@ export async function DELETE(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
-  const { userId } = auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  }
-
   try {
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+
     const { ids }: { ids: string[] } = await req.json();
 
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      return NextResponse.json(
-        { error: "Banner ID(s) are required and must be an array" },
-        { status: 400 },
+      throw ErrorFactory.InvalidRequest(
+        "Se requieren IDs de banners en formato de arreglo",
       );
     }
 
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    if (!storeByUserId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
+    await verifyStoreOwner(userId, params.storeId);
 
-    const result = await prismadb.$transaction(async (tx) => {
+    const deletedBanners = await prismadb.$transaction(async (tx) => {
       const banners = await tx.banner.findMany({
         where: {
           storeId: params.storeId,
@@ -110,6 +87,11 @@ export async function DELETE(
           },
         },
       });
+
+      if (banners.length !== ids.length)
+        throw ErrorFactory.NotFound(
+          "Algunos banners no se han encontrado en esta tienda",
+        );
 
       const publicIds = banners
         .map((banner) => getPublicIdFromCloudinaryUrl(banner.imageUrl))
@@ -122,13 +104,14 @@ export async function DELETE(
             resource_type: "image",
           });
         } catch (cloudinaryError: any) {
-          throw new Error(
-            `Cloudinary deletion failed: ${cloudinaryError.message}`,
+          throw ErrorFactory.CloudinaryError(
+            cloudinaryError,
+            "Error al intentar eliminar las imágenes de los banners seleccionados",
           );
         }
       }
 
-      const deletedBanners = await tx.banner.deleteMany({
+      const response = await tx.banner.deleteMany({
         where: {
           storeId: params.storeId,
           id: {
@@ -138,14 +121,13 @@ export async function DELETE(
       });
 
       return {
-        deletedBanners,
+        deletedBanners: response,
         deletedImages: publicIds,
       };
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json(deletedBanners);
   } catch (error) {
-    console.log("[BANNERS_DELETE]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "BANNERS_DELETE");
   }
 }

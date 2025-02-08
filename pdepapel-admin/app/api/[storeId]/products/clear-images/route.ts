@@ -1,6 +1,7 @@
+import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import cloudinaryInstance from "@/lib/cloudinary";
 import prismadb from "@/lib/prismadb";
-import { getPublicIdFromCloudinaryUrl } from "@/lib/utils";
+import { getPublicIdFromCloudinaryUrl, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
@@ -8,33 +9,41 @@ export async function PATCH(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400 },
-    );
-
   try {
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+
     const body = await req.json();
     const { ids }: { ids: string[] } = body;
 
-    if (!ids || !Array.isArray(ids) || ids.length === 0)
-      return NextResponse.json(
-        { error: "Product ID(s) are required and must be an array" },
-        { status: 400 },
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      throw ErrorFactory.InvalidRequest(
+        "Se requieren IDs de productos en formato de arreglo",
       );
+    }
 
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    // Verify store ownership
+    await verifyStoreOwner(userId, params.storeId);
 
     const result = await prismadb.$transaction(async (tx) => {
+      // Verify products exist and belong to the store
+      const products = await tx.product.findMany({
+        where: {
+          storeId: params.storeId,
+          id: {
+            in: ids,
+          },
+        },
+      });
+
+      if (products.length !== ids.length) {
+        throw ErrorFactory.InvalidRequest(
+          "Algunos productos no se encontraron o no pertenecen a esta tienda",
+        );
+      }
+
+      // Get all images for the products
       const images = await tx.image.findMany({
         where: {
           productId: {
@@ -43,29 +52,48 @@ export async function PATCH(
         },
       });
 
+      if (images.length === 0)
+        throw ErrorFactory.InvalidRequest(
+          "No se encontraron imágenes para los productos seleccionados",
+        );
+
+      // Extract valid Cloudinary public IDs
       const publicIds = images
         .map((image) => getPublicIdFromCloudinaryUrl(image.url))
         .filter((id): id is string => id !== null);
 
+      // Delete images from Cloudinary if any exist
       if (publicIds.length > 0) {
-        await cloudinaryInstance.v2.api.delete_resources(publicIds, {
-          type: "upload",
-          resource_type: "image",
-        });
+        try {
+          await cloudinaryInstance.v2.api.delete_resources(publicIds, {
+            type: "upload",
+            resource_type: "image",
+          });
+        } catch (cloudinaryError: any) {
+          throw ErrorFactory.CloudinaryError(
+            cloudinaryError,
+            "Ha ocurrido un error al intentar eliminar las imágenes en el servidor Cloudinary",
+          );
+        }
       }
 
-      return await tx.image.deleteMany({
+      // Delete image records from database
+      const deletedImages = await tx.image.deleteMany({
         where: {
           productId: {
             in: ids,
           },
         },
       });
+
+      return {
+        deletedCount: deletedImages.count,
+        deletedImages: publicIds,
+      };
     });
 
     return NextResponse.json(result);
   } catch (error) {
-    console.log("[PRODUCTS_CLEAR_IMAGES_PATCH]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "PRODUCTS_CLEAR_IMAGES_PATCH");
   }
 }

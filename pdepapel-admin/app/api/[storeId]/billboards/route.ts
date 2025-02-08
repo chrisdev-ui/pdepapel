@@ -1,6 +1,7 @@
+import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import cloudinaryInstance from "@/lib/cloudinary";
 import prismadb from "@/lib/prismadb";
-import { getPublicIdFromCloudinaryUrl } from "@/lib/utils";
+import { getPublicIdFromCloudinaryUrl, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
@@ -8,29 +9,26 @@ export async function POST(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400 },
-    );
   try {
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+
+    await verifyStoreOwner(userId, params.storeId);
+
     const body = await req.json();
     const { label, imageUrl, title, redirectUrl } = body;
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+
     if (!label)
-      return NextResponse.json({ error: "Label is required" }, { status: 400 });
-    if (!imageUrl)
-      return NextResponse.json(
-        { error: "Image URL is required" },
-        { status: 400 },
+      throw ErrorFactory.InvalidRequest(
+        "Se requiere una etiqueta para la publicación",
       );
+
+    if (!imageUrl)
+      throw ErrorFactory.InvalidRequest(
+        "Se requiere una imagen para la publicación",
+      );
+
     const billboard = await prismadb.billboard.create({
       data: {
         label,
@@ -40,36 +38,27 @@ export async function POST(
         storeId: params.storeId,
       },
     });
+
     return NextResponse.json(billboard);
   } catch (error) {
-    console.log("[BILLBOARDS_POST]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleErrorResponse(error, "BILLBOARDS_POST");
   }
 }
 
 export async function GET(
-  req: Request,
+  _req: Request,
   { params }: { params: { storeId: string } },
 ) {
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400 },
-    );
   try {
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+
     const billboards = await prismadb.billboard.findMany({
       where: { storeId: params.storeId },
     });
+
     return NextResponse.json(billboards);
   } catch (error) {
-    console.log("[BILLBOARDS_GET]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleErrorResponse(error, "BILLBOARDS_GET");
   }
 }
 
@@ -77,29 +66,21 @@ export async function DELETE(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
-  const { userId } = auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  }
-
   try {
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+
+    await verifyStoreOwner(userId, params.storeId);
+
     const { ids }: { ids: string[] } = await req.json();
 
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      return NextResponse.json(
-        { error: "Billboard ID(s) are required and must be an array" },
-        { status: 400 },
+      throw ErrorFactory.InvalidRequest(
+        "Se requieren IDs de publicaciones en formato de arreglo",
       );
     }
 
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    if (!storeByUserId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
-
-    const result = await prismadb.$transaction(async (tx) => {
+    const deletedBillboards = await prismadb.$transaction(async (tx) => {
       const billboards = await tx.billboard.findMany({
         where: {
           storeId: params.storeId,
@@ -108,6 +89,12 @@ export async function DELETE(
           },
         },
       });
+
+      if (billboards.length !== ids.length) {
+        throw ErrorFactory.NotFound(
+          "Algunas publicaciones no se han encontrado en esta tienda",
+        );
+      }
 
       const publicIds = billboards
         .map((billboard) => getPublicIdFromCloudinaryUrl(billboard.imageUrl))
@@ -120,13 +107,14 @@ export async function DELETE(
             resource_type: "image",
           });
         } catch (cloudinaryError: any) {
-          throw new Error(
-            `Cloudinary deletion failed: ${cloudinaryError.message}`,
+          throw ErrorFactory.CloudinaryError(
+            cloudinaryError,
+            "Error al intentar eliminar las imágenes de las publicaciones seleccionadas",
           );
         }
       }
 
-      const deletedBillboards = await tx.billboard.deleteMany({
+      const response = await tx.billboard.deleteMany({
         where: {
           storeId: params.storeId,
           id: {
@@ -136,14 +124,13 @@ export async function DELETE(
       });
 
       return {
-        deletedBillboards,
+        deletedBillboards: response,
         deletedImages: publicIds,
       };
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json(deletedBillboards);
   } catch (error) {
-    console.log("[BILLBOARDS_DELETE]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "BILLBOARDS_DELETE");
   }
 }

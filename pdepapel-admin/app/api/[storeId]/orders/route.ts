@@ -1,9 +1,21 @@
 import { EmailTemplate } from "@/components/email-template";
+import { ALLOWED_TRANSITIONS, shippingOptions } from "@/constants";
+import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
 import { resend } from "@/lib/resend";
-import { generateOrderNumber, getLastOrderTimestamp } from "@/lib/utils";
+import {
+  checkIfStoreOwner,
+  generateOrderNumber,
+  getLastOrderTimestamp,
+  verifyStoreOwner,
+} from "@/lib/utils";
 import { auth, clerkClient } from "@clerk/nextjs";
-import { OrderStatus, Prisma, ShippingStatus } from "@prisma/client";
+import {
+  OrderStatus,
+  PaymentMethod,
+  Prisma,
+  ShippingStatus,
+} from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 type OrderData = {
@@ -36,12 +48,10 @@ export async function POST(
   { params }: { params: { storeId: string } },
 ) {
   const { userId: userLogged } = auth();
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400, headers: corsHeaders },
-    );
+
   try {
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+
     const body = await req.json();
     const {
       fullName,
@@ -63,10 +73,7 @@ export async function POST(
       !orderItems ||
       orderItems.length === 0
     ) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400, headers: corsHeaders },
-      );
+      throw ErrorFactory.InvalidRequest("Faltan campos obligatorios");
     }
 
     let authenticatedUserId = userLogged;
@@ -75,15 +82,15 @@ export async function POST(
       if (user) {
         authenticatedUserId = user.id;
       } else {
-        return NextResponse.json(
-          { error: "Unauthenticated" },
-          { status: 401, headers: corsHeaders },
-        );
+        throw ErrorFactory.Unauthenticated();
       }
     }
 
-    const storeOwner = await isStoreOwner(authenticatedUserId, params.storeId);
-    if (!storeOwner) {
+    const isStoreOwner = await checkIfStoreOwner(
+      authenticatedUserId,
+      params.storeId,
+    );
+    if (!isStoreOwner) {
       const lastOrderTimestamp = await getLastOrderTimestamp(
         authenticatedUserId,
         guestId,
@@ -91,10 +98,7 @@ export async function POST(
       );
       const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000);
       if (lastOrderTimestamp && lastOrderTimestamp > threeMinutesAgo)
-        return NextResponse.json(
-          { error: "Too many orders" },
-          { status: 429, headers: corsHeaders },
-        );
+        throw ErrorFactory.OrderLimit();
     }
 
     const order = await prismadb.$transaction(
@@ -106,12 +110,14 @@ export async function POST(
           });
 
           if (!product) {
-            throw new Error(`Product ${item.productId} not found`);
+            throw ErrorFactory.NotFound(`Producto ${item.productId}`);
           }
 
           if (product.stock < (item.quantity ?? 1)) {
-            throw new Error(
-              `Product ${product.name} does not have enough stock. Available: ${product.stock}, Requested: ${item.quantity ?? 1}`,
+            throw ErrorFactory.InsufficientStock(
+              product.name,
+              product.stock,
+              item.quantity,
             );
           }
         }
@@ -178,7 +184,7 @@ export async function POST(
     );
 
     // Send email notification outside the transaction
-    if (!storeOwner) {
+    if (!isStoreOwner) {
       await resend.emails.send({
         from: "Orders <admin@papeleriapdepapel.com>",
         to: ["web.christian.dev@gmail.com", "papeleria.pdepapel@gmail.com"],
@@ -195,11 +201,7 @@ export async function POST(
 
     return NextResponse.json(order, { headers: corsHeaders });
   } catch (error) {
-    console.log("[ORDERS_POST]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500, headers: corsHeaders },
-    );
+    return handleErrorResponse(error, "ORDERS_POST", { headers: corsHeaders });
   }
 }
 
@@ -207,12 +209,9 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { storeId: string } },
 ) {
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400, headers: corsHeaders },
-    );
   try {
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+
     const userId = req.nextUrl.searchParams.get("userId");
     const guestId = req.nextUrl.searchParams.get("guestId");
     const whereClause: { storeId: string; userId?: string; guestId?: string } =
@@ -238,13 +237,10 @@ export async function GET(
         shipping: true,
       },
     });
+
     return NextResponse.json(orders, { headers: corsHeaders });
   } catch (error) {
-    console.log("[ORDERS_GET]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500, headers: corsHeaders },
-    );
+    return handleErrorResponse(error, "ORDERS_GET", { headers: corsHeaders });
   }
 }
 
@@ -253,26 +249,66 @@ export async function DELETE(
   { params }: { params: { storeId: string } },
 ) {
   const { userId } = auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  }
-
   try {
+    if (!userId) throw ErrorFactory.Unauthenticated();
+
     const { ids }: { ids: string[] } = await req.json();
 
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      return NextResponse.json(
-        { error: "Order ID(s) are required and must be an array" },
-        { status: 400 },
+      throw ErrorFactory.InvalidRequest(
+        "Se requieren IDs de órdenes válidas en formato de arreglo",
       );
     }
 
-    const storeOwner = await isStoreOwner(userId, params.storeId);
-    if (!storeOwner) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
+    await verifyStoreOwner(userId, params.storeId);
 
     const result = await prismadb.$transaction(async (tx) => {
+      const orders = await tx.order.findMany({
+        where: {
+          id: {
+            in: ids,
+          },
+          storeId: params.storeId,
+        },
+        include: {
+          shipping: true,
+          payment: true,
+        },
+      });
+
+      if (orders.length !== ids.length) {
+        throw ErrorFactory.NotFound(
+          "Algunas órdenes no se han encontrado en esta tienda",
+        );
+      }
+
+      for (const order of orders) {
+        if (order.status === OrderStatus.PAID) {
+          throw ErrorFactory.Conflict(
+            `La orden ${order.orderNumber} no puede eliminarse porque ya fue pagada`,
+          );
+        }
+
+        if (
+          order.shipping &&
+          order.shipping.status !== ShippingStatus.Preparing
+        ) {
+          throw ErrorFactory.Conflict(
+            `La orden ${order.orderNumber} no puede eliminarse porque el envío está en proceso`,
+          );
+        }
+
+        if (
+          order.payment &&
+          order.payment.method &&
+          order.payment.method !== PaymentMethod.COD
+        ) {
+          throw ErrorFactory.Conflict(
+            `La orden ${order.orderNumber} no puede eliminarse porque tiene una transacción bancaria registrada`,
+          );
+        }
+      }
+
       const deletedOrders = await tx.order.deleteMany({
         where: {
           storeId: params.storeId,
@@ -284,13 +320,13 @@ export async function DELETE(
 
       return {
         deletedOrders,
+        message: `Se eliminaron ${deletedOrders.count} órdenes correctamente`,
       };
     });
 
     return NextResponse.json(result);
   } catch (error) {
-    console.log("[ORDERS_DELETE]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "ORDERS_DELETE");
   }
 }
 
@@ -299,11 +335,10 @@ export async function PATCH(
   { params }: { params: { storeId: string } },
 ) {
   const { userId } = auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  }
 
   try {
+    if (!userId) throw ErrorFactory.Unauthenticated();
+
     const body = await req.json();
     const {
       ids,
@@ -313,16 +348,12 @@ export async function PATCH(
       body;
 
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      return NextResponse.json(
-        { error: "Order ID(s) are required and must be an array" },
-        { status: 400 },
+      throw ErrorFactory.InvalidRequest(
+        "Se requieren IDs de órdenes válidas en formato de arreglo",
       );
     }
 
-    const storeOwner = await isStoreOwner(userId, params.storeId);
-    if (!storeOwner) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
+    await verifyStoreOwner(userId, params.storeId);
 
     const result = await prismadb.$transaction(
       async (tx) => {
@@ -339,14 +370,81 @@ export async function PATCH(
                 product: true,
               },
             },
+            shipping: true,
+            payment: true,
           },
         });
+
+        if (orders.length !== ids.length) {
+          throw ErrorFactory.NotFound(
+            "Algunas órdenes no se han encontrado en esta tienda",
+          );
+        }
+
+        for (const order of orders) {
+          if (status) {
+            if (order.status === OrderStatus.CANCELLED) {
+              throw ErrorFactory.Conflict(
+                `La orden ${order.orderNumber} está cancelada y no puede modificarse`,
+              );
+            }
+
+            if (
+              status === OrderStatus.PAID &&
+              order.status !== OrderStatus.PAID
+            ) {
+              const outOfStock = order.orderItems.find(
+                (item) => item.product.stock < item.quantity,
+              );
+
+              if (outOfStock) {
+                throw ErrorFactory.InsufficientStock(
+                  outOfStock.product.name,
+                  outOfStock.product.stock,
+                  outOfStock.quantity,
+                );
+              }
+            }
+
+            if (
+              order.status === OrderStatus.PAID &&
+              status !== OrderStatus.PAID
+            ) {
+              if (order.shipping?.status === ShippingStatus.Delivered) {
+                throw ErrorFactory.Conflict(
+                  `La orden ${order.orderNumber} ya fue entregada y no puede modificarse`,
+                );
+              }
+            }
+          }
+
+          if (shipping) {
+            if (order.status !== OrderStatus.PAID) {
+              throw ErrorFactory.Conflict(
+                `La orden ${order.orderNumber} debe estar pagada para actualizar el envío`,
+              );
+            }
+
+            const currentShippingStatus = order.shipping?.status;
+
+            if (currentShippingStatus !== undefined) {
+              const allowedStatuses =
+                ALLOWED_TRANSITIONS[currentShippingStatus];
+
+              if (!allowedStatuses.includes(shipping)) {
+                throw ErrorFactory.Conflict(
+                  `No se puede cambiar el estado de envío de "${shippingOptions[currentShippingStatus]}" a "${shippingOptions[shipping]}"`,
+                );
+              }
+            }
+          }
+        }
 
         const updatedOrders = await Promise.all(
           orders.map(async (order) => {
             const updateData: {
               status?: OrderStatus;
-              shipping?: ShippingStatus;
+              shipping?: { update: { status?: ShippingStatus } };
             } = {};
 
             if (status) {
@@ -355,16 +453,6 @@ export async function PATCH(
               updateData.status = status;
 
               if (willBePaid && !wasPaid) {
-                const outOfStock = order.orderItems.find((item) => {
-                  return item.product.stock < item.quantity;
-                });
-
-                if (outOfStock) {
-                  throw new Error(
-                    `Product ${outOfStock.product.name} is out of stock. Please contact the store owner.`,
-                  );
-                }
-
                 await Promise.all(
                   order.orderItems.map((item) =>
                     tx.product.update({
@@ -382,11 +470,7 @@ export async function PATCH(
                   order.orderItems.map((item) =>
                     tx.product.update({
                       where: { id: item.productId },
-                      data: {
-                        stock: {
-                          increment: item.quantity,
-                        },
-                      },
+                      data: { stock: { increment: item.quantity } },
                     }),
                   ),
                 );
@@ -394,20 +478,20 @@ export async function PATCH(
             }
 
             if (shipping) {
-              updateData.shipping = shipping;
+              updateData.shipping = {
+                update: {
+                  status: shipping,
+                },
+              };
             }
 
-            return await tx.order.update({
+            return tx.order.update({
               where: { id: order.id },
-              data: {
-                status: updateData.status,
-                shipping: {
-                  update: {
-                    data: {
-                      status: updateData.shipping,
-                    },
-                  },
-                },
+              data: updateData,
+              include: {
+                orderItems: true,
+                shipping: true,
+                payment: true,
               },
             });
           }),
@@ -424,18 +508,6 @@ export async function PATCH(
 
     return NextResponse.json(result);
   } catch (error) {
-    console.log("[ORDERS_PATCH]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "ORDERS_PATCH");
   }
-}
-
-async function isStoreOwner(userId: string | null, storeId: string) {
-  if (!userId) return false;
-  const storeByUserId = await prismadb.store.findFirst({
-    where: {
-      id: storeId,
-      userId,
-    },
-  });
-  return !!storeByUserId;
 }

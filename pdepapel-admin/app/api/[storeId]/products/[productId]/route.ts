@@ -1,19 +1,19 @@
+import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import cloudinaryInstance from "@/lib/cloudinary";
 import prismadb from "@/lib/prismadb";
-import { getPublicIdFromCloudinaryUrl } from "@/lib/utils";
+import { getPublicIdFromCloudinaryUrl, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
 export async function GET(
   _req: Request,
-  { params }: { params: { productId: string } },
+  { params }: { params: { storeId: string; productId: string } },
 ) {
-  if (!params.productId)
-    return NextResponse.json(
-      { error: "Product ID is required" },
-      { status: 400 },
-    );
   try {
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    if (!params.productId)
+      throw ErrorFactory.InvalidRequest("El ID del producto es requerido");
+
     const product = await prismadb.product.findUnique({
       where: { id: params.productId },
       include: {
@@ -28,10 +28,10 @@ export async function GET(
         },
       },
     });
+
     return NextResponse.json(product);
   } catch (error) {
-    console.log("[PRODUCT_GET]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "PRODUCT_GET");
   }
 }
 
@@ -39,15 +39,15 @@ export async function PATCH(
   req: Request,
   { params }: { params: { storeId: string; productId: string } },
 ) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  if (!params.productId)
-    return NextResponse.json(
-      { error: "Product ID is required" },
-      { status: 400 },
-    );
   try {
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    if (!params.productId)
+      throw ErrorFactory.InvalidRequest("El ID del producto es requerido");
+
+    await verifyStoreOwner(userId, params.storeId);
+
     const body = await req.json();
     const {
       name,
@@ -64,66 +64,70 @@ export async function PATCH(
       isArchived,
       isFeatured,
     } = body;
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+
     if (!name)
-      return NextResponse.json({ error: "Name is required" }, { status: 400 });
+      throw ErrorFactory.InvalidRequest("El nombre del producto es requerido");
     if (!images || !images.length)
-      return NextResponse.json(
-        { error: "Images are required" },
-        { status: 400 },
+      throw ErrorFactory.InvalidRequest(
+        "Las imágenes del producto son requeridas",
       );
     if (!price)
-      return NextResponse.json({ error: "Price is required" }, { status: 400 });
+      throw ErrorFactory.InvalidRequest("El precio del producto es requerido");
     if (!categoryId)
-      return NextResponse.json(
-        { error: "Category ID is required" },
-        { status: 400 },
+      throw ErrorFactory.InvalidRequest(
+        "La categoría del producto es requerida",
       );
     if (!sizeId)
-      return NextResponse.json(
-        { error: "Size ID is required" },
-        { status: 400 },
-      );
+      throw ErrorFactory.InvalidRequest("El tamaño del producto es requerido");
     if (!colorId)
-      return NextResponse.json(
-        { error: "Color ID is required" },
-        { status: 400 },
-      );
+      throw ErrorFactory.InvalidRequest("El color del producto es requerido");
     if (!designId)
-      return NextResponse.json(
-        { error: "Design ID is required" },
-        { status: 400 },
-      );
+      throw ErrorFactory.InvalidRequest("El diseño del producto es requerido");
     if (stock && stock < 0)
-      return NextResponse.json(
-        { error: "Stock must be 0 or greater" },
-        { status: 400 },
+      throw ErrorFactory.InvalidRequest(
+        "El stock del producto debe ser cero o mayor a cero",
       );
+
     const productToUpdate = await prismadb.product.findUnique({
-      where: { id: params.productId },
+      where: { id: params.productId, storeId: params.storeId },
       include: { images: true },
     });
+
     if (!productToUpdate)
-      return NextResponse.json({ error: "Product not found" }, { status: 404 });
+      throw ErrorFactory.NotFound(
+        `El Producto ${params.productId} no existe en esta tienda`,
+      );
+
     const currentImageUrls = productToUpdate.images.map((image) => image.url);
     const newImageUrls = images.map((image: { url: string }) => image.url);
     const imagesToDelete = currentImageUrls.filter(
       (url) => !newImageUrls.includes(url),
     );
-    const publicIds = imagesToDelete.map(
-      (url) => getPublicIdFromCloudinaryUrl(url) ?? "",
-    );
-    if (publicIds.length)
-      await cloudinaryInstance.v2.api.delete_resources(publicIds, {
-        type: "upload",
-        resource_type: "image",
-      });
-    const [_, updatedProduct] = await prismadb.$transaction([
-      prismadb.product.update({
+
+    const result = await prismadb.$transaction(async (tx) => {
+      // Delete old images from Cloudinary
+      if (imagesToDelete.length > 0) {
+        const publicIds = imagesToDelete
+          .map((url) => getPublicIdFromCloudinaryUrl(url))
+          .filter((id): id is string => id !== null);
+
+        try {
+          if (publicIds.length > 0) {
+            await cloudinaryInstance.v2.api.delete_resources(publicIds, {
+              type: "upload",
+              resource_type: "image",
+            });
+          }
+        } catch (cloudinaryError: any) {
+          throw ErrorFactory.CloudinaryError(
+            cloudinaryError,
+            "Error al intentar eliminar las imágenes del servidor Cloudinary",
+          );
+        }
+      }
+
+      // Update product
+      await tx.product.update({
         where: { id: params.productId },
         data: {
           name,
@@ -142,27 +146,26 @@ export async function PATCH(
             deleteMany: {},
           },
         },
-      }),
-      prismadb.product.update({
+      });
+
+      // Create new images
+      return await tx.product.update({
         where: { id: params.productId },
         data: {
           images: {
             createMany: {
-              data: [
-                ...images.map((image: { url: string; isMain?: boolean }) => ({
-                  url: image.url,
-                  isMain: image.isMain ?? false,
-                })),
-              ],
+              data: images.map((image: { url: string; isMain?: boolean }) => ({
+                url: image.url,
+                isMain: image.isMain ?? false,
+              })),
             },
           },
         },
-      }),
-    ]);
-    return NextResponse.json(updatedProduct);
+      });
+    });
+    return NextResponse.json(result);
   } catch (error) {
-    console.log("[PRODUCT_PATCH]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "PRODUCT_PATCH");
   }
 }
 
@@ -170,40 +173,76 @@ export async function DELETE(
   _req: Request,
   { params }: { params: { storeId: string; productId: string } },
 ) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-
-  if (!params.productId)
-    return NextResponse.json(
-      { error: "Product ID is required" },
-      { status: 400 },
-    );
   try {
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    if (!params.productId)
+      throw ErrorFactory.InvalidRequest("El ID del producto es requerido");
+
+    await verifyStoreOwner(userId, params.storeId);
+
+    const deletedProduct = await prismadb.$transaction(async (tx) => {
+      const product = await prismadb.product.findUnique({
+        where: { id: params.productId, storeId: params.storeId },
+        include: {
+          images: true,
+          orderItems: true,
+        },
+      });
+
+      if (!product)
+        throw ErrorFactory.NotFound(
+          `El Producto ${params.productId} no existe en esta tienda`,
+        );
+
+      const productWithOrders = product.orderItems.length > 0;
+      if (productWithOrders) {
+        throw ErrorFactory.Conflict(
+          `No se puede eliminar el producto ${product.name} porque tiene ${product.orderItems.length} órdenes asociadas. Elimina o reasigna las órdenes asociadas primero`,
+          {
+            product: product.name,
+            orders: product.orderItems.map((order) => order.orderId).join(", "),
+          },
+        );
+      }
+
+      // Delete images from Cloudinary
+      const publicIds = product.images
+        .map((image) => getPublicIdFromCloudinaryUrl(image.url))
+        .filter((id): id is string => id !== null);
+
+      if (publicIds.length > 0) {
+        try {
+          await cloudinaryInstance.v2.api.delete_resources(publicIds, {
+            type: "upload",
+            resource_type: "image",
+          });
+        } catch (cloudinaryError: any) {
+          throw ErrorFactory.CloudinaryError(
+            cloudinaryError,
+            "Error al eliminar imágenes del producto del servidor Cloudinary",
+          );
+        }
+      }
+
+      // Delete related records first
+      await tx.review.deleteMany({
+        where: { productId: params.productId, storeId: params.storeId },
+      });
+
+      await tx.image.deleteMany({
+        where: { productId: params.productId },
+      });
+
+      // Finally delete the product
+      return await tx.product.delete({
+        where: { id: params.productId, storeId: params.storeId },
+      });
     });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    const productToDelete = await prismadb.product.findUnique({
-      where: { id: params.productId },
-      include: { images: true },
-    });
-    if (!productToDelete)
-      return NextResponse.json({ error: "Product not found" }, { status: 404 });
-    const publicIds = productToDelete.images.map(
-      (image) => getPublicIdFromCloudinaryUrl(image.url) ?? "",
-    );
-    await cloudinaryInstance.v2.api.delete_resources(publicIds, {
-      type: "upload",
-      resource_type: "image",
-    });
-    const deletedProduct = await prismadb.product.deleteMany({
-      where: { id: params.productId },
-    });
+
     return NextResponse.json(deletedProduct);
   } catch (error) {
-    console.log("[PRODUCT_DELETE]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "PRODUCT_DELETE");
   }
 }

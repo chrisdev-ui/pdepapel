@@ -1,6 +1,6 @@
+import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import cloudinaryInstance from "@/lib/cloudinary";
-import prismadb from "@/lib/prismadb";
-import { getPublicIdFromCloudinaryUrl } from "@/lib/utils";
+import { getPublicIdFromCloudinaryUrl, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
@@ -8,26 +8,33 @@ export async function POST(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
   try {
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+
+    await verifyStoreOwner(userId, params.storeId);
+
     const { imageUrl } = await req.json();
+
+    if (!imageUrl)
+      throw ErrorFactory.InvalidRequest("La URL de la imagen es obligatoria");
+
     const publicId = getPublicIdFromCloudinaryUrl(imageUrl);
     if (publicId) {
-      await cloudinaryInstance.v2.api.delete_resources([publicId], {
-        type: "upload",
-        resource_type: "image",
-      });
+      try {
+        await cloudinaryInstance.v2.api.delete_resources([publicId], {
+          type: "upload",
+          resource_type: "image",
+        });
+      } catch (error) {
+        throw ErrorFactory.CloudinaryError(
+          error,
+          "La imagen no se pudo eliminar",
+        );
+      }
     }
     return NextResponse.json(null, { status: 200 });
   } catch (error) {
-    console.log("[CLOUDINARY_DELETE]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "CLOUDINARY_DELETE");
   }
 }

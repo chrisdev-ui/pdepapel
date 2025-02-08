@@ -1,6 +1,6 @@
+import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
 import { auth, clerkClient } from "@clerk/nextjs";
-import { Review } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 const corsHeaders = {
@@ -19,32 +19,26 @@ export async function GET(
     params,
   }: { params: { storeId: string; productId: string; reviewId: string } },
 ) {
-  if (!params.reviewId)
-    return NextResponse.json(
-      { error: "Review ID is required" },
-      { status: 400 },
-    );
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400 },
-    );
-  if (!params.productId)
-    return NextResponse.json(
-      { error: "Product ID is required" },
-      { status: 400 },
-    );
   try {
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    if (!params.productId)
+      throw ErrorFactory.InvalidRequest("El ID del producto es requerido");
+    if (!params.reviewId)
+      throw ErrorFactory.InvalidRequest("El ID de la reseña es requerido");
+
     const review = await prismadb.review.findUnique({
-      where: { id: params.reviewId },
+      where: {
+        id: params.reviewId,
+        storeId: params.storeId,
+        productId: params.productId,
+      },
     });
-    if (!review)
-      return NextResponse.json({ error: "Review not found" }, { status: 404 });
+
+    if (!review) throw ErrorFactory.NotFound("Reseña no encontrada");
 
     return NextResponse.json(review);
   } catch (error) {
-    console.log("[REVIEW_GET]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "REVIEW_GET");
   }
 }
 
@@ -54,77 +48,58 @@ export async function PATCH(
     params,
   }: { params: { storeId: string; productId: string; reviewId: string } },
 ) {
-  if (!params.reviewId)
-    return NextResponse.json(
-      { error: "Review ID is required" },
-      { status: 400, headers: corsHeaders },
-    );
-  if (!params.productId)
-    return NextResponse.json(
-      { error: "Product ID is required" },
-      { status: 400, headers: corsHeaders },
-    );
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400, headers: corsHeaders },
-    );
   try {
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    if (!params.productId) {
+      throw ErrorFactory.InvalidRequest("El ID del producto es requerido");
+    }
+    if (!params.reviewId) {
+      throw ErrorFactory.InvalidRequest("El ID de la reseña es requerido");
+    }
+
     const body = await req.json();
     const { rating, comment, userId } = body;
     const user = await clerkClient.users.getUser(userId);
-    if (!user)
-      return NextResponse.json(
-        { error: "Unauthenticated" },
-        { status: 401, headers: corsHeaders },
-      );
-    if (!rating || isNaN(rating))
-      return NextResponse.json(
-        { error: "Rating is required" },
-        { status: 400, headers: corsHeaders },
-      );
-    const existingReview = await prismadb.review.findUnique({
-      where: { id: params.reviewId },
-    });
-    if (!existingReview)
-      return NextResponse.json(
-        { error: "Review not found" },
-        { status: 404, headers: corsHeaders },
-      );
-    if (existingReview.userId !== userId)
-      return NextResponse.json(
-        { error: "Unauthorized to perform this action" },
-        { status: 403, headers: corsHeaders },
-      );
 
-    let updateData: Partial<Review> = {
-      rating,
-      comment: comment ?? "",
-    };
+    if (!user) throw ErrorFactory.Unauthenticated();
 
-    if (
-      existingReview.name !== `${user.firstName ?? ""} ${user.lastName ?? ""}`
-    ) {
-      updateData.name = `${user.firstName ?? ""} ${user.lastName ?? ""}`;
+    // Validate rating if provided
+    if (rating !== undefined && (rating < 1 || rating > 5)) {
+      throw ErrorFactory.InvalidRequest(
+        "La calificación debe estar entre 1 y 5",
+      );
     }
-    const updatedReview = await prismadb.review.update({
+
+    // Verify review exists and user ownership
+    const existingReview = await prismadb.review.findUnique({
       where: {
         id: params.reviewId,
         productId: params.productId,
-        userId,
       },
-      data: updateData,
     });
-    return NextResponse.json(updatedReview, {
-      status: 200,
-      headers: corsHeaders,
+
+    if (!existingReview) {
+      throw ErrorFactory.NotFound("Reseña no encontrada");
+    }
+
+    // Only allow review author to update
+    if (existingReview.userId !== userId) {
+      throw ErrorFactory.Unauthorized();
+    }
+
+    const updatedReview = await prismadb.review.update({
+      where: {
+        id: params.reviewId,
+      },
+      data: {
+        ...(rating !== undefined && { rating }),
+        ...(comment !== undefined && { comment }),
+      },
     });
+
+    return NextResponse.json(updatedReview, { headers: corsHeaders });
   } catch (error) {
-    console.log("[REVIEW_PATCH]", error);
-    return NextResponse.json(
-      { error: "Internal Error" },
-      { status: 500, headers: corsHeaders },
-    );
+    return handleErrorResponse(error, "REVIEW_PATCH", { headers: corsHeaders });
   }
 }
 
@@ -134,48 +109,44 @@ export async function DELETE(
     params,
   }: { params: { storeId: string; reviewId: string; productId: string } },
 ) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-
-  if (!params.reviewId)
-    return NextResponse.json(
-      { error: "Review ID is required" },
-      { status: 400 },
-    );
-  if (!params.productId)
-    return NextResponse.json(
-      { error: "Product ID is required" },
-      { status: 400 },
-    );
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400 },
-    );
   try {
-    const reviewToDelete = await prismadb.review.findUnique({
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    if (!params.productId) {
+      throw ErrorFactory.InvalidRequest("El ID del producto es requerido");
+    }
+    if (!params.reviewId) {
+      throw ErrorFactory.InvalidRequest("El ID de la reseña es requerido");
+    }
+
+    // Verify store ownership or review ownership
+    const review = await prismadb.review.findUnique({
       where: {
         id: params.reviewId,
         productId: params.productId,
       },
+      include: {
+        store: {
+          select: {
+            userId: true,
+          },
+        },
+      },
     });
-    if (!reviewToDelete)
-      return NextResponse.json({ error: "Review not found" }, { status: 404 });
-    const isAuthor = userId === reviewToDelete.userId;
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    const isStoreOwner = !!storeByUserId;
-    if (!isStoreOwner && !isAuthor)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    if (!review) throw ErrorFactory.NotFound("Reseña no encontrada");
+
+    // Check if user is store owner or review author
+    if (review.store.userId !== userId && review.userId !== userId) {
+      throw ErrorFactory.Unauthorized();
+    }
 
     const deletedReview = await prismadb.review.delete({
       where: { id: params.reviewId },
     });
+
     return NextResponse.json(deletedReview);
   } catch (error) {
-    console.log("[REVIEW_DELETE]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "REVIEW_DELETE");
   }
 }

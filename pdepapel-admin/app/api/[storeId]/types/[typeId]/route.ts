@@ -1,21 +1,26 @@
+import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
+import { parseErrorDetails, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
 export async function GET(
   _req: Request,
-  { params }: { params: { typeId: string } },
+  { params }: { params: { storeId: string; typeId: string } },
 ) {
-  if (!params.typeId)
-    return NextResponse.json({ error: "Type ID is required" }, { status: 400 });
   try {
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    if (!params.typeId) {
+      throw ErrorFactory.InvalidRequest("El ID del tipo es requerido");
+    }
+
     const type = await prismadb.type.findUnique({
-      where: { id: params.typeId },
+      where: { id: params.typeId, storeId: params.storeId },
     });
+
     return NextResponse.json(type);
   } catch (error) {
-    console.log("[TYPE_GET]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "TYPE_GET");
   }
 }
 
@@ -23,32 +28,62 @@ export async function PATCH(
   req: Request,
   { params }: { params: { storeId: string; typeId: string } },
 ) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  if (!params.typeId)
-    return NextResponse.json({ error: "Type ID is required" }, { status: 400 });
   try {
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    if (!params.typeId) {
+      throw ErrorFactory.InvalidRequest("El ID del tipo es requerido");
+    }
+
     const body = await req.json();
     const { name } = body;
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    if (!name)
-      return NextResponse.json({ error: "Name is required" }, { status: 400 });
 
-    const type = await prismadb.type.updateMany({
-      where: { id: params.typeId },
-      data: {
-        name,
+    await verifyStoreOwner(userId, params.storeId);
+
+    if (!name?.trim()) {
+      throw ErrorFactory.InvalidRequest("El nombre del tipo es requerido");
+    }
+
+    const existingType = await prismadb.type.findUnique({
+      where: {
+        id: params.typeId,
+        storeId: params.storeId,
       },
     });
-    return NextResponse.json(type);
+
+    if (!existingType) {
+      throw ErrorFactory.NotFound(
+        "Tipo no encontrado o no pertenece a esta tienda",
+      );
+    }
+
+    const duplicateType = await prismadb.type.findFirst({
+      where: {
+        storeId: params.storeId,
+        name: name.trim(),
+        NOT: {
+          id: params.typeId,
+        },
+      },
+    });
+
+    if (duplicateType) {
+      throw ErrorFactory.Conflict("Ya existe un tipo con este nombre");
+    }
+
+    const updatedType = await prismadb.type.update({
+      where: {
+        id: params.typeId,
+      },
+      data: {
+        name: name.trim(),
+      },
+    });
+
+    return NextResponse.json(updatedType);
   } catch (error) {
-    console.log("[TYPE_PATCH]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "TYPE_PATCH");
   }
 }
 
@@ -56,24 +91,77 @@ export async function DELETE(
   _req: Request,
   { params }: { params: { storeId: string; typeId: string } },
 ) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-
-  if (!params.typeId)
-    return NextResponse.json({ error: "Type ID is required" }, { status: 400 });
   try {
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    if (!params.typeId) {
+      throw ErrorFactory.InvalidRequest("El ID del tipo es requerido");
+    }
+
+    await verifyStoreOwner(userId, params.storeId);
+
+    const deletedTypeTx = await prismadb.$transaction(async (tx) => {
+      const type = await tx.type.findUnique({
+        where: {
+          id: params.typeId,
+          storeId: params.storeId,
+        },
+        include: {
+          categories: {
+            include: {
+              products: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!type) {
+        throw ErrorFactory.NotFound(
+          "Tipo no encontrado o no pertenece a esta tienda",
+        );
+      }
+
+      const categoriesWithProducts = type.categories.filter(
+        (category) => category.products.length > 0,
+      );
+
+      if (categoriesWithProducts.length > 0) {
+        throw ErrorFactory.Conflict(
+          "No se puede eliminar un tipo que tiene productos asociados a sus categorías",
+          {
+            ...parseErrorDetails(
+              "categoriesWithProducts",
+              categoriesWithProducts.map((category) => ({
+                id: category.id,
+                name: category.name,
+                productsCount: category.products.length,
+              })),
+            ),
+          },
+        );
+      }
+
+      await tx.category.deleteMany({
+        where: {
+          typeId: params.typeId,
+        },
+      });
+
+      return await tx.type.delete({
+        where: {
+          id: params.typeId,
+        },
+      });
     });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    const type = await prismadb.type.deleteMany({
-      where: { id: params.typeId },
-    });
-    return NextResponse.json(type);
+
+    return NextResponse.json(deletedTypeTx);
   } catch (error) {
-    console.log("[TYPE_DELETE]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "TYPE_DELETE");
   }
 }

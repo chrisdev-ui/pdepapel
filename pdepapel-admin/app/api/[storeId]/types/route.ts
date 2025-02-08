@@ -1,65 +1,70 @@
+import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
+import { verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400 },
-    );
   try {
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+
     const body = await req.json();
     const { name } = body;
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
+
+    await verifyStoreOwner(userId, params.storeId);
+
+    if (!name?.trim()) {
+      throw ErrorFactory.InvalidRequest("El nombre del tipo es requerido");
+    }
+
+    const existingType = await prismadb.type.findFirst({
+      where: {
+        storeId: params.storeId,
+        name: name.trim(),
+      },
     });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    if (!name)
-      return NextResponse.json({ error: "Name is required" }, { status: 400 });
+
+    if (existingType) {
+      throw ErrorFactory.Conflict("Ya existe un tipo con este nombre");
+    }
+
     const type = await prismadb.type.create({
-      data: { name, storeId: params.storeId },
+      data: {
+        name: name.trim(),
+        storeId: params.storeId,
+      },
     });
+
     return NextResponse.json(type);
   } catch (error) {
-    console.log("[TYPES_POST]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleErrorResponse(error, "TYPES_POST");
   }
 }
 
 export async function GET(
-  req: Request,
+  req: NextRequest,
   { params }: { params: { storeId: string } },
 ) {
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400 },
-    );
   try {
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+
     const types = await prismadb.type.findMany({
-      where: { storeId: params.storeId },
-      include: {
-        categories: true,
+      where: {
+        storeId: params.storeId,
+      },
+      orderBy: {
+        createdAt: "desc",
       },
     });
+
     return NextResponse.json(types);
   } catch (error) {
-    console.log("[TYPES_GET]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleErrorResponse(error, "TYPES_GET");
   }
 }
 
@@ -67,30 +72,81 @@ export async function DELETE(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
-  const { userId } = auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  }
-
   try {
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+
     const { ids }: { ids: string[] } = await req.json();
 
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      return NextResponse.json(
-        { error: "Type ID(s) are required and must be an array" },
-        { status: 400 },
+      throw ErrorFactory.InvalidRequest(
+        "Los IDs de los tipos son requeridos y deben ser un arreglo",
       );
     }
 
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    if (!storeByUserId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
+    await verifyStoreOwner(userId, params.storeId);
 
     const result = await prismadb.$transaction(async (tx) => {
-      const deletedTypes = await tx.type.deleteMany({
+      const types = await tx.type.findMany({
+        where: {
+          storeId: params.storeId,
+          id: {
+            in: ids,
+          },
+        },
+        include: {
+          categories: {
+            include: {
+              products: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (types.length !== ids.length) {
+        throw ErrorFactory.InvalidRequest(
+          "Algunos tipos no existen o no pertenecen a esta tienda",
+        );
+      }
+
+      const typesWithProducts = types.filter((type) =>
+        type.categories.some((category) => category.products.length > 0),
+      );
+
+      if (typesWithProducts.length > 0) {
+        throw ErrorFactory.Conflict(
+          "No se pueden eliminar tipos que tienen productos asociados a sus categorías",
+          {
+            types: typesWithProducts.map((type) => ({
+              id: type.id,
+              name: type.name,
+              categoriesWithProducts: type.categories
+                .filter((cat) => cat.products.length > 0)
+                .map((cat) => ({
+                  id: cat.id,
+                  name: cat.name,
+                  productsCount: cat.products.length,
+                })),
+            })),
+          },
+        );
+      }
+
+      await tx.category.deleteMany({
+        where: {
+          typeId: {
+            in: ids,
+          },
+        },
+      });
+
+      return await tx.type.deleteMany({
         where: {
           storeId: params.storeId,
           id: {
@@ -98,16 +154,10 @@ export async function DELETE(
           },
         },
       });
-
-      return {
-        deletedTypes,
-      };
     });
 
     return NextResponse.json(result);
   } catch (error: any) {
-    console.log("[TYPES_DELETE]", error);
-
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "TYPES_DELETE");
   }
 }

@@ -21,9 +21,10 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/api-errors";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 const formSchema = z.object({
   name: z.string().min(1, "El nombre del proveedor no puede estar vacío"),
@@ -43,14 +44,17 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData }) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const title = initialData ? "Editar proveedor" : "Crear proveedor";
-  const description = initialData
-    ? "Editar un proveedor"
-    : "Crear un nuevo proveedor";
-  const toastMessage = initialData
-    ? "Proveedor actualizado"
-    : "Proveedor creado";
-  const action = initialData ? "Guardar cambios" : "Crear";
+  const { title, description, toastMessage, action } = useMemo(
+    () => ({
+      title: initialData ? "Editar proveedor" : "Crear proveedor",
+      description: initialData
+        ? "Editar un proveedor"
+        : "Crear un nuevo proveedor",
+      toastMessage: initialData ? "Proveedor actualizado" : "Proveedor creado",
+      action: initialData ? "Guardar cambios" : "Crear",
+    }),
+    [initialData],
+  );
 
   const form = useForm<SupplierFormValues>({
     resolver: zodResolver(formSchema),
@@ -77,8 +81,7 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData }) => {
       });
     } catch (error) {
       toast({
-        description:
-          "¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {
@@ -99,8 +102,7 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData }) => {
       });
     } catch (error) {
       toast({
-        description:
-          "Asegúrate de haber eliminado todos las productos que usen este proveedor primero.",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {

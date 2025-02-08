@@ -1,3 +1,4 @@
+import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
 import { OrderStatus, PaymentMethod } from "@prisma/client";
 import { NextResponse } from "next/server";
@@ -21,17 +22,11 @@ export async function POST(
   req: Request,
   { params }: { params: { storeId: string; orderId: string } },
 ) {
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400, headers: corsHeaders },
-    );
-  if (!params.orderId)
-    return NextResponse.json(
-      { error: "Order ID is required" },
-      { status: 400, headers: corsHeaders },
-    );
   try {
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    if (!params.orderId)
+      throw ErrorFactory.InvalidRequest("Se requiere el ID de la orden");
+
     const order = await prismadb.order.findUnique({
       where: {
         id: params.orderId,
@@ -47,16 +42,10 @@ export async function POST(
     });
 
     if (!order)
-      return NextResponse.json(
-        { error: `Order not found: ${params.orderId}` },
-        { status: 404, headers: corsHeaders },
-      );
+      throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
 
     if (order.status === OrderStatus.PAID)
-      return NextResponse.json(
-        { error: `Order is already paid: ${params.orderId}` },
-        { status: 400, headers: corsHeaders },
-      );
+      throw ErrorFactory.Conflict(`La orden ${params.orderId} ya está pagada`);
 
     if (order.payment?.method === PaymentMethod.PayU) {
       const payUData = generatePayUPayment(order);
@@ -73,14 +62,8 @@ export async function POST(
 
     return NextResponse.json({ url }, { headers: corsHeaders });
   } catch (error: any) {
-    console.error("[ORDER_CHECKOUT_BY_ID]", error);
-    return NextResponse.json(
-      {
-        error: `Internal server error processing checkout: ${
-          error?.message || error?.data?.message
-        }`,
-      },
-      { status: 500, headers: corsHeaders },
-    );
+    return handleErrorResponse(error, "ORDER_CHECKOUT_BY_ID", {
+      headers: corsHeaders,
+    });
   }
 }

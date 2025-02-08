@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/api-errors";
 import { OrderColumn } from "./columns";
 
 interface CellActionProps {
@@ -48,8 +49,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
       });
     } catch (error) {
       toast({
-        description:
-          "Ups! Algo salió mal, por favor intenta de nuevo más tarde",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {

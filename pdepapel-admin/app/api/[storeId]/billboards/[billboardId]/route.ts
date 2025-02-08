@@ -1,27 +1,26 @@
+import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import cloudinaryInstance from "@/lib/cloudinary";
 import prismadb from "@/lib/prismadb";
-import { getPublicIdFromCloudinaryUrl } from "@/lib/utils";
+import { getPublicIdFromCloudinaryUrl, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
 export async function GET(
   _req: Request,
-  { params }: { params: { billboardId: string } },
+  { params }: { params: { storeId: string; billboardId: string } },
 ) {
   try {
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.billboardId)
-      return NextResponse.json(
-        { error: "Billboard ID is required" },
-        { status: 400 },
-      );
+      throw ErrorFactory.InvalidRequest("Se requiere un ID de publicación");
 
     const billboard = await prismadb.billboard.findUnique({
-      where: { id: params.billboardId },
+      where: { id: params.billboardId, storeId: params.storeId },
     });
+
     return NextResponse.json(billboard);
   } catch (error) {
-    console.log("[BILLBOARD_GET]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "BILLBOARD_GET");
   }
 }
 
@@ -29,61 +28,67 @@ export async function PATCH(
   req: Request,
   { params }: { params: { storeId: string; billboardId: string } },
 ) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  if (!params.billboardId)
-    return NextResponse.json(
-      { error: "Billboard ID is required" },
-      { status: 400 },
-    );
   try {
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    if (!params.billboardId)
+      throw ErrorFactory.InvalidRequest("Se requiere un ID de publicación");
+
+    await verifyStoreOwner(userId, params.storeId);
+
     const body = await req.json();
     const { label, imageUrl, title, redirectUrl } = body;
 
     if (!label)
-      return NextResponse.json({ error: "Label is required" }, { status: 400 });
+      throw ErrorFactory.InvalidRequest(
+        "Se requiere una etiqueta para la publicación",
+      );
 
     if (!imageUrl)
-      return NextResponse.json(
-        { error: "Image URL is required" },
-        { status: 400 },
+      throw ErrorFactory.InvalidRequest(
+        "Se requiere una imagen para la publicación",
       );
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
 
-    const oldBillboard = await prismadb.billboard.findUnique({
-      where: { id: params.billboardId },
-    });
-
-    if (!oldBillboard)
-      return NextResponse.json(
-        { error: "Billboard not found" },
-        { status: 404 },
-      );
-    const publicId = getPublicIdFromCloudinaryUrl(oldBillboard.imageUrl);
-    if (publicId && imageUrl !== oldBillboard.imageUrl)
-      await cloudinaryInstance.v2.api.delete_resources([publicId], {
-        type: "upload",
-        resource_type: "image",
+    const updatedBillboard = await prismadb.$transaction(async (tx) => {
+      const billboard = await tx.billboard.findUnique({
+        where: { id: params.billboardId, storeId: params.storeId },
       });
-    const updatedBillboard = await prismadb.billboard.update({
-      where: { id: params.billboardId },
-      data: {
-        label,
-        imageUrl,
-        title: title ?? "",
-        redirectUrl: redirectUrl ?? "",
-      },
+
+      if (!billboard)
+        throw ErrorFactory.NotFound(
+          `La publicación ${params.billboardId} no existe`,
+        );
+
+      const publicId = getPublicIdFromCloudinaryUrl(billboard.imageUrl);
+      if (publicId) {
+        try {
+          await cloudinaryInstance.v2.api.delete_resources([publicId], {
+            type: "upload",
+            resource_type: "image",
+          });
+        } catch (error: any) {
+          throw ErrorFactory.CloudinaryError(
+            error,
+            "Error al intentar eliminar la imagen de la publicación",
+          );
+        }
+      }
+
+      return tx.billboard.update({
+        where: { id: params.billboardId },
+        data: {
+          label,
+          imageUrl,
+          title: title ?? "",
+          redirectUrl: redirectUrl ?? "",
+        },
+      });
     });
 
     return NextResponse.json(updatedBillboard);
   } catch (error) {
-    console.log("[BILLBOARD_PATCH]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "BILLBOARD_PATCH");
   }
 }
 
@@ -91,41 +96,47 @@ export async function DELETE(
   _req: Request,
   { params }: { params: { storeId: string; billboardId: string } },
 ) {
-  const { userId } = auth();
-  if (!userId)
-    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  if (!params.billboardId)
-    return NextResponse.json(
-      { error: "Billboard ID is required" },
-      { status: 400 },
-    );
   try {
-    const storeByUserId = await prismadb.store.findFirst({
-      where: { id: params.storeId, userId },
-    });
-    if (!storeByUserId)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    const billboardToDelete = await prismadb.billboard.findUnique({
-      where: { id: params.billboardId },
-    });
-    if (!billboardToDelete)
-      return NextResponse.json(
-        { error: "Billboard not found" },
-        { status: 404 },
-      );
-    const publicId = getPublicIdFromCloudinaryUrl(billboardToDelete.imageUrl);
-    if (publicId) {
-      await cloudinaryInstance.v2.api.delete_resources([publicId], {
-        type: "upload",
-        resource_type: "image",
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    if (!params.billboardId)
+      throw ErrorFactory.InvalidRequest("Se requiere un ID de publicación");
+
+    await verifyStoreOwner(userId, params.storeId);
+
+    const billboardToDelete = await prismadb.$transaction(async (tx) => {
+      const billboard = await tx.billboard.findUnique({
+        where: { id: params.billboardId, storeId: params.storeId },
       });
-    }
-    await prismadb.billboard.delete({
-      where: { id: billboardToDelete.id },
+
+      if (!billboard)
+        throw ErrorFactory.NotFound(
+          `La publicación ${params.billboardId} no existe`,
+        );
+
+      const publicId = getPublicIdFromCloudinaryUrl(billboard.imageUrl);
+      if (publicId) {
+        try {
+          await cloudinaryInstance.v2.api.delete_resources([publicId], {
+            type: "upload",
+            resource_type: "image",
+          });
+        } catch (error: any) {
+          throw ErrorFactory.CloudinaryError(
+            error,
+            "Error al intentar eliminar la imagen de la publicación",
+          );
+        }
+      }
+
+      return await tx.billboard.delete({
+        where: { id: params.billboardId },
+      });
     });
+
     return NextResponse.json(billboardToDelete);
   } catch (error) {
-    console.log("[BILLBOARD_DELETE]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return handleErrorResponse(error, "BILLBOARD_DELETE");
   }
 }

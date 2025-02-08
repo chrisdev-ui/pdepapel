@@ -21,10 +21,11 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/api-errors";
 import { Billboard } from "@prisma/client";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 const formSchema = z.object({
   label: z.string().min(1, "La etiqueta no puede estar vacía"),
@@ -49,14 +50,19 @@ export const BillboardForm: React.FC<BillboardFormProps> = ({
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const title = initialData ? "Editar publicación" : "Crear publicación";
-  const description = initialData
-    ? "Editar una publicación"
-    : "Crear una nueva publicación";
-  const toastMessage = initialData
-    ? "Publicación actualizada"
-    : "Publicación creada";
-  const action = initialData ? "Guardar cambios" : "Crear";
+  const { title, description, toastMessage, action } = useMemo(
+    () => ({
+      title: initialData ? "Editar publicación" : "Crear publicación",
+      description: initialData
+        ? "Editar una publicación"
+        : "Crear una nueva publicación",
+      toastMessage: initialData
+        ? "Publicación actualizada"
+        : "Publicación creada",
+      action: initialData ? "Guardar cambios" : "Crear",
+    }),
+    [initialData],
+  );
 
   const form = useForm<BillboardFormValues>({
     resolver: zodResolver(formSchema),
@@ -92,8 +98,7 @@ export const BillboardForm: React.FC<BillboardFormProps> = ({
       });
     } catch (error) {
       toast({
-        description:
-          "¡Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {
@@ -114,8 +119,7 @@ export const BillboardForm: React.FC<BillboardFormProps> = ({
       });
     } catch (error) {
       toast({
-        description:
-          "Ups! Algo salió mal. Por favor, verifica tu conexión e inténtalo nuevamente más tarde.",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {

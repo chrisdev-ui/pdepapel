@@ -1,4 +1,3 @@
-import { clerkClient } from "@clerk/nextjs";
 import {
   Order,
   OrderItem,
@@ -11,6 +10,7 @@ import { NextResponse } from "next/server";
 
 import { EmailTemplate } from "@/components/email-template";
 import { DEFAULT_COUNTRY } from "@/constants";
+import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
 import { resend } from "@/lib/resend";
@@ -18,6 +18,7 @@ import {
   generateIntegritySignature,
   generateOrderNumber,
   generatePayUSignature,
+  getClerkUserById,
   getLastOrderTimestamp,
   parseAndSplitAddress,
 } from "@/lib/utils";
@@ -58,46 +59,24 @@ export async function POST(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
-  if (!params.storeId)
-    return NextResponse.json(
-      { error: "Store ID is required" },
-      { status: 400, headers: corsHeaders },
-    );
   try {
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+
     const { fullName, phone, address, orderItems, userId, guestId, payment } =
       await req.json();
 
-    let authenticatedUserId = null;
-    if (userId) {
-      const user = await clerkClient.users.getUser(userId);
-      if (user) {
-        authenticatedUserId = user.id;
-      } else {
-        return NextResponse.json(
-          { error: "Unauthenticated" },
-          { status: 401, headers: corsHeaders },
-        );
-      }
-    }
+    const authenticatedUserId = await getClerkUserById(userId);
+    if (!authenticatedUserId) throw ErrorFactory.Unauthenticated();
+
     if (!fullName)
-      return NextResponse.json(
-        { error: "Full name is required" },
-        { status: 400, headers: corsHeaders },
-      );
+      throw ErrorFactory.InvalidRequest("El nombre completo es obligatorio");
     if (!phone)
-      return NextResponse.json(
-        { error: "Phone is required" },
-        { status: 400, headers: corsHeaders },
-      );
+      throw ErrorFactory.InvalidRequest("El número de teléfono es obligatorio");
     if (!address)
-      return NextResponse.json(
-        { error: "Address is required" },
-        { status: 400, headers: corsHeaders },
-      );
+      throw ErrorFactory.InvalidRequest("La dirección es obligatoria");
     if (!orderItems || orderItems.length === 0)
-      return NextResponse.json(
-        { error: "Order items are required" },
-        { status: 400, headers: corsHeaders },
+      throw ErrorFactory.InvalidRequest(
+        "La lista de productos en el pedido no puede estar vacía",
       );
 
     const lastOrderTimestamp = await getLastOrderTimestamp(
@@ -107,10 +86,8 @@ export async function POST(
     );
     const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000);
     if (lastOrderTimestamp && lastOrderTimestamp > threeMinutesAgo)
-      return NextResponse.json(
-        { error: "Too many orders" },
-        { status: 429, headers: corsHeaders },
-      );
+      throw ErrorFactory.OrderLimit();
+
     const errors: string[] = [];
     const orderItemsData = [];
 
@@ -145,11 +122,7 @@ export async function POST(
       });
     }
 
-    if (errors.length > 0)
-      return NextResponse.json(
-        { errors },
-        { status: 400, headers: corsHeaders },
-      );
+    if (errors.length > 0) throw ErrorFactory.InvalidRequest(errors.join(", "));
 
     const orderNumber = generateOrderNumber();
     const [order] = await prismadb.$transaction([
@@ -209,14 +182,9 @@ export async function POST(
 
     return NextResponse.json({ url }, { headers: corsHeaders });
   } catch (error: any) {
-    console.error("[ORDER_CHECKOUT]", error);
-    return NextResponse.json(
-      {
-        error: "Internal Server Error",
-        message: error.message,
-      },
-      { status: 500, headers: corsHeaders },
-    );
+    return handleErrorResponse(error, "ORDER_CHECKOUT", {
+      headers: corsHeaders,
+    });
   }
 }
 

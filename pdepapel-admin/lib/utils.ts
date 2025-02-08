@@ -1,8 +1,10 @@
 import prismadb from "@/lib/prismadb";
+import { clerkClient } from "@clerk/nextjs";
 import { clsx, type ClassValue } from "clsx";
 import crypto from "crypto";
 import { twMerge } from "tailwind-merge";
 import { v4 as uuidv4 } from "uuid";
+import { ErrorFactory } from "./api-errors";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -213,3 +215,50 @@ export const calculatePrice = (
     0,
   );
 };
+
+export async function checkIfStoreOwner(
+  userId: string | null,
+  storeId: string,
+) {
+  if (!userId) return false;
+  const storeByUserId = await prismadb.store.findFirst({
+    where: {
+      id: storeId,
+      userId,
+    },
+  });
+  return !!storeByUserId;
+}
+
+export async function verifyStoreOwner(userId: string, storeId: string) {
+  const isStoreOwner = await checkIfStoreOwner(userId, storeId);
+  if (!isStoreOwner) throw ErrorFactory.Unauthorized();
+}
+
+export const parseErrorDetails = (
+  key: string,
+  list: unknown[],
+): Record<string, unknown> => ({
+  [key]: JSON.stringify(list),
+});
+
+export async function getClerkUserById(
+  userId: string | undefined,
+): Promise<string | null> {
+  if (!userId) return null;
+  const user = await clerkClient.users.getUser(userId);
+  return user ? user.id : null;
+}
+
+export function checkRequiredFields(
+  fields: Record<string, any>,
+  requiredFields: Record<string, string>,
+) {
+  for (const [field, message] of Object.entries(requiredFields)) {
+    if (
+      Array.isArray(fields[field]) ? !fields[field]?.length : !fields[field]
+    ) {
+      throw ErrorFactory.InvalidRequest(message);
+    }
+  }
+}
