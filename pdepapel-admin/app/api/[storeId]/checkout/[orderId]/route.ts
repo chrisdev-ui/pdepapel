@@ -1,12 +1,12 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
-import { OrderStatus, PaymentMethod } from "@prisma/client";
-import { NextResponse } from "next/server";
 import {
   CheckoutOrder,
   generatePayUPayment,
   generateWompiPayment,
-} from "../route";
+} from "@/lib/utils";
+import { OrderStatus, PaymentMethod } from "@prisma/client";
+import { NextResponse } from "next/server";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

@@ -1,10 +1,13 @@
+import { DEFAULT_COUNTRY } from "@/constants";
 import prismadb from "@/lib/prismadb";
 import { clerkClient } from "@clerk/nextjs";
+import { Order, OrderItem, PaymentDetails, Product } from "@prisma/client";
 import { clsx, type ClassValue } from "clsx";
 import crypto from "crypto";
 import { twMerge } from "tailwind-merge";
 import { v4 as uuidv4 } from "uuid";
 import { ErrorFactory } from "./api-errors";
+import { env } from "./env.mjs";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -261,4 +264,81 @@ export function checkRequiredFields(
       throw ErrorFactory.InvalidRequest(message);
     }
   }
+}
+export interface CheckoutOrder extends Order {
+  orderItems: CheckoutOrderItem[];
+  payment?: PaymentDetails | null;
+}
+
+export type CheckoutOrderItem = OrderItem & { product: Product };
+
+export interface PayUResponse {
+  referenceCode: string;
+  amount: number;
+  tax?: number;
+  taxReturnBase?: number;
+  currency?: string;
+  signature: string;
+  test: number;
+  responseUrl: string;
+  confirmationUrl: string;
+  shippingAddress: string;
+  shippingCity: string;
+  shippingCountry: string;
+}
+
+export async function generateWompiPayment(
+  order: CheckoutOrder,
+): Promise<string> {
+  const expirationTime = new Date(
+    new Date().setHours(new Date().getHours() + 1),
+  ).toISOString();
+
+  const amountInCents = calculateTotalAmount(order.orderItems) * 100;
+
+  const signatureIntegrity = await generateIntegritySignature({
+    reference: order.id,
+    amountInCents,
+    currency: "COP",
+    integritySecret: env.WOMPI_INTEGRITY_KEY,
+    expirationTime,
+  });
+
+  const url = `https://checkout.wompi.co/p/?public-key=${env.WOMPI_API_KEY}&currency=COP&amount-in-cents=${amountInCents}&reference=${order.id}&signature:integrity=${signatureIntegrity}&redirect-url=${env.FRONTEND_STORE_URL}/order/${order.id}&expiration-time=${expirationTime}`;
+
+  return url;
+}
+
+export function generatePayUPayment(order: CheckoutOrder): PayUResponse {
+  const amount = calculateTotalAmount(order.orderItems);
+  const { shippingAddress, shippingCity } = parseAndSplitAddress(order.address);
+  return {
+    referenceCode: order.id,
+    amount,
+    signature: generatePayUSignature({
+      apiKey: env.PAYU_API_KEY,
+      merchantId: env.PAYU_MERCHANT_ID,
+      referenceCode: order.id,
+      amount,
+    }),
+    test: env.NODE_ENV === "production" ? 0 : 1,
+    responseUrl:
+      env.NODE_ENV === "production"
+        ? `${env.FRONTEND_STORE_URL}/order/${order.id}`
+        : `https://21dmqprm-3001.use2.devtunnels.ms/order/${order.id}`,
+    confirmationUrl:
+      env.NODE_ENV === "production"
+        ? `${env.ADMIN_WEB_URL}/api/webhook/payu`
+        : "https://4d8b-2800-e6-4010-ec51-ac30-1677-a33f-4dd9.ngrok-free.app/api/webhook/payu",
+    shippingAddress,
+    shippingCity,
+    shippingCountry: DEFAULT_COUNTRY,
+  };
+}
+
+function calculateTotalAmount(orderItems: CheckoutOrderItem[]): number {
+  return orderItems.reduce(
+    (acc, item) => acc + Number(item.product.price) * item.quantity,
+    0,
+  );
 }
