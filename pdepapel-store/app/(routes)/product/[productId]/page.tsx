@@ -2,6 +2,7 @@ import { getProduct } from "@/actions/get-product";
 import { getProducts } from "@/actions/get-products";
 import { SingleProductPage } from "@/components/single-product-page";
 import { Metadata } from "next";
+import { notFound } from "next/navigation";
 
 interface ProductPageProps {
   params: {
@@ -56,8 +57,11 @@ export const revalidate = 0;
 
 export default async function ProductPage({ params }: ProductPageProps) {
   const product = await getProduct(params.productId);
+
+  if (!product) return notFound();
+
   const { products: suggestedProducts } = await getProducts({
-    categoryId: product?.category?.id,
+    categoryId: product.category.id,
     excludeProducts: params.productId,
     limit: 4,
   });
