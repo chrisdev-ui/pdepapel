@@ -4,6 +4,7 @@ import { ApiList } from "@/components/ui/api-list";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Heading } from "@/components/ui/heading";
+import { RefreshButton } from "@/components/ui/refresh-button";
 import { Separator } from "@/components/ui/separator";
 import { Models } from "@/constants";
 import { Plus } from "lucide-react";
@@ -25,14 +26,17 @@ const ProductClient: React.FC<ProductClientProps> = ({ data }) => {
           title={`Productos (${data.length})`}
           description="Maneja los productos para tu tienda"
         />
-        <Button
-          onClick={() =>
-            router.push(`/${params.storeId}/${Models.Products}/new`)
-          }
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Crear producto
-        </Button>
+        <div className="flex items-center gap-x-2">
+          <RefreshButton />
+          <Button
+            onClick={() =>
+              router.push(`/${params.storeId}/${Models.Products}/new`)
+            }
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Crear producto
+          </Button>
+        </div>
       </div>
       <Separator />
       <DataTable

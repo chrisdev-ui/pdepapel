@@ -4,6 +4,7 @@ import { ApiList } from "@/components/ui/api-list";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Heading } from "@/components/ui/heading";
+import { RefreshButton } from "@/components/ui/refresh-button";
 import { Separator } from "@/components/ui/separator";
 import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
@@ -55,6 +56,7 @@ const CouponClient: React.FC<CouponClientProps> = ({ data }) => {
           description="Maneja los cupones de tu tienda"
         />
         <div className="flex items-center gap-x-2">
+          <RefreshButton />
           <Button onClick={handleUpdate} disabled={loading} variant="outline">
             {loading ? (
               <>

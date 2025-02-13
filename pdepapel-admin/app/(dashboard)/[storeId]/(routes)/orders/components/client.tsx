@@ -4,9 +4,10 @@ import { ApiList } from "@/components/ui/api-list";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Heading } from "@/components/ui/heading";
+import { RefreshButton } from "@/components/ui/refresh-button";
 import { Separator } from "@/components/ui/separator";
 import { Models } from "@/constants";
-import { Plus, RotateCw } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useId } from "react";
 import { OrderColumn, columns } from "./columns";
@@ -28,9 +29,7 @@ const OrderClient: React.FC<OrderClientProps> = ({ data }) => {
           description="Maneja las órdenes de tu tienda"
         />
         <div className="flex gap-2">
-          <Button variant="outline" onClick={router.refresh}>
-            <RotateCw className="h-4 w-4" />
-          </Button>
+          <RefreshButton />
           <Button
             onClick={() =>
               router.push(`/${params.storeId}/${Models.Orders}/new`)

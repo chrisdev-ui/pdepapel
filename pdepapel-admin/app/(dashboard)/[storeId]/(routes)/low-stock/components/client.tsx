@@ -4,6 +4,7 @@ import { TresholdSelector } from "@/components/treshold-selector";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Heading } from "@/components/ui/heading";
+import { RefreshButton } from "@/components/ui/refresh-button";
 import { Separator } from "@/components/ui/separator";
 import { Models } from "@/constants";
 import { ArrowBigLeft } from "lucide-react";
@@ -22,12 +23,15 @@ const LowStockClient: React.FC<LowStockClientProps> = ({ data }) => {
           title={`Productos por agotarse (${data.length})`}
           description="Maneja los productos por agotarse de tu tienda"
         />
-        <Button asChild>
-          <Link href="/">
-            <ArrowBigLeft className="mr-2 h-4 w-4" />
-            Volver al inicio
-          </Link>
-        </Button>
+        <div className="flex items-center gap-x-2">
+          <RefreshButton />
+          <Button asChild>
+            <Link href="/">
+              <ArrowBigLeft className="mr-2 h-4 w-4" />
+              Volver al inicio
+            </Link>
+          </Button>
+        </div>
       </div>
       <Separator />
       <div className="flex items-center gap-x-3">
