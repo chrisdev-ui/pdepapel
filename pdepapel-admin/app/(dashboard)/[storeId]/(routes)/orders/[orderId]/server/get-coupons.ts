@@ -17,7 +17,7 @@ export async function getCoupons(storeId: string) {
         {
           AND: [
             { maxUses: { not: null } },
-            { usedCount: { lt: prisma?.coupon.fields.maxUses } },
+            { usedCount: { lt: prismadb.coupon.fields.maxUses } },
           ],
         },
       ],
