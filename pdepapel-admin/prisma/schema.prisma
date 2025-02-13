@@ -28,7 +28,8 @@ model Store {
   reviews    Review[]         @relation("StoreToReview")
   shippings  Shipping[]       @relation("StoreToShipping")
   payments   PaymentDetails[] @relation("StoreToPaymentDetails")
-  suppliers Supplier[]        @relation("StoreToSupplier")
+  suppliers  Supplier[]       @relation("StoreToSupplier")
+  coupons    Coupon[]         @relation("StoreToCoupons")
 }
 
 model Billboard {
@@ -197,12 +198,26 @@ model Order {
   status      OrderStatus     @default(CREATED)
   userId      String?         @default("")
   guestId     String?         @default("")
+  subtotal    Float           @default(0)
+  discount    Float           @default(0)
+  discountType    DiscountType?
+  discountReason  String?
+  couponId        String?
+  couponDiscount  Float       @default(0)
+  total       Float           @default(0)
+  coupon      Coupon?         @relation(fields: [couponId], references: [id])
   store       Store           @relation("StoreToOrder", fields: [storeId], references: [id])
   orderItems  OrderItem[]
   shipping    Shipping?
   payment     PaymentDetails?
 
   @@index([storeId])
+  @@index([couponId])
+  @@index([storeId, status])
+  @@index([userId, storeId])
+  @@index([guestId, storeId])
+  @@index([createdAt])
+  @@index([status, createdAt])
 }
 
 model OrderItem {
@@ -293,6 +308,37 @@ model PaymentDetails {
 
   @@index([orderId])
   @@index([storeId])
+}
+
+model Coupon {
+  id            String         @id @default(uuid())
+  storeId       String
+  code          String         @unique
+  type          DiscountType
+  amount        Float
+  startDate     DateTime
+  endDate       DateTime
+  maxUses       Int?           @default(99)
+  usedCount     Int            @default(0)
+  isActive      Boolean        @default(true)
+  minOrderValue Float?         @default(0)
+  orders        Order[]        
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  store         Store          @relation("StoreToCoupons", fields: [storeId], references: [id])
+
+  @@unique([storeId, code])
+  @@index([storeId])
+  @@index([code])
+  @@index([isActive])
+  @@index([startDate, endDate])
+  @@index([usedCount, maxUses])
+  @@index([storeId, isActive, startDate, endDate])
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
 }
 
 enum OrderStatus {

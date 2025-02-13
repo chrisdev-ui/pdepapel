@@ -1,7 +1,8 @@
-import dynamic from "next/dynamic";
+import dynamicImport from "next/dynamic";
+import { v4 as uuidv4 } from "uuid";
 import { getOrders } from "./server/get-orders";
 
-const OrderClient = dynamic(() => import("./components/client"), {
+const OrderClient = dynamicImport(() => import("./components/client"), {
   ssr: false,
 });
 
@@ -19,7 +20,7 @@ export default async function OrdersPage({
   return (
     <div className="flex-col">
       <div className="flex-1 space-y-4 p-8 pt-6">
-        <OrderClient data={orders} />
+        <OrderClient data={orders} key={uuidv4()} />
       </div>
     </div>
   );

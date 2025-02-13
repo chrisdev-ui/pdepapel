@@ -19,6 +19,7 @@ export const env = createEnv({
     RESEND_API_KEY: z.string().min(1),
     PAYU_MERCHANT_ID: z.string().min(1),
     PAYU_API_KEY: z.string().min(1),
+    CRON_SECRET: z.string().min(1),
   },
   client: {
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().min(1),

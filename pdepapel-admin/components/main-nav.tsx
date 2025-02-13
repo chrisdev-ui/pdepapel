@@ -78,13 +78,21 @@ export function MainNav({
       active: pathname === `/${params.storeId}/${Models.Suppliers}`,
     },
     {
+      href: `/${params.storeId}/${Models.Coupons}`,
+      label: ModelLabels[Models.Coupons],
+      active: pathname === `/${params.storeId}/${Models.Coupons}`,
+    },
+    {
       href: `/${params.storeId}/settings`,
       label: "Ajustes",
       active: pathname === `/${params.storeId}/settings`,
     },
   ];
   return (
-    <nav className={cn("flex items-center space-x-4 lg:space-x-6", className)}>
+    <nav
+      className={cn("flex items-center space-x-4 lg:space-x-6", className)}
+      {...props}
+    >
       {routes.map((route) => (
         <Link
           key={route.href}

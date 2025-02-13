@@ -1,8 +1,10 @@
 "use server";
 
 import prismadb from "@/lib/prismadb";
+import { headers } from "next/headers";
 
 export async function getOrders(storeId: string) {
+  headers();
   return await prismadb.order.findMany({
     where: {
       storeId,
@@ -14,6 +16,7 @@ export async function getOrders(storeId: string) {
       phone: true,
       address: true,
       documentId: true,
+      total: true,
       status: true,
       createdAt: true,
       orderItems: {

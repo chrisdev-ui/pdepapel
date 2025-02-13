@@ -255,15 +255,6 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
     return encodedURL;
   }, [order?.shipping?.trackingCode]);
 
-  const orderItemsTotal = useMemo(
-    () =>
-      order?.orderItems?.reduce(
-        (sum, item) => sum + Number(item.product.price) * item.quantity,
-        0,
-      ),
-    [order],
-  );
-
   const isAdmin = (user: string) => ADMIN_USER_IDS.includes(user);
 
   const hasAccess = userId
@@ -283,7 +274,6 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                 sizes="(max-width: 640px) 100vw, 640px"
                 className="rounded-full object-cover"
                 unoptimized
-                placeholder="blur"
               />
             </div>
             <h1 className="font-serif text-3xl font-extrabold">
@@ -510,7 +500,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                   <span>Subtotal:</span>
                   <Currency
                     className="text-base lg:text-lg"
-                    value={orderItemsTotal}
+                    value={order.subtotal}
                   />
                 </div>
                 {order.shipping?.cost && (
@@ -522,16 +512,32 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                     />
                   </div>
                 )}
-                <div className="flex w-full justify-between">
-                  <span>Otros impuestos:</span>
-                  <Currency className="text-base lg:text-lg" value={0} />
-                </div>
+                {order.discount && order.discount > 0 ? (
+                  <div className="flex w-full justify-between text-success">
+                    <span>Descuento:</span>
+                    <Currency
+                      className="text-base lg:text-lg"
+                      value={order.discount}
+                      isNegative
+                    />
+                  </div>
+                ) : null}
+                {order.couponDiscount && order.couponDiscount > 0 ? (
+                  <div className="flex w-full justify-between text-success">
+                    <span>Descuento cupón:</span>
+                    <Currency
+                      className="text-base lg:text-lg"
+                      value={order.couponDiscount}
+                      isNegative
+                    />
+                  </div>
+                ) : null}
               </div>
               <div className="flex w-full px-0 py-8 text-xl">
                 <div className="flex w-full justify-between">
                   <span>Total</span>
                   <Currency
-                    value={orderItemsTotal + Number(order.shipping?.cost ?? 0)}
+                    value={order.total + Number(order?.shipping?.cost ?? 0)}
                   />
                 </div>
               </div>

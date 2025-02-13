@@ -1,9 +1,26 @@
 import { DEFAULT_COUNTRY } from "@/constants";
 import prismadb from "@/lib/prismadb";
 import { clerkClient } from "@clerk/nextjs";
-import { Order, OrderItem, PaymentDetails, Product } from "@prisma/client";
+import {
+  DiscountType,
+  Order,
+  OrderItem,
+  PaymentDetails,
+  Product,
+} from "@prisma/client";
 import { clsx, type ClassValue } from "clsx";
 import crypto from "crypto";
+import {
+  addDays,
+  addMonths,
+  addWeeks,
+  endOfDay,
+  endOfMonth,
+  endOfWeek,
+  startOfDay,
+  startOfMonth,
+  startOfWeek,
+} from "date-fns";
 import { twMerge } from "tailwind-merge";
 import { v4 as uuidv4 } from "uuid";
 import { ErrorFactory } from "./api-errors";
@@ -174,12 +191,6 @@ export const capitalizeFirstLetter = (string: string) => {
   return string.charAt(0).toUpperCase() + string.slice(1);
 };
 
-export const formattedDate = (date: string) =>
-  date.replace(
-    /(\d{2} de )(\w+)( de \d{4})/,
-    (match, p1, p2, p3) => `${p1}${capitalizeFirstLetter(p2)}${p3}`,
-  );
-
 export const formatPhoneNumber = (phone: string) => {
   //Filter only numbers from the input
   const cleaned = ("" + phone).replace(/\D/g, "");
@@ -193,30 +204,6 @@ export const formatPhoneNumber = (phone: string) => {
   }
 
   return null;
-};
-
-export const calculatePrice = (
-  orderItems: Array<{
-    product: {
-      name: string;
-      id: string;
-      price: number;
-      images: Array<{
-        id: string;
-        createdAt: Date;
-        updatedAt: Date;
-        productId: string;
-        url: string;
-        isMain: boolean;
-      }>;
-    };
-    quantity: number;
-  }>,
-) => {
-  return orderItems.reduce(
-    (sum, item) => sum + Number(item.product.price) * item.quantity,
-    0,
-  );
 };
 
 export async function checkIfStoreOwner(
@@ -294,7 +281,7 @@ export async function generateWompiPayment(
     new Date().setHours(new Date().getHours() + 1),
   ).toISOString();
 
-  const amountInCents = calculateTotalAmount(order.orderItems) * 100;
+  const amountInCents = order.total * 100;
 
   const signatureIntegrity = await generateIntegritySignature({
     reference: order.id,
@@ -310,16 +297,15 @@ export async function generateWompiPayment(
 }
 
 export function generatePayUPayment(order: CheckoutOrder): PayUResponse {
-  const amount = calculateTotalAmount(order.orderItems);
   const { shippingAddress, shippingCity } = parseAndSplitAddress(order.address);
   return {
     referenceCode: order.id,
-    amount,
+    amount: order.total,
     signature: generatePayUSignature({
       apiKey: env.PAYU_API_KEY,
       merchantId: env.PAYU_MERCHANT_ID,
       referenceCode: order.id,
-      amount,
+      amount: order.total,
     }),
     test: env.NODE_ENV === "production" ? 0 : 1,
     responseUrl:
@@ -336,9 +322,91 @@ export function generatePayUPayment(order: CheckoutOrder): PayUResponse {
   };
 }
 
-function calculateTotalAmount(orderItems: CheckoutOrderItem[]): number {
-  return orderItems.reduce(
-    (acc, item) => acc + Number(item.product.price) * item.quantity,
+export interface OrderTotals {
+  subtotal: number;
+  discount: number;
+  couponDiscount: number;
+  total: number;
+}
+
+export interface DiscountConfig {
+  type: DiscountType;
+  amount: number;
+}
+
+export function calculateOrderTotals(
+  orderItems: Array<{
+    product: { price: number };
+    quantity: number;
+  }>,
+  config?: {
+    discount?: DiscountConfig;
+    coupon?: DiscountConfig;
+  },
+): OrderTotals {
+  const subtotal = orderItems.reduce(
+    (sum, item) => sum + Number(item.product.price) * item.quantity,
     0,
   );
+
+  let discount = 0;
+  if (config?.discount) {
+    discount =
+      config.discount.type === DiscountType.PERCENTAGE
+        ? (subtotal * config.discount.amount) / 100
+        : Math.min(config.discount.amount, subtotal);
+  }
+
+  let couponDiscount = 0;
+  if (config?.coupon) {
+    const afterDiscount = subtotal - discount;
+    couponDiscount =
+      config.coupon.type === DiscountType.PERCENTAGE
+        ? (afterDiscount * config.coupon.amount) / 100
+        : Math.min(config.coupon.amount, afterDiscount);
+  }
+
+  const total = Math.max(0, subtotal - discount - couponDiscount);
+
+  return {
+    subtotal,
+    discount,
+    couponDiscount,
+    total,
+  };
 }
+
+export interface CustomDate {
+  name: string;
+  from: Date;
+  to: Date;
+}
+
+export const datePresets: Array<CustomDate> = [
+  { name: "Hoy", from: startOfDay(new Date()), to: endOfDay(new Date()) },
+  {
+    name: "Mañana",
+    from: startOfDay(addDays(new Date(), 1)),
+    to: endOfDay(addDays(new Date(), 1)),
+  },
+  {
+    name: "Esta semana",
+    from: startOfWeek(new Date()),
+    to: endOfWeek(new Date()),
+  },
+  {
+    name: "La próxima semana",
+    from: startOfWeek(addWeeks(new Date(), 1)),
+    to: endOfWeek(addWeeks(new Date(), 1)),
+  },
+  {
+    name: "Este mes",
+    from: startOfMonth(new Date()),
+    to: endOfMonth(new Date()),
+  },
+  {
+    name: "El próximo mes",
+    from: startOfMonth(addMonths(new Date(), 1)),
+    to: endOfMonth(addMonths(new Date(), 1)),
+  },
+];

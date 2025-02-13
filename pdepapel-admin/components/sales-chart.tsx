@@ -1,5 +1,6 @@
 "use client";
 
+import { getSalesData } from "@/actions/get-sales-data";
 import {
   currencyFormatter,
   numberFormatter,
@@ -20,11 +21,7 @@ import {
   YAxis,
 } from "recharts";
 
-interface SalesDataPoint {
-  date: string;
-  revenue: number;
-  orders: number;
-}
+type SalesDataPoint = Awaited<ReturnType<typeof getSalesData>>[number];
 
 interface SalesChartProps {
   data: SalesDataPoint[];
@@ -39,6 +36,51 @@ export const SalesChart: React.FC<SalesChartProps> = ({ data }) => {
       })),
     [data],
   );
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (!active || !payload) return null;
+
+    const dataPoint = payload[0]?.payload;
+    if (!dataPoint) return null;
+
+    return (
+      <div className="space-y-2 rounded-lg border bg-white p-4 shadow-lg">
+        <p className="border-b pb-2 font-semibold">{label}</p>
+
+        {/* Revenue Section */}
+        <div className="space-y-1">
+          <p className="text-sm text-gray-600">
+            Ingresos Brutos: {currencyFormatter.format(dataPoint.grossRevenue)}
+          </p>
+          <div className="pl-2 text-sm">
+            <p className="text-red-600">
+              Descuentos: -{currencyFormatter.format(dataPoint.discounts)}
+            </p>
+            <p className="text-orange-600">
+              Cupones: -{currencyFormatter.format(dataPoint.couponDiscounts)}
+            </p>
+          </div>
+          <p className="font-semibold text-[#a5c3ff]">
+            Ingresos Netos: {currencyFormatter.format(dataPoint.revenue)}
+          </p>
+        </div>
+
+        {/* Orders Section */}
+        <div className="space-y-1 border-t pt-2">
+          <p className="text-[#fea4c3]">
+            Órdenes: {numberFormatter.format(dataPoint.orders)}
+          </p>
+          <p className="text-sm text-gray-600">
+            Productos Vendidos: {numberFormatter.format(dataPoint.items)}
+          </p>
+          <p className="text-sm text-gray-600">
+            Valor Promedio por Orden:{" "}
+            {currencyFormatter.format(dataPoint.averageOrderValue)}
+          </p>
+        </div>
+      </div>
+    );
+  };
   return (
     <div className="h-[400px] w-full p-4">
       <ResponsiveContainer width="100%" height="100%">
@@ -66,27 +108,7 @@ export const SalesChart: React.FC<SalesChartProps> = ({ data }) => {
           />
 
           {/* Tooltip */}
-          <Tooltip
-            content={({ active, payload, label }) => {
-              if (active && payload && payload.length) {
-                return (
-                  <div className="rounded-lg border bg-white p-4 shadow-lg">
-                    <p className="font-semibold">{label}</p>
-                    <p className="text-[#a5c3ff]">
-                      Ganancia:{" "}
-                      {currencyFormatter.format(Number(payload[0]?.value ?? 0))}
-                    </p>
-                    <p className="text-[#fea4c3]">
-                      Número de órdenes:{" "}
-                      {numberFormatter.format(Number(payload[1].value ?? 0))}
-                    </p>
-                  </div>
-                );
-              }
-              return null;
-            }}
-          />
-
+          <Tooltip content={CustomTooltip} />
           <Legend />
 
           {/* Revenue Bars */}

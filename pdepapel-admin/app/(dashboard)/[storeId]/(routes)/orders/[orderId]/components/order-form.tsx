@@ -1,22 +1,28 @@
 "use client";
 
 import {
-  Order,
-  OrderItem,
+  Coupon,
+  DiscountType,
   OrderStatus,
-  PaymentDetails,
   PaymentMethod,
-  Shipping,
   ShippingStatus,
 } from "@prisma/client";
 import { useParams, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import z from "zod";
 
 import { AlertModal } from "@/components/modals/alert-modal";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AutoComplete } from "@/components/ui/autocomplete";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
 import {
   Form,
   FormControl,
@@ -28,6 +34,11 @@ import {
 import { Heading } from "@/components/ui/heading";
 import { Input } from "@/components/ui/input";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -35,9 +46,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
+import { UserCombobox } from "@/components/ui/user-combobox";
 import { WhatsappButton } from "@/components/whatsapp-button";
 import {
   detailsTitleOptions,
+  discountOptions,
   Models,
   paymentMethodsByOption,
   paymentOptions,
@@ -47,14 +61,24 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import {
+  cn,
   currencyFormatter,
   generateGuestId,
   parseOrderDetails,
 } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import axios from "axios";
-import { DollarSign, ShoppingBasket, Trash } from "lucide-react";
+import {
+  Check,
+  ChevronsUpDown,
+  DollarSign,
+  Percent,
+  ShoppingBasket,
+  Ticket,
+  Trash,
+} from "lucide-react";
 import { useForm } from "react-hook-form";
+import { getCoupons } from "../server/get-coupons";
 import { getOrder } from "../server/get-order";
 
 const paymentSchema = z
@@ -70,6 +94,14 @@ const shippingSchema = z
     courier: z.string(),
     cost: z.coerce.number(),
     trackingCode: z.string(),
+  })
+  .partial();
+
+const discountSchema = z
+  .object({
+    type: z.nativeEnum(DiscountType),
+    amount: z.coerce.number().min(0),
+    reason: z.string(),
   })
   .partial();
 
@@ -91,6 +123,10 @@ const formSchema = z.object({
   payment: paymentSchema,
   shipping: shippingSchema,
   documentId: z.string().default(""),
+  subtotal: z.coerce.number().default(0),
+  total: z.coerce.number().default(0),
+  discount: discountSchema,
+  couponCode: z.string().optional(),
 });
 
 type OrderFormValues = z.infer<typeof formSchema>;
@@ -98,25 +134,32 @@ type OrderFormValues = z.infer<typeof formSchema>;
 type ProductOption = Awaited<ReturnType<typeof getOrder>>["products"][number];
 
 interface OrderFormProps {
-  initialData:
-    | (Order & {
-        orderItems: OrderItem[];
-        payment: PaymentDetails | null;
-        shipping: Shipping | null;
-      })
-    | null;
+  initialData: Awaited<ReturnType<typeof getOrder>>["order"];
   products: ProductOption[];
+  availableCoupons: Awaited<ReturnType<typeof getCoupons>>;
+  users: {
+    value: string;
+    label: string;
+    image?: string;
+  }[];
 }
 
 export const OrderForm: React.FC<OrderFormProps> = ({
   initialData,
   products,
+  availableCoupons,
+  users,
 }) => {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
 
   const [open, setOpen] = useState(false);
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const [coupon, setCoupon] = useState<Coupon | null>(null);
+
   const [productsSelected, setProductsSelected] = useState<ProductOption[]>(
     initialData
       ? (initialData.orderItems
@@ -125,18 +168,6 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           )
           .filter(Boolean) as ProductOption[])
       : [],
-  );
-  const [totalPrice, setTotalPrice] = useState(
-    initialData
-      ? initialData.orderItems.reduce(
-          (sum, item) =>
-            sum +
-            (products.find((product) => product.value === item.productId)
-              ?.price || 0) *
-              (item.quantity || 1),
-          0,
-        )
-      : 0,
   );
 
   const [quantities, setQuantity] = useState(
@@ -150,7 +181,6 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         )
       : {},
   );
-  const [loading, setLoading] = useState(false);
 
   const { title, description, toastMessage, action } = useMemo(
     () => ({
@@ -170,6 +200,14 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           userId: initialData.userId || "",
           guestId: initialData.guestId || "",
           documentId: initialData.documentId || "",
+          subtotal: initialData.subtotal || 0,
+          total: initialData.total || 0,
+          discount: {
+            type: initialData.discountType || undefined,
+            amount: initialData.discount || undefined,
+            reason: initialData.discountReason || undefined,
+          },
+          couponCode: initialData.coupon?.code || "",
           orderItems: initialData.orderItems.map((item) => ({
             productId: item.productId,
             quantity: item.quantity,
@@ -196,8 +234,69 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           status: OrderStatus.CREATED,
           payment: {},
           shipping: {},
+          subtotal: 0,
+          total: 0,
+          discount: {},
+          couponCode: "",
         },
   });
+
+  const discountType = form.watch("discount.type");
+  const discountAmount = form.watch("discount.amount");
+
+  const {
+    formState: { isDirty },
+  } = form;
+
+  const orderTotals = useMemo(() => {
+    if (!isDirty && initialData) {
+      return {
+        subtotal: initialData.subtotal,
+        discount: initialData.discount,
+        couponDiscount: initialData.couponDiscount,
+        total: initialData.total,
+      };
+    }
+    const subtotal = productsSelected.reduce(
+      (sum, product) =>
+        sum + Number(product.price) * (quantities[product.value] || 1),
+      0,
+    );
+
+    let discountValue = 0;
+    if (discountType && discountAmount && !isNaN(discountAmount)) {
+      discountValue =
+        discountType === DiscountType.PERCENTAGE
+          ? (subtotal * discountAmount) / 100
+          : Math.min(discountAmount, subtotal);
+    }
+
+    let couponDiscount = 0;
+    if (coupon && subtotal >= (Number(coupon.minOrderValue) || 0)) {
+      const afterDiscount = subtotal - discountValue;
+      couponDiscount =
+        coupon.type === DiscountType.PERCENTAGE
+          ? (afterDiscount * Number(coupon.amount)) / 100
+          : Math.min(Number(coupon.amount), afterDiscount);
+    }
+
+    const total = Math.max(0, subtotal - discountValue - couponDiscount);
+
+    return {
+      subtotal,
+      discount: discountValue,
+      couponDiscount,
+      total,
+    };
+  }, [
+    isDirty,
+    initialData,
+    productsSelected,
+    quantities,
+    discountType,
+    discountAmount,
+    coupon,
+  ]);
 
   const onSubmit = async (data: OrderFormValues) => {
     try {
@@ -207,20 +306,20 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         quantity: quantities[item.productId] || item.quantity,
       }));
 
-      const updatedData = {
+      const payload = {
         ...data,
         orderItems: updatedOrderItems,
+        subtotal: orderTotals.subtotal,
+        total: orderTotals.total,
       };
+
       if (initialData) {
         await axios.patch(
           `/api/${params.storeId}/${Models.Orders}/${params.orderId}`,
-          updatedData,
+          payload,
         );
       } else {
-        await axios.post(
-          `/api/${params.storeId}/${Models.Orders}`,
-          updatedData,
-        );
+        await axios.post(`/api/${params.storeId}/${Models.Orders}`, payload);
       }
       router.refresh();
       router.push(`/${params.storeId}/${Models.Orders}`);
@@ -264,6 +363,12 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   };
 
   const parsedDetails = parseOrderDetails(initialData?.payment?.details);
+
+  useEffect(() => {
+    if (initialData?.coupon) {
+      setCoupon(initialData.coupon);
+    }
+  }, [initialData]);
 
   return (
     <>
@@ -313,24 +418,37 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                           ...prev,
                           [product.value]: newQuantity,
                         }));
-                        const newTotal = productsSelected.reduce(
-                          (sum, option) => {
-                            const quantity =
-                              option.value === product.value
-                                ? newQuantity
-                                : quantities[option.value] || 1;
-                            return sum + Number(option?.price) * quantity;
-                          },
-                          0,
-                        );
-                        setTotalPrice(newTotal);
                       }}
                     />
                   </AlertDescription>
                 </Alert>
               ))}
-            <div className="ml-auto text-lg font-semibold">
-              Total: {currencyFormatter.format(totalPrice)}
+          </div>
+          <div className="ml-auto flex flex-col space-y-2 text-right">
+            <div className="text-lg font-semibold">
+              Subtotal: {currencyFormatter.format(orderTotals.subtotal)}
+            </div>
+            {orderTotals.discount > 0 && (
+              <div className="text-lg text-red-600">
+                Descuento: -{currencyFormatter.format(orderTotals.discount)}
+                {form.watch("discount.type") === DiscountType.PERCENTAGE && (
+                  <span className="ml-1 text-xs">
+                    ({form.watch("discount.amount")}%)
+                  </span>
+                )}
+              </div>
+            )}
+            {orderTotals.couponDiscount > 0 && (
+              <div className="text-lg text-red-600">
+                Descuento cupón: -
+                {currencyFormatter.format(orderTotals.couponDiscount)}
+                {coupon?.type === DiscountType.PERCENTAGE && (
+                  <span className="ml-1 text-xs">({coupon.amount}%)</span>
+                )}
+              </div>
+            )}
+            <div className="text-xl font-bold">
+              Total: {currencyFormatter.format(orderTotals.total)}
             </div>
           </div>
           <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
@@ -353,14 +471,6 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                         }));
                         field.onChange(orderItems);
                         setProductsSelected(selectedOptions);
-                        const newTotal = selectedOptions.reduce(
-                          (sum, option) =>
-                            sum +
-                            Number(option.price) *
-                              (quantities[option.value] || 1),
-                          0,
-                        );
-                        setTotalPrice(newTotal);
                       }}
                       values={
                         field.value.map((item) => ({
@@ -383,12 +493,20 @@ export const OrderForm: React.FC<OrderFormProps> = ({
               name="userId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Id del usuario</FormLabel>
+                  <FormLabel>Usuario</FormLabel>
                   <FormControl>
-                    <Input
+                    <UserCombobox
+                      options={users}
+                      value={field.value}
+                      onChange={(value, user) => {
+                        field.onChange(value);
+                        if (user) {
+                          form.setValue("fullName", user.label);
+                          form.setValue("documentId", user.documentId ?? "");
+                          form.setValue("phone", user.phone ?? "");
+                        }
+                      }}
                       disabled={loading}
-                      placeholder="Id del usuario"
-                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
@@ -455,14 +573,15 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   <FormLabel>Teléfono</FormLabel>
                   <FormControl>
                     <div className="flex items-center gap-x-1">
-                      {initialData && (
+                      {(initialData || field.value.length >= 10) && (
                         <WhatsappButton
                           order={{
-                            orderNumber: initialData.orderNumber,
-                            status: initialData.status,
-                            fullName: initialData.fullName,
-                            phone: initialData.phone,
-                            totalPrice,
+                            orderNumber: initialData?.orderNumber ?? "",
+                            status: initialData?.status ?? OrderStatus.CREATED,
+                            fullName:
+                              initialData?.fullName ?? form.watch("fullName"),
+                            phone: field.value,
+                            totalPrice: orderTotals.total,
                             products: productsSelected.map((product) => ({
                               name: product.label,
                               quantity: quantities[product.value] || 1,
@@ -527,6 +646,263 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                       ))}
                     </SelectContent>
                   </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+          <Separator />
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Descuentos y Cupones</h2>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                form.resetField("discount.type");
+                form.resetField("discount.amount", {
+                  defaultValue: 0,
+                });
+                form.resetField("discount.reason", {
+                  defaultValue: "",
+                });
+                toast({
+                  description: "Descuentos eliminados",
+                  variant: "success",
+                });
+              }}
+            >
+              <Trash className="mr-2 h-4 w-4" />
+              Limpiar descuentos
+            </Button>
+          </div>
+          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-3">
+            <FormField
+              control={form.control}
+              name="discount.type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tipo de descuento</FormLabel>
+                  <Select
+                    disabled={loading}
+                    onValueChange={field.onChange}
+                    value={field.value || ""}
+                  >
+                    <FormControl>
+                      <SelectTrigger value={field.value}>
+                        <SelectValue placeholder="Seleccionar tipo" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={DiscountType.PERCENTAGE}>
+                        {discountOptions[DiscountType.PERCENTAGE]}
+                      </SelectItem>
+                      <SelectItem value={DiscountType.FIXED}>
+                        {discountOptions[DiscountType.FIXED]}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="discount.amount"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Monto del descuento</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      {form.watch("discount.type") ===
+                      DiscountType.PERCENTAGE ? (
+                        <Percent className="absolute left-3 top-3 h-4 w-4" />
+                      ) : (
+                        <DollarSign className="absolute left-3 top-3 h-4 w-4" />
+                      )}
+                      <Input
+                        type="number"
+                        disabled={loading || !form.watch("discount.type")}
+                        className="pl-8"
+                        placeholder={
+                          form.watch("discount.type") ===
+                          DiscountType.PERCENTAGE
+                            ? "10"
+                            : "10000"
+                        }
+                        {...field}
+                        onChange={(e) =>
+                          field.onChange(
+                            e.target.value === ""
+                              ? undefined
+                              : Number(e.target.value),
+                          )
+                        }
+                      />
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="discount.reason"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Razón del descuento</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      disabled={loading || !form.watch("discount.type")}
+                      placeholder="Ej: Promoción especial"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="couponCode"
+              render={({ field }) => (
+                <FormItem className="flex flex-col">
+                  <FormLabel className="flex items-center gap-2">
+                    Cupón
+                    {coupon && (
+                      <Badge
+                        variant="success"
+                        className="flex items-center gap-1"
+                      >
+                        <Check className="h-3 w-3" />
+                        Aplicado
+                      </Badge>
+                    )}
+                  </FormLabel>
+                  <div className="flex items-center gap-2">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            disabled={validatingCoupon || loading}
+                            className={cn(
+                              "w-full justify-between",
+                              !field.value && "text-muted-foreground",
+                            )}
+                          >
+                            <div className="flex items-center gap-2 font-mono">
+                              <Ticket
+                                className={cn(
+                                  "h-4 w-4",
+                                  coupon
+                                    ? "text-success"
+                                    : "text-muted-foreground",
+                                )}
+                              />
+                              {field.value
+                                ? availableCoupons.find(
+                                    (c) => c.code === field.value,
+                                  )?.code
+                                : availableCoupons.length > 0
+                                  ? "Seleccionar cupón"
+                                  : "No hay cupones disponibles"}
+                            </div>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      {availableCoupons.length > 0 && (
+                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+                          <Command>
+                            <CommandInput placeholder="Buscar cupón..." />
+                            <CommandEmpty>
+                              No se encontraron cupones.
+                            </CommandEmpty>
+                            <CommandGroup>
+                              {availableCoupons.map((c) => (
+                                <CommandItem
+                                  key={c.code}
+                                  value={c.code}
+                                  onSelect={async () => {
+                                    try {
+                                      setValidatingCoupon(true);
+                                      if (
+                                        !initialData?.coupon ||
+                                        initialData.coupon.code !== c.code
+                                      ) {
+                                        const response = await axios.post(
+                                          `/api/${params.storeId}/coupons/validate`,
+                                          {
+                                            code: c.code,
+                                            subtotal: orderTotals.subtotal,
+                                          },
+                                        );
+                                        setCoupon(response.data);
+                                      } else {
+                                        setCoupon(initialData.coupon);
+                                      }
+                                      field.onChange(c.code);
+                                      toast({
+                                        description:
+                                          "Cupón aplicado correctamente",
+                                        variant: "success",
+                                      });
+                                    } catch (error) {
+                                      toast({
+                                        description: getErrorMessage(error),
+                                        variant: "destructive",
+                                      });
+                                      setCoupon(null);
+                                      field.onChange("");
+                                    } finally {
+                                      setValidatingCoupon(false);
+                                    }
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      c.code === field.value
+                                        ? "opacity-100"
+                                        : "opacity-0",
+                                    )}
+                                  />
+                                  <div className="flex w-full items-center justify-between">
+                                    <span className="font-mono">{c.code}</span>
+                                    <span className="text-xs text-muted-foreground">
+                                      {c.type === DiscountType.PERCENTAGE
+                                        ? `${c.amount}% de descuento`
+                                        : `${currencyFormatter.format(Number(c.amount))} de descuento`}
+                                    </span>
+                                  </div>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </Command>
+                        </PopoverContent>
+                      )}
+                    </Popover>
+                    {coupon && (
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="icon"
+                        className=""
+                        onClick={() => {
+                          setCoupon(null);
+                          field.onChange("");
+                          toast({
+                            description: "Cupón removido",
+                            variant: "success",
+                          });
+                        }}
+                      >
+                        <Trash className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
                   <FormMessage />
                 </FormItem>
               )}

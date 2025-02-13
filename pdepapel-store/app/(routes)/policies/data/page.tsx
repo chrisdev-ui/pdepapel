@@ -34,7 +34,6 @@ export default function DataPolicyPage() {
               title="P de Papel"
               className="inline-flex object-contain"
               unoptimized
-              placeholder="blur"
             />
             , nos comprometemos con el uso responsable y cuidadoso de la
             información personal de nuestros clientes, proveedores, y demás
@@ -128,7 +127,6 @@ export default function DataPolicyPage() {
                 title="P de Papel"
                 className="inline-flex object-contain"
                 unoptimized
-                placeholder="blur"
               />
               no es responsable por el uso indebido de tus datos personales si
               no se ha notificado oportunamente una violación de estos.

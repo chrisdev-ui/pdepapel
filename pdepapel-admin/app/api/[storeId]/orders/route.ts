@@ -4,16 +4,19 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
 import { resend } from "@/lib/resend";
 import {
+  calculateOrderTotals,
   checkIfStoreOwner,
+  currencyFormatter,
   generateOrderNumber,
   getLastOrderTimestamp,
   verifyStoreOwner,
 } from "@/lib/utils";
 import { auth, clerkClient } from "@clerk/nextjs";
 import {
+  Coupon,
+  DiscountType,
   OrderStatus,
   PaymentMethod,
-  Prisma,
   ShippingStatus,
 } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
@@ -27,6 +30,13 @@ type OrderData = {
   phone: string;
   address: string;
   documentId?: string | null;
+  subtotal: number;
+  discount?: number;
+  discountType?: DiscountType;
+  discountReason?: string | null;
+  couponId?: string | null;
+  couponDiscount?: number;
+  total: number;
   orderItems: { create: any };
   status?: any;
   payment?: { create: any };
@@ -52,6 +62,10 @@ export async function POST(
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
+    const isStoreOwner = userLogged
+      ? await checkIfStoreOwner(userLogged, params.storeId)
+      : false;
+
     const body = await req.json();
     const {
       fullName,
@@ -64,6 +78,10 @@ export async function POST(
       userId,
       guestId,
       documentId,
+      subtotal,
+      total,
+      discount,
+      couponCode,
     } = body;
 
     if (
@@ -77,20 +95,27 @@ export async function POST(
     }
 
     let authenticatedUserId = userLogged;
-    if (userId && !userLogged) {
-      const user = await clerkClient.users.getUser(userId);
-      if (user) {
-        authenticatedUserId = user.id;
-      } else {
-        throw ErrorFactory.Unauthenticated();
+    if (userId) {
+      if (isStoreOwner) {
+        try {
+          await clerkClient.users.getUser(userId);
+          authenticatedUserId = userId;
+        } catch (error) {
+          throw ErrorFactory.NotFound("El usuario asignado no existe");
+        }
+      } else if (!userLogged) {
+        const user = await clerkClient.users.getUser(userId);
+        if (user) {
+          authenticatedUserId = user.id;
+        } else {
+          throw ErrorFactory.Unauthenticated();
+        }
       }
     }
 
-    const isStoreOwner = await checkIfStoreOwner(
-      authenticatedUserId,
-      params.storeId,
-    );
     if (!isStoreOwner) {
+      if (discount?.type && discount?.amount) throw ErrorFactory.Unauthorized();
+
       const lastOrderTimestamp = await getLastOrderTimestamp(
         authenticatedUserId,
         guestId,
@@ -101,87 +126,204 @@ export async function POST(
         throw ErrorFactory.OrderLimit();
     }
 
-    const order = await prismadb.$transaction(
-      async (tx) => {
-        // First, verify stock availability for all products
-        for (const item of orderItems) {
-          const product = await tx.product.findUnique({
-            where: { id: item.productId },
-          });
+    if (
+      discount &&
+      couponCode &&
+      discount.type != null &&
+      discount.amount &&
+      discount.amount > 0
+    ) {
+      throw ErrorFactory.Conflict(
+        "No se puede aplicar un cupón y un descuento a la vez",
+        {
+          discountType: discount.type,
+          discountAmount: discount.amount,
+          couponCode,
+        },
+      );
+    }
 
+    if (discount?.type && !discount?.amount) {
+      throw ErrorFactory.InvalidRequest(
+        "El monto del descuento es requerido cuando se selecciona un tipo",
+      );
+    }
+
+    if (discount?.amount && !discount?.type) {
+      throw ErrorFactory.InvalidRequest(
+        "El tipo de descuento es requerido cuando se ingresa un monto",
+      );
+    }
+
+    if (discount?.type === DiscountType.PERCENTAGE && discount.amount > 100) {
+      throw ErrorFactory.InvalidRequest(
+        "El descuento porcentual no puede ser mayor a 100%",
+      );
+    }
+
+    if (discount?.amount && discount.amount < 0) {
+      throw ErrorFactory.InvalidRequest("El descuento no puede ser negativo");
+    }
+
+    let coupon: Coupon | null = null;
+
+    if (couponCode) {
+      coupon = await prismadb.coupon.findFirst({
+        where: {
+          storeId: params.storeId,
+          code: couponCode.toUpperCase(),
+          isActive: true,
+          startDate: { lte: new Date() },
+          endDate: { gte: new Date() },
+          OR: [
+            { maxUses: null },
+            {
+              AND: [
+                { maxUses: { not: null } },
+                { usedCount: { lt: prisma?.coupon.fields.maxUses } },
+              ],
+            },
+          ],
+        },
+      });
+
+      if (!coupon) {
+        throw ErrorFactory.NotFound("Código de cupón no válido o expirado");
+      }
+
+      if (subtotal < Number(coupon.minOrderValue ?? 0)) {
+        throw ErrorFactory.Conflict(
+          `El pedido debe ser mayor a ${currencyFormatter.format(coupon.minOrderValue ?? 0)} para usar este cupón`,
+        );
+      }
+    }
+
+    const order = await prismadb.$transaction(async (tx) => {
+      const products = await tx.product.findMany({
+        where: {
+          id: {
+            in: orderItems.map((item: any) => item.productId),
+          },
+        },
+        select: {
+          id: true,
+          price: true,
+          stock: true,
+        },
+      });
+
+      const itemsWithPrices = orderItems.map(
+        (item: { productId: string; quantity?: number }) => {
+          const product = products.find((p) => p.id === item.productId);
           if (!product) {
-            throw ErrorFactory.NotFound(`Producto ${item.productId}`);
-          }
-
-          if (product.stock < (item.quantity ?? 1)) {
-            throw ErrorFactory.InsufficientStock(
-              product.name,
-              product.stock,
-              item.quantity,
+            throw ErrorFactory.NotFound(
+              `Producto ${item.productId} no encontrado`,
             );
           }
-        }
+          return {
+            product: { price: product.price },
+            quantity: item.quantity,
+          };
+        },
+      );
 
-        // Create the order
-        const orderNumber = generateOrderNumber();
-        const orderData: OrderData = {
-          storeId: params.storeId,
-          userId: authenticatedUserId,
-          guestId: !authenticatedUserId ? guestId : null,
-          orderNumber,
-          fullName,
-          phone,
-          address,
-          documentId,
-          orderItems: {
-            create: orderItems.map(
-              (product: { productId: string; quantity: number }) => ({
-                product: { connect: { id: product.productId } },
-                quantity: product.quantity ?? 1,
-              }),
-            ),
-          },
+      const totals = calculateOrderTotals(itemsWithPrices, {
+        discount:
+          discount?.type && discount?.amount
+            ? {
+                type: discount.type,
+                amount: discount.amount,
+              }
+            : undefined,
+        coupon: coupon
+          ? {
+              type: coupon.type,
+              amount: coupon.amount,
+            }
+          : undefined,
+      });
+
+      if (
+        Math.abs(totals.total - total) > 0.01 ||
+        Math.abs(totals.subtotal - subtotal) > 0.01
+      ) {
+        throw ErrorFactory.InvalidRequest(
+          "Los montos calculados no coinciden con los enviados",
+        );
+      }
+
+      const orderNumber = generateOrderNumber();
+      const orderData: OrderData = {
+        storeId: params.storeId,
+        userId: authenticatedUserId,
+        guestId: !authenticatedUserId ? guestId : null,
+        orderNumber,
+        fullName,
+        phone,
+        address,
+        documentId,
+        subtotal: totals.subtotal,
+        discount: totals.discount,
+        discountType: discount?.type,
+        discountReason: discount?.reason,
+        couponId: coupon?.id,
+        couponDiscount: totals.couponDiscount,
+        total: totals.total,
+        orderItems: {
+          create: orderItems.map(
+            (product: { productId: string; quantity: number }) => ({
+              product: { connect: { id: product.productId } },
+              quantity: product.quantity ?? 1,
+            }),
+          ),
+        },
+      };
+
+      if (status) orderData.status = status;
+      if (payment)
+        orderData.payment = {
+          create: { ...payment, storeId: params.storeId },
+        };
+      if (shipping)
+        orderData.shipping = {
+          create: { ...shipping, storeId: params.storeId },
         };
 
-        if (status) orderData.status = status;
-        if (payment)
-          orderData.payment = {
-            create: { ...payment, storeId: params.storeId },
-          };
-        if (shipping)
-          orderData.shipping = {
-            create: { ...shipping, storeId: params.storeId },
-          };
+      const createdOrder = await tx.order.create({
+        data: orderData,
+        include: {
+          orderItems: true,
+        },
+      });
 
-        const createdOrder = await tx.order.create({
-          data: orderData,
-          include: {
-            orderItems: true,
-          },
-        });
-
-        // If order is paid, update stock levels
-        if (status === OrderStatus.PAID) {
-          for (const item of createdOrder.orderItems) {
-            await tx.product.update({
-              where: { id: item.productId },
-              data: {
-                stock: {
-                  decrement: item.quantity,
-                },
+      if (status === OrderStatus.PAID) {
+        for (const item of createdOrder.orderItems) {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: {
+              stock: {
+                decrement: item.quantity,
               },
-            });
-          }
+            },
+          });
         }
+      }
 
-        return createdOrder;
-      },
-      {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-        maxWait: 10000,
-        timeout: 20000,
-      },
-    );
+      if (coupon) {
+        if (status === OrderStatus.PAID) {
+          await tx.coupon.update({
+            where: { id: coupon.id },
+            data: {
+              usedCount: {
+                increment: 1,
+              },
+            },
+          });
+        }
+      }
+
+      return createdOrder;
+    });
 
     // Send email notification outside the transaction
     if (!isStoreOwner) {
@@ -235,6 +377,7 @@ export async function GET(
         },
         payment: true,
         shipping: true,
+        coupon: true,
       },
     });
 
@@ -273,6 +416,7 @@ export async function DELETE(
         include: {
           shipping: true,
           payment: true,
+          coupon: true,
         },
       });
 
@@ -291,7 +435,10 @@ export async function DELETE(
 
         if (
           order.shipping &&
-          order.shipping.status !== ShippingStatus.Preparing
+          order.shipping.status !== ShippingStatus.Preparing &&
+          order.shipping.courier &&
+          order.shipping.trackingCode &&
+          order.shipping.cost
         ) {
           throw ErrorFactory.Conflict(
             `La orden ${order.orderNumber} no puede eliminarse porque el envío está en proceso`,
@@ -301,15 +448,26 @@ export async function DELETE(
         if (
           order.payment &&
           order.payment.method &&
-          order.payment.method !== PaymentMethod.COD
+          order.payment.method !== PaymentMethod.COD &&
+          (order.payment.transactionId || order.payment?.details)
         ) {
           throw ErrorFactory.Conflict(
             `La orden ${order.orderNumber} no puede eliminarse porque tiene una transacción bancaria registrada`,
           );
         }
+
+        if (order.coupon) {
+          await tx.order.update({
+            where: { id: order.id },
+            data: {
+              coupon: { disconnect: true },
+              couponDiscount: 0,
+            },
+          });
+        }
       }
 
-      const deletedOrders = await tx.order.deleteMany({
+      return await tx.order.deleteMany({
         where: {
           storeId: params.storeId,
           id: {
@@ -317,11 +475,6 @@ export async function DELETE(
           },
         },
       });
-
-      return {
-        deletedOrders,
-        message: `Se eliminaron ${deletedOrders.count} órdenes correctamente`,
-      };
     });
 
     return NextResponse.json(result);
@@ -355,156 +508,148 @@ export async function PATCH(
 
     await verifyStoreOwner(userId, params.storeId);
 
-    const result = await prismadb.$transaction(
-      async (tx) => {
-        const orders = await tx.order.findMany({
-          where: {
-            id: {
-              in: ids,
-            },
-            storeId: params.storeId,
+    const result = await prismadb.$transaction(async (tx) => {
+      const orders = await tx.order.findMany({
+        where: {
+          id: {
+            in: ids,
           },
-          include: {
-            orderItems: {
-              include: {
-                product: true,
-              },
+          storeId: params.storeId,
+        },
+        include: {
+          orderItems: {
+            include: {
+              product: true,
             },
-            shipping: true,
-            payment: true,
           },
-        });
+          shipping: true,
+          payment: true,
+        },
+      });
 
-        if (orders.length !== ids.length) {
-          throw ErrorFactory.NotFound(
-            "Algunas órdenes no se han encontrado en esta tienda",
-          );
+      if (orders.length !== ids.length) {
+        throw ErrorFactory.NotFound(
+          "Algunas órdenes no se han encontrado en esta tienda",
+        );
+      }
+
+      for (const order of orders) {
+        if (status) {
+          if (order.status === OrderStatus.CANCELLED) {
+            throw ErrorFactory.Conflict(
+              `La orden ${order.orderNumber} está cancelada y no puede modificarse`,
+            );
+          }
+
+          if (
+            status === OrderStatus.PAID &&
+            order.status !== OrderStatus.PAID
+          ) {
+            const outOfStock = order.orderItems.find(
+              (item) => item.product.stock < item.quantity,
+            );
+
+            if (outOfStock) {
+              throw ErrorFactory.InsufficientStock(
+                outOfStock.product.name,
+                outOfStock.product.stock,
+                outOfStock.quantity,
+              );
+            }
+          }
+
+          if (
+            order.status === OrderStatus.PAID &&
+            status !== OrderStatus.PAID
+          ) {
+            if (order.shipping?.status === ShippingStatus.Delivered) {
+              throw ErrorFactory.Conflict(
+                `La orden ${order.orderNumber} ya fue entregada y no puede modificarse`,
+              );
+            }
+          }
         }
 
-        for (const order of orders) {
-          if (status) {
-            if (order.status === OrderStatus.CANCELLED) {
+        if (shipping) {
+          if (order.status !== OrderStatus.PAID) {
+            throw ErrorFactory.Conflict(
+              `La orden ${order.orderNumber} debe estar pagada para actualizar el envío`,
+            );
+          }
+
+          const currentShippingStatus = order.shipping?.status;
+
+          if (currentShippingStatus !== undefined) {
+            const allowedStatuses = ALLOWED_TRANSITIONS[currentShippingStatus];
+
+            if (!allowedStatuses.includes(shipping)) {
               throw ErrorFactory.Conflict(
-                `La orden ${order.orderNumber} está cancelada y no puede modificarse`,
+                `No se puede cambiar el estado de envío de "${shippingOptions[currentShippingStatus]}" a "${shippingOptions[shipping]}"`,
               );
             }
+          }
+        }
+      }
 
-            if (
-              status === OrderStatus.PAID &&
-              order.status !== OrderStatus.PAID
-            ) {
-              const outOfStock = order.orderItems.find(
-                (item) => item.product.stock < item.quantity,
+      const updatedOrders = await Promise.all(
+        orders.map(async (order) => {
+          const updateData: {
+            status?: OrderStatus;
+            shipping?: { update: { status?: ShippingStatus } };
+          } = {};
+
+          if (status) {
+            const wasPaid = order.status === OrderStatus.PAID;
+            const willBePaid = status === OrderStatus.PAID;
+            updateData.status = status;
+
+            if (willBePaid && !wasPaid) {
+              await Promise.all(
+                order.orderItems.map((item) =>
+                  tx.product.update({
+                    where: { id: item.productId },
+                    data: {
+                      stock: {
+                        decrement: item.quantity,
+                      },
+                    },
+                  }),
+                ),
               );
-
-              if (outOfStock) {
-                throw ErrorFactory.InsufficientStock(
-                  outOfStock.product.name,
-                  outOfStock.product.stock,
-                  outOfStock.quantity,
-                );
-              }
-            }
-
-            if (
-              order.status === OrderStatus.PAID &&
-              status !== OrderStatus.PAID
-            ) {
-              if (order.shipping?.status === ShippingStatus.Delivered) {
-                throw ErrorFactory.Conflict(
-                  `La orden ${order.orderNumber} ya fue entregada y no puede modificarse`,
-                );
-              }
+            } else if (!willBePaid && wasPaid) {
+              await Promise.all(
+                order.orderItems.map((item) =>
+                  tx.product.update({
+                    where: { id: item.productId },
+                    data: { stock: { increment: item.quantity } },
+                  }),
+                ),
+              );
             }
           }
 
           if (shipping) {
-            if (order.status !== OrderStatus.PAID) {
-              throw ErrorFactory.Conflict(
-                `La orden ${order.orderNumber} debe estar pagada para actualizar el envío`,
-              );
-            }
-
-            const currentShippingStatus = order.shipping?.status;
-
-            if (currentShippingStatus !== undefined) {
-              const allowedStatuses =
-                ALLOWED_TRANSITIONS[currentShippingStatus];
-
-              if (!allowedStatuses.includes(shipping)) {
-                throw ErrorFactory.Conflict(
-                  `No se puede cambiar el estado de envío de "${shippingOptions[currentShippingStatus]}" a "${shippingOptions[shipping]}"`,
-                );
-              }
-            }
-          }
-        }
-
-        const updatedOrders = await Promise.all(
-          orders.map(async (order) => {
-            const updateData: {
-              status?: OrderStatus;
-              shipping?: { update: { status?: ShippingStatus } };
-            } = {};
-
-            if (status) {
-              const wasPaid = order.status === OrderStatus.PAID;
-              const willBePaid = status === OrderStatus.PAID;
-              updateData.status = status;
-
-              if (willBePaid && !wasPaid) {
-                await Promise.all(
-                  order.orderItems.map((item) =>
-                    tx.product.update({
-                      where: { id: item.productId },
-                      data: {
-                        stock: {
-                          decrement: item.quantity,
-                        },
-                      },
-                    }),
-                  ),
-                );
-              } else if (!willBePaid && wasPaid) {
-                await Promise.all(
-                  order.orderItems.map((item) =>
-                    tx.product.update({
-                      where: { id: item.productId },
-                      data: { stock: { increment: item.quantity } },
-                    }),
-                  ),
-                );
-              }
-            }
-
-            if (shipping) {
-              updateData.shipping = {
-                update: {
-                  status: shipping,
-                },
-              };
-            }
-
-            return tx.order.update({
-              where: { id: order.id },
-              data: updateData,
-              include: {
-                orderItems: true,
-                shipping: true,
-                payment: true,
+            updateData.shipping = {
+              update: {
+                status: shipping,
               },
-            });
-          }),
-        );
+            };
+          }
 
-        return updatedOrders;
-      },
-      {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-        maxWait: 10000,
-        timeout: 20000,
-      },
-    );
+          return tx.order.update({
+            where: { id: order.id },
+            data: updateData,
+            include: {
+              orderItems: true,
+              shipping: true,
+              payment: true,
+            },
+          });
+        }),
+      );
+
+      return updatedOrders;
+    });
 
     return NextResponse.json(result);
   } catch (error) {

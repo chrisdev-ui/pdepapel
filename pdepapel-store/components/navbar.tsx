@@ -67,7 +67,6 @@ const Navbar: React.FC<{}> = () => {
               fill
               sizes="(max-width: 640px) 100vw, 640px"
               priority
-              placeholder="blur"
               quality="100"
             />
           </Link>
@@ -87,7 +86,6 @@ const Navbar: React.FC<{}> = () => {
               sizes="(max-width: 640px) 100vw, 640px"
               priority
               quality="100"
-              placeholder="blur"
             />
           </Link>
           <ul className="mx-auto hidden space-x-12 px-4 lg:flex">

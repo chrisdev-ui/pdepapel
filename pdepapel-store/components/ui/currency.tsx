@@ -14,9 +14,14 @@ const formatter = new Intl.NumberFormat("en-US", {
 interface CurrencyProps {
   value?: number | string;
   className?: string;
+  isNegative?: boolean;
 }
 
-export const Currency: React.FC<CurrencyProps> = ({ value = 0, className }) => {
+export const Currency: React.FC<CurrencyProps> = ({
+  value = 0,
+  isNegative = false,
+  className,
+}) => {
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
@@ -28,6 +33,7 @@ export const Currency: React.FC<CurrencyProps> = ({ value = 0, className }) => {
   }
   return (
     <div className={cn("text-2xl", className)}>
+      {isNegative ? "-" : ""}
       {formatter.format(Number(value))}
     </div>
   );

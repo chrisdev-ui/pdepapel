@@ -3,5 +3,5 @@
 import { CldImage as CldImageDefault, CldImageProps } from "next-cloudinary";
 
 export const CldImage: React.FC<CldImageProps> = (props) => {
-  return <CldImageDefault placeholder="blur" {...props} />;
+  return <CldImageDefault {...props} />;
 };

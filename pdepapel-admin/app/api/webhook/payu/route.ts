@@ -2,6 +2,7 @@ import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
 import { formatPayUValue, generatePayUSignature } from "@/lib/utils";
 import {
+  Coupon,
   Order,
   OrderItem,
   OrderStatus,
@@ -67,6 +68,11 @@ async function processWebhookPayment(formData: FormData) {
             },
           },
           payment: true,
+          coupon: {
+            select: {
+              id: true,
+            },
+          },
         },
       });
 
@@ -139,6 +145,7 @@ async function updateOrderData({
       product: Product;
     })[];
     payment: PaymentDetails | null;
+    coupon: { id: Coupon["id"] } | null;
   };
   transaction: {
     id: string;
@@ -184,8 +191,32 @@ async function updateOrderData({
             );
           }
         }
+
+        if (order.coupon) {
+          await tx.coupon.update({
+            where: { id: order.coupon.id },
+            data: {
+              usedCount: {
+                increment: 1,
+              },
+            },
+          });
+        }
       });
+    } else if (currentStatus === OrderStatus.CANCELLED) {
+      if (order.coupon) {
+        await prismadb.$transaction(async (tx) => {
+          await tx.order.update({
+            where: { id: order.id },
+            data: {
+              coupon: { disconnect: true },
+              couponDiscount: 0,
+            },
+          });
+        });
+      }
     }
+
     await prismadb.paymentDetails.upsert({
       where: {
         orderId: order.id,

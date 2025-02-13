@@ -1,17 +1,22 @@
 import prismadb from "@/lib/prismadb";
 import { OrderStatus } from "@prisma/client";
+import { endOfYear, getMonth, startOfYear } from "date-fns";
 
 interface GraphData {
   name: string;
   total: number;
+  subtotal: number;
+  discounts: number;
+  couponDiscounts: number;
 }
 
 export const getGraphRevenue = async (
   storeId: string,
   year: number,
 ): Promise<GraphData[]> => {
-  const startDate = new Date(year, 0, 1);
-  const endDate = new Date(year + 1, 0, 1);
+  const yearDate = new Date(year, 0, 1);
+  const startDate = startOfYear(yearDate);
+  const endDate = endOfYear(yearDate);
 
   const paidOrders = await prismadb.order.findMany({
     where: {
@@ -22,50 +27,48 @@ export const getGraphRevenue = async (
         lt: endDate,
       },
     },
-    include: {
-      orderItems: {
-        include: {
-          product: true,
-        },
-      },
+    select: {
+      createdAt: true,
+      total: true,
+      subtotal: true,
+      discount: true,
+      couponDiscount: true,
     },
   });
 
-  const monthlyRevenue: { [key: number]: number } = {};
-
-  // Grouping the orders by month and summing the revenue
-  for (const order of paidOrders) {
-    const month = order.createdAt.getMonth();
-    let revenueForOrder = 0;
-
-    for (const item of order.orderItems) {
-      revenueForOrder += Number(item.product.price) * item.quantity;
-    }
-
-    // Adding the revenue for this order to the respective month
-    monthlyRevenue[month] = (monthlyRevenue[month] || 0) + revenueForOrder;
-  }
-
-  // Converting the grouped data into the format expected by the graph
-  const graphData: GraphData[] = [
-    { name: "Ene", total: 0 },
-    { name: "Feb", total: 0 },
-    { name: "Mar", total: 0 },
-    { name: "Abr", total: 0 },
-    { name: "May", total: 0 },
-    { name: "Jun", total: 0 },
-    { name: "Jul", total: 0 },
-    { name: "Ago", total: 0 },
-    { name: "Sep", total: 0 },
-    { name: "Oct", total: 0 },
-    { name: "Nov", total: 0 },
-    { name: "Dic", total: 0 },
+  const monthlyRevenue: { [key: number]: GraphData } = {};
+  const months = [
+    "Ene",
+    "Feb",
+    "Mar",
+    "Abr",
+    "May",
+    "Jun",
+    "Jul",
+    "Ago",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dic",
   ];
 
-  // Filling in the revenue data
-  for (const month in monthlyRevenue) {
-    graphData[parseInt(month)].total = monthlyRevenue[parseInt(month)];
+  months.forEach((name, index) => {
+    monthlyRevenue[index] = {
+      name,
+      total: 0,
+      subtotal: 0,
+      discounts: 0,
+      couponDiscounts: 0,
+    };
+  });
+
+  for (const order of paidOrders) {
+    const month = getMonth(order.createdAt);
+    monthlyRevenue[month].total += order.total;
+    monthlyRevenue[month].subtotal += order.subtotal;
+    monthlyRevenue[month].discounts += order.discount;
+    monthlyRevenue[month].couponDiscounts += order.couponDiscount;
   }
 
-  return graphData;
+  return Object.values(monthlyRevenue);
 };

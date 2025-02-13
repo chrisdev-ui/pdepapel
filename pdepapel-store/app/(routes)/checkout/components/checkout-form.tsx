@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 
@@ -29,16 +29,18 @@ import { useCart } from "@/hooks/use-cart";
 import useCheckout from "@/hooks/use-checkout";
 import { useGuestUser } from "@/hooks/use-guest-user";
 import { useToast } from "@/hooks/use-toast";
-import { generateGuestId } from "@/lib/utils";
+import useValidateCoupon from "@/hooks/use-validate-coupon";
+import { calculateTotals, cn, generateGuestId } from "@/lib/utils";
 import {
   CheckoutByOrderResponse,
+  Coupon,
   Order,
   PayUFormState,
   WompiResponse,
 } from "@/types";
 import { useAuth } from "@clerk/nextjs";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, CreditCard, Info, Loader2 } from "lucide-react";
+import { ArrowLeft, CreditCard, Info, Loader2, Tag } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { InfoCountryTooltip } from "./info-country-tooltip";
 
@@ -57,12 +59,18 @@ const formSchema = z.object({
   city: z.string().min(1, "Por favor, escribe tu ciudad").max(50),
   state: z.string().min(1, "Por favor, escribe tu departamento").max(30),
   documentId: z.string().optional(),
+  couponCode: z.string().optional(),
 });
 
 type CheckoutFormValue = z.infer<typeof formSchema>;
 
 interface CheckoutFormProps {
   currentUser?: CheckoutFormUser | null;
+}
+
+interface CouponState {
+  coupon: Coupon | null;
+  isValid: boolean | null;
 }
 
 export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
@@ -78,6 +86,11 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
     PaymentMethod.BankTransfer,
   );
 
+  const [couponState, setCouponState] = useState<CouponState>({
+    coupon: null,
+    isValid: null,
+  });
+
   const form = useForm<CheckoutFormValue>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -89,8 +102,43 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
       address2: "",
       city: "",
       state: "",
+      couponCode: "",
     },
   });
+
+  const { total, subtotal, couponDiscount } = useMemo(
+    () => calculateTotals(cart.items, couponState.coupon),
+    [cart.items, couponState.coupon],
+  );
+
+  const { mutate: validateCouponMutate, status: validateCouponStatus } =
+    useValidateCoupon({
+      onError(err) {
+        console.error(err);
+        setCouponState((prev) => ({
+          ...prev,
+          coupon: null,
+          isValid: false,
+        }));
+        toast({
+          title: "Cupón no válido ❌",
+          description: "El código ingresado no es válido o ha expirado.",
+          variant: "destructive",
+        });
+      },
+      onSuccess(data) {
+        setCouponState((prev) => ({
+          ...prev,
+          coupon: data,
+          isValid: true,
+        }));
+        toast({
+          title: "Cupón validado 🎉",
+          description: "El cupón es válido y se ha aplicado al pedido.",
+          variant: "success",
+        });
+      },
+    });
 
   const { mutate, status } = useCheckout({
     onError(err) {
@@ -142,12 +190,6 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
     0,
   );
 
-  const totalPrice = cart.items.reduce(
-    (total, item) =>
-      total + Number(item.price ?? 0) * Number(item.quantity ?? 1),
-    0,
-  );
-
   const onSubmit = (data: CheckoutFormValue) => {
     const orderItems = cart.items.map((item) => ({
       productId: item.id,
@@ -182,6 +224,9 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
       payment: {
         method: paymentMethod,
       },
+      couponCode: couponState.coupon?.code ?? null,
+      subtotal,
+      total,
     };
 
     mutate(formattedData);
@@ -373,6 +418,107 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                   </div>
                 </div>
               </div>
+              <div className="mx-auto my-4 w-full max-w-md space-y-4">
+                <FormField
+                  control={form.control}
+                  name="couponCode"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel className="flex items-center gap-2 text-base font-semibold">
+                        Redime un cupón de descuento
+                      </FormLabel>
+                      <div
+                        className={cn(
+                          "group relative flex items-center gap-x-2 rounded-lg shadow-[0_2px_10px_rgba(0,0,0,0.06)] transition-all duration-300 hover:shadow-[0_2px_10px_rgba(0,0,0,0.1)]",
+                          {
+                            "shadow-success/40": couponState.isValid === true,
+                            "shadow-destructive/40":
+                              couponState.isValid === false,
+                          },
+                        )}
+                      >
+                        <Tag className="absolute left-3 top-3 h-6 w-6 text-pink-froly" />
+                        <FormControl>
+                          <Input
+                            className={cn(
+                              "h-12 px-4 pl-12 text-lg transition-colors duration-200 focus-visible:outline-none focus-visible:ring-0",
+                              {
+                                "border-success focus:border-success focus:ring-success/20":
+                                  couponState.isValid === true,
+                                "border-destructive focus:border-destructive focus:ring-destructive/20":
+                                  couponState.isValid === false,
+                              },
+                            )}
+                            disabled={
+                              status === "pending" ||
+                              validateCouponStatus === "pending"
+                            }
+                            placeholder="Escribe tu código de cupón"
+                            maxLength={15}
+                            {...field}
+                            autoComplete="off"
+                            autoCorrect="off"
+                            onChange={(e) => {
+                              setCouponState((prev) => ({
+                                ...prev,
+                                isValid: null,
+                              }));
+                              field.onChange(e.target.value.toUpperCase());
+                            }}
+                          />
+                        </FormControl>
+                        <div className="absolute right-2 top-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            disabled={
+                              validateCouponStatus === "pending" || !field.value
+                            }
+                            className={cn(
+                              "h-8 px-3 font-medium transition-all duration-200 hover:bg-blue-purple/20",
+                              {
+                                "text-success hover:bg-success/50 hover:text-success/80":
+                                  couponState.isValid === true,
+                                "text-destructive hover:bg-destructive/50 hover:text-destructive/80":
+                                  couponState.isValid === false,
+                                "text-lg": field.value,
+                              },
+                            )}
+                            onClick={() => {
+                              if (!field.value) return;
+
+                              if (couponState.isValid && couponState.coupon) {
+                                form.resetField("couponCode");
+                                setCouponState((prev) => ({
+                                  ...prev,
+                                  coupon: null,
+                                  isValid: false,
+                                }));
+                                return;
+                              }
+
+                              validateCouponMutate({
+                                code: field.value.toUpperCase(),
+                                subtotal,
+                              });
+                            }}
+                          >
+                            {validateCouponStatus === "pending" ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : couponState.coupon ? (
+                              "Remover"
+                            ) : (
+                              "Validar"
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
               {paymentMethod === PaymentMethod.BankTransfer && (
                 <>
                   <h2 className="mt-10 font-serif text-lg font-bold">
@@ -469,9 +615,36 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                 ))}
               </div>
               <Separator className="my-6" />
-              <div className="flex w-full items-center justify-between text-xl">
-                <span>Total a pagar</span>
-                <Currency className="text-xl" value={totalPrice} />
+              <div className="flex w-full flex-col gap-y-4">
+                <div className="flex flex-1 items-center justify-between">
+                  <span className="text-lg">Subtotal</span>
+                  <Currency className="text-lg" value={subtotal} />
+                </div>
+                {couponDiscount > 0 && (
+                  <div className="flex flex-1 items-center justify-between">
+                    <div className="ml-2 text-lg text-destructive">
+                      Descuento{" "}
+                      {couponState.coupon?.type === "PERCENTAGE" && (
+                        <span className="text-destructive">
+                          ({couponState.coupon.amount}%)
+                        </span>
+                      )}
+                    </div>
+                    <Currency
+                      className="ml-2 text-lg text-destructive"
+                      value={couponDiscount}
+                    />
+                  </div>
+                )}
+                <div className="flex flex-1 items-center justify-between">
+                  <span className="text-xl font-black text-pink-froly">
+                    Total a pagar
+                  </span>
+                  <Currency
+                    className="text-xl font-black text-pink-froly"
+                    value={total}
+                  />
+                </div>
               </div>
               <Separator className="my-6" />
               <div className="mb-5 flex w-full items-center">

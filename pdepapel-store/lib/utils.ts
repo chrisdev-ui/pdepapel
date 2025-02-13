@@ -4,7 +4,7 @@ import {
   INTERRAPIDISIMO_KEYSIZE,
   INTERRAPIDISIMO_SALTSIZE,
 } from "@/constants";
-import { Review } from "@/types";
+import { Coupon, Product, Review } from "@/types";
 import { clsx, type ClassValue } from "clsx";
 import CryptoES from "crypto-es";
 import { twMerge } from "tailwind-merge";
@@ -127,3 +127,33 @@ export function base64ToHex(str: string) {
 
   return hex.join("");
 }
+
+export const calculateTotals = (
+  orderItems: Product[],
+  coupon: Coupon | null,
+) => {
+  const subtotal = orderItems.reduce(
+    (total, item) => total + Number(item.price) * Number(item.quantity ?? 1),
+    0,
+  );
+
+  let couponDiscount = 0;
+  if (
+    coupon &&
+    coupon.isActive &&
+    subtotal >= Number(coupon.minOrderValue ?? 0)
+  ) {
+    couponDiscount =
+      coupon.type === "PERCENTAGE"
+        ? (subtotal * coupon.amount) / 100
+        : Math.min(coupon.amount, subtotal);
+  }
+
+  const total = Math.max(subtotal - couponDiscount, 0);
+
+  return {
+    subtotal,
+    total,
+    couponDiscount,
+  };
+};

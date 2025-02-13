@@ -45,7 +45,6 @@ export default async function AboutPage() {
                 fill
                 sizes="(max-width: 640px) 100vw, 640px"
                 className="rounded-md object-contain shadow-lg"
-                placeholder="blur"
                 unoptimized
               />
             </div>

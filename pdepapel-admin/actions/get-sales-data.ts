@@ -1,6 +1,16 @@
 import prismadb from "@/lib/prismadb";
 import { compareAsc, format, parseISO } from "date-fns";
 
+interface SalesByDate {
+  revenue: number;
+  orders: number;
+  items: number;
+  discounts: number;
+  couponDiscounts: number;
+  grossRevenue: number;
+  averageOrderValue: number;
+}
+
 export async function getSalesData(storeId: string, year: number) {
   const startDate = new Date(year, 0, 1);
   const endDate = new Date(year, 11, 31);
@@ -14,10 +24,15 @@ export async function getSalesData(storeId: string, year: number) {
       },
       status: "PAID",
     },
-    include: {
+    select: {
+      createdAt: true,
+      total: true,
+      subtotal: true,
+      discount: true,
+      couponDiscount: true,
       orderItems: {
-        include: {
-          product: true,
+        select: {
+          quantity: true,
         },
       },
     },
@@ -30,23 +45,42 @@ export async function getSalesData(storeId: string, year: number) {
     (acc, sale) => {
       const date = format(sale.createdAt, "yyyy-MM-dd");
       if (!acc[date]) {
-        acc[date] = { revenue: 0, orders: 0 };
+        acc[date] = {
+          revenue: 0,
+          orders: 0,
+          items: 0,
+          discounts: 0,
+          couponDiscounts: 0,
+          grossRevenue: 0,
+          averageOrderValue: 0,
+        };
       }
-      acc[date].orders += 1;
-      acc[date].revenue += sale.orderItems.reduce(
-        (sum, item) => sum + item.product.price * item.quantity,
+
+      // Sum up total items for this order
+      const totalItems = sale.orderItems.reduce(
+        (sum, item) => sum + item.quantity,
         0,
       );
+
+      acc[date].orders += 1;
+      acc[date].items += totalItems;
+      acc[date].revenue += sale.total;
+      acc[date].discounts += sale.discount;
+      acc[date].couponDiscounts += sale.couponDiscount;
+      acc[date].grossRevenue += sale.subtotal;
+
+      // Calculate average order value for this date
+      acc[date].averageOrderValue = acc[date].revenue / acc[date].orders;
+
       return acc;
     },
-    {} as Record<string, { revenue: number; orders: number }>,
+    {} as Record<string, SalesByDate>,
   );
 
   return Object.entries(salesByDate)
     .sort(([dateA], [dateB]) => compareAsc(parseISO(dateA), parseISO(dateB)))
     .map(([date, data]) => ({
       date,
-      revenue: data.revenue,
-      orders: data.orders,
+      ...data,
     }));
 }

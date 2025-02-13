@@ -56,7 +56,7 @@ export default async function DashboardPage({
                 <SensitiveDataCard
                   id="total-orders"
                   title="Ventas"
-                  value={salesCount}
+                  value={salesCount.totalSales}
                   format="number"
                   icon={
                     <CreditCard className="h-4 w-4 text-muted-foreground" />
@@ -88,7 +88,7 @@ export default async function DashboardPage({
           </TabsContent>
           <TabsContent value="analytics">
             <Suspense fallback={<SpinnerButton />}>
-              <Analytics params={params} year={year} />
+              <Analytics params={params} year={year} salesData={salesCount} />
             </Suspense>
           </TabsContent>
         </Tabs>

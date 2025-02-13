@@ -1,11 +1,15 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
-import { checkIfStoreOwner, verifyStoreOwner } from "@/lib/utils";
-import { auth } from "@clerk/nextjs";
 import {
+  calculateOrderTotals,
+  currencyFormatter,
+  verifyStoreOwner,
+} from "@/lib/utils";
+import { auth, clerkClient } from "@clerk/nextjs";
+import {
+  DiscountType,
   OrderStatus,
   PaymentMethod,
-  Prisma,
   ShippingStatus,
 } from "@prisma/client";
 import { NextResponse } from "next/server";
@@ -42,6 +46,7 @@ export async function GET(
         },
         payment: true,
         shipping: true,
+        coupon: true,
       },
     });
     if (!order)
@@ -76,121 +81,296 @@ export async function PATCH(
       userId: requestUserId,
       guestId,
       documentId,
+      subtotal,
+      total,
+      discount,
+      couponCode,
     } = body;
 
-    const storeByUserId = await checkIfStoreOwner(userId, params.storeId);
-    if (!storeByUserId) throw ErrorFactory.Unauthorized();
+    await verifyStoreOwner(userId, params.storeId);
 
     const order = await prismadb.order.findUnique({
       where: { id: params.orderId },
-      include: { orderItems: true, shipping: true },
+      include: { orderItems: true, shipping: true, coupon: true },
     });
     if (!order)
       throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
 
-    const updatedOrder = await prismadb.$transaction(
-      async (tx) => {
-        // 1. Remove existing order items
-        await tx.orderItem.deleteMany({ where: { orderId: order.id } });
+    if (
+      discount &&
+      couponCode &&
+      discount.type != null &&
+      discount.amount &&
+      discount.amount > 0
+    ) {
+      throw ErrorFactory.Conflict(
+        "No se puede aplicar un cupón y un descuento a la vez",
+        {
+          discountType: discount.type,
+          discountAmount: discount.amount,
+          couponCode,
+        },
+      );
+    }
 
-        // 2. Update order with new items and details
-        const updated = await tx.order.update({
-          where: { id: params.orderId },
-          data: {
-            fullName,
-            phone,
-            address,
-            userId: requestUserId,
-            guestId,
-            documentId,
-            orderItems: {
-              create: orderItems.map(
-                (orderItem: { productId: string; quantity?: number }) => ({
-                  product: { connect: { id: orderItem.productId } },
-                  quantity: orderItem.quantity ?? 1,
-                }),
-              ),
-            },
-            ...(status && { status }),
-            payment: payment && {
-              upsert: {
-                create: {
-                  ...payment,
-                  store: { connect: { id: params.storeId } },
-                },
-                update: payment,
+    if (discount?.type && !discount?.amount) {
+      throw ErrorFactory.InvalidRequest(
+        "El monto del descuento es requerido cuando se selecciona un tipo",
+      );
+    }
+
+    if (discount?.amount && !discount?.type) {
+      throw ErrorFactory.InvalidRequest(
+        "El tipo de descuento es requerido cuando se ingresa un monto",
+      );
+    }
+
+    if (discount?.type === DiscountType.PERCENTAGE && discount.amount > 100) {
+      throw ErrorFactory.InvalidRequest(
+        "El descuento porcentual no puede ser mayor a 100%",
+      );
+    }
+
+    if (discount?.amount && discount.amount < 0) {
+      throw ErrorFactory.InvalidRequest("El descuento no puede ser negativo");
+    }
+
+    let verifiedUserId = order.userId;
+    if (requestUserId && order.userId !== requestUserId) {
+      try {
+        await clerkClient.users.getUser(requestUserId);
+        verifiedUserId = requestUserId;
+      } catch (error) {
+        throw ErrorFactory.NotFound("El usuario asignado no existe");
+      }
+    }
+
+    const updatedOrder = await prismadb.$transaction(async (tx) => {
+      let coupon = order.coupon;
+
+      if (order.couponId && !couponCode) {
+        if (order.status === OrderStatus.PAID) {
+          const existingCoupon = await tx.coupon.findUnique({
+            where: { id: order.couponId },
+          });
+
+          if (existingCoupon && existingCoupon.usedCount > 0) {
+            await tx.coupon.update({
+              where: { id: order.couponId },
+              data: { usedCount: { decrement: 1 } },
+            });
+          }
+        }
+        coupon = null;
+      }
+
+      if (couponCode && (!order.coupon || order.coupon.code !== couponCode)) {
+        if (order.couponId && order.status === OrderStatus.PAID) {
+          const existingCoupon = await tx.coupon.findUnique({
+            where: { id: order.couponId },
+          });
+
+          if (existingCoupon && existingCoupon.usedCount > 0) {
+            await tx.coupon.update({
+              where: { id: order.couponId },
+              data: { usedCount: { decrement: 1 } },
+            });
+          }
+        }
+
+        coupon = await tx.coupon.findFirst({
+          where: {
+            storeId: params.storeId,
+            code: couponCode.toUpperCase(),
+            isActive: true,
+            startDate: { lte: new Date() },
+            endDate: { gte: new Date() },
+            OR: [
+              { maxUses: null },
+              {
+                AND: [
+                  { maxUses: { not: null } },
+                  { usedCount: { lt: prisma?.coupon.fields.maxUses } },
+                ],
               },
-            },
-            shipping: shipping && {
-              upsert: {
-                create: {
-                  ...shipping,
-                  store: { connect: { id: params.storeId } },
-                },
-                update: shipping,
-              },
-            },
-          },
-          include: {
-            orderItems: { include: { product: true } },
-            payment: true,
-            shipping: true,
+            ],
           },
         });
 
-        // 3. Handle stock changes within the same transaction
-        const wasPaid = order.status === OrderStatus.PAID;
-        const isNowPaid = updated.status === OrderStatus.PAID;
+        if (!coupon) {
+          throw ErrorFactory.NotFound("Cupón no válido o expirado");
+        }
 
-        if (isNowPaid && !wasPaid) {
-          // Pre-check product availability
-          const productIds = updated.orderItems.map((i) => i.productId);
-          const products = await tx.product.findMany({
-            where: { id: { in: productIds } },
-          });
-
-          const outOfStock = updated.orderItems.find((item) => {
-            const product = products.find((p) => p.id === item.productId);
-            return !product || product.stock < item.quantity;
-          });
-
-          if (outOfStock) {
-            throw ErrorFactory.InsufficientStock(
-              outOfStock.product.name,
-              outOfStock.product.stock,
-              outOfStock.quantity,
-            );
-          }
-
-          // Batch update stock
-          await Promise.all(
-            updated.orderItems.map((item) =>
-              tx.product.update({
-                where: { id: item.productId },
-                data: { stock: { decrement: item.quantity } },
-              }),
-            ),
-          );
-        } else if (!isNowPaid && wasPaid) {
-          // Restock products
-          await Promise.all(
-            updated.orderItems.map((item) =>
-              tx.product.update({
-                where: { id: item.productId },
-                data: { stock: { increment: item.quantity } },
-              }),
-            ),
+        if (subtotal < Number(coupon.minOrderValue ?? 0)) {
+          throw ErrorFactory.Conflict(
+            `El pedido debe ser mayor a ${currencyFormatter.format(coupon.minOrderValue ?? 0)} para usar este cupón`,
           );
         }
 
-        return updated;
-      },
-      {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-        maxWait: 10000,
-        timeout: 20000,
-      },
-    );
+        if (status === OrderStatus.PAID) {
+          await tx.coupon.update({
+            where: { id: coupon.id },
+            data: { usedCount: { increment: 1 } },
+          });
+        }
+      }
+
+      await tx.orderItem.deleteMany({ where: { orderId: order.id } });
+
+      const products = await tx.product.findMany({
+        where: {
+          id: {
+            in: orderItems.map((item: any) => item.productId),
+          },
+        },
+        select: {
+          id: true,
+          price: true,
+          name: true,
+          stock: true,
+        },
+      });
+
+      const itemsWithPrices = orderItems.map((item: any) => {
+        const product = products.find((p) => p.id === item.productId);
+        if (!product) {
+          throw ErrorFactory.NotFound(
+            `Producto ${item.productId} no encontrado`,
+          );
+        }
+        return {
+          product: { price: product.price },
+          quantity: item.quantity,
+        };
+      });
+
+      const totals = calculateOrderTotals(itemsWithPrices, {
+        discount:
+          discount?.type && discount?.amount
+            ? {
+                type: discount.type,
+                amount: discount.amount,
+              }
+            : undefined,
+        coupon:
+          coupon && subtotal >= Number(coupon.minOrderValue ?? 0)
+            ? {
+                type: coupon.type,
+                amount: coupon.amount,
+              }
+            : undefined,
+      });
+
+      if (
+        Math.abs(totals.total - total) > 0.01 ||
+        Math.abs(totals.subtotal - subtotal) > 0.01
+      ) {
+        throw ErrorFactory.InvalidRequest(
+          "Los montos calculados no coinciden con los enviados",
+        );
+      }
+
+      const updated = await tx.order.update({
+        where: { id: params.orderId },
+        data: {
+          fullName,
+          phone,
+          address,
+          userId: verifiedUserId,
+          guestId: verifiedUserId ? null : guestId,
+          documentId,
+          subtotal: totals.subtotal,
+          discount: totals.discount,
+          discountType: discount?.type,
+          discountReason: discount?.reason,
+          coupon: coupon
+            ? { connect: { id: coupon.id } }
+            : { disconnect: true },
+          couponDiscount: coupon ? totals.couponDiscount : 0,
+          total: totals.total,
+          orderItems: {
+            create: orderItems.map(
+              (orderItem: { productId: string; quantity?: number }) => ({
+                product: { connect: { id: orderItem.productId } },
+                quantity: orderItem.quantity ?? 1,
+              }),
+            ),
+          },
+          ...(status && { status }),
+          payment: payment && {
+            upsert: {
+              create: {
+                ...payment,
+                store: { connect: { id: params.storeId } },
+              },
+              update: payment,
+            },
+          },
+          shipping: shipping && {
+            upsert: {
+              create: {
+                ...shipping,
+                store: { connect: { id: params.storeId } },
+              },
+              update: shipping,
+            },
+          },
+        },
+        include: {
+          orderItems: { include: { product: true } },
+          payment: true,
+          shipping: true,
+          coupon: true,
+        },
+      });
+
+      // 3. Handle stock changes within the same transaction
+      const wasPaid = order.status === OrderStatus.PAID;
+      const isNowPaid = updated.status === OrderStatus.PAID;
+
+      if (isNowPaid && !wasPaid) {
+        // Pre-check product availability
+        const productIds = updated.orderItems.map((i) => i.productId);
+        const products = await tx.product.findMany({
+          where: { id: { in: productIds } },
+        });
+
+        const outOfStock = updated.orderItems.find((item) => {
+          const product = products.find((p) => p.id === item.productId);
+          return !product || product.stock < item.quantity;
+        });
+
+        if (outOfStock) {
+          throw ErrorFactory.InsufficientStock(
+            outOfStock.product.name,
+            outOfStock.product.stock,
+            outOfStock.quantity,
+          );
+        }
+
+        // Batch update stock
+        await Promise.all(
+          updated.orderItems.map((item) =>
+            tx.product.update({
+              where: { id: item.productId },
+              data: { stock: { decrement: item.quantity } },
+            }),
+          ),
+        );
+      } else if (!isNowPaid && wasPaid) {
+        // Restock products
+        await Promise.all(
+          updated.orderItems.map((item) =>
+            tx.product.update({
+              where: { id: item.productId },
+              data: { stock: { increment: item.quantity } },
+            }),
+          ),
+        );
+      }
+
+      return updated;
+    });
 
     return NextResponse.json(updatedOrder);
   } catch (error) {
@@ -214,7 +394,7 @@ export async function DELETE(
     const order = await prismadb.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
         where: { id: params.orderId },
-        include: { shipping: true, payment: true },
+        include: { shipping: true, payment: true, coupon: true },
       });
       if (!order)
         throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
@@ -237,11 +417,26 @@ export async function DELETE(
       if (
         order.payment &&
         order.payment.method &&
-        order.payment.method !== PaymentMethod.COD
+        order.payment.method !== PaymentMethod.COD &&
+        order.payment.transactionId
       ) {
         throw ErrorFactory.Conflict(
           `La orden ${order.orderNumber} no puede eliminarse porque tiene una transacción bancaria registrada`,
         );
+      }
+
+      if (order.coupon) {
+        const coupon = await tx.coupon.findUnique({
+          where: { id: order.coupon.id },
+        });
+
+        await tx.order.update({
+          where: { id: order.id },
+          data: {
+            coupon: { disconnect: true },
+            couponDiscount: 0,
+          },
+        });
       }
 
       const deletedOrder = await tx.order.delete({

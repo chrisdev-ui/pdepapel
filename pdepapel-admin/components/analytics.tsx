@@ -1,5 +1,5 @@
-import { getAverageOrderValue } from "@/actions/get-average-order-value";
 import { getCategorySales } from "@/actions/get-category-sales";
+import { getSalesCount } from "@/actions/get-sales-count";
 import { getSalesData } from "@/actions/get-sales-data";
 import { getTopSellingProducts } from "@/actions/get-top-selling-products";
 import { SalesByCategory } from "@/components/sales-by-category";
@@ -7,17 +7,21 @@ import { SalesChart } from "@/components/sales-chart";
 import { TopProductsTable } from "@/components/top-products-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { YearSelector } from "@/components/year-selector";
-import { currencyFormatter } from "@/lib/utils";
+import { currencyFormatter, numberFormatter } from "@/lib/utils";
 
 interface AnalyticsProps {
+  salesData: Awaited<ReturnType<typeof getSalesCount>>;
   params: { storeId: string };
   year: number;
 }
 
-export const Analytics: React.FC<AnalyticsProps> = async ({ params, year }) => {
+export const Analytics: React.FC<AnalyticsProps> = async ({
+  params,
+  year,
+  salesData: sales,
+}) => {
   const salesData = await getSalesData(params.storeId, year);
   const categorySales = await getCategorySales(params.storeId, year);
-  const averageOrderValue = await getAverageOrderValue(params.storeId, year);
   const topSellingProducts = await getTopSellingProducts(params.storeId, year);
 
   return (
@@ -54,21 +58,55 @@ export const Analytics: React.FC<AnalyticsProps> = async ({ params, year }) => {
           <CardTitle>Métricas de ventas para el año {year}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-5">
+            <div>
+              <h3 className="text-lg font-semibold">Ganancias brutas</h3>
+              <p className="text-3xl font-bold">
+                {currencyFormatter.format(sales.totalGrossRevenue)}
+              </p>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold">Ganancias netas</h3>
+              <p className="text-3xl font-bold">
+                {currencyFormatter.format(sales.totalNetRevenue)}
+              </p>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold">Descuentos totales</h3>
+              <p className="text-3xl font-bold">
+                {currencyFormatter.format(
+                  sales.totalDiscounts + sales.totalCouponDiscounts,
+                )}
+              </p>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold">Órdenes con descuento</h3>
+              <p className="text-3xl font-bold">
+                {numberFormatter.format(
+                  sales.ordersWithDiscount + sales.ordersWithCoupon,
+                )}
+              </p>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold">Descuento promedio</h3>
+              <p className="text-3xl font-bold">
+                {currencyFormatter.format(sales.averageDiscount)}
+              </p>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold">
+                Descuento promedio por cupones
+              </h3>
+              <p className="text-3xl font-bold">
+                {currencyFormatter.format(sales.averageCouponDiscount)}
+              </p>
+            </div>
             <div>
               <h3 className="text-lg font-semibold">
                 Valor promedio de una órden
               </h3>
               <p className="text-3xl font-bold">
-                {currencyFormatter.format(averageOrderValue)}
-              </p>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold">Ventas totales</h3>
-              <p className="text-3xl font-bold">
-                {currencyFormatter.format(
-                  salesData.reduce((sum, data) => sum + data.revenue, 0),
-                )}
+                {currencyFormatter.format(sales.averageOrderValue)}
               </p>
             </div>
           </div>

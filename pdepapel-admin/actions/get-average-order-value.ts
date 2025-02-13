@@ -1,31 +1,24 @@
 import prisma from "@/lib/prismadb";
+import { endOfYear, startOfYear } from "date-fns";
 
 export const getAverageOrderValue = async (
   storeId: string,
   year: number,
 ): Promise<number> => {
-  const startDate = new Date(year, 0, 1);
-  const endDate = new Date(year, 11, 31);
+  const yearDate = new Date(year, 0, 1);
+  const firstDayOfYear = startOfYear(yearDate);
+  const lastDayOfYear = endOfYear(yearDate);
 
   const orders = await prisma.order.findMany({
     where: {
       storeId,
       createdAt: {
-        gte: startDate,
-        lte: endDate,
+        gte: firstDayOfYear,
+        lte: lastDayOfYear,
       },
     },
-    include: {
-      orderItems: {
-        select: {
-          quantity: true,
-          product: {
-            select: {
-              price: true,
-            },
-          },
-        },
-      },
+    select: {
+      total: true,
     },
   });
 
@@ -33,13 +26,6 @@ export const getAverageOrderValue = async (
     return 0;
   }
 
-  const totalRevenue = orders.reduce((sum, order) => {
-    const orderTotal = order.orderItems.reduce(
-      (orderSum, item) => orderSum + item.quantity * item.product.price,
-      0,
-    );
-    return sum + orderTotal;
-  }, 0);
-
+  const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0);
   return totalRevenue / orders.length;
 };

@@ -1,34 +1,25 @@
 import prismadb from "@/lib/prismadb";
 import { OrderStatus } from "@prisma/client";
+import { endOfYear, startOfYear } from "date-fns";
 
 export const getTotalRevenue = async (storeId: string, year: number) => {
-  const startDate = new Date(year, 0, 1);
-  const endDate = new Date(year + 1, 0, 1);
+  const yearDate = new Date(year, 0, 1);
+  const firstDayOfYear = startOfYear(yearDate);
+  const lastDayOfYear = endOfYear(yearDate);
 
   const paidOrders = await prismadb.order.findMany({
     where: {
       storeId,
       status: OrderStatus.PAID,
       createdAt: {
-        gte: startDate,
-        lt: endDate,
+        gte: firstDayOfYear,
+        lt: lastDayOfYear,
       },
     },
-    include: {
-      orderItems: {
-        include: {
-          product: true,
-        },
-      },
+    select: {
+      total: true,
     },
   });
 
-  const totalRevenue = paidOrders.reduce((total, order) => {
-    const orderTotal = order.orderItems.reduce((orderSum, item) => {
-      return orderSum + Number(item.product.price) * item.quantity;
-    }, 0);
-    return total + orderTotal;
-  }, 0);
-
-  return totalRevenue;
+  return paidOrders.reduce((total, order) => total + order.total, 0);
 };

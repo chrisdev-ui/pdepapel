@@ -1,4 +1,4 @@
-import { OrderStatus, PaymentMethod } from "@prisma/client";
+import { Coupon, OrderStatus, PaymentMethod } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { EmailTemplate } from "@/components/email-template";
@@ -6,6 +6,8 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
 import { resend } from "@/lib/resend";
 import {
+  calculateOrderTotals,
+  currencyFormatter,
   generateOrderNumber,
   generatePayUPayment,
   generateWompiPayment,
@@ -30,8 +32,18 @@ export async function POST(
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
-    const { fullName, phone, address, orderItems, userId, guestId, payment } =
-      await req.json();
+    const {
+      fullName,
+      phone,
+      address,
+      orderItems,
+      userId,
+      guestId,
+      payment,
+      couponCode,
+      subtotal,
+      total,
+    } = await req.json();
 
     const authenticatedUserId = await getClerkUserById(userId);
     if (!authenticatedUserId) throw ErrorFactory.Unauthenticated();
@@ -64,6 +76,11 @@ export async function POST(
     );
     const products = await prismadb.product.findMany({
       where: { id: { in: productIds } },
+      select: {
+        id: true,
+        stock: true,
+        price: true,
+      },
     });
 
     for (const { productId, quantity = 1 } of orderItems) {
@@ -92,6 +109,75 @@ export async function POST(
 
     if (errors.length > 0) throw ErrorFactory.InvalidRequest(errors.join(", "));
 
+    let coupon: Coupon | null = null;
+    if (couponCode) {
+      coupon = await prismadb.coupon.findFirst({
+        where: {
+          storeId: params.storeId,
+          code: couponCode.toUpperCase(),
+          isActive: true,
+          startDate: { lte: new Date() },
+          endDate: { gte: new Date() },
+          OR: [
+            { maxUses: null },
+            {
+              AND: [
+                { maxUses: { not: null } },
+                { usedCount: { lt: prisma?.coupon.fields.maxUses } },
+              ],
+            },
+          ],
+        },
+      });
+
+      if (!coupon) {
+        throw ErrorFactory.NotFound(
+          "Este cupón no es válido: puede estar inactivo, no haber iniciado aún o ya haber expirado",
+        );
+      }
+
+      if (subtotal < Number(coupon.minOrderValue ?? 0)) {
+        throw ErrorFactory.Conflict(
+          `El pedido debe ser mayor a ${currencyFormatter.format(coupon.minOrderValue ?? 0)} para usar este cupón`,
+        );
+      }
+    }
+
+    const itemsWithPrices: Array<{
+      product: { price: number };
+      quantity: number;
+    }> = orderItems.map(
+      ({
+        productId,
+        quantity = 1,
+      }: {
+        productId: string;
+        quantity: number | undefined;
+      }) => {
+        const product = products.find((p) => p.id === productId);
+        if (!product) {
+          throw ErrorFactory.NotFound(`Producto ${productId} no encontrado`);
+        }
+        return {
+          product: { price: product.price },
+          quantity,
+        };
+      },
+    );
+
+    const totals = calculateOrderTotals(itemsWithPrices, {
+      coupon: coupon ? { type: coupon.type, amount: coupon.amount } : undefined,
+    });
+
+    if (
+      Math.abs(totals.total - total) > 0.01 ||
+      Math.abs(totals.subtotal - subtotal) > 0.01
+    ) {
+      throw ErrorFactory.InvalidRequest(
+        "Los montos calculados no coinciden con los enviados",
+      );
+    }
+
     const orderNumber = generateOrderNumber();
     const [order] = await prismadb.$transaction([
       prismadb.order.create({
@@ -104,6 +190,10 @@ export async function POST(
           fullName,
           phone,
           address,
+          subtotal: totals.subtotal,
+          total: totals.total,
+          couponDiscount: totals.couponDiscount,
+          couponId: coupon?.id,
           orderItems: { create: orderItemsData },
           payment: {
             create: {
@@ -118,6 +208,7 @@ export async function POST(
               product: true,
             },
           },
+          coupon: true,
         },
       }),
     ]);

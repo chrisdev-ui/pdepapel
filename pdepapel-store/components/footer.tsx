@@ -19,7 +19,6 @@ export const Footer: React.FC<{}> = () => {
                 alt="Logo Papelería P de Papel con nombre al lado"
                 sizes="(max-width: 640px) 100vw, 640px"
                 className="object-cover"
-                placeholder="blur"
                 priority
                 fill
                 quality="100"

@@ -88,6 +88,22 @@ export interface Review {
   comment: string;
 }
 
+export interface Coupon {
+  id: string;
+  code: string;
+  createdAt: Date;
+  updatedAt: Date;
+  type: "PERCENTAGE" | "FIXED";
+  storeId: string;
+  amount: number;
+  startDate: Date;
+  endDate: Date;
+  maxUses: number | null;
+  usedCount: number;
+  isActive: boolean;
+  minOrderValue: number | null;
+}
+
 export interface Order {
   id: string;
   orderNumber: string;
@@ -100,6 +116,13 @@ export interface Order {
   orderItems: OrderItem[];
   payment: Payment;
   shipping: Shipping;
+  subtotal: number;
+  total: number;
+  discount?: number;
+  discountType?: "PERCENTAGE" | "FIXED";
+  documentId?: string | null;
+  coupon?: Coupon | null;
+  couponDiscount?: number;
   createdAt: string;
 }
 
@@ -169,6 +192,9 @@ export interface CheckoutOrder {
   address: string;
   userId: string | null | undefined;
   guestId: string | null;
+  couponCode: string | null;
+  subtotal: number;
+  total: number;
   documentId: string | null | undefined;
   orderItems: {
     productId: string;

@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/tooltip";
 import { WhatsappButton } from "@/components/whatsapp-button";
 import { paymentNames } from "@/constants";
-import { calculatePrice, currencyFormatter } from "@/lib/utils";
+import { currencyFormatter } from "@/lib/utils";
 import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
 import { ColumnDef } from "@tanstack/react-table";
 import { Receipt } from "lucide-react";
@@ -81,10 +81,8 @@ export const columns: ColumnDef<OrderColumn>[] = [
           orderNumber: row.original.orderNumber,
           status: row.original.status,
           fullName: row.original.fullName,
-          phone: row.original.phone as string,
-          totalPrice: currencyFormatter.format(
-            calculatePrice(row.original.orderItems),
-          ),
+          phone: row.original.phone,
+          totalPrice: currencyFormatter.format(row.original.total),
           products: row.original.orderItems.map((orderItem) => ({
             name: orderItem.product.name,
             quantity: orderItem.quantity,
@@ -146,13 +144,11 @@ export const columns: ColumnDef<OrderColumn>[] = [
   },
   {
     id: "totalPrice",
-    accessorFn: (row) => calculatePrice(row.orderItems),
+    accessorKey: "total",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Precio total" />
     ),
-    cell: ({ row }) => (
-      <DataTableCellCurrency value={calculatePrice(row.original.orderItems)} />
-    ),
+    cell: ({ row }) => <DataTableCellCurrency value={row.original.total} />,
   },
   {
     accessorKey: "status",

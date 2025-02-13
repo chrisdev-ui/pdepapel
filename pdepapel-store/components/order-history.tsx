@@ -86,13 +86,7 @@ export const OrderHistory: React.FC<{}> = () => {
               <CardTitle className="flex w-full flex-wrap items-center justify-between font-serif text-lg">
                 <div className="flex gap-1">{order.orderNumber}</div>
                 <Currency
-                  value={
-                    order.orderItems.reduce(
-                      (acc, item) =>
-                        acc + Number(item.product.price) * item.quantity,
-                      0,
-                    ) + Number(order?.shipping?.cost ?? 0)
-                  }
+                  value={order.total + Number(order?.shipping?.cost ?? 0)}
                 />
               </CardTitle>
               <CardDescription className="flex flex-wrap items-center justify-between gap-y-2 text-xs">

@@ -1,4 +1,9 @@
-import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
+import {
+  DiscountType,
+  OrderStatus,
+  PaymentMethod,
+  ShippingStatus,
+} from "@prisma/client";
 
 export const DEFAULT_COUNTRY = "CO";
 
@@ -53,6 +58,11 @@ export const paymentOptions = {
   [PaymentMethod.COD]: "Contra entrega",
   [PaymentMethod.PayU]: "PayU",
   [PaymentMethod.Wompi]: "Wompi",
+};
+
+export const discountOptions = {
+  [DiscountType.PERCENTAGE]: "Porcentaje",
+  [DiscountType.FIXED]: "Monto fijo",
 };
 
 export const shippingOptions = {
@@ -135,6 +145,7 @@ export enum Models {
   OutOfStock = "out-of-stock",
   Inventory = "inventory",
   SalesByCategory = "sales-by-category",
+  Coupons = "coupons",
 }
 
 export const ModelLabels: Record<Models, string> = {
@@ -155,6 +166,7 @@ export const ModelLabels: Record<Models, string> = {
   [Models.OutOfStock]: "Productos completamente agotados",
   [Models.Inventory]: "Inventario",
   [Models.SalesByCategory]: "Ventas por categoría",
+  [Models.Coupons]: "Cupones",
 };
 
 export const ModelsColumns: Record<Models, { [key: string]: string }> = {
@@ -276,6 +288,17 @@ export const ModelsColumns: Record<Models, { [key: string]: string }> = {
     category: "Categoría",
     sales: "Ventas",
     orders: "Órdenes",
+  },
+  [Models.Coupons]: {
+    code: "Código",
+    type: "Tipo",
+    amount: "Descuento",
+    startDate: "Inicio",
+    endDate: "Fin",
+    usedCount: "Cantidad de usos",
+    minOrderValue: "Pedido mínimo",
+    isActive: "Vigencia",
+    createdAt: "Fecha de creación",
   },
 };
 

@@ -58,6 +58,11 @@ async function processWebhookPayment(response: any) {
               },
             },
             payment: true,
+            coupon: {
+              select: {
+                id: true,
+              },
+            },
           },
         });
 
@@ -134,14 +139,9 @@ function createHash(
 }
 
 function isPaymentValid(order: any, transaction: any): boolean {
-  const { orderItems, payment } = order;
+  const { total, payment } = order;
   const { amount_in_cents: amountInCents } = transaction;
-  const totalAmount =
-    orderItems.reduce(
-      (acc: number, item: any) =>
-        acc + Number(item.product.price) * item.quantity,
-      0,
-    ) * 100;
+  const totalAmount = total * 100;
   return (
     payment.method === PaymentMethod.Wompi && amountInCents === totalAmount
   );
@@ -184,6 +184,23 @@ async function updateOrderData(order: any, transaction: any) {
             );
           }
         }
+      });
+    } else if (currentStatus === OrderStatus.CANCELLED && order.coupon) {
+      await prismadb.coupon.update({
+        where: { id: order.coupon.id },
+        data: {
+          usedCount: {
+            decrement: 1,
+          },
+        },
+      });
+
+      await prismadb.order.update({
+        where: { id: order.id },
+        data: {
+          coupon: { disconnect: true },
+          couponDiscount: 0,
+        },
       });
     }
     await prismadb.paymentDetails.upsert({

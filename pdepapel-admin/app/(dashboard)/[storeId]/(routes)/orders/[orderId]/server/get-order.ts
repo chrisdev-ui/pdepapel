@@ -1,8 +1,10 @@
 "use server";
 
 import prismadb from "@/lib/prismadb";
+import { headers } from "next/headers";
 
 export async function getOrder(orderId: string, storeId: string) {
+  headers();
   const order = await prismadb.order.findUnique({
     where: {
       id: orderId,
@@ -11,6 +13,7 @@ export async function getOrder(orderId: string, storeId: string) {
       orderItems: true,
       payment: true,
       shipping: true,
+      coupon: true,
     },
   });
 

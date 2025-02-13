@@ -38,6 +38,11 @@ export async function POST(
           },
         },
         payment: true,
+        coupon: {
+          select: {
+            id: true,
+          },
+        },
       },
     });
 
