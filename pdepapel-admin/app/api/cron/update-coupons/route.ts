@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
             {
               AND: [
                 { maxUses: { not: null } },
-                { usedCount: { gte: prisma?.coupon.fields.maxUses } },
+                { usedCount: { gte: prismadb.coupon.fields.maxUses } },
               ],
             },
           ],
@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
             {
               OR: [
                 { maxUses: null },
-                { usedCount: { lt: prisma?.coupon.fields.maxUses } },
+                { usedCount: { lt: prismadb.coupon.fields.maxUses } },
               ],
             },
           ],

@@ -123,7 +123,7 @@ export async function POST(
             {
               AND: [
                 { maxUses: { not: null } },
-                { usedCount: { lt: prisma?.coupon.fields.maxUses } },
+                { usedCount: { lt: prismadb.coupon.fields.maxUses } },
               ],
             },
           ],
