@@ -3,9 +3,6 @@ import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
 import { NextRequest, NextResponse } from "next/server";
 
-export const runtime = "edge";
-export const preferredRegion = "auto";
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
