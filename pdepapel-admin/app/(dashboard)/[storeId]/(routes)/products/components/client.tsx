@@ -11,6 +11,7 @@ import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import { PDFDownloadLink } from "@react-pdf/renderer";
+import { format } from "date-fns";
 import { FileDown, Plus } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import React, { useCallback, useState } from "react";
@@ -84,12 +85,9 @@ const ProductClient: React.FC<ProductClientProps> = ({ data }) => {
                   store={catalogData.store}
                 />
               }
-              fileName={`catalogo-${(catalogData.store.name as string)
+              fileName={`Catálogo-${(catalogData.store.name as string)
                 .toLowerCase()
-                .replace(
-                  /\s+/g,
-                  "-",
-                )}-${new Date().toISOString().split("T")[0]}.pdf`}
+                .replace(/\s+/g, "-")}-${format(new Date(), "yyyy-MM-dd")}.pdf`}
             >
               {({ loading: pdfLoading }) => {
                 return (

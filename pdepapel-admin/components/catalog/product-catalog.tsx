@@ -16,6 +16,11 @@ Font.register({
   src: "https://fonts.gstatic.com/s/nunito/v25/XRXI3I6Li01BKofiOc5wtlZ2di8HDLshRTM.ttf",
 });
 
+Font.register({
+  family: "ShiftyNotes",
+  src: "/fonts/font.ttf",
+});
+
 const styles = StyleSheet.create({
   page: {
     fontFamily: "Nunito",
@@ -63,14 +68,14 @@ const styles = StyleSheet.create({
     objectFit: "contain",
   },
   coverTitle: {
-    fontFamily: "Nunito",
+    fontFamily: "ShiftyNotes",
     fontSize: 52,
     color: "#FF6B9B",
     textAlign: "center",
     marginBottom: 15,
   },
   coverSubtitle: {
-    fontFamily: "Nunito",
+    fontFamily: "ShiftyNotes",
     fontSize: 18,
     color: "#946C90",
     textAlign: "center",
@@ -80,7 +85,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#946C90",
     textAlign: "center",
-    textTransform: "uppercase",
+    textTransform: "capitalize",
   },
   watermark: {
     position: "absolute",
@@ -108,12 +113,12 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   sectionTitle: {
-    fontFamily: "Nunito",
+    fontFamily: "ShiftyNotes",
     fontSize: 24,
     color: "#FF6B9B",
   },
   productName: {
-    fontFamily: "Nunito",
+    fontFamily: "ShiftyNotes",
     fontSize: 14,
     marginBottom: 5,
     color: "#FF6B9B",
@@ -146,7 +151,7 @@ const styles = StyleSheet.create({
     color: "#946C90",
   },
   contactTitle: {
-    fontFamily: "Nunito",
+    fontFamily: "ShiftyNotes",
     fontSize: 16,
     marginBottom: 10,
     color: "#FF6B9B",
@@ -163,7 +168,7 @@ const styles = StyleSheet.create({
     gap: "10",
   },
   policyTitle: {
-    fontFamily: "Nunito",
+    fontFamily: "ShiftyNotes",
     fontSize: 14,
     marginBottom: 8,
     color: "#946C90",
@@ -176,30 +181,6 @@ const styles = StyleSheet.create({
   priceTable: {
     width: "100%",
     marginBottom: 30,
-  },
-  tableHeader: {
-    fontFamily: "Nunito",
-    backgroundColor: "#FDE1D3",
-    flexDirection: "row",
-    borderBottomColor: "#FFE4E9",
-    borderBottomWidth: 1,
-    alignItems: "center",
-    height: 30,
-    fontSize: 10,
-    borderRadius: 8,
-  },
-  tableRow: {
-    flexDirection: "row",
-    borderBottomColor: "#FFE4E9",
-    borderBottomWidth: 1,
-    alignItems: "center",
-    height: 25,
-    fontSize: 9,
-  },
-  tableCell: {
-    flex: 1,
-    padding: 5,
-    color: "#946C90",
   },
   contactWrapper: {
     display: "flex",
