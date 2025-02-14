@@ -12,6 +12,17 @@ model Store {
   id         String           @id @default(uuid())
   name       String
   userId     String
+  logoUrl    String?
+  phone      String?          @default("")
+  email      String?          @default("")
+  address    String?          @default("")
+  instagram  String?          @default("")
+  tiktok     String?          @default("")
+  youtube    String?          @default("")
+  facebook   String?          @default("")
+  twitter    String?          @default("")
+  pinterest  String?          @default("")
+  policies   Json?            @default("{}")
   createdAt  DateTime         @default(now())
   updatedAt  DateTime         @updatedAt
   types      Type[]           @relation("StoreToType")

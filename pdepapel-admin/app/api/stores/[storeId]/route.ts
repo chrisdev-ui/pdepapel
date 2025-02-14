@@ -1,6 +1,7 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import cloudinaryInstance from "@/lib/cloudinary";
 import prismadb from "@/lib/prismadb";
-import { verifyStoreOwner } from "@/lib/utils";
+import { getPublicIdFromCloudinaryUrl, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
@@ -40,7 +41,20 @@ export async function PATCH(
     await verifyStoreOwner(userId, params.storeId);
 
     const body = await req.json();
-    const { name } = body;
+    const {
+      name,
+      logoUrl,
+      phone,
+      email,
+      address,
+      instagram,
+      facebook,
+      tiktok,
+      twitter,
+      youtube,
+      pinterest,
+      policies,
+    } = body;
 
     if (!name?.trim()) {
       throw ErrorFactory.InvalidRequest("El nombre de la tienda es requerido");
@@ -55,6 +69,22 @@ export async function PATCH(
 
     if (!existingStore) {
       throw ErrorFactory.NotFound("Tienda no encontrada o no tiene permisos");
+    }
+
+    if (logoUrl) {
+      if (existingStore?.logoUrl && existingStore.logoUrl !== logoUrl) {
+        const publicId = getPublicIdFromCloudinaryUrl(existingStore.logoUrl);
+        if (publicId) {
+          try {
+            await cloudinaryInstance.v2.uploader.destroy(publicId);
+          } catch (error) {
+            throw ErrorFactory.CloudinaryError(
+              error,
+              "Ha ocurrido un error intentando eliminar la imagen de la tienda",
+            );
+          }
+        }
+      }
     }
 
     const duplicateStore = await prismadb.store.findFirst({
@@ -74,9 +104,21 @@ export async function PATCH(
     const updatedStore = await prismadb.store.update({
       where: {
         id: params.storeId,
+        userId,
       },
       data: {
         name: name.trim(),
+        logoUrl,
+        phone,
+        email,
+        address,
+        instagram,
+        tiktok,
+        youtube,
+        twitter,
+        pinterest,
+        facebook,
+        policies: policies ? JSON.stringify(policies) : {},
       },
     });
 
