@@ -96,6 +96,34 @@ export async function PATCH(
     if (!order)
       throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
 
+    let wasPaid = order.status === OrderStatus.PAID;
+    let isNowPaid = status === OrderStatus.PAID;
+
+    if (wasPaid && isNowPaid && orderItems) {
+      const originalItems = order.orderItems
+        .map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+        }))
+        .sort((a, b) => a.productId.localeCompare(b.productId));
+
+      const newItems = orderItems
+        .map((item: any) => ({
+          productId: item.productId,
+          quantity: item.quantity || 1,
+        }))
+        .sort((a: any, b: any) => a.productId.localeCompare(b.productId));
+
+      const itemsMatch =
+        JSON.stringify(originalItems) === JSON.stringify(newItems);
+
+      if (!itemsMatch) {
+        throw ErrorFactory.InvalidRequest(
+          "No se pueden modificar los items de una orden ya pagada",
+        );
+      }
+    }
+
     if (
       discount &&
       couponCode &&
@@ -146,6 +174,44 @@ export async function PATCH(
     }
 
     const updatedOrder = await prismadb.$transaction(async (tx) => {
+      if (wasPaid && isNowPaid) {
+        // Update only non-total related fields for paid orders
+        return tx.order.update({
+          where: { id: params.orderId },
+          data: {
+            fullName,
+            phone,
+            address,
+            userId: verifiedUserId,
+            guestId: verifiedUserId ? null : guestId,
+            documentId,
+            payment: payment && {
+              upsert: {
+                create: {
+                  ...payment,
+                  store: { connect: { id: params.storeId } },
+                },
+                update: payment,
+              },
+            },
+            shipping: shipping && {
+              upsert: {
+                create: {
+                  ...shipping,
+                  store: { connect: { id: params.storeId } },
+                },
+                update: shipping,
+              },
+            },
+          },
+          include: {
+            orderItems: { include: { product: true } },
+            payment: true,
+            shipping: true,
+            coupon: true,
+          },
+        });
+      }
       let coupon = order.coupon;
 
       if (order.couponId && !couponCode) {
@@ -325,8 +391,8 @@ export async function PATCH(
       });
 
       // 3. Handle stock changes within the same transaction
-      const wasPaid = order.status === OrderStatus.PAID;
-      const isNowPaid = updated.status === OrderStatus.PAID;
+      wasPaid = order.status === OrderStatus.PAID;
+      isNowPaid = updated.status === OrderStatus.PAID;
 
       if (isNowPaid && !wasPaid) {
         // Pre-check product availability

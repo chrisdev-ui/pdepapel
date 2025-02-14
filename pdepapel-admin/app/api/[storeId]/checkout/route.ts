@@ -87,17 +87,19 @@ export async function POST(
       const product = products.find((product) => product.id === productId);
 
       if (!product) {
-        errors.push(`Product ${productId} not found`);
+        errors.push(`El producto ${productId} no existe`);
         continue;
       }
 
       if (product.stock < quantity) {
-        errors.push(`Product ${productId} out of stock`);
+        errors.push(`El producto ${productId} está agotado`);
         continue;
       }
 
       if (product.stock - quantity < 0) {
-        errors.push(`Product ${productId} stock would become negative`);
+        errors.push(
+          `El producto ${productId} no puede ser vendido porque no hay suficiente stock`,
+        );
         continue;
       }
 

@@ -804,7 +804,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                               {field.value
                                 ? availableCoupons.find(
                                     (c) => c.code === field.value,
-                                  )?.code
+                                  )?.code || field.value
                                 : availableCoupons.length > 0
                                   ? "Seleccionar cupón"
                                   : "No hay cupones disponibles"}

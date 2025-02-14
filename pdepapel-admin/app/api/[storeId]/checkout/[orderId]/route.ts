@@ -52,6 +52,24 @@ export async function POST(
     if (order.status === OrderStatus.PAID)
       throw ErrorFactory.Conflict(`La orden ${params.orderId} ya está pagada`);
 
+    const productIds = order.orderItems.map((item) => item.productId);
+    const products = await prismadb.product.findMany({
+      where: { id: { in: productIds } },
+    });
+
+    const outOfStock = order.orderItems.find((item) => {
+      const product = products.find((p) => p.id === item.productId);
+      return !product || product.stock < item.quantity;
+    });
+
+    if (outOfStock) {
+      throw ErrorFactory.InsufficientStock(
+        outOfStock.product.name,
+        outOfStock.product.stock,
+        outOfStock.quantity,
+      );
+    }
+
     if (order.payment?.method === PaymentMethod.PayU) {
       const payUData = generatePayUPayment(order);
 
