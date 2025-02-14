@@ -1,4 +1,4 @@
-import { currencyFormatter } from "@/lib/utils";
+import { currencyFormatter, formatPhoneNumber } from "@/lib/utils";
 import {
   Document,
   Font,
@@ -28,11 +28,9 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 20,
     marginBottom: 30,
-    minHeight: 0, // Important for flex layout
-    maxHeight: "70%", // Prevent overflow
   },
   productCard: {
-    width: "45%",
+    width: "48%",
     marginBottom: 20,
     padding: 15,
     backgroundColor: "#FFFFFF",
@@ -42,7 +40,7 @@ const styles = StyleSheet.create({
   },
   productImage: {
     width: "100%",
-    height: 150, // Fixed height
+    height: 200,
     objectFit: "cover",
     marginBottom: 10,
     borderRadius: 10,
@@ -66,7 +64,7 @@ const styles = StyleSheet.create({
   },
   coverTitle: {
     fontFamily: "Nunito",
-    fontSize: 36,
+    fontSize: 52,
     color: "#FF6B9B",
     textAlign: "center",
     marginBottom: 15,
@@ -82,6 +80,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#946C90",
     textAlign: "center",
+    textTransform: "uppercase",
   },
   watermark: {
     position: "absolute",
@@ -123,6 +122,7 @@ const styles = StyleSheet.create({
     fontFamily: "Nunito",
     fontSize: 10,
     color: "#946C90",
+    fontWeight: "bold",
     marginBottom: 3,
   },
   footer: {
@@ -271,11 +271,10 @@ interface Product {
   name: string;
   price: number;
   sku: string;
-  stock: number;
   images: { url: string; isMain: boolean }[];
   category: { name: string };
   size: { name: string };
-  color: { value: string };
+  color: { name: string };
   design: { name: string };
 }
 
@@ -332,7 +331,9 @@ const ContactPage = ({ store }: { store: Store }) => (
       <View style={styles.contactSection}>
         <Text style={styles.contactTitle}>Información de Contacto</Text>
         {store.phone && (
-          <Text style={styles.contactText}>Teléfono: {store.phone}</Text>
+          <Text style={styles.contactText}>
+            Teléfono: {formatPhoneNumber(store.phone)}
+          </Text>
         )}
         {store.email && (
           <Text style={styles.contactText}>Email: {store.email}</Text>
@@ -360,7 +361,7 @@ const ContactPage = ({ store }: { store: Store }) => (
           )}
           {store.tiktok && (
             <View style={styles.socialItem}>
-              <Text style={styles.contactText}>🎵 TikTok: {store.tiktok}</Text>
+              <Text style={styles.contactText}>TikTok: {store.tiktok}</Text>
             </View>
           )}
           {store.youtube && (
@@ -446,31 +447,15 @@ const ProductsPage = ({
 }) => (
   <Page size="A4" style={styles.page}>
     <Image
-      src={`${process.env.ADMIN_WEB_URL}/images/transparent-background.png`}
+      src={
+        store.logoUrl ??
+        `${process.env.ADMIN_WEB_URL}/images/transparent-background.png`
+      }
       style={styles.watermarkImage}
     />
 
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionTitle}>{category}</Text>
-    </View>
-
-    <View style={styles.priceTable}>
-      <View style={styles.tableHeader}>
-        <Text style={styles.tableCell}>Producto</Text>
-        <Text style={styles.tableCell}>SKU</Text>
-        <Text style={styles.tableCell}>Precio</Text>
-        <Text style={styles.tableCell}>Stock</Text>
-      </View>
-      {products.map((product) => (
-        <View key={product.id} style={styles.tableRow}>
-          <Text style={styles.tableCell}>{product.name}</Text>
-          <Text style={styles.tableCell}>{product.sku}</Text>
-          <Text style={styles.tableCell}>
-            {currencyFormatter.format(product.price)}
-          </Text>
-          <Text style={styles.tableCell}>{product.stock}</Text>
-        </View>
-      ))}
     </View>
 
     <View style={styles.productsGrid}>
@@ -491,9 +476,7 @@ const ProductsPage = ({
             Precio: {currencyFormatter.format(product.price)}
           </Text>
           <Text style={styles.productDetails}>Tamaño: {product.size.name}</Text>
-          <Text style={styles.productDetails}>
-            Color: {product.color.value}
-          </Text>
+          <Text style={styles.productDetails}>Color: {product.color.name}</Text>
           <Text style={styles.productDetails}>
             Diseño: {product.design.name}
           </Text>

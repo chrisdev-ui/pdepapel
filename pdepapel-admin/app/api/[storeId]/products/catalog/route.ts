@@ -36,7 +36,7 @@ export async function GET(
           },
           color: {
             select: {
-              value: true,
+              name: true,
             },
           },
           design: {

@@ -84,12 +84,14 @@ const ProductClient: React.FC<ProductClientProps> = ({ data }) => {
                   store={catalogData.store}
                 />
               }
-              fileName={`catalogo-${(catalogData.store.name as string).toLocaleLowerCase()}-${new Date().toISOString().split("T")[0]}.pdf`}
+              fileName={`catalogo-${(catalogData.store.name as string)
+                .toLowerCase()
+                .replace(
+                  /\s+/g,
+                  "-",
+                )}-${new Date().toISOString().split("T")[0]}.pdf`}
             >
-              {({ loading: pdfLoading, error, url, blob }) => {
-                console.log(error);
-                console.log(url);
-                console.log(blob);
+              {({ loading: pdfLoading }) => {
                 return (
                   <Button variant="default" disabled={pdfLoading}>
                     <FileDown className="mr-2 h-4 w-4" />
