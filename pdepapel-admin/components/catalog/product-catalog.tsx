@@ -1,4 +1,8 @@
-import { currencyFormatter, formatPhoneNumber } from "@/lib/utils";
+import {
+  currencyFormatter,
+  formatPhoneNumber,
+  numberFormatter,
+} from "@/lib/utils";
 import {
   Document,
   Font,
@@ -13,12 +17,21 @@ import { es } from "date-fns/locale";
 
 Font.register({
   family: "Nunito",
-  src: "https://fonts.gstatic.com/s/nunito/v25/XRXI3I6Li01BKofiOc5wtlZ2di8HDLshRTM.ttf",
+  fonts: [
+    {
+      src: "https://cdn.jsdelivr.net/fontsource/fonts/nunito@latest/latin-400-normal.ttf",
+      fontWeight: 400,
+    },
+    {
+      src: "https://cdn.jsdelivr.net/fontsource/fonts/nunito@latest/latin-800-normal.ttf",
+      fontWeight: 800,
+    },
+  ],
 });
 
 Font.register({
-  family: "ShiftyNotes",
-  src: "/fonts/font.ttf",
+  family: "MangabeyRegular",
+  src: "/fonts/mangabey-regular.otf",
 });
 
 const styles = StyleSheet.create({
@@ -26,22 +39,26 @@ const styles = StyleSheet.create({
     fontFamily: "Nunito",
     padding: 30,
     backgroundColor: "#FEE5ED",
+    fontWeight: 400,
   },
   productsGrid: {
     display: "flex",
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 20,
-    marginBottom: 30,
+    gap: 10,
+    marginBottom: 10,
+    minHeight: 0,
+    breakInside: "avoid-page",
   },
   productCard: {
     width: "48%",
-    marginBottom: 20,
-    padding: 15,
+    marginBottom: 12,
+    padding: 10,
     backgroundColor: "#FFFFFF",
     borderRadius: 15,
     border: "2pt solid #FFE4E9",
     minHeight: 0, // Important for flex layout
+    breakInside: "avoid",
   },
   productImage: {
     width: "100%",
@@ -68,14 +85,14 @@ const styles = StyleSheet.create({
     objectFit: "contain",
   },
   coverTitle: {
-    fontFamily: "ShiftyNotes",
+    fontFamily: "MangabeyRegular",
     fontSize: 52,
     color: "#FF6B9B",
     textAlign: "center",
     marginBottom: 15,
   },
   coverSubtitle: {
-    fontFamily: "ShiftyNotes",
+    fontFamily: "MangabeyRegular",
     fontSize: 18,
     color: "#946C90",
     textAlign: "center",
@@ -108,26 +125,26 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     backgroundColor: "#FDE1D3",
-    padding: 15,
-    marginBottom: 20,
+    padding: 10,
+    marginBottom: 10,
     borderRadius: 10,
   },
   sectionTitle: {
-    fontFamily: "ShiftyNotes",
+    fontFamily: "MangabeyRegular",
     fontSize: 24,
     color: "#FF6B9B",
   },
   productName: {
-    fontFamily: "ShiftyNotes",
+    fontFamily: "MangabeyRegular",
     fontSize: 14,
     marginBottom: 5,
     color: "#FF6B9B",
+    fontWeight: "bold",
   },
   productDetails: {
     fontFamily: "Nunito",
     fontSize: 10,
     color: "#946C90",
-    fontWeight: "bold",
     marginBottom: 3,
   },
   footer: {
@@ -151,7 +168,7 @@ const styles = StyleSheet.create({
     color: "#946C90",
   },
   contactTitle: {
-    fontFamily: "ShiftyNotes",
+    fontFamily: "MangabeyRegular",
     fontSize: 16,
     marginBottom: 10,
     color: "#FF6B9B",
@@ -168,7 +185,7 @@ const styles = StyleSheet.create({
     gap: "10",
   },
   policyTitle: {
-    fontFamily: "ShiftyNotes",
+    fontFamily: "MangabeyRegular",
     fontSize: 14,
     marginBottom: 8,
     color: "#946C90",
@@ -177,10 +194,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: "#946C90",
     marginBottom: 15,
-  },
-  priceTable: {
-    width: "100%",
-    marginBottom: 30,
   },
   contactWrapper: {
     display: "flex",
@@ -256,7 +269,7 @@ interface Product {
   category: { name: string };
   size: { name: string };
   color: { name: string };
-  design: { name: string };
+  stock: number;
 }
 
 interface Store {
@@ -411,7 +424,7 @@ const ContactPage = ({ store }: { store: Store }) => (
   </Page>
 );
 
-const PRODUCTS_PER_PAGE = 6; // Adjust based on your needs
+const PRODUCTS_PER_PAGE = 4; // Adjust based on your needs
 
 const ProductsPage = ({
   products,
@@ -453,13 +466,13 @@ const ProductsPage = ({
           )}
           <Text style={styles.productName}>{product.name}</Text>
           <Text style={styles.productDetails}>SKU: {product.sku}</Text>
-          <Text style={styles.productDetails}>
+          <Text style={[styles.productDetails, { fontWeight: 800 }]}>
             Precio: {currencyFormatter.format(product.price)}
           </Text>
           <Text style={styles.productDetails}>Tamaño: {product.size.name}</Text>
           <Text style={styles.productDetails}>Color: {product.color.name}</Text>
           <Text style={styles.productDetails}>
-            Diseño: {product.design.name}
+            Stock: {numberFormatter.format(product.stock)}
           </Text>
         </View>
       ))}

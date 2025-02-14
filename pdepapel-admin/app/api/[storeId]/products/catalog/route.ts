@@ -39,11 +39,6 @@ export async function GET(
               name: true,
             },
           },
-          design: {
-            select: {
-              name: true,
-            },
-          },
         },
         orderBy: {
           category: {
