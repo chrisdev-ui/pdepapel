@@ -2,10 +2,9 @@
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 
-const formatter = new Intl.NumberFormat("en-US", {
+const formatter = new Intl.NumberFormat("es-CO", {
   style: "currency",
   currency: "COP",
-  currencyDisplay: "narrowSymbol",
   minimumFractionDigits: 0,
   maximumFractionDigits: 0,
   useGrouping: true,
