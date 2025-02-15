@@ -6,7 +6,7 @@ import type { Metadata } from "next";
 import dynamic from "next/dynamic";
 
 import { Footer } from "@/components/footer";
-import { caudex, comingSoon, martelSans, roboto } from "@/lib/fonts";
+import { caudex, mangabeyregular, nunito, roboto } from "@/lib/fonts";
 import { ModalProvider } from "@/providers/modal-provider";
 import { ReactQueryProvider } from "@/providers/query-client-provider";
 import { Toaster } from "@/providers/toaster";
@@ -90,7 +90,7 @@ export default function RootLayout({
     <ClerkProvider localization={esES}>
       <html lang="en">
         <body
-          className={`${caudex.variable} ${comingSoon.variable} ${martelSans.variable} ${roboto.variable}`}
+          className={`${caudex.variable} ${mangabeyregular.variable} ${nunito.variable} ${roboto.variable}`}
         >
           <ReactQueryProvider>
             <ModalProvider />

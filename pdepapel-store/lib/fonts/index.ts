@@ -1,4 +1,5 @@
-import { Caudex, Coming_Soon, Martel_Sans, Roboto } from "next/font/google";
+import { Caudex, Nunito, Roboto } from "next/font/google";
+import localFont from "next/font/local";
 
 export const caudex = Caudex({
   subsets: ["latin"],
@@ -7,19 +8,16 @@ export const caudex = Caudex({
   style: ["italic", "normal"],
   variable: "--font-caudex",
 });
-export const comingSoon = Coming_Soon({
-  subsets: ["latin"],
-  display: "swap",
-  weight: "400",
-  style: "normal",
-  variable: "--font-coming-soon",
+export const mangabeyregular = localFont({
+  src: "../../public/fonts/MangabeyRegular.otf",
+  variable: "--font-mangabey-regular",
 });
-export const martelSans = Martel_Sans({
+export const nunito = Nunito({
   subsets: ["latin"],
   display: "swap",
-  weight: ["200", "300", "400", "600", "700", "800", "900"],
+  weight: ["200", "300", "400", "500", "600", "700", "800", "900", "1000"],
   style: "normal",
-  variable: "--font-martel-sans",
+  variable: "--font-nunito",
 });
 export const roboto = Roboto({
   style: ["normal", "italic"],
