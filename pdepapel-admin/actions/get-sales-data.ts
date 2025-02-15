@@ -1,5 +1,5 @@
 import prismadb from "@/lib/prismadb";
-import { compareAsc, format, parseISO } from "date-fns";
+import { compareAsc, endOfYear, format, parseISO, startOfYear } from "date-fns";
 
 interface SalesByDate {
   revenue: number;
@@ -12,8 +12,9 @@ interface SalesByDate {
 }
 
 export async function getSalesData(storeId: string, year: number) {
-  const startDate = new Date(year, 0, 1);
-  const endDate = new Date(year, 11, 31);
+  const yearDate = new Date(year, 0, 1);
+  const startDate = startOfYear(yearDate);
+  const endDate = endOfYear(yearDate);
 
   const sales = await prismadb.order.findMany({
     where: {

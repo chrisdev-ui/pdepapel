@@ -1,8 +1,12 @@
+"use server";
+
 import prisma from "@/lib/prismadb";
+import { endOfYear, startOfYear } from "date-fns";
 
 export const getTopSellingProducts = async (storeId: string, year: number) => {
-  const startDate = new Date(year, 0, 1);
-  const endDate = new Date(year, 11, 31);
+  const yearDate = new Date(year, 0, 1);
+  const startDate = startOfYear(yearDate);
+  const endDate = endOfYear(yearDate);
 
   const topSellingProducts = await prisma.product.findMany({
     where: {
@@ -18,12 +22,6 @@ export const getTopSellingProducts = async (storeId: string, year: number) => {
         },
       },
     },
-    orderBy: {
-      orderItems: {
-        _count: "desc",
-      },
-    },
-    take: 10,
     select: {
       id: true,
       name: true,
@@ -36,16 +34,28 @@ export const getTopSellingProducts = async (storeId: string, year: number) => {
           url: true,
         },
       },
-      _count: {
-        select: {
-          orderItems: true,
+      orderItems: {
+        where: {
+          order: {
+            createdAt: {
+              gte: startDate,
+              lte: endDate,
+            },
+          },
         },
       },
     },
   });
 
-  return topSellingProducts.map((product) => ({
-    ...product,
-    totalSold: product._count.orderItems,
-  }));
+  // Calculate total sold items within the date range and sort
+  const productsWithSales = topSellingProducts
+    .map((product) => ({
+      ...product,
+      totalSold: product.orderItems.length,
+    }))
+    .sort((a, b) => b.totalSold - a.totalSold)
+    .slice(0, 10);
+
+  // Remove the orderItems from the final result
+  return productsWithSales.map(({ orderItems, ...rest }) => rest);
 };
