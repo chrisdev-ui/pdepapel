@@ -8,6 +8,9 @@ export async function getProducts(storeId: string) {
       categoryId: {
         notIn: [CAPSULAS_SORPRESA_ID, KITS_ID],
       },
+      stock: {
+        gt: 0,
+      },
     },
     select: {
       id: true,
