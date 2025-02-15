@@ -192,6 +192,21 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     [initialData],
   );
 
+  const getOriginalDiscountAmount = (
+    initialData: Awaited<ReturnType<typeof getOrder>>["order"],
+  ) => {
+    if (!initialData?.discount || !initialData?.discountType) return undefined;
+
+    if (initialData.discountType === DiscountType.PERCENTAGE) {
+      // If percentage, we need to calculate what percentage produced the stored discount
+      return Number(
+        ((initialData.discount / initialData.subtotal) * 100).toFixed(0),
+      );
+    }
+
+    return initialData.discount;
+  };
+
   const form = useForm<OrderFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: initialData
@@ -204,7 +219,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           total: initialData.total || 0,
           discount: {
             type: initialData.discountType || undefined,
-            amount: initialData.discount || undefined,
+            amount: getOriginalDiscountAmount(initialData),
             reason: initialData.discountReason || undefined,
           },
           couponCode: initialData.coupon?.code || "",
@@ -311,6 +326,9 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         orderItems: updatedOrderItems,
         subtotal: orderTotals.subtotal,
         total: orderTotals.total,
+        discountType: data.discount?.type,
+        discountAmount: data.discount?.amount,
+        discountReason: data.discount?.reason,
       };
 
       if (initialData) {

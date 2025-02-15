@@ -141,7 +141,7 @@ export async function PATCH(
       );
     }
 
-    if (discount?.type && !discount?.amount) {
+    if ((discount?.type as DiscountType) && !discount?.amount) {
       throw ErrorFactory.InvalidRequest(
         "El monto del descuento es requerido cuando se selecciona un tipo",
       );
@@ -153,7 +153,10 @@ export async function PATCH(
       );
     }
 
-    if (discount?.type === DiscountType.PERCENTAGE && discount.amount > 100) {
+    if (
+      (discount?.type as DiscountType) === DiscountType.PERCENTAGE &&
+      discount.amount > 100
+    ) {
       throw ErrorFactory.InvalidRequest(
         "El descuento porcentual no puede ser mayor a 100%",
       );
@@ -314,14 +317,14 @@ export async function PATCH(
         discount:
           discount?.type && discount?.amount
             ? {
-                type: discount.type,
+                type: discount.type as DiscountType,
                 amount: discount.amount,
               }
             : undefined,
         coupon:
           coupon && subtotal >= Number(coupon.minOrderValue ?? 0)
             ? {
-                type: coupon.type,
+                type: coupon.type as DiscountType,
                 amount: coupon.amount,
               }
             : undefined,
@@ -347,7 +350,7 @@ export async function PATCH(
           documentId,
           subtotal: totals.subtotal,
           discount: totals.discount,
-          discountType: discount?.type,
+          discountType: discount?.type as DiscountType,
           discountReason: discount?.reason,
           coupon: coupon
             ? { connect: { id: coupon.id } }
