@@ -140,8 +140,8 @@ model Product {
   categoryId  String
   name        String
   description String      @db.Text
-  stock       Int
-  price       Float
+  stock       Int         @default(0)
+  price       Float       @default(0)
   acqPrice    Float?      @default(0)
   isFeatured  Boolean     @default(false)
   isArchived  Boolean     @default(false)
@@ -168,6 +168,11 @@ model Product {
   @@index([colorId])
   @@index([designId])
   @@index([supplierId])
+  @@index([storeId, isArchived, isFeatured])
+  @@index([storeId, categoryId, isArchived])
+  @@index([storeId, createdAt, isArchived])
+  @@index([storeId, price, isArchived])
+  @@index([storeId, stock, isArchived])
   @@fulltext([name])
   @@fulltext([name, description])
 }
@@ -229,6 +234,10 @@ model Order {
   @@index([guestId, storeId])
   @@index([createdAt])
   @@index([status, createdAt])
+  @@index([storeId, status, createdAt])
+  @@index([storeId, userId, status])
+  @@index([storeId, total, status])
+  @@index([storeId, createdAt, total])
 }
 
 model OrderItem {
@@ -237,7 +246,7 @@ model OrderItem {
   productId String
   quantity  Int
   order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product   Product @relation(fields: [productId], references: [id])
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
 
   @@index([orderId])
   @@index([productId])
@@ -345,6 +354,7 @@ model Coupon {
   @@index([startDate, endDate])
   @@index([usedCount, maxUses])
   @@index([storeId, isActive, startDate, endDate])
+  @@index([storeId, isActive, startDate, endDate, usedCount])
 }
 
 enum DiscountType {
