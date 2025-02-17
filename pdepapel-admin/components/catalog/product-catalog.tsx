@@ -513,10 +513,13 @@ export const ProductCatalog = ({ products, store }: CatalogProps) => {
   );
 
   // Calculate total pages
-  let totalPages = 2; // Cover and contact pages
-  Object.values(productsByCategory).forEach((categoryProducts) => {
-    totalPages += Math.ceil(categoryProducts.length / PRODUCTS_PER_PAGE);
-  });
+  const totalPages =
+    2 +
+    Object.values(productsByCategory).reduce((acc, categoryProducts) => {
+      return acc + Math.ceil(categoryProducts.length / PRODUCTS_PER_PAGE);
+    }, 0);
+
+  let currentPage = 3;
 
   return (
     <Document>
@@ -528,13 +531,7 @@ export const ProductCatalog = ({ products, store }: CatalogProps) => {
           const productChunks = chunkArray(categoryProducts, PRODUCTS_PER_PAGE);
 
           return productChunks.map((chunk, index) => {
-            const pageNumber =
-              3 + // Cover (1) + Contact (1) + Starting from 1
-              Object.entries(productsByCategory).findIndex(
-                ([cat]) => cat === category,
-              ) *
-                Math.ceil(categoryProducts.length / PRODUCTS_PER_PAGE) +
-              index;
+            const pageNumber = currentPage++;
 
             return (
               <ProductsPage
