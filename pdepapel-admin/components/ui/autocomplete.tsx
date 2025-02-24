@@ -2,6 +2,7 @@
 
 import { Command as CommandPrimitive } from "cmdk";
 import { Check } from "lucide-react";
+import Image from "next/image";
 import { useCallback, useRef, useState, type KeyboardEvent } from "react";
 
 import {
@@ -17,6 +18,7 @@ export type Option = {
   value: string;
   label: string;
   price: number;
+  image?: string;
 } & { [key: string]: string | number | undefined };
 
 type AutoCompleteProps = {
@@ -155,6 +157,16 @@ export const AutoComplete = ({
                       >
                         <div className="flex items-center gap-2">
                           {isSelected && <Check className="w-4" />}
+                          {option.image && (
+                            <Image
+                              src={option.image}
+                              alt={option.value}
+                              width={36}
+                              height={36}
+                              className="rounded-md"
+                              unoptimized
+                            />
+                          )}
                           {option.label}
                         </div>
                         {option.price && (

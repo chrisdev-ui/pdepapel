@@ -29,6 +29,16 @@ export async function getOrder(orderId: string, storeId: string) {
       id: true,
       name: true,
       price: true,
+      images: {
+        select: {
+          url: true,
+          isMain: true,
+        },
+        orderBy: {
+          isMain: "desc",
+        },
+        take: 1,
+      },
     },
     orderBy: {
       name: "asc",
@@ -41,6 +51,7 @@ export async function getOrder(orderId: string, storeId: string) {
       value: product.id,
       label: product.name,
       price: product.price,
+      image: product.images[0]?.url || "",
     })),
   };
 }

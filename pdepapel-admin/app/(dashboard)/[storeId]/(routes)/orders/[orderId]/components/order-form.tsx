@@ -7,6 +7,7 @@ import {
   PaymentMethod,
   ShippingStatus,
 } from "@prisma/client";
+import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import z from "zod";
@@ -73,7 +74,6 @@ import {
   ChevronsUpDown,
   DollarSign,
   Percent,
-  ShoppingBasket,
   Ticket,
   Trash,
 } from "lucide-react";
@@ -422,23 +422,36 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             {productsSelected.length > 0 &&
               productsSelected.map((product, index) => (
                 <Alert key={product.value} className="max-w-xs">
-                  <ShoppingBasket className="h-4 w-4" />
-                  <AlertTitle>{product.label}</AlertTitle>
-                  <AlertDescription>
-                    {currencyFormatter.format(product.price || 0)} x{" "}
-                    <Input
-                      type="number"
-                      min={1}
-                      defaultValue={quantities[product.value] || 1}
-                      onChange={(event) => {
-                        const newQuantity = Number(event.target.value);
-                        setQuantity((prev) => ({
-                          ...prev,
-                          [product.value]: newQuantity,
-                        }));
-                      }}
-                    />
-                  </AlertDescription>
+                  <div className="flex items-start gap-2">
+                    {product.image && (
+                      <Image
+                        src={product.image}
+                        alt={product.value}
+                        width={40}
+                        height={40}
+                        className="rounded-md"
+                        unoptimized
+                      />
+                    )}
+                    <div className="flex flex-col gap-2">
+                      <AlertTitle>{product.label}</AlertTitle>
+                      <AlertDescription>
+                        {currencyFormatter.format(product.price || 0)} x{" "}
+                        <Input
+                          type="number"
+                          min={1}
+                          defaultValue={quantities[product.value] || 1}
+                          onChange={(event) => {
+                            const newQuantity = Number(event.target.value);
+                            setQuantity((prev) => ({
+                              ...prev,
+                              [product.value]: newQuantity,
+                            }));
+                          }}
+                        />
+                      </AlertDescription>
+                    </div>
+                  </div>
                 </Alert>
               ))}
           </div>
@@ -488,7 +501,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                           quantity: quantities[option.value] || 1,
                         }));
                         field.onChange(orderItems);
-                        setProductsSelected(selectedOptions);
+                        setProductsSelected(selectedOptions as ProductOption[]);
                       }}
                       values={
                         field.value.map((item) => ({
