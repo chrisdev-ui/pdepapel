@@ -3,8 +3,10 @@
 import { Button } from "@/components/ui/button";
 import { Currency } from "@/components/ui/currency";
 import { useCart } from "@/hooks/use-cart";
+import { calculateTotals } from "@/lib/utils";
 import { CreditCard } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useMemo } from "react";
 
 export const Summary: React.FC<{}> = () => {
   const router = useRouter();
@@ -14,10 +16,7 @@ export const Summary: React.FC<{}> = () => {
     router.push("/checkout");
   };
 
-  const totalPrice = items.reduce(
-    (total, item) => total + Number(item.price) * Number(item.quantity ?? 1),
-    0,
-  );
+  const { total } = useMemo(() => calculateTotals(items, null), [items]);
 
   return (
     <div className="mt-16 rounded-lg bg-blue-baby/20 px-4 py-6 sm:p-6 lg:col-span-5 lg:mt-0 lg:p-8">
@@ -25,7 +24,7 @@ export const Summary: React.FC<{}> = () => {
       <div className="mt-6 space-y-4">
         <div className="flex items-center justify-between border-t border-gray-200 pt-4">
           <div className="text-2xl font-medium">Total</div>
-          <Currency value={totalPrice} />
+          <Currency value={total} />
         </div>
       </div>
       <Button

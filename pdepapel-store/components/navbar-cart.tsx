@@ -2,7 +2,7 @@
 
 import { CreditCard, ShoppingBag, ShoppingCart, X } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { CldImage } from "@/components/ui/CldImage";
@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/sheet";
 import { KAWAII_FACE_SAD } from "@/constants";
 import { useCart } from "@/hooks/use-cart";
-import { cn } from "@/lib/utils";
+import { calculateTotals, cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 
 interface NavbarCartProps {
@@ -29,6 +29,11 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
+
+  const { total } = useMemo(
+    () => calculateTotals(cart.items, null),
+    [cart.items],
+  );
 
   useEffect(() => {
     setIsMounted(true);
@@ -54,11 +59,6 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
 
   const totalQuantity = cart.items.reduce(
     (total, item) => total + Number(item.quantity ?? 1),
-    0,
-  );
-
-  const totalPrice = cart.items.reduce(
-    (total, item) => total + Number(item.price) * Number(item.quantity ?? 1),
     0,
   );
 
@@ -147,7 +147,7 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
         <SheetFooter className="grid w-full grid-cols-1 grid-rows-2 gap-6 border-t border-blue-purple p-6 sm:space-x-0">
           <div className="flex w-full items-center justify-between text-2xl">
             <span>Subtotal</span>
-            <Currency value={totalPrice} />
+            <Currency value={total} />
           </div>
           <div className="flex w-full flex-col gap-3 lg:flex-row">
             <Button
