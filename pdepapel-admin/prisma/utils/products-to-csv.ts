@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { createObjectCsvWriter } from "csv-writer";
+import path from "path";
 
 const prismadb = new PrismaClient();
 
@@ -20,7 +21,7 @@ function generateUniqueName(baseName = "file") {
   return `${baseName}_${dateString}`;
 }
 
-async function exportProdcutsToCSV() {
+async function exportProductsToCSV() {
   try {
     console.log("Fetching products from the database...");
     const products = await prismadb.product.findMany({
@@ -32,12 +33,24 @@ async function exportProdcutsToCSV() {
         design: true,
         images: true,
       },
+      orderBy: {
+        name: "asc",
+      },
     });
+
+    if (products.length === 0) {
+      console.log("No products found in the database.");
+      return;
+    }
 
     console.log(`Found ${products.length} products. Preparing CSV data...`);
 
+    const filePath = path.resolve(
+      `${generateUniqueName("products_export")}.csv`,
+    );
+
     const csvWriter = createObjectCsvWriter({
-      path: `${generateUniqueName("products_export")}.csv`,
+      path: filePath,
       header: [
         { id: "id", title: "ID" },
         { id: "name", title: "Nombre" },
@@ -69,10 +82,10 @@ async function exportProdcutsToCSV() {
       isFeatured: product.isFeatured ? "Sí" : "No",
       isArchived: product.isArchived ? "Sí" : "No",
       sku: product.sku,
-      categoryName: product.category.name,
-      sizeName: product.size.name,
-      colorName: product.color.name,
-      designName: product.design.name,
+      categoryName: product.category?.name || "N/A",
+      sizeName: product.size?.name || "N/A",
+      colorName: product.color?.name || "N/A",
+      designName: product.design?.name || "N/A",
       images: product.images.map((img) => img.url).join(", "),
       createdAt: product.createdAt.toISOString(),
       updatedAt: product.updatedAt.toISOString(),
@@ -81,12 +94,16 @@ async function exportProdcutsToCSV() {
     console.log("Writing CSV data to file...");
     await csvWriter.writeRecords(records);
 
-    console.log("CSV file has been created successfully!");
+    console.log(`CSV file has been created successfully at: ${filePath}`);
   } catch (error) {
-    console.error("Error exporting products to CSV:", error);
+    if (error instanceof Error) {
+      console.error("Error exporting products to CSV:", error.message);
+    } else {
+      console.error("Error exporting products to CSV:", error);
+    }
   } finally {
     await prismadb.$disconnect();
   }
 }
 
-exportProdcutsToCSV();
+exportProductsToCSV();
