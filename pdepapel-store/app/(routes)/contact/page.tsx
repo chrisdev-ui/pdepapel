@@ -76,12 +76,12 @@ export default function ContactPage() {
                   <span className="font-serif font-medium text-green-500">
                     Whatsapp:
                   </span>
-                  <span>(+57) 321 629 9845</span>
+                  <span>(+57) 313 258 2293</span>
                 </div>
                 <div className="flex flex-1 items-center justify-start gap-x-5">
                   <PhoneCall className="h-10 w-10" />
                   <span className="font-serif font-medium">Teléfono:</span>
-                  <span>(+57) 321 629 9845</span>
+                  <span>(+57) 313 258 2293</span>
                   <span className="text-xs">
                     Aceptamos órdenes por medio telefónico
                   </span>

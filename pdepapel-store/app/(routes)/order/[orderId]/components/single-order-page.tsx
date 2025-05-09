@@ -433,7 +433,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                       *** Recuerda que si pagas por transferencia bancaria debes
                       enviar un mensaje al número de WhatsApp
                       <Icons.whatsapp className="mx-1 inline-flex h-3 w-3 text-green-600" />
-                      <strong className="font-serif">321-629-9845</strong> con
+                      <strong className="font-serif">313-258-2293</strong> con
                       el comprobante de pago del depósito hecho a la cuenta
                       Bancolombia
                       <Icons.payments.bancolombia className="mx-1 inline-flex h-3 w-3" />

@@ -21,7 +21,7 @@ export const metadata: Metadata = {
     template: "%s | Papelería P de Papel",
   },
   description:
-    "Descubre en Papelería P de Papel una encantadora selección de artículos kawaii y todo lo necesario para tu oficina o estudio. Cuadernos, accesorios, y más con un toque único. ¡Explora y embellece tu espacio de trabajo y estudio! - Contáctanos 3216299845",
+    "Descubre en Papelería P de Papel una encantadora selección de artículos kawaii y todo lo necesario para tu oficina o estudio. Cuadernos, accesorios, y más con un toque único. ¡Explora y embellece tu espacio de trabajo y estudio! - Contáctanos 3132582293",
   applicationName: "Papelería P de Papel",
   keywords: [
     "Papelería kawaii",
@@ -66,7 +66,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Papelería P de Papel",
     description:
-      "Descubre en Papelería P de Papel una encantadora selección de artículos kawaii y todo lo necesario para tu oficina o estudio. Cuadernos, accesorios, y más con un toque único. ¡Explora y embellece tu espacio de trabajo y estudio! - Contáctanos 3216299845",
+      "Descubre en Papelería P de Papel una encantadora selección de artículos kawaii y todo lo necesario para tu oficina o estudio. Cuadernos, accesorios, y más con un toque único. ¡Explora y embellece tu espacio de trabajo y estudio! - Contáctanos 3132582293",
     url: "https://papeleriapdepapel.com",
     siteName: "Papelería P de Papel",
     type: "website",
@@ -75,7 +75,7 @@ export const metadata: Metadata = {
   twitter: {
     title: "Papelería P de Papel",
     description:
-      "Descubre en Papelería P de Papel una encantadora selección de artículos kawaii y todo lo necesario para tu oficina o estudio. Cuadernos, accesorios, y más con un toque único. ¡Explora y embellece tu espacio de trabajo y estudio! - Contáctanos 3216299845",
+      "Descubre en Papelería P de Papel una encantadora selección de artículos kawaii y todo lo necesario para tu oficina o estudio. Cuadernos, accesorios, y más con un toque único. ¡Explora y embellece tu espacio de trabajo y estudio! - Contáctanos 3132582293",
     card: "summary_large_image",
     site: "Papelería P de Papel",
   },

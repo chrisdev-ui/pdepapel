@@ -324,7 +324,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                         <Input
                           className="bg-blue-purple/20 invalid:bg-pink-froly/20"
                           disabled={status === "pending"}
-                          placeholder="ex: 321 629 9845"
+                          placeholder="3132582293"
                           {...field}
                         />
                       </FormControl>
@@ -555,7 +555,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                           Envíanos una imagen de la transferencia al siguiente
                           número
                           <Icons.whatsapp className="mx-1 inline-flex h-3 w-3 text-green-600" />
-                          <strong>321-629-9845</strong>
+                          <strong>313-258-2293</strong>
                         </p>
                       </li>
                     </ol>

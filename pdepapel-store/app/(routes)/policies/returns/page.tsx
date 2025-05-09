@@ -53,7 +53,7 @@ export default function ReturnsPolicyPage() {
             <li>
               Para iniciar el proceso, contáctanos al teléfono{" "}
               <Phone className="inline-flex h-4 w-4" />
-              (+57) 321 629 9845 o envía un correo electrónico a{" "}
+              (+57) 313 258 2293 o envía un correo electrónico a{" "}
               <Mail className="inline-flex h-4 w-4" />{" "}
               papeleria.pdepapel@gmail.com.
             </li>
@@ -120,7 +120,7 @@ export default function ReturnsPolicyPage() {
               Si tienes alguna pregunta o inquietud, no dudes en comunicarte con
               nosotros al whatsapp{" "}
               <Icons.whatsapp className="inline-flex h-4 w-4 text-green-500" />{" "}
-              (+57) 321 629 9845 o al correo electrónico{" "}
+              (+57) 313 258 2293 o al correo electrónico{" "}
               <Mail className="inline-flex h-4 w-4 text-pink-froly" />{" "}
               papeleria.pdepapel@gmail.com
             </li>
