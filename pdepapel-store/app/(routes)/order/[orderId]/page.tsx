@@ -23,6 +23,10 @@ export async function generateMetadata({
       alternates: {
         canonical: "/",
       },
+      robots: {
+        index: false,
+        follow: false,
+      },
     };
   }
   return {
@@ -31,6 +35,10 @@ export async function generateMetadata({
       "Consulta los detalles de tu orden en Papelería P de Papel. Aquí encontrarás toda la información sobre tus artículos kawaii y de oficina seleccionados, estado del pedido, y opciones de seguimiento. Comprometidos con una experiencia de compra transparente y eficiente.",
     alternates: {
       canonical: `/order/${params.orderId}`,
+    },
+    robots: {
+      index: false,
+      follow: false,
     },
   };
 }

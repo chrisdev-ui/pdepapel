@@ -5,7 +5,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: "/",
-      disallow: "/private/",
+      disallow: ["/order/", "/orders/"],
     },
     sitemap: "https://papeleriapdepapel.com/sitemap.xml",
   };
