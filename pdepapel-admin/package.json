@@ -13,6 +13,7 @@
     "postinstall": "prisma generate",
     "format:prettier": "prettier --write \"./**/*.{js,jsx,mjs,cjs,ts,tsx,json}\"",
     "export:products": "ts-node prisma/utils/products-to-csv.ts",
+    "export:products-merchant": "ts-node prisma/utils/products-to-google-merchant.ts",
     "update:orders": "ts-node prisma/scripts/update-orders-totals.ts"
   },
   "dependencies": {

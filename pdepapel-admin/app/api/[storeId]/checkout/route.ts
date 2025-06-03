@@ -7,6 +7,7 @@ import prismadb from "@/lib/prismadb";
 import { resend } from "@/lib/resend";
 import {
   calculateOrderTotals,
+  checkIfStoreOwner,
   currencyFormatter,
   generateOrderNumber,
   generatePayUPayment,
@@ -14,6 +15,7 @@ import {
   getClerkUserById,
   getLastOrderTimestamp,
 } from "@/lib/utils";
+import { auth, clerkClient } from "@clerk/nextjs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -29,8 +31,13 @@ export async function POST(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
+  const { userId: userLogged } = auth();
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
+
+    const isStoreOwner = userLogged
+      ? await checkIfStoreOwner(userLogged, params.storeId)
+      : false;
 
     const {
       fullName,
@@ -45,9 +52,6 @@ export async function POST(
       total,
     } = await req.json();
 
-    const authenticatedUserId = await getClerkUserById(userId);
-    if (!authenticatedUserId) throw ErrorFactory.Unauthenticated();
-
     if (!fullName)
       throw ErrorFactory.InvalidRequest("El nombre completo es obligatorio");
     if (!phone)
@@ -58,6 +62,25 @@ export async function POST(
       throw ErrorFactory.InvalidRequest(
         "La lista de productos en el pedido no puede estar vacía",
       );
+
+    let authenticatedUserId = userLogged;
+    if (userId) {
+      if (isStoreOwner) {
+        try {
+          await clerkClient.users.getUser(userId);
+          authenticatedUserId = userId;
+        } catch (error) {
+          throw ErrorFactory.NotFound("El usuario asignado no existe");
+        }
+      } else if (!userLogged) {
+        const user = await clerkClient.users.getUser(userId);
+        if (user) {
+          authenticatedUserId = user.id;
+        } else {
+          throw ErrorFactory.Unauthenticated();
+        }
+      }
+    }
 
     const lastOrderTimestamp = await getLastOrderTimestamp(
       authenticatedUserId,
