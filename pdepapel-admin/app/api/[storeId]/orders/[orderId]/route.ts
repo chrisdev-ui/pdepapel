@@ -456,6 +456,7 @@ export async function PATCH(
         include: {
           payment: true,
           shipping: true,
+          orderItems: true,
           coupon: true,
         },
       });

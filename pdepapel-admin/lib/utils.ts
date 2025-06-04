@@ -5,8 +5,11 @@ import {
   DiscountType,
   Order,
   OrderItem,
+  OrderStatus,
   PaymentDetails,
+  PaymentMethod,
   Product,
+  ShippingStatus,
 } from "@prisma/client";
 import { clsx, type ClassValue } from "clsx";
 import crypto from "crypto";
@@ -410,3 +413,43 @@ export const datePresets: Array<CustomDate> = [
     to: endOfMonth(addMonths(new Date(), 1)),
   },
 ];
+
+export function getReadableStatus(status: OrderStatus | ShippingStatus) {
+  switch (status) {
+    case OrderStatus.PENDING:
+      return "Pendiente de pago";
+    case OrderStatus.PAID:
+      return "Pago confirmado";
+    case OrderStatus.CANCELLED:
+      return "Cancelada";
+    case OrderStatus.CREATED:
+      return "Creada";
+    case ShippingStatus.Preparing:
+      return "Preparando envío";
+    case ShippingStatus.Shipped:
+      return "Enviado";
+    case ShippingStatus.InTransit:
+      return "En tránsito";
+    case ShippingStatus.Delivered:
+      return "Entregado";
+    case ShippingStatus.Returned:
+      return "Devuelto";
+    default:
+      return String(status);
+  }
+}
+
+export function getReadablePaymentMethod(method?: PaymentMethod | null) {
+  switch (method) {
+    case PaymentMethod.BankTransfer:
+      return "Transferencia Bancaria";
+    case PaymentMethod.COD:
+      return "Pago contra entrega";
+    case PaymentMethod.PayU:
+      return "PayU";
+    case PaymentMethod.Wompi:
+      return "Wompi";
+    default:
+      return "No especificado";
+  }
+}

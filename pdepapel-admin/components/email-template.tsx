@@ -1,5 +1,6 @@
 import { OrderStatus, ShippingStatus } from "@prisma/client";
 import { format } from "date-fns";
+import { es } from "date-fns/locale";
 
 /* eslint-disable @next/next/no-img-element */
 interface EmailTemplateProps {
@@ -11,6 +12,9 @@ interface EmailTemplateProps {
   trackingInfo?: string;
   address?: string;
   phone?: string;
+  orderSummary?: string;
+  orderLink?: string;
+  thanksParagraph?: string;
 }
 
 export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
@@ -22,6 +26,9 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
   trackingInfo,
   address,
   phone,
+  orderSummary,
+  orderLink,
+  thanksParagraph,
 }) => {
   const getStatusMessage = () => {
     switch (status) {
@@ -41,6 +48,10 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
         return isAdminEmail
           ? `Pedido #${orderNumber} entregado`
           : `¡Tu pedido #${orderNumber} ha sido entregado!`;
+      case OrderStatus.CANCELLED:
+        return isAdminEmail
+          ? `Pedido #${orderNumber} cancelado`
+          : `Tu pedido #${orderNumber} ha sido cancelado`;
       default:
         return `Actualización de pedido #${orderNumber}`;
     }
@@ -111,6 +122,10 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
                   <strong>Número de pedido:</strong> #{orderNumber}
                 </div>
 
+                {thanksParagraph && !isAdminEmail && (
+                  <div style={{ marginTop: "20px" }}>{thanksParagraph}</div>
+                )}
+
                 {isAdminEmail && (
                   <>
                     <div style={{ marginTop: "15px" }}>
@@ -125,6 +140,26 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
                   </>
                 )}
 
+                {orderSummary && (
+                  <div style={{ marginTop: "20px" }}>
+                    <strong>Resumen de tu pedido:</strong>
+                    <pre style={{ fontFamily: "inherit", fontSize: "14px" }}>
+                      {orderSummary}
+                    </pre>
+                  </div>
+                )}
+
+                {orderLink && !isAdminEmail && (
+                  <div style={{ marginTop: "20px" }}>
+                    <a
+                      href={orderLink}
+                      style={{ color: "#0066cc", textDecoration: "underline" }}
+                    >
+                      Ver o modificar mi pedido
+                    </a>
+                  </div>
+                )}
+
                 {paymentMethod && (
                   <div style={{ marginTop: "10px" }}>
                     <strong>Método de pago:</strong> {paymentMethod}
@@ -133,7 +168,16 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
 
                 {trackingInfo && (
                   <div style={{ marginTop: "10px" }}>
-                    <strong>Información de seguimiento:</strong> {trackingInfo}
+                    <strong>Guía de envío:</strong> {trackingInfo}
+                    <br />
+                    <a
+                      href={`https://interrapidisimo.com/sigue-tu-envio/?codigo=${trackingInfo}`}
+                      style={{ color: "#0066cc", textDecoration: "underline" }}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Consultar estado del envío en Interrapidísimo
+                    </a>
                   </div>
                 )}
 
@@ -164,7 +208,10 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
                   )}
 
                 <div style={{ marginTop: "20px" }}>
-                  <strong>Fecha:</strong> {format(new Date(), "dd/MM/yyyy")}
+                  <strong>Fecha:</strong>{" "}
+                  {format(new Date(), "dd 'de' MMMM 'de' yyyy", {
+                    locale: es,
+                  })}
                 </div>
 
                 <div style={{ marginTop: "20px" }}>

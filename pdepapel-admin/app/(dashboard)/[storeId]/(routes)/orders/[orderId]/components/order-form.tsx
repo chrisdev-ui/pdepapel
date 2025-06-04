@@ -109,6 +109,10 @@ const formSchema = z.object({
   userId: z.string().default(""),
   guestId: z.string().default(""),
   fullName: z.string().min(1, "Debes agregar un nombre"),
+  email: z
+    .string()
+    .email("Debes agregar un correo electrónico válido")
+    .optional(),
   phone: z
     .string()
     .min(10, "El número telefónico debe tener 10 dígitos")
@@ -215,6 +219,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           userId: initialData.userId || "",
           guestId: initialData.guestId || "",
           documentId: initialData.documentId || "",
+          email: initialData.email || "",
           subtotal: initialData.subtotal || 0,
           total: initialData.total || 0,
           discount: {
@@ -244,6 +249,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           fullName: "",
           orderItems: [],
           phone: "",
+          email: "",
           address: "",
           documentId: "",
           status: OrderStatus.CREATED,
@@ -589,6 +595,23 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                     <Input
                       disabled={loading}
                       placeholder="Documento de identidad"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Correo electrónico</FormLabel>
+                  <FormControl>
+                    <Input
+                      disabled={loading}
+                      placeholder="Correo electrónico"
                       {...field}
                     />
                   </FormControl>
