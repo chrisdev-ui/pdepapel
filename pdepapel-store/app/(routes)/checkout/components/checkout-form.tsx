@@ -53,6 +53,7 @@ type CheckoutFormUser = {
 const formSchema = z.object({
   firstName: z.string().min(1, "Por favor, escribe tu nombre").max(20),
   lastName: z.string().min(1, "Por favor, escribe tu apellido").max(20),
+  email: z.string().email("Por favor, escribe un correo válido").optional(),
   telephone: z.string().min(10, "Por favor, escribe tu teléfono").max(14),
   address1: z.string().min(1, "Por favor, escribe tu dirección").max(50),
   address2: z.string().max(50).optional(),
@@ -203,6 +204,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
       address2,
       city,
       state,
+      email,
       documentId,
     } = data;
     const isUserLoggedIn = Boolean(userId);
@@ -214,6 +216,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
     const formattedData = {
       fullName: `${firstName} ${lastName}`,
       phone: telephone,
+      email,
       address: [address1, address2, city, state]
         .filter((a) => a !== null)
         .join(", "),
@@ -306,6 +309,25 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
                           className="bg-blue-purple/20 invalid:bg-pink-froly/20"
                           disabled={status === "pending"}
                           placeholder="CC, DNI, Pasaporte, etc."
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>Este campo es opcional</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Correo electrónico</FormLabel>
+                      <FormControl>
+                        <Input
+                          className="bg-blue-purple/20 invalid:bg-pink-froly/20"
+                          disabled={status === "pending"}
+                          placeholder="ejemplo@correo.com"
                           {...field}
                         />
                       </FormControl>

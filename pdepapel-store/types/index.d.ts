@@ -190,6 +190,7 @@ export interface CheckoutOrder {
   fullName: string;
   phone: string;
   address: string;
+  email: string | null | undefined;
   userId: string | null | undefined;
   guestId: string | null;
   couponCode: string | null;
