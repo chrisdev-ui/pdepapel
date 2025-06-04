@@ -79,6 +79,7 @@ export async function PATCH(
       status,
       payment,
       shipping,
+      email,
       userId: requestUserId,
       guestId,
       documentId,
@@ -193,6 +194,7 @@ export async function PATCH(
             userId: verifiedUserId,
             guestId: verifiedUserId ? null : guestId,
             documentId,
+            email,
             payment: payment && {
               upsert: {
                 create: {

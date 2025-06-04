@@ -216,6 +216,7 @@ export async function POST(
           status: OrderStatus.PENDING,
           fullName,
           phone,
+          email,
           address,
           subtotal: totals.subtotal,
           total: totals.total,

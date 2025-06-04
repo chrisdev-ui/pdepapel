@@ -267,6 +267,7 @@ export async function POST(
         fullName,
         phone,
         address,
+        email,
         documentId,
         subtotal: totals.subtotal,
         discount: totals.discount,
