@@ -1,4 +1,5 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
 import {
   CheckoutOrder,
@@ -38,6 +39,7 @@ export async function POST(
           },
         },
         payment: true,
+        shipping: true,
         coupon: {
           select: {
             id: true,
@@ -69,6 +71,17 @@ export async function POST(
         outOfStock.quantity,
       );
     }
+
+    // Send email notification (admin + customer)
+    await sendOrderEmail(
+      {
+        ...order,
+        email: order.email,
+        payment: order.payment?.method ?? undefined,
+        shipping: order.shipping ?? undefined,
+      },
+      OrderStatus.PENDING,
+    );
 
     if (order.payment?.method === PaymentMethod.PayU) {
       const payUData = generatePayUPayment(order);

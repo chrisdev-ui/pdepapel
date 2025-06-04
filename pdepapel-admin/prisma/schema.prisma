@@ -204,6 +204,7 @@ model Image {
 model Order {
   id          String          @id @default(uuid())
   storeId     String
+  email       String?         @default("")
   phone       String          @default("")
   address     String          @default("")
   createdAt   DateTime        @default(now())

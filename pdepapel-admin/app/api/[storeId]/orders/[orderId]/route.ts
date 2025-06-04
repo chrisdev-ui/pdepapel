@@ -1,4 +1,5 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
 import {
   calculateOrderTotals,
@@ -175,6 +176,10 @@ export async function PATCH(
         throw ErrorFactory.NotFound("El usuario asignado no existe");
       }
     }
+
+    // Store original status before update
+    const originalStatus = order.status;
+    const originalShippingStatus = order.shipping?.status;
 
     const updatedOrder = await prismadb.$transaction(async (tx) => {
       if (wasPaid && isNowPaid) {
@@ -441,6 +446,55 @@ export async function PATCH(
       return updated;
     });
 
+    // Send email notifications for status changes
+    if (status && updatedOrder.status !== originalStatus) {
+      // Fetch full order details with relations
+      const fullOrder = await prismadb.order.findUnique({
+        where: { id: params.orderId },
+        include: {
+          payment: true,
+          shipping: true,
+          coupon: true,
+        },
+      });
+
+      if (fullOrder) {
+        await sendOrderEmail(
+          {
+            ...fullOrder,
+            payment: fullOrder.payment?.method ?? null,
+          },
+          updatedOrder.status,
+        );
+      }
+    }
+
+    // Send email for shipping status changes
+    if (
+      shipping?.status &&
+      updatedOrder.shipping?.status !== originalShippingStatus
+    ) {
+      // Fetch full order details with relations
+      const fullOrder = await prismadb.order.findUnique({
+        where: { id: params.orderId },
+        include: {
+          payment: true,
+          shipping: true,
+          coupon: true,
+        },
+      });
+
+      if (fullOrder) {
+        await sendOrderEmail(
+          {
+            ...fullOrder,
+            payment: fullOrder.payment?.method ?? null,
+          },
+          fullOrder.shipping?.status as ShippingStatus,
+        );
+      }
+    }
+
     return NextResponse.json(updatedOrder);
   } catch (error) {
     return handleErrorResponse(error, "ORDER_PATCH");
@@ -514,6 +568,29 @@ export async function DELETE(
 
       return deletedOrder;
     });
+
+    // Send cancellation email
+    if (order.status !== OrderStatus.CANCELLED) {
+      // Fetch full order details with relations
+      const fullOrder = await prismadb.order.findUnique({
+        where: { id: params.orderId },
+        include: {
+          payment: true,
+          shipping: true,
+          coupon: true,
+        },
+      });
+
+      if (fullOrder) {
+        await sendOrderEmail(
+          {
+            ...fullOrder,
+            payment: fullOrder.payment?.method ?? null,
+          },
+          OrderStatus.CANCELLED,
+        );
+      }
+    }
 
     return NextResponse.json(order);
   } catch (error) {

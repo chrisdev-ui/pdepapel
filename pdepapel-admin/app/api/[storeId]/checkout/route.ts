@@ -16,6 +16,7 @@ import {
   getLastOrderTimestamp,
 } from "@/lib/utils";
 import { auth, clerkClient } from "@clerk/nextjs";
+import { sendOrderEmail } from "@/lib/email";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,7 +32,7 @@ export async function POST(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
-  const { userId: userLogged } = auth();
+  const { userId: userLogged, user } = auth();
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
@@ -43,6 +44,7 @@ export async function POST(
       fullName,
       phone,
       address,
+      email,
       orderItems,
       userId,
       guestId,
@@ -238,18 +240,15 @@ export async function POST(
       }),
     ]);
 
-    await resend.emails.send({
-      from: "Orders <admin@papeleriapdepapel.com>",
-      to: ["web.christian.dev@gmail.com", "papeleria.pdepapel@gmail.com"],
-      subject: `Nueva orden de compra - ${fullName}`,
-      react: EmailTemplate({
-        name: fullName,
-        phone,
-        address,
-        orderNumber,
-        paymentMethod: payment.method,
-      }) as React.ReactElement,
-    });
+    // Send email to admin and customer
+    await sendOrderEmail(
+      {
+        ...order,
+        email: email ?? user?.emailAddresses[0]?.emailAddress,
+        payment: payment.method,
+      },
+      OrderStatus.PENDING,
+    );
 
     if (payment.method === PaymentMethod.PayU) {
       const payUData = generatePayUPayment(order);

@@ -1,6 +1,7 @@
 import { EmailTemplate } from "@/components/email-template";
 import { ALLOWED_TRANSITIONS, shippingOptions } from "@/constants";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
 import { resend } from "@/lib/resend";
 import {
@@ -28,6 +29,7 @@ type OrderData = {
   orderNumber: string;
   fullName: string;
   phone: string;
+  email?: string;
   address: string;
   documentId?: string | null;
   subtotal: number;
@@ -75,6 +77,7 @@ export async function POST(
       status,
       payment,
       shipping,
+      email,
       userId,
       guestId,
       documentId,
@@ -330,18 +333,24 @@ export async function POST(
 
     // Send email notification outside the transaction
     if (!isStoreOwner) {
-      await resend.emails.send({
-        from: "Orders <admin@papeleriapdepapel.com>",
-        to: ["web.christian.dev@gmail.com", "papeleria.pdepapel@gmail.com"],
-        subject: `Nueva orden de compra - ${fullName}`,
-        react: EmailTemplate({
-          name: fullName,
-          phone,
-          address,
-          orderNumber: order.orderNumber,
-          paymentMethod: "Transferencia bancaria o contra entrega",
-        }) as React.ReactElement,
+      const orderWithDetails = await prismadb.order.findUnique({
+        where: { id: order.id },
+        include: {
+          payment: true,
+          shipping: true,
+        },
       });
+
+      if (orderWithDetails) {
+        await sendOrderEmail(
+          {
+            ...orderWithDetails,
+            email: email || "",
+            payment: orderWithDetails.payment?.method ?? null,
+          },
+          status || OrderStatus.PENDING,
+        );
+      }
     }
 
     return NextResponse.json(order, { headers: corsHeaders });
@@ -653,6 +662,31 @@ export async function PATCH(
 
       return updatedOrders;
     });
+
+    // Send email notifications for status changes
+    for (const order of result) {
+      if (status) {
+        await sendOrderEmail(
+          {
+            ...order,
+            email: order.email || "",
+            payment: order.payment?.method ?? null,
+          },
+          status,
+        );
+      }
+
+      if (shipping) {
+        await sendOrderEmail(
+          {
+            ...order,
+            email: order.email || "",
+            payment: order.payment?.method ?? null,
+          },
+          shipping,
+        );
+      }
+    }
 
     return NextResponse.json(result);
   } catch (error) {

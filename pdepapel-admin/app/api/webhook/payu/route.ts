@@ -1,3 +1,4 @@
+import { sendOrderEmail } from "@/lib/email";
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
 import { formatPayUValue, generatePayUSignature } from "@/lib/utils";
@@ -270,6 +271,28 @@ async function updateOrderData({
         },
       },
     });
+
+    // Fetch updated order with relations needed for the email
+    const updatedOrder = await prismadb.order.findUnique({
+      where: { id: order.id },
+      include: {
+        payment: true,
+        shipping: true,
+      },
+    });
+
+    // Send email notification (admin + customer)
+    if (updatedOrder) {
+      await sendOrderEmail(
+        {
+          ...updatedOrder,
+          email: updatedOrder.email,
+          payment: updatedOrder.payment?.method ?? undefined,
+          shipping: updatedOrder.shipping ?? undefined,
+        },
+        currentStatus,
+      );
+    }
     return NextResponse.json(null, { status: 200 });
   } catch (error: any) {
     return NextResponse.json(
