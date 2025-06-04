@@ -472,6 +472,9 @@ export async function PATCH(
             payment: fullOrder.payment?.method ?? null,
           },
           updatedOrder.status,
+          {
+            notifyAdmin: false,
+          },
         );
       }
     }
@@ -487,6 +490,11 @@ export async function PATCH(
         include: {
           payment: true,
           shipping: true,
+          orderItems: {
+            include: {
+              product: true,
+            },
+          },
           coupon: true,
         },
       });
@@ -498,6 +506,9 @@ export async function PATCH(
             payment: fullOrder.payment?.method ?? null,
           },
           fullOrder.shipping?.status as ShippingStatus,
+          {
+            notifyAdmin: false,
+          },
         );
       }
     }
@@ -600,6 +611,9 @@ export async function DELETE(
             payment: fullOrder.payment?.method ?? null,
           },
           OrderStatus.CANCELLED,
+          {
+            notifyAdmin: false,
+          },
         );
       }
     }

@@ -76,9 +76,7 @@ export async function POST(
     await sendOrderEmail(
       {
         ...order,
-        email: order.email,
         payment: order.payment?.method ?? undefined,
-        shipping: order.shipping ?? undefined,
       },
       OrderStatus.PENDING,
     );

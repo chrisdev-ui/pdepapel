@@ -658,7 +658,11 @@ export async function PATCH(
             where: { id: order.id },
             data: updateData,
             include: {
-              orderItems: true,
+              orderItems: {
+                include: {
+                  product: true,
+                },
+              },
               shipping: true,
               payment: true,
             },
@@ -675,10 +679,12 @@ export async function PATCH(
         await sendOrderEmail(
           {
             ...order,
-            email: order.email || "",
             payment: order.payment?.method ?? null,
           },
           status,
+          {
+            notifyAdmin: false,
+          },
         );
       }
 
@@ -686,10 +692,12 @@ export async function PATCH(
         await sendOrderEmail(
           {
             ...order,
-            email: order.email || "",
             payment: order.payment?.method ?? null,
           },
           shipping,
+          {
+            notifyAdmin: false,
+          },
         );
       }
     }

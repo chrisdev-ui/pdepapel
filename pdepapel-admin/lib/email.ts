@@ -30,6 +30,7 @@ export const sendOrderEmail = async (
     orderItems?: any[];
   },
   status: OrderStatus | ShippingStatus,
+  options?: { notifyAdmin?: boolean },
 ) => {
   try {
     const readableStatus = getReadableStatus(status);
@@ -48,25 +49,27 @@ export const sendOrderEmail = async (
         : "Gracias por confiar en nosotros. Si tienes dudas, responde al correo papeleria.pdepapel@gmail.com o contáctanos por WhatsApp.";
 
     // Send to admin
-    await resend.emails.send({
-      from: "Papelería P de Papel <orders@papeleriapdepapel.com>",
-      to: ["web.christian.dev@gmail.com", "papeleria.pdepapel@gmail.com"],
-      subject: subjectAdmin,
-      react: EmailTemplate({
-        name: order.fullName,
-        orderNumber: order.orderNumber,
-        status,
-        isAdminEmail: true,
-        paymentMethod: readablePayment,
-        trackingInfo: order.shipping?.trackingCode ?? undefined,
-        address: order.address,
-        phone: order.phone,
-        orderSummary,
-        orderLink,
-        thanksParagraph,
-      }),
-      text: `Pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\n\n${orderSummary}\n\nVer detalles: ${orderLink}`,
-    });
+    if (options?.notifyAdmin !== false) {
+      await resend.emails.send({
+        from: "Papelería P de Papel <orders@papeleriapdepapel.com>",
+        to: ["web.christian.dev@gmail.com", "papeleria.pdepapel@gmail.com"],
+        subject: subjectAdmin,
+        react: EmailTemplate({
+          name: order.fullName,
+          orderNumber: order.orderNumber,
+          status,
+          isAdminEmail: true,
+          paymentMethod: readablePayment,
+          trackingInfo: order.shipping?.trackingCode ?? undefined,
+          address: order.address,
+          phone: order.phone,
+          orderSummary,
+          orderLink,
+          thanksParagraph,
+        }),
+        text: `Pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\n\n${orderSummary}\n\nVer detalles: ${orderLink}`,
+      });
+    }
 
     // Send to customer if email exists
     if (order.email) {
