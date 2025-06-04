@@ -541,6 +541,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                           form.setValue("fullName", user.label);
                           form.setValue("documentId", user.documentId ?? "");
                           form.setValue("phone", user.phone ?? "");
+                          form.setValue("email", user.documentId ?? "");
                         }
                       }}
                       disabled={loading}
