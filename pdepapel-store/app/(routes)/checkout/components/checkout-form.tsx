@@ -48,6 +48,7 @@ type CheckoutFormUser = {
   firstName?: string | null;
   lastName?: string | null;
   telephone?: string | null;
+  email?: string | null;
 };
 
 const formSchema = z.object({
@@ -98,6 +99,7 @@ export const CheckoutForm: React.FC<CheckoutFormProps> = ({ currentUser }) => {
       firstName: currentUser?.firstName ?? "",
       lastName: currentUser?.lastName ?? "",
       telephone: currentUser?.telephone ?? "",
+      email: currentUser?.email ?? "",
       documentId: "",
       address1: "",
       address2: "",

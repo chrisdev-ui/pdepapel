@@ -23,6 +23,7 @@ export default async function CheckoutPage() {
     firstName: user?.firstName,
     lastName: user?.lastName,
     telephone: user?.phoneNumbers[0]?.phoneNumber,
+    email: user?.emailAddresses[0]?.emailAddress,
   };
   return (
     <>
