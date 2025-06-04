@@ -456,7 +456,11 @@ export async function PATCH(
         include: {
           payment: true,
           shipping: true,
-          orderItems: true,
+          orderItems: {
+            include: {
+              product: true,
+            },
+          },
           coupon: true,
         },
       });
@@ -581,6 +585,11 @@ export async function DELETE(
           payment: true,
           shipping: true,
           coupon: true,
+          orderItems: {
+            include: {
+              product: true,
+            },
+          },
         },
       });
 

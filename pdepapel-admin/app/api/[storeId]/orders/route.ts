@@ -339,7 +339,11 @@ export async function POST(
         include: {
           payment: true,
           shipping: true,
-          orderItems: true,
+          orderItems: {
+            include: {
+              product: true,
+            },
+          },
         },
       });
 

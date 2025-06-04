@@ -264,6 +264,11 @@ async function updateOrderData(order: any, transaction: any) {
       include: {
         payment: true,
         shipping: true,
+        orderItems: {
+          include: {
+            product: true,
+          },
+        },
       },
     });
 
@@ -272,9 +277,7 @@ async function updateOrderData(order: any, transaction: any) {
       await sendOrderEmail(
         {
           ...updatedOrder,
-          email: updatedOrder.email,
           payment: updatedOrder.payment?.method ?? undefined,
-          shipping: updatedOrder.shipping ?? undefined,
         },
         currentStatus,
       );
