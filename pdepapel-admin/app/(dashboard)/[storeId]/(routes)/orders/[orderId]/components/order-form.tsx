@@ -112,7 +112,8 @@ const formSchema = z.object({
   email: z
     .string()
     .email("Debes agregar un correo electrónico válido")
-    .optional(),
+    .optional()
+    .or(z.literal("")),
   phone: z
     .string()
     .min(10, "El número telefónico debe tener 10 dígitos")
