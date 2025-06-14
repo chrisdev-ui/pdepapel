@@ -1,8 +1,15 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
-import { parseErrorDetails, verifyStoreOwner } from "@/lib/utils";
+import {
+  CACHE_HEADERS,
+  parseErrorDetails,
+  verifyStoreOwner,
+} from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
+
+// Enable Edge Runtime for faster response times
+export const runtime = "edge";
 
 export async function POST(
   req: Request,
@@ -42,9 +49,13 @@ export async function POST(
       },
     });
 
-    return NextResponse.json(supplier);
+    return NextResponse.json(supplier, {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "SUPPLIERS_POST");
+    return handleErrorResponse(error, "SUPPLIERS_POST", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   }
 }
 
@@ -62,9 +73,13 @@ export async function GET(
       },
     });
 
-    return NextResponse.json(suppliers);
+    return NextResponse.json(suppliers, {
+      headers: CACHE_HEADERS.STATIC,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "SUPPLIERS_GET");
+    return handleErrorResponse(error, "SUPPLIERS_GET", {
+      headers: CACHE_HEADERS.STATIC,
+    });
   }
 }
 
@@ -87,7 +102,7 @@ export async function DELETE(
 
     await verifyStoreOwner(userId, params.storeId);
 
-    const result = await prismadb.$transaction(async (tx) => {
+    await prismadb.$transaction(async (tx) => {
       const suppliers = await tx.supplier.findMany({
         where: {
           storeId: params.storeId,
@@ -131,7 +146,7 @@ export async function DELETE(
         );
       }
 
-      return await tx.supplier.deleteMany({
+      await tx.supplier.deleteMany({
         where: {
           storeId: params.storeId,
           id: {
@@ -141,8 +156,12 @@ export async function DELETE(
       });
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json("Los proveedores han sido eliminados", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "SUPPLIERS_DELETE");
+    return handleErrorResponse(error, "SUPPLIERS_DELETE", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   }
 }

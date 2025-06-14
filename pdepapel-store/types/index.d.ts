@@ -33,7 +33,7 @@ export interface Product {
 
 export interface Category {
   id: string;
-  type: Type;
+  typeId: string;
   name: string;
 }
 

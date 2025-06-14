@@ -1,8 +1,11 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
-import { verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
+
+// Enable Edge Runtime for faster response times
+export const runtime = "edge";
 
 export async function GET(
   _req: Request,
@@ -15,9 +18,16 @@ export async function GET(
 
     const category = await prismadb.category.findUnique({
       where: { id: params.categoryId, storeId: params.storeId },
+      select: {
+        id: true,
+        name: true,
+        typeId: true,
+      },
     });
 
-    return NextResponse.json(category);
+    return NextResponse.json(category, {
+      headers: CACHE_HEADERS.SEMI_STATIC,
+    });
   } catch (error) {
     return handleErrorResponse(error, "CATEGORY_GET");
   }
@@ -72,10 +82,17 @@ export async function PATCH(
           name,
           typeId,
         },
+        select: {
+          id: true,
+          name: true,
+          typeId: true,
+        },
       });
     });
 
-    return NextResponse.json(updatedCategory);
+    return NextResponse.json(updatedCategory, {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
     return handleErrorResponse(error, "CATEGORY_PATCH");
   }
@@ -94,7 +111,7 @@ export async function DELETE(
 
     await verifyStoreOwner(userId, params.storeId);
 
-    const deletedCategory = await prismadb.$transaction(async (tx) => {
+    await prismadb.$transaction(async (tx) => {
       const category = await tx.category.findUnique({
         where: { id: params.categoryId, storeId: params.storeId },
       });
@@ -120,12 +137,14 @@ export async function DELETE(
           },
         );
 
-      return await tx.category.delete({
+      await tx.category.delete({
         where: { id: params.categoryId, storeId: params.storeId },
       });
     });
 
-    return NextResponse.json(deletedCategory);
+    return NextResponse.json("Categoría eliminada correctamente", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
     return handleErrorResponse(error, "CATEGORY_DELETE");
   }

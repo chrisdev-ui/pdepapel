@@ -1,8 +1,15 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
-import { parseErrorDetails, verifyStoreOwner } from "@/lib/utils";
+import {
+  CACHE_HEADERS,
+  parseErrorDetails,
+  verifyStoreOwner,
+} from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
+
+// Enable Edge Runtime for faster response times
+export const runtime = "edge";
 
 export async function POST(
   req: Request,
@@ -28,9 +35,15 @@ export async function POST(
 
     const category = await prismadb.category.create({
       data: { name, typeId, storeId: params.storeId },
+      select: {
+        id: true,
+        name: true,
+      },
     });
 
-    return NextResponse.json(category);
+    return NextResponse.json(category, {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
     return handleErrorResponse(error, "CATEGORIES_POST");
   }
@@ -45,9 +58,16 @@ export async function GET(
 
     const categories = await prismadb.category.findMany({
       where: { storeId: params.storeId },
+      select: {
+        id: true,
+        name: true,
+        typeId: true,
+      },
     });
 
-    return NextResponse.json(categories);
+    return NextResponse.json(categories, {
+      headers: CACHE_HEADERS.SEMI_STATIC,
+    });
   } catch (error) {
     return handleErrorResponse(error, "CATEGORIES_GET");
   }
@@ -71,7 +91,7 @@ export async function DELETE(
         "Se requieren IDs de categorías en formato de arreglo",
       );
 
-    const deletedCategories = await prismadb.$transaction(async (tx) => {
+    await prismadb.$transaction(async (tx) => {
       const categories = await tx.category.findMany({
         where: {
           storeId: params.storeId,
@@ -114,7 +134,7 @@ export async function DELETE(
         );
       }
 
-      return await tx.category.deleteMany({
+      await tx.category.deleteMany({
         where: {
           storeId: params.storeId,
           id: {
@@ -124,7 +144,9 @@ export async function DELETE(
       });
     });
 
-    return NextResponse.json(deletedCategories);
+    return NextResponse.json("Categorías eliminadas correctamente", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
     return handleErrorResponse(error, "CATEGORIES_DELETE");
   }

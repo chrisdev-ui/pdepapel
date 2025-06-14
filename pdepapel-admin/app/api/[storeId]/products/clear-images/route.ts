@@ -1,7 +1,11 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import cloudinaryInstance from "@/lib/cloudinary";
 import prismadb from "@/lib/prismadb";
-import { getPublicIdFromCloudinaryUrl, verifyStoreOwner } from "@/lib/utils";
+import {
+  CACHE_HEADERS,
+  getPublicIdFromCloudinaryUrl,
+  verifyStoreOwner,
+} from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
@@ -92,8 +96,12 @@ export async function PATCH(
       };
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json(result, {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "PRODUCTS_CLEAR_IMAGES_PATCH");
+    return handleErrorResponse(error, "PRODUCTS_CLEAR_IMAGES_PATCH", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   }
 }

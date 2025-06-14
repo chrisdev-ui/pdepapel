@@ -1,9 +1,15 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import cloudinaryInstance from "@/lib/cloudinary";
 import prismadb from "@/lib/prismadb";
-import { getPublicIdFromCloudinaryUrl, verifyStoreOwner } from "@/lib/utils";
+import {
+  CACHE_HEADERS,
+  getPublicIdFromCloudinaryUrl,
+  verifyStoreOwner,
+} from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
+
+export const runtime = "edge";
 
 export async function GET(
   _req: Request,
@@ -16,9 +22,18 @@ export async function GET(
 
     const billboard = await prismadb.billboard.findUnique({
       where: { id: params.billboardId, storeId: params.storeId },
+      select: {
+        id: true,
+        label: true,
+        imageUrl: true,
+        title: true,
+        redirectUrl: true,
+      },
     });
 
-    return NextResponse.json(billboard);
+    return NextResponse.json(billboard, {
+      headers: CACHE_HEADERS.DYNAMIC,
+    });
   } catch (error) {
     return handleErrorResponse(error, "BILLBOARD_GET");
   }
@@ -83,10 +98,19 @@ export async function PATCH(
           title: title ?? "",
           redirectUrl: redirectUrl ?? "",
         },
+        select: {
+          id: true,
+          label: true,
+          imageUrl: true,
+          title: true,
+          redirectUrl: true,
+        },
       });
     });
 
-    return NextResponse.json(updatedBillboard);
+    return NextResponse.json(updatedBillboard, {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
     return handleErrorResponse(error, "BILLBOARD_PATCH");
   }
@@ -105,7 +129,7 @@ export async function DELETE(
 
     await verifyStoreOwner(userId, params.storeId);
 
-    const billboardToDelete = await prismadb.$transaction(async (tx) => {
+    await prismadb.$transaction(async (tx) => {
       const billboard = await tx.billboard.findUnique({
         where: { id: params.billboardId, storeId: params.storeId },
       });
@@ -130,12 +154,14 @@ export async function DELETE(
         }
       }
 
-      return await tx.billboard.delete({
+      await tx.billboard.delete({
         where: { id: params.billboardId },
       });
     });
 
-    return NextResponse.json(billboardToDelete);
+    return NextResponse.json("Publicación eliminada correctamente", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
     return handleErrorResponse(error, "BILLBOARD_DELETE");
   }

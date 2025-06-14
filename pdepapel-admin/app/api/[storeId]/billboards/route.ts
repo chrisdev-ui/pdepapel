@@ -1,9 +1,16 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import cloudinaryInstance from "@/lib/cloudinary";
 import prismadb from "@/lib/prismadb";
-import { getPublicIdFromCloudinaryUrl, verifyStoreOwner } from "@/lib/utils";
+import {
+  CACHE_HEADERS,
+  getPublicIdFromCloudinaryUrl,
+  verifyStoreOwner,
+} from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
+
+// Enable Edge Runtime for faster response times
+export const runtime = "edge";
 
 export async function POST(
   req: Request,
@@ -37,9 +44,18 @@ export async function POST(
         redirectUrl: redirectUrl ?? "",
         storeId: params.storeId,
       },
+      select: {
+        id: true,
+        label: true,
+        imageUrl: true,
+        title: true,
+        redirectUrl: true,
+      },
     });
 
-    return NextResponse.json(billboard);
+    return NextResponse.json(billboard, {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
     return handleErrorResponse(error, "BILLBOARDS_POST");
   }
@@ -54,9 +70,18 @@ export async function GET(
 
     const billboards = await prismadb.billboard.findMany({
       where: { storeId: params.storeId },
+      select: {
+        id: true,
+        label: true,
+        imageUrl: true,
+        title: true,
+        redirectUrl: true,
+      },
     });
 
-    return NextResponse.json(billboards);
+    return NextResponse.json(billboards, {
+      headers: CACHE_HEADERS.DYNAMIC,
+    });
   } catch (error) {
     return handleErrorResponse(error, "BILLBOARDS_GET");
   }
@@ -80,7 +105,7 @@ export async function DELETE(
       );
     }
 
-    const deletedBillboards = await prismadb.$transaction(async (tx) => {
+    await prismadb.$transaction(async (tx) => {
       const billboards = await tx.billboard.findMany({
         where: {
           storeId: params.storeId,
@@ -114,7 +139,7 @@ export async function DELETE(
         }
       }
 
-      const response = await tx.billboard.deleteMany({
+      await tx.billboard.deleteMany({
         where: {
           storeId: params.storeId,
           id: {
@@ -122,14 +147,11 @@ export async function DELETE(
           },
         },
       });
-
-      return {
-        deletedBillboards: response,
-        deletedImages: publicIds,
-      };
     });
 
-    return NextResponse.json(deletedBillboards);
+    return NextResponse.json("Publicaciones eliminadas correctamente", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
     return handleErrorResponse(error, "BILLBOARDS_DELETE");
   }

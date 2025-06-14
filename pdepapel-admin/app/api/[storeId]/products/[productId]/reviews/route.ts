@@ -1,5 +1,6 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
+import { CACHE_HEADERS } from "@/lib/utils";
 import { clerkClient } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
@@ -7,6 +8,7 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  ...CACHE_HEADERS.NO_CACHE,
 };
 
 export async function OPTIONS() {
@@ -108,8 +110,12 @@ export async function GET(
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json(reviews);
+    return NextResponse.json(reviews, {
+      headers: CACHE_HEADERS.DYNAMIC,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "REVIEWS_GET");
+    return handleErrorResponse(error, "REVIEWS_GET", {
+      headers: CACHE_HEADERS.DYNAMIC,
+    });
   }
 }

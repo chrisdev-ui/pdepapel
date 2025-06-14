@@ -1,8 +1,15 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import cloudinaryInstance from "@/lib/cloudinary";
-import { getPublicIdFromCloudinaryUrl, verifyStoreOwner } from "@/lib/utils";
+import {
+  CACHE_HEADERS,
+  getPublicIdFromCloudinaryUrl,
+  verifyStoreOwner,
+} from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
+
+// Enable Edge Runtime for faster response times
+export const runtime = "edge";
 
 export async function POST(
   req: Request,
@@ -33,7 +40,10 @@ export async function POST(
         );
       }
     }
-    return NextResponse.json(null, { status: 200 });
+    return NextResponse.json(null, {
+      status: 200,
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
     return handleErrorResponse(error, "CLOUDINARY_DELETE");
   }

@@ -8,6 +8,7 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import cloudinaryInstance from "@/lib/cloudinary";
 import prismadb from "@/lib/prismadb";
 import {
+  CACHE_HEADERS,
   generateRandomSKU,
   getPublicIdFromCloudinaryUrl,
   parseErrorDetails,
@@ -92,9 +93,13 @@ export async function POST(
       },
     });
 
-    return NextResponse.json(product);
+    return NextResponse.json(product, {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "PRODUCTS_POST");
+    return handleErrorResponse(error, "PRODUCTS_POST", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   }
 }
 
@@ -254,13 +259,20 @@ export async function GET(
       });
     }
     const totalPages = fromShop ? Math.ceil(totalItems / itemsPerPage) : 1;
-    return NextResponse.json({
-      products,
-      totalItems,
-      totalPages: fromShop ? totalPages : 1,
-    });
+    return NextResponse.json(
+      {
+        products,
+        totalItems,
+        totalPages: fromShop ? totalPages : 1,
+      },
+      {
+        headers: CACHE_HEADERS.DYNAMIC,
+      },
+    );
   } catch (error) {
-    return handleErrorResponse(error, "PRODUCTS_GET");
+    return handleErrorResponse(error, "PRODUCTS_GET", {
+      headers: CACHE_HEADERS.DYNAMIC,
+    });
   }
 }
 
@@ -282,7 +294,7 @@ export async function DELETE(
         "Se requieren IDs de productos válidos en formato de arreglo",
       );
 
-    const result = await prismadb.$transaction(async (tx) => {
+    await prismadb.$transaction(async (tx) => {
       const products = await tx.product.findMany({
         where: {
           storeId: params.storeId,
@@ -355,7 +367,7 @@ export async function DELETE(
         },
       });
 
-      const deletedProducts = await tx.product.deleteMany({
+      await tx.product.deleteMany({
         where: {
           storeId: params.storeId,
           id: {
@@ -363,16 +375,18 @@ export async function DELETE(
           },
         },
       });
-
-      return {
-        deletedProducts,
-        deletedImages: publicIds,
-      };
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json(
+      "Los productos han sido eliminados correctamente",
+      {
+        headers: CACHE_HEADERS.NO_CACHE,
+      },
+    );
   } catch (error) {
-    return handleErrorResponse(error, "PRODUCTS_DELETE");
+    return handleErrorResponse(error, "PRODUCTS_DELETE", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   }
 }
 
@@ -445,8 +459,12 @@ export async function PATCH(
       });
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json(result, {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "PRODUCTS_PATCH");
+    return handleErrorResponse(error, "PRODUCTS_PATCH", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   }
 }

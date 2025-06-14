@@ -1,9 +1,16 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import cloudinaryInstance from "@/lib/cloudinary";
 import prismadb from "@/lib/prismadb";
-import { getPublicIdFromCloudinaryUrl, verifyStoreOwner } from "@/lib/utils";
+import {
+  CACHE_HEADERS,
+  getPublicIdFromCloudinaryUrl,
+  verifyStoreOwner,
+} from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
+
+// Enable Edge Runtime for faster response times
+export const runtime = "edge";
 
 export async function POST(
   req: Request,
@@ -35,9 +42,14 @@ export async function POST(
         imageUrl,
         storeId: params.storeId,
       },
+      select: {
+        id: true,
+      },
     });
 
-    return NextResponse.json(banner);
+    return NextResponse.json(banner, {
+      headers: CACHE_HEADERS.DYNAMIC,
+    });
   } catch (error) {
     return handleErrorResponse(error, "BANNERS_POST");
   }
@@ -52,9 +64,16 @@ export async function GET(
 
     const banners = await prismadb.banner.findMany({
       where: { storeId: params.storeId },
+      select: {
+        id: true,
+        callToAction: true,
+        imageUrl: true,
+      },
     });
 
-    return NextResponse.json(banners);
+    return NextResponse.json(banners, {
+      headers: CACHE_HEADERS.DYNAMIC,
+    });
   } catch (error) {
     return handleErrorResponse(error, "BANNERS_GET");
   }
@@ -78,7 +97,7 @@ export async function DELETE(
 
     await verifyStoreOwner(userId, params.storeId);
 
-    const deletedBanners = await prismadb.$transaction(async (tx) => {
+    await prismadb.$transaction(async (tx) => {
       const banners = await tx.banner.findMany({
         where: {
           storeId: params.storeId,
@@ -111,7 +130,7 @@ export async function DELETE(
         }
       }
 
-      const response = await tx.banner.deleteMany({
+      await tx.banner.deleteMany({
         where: {
           storeId: params.storeId,
           id: {
@@ -119,14 +138,11 @@ export async function DELETE(
           },
         },
       });
-
-      return {
-        deletedBanners: response,
-        deletedImages: publicIds,
-      };
     });
 
-    return NextResponse.json(deletedBanners);
+    return NextResponse.json("Banners eliminados correctamente", {
+      headers: CACHE_HEADERS.DYNAMIC,
+    });
   } catch (error) {
     return handleErrorResponse(error, "BANNERS_DELETE");
   }

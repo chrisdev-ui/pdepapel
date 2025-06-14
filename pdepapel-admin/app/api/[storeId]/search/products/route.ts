@@ -1,11 +1,13 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
+import { CACHE_HEADERS } from "@/lib/utils";
 import { NextRequest, NextResponse } from "next/server";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  ...CACHE_HEADERS.DYNAMIC,
 };
 
 export async function OPTIONS() {

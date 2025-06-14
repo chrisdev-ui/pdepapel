@@ -1,12 +1,13 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
-import { currencyFormatter } from "@/lib/utils";
+import { CACHE_HEADERS, currencyFormatter } from "@/lib/utils";
 import { NextResponse } from "next/server";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  ...CACHE_HEADERS.NO_CACHE,
 };
 
 export async function OPTIONS() {

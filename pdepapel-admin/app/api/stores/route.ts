@@ -1,8 +1,11 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
-import { parseErrorDetails } from "@/lib/utils";
+import { CACHE_HEADERS, parseErrorDetails } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
+
+// Enable Edge Runtime for faster response times
+export const runtime = "edge";
 
 export async function POST(req: Request) {
   try {
@@ -31,9 +34,13 @@ export async function POST(req: Request) {
       data: { name: name.trim(), userId },
     });
 
-    return NextResponse.json(store);
+    return NextResponse.json(store, {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "STORES_POST");
+    return handleErrorResponse(error, "STORES_POST", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   }
 }
 
@@ -55,9 +62,13 @@ export async function GET(req: Request) {
       throw ErrorFactory.NotFound("No tienes tiendas registradas");
     }
 
-    return NextResponse.json(stores);
+    return NextResponse.json(stores, {
+      headers: CACHE_HEADERS.STATIC,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "STORES_GET");
+    return handleErrorResponse(error, "STORES_GET", {
+      headers: CACHE_HEADERS.STATIC,
+    });
   }
 }
 
@@ -132,8 +143,12 @@ export async function DELETE(req: Request) {
       return ids.length;
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json(result, {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "STORES_DELETE");
+    return handleErrorResponse(error, "STORES_DELETE", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   }
 }

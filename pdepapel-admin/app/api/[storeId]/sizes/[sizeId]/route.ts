@@ -1,8 +1,11 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
-import { verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
+
+// Enable Edge Runtime for faster response times
+export const runtime = "edge";
 
 export async function GET(
   _req: Request,
@@ -18,9 +21,13 @@ export async function GET(
       where: { id: params.sizeId, storeId: params.storeId },
     });
 
-    return NextResponse.json(size);
+    return NextResponse.json(size, {
+      headers: CACHE_HEADERS.STATIC,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "SIZE_GET");
+    return handleErrorResponse(error, "SIZE_GET", {
+      headers: CACHE_HEADERS.STATIC,
+    });
   }
 }
 
@@ -71,9 +78,13 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json(updatedSize);
+    return NextResponse.json(updatedSize, {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "SIZE_PATCH");
+    return handleErrorResponse(error, "SIZE_PATCH", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   }
 }
 
@@ -91,7 +102,7 @@ export async function DELETE(
 
     await verifyStoreOwner(userId, params.storeId);
 
-    const deletedSize = await prismadb.$transaction(async (tx) => {
+    await prismadb.$transaction(async (tx) => {
       const size = await tx.size.findUnique({
         where: {
           id: params.sizeId,
@@ -120,15 +131,19 @@ export async function DELETE(
         );
       }
 
-      return await tx.size.delete({
+      await tx.size.delete({
         where: {
           id: params.sizeId,
         },
       });
     });
 
-    return NextResponse.json(deletedSize);
+    return NextResponse.json("Tamaño eliminado correctamente", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "SIZE_DELETE");
+    return handleErrorResponse(error, "SIZE_DELETE", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   }
 }

@@ -1,5 +1,6 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
+import { CACHE_HEADERS } from "@/lib/utils";
 import { auth, clerkClient } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
@@ -7,6 +8,7 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "PATCH, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  ...CACHE_HEADERS.NO_CACHE,
 };
 
 export async function OPTIONS() {
@@ -36,9 +38,13 @@ export async function GET(
 
     if (!review) throw ErrorFactory.NotFound("Reseña no encontrada");
 
-    return NextResponse.json(review);
+    return NextResponse.json(review, {
+      headers: CACHE_HEADERS.DYNAMIC,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "REVIEW_GET");
+    return handleErrorResponse(error, "REVIEW_GET", {
+      headers: CACHE_HEADERS.DYNAMIC,
+    });
   }
 }
 
@@ -141,12 +147,16 @@ export async function DELETE(
       throw ErrorFactory.Unauthorized();
     }
 
-    const deletedReview = await prismadb.review.delete({
+    await prismadb.review.delete({
       where: { id: params.reviewId },
     });
 
-    return NextResponse.json(deletedReview);
+    return NextResponse.json("La reseña ha sido eliminada correctamente", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "REVIEW_DELETE");
+    return handleErrorResponse(error, "REVIEW_DELETE", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   }
 }

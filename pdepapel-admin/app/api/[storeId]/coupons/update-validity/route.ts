@@ -1,8 +1,11 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
-import { verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
+
+// Enable Edge Runtime for faster response times
+export const runtime = "edge";
 
 export async function POST(
   req: Request,
@@ -44,9 +47,14 @@ export async function POST(
       }),
     ]);
 
-    return NextResponse.json({
-      message: "Se han activado todos los cupones válidos",
-    });
+    return NextResponse.json(
+      {
+        message: "Se han activado todos los cupones válidos",
+      },
+      {
+        headers: CACHE_HEADERS.NO_CACHE,
+      },
+    );
   } catch (error) {
     return handleErrorResponse(error, "COUPONS_UPDATE_VALIDITY");
   }

@@ -1,9 +1,16 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import cloudinaryInstance from "@/lib/cloudinary";
 import prismadb from "@/lib/prismadb";
-import { getPublicIdFromCloudinaryUrl, verifyStoreOwner } from "@/lib/utils";
+import {
+  CACHE_HEADERS,
+  getPublicIdFromCloudinaryUrl,
+  verifyStoreOwner,
+} from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
+
+// Enable Edge Runtime for faster response times
+export const runtime = "edge";
 
 export async function GET(
   _req: Request,
@@ -23,9 +30,13 @@ export async function GET(
       },
     });
 
-    return NextResponse.json(store);
+    return NextResponse.json(store, {
+      headers: CACHE_HEADERS.STATIC,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "STORE_GET");
+    return handleErrorResponse(error, "STORE_GET", {
+      headers: CACHE_HEADERS.STATIC,
+    });
   }
 }
 
@@ -122,9 +133,13 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json(updatedStore);
+    return NextResponse.json(updatedStore, {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "STORE_PATCH");
+    return handleErrorResponse(error, "STORE_PATCH", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   }
 }
 
@@ -182,7 +197,7 @@ export async function DELETE(
       );
     }
 
-    const result = await prismadb.$transaction(async (tx) => {
+    await prismadb.$transaction(async (tx) => {
       const where = {
         where: {
           storeId: params.storeId,
@@ -205,15 +220,19 @@ export async function DELETE(
       await tx.color.deleteMany(where);
       await tx.design.deleteMany(where);
 
-      return await tx.store.delete({
+      await tx.store.delete({
         where: {
           id: params.storeId,
         },
       });
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json("Tu tienda ha sido eliminada correctamente", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "STORE_DELETE");
+    return handleErrorResponse(error, "STORE_DELETE", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   }
 }

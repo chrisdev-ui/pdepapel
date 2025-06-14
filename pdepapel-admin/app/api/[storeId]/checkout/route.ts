@@ -1,18 +1,16 @@
 import { Coupon, OrderStatus, PaymentMethod } from "@prisma/client";
 import { NextResponse } from "next/server";
 
-import { EmailTemplate } from "@/components/email-template";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
-import { resend } from "@/lib/resend";
 import {
+  CACHE_HEADERS,
   calculateOrderTotals,
   checkIfStoreOwner,
   currencyFormatter,
   generateOrderNumber,
   generatePayUPayment,
   generateWompiPayment,
-  getClerkUserById,
   getLastOrderTimestamp,
 } from "@/lib/utils";
 import { auth, clerkClient } from "@clerk/nextjs";
@@ -22,6 +20,7 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  ...CACHE_HEADERS.NO_CACHE,
 };
 
 export async function OPTIONS() {

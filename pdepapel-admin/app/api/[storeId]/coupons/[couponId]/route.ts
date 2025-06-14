@@ -1,9 +1,12 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
-import { verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { DiscountType } from "@prisma/client";
 import { NextResponse } from "next/server";
+
+// Enable Edge Runtime for faster response times
+export const runtime = "edge";
 
 export async function GET(
   _req: Request,
@@ -25,7 +28,9 @@ export async function GET(
       throw ErrorFactory.NotFound("Cupón no encontrado");
     }
 
-    return NextResponse.json(coupon);
+    return NextResponse.json(coupon, {
+      headers: CACHE_HEADERS.DYNAMIC,
+    });
   } catch (error) {
     return handleErrorResponse(error, "COUPON_GET");
   }
@@ -88,7 +93,9 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json(coupon);
+    return NextResponse.json(coupon, {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
     return handleErrorResponse(error, "COUPON_PATCH");
   }
@@ -127,7 +134,9 @@ export async function DELETE(
       where: { id: params.couponId },
     });
 
-    return NextResponse.json(coupon);
+    return NextResponse.json(coupon, {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
     return handleErrorResponse(error, "COUPON_DELETE");
   }
@@ -166,7 +175,9 @@ export async function PUT(
       },
     });
 
-    return NextResponse.json(invalidatedCoupon);
+    return NextResponse.json(invalidatedCoupon, {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
     return handleErrorResponse(error, "COUPON_INVALIDATE");
   }

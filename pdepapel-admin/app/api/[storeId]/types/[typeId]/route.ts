@@ -1,8 +1,15 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
-import { parseErrorDetails, verifyStoreOwner } from "@/lib/utils";
+import {
+  CACHE_HEADERS,
+  parseErrorDetails,
+  verifyStoreOwner,
+} from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
+
+// Enable Edge Runtime for faster response times
+export const runtime = "edge";
 
 export async function GET(
   _req: Request,
@@ -18,9 +25,13 @@ export async function GET(
       where: { id: params.typeId, storeId: params.storeId },
     });
 
-    return NextResponse.json(type);
+    return NextResponse.json(type, {
+      headers: CACHE_HEADERS.STATIC,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "TYPE_GET");
+    return handleErrorResponse(error, "TYPE_GET", {
+      headers: CACHE_HEADERS.STATIC,
+    });
   }
 }
 
@@ -81,9 +92,13 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json(updatedType);
+    return NextResponse.json(updatedType, {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "TYPE_PATCH");
+    return handleErrorResponse(error, "TYPE_PATCH", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   }
 }
 
@@ -101,7 +116,7 @@ export async function DELETE(
 
     await verifyStoreOwner(userId, params.storeId);
 
-    const deletedTypeTx = await prismadb.$transaction(async (tx) => {
+    await prismadb.$transaction(async (tx) => {
       const type = await tx.type.findUnique({
         where: {
           id: params.typeId,
@@ -153,15 +168,19 @@ export async function DELETE(
         },
       });
 
-      return await tx.type.delete({
+      await tx.type.delete({
         where: {
           id: params.typeId,
         },
       });
     });
 
-    return NextResponse.json(deletedTypeTx);
+    return NextResponse.json("Tipo eliminado correctamente", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "TYPE_DELETE");
+    return handleErrorResponse(error, "TYPE_DELETE", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   }
 }

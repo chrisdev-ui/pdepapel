@@ -1,7 +1,11 @@
 import { CAPSULAS_SORPRESA_ID, KITS_ID } from "@/constants";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
+import { CACHE_HEADERS } from "@/lib/utils";
 import { NextResponse } from "next/server";
+
+// Enable Edge Runtime for faster response times
+export const runtime = "edge";
 
 export async function GET(
   req: Request,
@@ -71,14 +75,23 @@ export async function GET(
       throw ErrorFactory.NotFound("La tienda no se encuentra");
     }
 
-    return NextResponse.json({
-      products,
-      store: {
-        ...store,
-        policies: store.policies ? JSON.parse(store.policies as string) : null,
+    return NextResponse.json(
+      {
+        products,
+        store: {
+          ...store,
+          policies: store.policies
+            ? JSON.parse(store.policies as string)
+            : null,
+        },
       },
-    });
+      {
+        headers: CACHE_HEADERS.DYNAMIC,
+      },
+    );
   } catch (error) {
-    return handleErrorResponse(error, "CATALOG_GET");
+    return handleErrorResponse(error, "CATALOG_GET", {
+      headers: CACHE_HEADERS.DYNAMIC,
+    });
   }
 }

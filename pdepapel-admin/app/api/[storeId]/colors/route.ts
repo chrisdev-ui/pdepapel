@@ -1,8 +1,15 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
-import { parseErrorDetails, verifyStoreOwner } from "@/lib/utils";
+import {
+  CACHE_HEADERS,
+  parseErrorDetails,
+  verifyStoreOwner,
+} from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
+
+// Enable Edge Runtime for faster response times
+export const runtime = "edge";
 
 export async function POST(
   req: Request,
@@ -25,9 +32,16 @@ export async function POST(
 
     const color = await prismadb.color.create({
       data: { name, value, storeId: params.storeId },
+      select: {
+        id: true,
+        name: true,
+        value: true,
+      },
     });
 
-    return NextResponse.json(color);
+    return NextResponse.json(color, {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
     return handleErrorResponse(error, "COLORS_POST");
   }
@@ -42,9 +56,16 @@ export async function GET(
 
     const colors = await prismadb.color.findMany({
       where: { storeId: params.storeId },
+      select: {
+        id: true,
+        name: true,
+        value: true,
+      },
     });
 
-    return NextResponse.json(colors);
+    return NextResponse.json(colors, {
+      headers: CACHE_HEADERS.STATIC,
+    });
   } catch (error) {
     return handleErrorResponse(error, "COLORS_GET");
   }
@@ -67,7 +88,7 @@ export async function DELETE(
       );
     }
 
-    const deletedColors = await prismadb.$transaction(async (tx) => {
+    await prismadb.$transaction(async (tx) => {
       const colors = await tx.color.findMany({
         where: {
           storeId: params.storeId,
@@ -102,7 +123,7 @@ export async function DELETE(
           },
         );
 
-      return await tx.color.deleteMany({
+      await tx.color.deleteMany({
         where: {
           storeId: params.storeId,
           id: {
@@ -112,7 +133,9 @@ export async function DELETE(
       });
     });
 
-    return NextResponse.json(deletedColors);
+    return NextResponse.json("Los colores han sido eliminados", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
     return handleErrorResponse(error, "COLORS_DELETE");
   }

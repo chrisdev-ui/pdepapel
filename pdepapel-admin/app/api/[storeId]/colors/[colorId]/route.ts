@@ -1,8 +1,11 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
-import { verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
+
+// Enable Edge Runtime for faster response times
+export const runtime = "edge";
 
 export async function GET(
   _req: Request,
@@ -15,9 +18,16 @@ export async function GET(
 
     const color = await prismadb.color.findUnique({
       where: { id: params.colorId },
+      select: {
+        id: true,
+        name: true,
+        value: true,
+      },
     });
 
-    return NextResponse.json(color);
+    return NextResponse.json(color, {
+      headers: CACHE_HEADERS.STATIC,
+    });
   } catch (error) {
     return handleErrorResponse(error, "COLOR_GET");
   }
@@ -60,10 +70,17 @@ export async function PATCH(
           name,
           value,
         },
+        select: {
+          id: true,
+          name: true,
+          value: true,
+        },
       });
     });
 
-    return NextResponse.json(updatedColor);
+    return NextResponse.json(updatedColor, {
+      headers: CACHE_HEADERS.STATIC,
+    });
   } catch (error) {
     return handleErrorResponse(error, "COLOR_PATCH");
   }
@@ -82,7 +99,7 @@ export async function DELETE(
 
     await verifyStoreOwner(userId, params.storeId);
 
-    const deletedColor = await prismadb.$transaction(async (tx) => {
+    await prismadb.$transaction(async (tx) => {
       const color = await tx.color.findUnique({
         where: {
           id: params.colorId,
@@ -111,7 +128,7 @@ export async function DELETE(
           },
         );
 
-      return await tx.color.delete({
+      await tx.color.delete({
         where: {
           id: params.colorId,
           storeId: params.storeId,
@@ -119,7 +136,9 @@ export async function DELETE(
       });
     });
 
-    return NextResponse.json(deletedColor);
+    return NextResponse.json("El color ha sido eliminado", {
+      headers: CACHE_HEADERS.STATIC,
+    });
   } catch (error) {
     return handleErrorResponse(error, "COLOR_DELETE");
   }

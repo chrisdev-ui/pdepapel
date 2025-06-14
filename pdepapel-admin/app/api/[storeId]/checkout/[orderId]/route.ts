@@ -2,6 +2,7 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
 import {
+  CACHE_HEADERS,
   CheckoutOrder,
   generatePayUPayment,
   generateWompiPayment,
@@ -13,6 +14,7 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  ...CACHE_HEADERS.NO_CACHE,
 };
 
 export async function OPTIONS() {

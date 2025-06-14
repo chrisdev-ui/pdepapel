@@ -1,9 +1,12 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
-import { verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { Social } from "@prisma/client";
 import { NextResponse } from "next/server";
+
+// Enable Edge Runtime for faster response times
+export const runtime = "edge";
 
 export async function GET(
   _req: Request,
@@ -17,11 +20,20 @@ export async function GET(
 
     const post = await prismadb.post.findUnique({
       where: { id: params.postId, storeId: params.storeId },
+      select: {
+        id: true,
+        social: true,
+        postId: true,
+      },
     });
 
-    return NextResponse.json(post);
+    return NextResponse.json(post, {
+      headers: CACHE_HEADERS.STATIC,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "POST_GET");
+    return handleErrorResponse(error, "POST_GET", {
+      headers: CACHE_HEADERS.STATIC,
+    });
   }
 }
 
@@ -87,9 +99,13 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json(updatedPost);
+    return NextResponse.json(updatedPost, {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "POST_PATCH");
+    return handleErrorResponse(error, "POST_PATCH", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   }
 }
 
@@ -118,13 +134,15 @@ export async function DELETE(
       throw ErrorFactory.NotFound("Publicación no encontrada");
     }
 
-    const deletedPost = await prismadb.post.delete({
+    await prismadb.post.delete({
       where: {
         id: params.postId,
       },
     });
 
-    return NextResponse.json(deletedPost);
+    return NextResponse.json("Publicación eliminada", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
     return handleErrorResponse(error, "POST_DELETE");
   }

@@ -1,8 +1,15 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
-import { parseErrorDetails, verifyStoreOwner } from "@/lib/utils";
+import {
+  CACHE_HEADERS,
+  parseErrorDetails,
+  verifyStoreOwner,
+} from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
+
+// Enable Edge Runtime for faster response times
+export const runtime = "edge";
 
 export async function POST(
   req: Request,
@@ -23,9 +30,15 @@ export async function POST(
 
     const design = await prismadb.design.create({
       data: { name, storeId: params.storeId },
+      select: {
+        id: true,
+        name: true,
+      },
     });
 
-    return NextResponse.json(design);
+    return NextResponse.json(design, {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
     return handleErrorResponse(error, "DESIGNS_POST");
   }
@@ -40,9 +53,15 @@ export async function GET(
 
     const designs = await prismadb.design.findMany({
       where: { storeId: params.storeId },
+      select: {
+        id: true,
+        name: true,
+      },
     });
 
-    return NextResponse.json(designs);
+    return NextResponse.json(designs, {
+      headers: CACHE_HEADERS.SEMI_STATIC,
+    });
   } catch (error) {
     return handleErrorResponse(error, "DESIGNS_GET");
   }
@@ -66,7 +85,7 @@ export async function DELETE(
       );
     }
 
-    const deletedDesigns = await prismadb.$transaction(async (tx) => {
+    await prismadb.$transaction(async (tx) => {
       const designs = await tx.design.findMany({
         where: { id: { in: ids }, storeId: params.storeId },
       });
@@ -93,7 +112,7 @@ export async function DELETE(
           },
         );
 
-      return await tx.design.deleteMany({
+      await tx.design.deleteMany({
         where: {
           storeId: params.storeId,
           id: { in: ids },
@@ -101,7 +120,9 @@ export async function DELETE(
       });
     });
 
-    return NextResponse.json(deletedDesigns);
+    return NextResponse.json("Los diseños han sido eliminados", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
     return handleErrorResponse(error, "DESIGNS_DELETE");
   }

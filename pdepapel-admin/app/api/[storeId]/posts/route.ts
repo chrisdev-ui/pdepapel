@@ -1,9 +1,12 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
-import { verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { Social } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
+
+// Enable Edge Runtime for faster response times
+export const runtime = "edge";
 
 export async function POST(
   req: Request,
@@ -43,9 +46,16 @@ export async function POST(
 
     const post = await prismadb.post.create({
       data: { social, postId, storeId: params.storeId },
+      select: {
+        id: true,
+        social: true,
+        postId: true,
+      },
     });
 
-    return NextResponse.json(post);
+    return NextResponse.json(post, {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
     return handleErrorResponse(error, "POSTS_POST");
   }
@@ -62,14 +72,23 @@ export async function GET(
 
     const posts = await prismadb.post.findMany({
       where: { storeId: params.storeId, ...(social && { social }) },
+      select: {
+        id: true,
+        social: true,
+        postId: true,
+      },
       orderBy: {
         createdAt: "desc",
       },
     });
 
-    return NextResponse.json(posts);
+    return NextResponse.json(posts, {
+      headers: CACHE_HEADERS.STATIC,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "POSTS_GET");
+    return handleErrorResponse(error, "POSTS_GET", {
+      headers: CACHE_HEADERS.STATIC,
+    });
   }
 }
 
@@ -92,7 +111,7 @@ export async function DELETE(
 
     await verifyStoreOwner(userId, params.storeId);
 
-    const result = await prismadb.$transaction(async (tx) => {
+    await prismadb.$transaction(async (tx) => {
       const posts = await tx.post.findMany({
         where: {
           storeId: params.storeId,
@@ -108,7 +127,7 @@ export async function DELETE(
         );
       }
 
-      return await tx.post.deleteMany({
+      await tx.post.deleteMany({
         where: {
           storeId: params.storeId,
           id: {
@@ -118,8 +137,12 @@ export async function DELETE(
       });
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json("Las publicaciones han sido eliminadas", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "POSTS_DELETE");
+    return handleErrorResponse(error, "POSTS_DELETE", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   }
 }

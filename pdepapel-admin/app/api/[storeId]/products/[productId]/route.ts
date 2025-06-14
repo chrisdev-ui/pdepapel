@@ -1,7 +1,11 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import cloudinaryInstance from "@/lib/cloudinary";
 import prismadb from "@/lib/prismadb";
-import { getPublicIdFromCloudinaryUrl, verifyStoreOwner } from "@/lib/utils";
+import {
+  CACHE_HEADERS,
+  getPublicIdFromCloudinaryUrl,
+  verifyStoreOwner,
+} from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
@@ -29,9 +33,13 @@ export async function GET(
       },
     });
 
-    return NextResponse.json(product);
+    return NextResponse.json(product, {
+      headers: CACHE_HEADERS.DYNAMIC,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "PRODUCT_GET");
+    return handleErrorResponse(error, "PRODUCT_GET", {
+      headers: CACHE_HEADERS.DYNAMIC,
+    });
   }
 }
 
@@ -163,9 +171,13 @@ export async function PATCH(
         },
       });
     });
-    return NextResponse.json(result);
+    return NextResponse.json(result, {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "PRODUCT_PATCH");
+    return handleErrorResponse(error, "PRODUCT_PATCH", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   }
 }
 
@@ -182,7 +194,7 @@ export async function DELETE(
 
     await verifyStoreOwner(userId, params.storeId);
 
-    const deletedProduct = await prismadb.$transaction(async (tx) => {
+    await prismadb.$transaction(async (tx) => {
       const product = await prismadb.product.findUnique({
         where: { id: params.productId, storeId: params.storeId },
         include: {
@@ -236,13 +248,17 @@ export async function DELETE(
       });
 
       // Finally delete the product
-      return await tx.product.delete({
+      await tx.product.delete({
         where: { id: params.productId, storeId: params.storeId },
       });
     });
 
-    return NextResponse.json(deletedProduct);
+    return NextResponse.json("El producto ha sido eliminado correctamente", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "PRODUCT_DELETE");
+    return handleErrorResponse(error, "PRODUCT_DELETE", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   }
 }

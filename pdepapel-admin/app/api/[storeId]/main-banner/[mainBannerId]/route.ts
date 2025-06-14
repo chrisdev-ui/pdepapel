@@ -1,9 +1,16 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import cloudinaryInstance from "@/lib/cloudinary";
 import prismadb from "@/lib/prismadb";
-import { getPublicIdFromCloudinaryUrl, verifyStoreOwner } from "@/lib/utils";
+import {
+  CACHE_HEADERS,
+  getPublicIdFromCloudinaryUrl,
+  verifyStoreOwner,
+} from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
+
+// Enable Edge Runtime for faster response times
+export const runtime = "edge";
 
 export async function GET(
   _req: Request,
@@ -18,9 +25,20 @@ export async function GET(
 
     const mainBanner = await prismadb.mainBanner.findUnique({
       where: { id: params.mainBannerId, storeId: params.storeId },
+      select: {
+        id: true,
+        title: true,
+        label1: true,
+        label2: true,
+        highlight: true,
+        callToAction: true,
+        imageUrl: true,
+      },
     });
 
-    return NextResponse.json(mainBanner);
+    return NextResponse.json(mainBanner, {
+      headers: CACHE_HEADERS.SEMI_STATIC,
+    });
   } catch (error) {
     return handleErrorResponse(error, "MAIN_BANNER_GET");
   }
@@ -92,7 +110,9 @@ export async function PATCH(
       });
     });
 
-    return NextResponse.json(updatedMainBanner);
+    return NextResponse.json(updatedMainBanner, {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
     return handleErrorResponse(error, "MAIN_BANNER_PATCH");
   }
@@ -113,7 +133,7 @@ export async function DELETE(
 
     await verifyStoreOwner(userId, params.storeId);
 
-    const mainBannerToDelete = await prismadb.$transaction(async (tx) => {
+    await prismadb.$transaction(async (tx) => {
       const banner = await tx.mainBanner.findUnique({
         where: { id: params.mainBannerId, storeId: params.storeId },
       });
@@ -138,12 +158,14 @@ export async function DELETE(
         }
       }
 
-      return await tx.mainBanner.delete({
+      await tx.mainBanner.delete({
         where: { id: params.mainBannerId },
       });
     });
 
-    return NextResponse.json(mainBannerToDelete);
+    return NextResponse.json("Banner principal eliminado correctamente", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
     return handleErrorResponse(error, "MAIN_BANNER_DELETE");
   }

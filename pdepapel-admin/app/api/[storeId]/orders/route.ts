@@ -1,10 +1,10 @@
-import { EmailTemplate } from "@/components/email-template";
 import { ALLOWED_TRANSITIONS, shippingOptions } from "@/constants";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
-import { resend } from "@/lib/resend";
+
 import {
+  CACHE_HEADERS,
   calculateOrderTotals,
   checkIfStoreOwner,
   currencyFormatter,
@@ -359,9 +359,13 @@ export async function POST(
       }
     }
 
-    return NextResponse.json(order, { headers: corsHeaders });
+    return NextResponse.json(order, {
+      headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
+    });
   } catch (error) {
-    return handleErrorResponse(error, "ORDERS_POST", { headers: corsHeaders });
+    return handleErrorResponse(error, "ORDERS_POST", {
+      headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
+    });
   }
 }
 
@@ -399,9 +403,13 @@ export async function GET(
       },
     });
 
-    return NextResponse.json(orders, { headers: corsHeaders });
+    return NextResponse.json(orders, {
+      headers: { ...corsHeaders, ...CACHE_HEADERS.DYNAMIC },
+    });
   } catch (error) {
-    return handleErrorResponse(error, "ORDERS_GET", { headers: corsHeaders });
+    return handleErrorResponse(error, "ORDERS_GET", {
+      headers: { ...corsHeaders, ...CACHE_HEADERS.DYNAMIC },
+    });
   }
 }
 
@@ -495,9 +503,13 @@ export async function DELETE(
       });
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json(result, {
+      headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
+    });
   } catch (error) {
-    return handleErrorResponse(error, "ORDERS_DELETE");
+    return handleErrorResponse(error, "ORDERS_DELETE", {
+      headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
+    });
   }
 }
 
@@ -702,8 +714,12 @@ export async function PATCH(
       }
     }
 
-    return NextResponse.json(result);
+    return NextResponse.json(result, {
+      headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
+    });
   } catch (error) {
-    return handleErrorResponse(error, "ORDERS_PATCH");
+    return handleErrorResponse(error, "ORDERS_PATCH", {
+      headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
+    });
   }
 }

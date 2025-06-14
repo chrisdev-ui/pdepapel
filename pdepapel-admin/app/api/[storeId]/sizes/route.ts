@@ -1,8 +1,15 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
-import { parseErrorDetails, verifyStoreOwner } from "@/lib/utils";
+import {
+  CACHE_HEADERS,
+  parseErrorDetails,
+  verifyStoreOwner,
+} from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
+
+// Enable Edge Runtime for faster response times
+export const runtime = "edge";
 
 export async function POST(
   req: Request,
@@ -33,9 +40,13 @@ export async function POST(
       },
     });
 
-    return NextResponse.json(size);
+    return NextResponse.json(size, {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "SIZES_POST");
+    return handleErrorResponse(error, "SIZES_POST", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   }
 }
 
@@ -53,9 +64,13 @@ export async function GET(
       },
     });
 
-    return NextResponse.json(sizes);
+    return NextResponse.json(sizes, {
+      headers: CACHE_HEADERS.STATIC,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "SIZES_GET");
+    return handleErrorResponse(error, "SIZES_GET", {
+      headers: CACHE_HEADERS.STATIC,
+    });
   }
 }
 
@@ -78,7 +93,7 @@ export async function DELETE(
 
     await verifyStoreOwner(userId, params.storeId);
 
-    const result = await prismadb.$transaction(async (tx) => {
+    await prismadb.$transaction(async (tx) => {
       const sizes = await tx.size.findMany({
         where: {
           storeId: params.storeId,
@@ -121,7 +136,7 @@ export async function DELETE(
         );
       }
 
-      return await tx.size.deleteMany({
+      await tx.size.deleteMany({
         where: {
           storeId: params.storeId,
           id: {
@@ -131,8 +146,12 @@ export async function DELETE(
       });
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json("Los tamaños han sido eliminados", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "SIZES_DELETE");
+    return handleErrorResponse(error, "SIZES_DELETE", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   }
 }

@@ -453,3 +453,22 @@ export function getReadablePaymentMethod(method?: PaymentMethod | null) {
       return "No especificado";
   }
 }
+
+export const CACHE_HEADERS = {
+  // For data that changes very infrequently (e.g., types, sizes, colors)
+  STATIC: {
+    "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400",
+  },
+  // For data that changes occasionally (e.g., categories, designs)
+  SEMI_STATIC: {
+    "Cache-Control": "public, s-maxage=300, stale-while-revalidate=3600",
+  },
+  // For data that changes frequently (e.g., products, orders)
+  DYNAMIC: {
+    "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+  },
+  // For data that should not be cached
+  NO_CACHE: {
+    "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+  },
+};

@@ -1,9 +1,12 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
-import { verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { DiscountType } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
+
+// Enable Edge Runtime for faster response times
+export const runtime = "edge";
 
 export async function POST(
   req: Request,
@@ -56,9 +59,12 @@ export async function POST(
         storeId: params.storeId,
         code: code.toUpperCase(),
       },
+      select: {
+        id: true,
+      },
     });
 
-    if (existingCoupon) {
+    if (existingCoupon?.id) {
       throw ErrorFactory.Conflict("Ya existe un cupón con este código");
     }
 
@@ -74,9 +80,23 @@ export async function POST(
         minOrderValue: minOrderValue || 0,
         isActive,
       },
+      select: {
+        id: true,
+        code: true,
+        type: true,
+        amount: true,
+        startDate: true,
+        endDate: true,
+        maxUses: true,
+        usedCount: true,
+        isActive: true,
+        minOrderValue: true,
+      },
     });
 
-    return NextResponse.json(coupon);
+    return NextResponse.json(coupon, {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
     return handleErrorResponse(error, "COUPON_POST");
   }
@@ -102,12 +122,26 @@ export async function GET(
 
     const coupons = await prismadb.coupon.findMany({
       where: whereClause,
+      select: {
+        id: true,
+        code: true,
+        type: true,
+        amount: true,
+        startDate: true,
+        endDate: true,
+        maxUses: true,
+        usedCount: true,
+        isActive: true,
+        minOrderValue: true,
+      },
       orderBy: {
         createdAt: "desc",
       },
     });
 
-    return NextResponse.json(coupons);
+    return NextResponse.json(coupons, {
+      headers: CACHE_HEADERS.DYNAMIC,
+    });
   } catch (error) {
     return handleErrorResponse(error, "COUPONS_GET");
   }
@@ -132,7 +166,7 @@ export async function DELETE(
 
     await verifyStoreOwner(userId, params.storeId);
 
-    const result = await prismadb.$transaction(async (tx) => {
+    await prismadb.$transaction(async (tx) => {
       const coupons = await tx.coupon.findMany({
         where: {
           id: {
@@ -156,7 +190,7 @@ export async function DELETE(
         }
       }
 
-      return await tx.coupon.deleteMany({
+      await tx.coupon.deleteMany({
         where: {
           storeId: params.storeId,
           id: {
@@ -166,7 +200,9 @@ export async function DELETE(
       });
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json("Los cupones han sido eliminados", {
+      headers: CACHE_HEADERS.STATIC,
+    });
   } catch (error) {
     return handleErrorResponse(error, "COUPONS_DELETE");
   }
@@ -222,7 +258,9 @@ export async function PATCH(
       return updatedCoupons;
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json(result, {
+      headers: CACHE_HEADERS.STATIC,
+    });
   } catch (error) {
     return handleErrorResponse(error, "COUPONS_PATCH");
   }

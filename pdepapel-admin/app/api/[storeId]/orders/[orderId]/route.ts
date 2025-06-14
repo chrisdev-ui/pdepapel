@@ -2,6 +2,7 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
 import {
+  CACHE_HEADERS,
   calculateOrderTotals,
   currencyFormatter,
   verifyStoreOwner,
@@ -53,9 +54,13 @@ export async function GET(
     if (!order)
       throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
 
-    return NextResponse.json(order, { headers: corsHeaders });
+    return NextResponse.json(order, {
+      headers: { ...corsHeaders, ...CACHE_HEADERS.DYNAMIC },
+    });
   } catch (error) {
-    return handleErrorResponse(error, "ORDER_GET", { headers: corsHeaders });
+    return handleErrorResponse(error, "ORDER_GET", {
+      headers: { ...corsHeaders, ...CACHE_HEADERS.DYNAMIC },
+    });
   }
 }
 
@@ -513,9 +518,13 @@ export async function PATCH(
       }
     }
 
-    return NextResponse.json(updatedOrder);
+    return NextResponse.json(updatedOrder, {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "ORDER_PATCH");
+    return handleErrorResponse(error, "ORDER_PATCH", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   }
 }
 
@@ -618,8 +627,12 @@ export async function DELETE(
       }
     }
 
-    return NextResponse.json(order);
+    return NextResponse.json(order, {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
-    return handleErrorResponse(error, "ORDER_DELETE");
+    return handleErrorResponse(error, "ORDER_DELETE", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   }
 }

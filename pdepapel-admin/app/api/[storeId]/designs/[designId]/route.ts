@@ -1,8 +1,11 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
-import { verifyStoreOwner } from "@/lib/utils";
+import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
+
+// Enable Edge Runtime for faster response times
+export const runtime = "edge";
 
 export async function GET(
   _req: Request,
@@ -15,9 +18,15 @@ export async function GET(
 
     const design = await prismadb.design.findUnique({
       where: { id: params.designId },
+      select: {
+        id: true,
+        name: true,
+      },
     });
 
-    return NextResponse.json(design);
+    return NextResponse.json(design, {
+      headers: CACHE_HEADERS.SEMI_STATIC,
+    });
   } catch (error) {
     return handleErrorResponse(error, "DESIGN_GET");
   }
@@ -60,7 +69,9 @@ export async function PATCH(
       });
     });
 
-    return NextResponse.json(design);
+    return NextResponse.json(design, {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
     return handleErrorResponse(error, "DESIGN_PATCH");
   }
@@ -79,7 +90,7 @@ export async function DELETE(
 
     await verifyStoreOwner(userId, params.storeId);
 
-    const deletedDesign = await prismadb.$transaction(async (tx) => {
+    await prismadb.$transaction(async (tx) => {
       const design = await tx.design.findUnique({
         where: { id: params.designId, storeId: params.storeId },
       });
@@ -105,12 +116,14 @@ export async function DELETE(
           },
         );
 
-      return tx.design.delete({
+      await tx.design.delete({
         where: { id: params.designId, storeId: params.storeId },
       });
     });
 
-    return NextResponse.json(deletedDesign);
+    return NextResponse.json("Diseño eliminado correctamente", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   } catch (error) {
     return handleErrorResponse(error, "DESIGN_DELETE");
   }
