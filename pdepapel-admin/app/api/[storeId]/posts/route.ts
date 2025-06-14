@@ -6,7 +6,6 @@ import { Social } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 // Enable Edge Runtime for faster response times
-export const runtime = "edge";
 
 export async function POST(
   req: Request,
