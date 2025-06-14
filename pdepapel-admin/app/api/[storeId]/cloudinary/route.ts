@@ -8,9 +8,6 @@ import {
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
-// Enable Edge Runtime for faster response times
-export const runtime = "edge";
-
 export async function POST(
   req: Request,
   { params }: { params: { storeId: string } },
