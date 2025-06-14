@@ -9,8 +9,6 @@ import {
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
-export const runtime = "edge";
-
 export async function GET(
   _req: Request,
   { params }: { params: { storeId: string; billboardId: string } },
