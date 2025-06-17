@@ -4,5 +4,18 @@
       "path": "/api/cron/update-coupons",
       "schedule": "0 0 * * *"
     }
-  ]
+  ],
+  "functions": {
+    "app/api/**/*": {
+      "maxDuration": 60
+    },
+    "app/api/orders/**": {
+      "maxDuration": 60,
+      "memory": 1024
+    },
+    "app/api/checkout/**": {
+      "maxDuration": 60,
+      "memory": 1024
+    }
+  }
 }

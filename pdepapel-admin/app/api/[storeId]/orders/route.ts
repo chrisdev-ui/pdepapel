@@ -1,10 +1,4 @@
-import {
-  ALLOWED_TRANSITIONS,
-  BATCH_SIZE,
-  MAX_WAIT_TIME,
-  shippingOptions,
-  TIMEOUT_TIME,
-} from "@/constants";
+import { BATCH_SIZE } from "@/constants";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
