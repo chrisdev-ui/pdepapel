@@ -1,4 +1,9 @@
-import { BATCH_SIZE, shippingOptions } from "@/constants";
+import {
+  BATCH_SIZE,
+  MAX_WAIT_TIME,
+  shippingOptions,
+  TIMEOUT_TIME,
+} from "@/constants";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
@@ -16,6 +21,7 @@ import {
   PaymentMethod,
   ShippingStatus,
 } from "@prisma/client";
+import { TIMEOUT } from "dns";
 import { NextResponse } from "next/server";
 
 const corsHeaders = {
@@ -207,168 +213,162 @@ export async function PATCH(
     const originalStatus = order.status;
     const originalShippingStatus = order.shipping?.status;
 
-    const updatedOrder = await prismadb.$transaction(
-      async (tx) => {
-        // Batch process products for better performance
-        const products = await processOrderItemsInBatches(
-          orderItems,
-          params.storeId,
-          BATCH_SIZE,
+    const updatedOrder = await prismadb.$transaction(async (tx) => {
+      // Batch process products for better performance
+      const products = await processOrderItemsInBatches(
+        orderItems,
+        params.storeId,
+        BATCH_SIZE,
+      );
+
+      // Create a map for O(1) lookups
+      const productMap = new Map(products.map((p) => [p.id, p]));
+
+      // Validate all products exist
+      for (const item of orderItems) {
+        if (!productMap.has(item.productId)) {
+          throw ErrorFactory.NotFound(
+            `Producto ${item.productId} no encontrado`,
+          );
+        }
+      }
+
+      const itemsWithPrices = orderItems.map((item: any) => {
+        const product = productMap.get(item.productId);
+        return {
+          product: { price: product!.price },
+          quantity: item.quantity || 1,
+        };
+      });
+
+      // Calculate totals
+      const totals = calculateOrderTotals(itemsWithPrices, {
+        discount:
+          discount?.type && discount?.amount
+            ? {
+                type: discount.type as DiscountType,
+                amount: discount.amount,
+              }
+            : undefined,
+        coupon:
+          order.coupon && subtotal >= Number(order.coupon.minOrderValue ?? 0)
+            ? {
+                type: order.coupon.type as DiscountType,
+                amount: order.coupon.amount,
+              }
+            : undefined,
+      });
+
+      // Validate calculated totals
+      if (
+        Math.abs(totals.total - total) > 0.01 ||
+        Math.abs(totals.subtotal - subtotal) > 0.01
+      ) {
+        throw ErrorFactory.InvalidRequest(
+          "Los montos calculados no coinciden con los enviados",
         );
+      }
 
-        // Create a map for O(1) lookups
-        const productMap = new Map(products.map((p) => [p.id, p]));
+      // Delete existing order items in batches
+      await tx.orderItem.deleteMany({
+        where: { orderId: order.id },
+      });
 
-        // Validate all products exist
-        for (const item of orderItems) {
-          if (!productMap.has(item.productId)) {
-            throw ErrorFactory.NotFound(
-              `Producto ${item.productId} no encontrado`,
+      // Batch create new order items
+      const createOperations = [];
+      for (let i = 0; i < orderItems.length; i += BATCH_SIZE) {
+        const batch = orderItems.slice(i, i + BATCH_SIZE);
+        createOperations.push(
+          ...batch.map((item: any) =>
+            tx.orderItem.create({
+              data: {
+                orderId: order.id,
+                productId: item.productId,
+                quantity: item.quantity || 1,
+              },
+            }),
+          ),
+        );
+      }
+      await Promise.all(createOperations);
+
+      // Update the order
+      const updated = await tx.order.update({
+        where: { id: params.orderId },
+        data: {
+          fullName,
+          phone,
+          address,
+          userId: verifiedUserId,
+          guestId: verifiedUserId ? null : guestId,
+          documentId,
+          subtotal: totals.subtotal,
+          discount: totals.discount,
+          discountType: discount?.type as DiscountType,
+          discountReason: discount?.reason,
+          couponDiscount: order.coupon ? totals.couponDiscount : 0,
+          total: totals.total,
+          ...(status && { status }),
+          payment: payment && {
+            upsert: {
+              create: {
+                ...payment,
+                store: { connect: { id: params.storeId } },
+              },
+              update: payment,
+            },
+          },
+          shipping: shipping && {
+            upsert: {
+              create: {
+                ...shipping,
+                store: { connect: { id: params.storeId } },
+              },
+              update: shipping,
+            },
+          },
+        },
+        include: {
+          orderItems: { include: { product: true } },
+          payment: true,
+          shipping: true,
+          coupon: true,
+        },
+      });
+
+      // Handle stock changes with batching
+      wasPaid = order.status === OrderStatus.PAID;
+      isNowPaid = updated.status === OrderStatus.PAID;
+
+      if (isNowPaid && !wasPaid) {
+        // Check stock availability before decrementing
+        const stockUpdates = [];
+        for (const item of updated.orderItems) {
+          const product = productMap.get(item.productId);
+          if (!product || product.stock < item.quantity) {
+            throw ErrorFactory.InsufficientStock(
+              product?.name || "Producto desconocido",
+              product?.stock || 0,
+              item.quantity,
             );
           }
-        }
-
-        const itemsWithPrices = orderItems.map((item: any) => {
-          const product = productMap.get(item.productId);
-          return {
-            product: { price: product!.price },
-            quantity: item.quantity || 1,
-          };
-        });
-
-        // Calculate totals
-        const totals = calculateOrderTotals(itemsWithPrices, {
-          discount:
-            discount?.type && discount?.amount
-              ? {
-                  type: discount.type as DiscountType,
-                  amount: discount.amount,
-                }
-              : undefined,
-          coupon:
-            order.coupon && subtotal >= Number(order.coupon.minOrderValue ?? 0)
-              ? {
-                  type: order.coupon.type as DiscountType,
-                  amount: order.coupon.amount,
-                }
-              : undefined,
-        });
-
-        // Validate calculated totals
-        if (
-          Math.abs(totals.total - total) > 0.01 ||
-          Math.abs(totals.subtotal - subtotal) > 0.01
-        ) {
-          throw ErrorFactory.InvalidRequest(
-            "Los montos calculados no coinciden con los enviados",
-          );
-        }
-
-        // Delete existing order items in batches
-        await tx.orderItem.deleteMany({
-          where: { orderId: order.id },
-        });
-
-        // Batch create new order items
-        const createOperations = [];
-        for (let i = 0; i < orderItems.length; i += BATCH_SIZE) {
-          const batch = orderItems.slice(i, i + BATCH_SIZE);
-          createOperations.push(
-            ...batch.map((item: any) =>
-              tx.orderItem.create({
-                data: {
-                  orderId: order.id,
-                  productId: item.productId,
-                  quantity: item.quantity || 1,
-                },
-              }),
-            ),
-          );
-        }
-        await Promise.all(createOperations);
-
-        // Update the order
-        const updated = await tx.order.update({
-          where: { id: params.orderId },
-          data: {
-            fullName,
-            phone,
-            address,
-            userId: verifiedUserId,
-            guestId: verifiedUserId ? null : guestId,
-            documentId,
-            subtotal: totals.subtotal,
-            discount: totals.discount,
-            discountType: discount?.type as DiscountType,
-            discountReason: discount?.reason,
-            couponDiscount: order.coupon ? totals.couponDiscount : 0,
-            total: totals.total,
-            ...(status && { status }),
-            payment: payment && {
-              upsert: {
-                create: {
-                  ...payment,
-                  store: { connect: { id: params.storeId } },
-                },
-                update: payment,
-              },
-            },
-            shipping: shipping && {
-              upsert: {
-                create: {
-                  ...shipping,
-                  store: { connect: { id: params.storeId } },
-                },
-                update: shipping,
-              },
-            },
-          },
-          include: {
-            orderItems: { include: { product: true } },
-            payment: true,
-            shipping: true,
-            coupon: true,
-          },
-        });
-
-        // Handle stock changes with batching
-        wasPaid = order.status === OrderStatus.PAID;
-        isNowPaid = updated.status === OrderStatus.PAID;
-
-        if (isNowPaid && !wasPaid) {
-          // Check stock availability before decrementing
-          const stockUpdates = [];
-          for (const item of updated.orderItems) {
-            const product = productMap.get(item.productId);
-            if (!product || product.stock < item.quantity) {
-              throw ErrorFactory.InsufficientStock(
-                product?.name || "Producto desconocido",
-                product?.stock || 0,
-                item.quantity,
-              );
-            }
-            stockUpdates.push({
-              productId: item.productId,
-              quantity: -item.quantity, // Negative for decrement
-            });
-          }
-          await batchUpdateProductStock(tx, stockUpdates);
-        } else if (!isNowPaid && wasPaid) {
-          // Restock products
-          const stockUpdates = updated.orderItems.map((item) => ({
+          stockUpdates.push({
             productId: item.productId,
-            quantity: item.quantity, // Positive for increment
-          }));
-          await batchUpdateProductStock(tx, stockUpdates);
+            quantity: -item.quantity, // Negative for decrement
+          });
         }
+        await batchUpdateProductStock(tx, stockUpdates);
+      } else if (!isNowPaid && wasPaid) {
+        // Restock products
+        const stockUpdates = updated.orderItems.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity, // Positive for increment
+        }));
+        await batchUpdateProductStock(tx, stockUpdates);
+      }
 
-        return updated;
-      },
-      {
-        maxWait: 10000,
-        timeout: 30000,
-      },
-    );
+      return updated;
+    });
 
     // Async email notifications
     setImmediate(async () => {
@@ -444,46 +444,40 @@ export async function DELETE(
 
     await verifyStoreOwner(userId, params.storeId);
 
-    const order = await prismadb.$transaction(
-      async (tx) => {
-        const order = await tx.order.findUnique({
-          where: { id: params.orderId },
-          include: {
-            shipping: true,
-            payment: true,
-            coupon: true,
-            orderItems: true,
+    const order = await prismadb.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { id: params.orderId },
+        include: {
+          shipping: true,
+          payment: true,
+          coupon: true,
+          orderItems: true,
+        },
+      });
+      if (!order)
+        throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
+
+      // REMOVED: Order status and shipping validations for deletion
+      // Now any order can be deleted regardless of status
+
+      // Disconnect coupon if exists
+      if (order.coupon) {
+        await tx.order.update({
+          where: { id: order.id },
+          data: {
+            coupon: { disconnect: true },
+            couponDiscount: 0,
           },
         });
-        if (!order)
-          throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
+      }
 
-        // REMOVED: Order status and shipping validations for deletion
-        // Now any order can be deleted regardless of status
+      // Delete the order
+      const deletedOrder = await tx.order.delete({
+        where: { id: params.orderId, storeId: params.storeId },
+      });
 
-        // Disconnect coupon if exists
-        if (order.coupon) {
-          await tx.order.update({
-            where: { id: order.id },
-            data: {
-              coupon: { disconnect: true },
-              couponDiscount: 0,
-            },
-          });
-        }
-
-        // Delete the order
-        const deletedOrder = await tx.order.delete({
-          where: { id: params.orderId, storeId: params.storeId },
-        });
-
-        return deletedOrder;
-      },
-      {
-        maxWait: 10000,
-        timeout: 30000,
-      },
-    );
+      return deletedOrder;
+    });
 
     // Async cancellation email
     setImmediate(async () => {

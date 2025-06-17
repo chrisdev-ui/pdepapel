@@ -1,3 +1,4 @@
+import { MAX_WAIT_TIME, TIMEOUT_TIME } from "@/constants";
 import { Prisma, PrismaClient } from "@prisma/client";
 
 declare global {
@@ -10,8 +11,8 @@ const prismadb =
     log: ["query", "info", "warn", "error"],
     transactionOptions: {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-      maxWait: 10000,
-      timeout: 20000,
+      maxWait: MAX_WAIT_TIME,
+      timeout: TIMEOUT_TIME,
     },
   });
 

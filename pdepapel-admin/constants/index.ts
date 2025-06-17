@@ -8,6 +8,8 @@ import {
 export const DEFAULT_COUNTRY = "CO";
 
 export const BATCH_SIZE = 100;
+export const MAX_WAIT_TIME = 300000; // 5 minutes
+export const TIMEOUT_TIME = 600000; // 10 minutes
 
 export const GENERIC_ERROR =
   "Ha ocurrido un error inesperado. Por favor, inténtalo de nuevo más tarde.";

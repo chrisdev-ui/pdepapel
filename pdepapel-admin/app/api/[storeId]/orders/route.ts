@@ -1,4 +1,10 @@
-import { ALLOWED_TRANSITIONS, BATCH_SIZE, shippingOptions } from "@/constants";
+import {
+  ALLOWED_TRANSITIONS,
+  BATCH_SIZE,
+  MAX_WAIT_TIME,
+  shippingOptions,
+  TIMEOUT_TIME,
+} from "@/constants";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
@@ -212,132 +218,126 @@ export async function POST(
       }
     }
 
-    const order = await prismadb.$transaction(
-      async (tx) => {
-        // Batch process products for better performance
-        const products = await processOrderItemsInBatches(
-          orderItems,
-          params.storeId,
-          BATCH_SIZE,
-        );
+    const order = await prismadb.$transaction(async (tx) => {
+      // Batch process products for better performance
+      const products = await processOrderItemsInBatches(
+        orderItems,
+        params.storeId,
+        BATCH_SIZE,
+      );
 
-        // Create a map for faster lookups
-        const productMap = new Map(products.map((p) => [p.id, p]));
+      // Create a map for faster lookups
+      const productMap = new Map(products.map((p) => [p.id, p]));
 
-        const itemsWithPrices = orderItems.map(
-          (item: { productId: string; quantity?: number }) => {
-            const product = productMap.get(item.productId);
-            if (!product) {
-              throw ErrorFactory.NotFound(
-                `Producto ${item.productId} no encontrado`,
-              );
-            }
-            return {
-              product: { price: product.price },
-              quantity: item.quantity,
-            };
-          },
-        );
+      const itemsWithPrices = orderItems.map(
+        (item: { productId: string; quantity?: number }) => {
+          const product = productMap.get(item.productId);
+          if (!product) {
+            throw ErrorFactory.NotFound(
+              `Producto ${item.productId} no encontrado`,
+            );
+          }
+          return {
+            product: { price: product.price },
+            quantity: item.quantity,
+          };
+        },
+      );
 
-        const totals = calculateOrderTotals(itemsWithPrices, {
-          discount:
-            discount?.type && discount?.amount
-              ? {
-                  type: discount.type as DiscountType,
-                  amount: discount.amount,
-                }
-              : undefined,
-          coupon: coupon
+      const totals = calculateOrderTotals(itemsWithPrices, {
+        discount:
+          discount?.type && discount?.amount
             ? {
-                type: coupon.type as DiscountType,
-                amount: coupon.amount,
+                type: discount.type as DiscountType,
+                amount: discount.amount,
               }
             : undefined,
-        });
+        coupon: coupon
+          ? {
+              type: coupon.type as DiscountType,
+              amount: coupon.amount,
+            }
+          : undefined,
+      });
 
-        if (
-          Math.abs(totals.total - total) > 0.01 ||
-          Math.abs(totals.subtotal - subtotal) > 0.01
-        ) {
-          throw ErrorFactory.InvalidRequest(
-            "Los montos calculados no coinciden con los enviados",
-          );
-        }
+      if (
+        Math.abs(totals.total - total) > 0.01 ||
+        Math.abs(totals.subtotal - subtotal) > 0.01
+      ) {
+        throw ErrorFactory.InvalidRequest(
+          "Los montos calculados no coinciden con los enviados",
+        );
+      }
 
-        const orderNumber = generateOrderNumber();
-        const orderData: OrderData = {
-          storeId: params.storeId,
-          userId: authenticatedUserId,
-          guestId: !authenticatedUserId ? guestId : null,
-          orderNumber,
-          fullName,
-          phone,
-          address,
-          email,
-          documentId,
-          subtotal: totals.subtotal,
-          discount: totals.discount,
-          discountType: discount?.type as DiscountType,
-          discountReason: discount?.reason,
-          couponId: coupon?.id,
-          couponDiscount: totals.couponDiscount,
-          total: totals.total,
-          orderItems: {
-            create: orderItems.map(
-              (product: { productId: string; quantity: number }) => ({
-                product: { connect: { id: product.productId } },
-                quantity: product.quantity ?? 1,
-              }),
-            ),
-          },
+      const orderNumber = generateOrderNumber();
+      const orderData: OrderData = {
+        storeId: params.storeId,
+        userId: authenticatedUserId,
+        guestId: !authenticatedUserId ? guestId : null,
+        orderNumber,
+        fullName,
+        phone,
+        address,
+        email,
+        documentId,
+        subtotal: totals.subtotal,
+        discount: totals.discount,
+        discountType: discount?.type as DiscountType,
+        discountReason: discount?.reason,
+        couponId: coupon?.id,
+        couponDiscount: totals.couponDiscount,
+        total: totals.total,
+        orderItems: {
+          create: orderItems.map(
+            (product: { productId: string; quantity: number }) => ({
+              product: { connect: { id: product.productId } },
+              quantity: product.quantity ?? 1,
+            }),
+          ),
+        },
+      };
+
+      if (status) orderData.status = status;
+      if (payment)
+        orderData.payment = {
+          create: { ...payment, storeId: params.storeId },
+        };
+      if (shipping)
+        orderData.shipping = {
+          create: { ...shipping, storeId: params.storeId },
         };
 
-        if (status) orderData.status = status;
-        if (payment)
-          orderData.payment = {
-            create: { ...payment, storeId: params.storeId },
-          };
-        if (shipping)
-          orderData.shipping = {
-            create: { ...shipping, storeId: params.storeId },
-          };
+      const createdOrder = await tx.order.create({
+        data: orderData,
+        include: {
+          orderItems: true,
+        },
+      });
 
-        const createdOrder = await tx.order.create({
-          data: orderData,
-          include: {
-            orderItems: true,
+      // Batch update stock if order is paid
+      if (status === OrderStatus.PAID) {
+        const stockUpdates = createdOrder.orderItems.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+        }));
+
+        await batchUpdateProductStock(tx, stockUpdates);
+      }
+
+      // Update coupon usage if applicable
+      if (coupon && status === OrderStatus.PAID) {
+        await tx.coupon.update({
+          where: { id: coupon.id },
+          data: {
+            usedCount: {
+              increment: 1,
+            },
           },
         });
+      }
 
-        // Batch update stock if order is paid
-        if (status === OrderStatus.PAID) {
-          const stockUpdates = createdOrder.orderItems.map((item) => ({
-            productId: item.productId,
-            quantity: item.quantity,
-          }));
-
-          await batchUpdateProductStock(tx, stockUpdates);
-        }
-
-        // Update coupon usage if applicable
-        if (coupon && status === OrderStatus.PAID) {
-          await tx.coupon.update({
-            where: { id: coupon.id },
-            data: {
-              usedCount: {
-                increment: 1,
-              },
-            },
-          });
-        }
-
-        return createdOrder;
-      },
-      {
-        maxWait: 10000, // 10 seconds max wait for the transaction
-        timeout: 30000, // 30 seconds timeout for the transaction
-      },
-    );
+      return createdOrder;
+    });
 
     // Queue email sending asynchronously (don't wait for it)
     if (!isStoreOwner) {
@@ -536,15 +536,119 @@ export async function PATCH(
 
     await verifyStoreOwner(userId, params.storeId);
 
-    const result = await prismadb.$transaction(
-      async (tx) => {
-        const orders = await tx.order.findMany({
-          where: {
-            id: {
-              in: ids,
-            },
-            storeId: params.storeId,
+    const result = await prismadb.$transaction(async (tx) => {
+      const orders = await tx.order.findMany({
+        where: {
+          id: {
+            in: ids,
           },
+          storeId: params.storeId,
+        },
+        include: {
+          orderItems: {
+            include: {
+              product: true,
+            },
+          },
+          shipping: true,
+          payment: true,
+        },
+      });
+
+      if (orders.length !== ids.length) {
+        throw ErrorFactory.NotFound(
+          "Algunas órdenes no se han encontrado en esta tienda",
+        );
+      }
+
+      // Collect all stock updates to batch them
+      const stockUpdates: {
+        productId: string;
+        quantity: number;
+        increment: boolean;
+      }[] = [];
+
+      // Process all orders and collect stock updates
+      for (const order of orders) {
+        if (status) {
+          const wasPaid = order.status === OrderStatus.PAID;
+          const willBePaid = status === OrderStatus.PAID;
+
+          if (willBePaid && !wasPaid) {
+            // Will be paid - decrement stock
+            order.orderItems.forEach((item) => {
+              stockUpdates.push({
+                productId: item.productId,
+                quantity: item.quantity,
+                increment: false,
+              });
+            });
+          } else if (!willBePaid && wasPaid) {
+            // Was paid, now unpaid - increment stock
+            order.orderItems.forEach((item) => {
+              stockUpdates.push({
+                productId: item.productId,
+                quantity: item.quantity,
+                increment: true,
+              });
+            });
+          }
+        }
+      }
+
+      // Batch execute stock updates
+      if (stockUpdates.length > 0) {
+        const groupedUpdates = stockUpdates.reduce(
+          (acc, update) => {
+            const key = `${update.productId}-${update.increment}`;
+            if (!acc[key]) {
+              acc[key] = { ...update, quantity: 0 };
+            }
+            acc[key].quantity += update.quantity;
+            return acc;
+          },
+          {} as Record<
+            string,
+            { productId: string; quantity: number; increment: boolean }
+          >,
+        );
+
+        const updatePromises = Object.values(groupedUpdates).map((update) =>
+          tx.product.update({
+            where: { id: update.productId },
+            data: {
+              stock: update.increment
+                ? { increment: update.quantity }
+                : { decrement: update.quantity },
+            },
+          }),
+        );
+
+        await Promise.all(updatePromises);
+      }
+
+      // Update orders
+      const updatePromises = orders.map(async (order) => {
+        const updateData: {
+          status?: OrderStatus;
+          shipping?: { update: { status?: ShippingStatus } };
+        } = {};
+
+        if (status) {
+          updateData.status = status;
+        }
+
+        if (shipping) {
+          updateData.shipping = {
+            update: {
+              status: shipping,
+            },
+          };
+        }
+
+        return tx.order.update({
+          where: { id: order.id },
+          data: updateData,
           include: {
             orderItems: {
               include: {
@@ -555,120 +659,10 @@ export async function PATCH(
             payment: true,
           },
         });
+      });
 
-        if (orders.length !== ids.length) {
-          throw ErrorFactory.NotFound(
-            "Algunas órdenes no se han encontrado en esta tienda",
-          );
-        }
-
-        // Collect all stock updates to batch them
-        const stockUpdates: {
-          productId: string;
-          quantity: number;
-          increment: boolean;
-        }[] = [];
-
-        // Process all orders and collect stock updates
-        for (const order of orders) {
-          if (status) {
-            const wasPaid = order.status === OrderStatus.PAID;
-            const willBePaid = status === OrderStatus.PAID;
-
-            if (willBePaid && !wasPaid) {
-              // Will be paid - decrement stock
-              order.orderItems.forEach((item) => {
-                stockUpdates.push({
-                  productId: item.productId,
-                  quantity: item.quantity,
-                  increment: false,
-                });
-              });
-            } else if (!willBePaid && wasPaid) {
-              // Was paid, now unpaid - increment stock
-              order.orderItems.forEach((item) => {
-                stockUpdates.push({
-                  productId: item.productId,
-                  quantity: item.quantity,
-                  increment: true,
-                });
-              });
-            }
-          }
-        }
-
-        // Batch execute stock updates
-        if (stockUpdates.length > 0) {
-          const groupedUpdates = stockUpdates.reduce(
-            (acc, update) => {
-              const key = `${update.productId}-${update.increment}`;
-              if (!acc[key]) {
-                acc[key] = { ...update, quantity: 0 };
-              }
-              acc[key].quantity += update.quantity;
-              return acc;
-            },
-            {} as Record<
-              string,
-              { productId: string; quantity: number; increment: boolean }
-            >,
-          );
-
-          const updatePromises = Object.values(groupedUpdates).map((update) =>
-            tx.product.update({
-              where: { id: update.productId },
-              data: {
-                stock: update.increment
-                  ? { increment: update.quantity }
-                  : { decrement: update.quantity },
-              },
-            }),
-          );
-
-          await Promise.all(updatePromises);
-        }
-
-        // Update orders
-        const updatePromises = orders.map(async (order) => {
-          const updateData: {
-            status?: OrderStatus;
-            shipping?: { update: { status?: ShippingStatus } };
-          } = {};
-
-          if (status) {
-            updateData.status = status;
-          }
-
-          if (shipping) {
-            updateData.shipping = {
-              update: {
-                status: shipping,
-              },
-            };
-          }
-
-          return tx.order.update({
-            where: { id: order.id },
-            data: updateData,
-            include: {
-              orderItems: {
-                include: {
-                  product: true,
-                },
-              },
-              shipping: true,
-              payment: true,
-            },
-          });
-        });
-
-        return Promise.all(updatePromises);
-      },
-      {
-        maxWait: 10000, // 10 seconds
-        timeout: 30000, // 30 seconds
-      },
-    );
+      return Promise.all(updatePromises);
+    });
 
     // Send email notifications asynchronously
     setImmediate(async () => {
