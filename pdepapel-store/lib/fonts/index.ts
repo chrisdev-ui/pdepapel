@@ -8,9 +8,9 @@ export const caudex = Caudex({
   style: ["italic", "normal"],
   variable: "--font-caudex",
 });
-export const mangabeyregular = localFont({
-  src: "../../public/fonts/MangabeyRegular.otf",
-  variable: "--font-mangabey-regular",
+export const beautifulEveryTime = localFont({
+  src: "../../public/fonts/BeautifulEveryTime-Dg4m.woff2",
+  variable: "--font-beautiful-every-time-regular",
 });
 export const nunito = Nunito({
   subsets: ["latin"],

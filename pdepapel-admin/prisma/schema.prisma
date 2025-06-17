@@ -173,6 +173,9 @@ model Product {
   @@index([storeId, createdAt, isArchived])
   @@index([storeId, price, isArchived])
   @@index([storeId, stock, isArchived])
+  @@index([id, storeId, stock, price])
+  @@index([storeId, id, isArchived])
+  @@index([id, stock])
   @@fulltext([name])
   @@fulltext([name, description])
 }
@@ -239,6 +242,10 @@ model Order {
   @@index([storeId, userId, status])
   @@index([storeId, total, status])
   @@index([storeId, createdAt, total])
+  @@index([id, storeId, status])
+  @@index([userId, guestId, storeId, createdAt])
+  @@index([storeId, userId, createdAt])
+  @@index([storeId, guestId, createdAt])
 }
 
 model OrderItem {
@@ -251,6 +258,10 @@ model OrderItem {
 
   @@index([orderId])
   @@index([productId])
+  @@index([orderId, productId])
+  @@index([productId, quantity])
+  @@index([orderId, productId, quantity])
+  @@index([productId, orderId, quantity])
 }
 
 model MainBanner {
@@ -356,6 +367,7 @@ model Coupon {
   @@index([usedCount, maxUses])
   @@index([storeId, isActive, startDate, endDate])
   @@index([storeId, isActive, startDate, endDate, usedCount])
+  @@index([storeId, code, isActive, startDate, endDate, usedCount, maxUses, minOrderValue])
 }
 
 enum DiscountType {

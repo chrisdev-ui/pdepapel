@@ -6,9 +6,11 @@ import {
   CheckoutOrder,
   generatePayUPayment,
   generateWompiPayment,
+  processOrderItemsInBatches,
 } from "@/lib/utils";
 import { OrderStatus, PaymentMethod } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { BATCH_SIZE } from "@/constants";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -56,33 +58,69 @@ export async function POST(
     if (order.status === OrderStatus.PAID)
       throw ErrorFactory.Conflict(`La orden ${params.orderId} ya está pagada`);
 
-    const productIds = order.orderItems.map((item) => item.productId);
-    const products = await prismadb.product.findMany({
-      where: { id: { in: productIds } },
-    });
-
-    const outOfStock = order.orderItems.find((item) => {
-      const product = products.find((p) => p.id === item.productId);
-      return !product || product.stock < item.quantity;
-    });
-
-    if (outOfStock) {
-      throw ErrorFactory.InsufficientStock(
-        outOfStock.product.name,
-        outOfStock.product.stock,
-        outOfStock.quantity,
+    // Validate order items count (similar to main checkout)
+    if (order.orderItems.length > 1000) {
+      throw ErrorFactory.InvalidRequest(
+        "La orden excede el límite máximo de 1000 productos",
       );
     }
 
-    // Send email notification (admin + customer)
-    await sendOrderEmail(
-      {
-        ...order,
-        payment: order.payment?.method ?? undefined,
-      },
-      OrderStatus.PENDING,
+    // Transform order items to match the format expected by processOrderItemsInBatches
+    const orderItemsForBatch = order.orderItems.map((item) => ({
+      productId: item.productId,
+      quantity: item.quantity,
+    }));
+
+    // Batch process products for validation and pricing (using the same optimization as main checkout)
+    const products = await processOrderItemsInBatches(
+      orderItemsForBatch,
+      params.storeId,
+      BATCH_SIZE,
     );
 
+    // Create product map for O(1) lookups (same optimization as main checkout)
+    const productMap = new Map(products.map((p) => [p.id, p]));
+
+    const errors: string[] = [];
+
+    // Validate stock for each item using the product map
+    for (const item of order.orderItems) {
+      const product = productMap.get(item.productId);
+
+      if (!product) {
+        errors.push(`El producto ${item.productId} no existe`);
+        continue;
+      }
+
+      if (product.stock < item.quantity) {
+        errors.push(
+          `El producto ${product.name} no tiene suficiente stock disponible. Stock disponible: ${product.stock}, cantidad solicitada: ${item.quantity}`,
+        );
+        continue;
+      }
+    }
+
+    // Throw all errors at once if any exist
+    if (errors.length > 0) {
+      throw ErrorFactory.InvalidRequest(errors.join(", "));
+    }
+
+    // Send email notification asynchronously (same pattern as main checkout)
+    setImmediate(async () => {
+      try {
+        await sendOrderEmail(
+          {
+            ...order,
+            payment: order.payment?.method ?? undefined,
+          },
+          OrderStatus.PENDING,
+        );
+      } catch (emailError) {
+        console.error("Failed to send order email:", emailError);
+      }
+    });
+
+    // Generate payment based on method
     if (order.payment?.method === PaymentMethod.PayU) {
       const payUData = generatePayUPayment(order);
 

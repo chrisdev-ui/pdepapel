@@ -1,10 +1,12 @@
+import { ALLOWED_TRANSITIONS, BATCH_SIZE, shippingOptions } from "@/constants";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
 import {
+  batchUpdateProductStock,
   CACHE_HEADERS,
   calculateOrderTotals,
-  currencyFormatter,
+  processOrderItemsInBatches,
   verifyStoreOwner,
 } from "@/lib/utils";
 import { auth, clerkClient } from "@clerk/nextjs";
@@ -94,11 +96,23 @@ export async function PATCH(
       couponCode,
     } = body;
 
+    // Validate order items count
+    if (orderItems && orderItems.length > 1000) {
+      throw ErrorFactory.InvalidRequest(
+        "La orden excede el límite máximo de 1000 productos",
+      );
+    }
+
     await verifyStoreOwner(userId, params.storeId);
 
     const order = await prismadb.order.findUnique({
       where: { id: params.orderId },
-      include: { orderItems: true, shipping: true, coupon: true },
+      include: {
+        orderItems: true,
+        shipping: true,
+        coupon: true,
+        payment: true,
+      },
     });
     if (!order)
       throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
@@ -106,6 +120,7 @@ export async function PATCH(
     let wasPaid = order.status === OrderStatus.PAID;
     let isNowPaid = status === OrderStatus.PAID;
 
+    // Validate order items changes for paid orders
     if (wasPaid && isNowPaid && orderItems) {
       const originalItems = order.orderItems
         .map((item) => ({
@@ -131,6 +146,7 @@ export async function PATCH(
       }
     }
 
+    // Validate discount and coupon conflicts
     if (
       discount &&
       couponCode &&
@@ -148,6 +164,7 @@ export async function PATCH(
       );
     }
 
+    // Validate discount data
     if ((discount?.type as DiscountType) && !discount?.amount) {
       throw ErrorFactory.InvalidRequest(
         "El monto del descuento es requerido cuando se selecciona un tipo",
@@ -173,6 +190,45 @@ export async function PATCH(
       throw ErrorFactory.InvalidRequest("El descuento no puede ser negativo");
     }
 
+    // Validate shipping status transitions
+    if (shipping?.status) {
+      if (order.status !== OrderStatus.PAID) {
+        throw ErrorFactory.Conflict(
+          `La orden ${order.orderNumber} debe estar pagada para actualizar el envío`,
+        );
+      }
+
+      const currentShippingStatus = order.shipping?.status as
+        | keyof typeof shippingOptions
+        | undefined;
+      if (currentShippingStatus !== undefined) {
+        const allowedStatuses = ALLOWED_TRANSITIONS[currentShippingStatus];
+
+        if (!allowedStatuses.includes(shipping.status)) {
+          throw ErrorFactory.Conflict(
+            `No se puede cambiar el estado de envío de "${shippingOptions[currentShippingStatus]}" a "${shippingOptions[shipping.status as keyof typeof shippingOptions]}"`,
+          );
+        }
+      }
+    }
+
+    // Validate order status changes
+    if (status) {
+      if (order.status === OrderStatus.CANCELLED) {
+        throw ErrorFactory.Conflict(
+          `La orden ${order.orderNumber} está cancelada y no puede modificarse`,
+        );
+      }
+
+      if (order.status === OrderStatus.PAID && status !== OrderStatus.PAID) {
+        if (order.shipping?.status === ShippingStatus.Delivered) {
+          throw ErrorFactory.Conflict(
+            `La orden ${order.orderNumber} ya fue entregada y no puede modificarse`,
+          );
+        }
+      }
+    }
+
     let verifiedUserId = order.userId;
     if (requestUserId && order.userId !== requestUserId) {
       try {
@@ -187,10 +243,88 @@ export async function PATCH(
     const originalStatus = order.status;
     const originalShippingStatus = order.shipping?.status;
 
-    const updatedOrder = await prismadb.$transaction(async (tx) => {
-      if (wasPaid && isNowPaid) {
-        // Update only non-total related fields for paid orders
-        return tx.order.update({
+    const updatedOrder = await prismadb.$transaction(
+      async (tx) => {
+        // Batch process products for better performance
+        const products = await processOrderItemsInBatches(
+          orderItems,
+          params.storeId,
+          BATCH_SIZE,
+        );
+
+        // Create a map for O(1) lookups
+        const productMap = new Map(products.map((p) => [p.id, p]));
+
+        // Validate all products exist
+        for (const item of orderItems) {
+          if (!productMap.has(item.productId)) {
+            throw ErrorFactory.NotFound(
+              `Producto ${item.productId} no encontrado`,
+            );
+          }
+        }
+
+        const itemsWithPrices = orderItems.map((item: any) => {
+          const product = productMap.get(item.productId);
+          return {
+            product: { price: product!.price },
+            quantity: item.quantity || 1,
+          };
+        });
+
+        // Calculate totals
+        const totals = calculateOrderTotals(itemsWithPrices, {
+          discount:
+            discount?.type && discount?.amount
+              ? {
+                  type: discount.type as DiscountType,
+                  amount: discount.amount,
+                }
+              : undefined,
+          coupon:
+            order.coupon && subtotal >= Number(order.coupon.minOrderValue ?? 0)
+              ? {
+                  type: order.coupon.type as DiscountType,
+                  amount: order.coupon.amount,
+                }
+              : undefined,
+        });
+
+        // Validate calculated totals
+        if (
+          Math.abs(totals.total - total) > 0.01 ||
+          Math.abs(totals.subtotal - subtotal) > 0.01
+        ) {
+          throw ErrorFactory.InvalidRequest(
+            "Los montos calculados no coinciden con los enviados",
+          );
+        }
+
+        // Delete existing order items in batches
+        await tx.orderItem.deleteMany({
+          where: { orderId: order.id },
+        });
+
+        // Batch create new order items
+        const createOperations = [];
+        for (let i = 0; i < orderItems.length; i += BATCH_SIZE) {
+          const batch = orderItems.slice(i, i + BATCH_SIZE);
+          createOperations.push(
+            ...batch.map((item: any) =>
+              tx.orderItem.create({
+                data: {
+                  orderId: order.id,
+                  productId: item.productId,
+                  quantity: item.quantity || 1,
+                },
+              }),
+            ),
+          );
+        }
+        await Promise.all(createOperations);
+
+        // Update the order
+        const updated = await tx.order.update({
           where: { id: params.orderId },
           data: {
             fullName,
@@ -199,7 +333,13 @@ export async function PATCH(
             userId: verifiedUserId,
             guestId: verifiedUserId ? null : guestId,
             documentId,
-            email,
+            subtotal: totals.subtotal,
+            discount: totals.discount,
+            discountType: discount?.type as DiscountType,
+            discountReason: discount?.reason,
+            couponDiscount: order.coupon ? totals.couponDiscount : 0,
+            total: totals.total,
+            ...(status && { status }),
             payment: payment && {
               upsert: {
                 create: {
@@ -226,304 +366,103 @@ export async function PATCH(
             coupon: true,
           },
         });
-      }
-      let coupon = order.coupon;
 
-      if (order.couponId && !couponCode) {
-        if (order.status === OrderStatus.PAID) {
-          const existingCoupon = await tx.coupon.findUnique({
-            where: { id: order.couponId },
-          });
+        // Handle stock changes with batching
+        wasPaid = order.status === OrderStatus.PAID;
+        isNowPaid = updated.status === OrderStatus.PAID;
 
-          if (existingCoupon && existingCoupon.usedCount > 0) {
-            await tx.coupon.update({
-              where: { id: order.couponId },
-              data: { usedCount: { decrement: 1 } },
+        if (isNowPaid && !wasPaid) {
+          // Check stock availability before decrementing
+          const stockUpdates = [];
+          for (const item of updated.orderItems) {
+            const product = productMap.get(item.productId);
+            if (!product || product.stock < item.quantity) {
+              throw ErrorFactory.InsufficientStock(
+                product?.name || "Producto desconocido",
+                product?.stock || 0,
+                item.quantity,
+              );
+            }
+            stockUpdates.push({
+              productId: item.productId,
+              quantity: -item.quantity, // Negative for decrement
             });
           }
-        }
-        coupon = null;
-      }
-
-      if (couponCode && (!order.coupon || order.coupon.code !== couponCode)) {
-        if (order.couponId && order.status === OrderStatus.PAID) {
-          const existingCoupon = await tx.coupon.findUnique({
-            where: { id: order.couponId },
-          });
-
-          if (existingCoupon && existingCoupon.usedCount > 0) {
-            await tx.coupon.update({
-              where: { id: order.couponId },
-              data: { usedCount: { decrement: 1 } },
-            });
-          }
+          await batchUpdateProductStock(tx, stockUpdates);
+        } else if (!isNowPaid && wasPaid) {
+          // Restock products
+          const stockUpdates = updated.orderItems.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity, // Positive for increment
+          }));
+          await batchUpdateProductStock(tx, stockUpdates);
         }
 
-        coupon = await tx.coupon.findFirst({
-          where: {
-            storeId: params.storeId,
-            code: couponCode.toUpperCase(),
-            isActive: true,
-            startDate: { lte: new Date() },
-            endDate: { gte: new Date() },
-            OR: [
-              { maxUses: null },
-              {
-                AND: [
-                  { maxUses: { not: null } },
-                  { usedCount: { lt: prismadb.coupon.fields.maxUses } },
-                ],
-              },
-            ],
+        return updated;
+      },
+      {
+        maxWait: 10000,
+        timeout: 30000,
+      },
+    );
+
+    // Async email notifications
+    setImmediate(async () => {
+      try {
+        // Only fetch necessary fields for email
+        const emailOrder = await prismadb.order.findUnique({
+          where: { id: params.orderId },
+          select: {
+            id: true,
+            orderNumber: true,
+            status: true,
+            shipping: { select: { status: true } },
+            payment: { select: { method: true } },
+            email: true,
+            fullName: true,
+            // Add other necessary fields
           },
         });
 
-        if (!coupon) {
-          throw ErrorFactory.NotFound("Cupón no válido o expirado");
-        }
+        if (!emailOrder) return;
 
-        if (subtotal < Number(coupon.minOrderValue ?? 0)) {
-          throw ErrorFactory.Conflict(
-            `El pedido debe ser mayor a ${currencyFormatter.format(coupon.minOrderValue ?? 0)} para usar este cupón`,
+        // Status change notification
+        if (status && emailOrder.status !== originalStatus) {
+          await sendOrderEmail(
+            {
+              ...emailOrder,
+              payment: emailOrder.payment?.method ?? null,
+            } as any,
+            emailOrder.status,
+            { notifyAdmin: false },
           );
         }
 
-        if (status === OrderStatus.PAID) {
-          await tx.coupon.update({
-            where: { id: coupon.id },
-            data: { usedCount: { increment: 1 } },
-          });
-        }
-      }
-
-      await tx.orderItem.deleteMany({ where: { orderId: order.id } });
-
-      const products = await tx.product.findMany({
-        where: {
-          id: {
-            in: orderItems.map((item: any) => item.productId),
-          },
-        },
-        select: {
-          id: true,
-          price: true,
-          name: true,
-          stock: true,
-        },
-      });
-
-      const itemsWithPrices = orderItems.map((item: any) => {
-        const product = products.find((p) => p.id === item.productId);
-        if (!product) {
-          throw ErrorFactory.NotFound(
-            `Producto ${item.productId} no encontrado`,
+        // Shipping status change
+        if (
+          shipping?.status &&
+          emailOrder.shipping?.status !== originalShippingStatus
+        ) {
+          await sendOrderEmail(
+            {
+              ...emailOrder,
+              payment: emailOrder.payment?.method ?? null,
+            } as any,
+            emailOrder.shipping?.status as ShippingStatus,
+            { notifyAdmin: false },
           );
         }
-        return {
-          product: { price: product.price },
-          quantity: item.quantity,
-        };
-      });
-
-      const totals = calculateOrderTotals(itemsWithPrices, {
-        discount:
-          discount?.type && discount?.amount
-            ? {
-                type: discount.type as DiscountType,
-                amount: discount.amount,
-              }
-            : undefined,
-        coupon:
-          coupon && subtotal >= Number(coupon.minOrderValue ?? 0)
-            ? {
-                type: coupon.type as DiscountType,
-                amount: coupon.amount,
-              }
-            : undefined,
-      });
-
-      if (
-        Math.abs(totals.total - total) > 0.01 ||
-        Math.abs(totals.subtotal - subtotal) > 0.01
-      ) {
-        throw ErrorFactory.InvalidRequest(
-          "Los montos calculados no coinciden con los enviados",
-        );
+      } catch (emailError) {
+        console.error("Email sending failed:", emailError);
       }
-
-      const updated = await tx.order.update({
-        where: { id: params.orderId },
-        data: {
-          fullName,
-          phone,
-          address,
-          userId: verifiedUserId,
-          guestId: verifiedUserId ? null : guestId,
-          documentId,
-          subtotal: totals.subtotal,
-          discount: totals.discount,
-          discountType: discount?.type as DiscountType,
-          discountReason: discount?.reason,
-          coupon: coupon
-            ? { connect: { id: coupon.id } }
-            : { disconnect: true },
-          couponDiscount: coupon ? totals.couponDiscount : 0,
-          total: totals.total,
-          orderItems: {
-            create: orderItems.map(
-              (orderItem: { productId: string; quantity?: number }) => ({
-                product: { connect: { id: orderItem.productId } },
-                quantity: orderItem.quantity ?? 1,
-              }),
-            ),
-          },
-          ...(status && { status }),
-          payment: payment && {
-            upsert: {
-              create: {
-                ...payment,
-                store: { connect: { id: params.storeId } },
-              },
-              update: payment,
-            },
-          },
-          shipping: shipping && {
-            upsert: {
-              create: {
-                ...shipping,
-                store: { connect: { id: params.storeId } },
-              },
-              update: shipping,
-            },
-          },
-        },
-        include: {
-          orderItems: { include: { product: true } },
-          payment: true,
-          shipping: true,
-          coupon: true,
-        },
-      });
-
-      // 3. Handle stock changes within the same transaction
-      wasPaid = order.status === OrderStatus.PAID;
-      isNowPaid = updated.status === OrderStatus.PAID;
-
-      if (isNowPaid && !wasPaid) {
-        // Pre-check product availability
-        const productIds = updated.orderItems.map((i) => i.productId);
-        const products = await tx.product.findMany({
-          where: { id: { in: productIds } },
-        });
-
-        const outOfStock = updated.orderItems.find((item) => {
-          const product = products.find((p) => p.id === item.productId);
-          return !product || product.stock < item.quantity;
-        });
-
-        if (outOfStock) {
-          throw ErrorFactory.InsufficientStock(
-            outOfStock.product.name,
-            outOfStock.product.stock,
-            outOfStock.quantity,
-          );
-        }
-
-        // Batch update stock
-        await Promise.all(
-          updated.orderItems.map((item) =>
-            tx.product.update({
-              where: { id: item.productId },
-              data: { stock: { decrement: item.quantity } },
-            }),
-          ),
-        );
-      } else if (!isNowPaid && wasPaid) {
-        // Restock products
-        await Promise.all(
-          updated.orderItems.map((item) =>
-            tx.product.update({
-              where: { id: item.productId },
-              data: { stock: { increment: item.quantity } },
-            }),
-          ),
-        );
-      }
-
-      return updated;
     });
 
-    // Send email notifications for status changes
-    if (status && updatedOrder.status !== originalStatus) {
-      // Fetch full order details with relations
-      const fullOrder = await prismadb.order.findUnique({
-        where: { id: params.orderId },
-        include: {
-          payment: true,
-          shipping: true,
-          orderItems: {
-            include: {
-              product: true,
-            },
-          },
-          coupon: true,
-        },
-      });
-
-      if (fullOrder) {
-        await sendOrderEmail(
-          {
-            ...fullOrder,
-            payment: fullOrder.payment?.method ?? null,
-          },
-          updatedOrder.status,
-          {
-            notifyAdmin: false,
-          },
-        );
-      }
-    }
-
-    // Send email for shipping status changes
-    if (
-      shipping?.status &&
-      updatedOrder.shipping?.status !== originalShippingStatus
-    ) {
-      // Fetch full order details with relations
-      const fullOrder = await prismadb.order.findUnique({
-        where: { id: params.orderId },
-        include: {
-          payment: true,
-          shipping: true,
-          orderItems: {
-            include: {
-              product: true,
-            },
-          },
-          coupon: true,
-        },
-      });
-
-      if (fullOrder) {
-        await sendOrderEmail(
-          {
-            ...fullOrder,
-            payment: fullOrder.payment?.method ?? null,
-          },
-          fullOrder.shipping?.status as ShippingStatus,
-          {
-            notifyAdmin: false,
-          },
-        );
-      }
-    }
-
     return NextResponse.json(updatedOrder, {
-      headers: CACHE_HEADERS.NO_CACHE,
+      headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
     });
   } catch (error) {
     return handleErrorResponse(error, "ORDER_PATCH", {
-      headers: CACHE_HEADERS.NO_CACHE,
+      headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
     });
   }
 }
@@ -541,98 +480,109 @@ export async function DELETE(
 
     await verifyStoreOwner(userId, params.storeId);
 
-    const order = await prismadb.$transaction(async (tx) => {
-      const order = await tx.order.findUnique({
-        where: { id: params.orderId },
-        include: { shipping: true, payment: true, coupon: true },
-      });
-      if (!order)
-        throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
-
-      if (order.status === OrderStatus.PAID) {
-        throw ErrorFactory.Conflict(
-          `La orden ${params.orderId} ya fue pagada y no puede ser eliminada`,
-        );
-      }
-
-      if (
-        order.shipping &&
-        order.shipping.status !== ShippingStatus.Preparing
-      ) {
-        throw ErrorFactory.Conflict(
-          `La orden ${order.orderNumber} no puede eliminarse porque el envío está en proceso`,
-        );
-      }
-
-      if (
-        order.payment &&
-        order.payment.method &&
-        order.payment.method !== PaymentMethod.COD &&
-        order.payment.transactionId
-      ) {
-        throw ErrorFactory.Conflict(
-          `La orden ${order.orderNumber} no puede eliminarse porque tiene una transacción bancaria registrada`,
-        );
-      }
-
-      if (order.coupon) {
-        const coupon = await tx.coupon.findUnique({
-          where: { id: order.coupon.id },
-        });
-
-        await tx.order.update({
-          where: { id: order.id },
-          data: {
-            coupon: { disconnect: true },
-            couponDiscount: 0,
+    const order = await prismadb.$transaction(
+      async (tx) => {
+        const order = await tx.order.findUnique({
+          where: { id: params.orderId },
+          include: {
+            shipping: true,
+            payment: true,
+            coupon: true,
+            orderItems: true,
           },
         });
+        if (!order)
+          throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
+
+        // Validate order can be deleted
+        if (order.status === OrderStatus.PAID) {
+          throw ErrorFactory.Conflict(
+            `La orden ${order.orderNumber} ya fue pagada y no puede ser eliminada`,
+          );
+        }
+
+        if (
+          order.shipping &&
+          order.shipping.status !== ShippingStatus.Preparing &&
+          order.shipping.courier &&
+          order.shipping.trackingCode &&
+          order.shipping.cost
+        ) {
+          throw ErrorFactory.Conflict(
+            `La orden ${order.orderNumber} no puede eliminarse porque el envío está en proceso`,
+          );
+        }
+
+        if (
+          order.payment &&
+          order.payment.method &&
+          order.payment.method !== PaymentMethod.COD &&
+          (order.payment.transactionId || order.payment?.details)
+        ) {
+          throw ErrorFactory.Conflict(
+            `La orden ${order.orderNumber} no puede eliminarse porque tiene una transacción bancaria registrada`,
+          );
+        }
+
+        // Disconnect coupon if exists
+        if (order.coupon) {
+          await tx.order.update({
+            where: { id: order.id },
+            data: {
+              coupon: { disconnect: true },
+              couponDiscount: 0,
+            },
+          });
+        }
+
+        // Delete the order
+        const deletedOrder = await tx.order.delete({
+          where: { id: params.orderId, storeId: params.storeId },
+        });
+
+        return deletedOrder;
+      },
+      {
+        maxWait: 10000,
+        timeout: 30000,
+      },
+    );
+
+    // Async cancellation email
+    setImmediate(async () => {
+      try {
+        const emailData = await prismadb.order.findUnique({
+          where: { id: params.orderId },
+          select: {
+            id: true,
+            orderNumber: true,
+            email: true,
+            fullName: true,
+            // Add other necessary fields
+          },
+        });
+
+        if (emailData) {
+          await sendOrderEmail(
+            {
+              ...emailData,
+              payment: null,
+            } as any,
+            OrderStatus.CANCELLED,
+            { notifyAdmin: false },
+          );
+        }
+      } catch (emailError) {
+        console.error("Cancellation email failed:", emailError);
       }
-
-      const deletedOrder = await tx.order.delete({
-        where: { id: params.orderId, storeId: params.storeId },
-      });
-
-      return deletedOrder;
     });
 
-    // Send cancellation email
-    if (order.status !== OrderStatus.CANCELLED) {
-      // Fetch full order details with relations
-      const fullOrder = await prismadb.order.findUnique({
-        where: { id: params.orderId },
-        include: {
-          payment: true,
-          shipping: true,
-          coupon: true,
-          orderItems: {
-            include: {
-              product: true,
-            },
-          },
-        },
-      });
-
-      if (fullOrder) {
-        await sendOrderEmail(
-          {
-            ...fullOrder,
-            payment: fullOrder.payment?.method ?? null,
-          },
-          OrderStatus.CANCELLED,
-          {
-            notifyAdmin: false,
-          },
-        );
-      }
-    }
-
     return NextResponse.json(order, {
-      headers: CACHE_HEADERS.NO_CACHE,
+      headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
     });
   } catch (error) {
     return handleErrorResponse(error, "ORDER_DELETE", {
-      headers: CACHE_HEADERS.NO_CACHE,
+      headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
     });
   }
 }

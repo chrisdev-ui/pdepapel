@@ -1,4 +1,4 @@
-import { DEFAULT_COUNTRY } from "@/constants";
+import { BATCH_SIZE, DEFAULT_COUNTRY } from "@/constants";
 import prismadb from "@/lib/prismadb";
 import { clerkClient } from "@clerk/nextjs";
 import {
@@ -8,6 +8,8 @@ import {
   OrderStatus,
   PaymentDetails,
   PaymentMethod,
+  Prisma,
+  PrismaClient,
   Product,
   ShippingStatus,
 } from "@prisma/client";
@@ -28,6 +30,7 @@ import { twMerge } from "tailwind-merge";
 import { v4 as uuidv4 } from "uuid";
 import { ErrorFactory } from "./api-errors";
 import { env } from "./env.mjs";
+import { DefaultArgs } from "@prisma/client/runtime/library";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -472,3 +475,71 @@ export const CACHE_HEADERS = {
     "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
   },
 };
+
+export async function processOrderItemsInBatches(
+  orderItems: any[],
+  storeId: string,
+  batchSize: number = BATCH_SIZE,
+) {
+  const batches = [];
+  for (let i = 0; i < orderItems.length; i += batchSize) {
+    batches.push(orderItems.slice(i, i + batchSize));
+  }
+
+  const allProducts = [];
+  for (const batch of batches) {
+    const products = await prismadb.product.findMany({
+      where: {
+        id: {
+          in: batch.map((item: any) => item.productId),
+        },
+        storeId: storeId,
+      },
+      select: {
+        id: true,
+        price: true,
+        stock: true,
+        name: true,
+      },
+    });
+    allProducts.push(...products);
+  }
+
+  return allProducts;
+}
+
+export async function batchUpdateProductStock(
+  tx: Omit<
+    PrismaClient<Prisma.PrismaClientOptions, never, DefaultArgs>,
+    "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
+  >,
+  stockUpdates: { productId: string; quantity: number }[],
+) {
+  // Group updates by product to handle multiple items of same product
+  const groupedUpdates = stockUpdates.reduce(
+    (acc, update) => {
+      if (acc[update.productId]) {
+        acc[update.productId] += update.quantity;
+      } else {
+        acc[update.productId] = update.quantity;
+      }
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
+
+  // Execute all stock updates in parallel
+  const updatePromises = Object.entries(groupedUpdates).map(
+    ([productId, quantity]) =>
+      tx.product.update({
+        where: { id: productId },
+        data: {
+          stock: {
+            decrement: quantity,
+          },
+        },
+      }),
+  );
+
+  await Promise.all(updatePromises);
+}

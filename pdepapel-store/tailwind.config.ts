@@ -48,7 +48,7 @@ const config: Config = {
       },
       fontFamily: {
         mono: ["var(--font-caudex)", ...fontFamily.mono],
-        sans: ["var(--font-mangabey-regular)", ...fontFamily.sans],
+        sans: ["var(--font-beautiful-every-time-regular)", ...fontFamily.sans],
         serif: ["var(--font-nunito)", ...fontFamily.serif],
         roboto: ["var(--font-roboto)", ...fontFamily.sans],
       },

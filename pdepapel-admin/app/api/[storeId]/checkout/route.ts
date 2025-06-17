@@ -1,6 +1,5 @@
 import { Coupon, OrderStatus, PaymentMethod } from "@prisma/client";
 import { NextResponse } from "next/server";
-
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
 import {
@@ -12,9 +11,11 @@ import {
   generatePayUPayment,
   generateWompiPayment,
   getLastOrderTimestamp,
+  processOrderItemsInBatches,
 } from "@/lib/utils";
 import { auth, clerkClient } from "@clerk/nextjs";
 import { sendOrderEmail } from "@/lib/email";
+import { BATCH_SIZE } from "@/constants";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -64,6 +65,13 @@ export async function POST(
         "La lista de productos en el pedido no puede estar vacía",
       );
 
+    // Validate order items count
+    if (orderItems.length > 1000) {
+      throw ErrorFactory.InvalidRequest(
+        "La orden excede el límite máximo de 1000 productos",
+      );
+    }
+
     let authenticatedUserId = userLogged;
     if (userId) {
       if (isStoreOwner) {
@@ -92,23 +100,21 @@ export async function POST(
     if (lastOrderTimestamp && lastOrderTimestamp > threeMinutesAgo)
       throw ErrorFactory.OrderLimit();
 
+    // Batch process products for validation and pricing
+    const products = await processOrderItemsInBatches(
+      orderItems,
+      params.storeId,
+      BATCH_SIZE,
+    );
+
+    // Create product map for O(1) lookups
+    const productMap = new Map(products.map((p) => [p.id, p]));
+
     const errors: string[] = [];
     const orderItemsData = [];
 
-    const productIds = orderItems.map(
-      (item: { productId: string }) => item.productId,
-    );
-    const products = await prismadb.product.findMany({
-      where: { id: { in: productIds } },
-      select: {
-        id: true,
-        stock: true,
-        price: true,
-      },
-    });
-
     for (const { productId, quantity = 1 } of orderItems) {
-      const product = products.find((product) => product.id === productId);
+      const product = productMap.get(productId);
 
       if (!product) {
         errors.push(`El producto ${productId} no existe`);
@@ -169,18 +175,16 @@ export async function POST(
       }
     }
 
-    const itemsWithPrices: Array<{
-      product: { price: number };
-      quantity: number;
-    }> = orderItems.map(
+    // Create items with prices using product map
+    const itemsWithPrices = orderItems.map(
       ({
         productId,
         quantity = 1,
       }: {
         productId: string;
-        quantity: number | undefined;
+        quantity?: number;
       }) => {
-        const product = products.find((p) => p.id === productId);
+        const product = productMap.get(productId);
         if (!product) {
           throw ErrorFactory.NotFound(`Producto ${productId} no encontrado`);
         }
@@ -205,64 +209,62 @@ export async function POST(
     }
 
     const orderNumber = generateOrderNumber();
-    const [order] = await prismadb.$transaction([
-      prismadb.order.create({
-        data: {
-          storeId: params.storeId,
-          userId: authenticatedUserId,
-          guestId: !authenticatedUserId ? guestId : null,
-          orderNumber: orderNumber,
-          status: OrderStatus.PENDING,
-          fullName,
-          phone,
-          email,
-          address,
-          subtotal: totals.subtotal,
-          total: totals.total,
-          couponDiscount: totals.couponDiscount,
-          couponId: coupon?.id,
-          orderItems: { create: orderItemsData },
-          payment: {
-            create: {
-              storeId: params.storeId,
-              method: payment.method,
-            },
+    const order = await prismadb.order.create({
+      data: {
+        storeId: params.storeId,
+        userId: authenticatedUserId,
+        guestId: !authenticatedUserId ? guestId : null,
+        orderNumber: orderNumber,
+        status: OrderStatus.PENDING,
+        fullName,
+        phone,
+        email,
+        address,
+        subtotal: totals.subtotal,
+        total: totals.total,
+        couponDiscount: totals.couponDiscount,
+        couponId: coupon?.id,
+        orderItems: { create: orderItemsData },
+        payment: {
+          create: {
+            storeId: params.storeId,
+            method: payment.method,
           },
         },
-        include: {
-          orderItems: {
-            include: {
-              product: true,
-            },
-          },
-          coupon: true,
-        },
-      }),
-    ]);
-
-    // Send email to admin and customer
-    await sendOrderEmail(
-      {
-        ...order,
-        email: email ?? user?.emailAddresses[0]?.emailAddress,
-        payment: payment.method,
       },
-      OrderStatus.PENDING,
-    );
+      include: {
+        orderItems: {
+          include: {
+            product: true,
+          },
+        },
+        coupon: true,
+      },
+    });
 
+    // Send email asynchronously
+    setImmediate(async () => {
+      try {
+        await sendOrderEmail(
+          {
+            ...order,
+            email: email ?? user?.emailAddresses[0]?.emailAddress,
+            payment: payment.method,
+          },
+          OrderStatus.PENDING,
+        );
+      } catch (emailError) {
+        console.error("Failed to send order email:", emailError);
+      }
+    });
+
+    // Generate payment based on method
     if (payment.method === PaymentMethod.PayU) {
       const payUData = generatePayUPayment(order);
-
-      return NextResponse.json(
-        {
-          ...payUData,
-        },
-        { headers: corsHeaders },
-      );
+      return NextResponse.json({ ...payUData }, { headers: corsHeaders });
     }
 
     const url = await generateWompiPayment(order);
-
     return NextResponse.json({ url }, { headers: corsHeaders });
   } catch (error: any) {
     return handleErrorResponse(error, "ORDER_CHECKOUT", {

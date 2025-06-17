@@ -7,6 +7,8 @@ import {
 
 export const DEFAULT_COUNTRY = "CO";
 
+export const BATCH_SIZE = 100;
+
 export const GENERIC_ERROR =
   "Ha ocurrido un error inesperado. Por favor, inténtalo de nuevo más tarde.";
 
