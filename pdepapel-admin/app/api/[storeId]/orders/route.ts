@@ -475,37 +475,6 @@ export async function DELETE(
         );
       }
 
-      for (const order of orders) {
-        if (order.status === OrderStatus.PAID) {
-          throw ErrorFactory.Conflict(
-            `La orden ${order.orderNumber} no puede eliminarse porque ya fue pagada`,
-          );
-        }
-
-        if (
-          order.shipping &&
-          order.shipping.status !== ShippingStatus.Preparing &&
-          order.shipping.courier &&
-          order.shipping.trackingCode &&
-          order.shipping.cost
-        ) {
-          throw ErrorFactory.Conflict(
-            `La orden ${order.orderNumber} no puede eliminarse porque el envío está en proceso`,
-          );
-        }
-
-        if (
-          order.payment &&
-          order.payment.method &&
-          order.payment.method !== PaymentMethod.COD &&
-          (order.payment.transactionId || order.payment?.details)
-        ) {
-          throw ErrorFactory.Conflict(
-            `La orden ${order.orderNumber} no puede eliminarse porque tiene una transacción bancaria registrada`,
-          );
-        }
-      }
-
       // Batch disconnect coupons
       const ordersWithCoupons = orders.filter((order) => order.coupon);
       if (ordersWithCoupons.length > 0) {
@@ -591,60 +560,6 @@ export async function PATCH(
           throw ErrorFactory.NotFound(
             "Algunas órdenes no se han encontrado en esta tienda",
           );
-        }
-
-        // Validate all orders before making changes
-        for (const order of orders) {
-          if (status) {
-            if (order.status === OrderStatus.CANCELLED) {
-              throw ErrorFactory.Conflict(
-                `La orden ${order.orderNumber} está cancelada y no puede modificarse`,
-              );
-            }
-
-            if (
-              status === OrderStatus.PAID &&
-              order.status !== OrderStatus.PAID
-            ) {
-              const outOfStock = order.orderItems.find(
-                (item) => item.product.stock < item.quantity,
-              );
-
-              if (outOfStock) {
-                throw ErrorFactory.InsufficientStock(
-                  outOfStock.product.name,
-                  outOfStock.product.stock,
-                  outOfStock.quantity,
-                );
-              }
-            }
-
-            if (
-              order.status === OrderStatus.PAID &&
-              status !== OrderStatus.PAID
-            ) {
-              if (order.shipping?.status === ShippingStatus.Delivered) {
-                throw ErrorFactory.Conflict(
-                  `La orden ${order.orderNumber} ya fue entregada y no puede modificarse`,
-                );
-              }
-            }
-          }
-
-          if (shipping) {
-            const currentShippingStatus = order.shipping?.status;
-
-            if (currentShippingStatus !== undefined) {
-              const allowedStatuses =
-                ALLOWED_TRANSITIONS[currentShippingStatus];
-
-              if (!allowedStatuses.includes(shipping)) {
-                throw ErrorFactory.Conflict(
-                  `No se puede cambiar el estado de envío de "${shippingOptions[currentShippingStatus]}" a "${shippingOptions[shipping]}"`,
-                );
-              }
-            }
-          }
         }
 
         // Collect all stock updates to batch them

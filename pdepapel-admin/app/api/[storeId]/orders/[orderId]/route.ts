@@ -1,4 +1,4 @@
-import { ALLOWED_TRANSITIONS, BATCH_SIZE, shippingOptions } from "@/constants";
+import { BATCH_SIZE, shippingOptions } from "@/constants";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
@@ -190,38 +190,8 @@ export async function PATCH(
       throw ErrorFactory.InvalidRequest("El descuento no puede ser negativo");
     }
 
-    // Validate shipping status transitions
-    if (shipping?.status) {
-      const currentShippingStatus = order.shipping?.status as
-        | keyof typeof shippingOptions
-        | undefined;
-      if (currentShippingStatus !== undefined) {
-        const allowedStatuses = ALLOWED_TRANSITIONS[currentShippingStatus];
-
-        if (!allowedStatuses.includes(shipping.status)) {
-          throw ErrorFactory.Conflict(
-            `No se puede cambiar el estado de envío de "${shippingOptions[currentShippingStatus]}" a "${shippingOptions[shipping.status as keyof typeof shippingOptions]}"`,
-          );
-        }
-      }
-    }
-
-    // Validate order status changes
-    if (status) {
-      if (order.status === OrderStatus.CANCELLED) {
-        throw ErrorFactory.Conflict(
-          `La orden ${order.orderNumber} está cancelada y no puede modificarse`,
-        );
-      }
-
-      if (order.status === OrderStatus.PAID && status !== OrderStatus.PAID) {
-        if (order.shipping?.status === ShippingStatus.Delivered) {
-          throw ErrorFactory.Conflict(
-            `La orden ${order.orderNumber} ya fue entregada y no puede modificarse`,
-          );
-        }
-      }
-    }
+    // REMOVED: Shipping status transition validations
+    // REMOVED: Order status change validations
 
     let verifiedUserId = order.userId;
     if (requestUserId && order.userId !== requestUserId) {
@@ -488,35 +458,8 @@ export async function DELETE(
         if (!order)
           throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
 
-        // Validate order can be deleted
-        if (order.status === OrderStatus.PAID) {
-          throw ErrorFactory.Conflict(
-            `La orden ${order.orderNumber} ya fue pagada y no puede ser eliminada`,
-          );
-        }
-
-        if (
-          order.shipping &&
-          order.shipping.status !== ShippingStatus.Preparing &&
-          order.shipping.courier &&
-          order.shipping.trackingCode &&
-          order.shipping.cost
-        ) {
-          throw ErrorFactory.Conflict(
-            `La orden ${order.orderNumber} no puede eliminarse porque el envío está en proceso`,
-          );
-        }
-
-        if (
-          order.payment &&
-          order.payment.method &&
-          order.payment.method !== PaymentMethod.COD &&
-          (order.payment.transactionId || order.payment?.details)
-        ) {
-          throw ErrorFactory.Conflict(
-            `La orden ${order.orderNumber} no puede eliminarse porque tiene una transacción bancaria registrada`,
-          );
-        }
+        // REMOVED: Order status and shipping validations for deletion
+        // Now any order can be deleted regardless of status
 
         // Disconnect coupon if exists
         if (order.coupon) {
