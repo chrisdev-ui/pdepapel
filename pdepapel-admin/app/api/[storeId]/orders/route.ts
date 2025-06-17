@@ -632,12 +632,6 @@ export async function PATCH(
           }
 
           if (shipping) {
-            if (order.status !== OrderStatus.PAID) {
-              throw ErrorFactory.Conflict(
-                `La orden ${order.orderNumber} debe estar pagada para actualizar el envío`,
-              );
-            }
-
             const currentShippingStatus = order.shipping?.status;
 
             if (currentShippingStatus !== undefined) {
