@@ -70,6 +70,7 @@ import {
 import { zodResolver } from "@hookform/resolvers/zod";
 import axios from "axios";
 import {
+  AlertTriangle,
   Check,
   ChevronsUpDown,
   DollarSign,
@@ -79,7 +80,11 @@ import {
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { getCoupons } from "../server/get-coupons";
-import { getOrder } from "../server/get-order";
+import {
+  getOrder,
+  type GetOrderResult,
+  type ProductOption,
+} from "../server/get-order";
 
 const paymentSchema = z
   .object({
@@ -136,10 +141,8 @@ const formSchema = z.object({
 
 type OrderFormValues = z.infer<typeof formSchema>;
 
-type ProductOption = Awaited<ReturnType<typeof getOrder>>["products"][number];
-
 interface OrderFormProps {
-  initialData: Awaited<ReturnType<typeof getOrder>>["order"];
+  initialData: GetOrderResult["order"];
   products: ProductOption[];
   availableCoupons: Awaited<ReturnType<typeof getCoupons>>;
   users: {
@@ -503,6 +506,44 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                       placeholder='Escribe el nombre del producto y presiona "Enter"'
                       isLoading={loading}
                       onValuesChange={(selectedOptions) => {
+                        // Check if user is trying to add unavailable products that aren't already in the order
+                        const newUnavailableProducts = selectedOptions.filter(
+                          (option) => {
+                            const typedOption = option as ProductOption;
+                            const isUnavailable = !typedOption.isAvailable;
+                            const wasAlreadySelected = productsSelected.some(
+                              (p) => p.value === option.value,
+                            );
+                            return isUnavailable && !wasAlreadySelected;
+                          },
+                        );
+
+                        if (newUnavailableProducts.length > 0) {
+                          toast({
+                            description: `No puedes agregar productos archivados o sin stock: ${newUnavailableProducts.map((p) => p.label).join(", ")}`,
+                            variant: "destructive",
+                          });
+                          // Filter out the unavailable products from selection
+                          const validOptions = selectedOptions.filter(
+                            (option) => {
+                              const typedOption = option as ProductOption;
+                              return (
+                                typedOption.isAvailable ||
+                                productsSelected.some(
+                                  (p) => p.value === option.value,
+                                )
+                              );
+                            },
+                          );
+                          const orderItems = validOptions.map((option) => ({
+                            productId: option.value,
+                            quantity: quantities[option.value] || 1,
+                          }));
+                          field.onChange(orderItems);
+                          setProductsSelected(validOptions as ProductOption[]);
+                          return;
+                        }
+
                         const orderItems = selectedOptions.map((option) => ({
                           productId: option.value,
                           quantity: quantities[option.value] || 1,
@@ -510,19 +551,18 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                         field.onChange(orderItems);
                         setProductsSelected(selectedOptions as ProductOption[]);
                       }}
-                      values={
-                        field.value.map((item) => ({
-                          ...products.find(
-                            (product) => product.value === item.productId,
-                          ),
-                          quantity: item.quantity,
-                        })) as ProductOption[]
-                      }
+                      values={productsSelected}
                       multiSelect
                       disabled={loading}
                     />
                   </FormControl>
                   <FormMessage />
+                  {productsSelected.some((p) => !p.isAvailable) && (
+                    <div className="flex items-center gap-1 text-sm text-warning">
+                      <AlertTriangle className="h-4 w-4" />
+                      Algunos productos de esta orden ya no están disponibles
+                    </div>
+                  )}
                 </FormItem>
               )}
             />

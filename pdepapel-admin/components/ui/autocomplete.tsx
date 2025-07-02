@@ -1,7 +1,7 @@
 "use client";
 
 import { Command as CommandPrimitive } from "cmdk";
-import { Check } from "lucide-react";
+import { Archive, Check, Package } from "lucide-react";
 import Image from "next/image";
 import { useCallback, useRef, useState, type KeyboardEvent } from "react";
 
@@ -13,13 +13,17 @@ import {
 } from "@/components/ui/command";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn, currencyFormatter } from "@/lib/utils";
+import { Badge } from "./badge";
 
 export type Option = {
   value: string;
   label: string;
   price: number;
+  stock: number;
   image?: string;
-} & { [key: string]: string | number | undefined };
+  isAvailable: boolean;
+  isArchived: boolean;
+} & { [key: string]: string | number | undefined | boolean };
 
 type AutoCompleteProps = {
   options: Option[];
@@ -167,7 +171,41 @@ export const AutoComplete = ({
                               unoptimized
                             />
                           )}
-                          {option.label}
+                          <div className="flex flex-1 flex-col">
+                            <span
+                              className={cn(
+                                "text-sm",
+                                !option.isAvailable && "line-through",
+                              )}
+                            >
+                              {option.label}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              {option.isArchived && (
+                                <Badge
+                                  variant="secondary"
+                                  className="h-4 text-xs"
+                                >
+                                  <Archive className="mr-1 h-2 w-2" />
+                                  Archivado
+                                </Badge>
+                              )}
+                              {option.stock === 0 && (
+                                <Badge
+                                  variant="destructive"
+                                  className="h-4 text-xs"
+                                >
+                                  <Package className="mr-1 h-2 w-2" />
+                                  Sin stock
+                                </Badge>
+                              )}
+                              {option.stock > 0 && (
+                                <span className="text-xs text-muted-foreground">
+                                  Stock: {option.stock}
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </div>
                         {option.price && (
                           <span className="text-slate-500">
