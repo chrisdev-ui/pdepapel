@@ -28,11 +28,11 @@ body,
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
 
-    --warning: 51 93% 65%;
-    --warning-foreground: 252 42% 18%;
+    --warning: 45 100% 51%;
+    --warning-foreground: 222.2 84% 4.9%;
 
-    --info: 197 59% 53%;
-    --info-foreground: 210 40% 98%;
+    --info: 211 100% 50%;
+    --info-foreground: 0 0% 100%;
 
     --accent: 210 40% 96.1%;
     --accent-foreground: 222.2 47.4% 11.2%;
