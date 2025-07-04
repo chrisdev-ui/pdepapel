@@ -116,15 +116,13 @@ const ProductCard: React.FC<ProductCardProps> = ({
       </div>
       <div>
         <p className="font-serif text-lg font-semibold">{product.name}</p>
-        <p className="font-serif text-sm text-gray-500">
-          {product.category?.name}
-        </p>
+        <p className="text-sm text-gray-500">{product.category?.name}</p>
       </div>
       <StarRating
         currentRating={calculateAverageRating(product.reviews)}
         isDisabled
       />
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between font-serif">
         <Currency value={product.price} />
       </div>
       {product.stock === 0 && (
