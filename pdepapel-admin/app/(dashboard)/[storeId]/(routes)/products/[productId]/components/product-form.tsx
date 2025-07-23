@@ -481,6 +481,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                         disabled={loading}
                         placeholder="10"
                         className="pl-8"
+                        min="0"
                         {...field}
                       />
                     </div>

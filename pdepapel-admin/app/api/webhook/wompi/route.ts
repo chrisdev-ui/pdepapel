@@ -1,6 +1,7 @@
 import { sendOrderEmail } from "@/lib/email";
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
+import { batchUpdateProductStockResilient } from "@/lib/utils";
 import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
 import crypto from "crypto";
 import { NextResponse } from "next/server";
@@ -161,47 +162,74 @@ async function updateOrderData(order: any, transaction: any) {
     });
     if (currentStatus === OrderStatus.PAID) {
       await prismadb.$transaction(async (tx) => {
-        for (const orderItem of order.orderItems) {
-          const product = await tx.product.findUnique({
-            where: { id: orderItem.productId },
+        // Prepare stock updates for batch processing
+        const stockUpdates = order.orderItems.map((orderItem: any) => ({
+          productId: orderItem.productId,
+          quantity: orderItem.quantity,
+        }));
+
+        // Use the resilient batch update function
+        const stockResult = await batchUpdateProductStockResilient(
+          tx,
+          stockUpdates,
+          true,
+        );
+
+        // Log any stock update failures but don't throw errors
+        if (stockResult.failed.length > 0) {
+          console.warn("Some stock updates failed in Wompi webhook:", {
+            transactionId: transaction.id,
+            transactionStatus: transaction.status,
+            failed: stockResult.failed,
+            success: stockResult.success,
           });
-
-          if (!product) {
-            throw new Error(`Product ${orderItem.productId} not found.`);
-          }
-
-          if (product.stock >= orderItem.quantity) {
-            await tx.product.update({
-              where: { id: orderItem.productId },
-              data: {
-                stock: {
-                  decrement: orderItem.quantity,
-                },
-              },
-            });
-          } else {
-            throw new Error(
-              `Product ${product.name} is out of stock. Please contact the store owner.`,
-            );
-          }
         }
       });
-    } else if (currentStatus === OrderStatus.CANCELLED && order.coupon) {
-      await prismadb.coupon.update({
-        where: { id: order.coupon.id },
-        data: {
-          usedCount: {
-            decrement: 1,
-          },
-        },
-      });
+    } else if (currentStatus === OrderStatus.CANCELLED) {
+      await prismadb.$transaction(async (tx) => {
+        // Restock products if order was previously paid
+        if (order.status === OrderStatus.PAID) {
+          const stockUpdates = order.orderItems.map((orderItem: any) => ({
+            productId: orderItem.productId,
+            quantity: -orderItem.quantity, // Negative for increment
+          }));
 
-      await prismadb.order.update({
-        where: { id: order.id },
-        data: {
-          coupon: { disconnect: true },
-          couponDiscount: 0,
-        },
+          const stockResult = await batchUpdateProductStockResilient(
+            tx,
+            stockUpdates,
+            true,
+          );
+
+          // Log any stock update failures but don't throw errors
+          if (stockResult.failed.length > 0) {
+            console.warn("Some stock restock failed in Wompi webhook:", {
+              transactionId: transaction.id,
+              transactionStatus: transaction.status,
+              failed: stockResult.failed,
+              success: stockResult.success,
+            });
+          }
+        }
+
+        // Handle coupon if exists
+        if (order.coupon) {
+          await tx.coupon.update({
+            where: { id: order.coupon.id },
+            data: {
+              usedCount: {
+                decrement: 1,
+              },
+            },
+          });
+
+          await tx.order.update({
+            where: { id: order.id },
+            data: {
+              coupon: { disconnect: true },
+              couponDiscount: 0,
+            },
+          });
+        }
       });
     }
     await prismadb.paymentDetails.upsert({

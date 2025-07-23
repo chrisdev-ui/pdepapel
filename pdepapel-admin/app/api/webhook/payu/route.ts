@@ -1,7 +1,12 @@
 import { sendOrderEmail } from "@/lib/email";
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
-import { formatPayUValue, generatePayUSignature } from "@/lib/utils";
+import {
+  formatPayUValue,
+  generatePayUSignature,
+  batchUpdateProductStock,
+  batchUpdateProductStockResilient,
+} from "@/lib/utils";
 import {
   Coupon,
   Order,
@@ -168,29 +173,27 @@ async function updateOrderData({
     });
     if (currentStatus === OrderStatus.PAID) {
       await prismadb.$transaction(async (tx) => {
-        for (const orderItem of order.orderItems) {
-          const product = await tx.product.findUnique({
-            where: { id: orderItem.productId },
+        // Prepare stock updates for batch processing
+        const stockUpdates = order.orderItems.map((orderItem) => ({
+          productId: orderItem.productId,
+          quantity: orderItem.quantity,
+        }));
+
+        // Use the resilient batch update function
+        const stockResult = await batchUpdateProductStockResilient(
+          tx,
+          stockUpdates,
+          true,
+        );
+
+        // Log any stock update failures but don't throw errors
+        if (stockResult.failed.length > 0) {
+          console.warn("Some stock updates failed in PayU webhook:", {
+            transactionId: transaction.id,
+            referencePol: transaction.reference_pol,
+            failed: stockResult.failed,
+            success: stockResult.success,
           });
-
-          if (!product) {
-            throw new Error(`Product ${orderItem.productId} not found.`);
-          }
-
-          if (product.stock >= orderItem.quantity) {
-            await tx.product.update({
-              where: { id: orderItem.productId },
-              data: {
-                stock: {
-                  decrement: orderItem.quantity,
-                },
-              },
-            });
-          } else {
-            throw new Error(
-              `Product ${product.name} is out of stock. Please contact the store owner.`,
-            );
-          }
         }
 
         if (order.coupon) {
@@ -205,8 +208,33 @@ async function updateOrderData({
         }
       });
     } else if (currentStatus === OrderStatus.CANCELLED) {
-      if (order.coupon) {
-        await prismadb.$transaction(async (tx) => {
+      await prismadb.$transaction(async (tx) => {
+        // Restock products if order was previously paid
+        if (order.status === OrderStatus.PAID) {
+          const stockUpdates = order.orderItems.map((orderItem) => ({
+            productId: orderItem.productId,
+            quantity: -orderItem.quantity, // Negative for increment
+          }));
+
+          const stockResult = await batchUpdateProductStockResilient(
+            tx,
+            stockUpdates,
+            true,
+          );
+
+          // Log any stock update failures but don't throw errors
+          if (stockResult.failed.length > 0) {
+            console.warn("Some stock restock failed in PayU webhook:", {
+              transactionId: transaction.id,
+              referencePol: transaction.reference_pol,
+              failed: stockResult.failed,
+              success: stockResult.success,
+            });
+          }
+        }
+
+        // Handle coupon disconnection
+        if (order.coupon) {
           await tx.order.update({
             where: { id: order.id },
             data: {
@@ -214,8 +242,8 @@ async function updateOrderData({
               couponDiscount: 0,
             },
           });
-        });
-      }
+        }
+      });
     }
 
     await prismadb.paymentDetails.upsert({

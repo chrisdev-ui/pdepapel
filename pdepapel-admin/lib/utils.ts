@@ -514,7 +514,10 @@ export async function batchUpdateProductStock(
     "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
   >,
   stockUpdates: { productId: string; quantity: number }[],
+  validateStock: boolean = true,
 ) {
+  if (stockUpdates.length === 0) return;
+
   // Group updates by product to handle multiple items of same product
   const groupedUpdates = stockUpdates.reduce(
     (acc, update) => {
@@ -528,18 +531,213 @@ export async function batchUpdateProductStock(
     {} as Record<string, number>,
   );
 
-  // Execute all stock updates in parallel
-  const updatePromises = Object.entries(groupedUpdates).map(
-    ([productId, quantity]) =>
-      tx.product.update({
-        where: { id: productId },
-        data: {
-          stock: {
-            decrement: quantity,
+  // If validation is enabled and we have decrements, check stock availability first
+  if (validateStock) {
+    const productIds = Object.keys(groupedUpdates).filter(
+      (productId) => groupedUpdates[productId] > 0,
+    );
+
+    if (productIds.length > 0) {
+      const products = await tx.product.findMany({
+        where: {
+          id: {
+            in: productIds,
           },
         },
-      }),
-  );
+        select: {
+          id: true,
+          name: true,
+          stock: true,
+        },
+      });
+
+      // Check for insufficient stock
+      for (const product of products) {
+        const decrementAmount = groupedUpdates[product.id];
+        if (decrementAmount > 0 && product.stock < decrementAmount) {
+          throw new Error(
+            `Insufficient stock for product "${product.name}". Available: ${product.stock}, Required: ${decrementAmount}`,
+          );
+        }
+      }
+    }
+  }
+
+  // Execute all stock updates in parallel
+  const updatePromises = Object.entries(groupedUpdates)
+    .map(([productId, quantity]) => {
+      if (quantity > 0) {
+        // Positive quantity means decrement
+        return tx.product.update({
+          where: { id: productId },
+          data: {
+            stock: {
+              decrement: quantity,
+            },
+          },
+        });
+      } else if (quantity < 0) {
+        // Negative quantity means increment
+        return tx.product.update({
+          where: { id: productId },
+          data: {
+            stock: {
+              increment: Math.abs(quantity),
+            },
+          },
+        });
+      }
+      // If quantity is 0, no update needed
+      return Promise.resolve();
+    })
+    .filter(Boolean);
 
   await Promise.all(updatePromises);
+}
+
+export async function batchUpdateProductStockResilient(
+  tx: Omit<
+    PrismaClient<Prisma.PrismaClientOptions, never, DefaultArgs>,
+    "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
+  >,
+  stockUpdates: { productId: string; quantity: number }[],
+  allowPartialFailures: boolean = true,
+) {
+  if (stockUpdates.length === 0) return { success: [], failed: [] };
+
+  // Group updates by product to handle multiple items of same product
+  const groupedUpdates = stockUpdates.reduce(
+    (acc, update) => {
+      if (acc[update.productId]) {
+        acc[update.productId] += update.quantity;
+      } else {
+        acc[update.productId] = update.quantity;
+      }
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
+
+  // Get current stock levels for all products
+  const productIds = Object.keys(groupedUpdates);
+  const products = await tx.product.findMany({
+    where: {
+      id: {
+        in: productIds,
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      stock: true,
+    },
+  });
+
+  const productMap = new Map(products.map((p) => [p.id, p]));
+  const successfulUpdates: Array<{
+    productId: string;
+    quantity: number;
+    productName: string;
+  }> = [];
+  const failedUpdates: Array<{
+    productId: string;
+    quantity: number;
+    productName: string;
+    reason: string;
+  }> = [];
+
+  // Process each update individually to handle partial failures
+  for (const [productId, quantity] of Object.entries(groupedUpdates)) {
+    const product = productMap.get(productId);
+
+    if (!product) {
+      failedUpdates.push({
+        productId,
+        quantity,
+        productName: "Producto desconocido",
+        reason: "Producto no encontrado",
+      });
+      continue;
+    }
+
+    try {
+      if (quantity > 0) {
+        // Decrement stock - check if sufficient stock available
+        if (allowPartialFailures && product.stock < quantity) {
+          // Process what we can if partial failures are allowed
+          const availableToDecrement = Math.max(0, product.stock);
+          if (availableToDecrement > 0) {
+            await tx.product.update({
+              where: { id: productId },
+              data: {
+                stock: {
+                  decrement: availableToDecrement,
+                },
+              },
+            });
+            successfulUpdates.push({
+              productId,
+              quantity: availableToDecrement,
+              productName: product.name,
+            });
+            failedUpdates.push({
+              productId,
+              quantity: quantity - availableToDecrement,
+              productName: product.name,
+              reason: `Stock insuficiente. Procesado: ${availableToDecrement}, Faltante: ${quantity - availableToDecrement}`,
+            });
+          } else {
+            failedUpdates.push({
+              productId,
+              quantity,
+              productName: product.name,
+              reason: `Sin stock disponible. Stock actual: ${product.stock}, Requerido: ${quantity}`,
+            });
+          }
+        } else {
+          // Normal decrement
+          await tx.product.update({
+            where: { id: productId },
+            data: {
+              stock: {
+                decrement: quantity,
+              },
+            },
+          });
+          successfulUpdates.push({
+            productId,
+            quantity,
+            productName: product.name,
+          });
+        }
+      } else if (quantity < 0) {
+        // Increment stock - this should never fail
+        await tx.product.update({
+          where: { id: productId },
+          data: {
+            stock: {
+              increment: Math.abs(quantity),
+            },
+          },
+        });
+        successfulUpdates.push({
+          productId,
+          quantity: Math.abs(quantity),
+          productName: product.name,
+        });
+      }
+    } catch (error) {
+      failedUpdates.push({
+        productId,
+        quantity,
+        productName: product.name,
+        reason: error instanceof Error ? error.message : "Error desconocido",
+      });
+    }
+  }
+
+  return {
+    success: successfulUpdates,
+    failed: failedUpdates,
+  };
 }

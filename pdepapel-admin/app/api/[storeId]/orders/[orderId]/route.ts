@@ -4,6 +4,7 @@ import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
 import {
   batchUpdateProductStock,
+  batchUpdateProductStockResilient,
   CACHE_HEADERS,
   calculateOrderTotals,
   processOrderItemsInBatches,
@@ -336,30 +337,34 @@ export async function PATCH(
       isNowPaid = updated.status === OrderStatus.PAID;
 
       if (isNowPaid && !wasPaid) {
-        // Check stock availability before decrementing
-        const stockUpdates = [];
-        for (const item of updated.orderItems) {
-          const product = productMap.get(item.productId);
-          if (!product || product.stock < item.quantity) {
-            throw ErrorFactory.InsufficientStock(
-              product?.name || "Producto desconocido",
-              product?.stock || 0,
-              item.quantity,
-            );
-          }
-          stockUpdates.push({
-            productId: item.productId,
-            quantity: -item.quantity, // Negative for decrement
-          });
-        }
-        await batchUpdateProductStock(tx, stockUpdates);
-      } else if (!isNowPaid && wasPaid) {
-        // Restock products
+        // Prepare stock updates for decrementing
         const stockUpdates = updated.orderItems.map((item) => ({
           productId: item.productId,
-          quantity: item.quantity, // Positive for increment
+          quantity: item.quantity, // Positive for decrement
         }));
-        await batchUpdateProductStock(tx, stockUpdates);
+
+        const stockResult = await batchUpdateProductStockResilient(
+          tx,
+          stockUpdates,
+          true,
+        );
+
+        // Log any stock update failures but don't throw errors
+        if (stockResult.failed.length > 0) {
+          console.warn("Some stock updates failed for order:", {
+            orderId: updated.id,
+            orderNumber: updated.orderNumber,
+            failed: stockResult.failed,
+            success: stockResult.success,
+          });
+        }
+      } else if (!isNowPaid && wasPaid) {
+        // Restock products (this should never fail)
+        const stockUpdates = updated.orderItems.map((item) => ({
+          productId: item.productId,
+          quantity: -item.quantity, // Negative for increment
+        }));
+        await batchUpdateProductStock(tx, stockUpdates, false);
       }
 
       return updated;
@@ -454,6 +459,30 @@ export async function DELETE(
 
       // REMOVED: Order status and shipping validations for deletion
       // Now any order can be deleted regardless of status
+
+      // Restock products if order was paid
+      if (order.status === OrderStatus.PAID) {
+        const stockUpdates = order.orderItems.map((item) => ({
+          productId: item.productId,
+          quantity: -item.quantity, // Negative for increment
+        }));
+
+        const stockResult = await batchUpdateProductStockResilient(
+          tx,
+          stockUpdates,
+          true,
+        );
+
+        // Log any stock update failures but don't throw errors
+        if (stockResult.failed.length > 0) {
+          console.warn("Some stock restock failed during order deletion:", {
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            failed: stockResult.failed,
+            success: stockResult.success,
+          });
+        }
+      }
 
       // Disconnect coupon if exists
       if (order.coupon) {

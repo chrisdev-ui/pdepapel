@@ -5,6 +5,7 @@ import prismadb from "@/lib/prismadb";
 
 import {
   batchUpdateProductStock,
+  batchUpdateProductStockResilient,
   CACHE_HEADERS,
   calculateOrderTotals,
   checkIfStoreOwner,
@@ -312,10 +313,24 @@ export async function POST(
       if (status === OrderStatus.PAID) {
         const stockUpdates = createdOrder.orderItems.map((item) => ({
           productId: item.productId,
-          quantity: item.quantity,
+          quantity: item.quantity, // Positive for decrement
         }));
 
-        await batchUpdateProductStock(tx, stockUpdates);
+        const stockResult = await batchUpdateProductStockResilient(
+          tx,
+          stockUpdates,
+          true,
+        );
+
+        // Log stock update results but don't throw errors
+        if (stockResult.failed.length > 0) {
+          console.warn("Some stock updates failed:", {
+            orderId: createdOrder.id,
+            orderNumber: createdOrder.orderNumber,
+            failed: stockResult.failed,
+            success: stockResult.success,
+          });
+        }
       }
 
       // Update coupon usage if applicable
@@ -460,6 +475,7 @@ export async function DELETE(
           shipping: true,
           payment: true,
           coupon: true,
+          orderItems: true,
         },
       });
 
@@ -467,6 +483,46 @@ export async function DELETE(
         throw ErrorFactory.NotFound(
           "Algunas órdenes no se han encontrado en esta tienda",
         );
+      }
+
+      // Restock products for paid orders before deletion
+      const paidOrders = orders.filter(
+        (order) => order.status === OrderStatus.PAID,
+      );
+      if (paidOrders.length > 0) {
+        const stockUpdates: {
+          productId: string;
+          quantity: number;
+        }[] = [];
+
+        paidOrders.forEach((order) => {
+          order.orderItems.forEach((item) => {
+            stockUpdates.push({
+              productId: item.productId,
+              quantity: -item.quantity, // Negative for increment
+            });
+          });
+        });
+
+        if (stockUpdates.length > 0) {
+          const stockResult = await batchUpdateProductStockResilient(
+            tx,
+            stockUpdates,
+            true,
+          );
+
+          // Log any stock update failures but don't throw errors
+          if (stockResult.failed.length > 0) {
+            console.warn(
+              "Some stock restock failed during batch order deletion:",
+              {
+                orderIds: paidOrders.map((o) => o.id),
+                failed: stockResult.failed,
+                success: stockResult.success,
+              },
+            );
+          }
+        }
       }
 
       // Batch disconnect coupons
@@ -559,7 +615,6 @@ export async function PATCH(
       const stockUpdates: {
         productId: string;
         quantity: number;
-        increment: boolean;
       }[] = [];
 
       // Process all orders and collect stock updates
@@ -569,56 +624,41 @@ export async function PATCH(
           const willBePaid = status === OrderStatus.PAID;
 
           if (willBePaid && !wasPaid) {
-            // Will be paid - decrement stock
+            // Will be paid - decrement stock (positive quantity)
             order.orderItems.forEach((item) => {
               stockUpdates.push({
                 productId: item.productId,
-                quantity: item.quantity,
-                increment: false,
+                quantity: item.quantity, // Positive for decrement
               });
             });
           } else if (!willBePaid && wasPaid) {
-            // Was paid, now unpaid - increment stock
+            // Was paid, now unpaid - increment stock (negative quantity)
             order.orderItems.forEach((item) => {
               stockUpdates.push({
                 productId: item.productId,
-                quantity: item.quantity,
-                increment: true,
+                quantity: -item.quantity, // Negative for increment
               });
             });
           }
         }
       }
 
-      // Batch execute stock updates
+      // Batch execute stock updates using resilient method
       if (stockUpdates.length > 0) {
-        const groupedUpdates = stockUpdates.reduce(
-          (acc, update) => {
-            const key = `${update.productId}-${update.increment}`;
-            if (!acc[key]) {
-              acc[key] = { ...update, quantity: 0 };
-            }
-            acc[key].quantity += update.quantity;
-            return acc;
-          },
-          {} as Record<
-            string,
-            { productId: string; quantity: number; increment: boolean }
-          >,
+        const stockResult = await batchUpdateProductStockResilient(
+          tx,
+          stockUpdates,
+          true,
         );
 
-        const updatePromises = Object.values(groupedUpdates).map((update) =>
-          tx.product.update({
-            where: { id: update.productId },
-            data: {
-              stock: update.increment
-                ? { increment: update.quantity }
-                : { decrement: update.quantity },
-            },
-          }),
-        );
-
-        await Promise.all(updatePromises);
+        // Log stock update results but don't throw errors
+        if (stockResult.failed.length > 0) {
+          console.warn("Some stock updates failed in batch order update:", {
+            orderIds: orders.map((o) => o.id),
+            failed: stockResult.failed,
+            success: stockResult.success,
+          });
+        }
       }
 
       // Update orders
