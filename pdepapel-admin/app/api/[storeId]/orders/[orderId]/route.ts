@@ -265,6 +265,66 @@ export async function PATCH(
         );
       }
 
+      // CRITICAL FIX: Validate stock for PAID orders when changing items
+      if (order.status === OrderStatus.PAID) {
+        const newStockRequirements = orderItems.map((item: any) => ({
+          productId: item.productId,
+          quantity: item.quantity || 1,
+        }));
+
+        // Get current order items to calculate the difference
+        const currentStockUsage = order.orderItems.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+        }));
+
+        // Calculate net stock change (what we need - what we already have)
+        const stockChanges: { [productId: string]: number } = {};
+
+        // Add new requirements
+        newStockRequirements.forEach(
+          ({
+            productId,
+            quantity,
+          }: {
+            productId: string;
+            quantity: number;
+          }) => {
+            stockChanges[productId] = (stockChanges[productId] || 0) + quantity;
+          },
+        );
+
+        // Subtract current usage
+        currentStockUsage.forEach(
+          ({
+            productId,
+            quantity,
+          }: {
+            productId: string;
+            quantity: number;
+          }) => {
+            stockChanges[productId] = (stockChanges[productId] || 0) - quantity;
+          },
+        );
+
+        // Validate only products that need MORE stock
+        const additionalStockNeeded = Object.entries(stockChanges)
+          .filter(([, change]) => change > 0)
+          .map(([productId, change]) => ({ productId, quantity: change }));
+
+        if (additionalStockNeeded.length > 0) {
+          await batchUpdateProductStock(tx, additionalStockNeeded, true);
+          // Revert validation
+          const revertUpdates = additionalStockNeeded.map(
+            ({ productId, quantity }) => ({
+              productId,
+              quantity: -quantity,
+            }),
+          );
+          await batchUpdateProductStock(tx, revertUpdates, false);
+        }
+      }
+
       // Delete existing order items in batches
       await tx.orderItem.deleteMany({
         where: { orderId: order.id },

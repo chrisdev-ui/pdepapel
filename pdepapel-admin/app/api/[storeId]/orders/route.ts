@@ -265,6 +265,29 @@ export async function POST(
       }
 
       const orderNumber = generateOrderNumber();
+
+      // CRITICAL FIX: Validate stock BEFORE creating PAID orders
+      if (status === OrderStatus.PAID) {
+        const stockValidationUpdates = orderItems.map(
+          (item: { productId: string; quantity: number }) => ({
+            productId: item.productId,
+            quantity: item.quantity, // Positive for decrement validation
+          }),
+        );
+
+        // Use strict validation - will throw error if insufficient stock
+        await batchUpdateProductStock(tx, stockValidationUpdates, true);
+
+        // Revert the validation updates since we'll apply them after order creation
+        const revertUpdates = stockValidationUpdates.map(
+          (update: { productId: string; quantity: number }) => ({
+            productId: update.productId,
+            quantity: -update.quantity, // Negative to revert
+          }),
+        );
+        await batchUpdateProductStock(tx, revertUpdates, false);
+      }
+
       const orderData: OrderData = {
         storeId: params.storeId,
         userId: authenticatedUserId,
@@ -616,6 +639,40 @@ export async function PATCH(
         productId: string;
         quantity: number;
       }[] = [];
+
+      // CRITICAL FIX: First validate stock for orders becoming PAID
+      if (status === OrderStatus.PAID) {
+        const ordersBecomingPaid = orders.filter(
+          (order) => order.status !== OrderStatus.PAID,
+        );
+        if (ordersBecomingPaid.length > 0) {
+          const stockValidationUpdates: {
+            productId: string;
+            quantity: number;
+          }[] = [];
+          ordersBecomingPaid.forEach((order) => {
+            order.orderItems.forEach((item) => {
+              stockValidationUpdates.push({
+                productId: item.productId,
+                quantity: item.quantity,
+              });
+            });
+          });
+
+          if (stockValidationUpdates.length > 0) {
+            // Validate stock availability first
+            await batchUpdateProductStock(tx, stockValidationUpdates, true);
+            // Revert validation
+            const revertUpdates = stockValidationUpdates.map(
+              ({ productId, quantity }) => ({
+                productId,
+                quantity: -quantity,
+              }),
+            );
+            await batchUpdateProductStock(tx, revertUpdates, false);
+          }
+        }
+      }
 
       // Process all orders and collect stock updates
       for (const order of orders) {
