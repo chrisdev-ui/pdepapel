@@ -662,40 +662,17 @@ export async function batchUpdateProductStockResilient(
 
     try {
       if (quantity > 0) {
-        // Decrement stock - check if sufficient stock available
-        if (allowPartialFailures && product.stock < quantity) {
-          // Process what we can if partial failures are allowed
-          const availableToDecrement = Math.max(0, product.stock);
-          if (availableToDecrement > 0) {
-            await tx.product.update({
-              where: { id: productId },
-              data: {
-                stock: {
-                  decrement: availableToDecrement,
-                },
-              },
-            });
-            successfulUpdates.push({
-              productId,
-              quantity: availableToDecrement,
-              productName: product.name,
-            });
-            failedUpdates.push({
-              productId,
-              quantity: quantity - availableToDecrement,
-              productName: product.name,
-              reason: `Stock insuficiente. Procesado: ${availableToDecrement}, Faltante: ${quantity - availableToDecrement}`,
-            });
-          } else {
-            failedUpdates.push({
-              productId,
-              quantity,
-              productName: product.name,
-              reason: `Sin stock disponible. Stock actual: ${product.stock}, Requerido: ${quantity}`,
-            });
-          }
+        // Decrement stock - STRICT CHECK: Never do partial updates for decrements
+        if (product.stock < quantity) {
+          // NEVER decrement if insufficient stock - fail completely
+          failedUpdates.push({
+            productId,
+            quantity,
+            productName: product.name,
+            reason: `Stock insuficiente. Stock actual: ${product.stock}, Requerido: ${quantity}`,
+          });
         } else {
-          // Normal decrement
+          // Only decrement if we have sufficient stock
           await tx.product.update({
             where: { id: productId },
             data: {

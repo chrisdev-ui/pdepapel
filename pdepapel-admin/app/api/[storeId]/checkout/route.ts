@@ -122,13 +122,8 @@ export async function POST(
       }
 
       if (product.stock < quantity) {
-        errors.push(`El producto ${productId} está agotado`);
-        continue;
-      }
-
-      if (product.stock - quantity < 0) {
         errors.push(
-          `El producto ${productId} no puede ser vendido porque no hay suficiente stock`,
+          `El producto ${product.name} no tiene suficiente stock disponible. Stock disponible: ${product.stock}, cantidad solicitada: ${quantity}`,
         );
         continue;
       }
