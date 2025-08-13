@@ -418,6 +418,18 @@ export async function PATCH(
             success: stockResult.success,
           });
         }
+
+        // CRITICAL FIX: Increment coupon usage when order becomes PAID
+        if (updated.coupon) {
+          await tx.coupon.update({
+            where: { id: updated.coupon.id },
+            data: {
+              usedCount: {
+                increment: 1,
+              },
+            },
+          });
+        }
       } else if (!isNowPaid && wasPaid) {
         // Restock products (this should never fail)
         const stockUpdates = updated.orderItems.map((item) => ({
@@ -425,6 +437,18 @@ export async function PATCH(
           quantity: -item.quantity, // Negative for increment
         }));
         await batchUpdateProductStock(tx, stockUpdates, false);
+
+        // CRITICAL FIX: Decrement coupon usage when PAID order becomes unpaid
+        if (updated.coupon) {
+          await tx.coupon.update({
+            where: { id: updated.coupon.id },
+            data: {
+              usedCount: {
+                decrement: 1,
+              },
+            },
+          });
+        }
       }
 
       return updated;
@@ -546,6 +570,18 @@ export async function DELETE(
 
       // Disconnect coupon if exists
       if (order.coupon) {
+        // CRITICAL FIX: Decrement coupon usage if order was PAID
+        if (order.status === OrderStatus.PAID) {
+          await tx.coupon.update({
+            where: { id: order.coupon.id },
+            data: {
+              usedCount: {
+                decrement: 1,
+              },
+            },
+          });
+        }
+
         await tx.order.update({
           where: { id: order.id },
           data: {
