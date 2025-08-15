@@ -16,11 +16,9 @@ export async function getCustomers(storeId: string) {
         storeId,
         phone: {
           not: null,
-          not: "",
         },
         fullName: {
           not: null,
-          not: "",
         },
       },
       _count: {
