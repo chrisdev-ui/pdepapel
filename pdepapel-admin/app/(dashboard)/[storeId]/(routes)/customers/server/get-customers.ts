@@ -8,10 +8,8 @@ export async function getCustomers(storeId: string) {
   headers();
 
   try {
-    // First, get all unique customers by phone + fullName combination
-    // Don't group by email since it can be null/empty
-    const customers = await prismadb.order.groupBy({
-      by: ["phone", "fullName"],
+    // Get customers with a single optimized query
+    const orders = await prismadb.order.findMany({
       where: {
         storeId,
         phone: {
@@ -21,136 +19,137 @@ export async function getCustomers(storeId: string) {
           not: "",
         },
       },
-      _count: {
+      select: {
         id: true,
-      },
-      _sum: {
+        phone: true,
+        fullName: true,
+        email: true,
+        status: true,
         total: true,
-      },
-      _max: {
         createdAt: true,
-      },
-      _min: {
-        createdAt: true,
-      },
-    });
-
-    // Get detailed customer data with order statistics
-    const customerData = await Promise.all(
-      customers.map(async (customer) => {
-        // Get all orders for this customer (by phone + fullName)
-        const orders = await prismadb.order.findMany({
-          where: {
-            storeId,
-            phone: customer.phone,
-            fullName: customer.fullName,
-          },
+        orderItems: {
           select: {
-            id: true,
-            orderNumber: true,
-            status: true,
-            total: true,
-            email: true, // Include email to get the most recent one
-            createdAt: true,
-            orderItems: {
+            quantity: true,
+            product: {
               select: {
-                quantity: true,
-                product: {
-                  select: {
-                    name: true,
-                    price: true,
-                  },
-                },
+                name: true,
+                price: true,
               },
             },
           },
-          orderBy: {
-            createdAt: "desc",
-          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    // Group customers in memory (faster than DB groupBy)
+    const customerMap = new Map<string, any>();
+
+    orders.forEach((order) => {
+      const customerKey = `${order.phone}_${order.fullName}`;
+
+      if (!customerMap.has(customerKey)) {
+        customerMap.set(customerKey, {
+          phone: order.phone,
+          fullName: order.fullName,
+          email: order.email || "Sin email",
+          orders: [],
+          totalSpent: 0,
+          totalOrders: 0,
+          paidOrders: 0,
+          pendingOrders: 0,
+          cancelledOrders: 0,
+          firstOrderDate: order.createdAt,
+          lastOrderDate: order.createdAt,
         });
+      }
 
-        // Get the most recent email from orders (if any)
-        const mostRecentEmail = orders.find(
-          (order) => order.email && order.email.trim() !== "",
-        )?.email;
+      const customer = customerMap.get(customerKey);
+      customer.orders.push(order);
+      customer.totalOrders++;
 
-        const paidOrders = orders.filter(
-          (order) => order.status === OrderStatus.PAID,
+      // Update email if current order has one and stored customer doesn't
+      if (order.email && order.email.trim() && customer.email === "Sin email") {
+        customer.email = order.email.trim();
+      }
+
+      // Update dates
+      if (order.createdAt < customer.firstOrderDate) {
+        customer.firstOrderDate = order.createdAt;
+      }
+      if (order.createdAt > customer.lastOrderDate) {
+        customer.lastOrderDate = order.createdAt;
+      }
+
+      // Count by status
+      switch (order.status) {
+        case OrderStatus.PAID:
+          customer.paidOrders++;
+          customer.totalSpent += order.total;
+          break;
+        case OrderStatus.PENDING:
+          customer.pendingOrders++;
+          break;
+        case OrderStatus.CANCELLED:
+          customer.cancelledOrders++;
+          break;
+      }
+    });
+
+    // Convert to array and calculate additional metrics
+    const customerData = Array.from(customerMap.values()).map((customer) => {
+      const averageOrderValue =
+        customer.paidOrders > 0 ? customer.totalSpent / customer.paidOrders : 0;
+
+      const totalItems = customer.orders.reduce((sum: number, order: any) => {
+        return (
+          sum +
+          order.orderItems.reduce(
+            (itemSum: number, item: any) => itemSum + item.quantity,
+            0,
+          )
         );
-        const pendingOrders = orders.filter(
-          (order) => order.status === OrderStatus.PENDING,
-        );
-        const cancelledOrders = orders.filter(
-          (order) => order.status === OrderStatus.CANCELLED,
-        );
+      }, 0);
 
-        const totalSpent = paidOrders.reduce(
-          (sum, order) => sum + order.total,
-          0,
-        );
-        const averageOrderValue =
-          paidOrders.length > 0 ? totalSpent / paidOrders.length : 0;
+      // Get favorite products
+      const productCounts: { [key: string]: { count: number; name: string } } =
+        {};
 
-        const totalItems = orders.reduce((sum, order) => {
-          return (
-            sum +
-            order.orderItems.reduce(
-              (itemSum, item) => itemSum + item.quantity,
-              0,
-            )
-          );
-        }, 0);
-
-        // Get most purchased products
-        const productCounts: {
-          [key: string]: { count: number; name: string; totalSpent: number };
-        } = {};
-
-        orders.forEach((order) => {
-          order.orderItems.forEach((item) => {
-            const productName = item.product.name;
-            if (!productCounts[productName]) {
-              productCounts[productName] = {
-                count: 0,
-                name: productName,
-                totalSpent: 0,
-              };
-            }
-            productCounts[productName].count += item.quantity;
-            if (order.status === OrderStatus.PAID) {
-              productCounts[productName].totalSpent +=
-                item.product.price * item.quantity;
-            }
-          });
+      customer.orders.forEach((order: any) => {
+        order.orderItems.forEach((item: any) => {
+          const productName = item.product.name;
+          if (!productCounts[productName]) {
+            productCounts[productName] = { count: 0, name: productName };
+          }
+          productCounts[productName].count += item.quantity;
         });
+      });
 
-        const favoriteProducts = Object.values(productCounts)
-          .sort((a, b) => b.count - a.count)
-          .slice(0, 3);
+      const favoriteProducts = Object.values(productCounts)
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 3);
 
-        return {
-          phone: customer.phone || "",
-          fullName: customer.fullName || "",
-          email: mostRecentEmail || "Sin email",
-          totalOrders: customer._count.id,
-          paidOrders: paidOrders.length,
-          pendingOrders: pendingOrders.length,
-          cancelledOrders: cancelledOrders.length,
-          totalSpent,
-          averageOrderValue,
-          totalItems,
-          firstOrderDate: customer._min.createdAt,
-          lastOrderDate: customer._max.createdAt,
-          favoriteProducts,
-          recentOrders: orders.slice(0, 5),
-        };
-      }),
-    );
+      return {
+        ...customer,
+        averageOrderValue,
+        totalItems,
+        favoriteProducts,
+        recentOrders: customer.orders.slice(0, 5),
+      };
+    });
 
+    // Sort by total spent and return
     return customerData.sort((a, b) => b.totalSpent - a.totalSpent);
   } catch (error) {
     console.error("Error fetching customers:", error);
+    // Ensure we close any connections
+    await prismadb.$disconnect();
     return [];
+  } finally {
+    // Always disconnect in serverless
+    await prismadb.$disconnect();
   }
 }
 
