@@ -17,6 +17,12 @@ import { Phone, User } from "lucide-react";
 import { CustomerData } from "../server/get-customers";
 import { CellAction } from "./cell-action";
 
+// Define the FavoriteProduct type if not imported from elsewhere
+type FavoriteProduct = {
+  name: string;
+  count: number;
+};
+
 export type CustomerColumn = CustomerData;
 
 export const columns: ColumnDef<CustomerColumn>[] = [
@@ -152,15 +158,17 @@ export const columns: ColumnDef<CustomerColumn>[] = [
               </TooltipTrigger>
               <TooltipContent className="max-w-xs">
                 <div className="space-y-1">
-                  {row.original.favoriteProducts.map((product, index) => (
-                    <div key={index} className="text-xs">
-                      <span className="font-medium">{product.name}</span>
-                      <span className="text-muted-foreground">
-                        {" "}
-                        ({product.count} unidades)
-                      </span>
-                    </div>
-                  ))}
+                  {row.original.favoriteProducts.map(
+                    (product: FavoriteProduct, index: number) => (
+                      <div key={index} className="text-xs">
+                        <span className="font-medium">{product.name}</span>
+                        <span className="text-muted-foreground">
+                          {" "}
+                          ({product.count} unidades)
+                        </span>
+                      </div>
+                    ),
+                  )}
                 </div>
               </TooltipContent>
             </Tooltip>
