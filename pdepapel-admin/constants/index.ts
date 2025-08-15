@@ -7,9 +7,9 @@ import {
 
 export const DEFAULT_COUNTRY = "CO";
 
-export const EMPLOYEE_NAMES = ["Melisa", "Susana"];
+export const EMPLOYEE_NAMES = ["Melisa", "Susana", "Paula Morales"];
 
-export const EMPLOYEE_PHONES = ["3136422316", "3505646475"];
+export const EMPLOYEE_PHONES = ["3136422316", "3505646475", "3142829044"];
 
 export const BATCH_SIZE = 100;
 export const MAX_WAIT_TIME = 30000; // 30 seconds
