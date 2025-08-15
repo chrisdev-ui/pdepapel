@@ -9,6 +9,9 @@
     "app/api/**/*": {
       "maxDuration": 60
     },
+    "app/(dashboard)/[storeId]/(routes)/customers/page.tsx": {
+      "maxDuration": 60
+    },
     "app/api/orders/**": {
       "maxDuration": 60,
       "memory": 1024
