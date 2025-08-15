@@ -30,11 +30,12 @@ import { datePresets } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Coupon, DiscountType } from "@prisma/client";
 import axios from "axios";
-import { DollarSign, Percent, Ticket, Trash } from "lucide-react";
+import { DollarSign, Percent, Trash } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { CouponCodeField } from "../../components/coupon-code-field";
 
 const formSchema = z.object({
   code: z
@@ -200,20 +201,13 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData }) => {
               name="code"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Código</FormLabel>
                   <FormControl>
-                    <div className="relative">
-                      <Ticket className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        {...field}
-                        className="border-dashed bg-accent pl-9 font-mono uppercase tracking-wider text-accent-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
-                        disabled={loading}
-                        placeholder="VERANO2025"
-                        onChange={(e) =>
-                          field.onChange(e.target.value.toUpperCase())
-                        }
-                      />
-                    </div>
+                    <CouponCodeField
+                      form={form}
+                      fieldName="code"
+                      placeholder="VERANO2025 o generar automáticamente"
+                      disabled={loading}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

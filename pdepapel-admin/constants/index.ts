@@ -139,6 +139,7 @@ export enum Models {
   Colors = "colors",
   Designs = "designs",
   Orders = "orders",
+  Customers = "customers",
   Products = "products",
   Posts = "posts",
   Reviews = "reviews",
@@ -171,6 +172,7 @@ export const ModelLabels: Record<Models, string> = {
   [Models.Inventory]: "Inventario",
   [Models.SalesByCategory]: "Ventas por categoría",
   [Models.Coupons]: "Cupones",
+  [Models.Customers]: "Clientes",
 };
 
 export const ModelsColumns: Record<Models, { [key: string]: string }> = {
@@ -222,6 +224,16 @@ export const ModelsColumns: Record<Models, { [key: string]: string }> = {
     status: "Estado de la orden",
     shippingStatus: "Estado del envío",
     createdAt: "Fecha de creación",
+  },
+  [Models.Customers]: {
+    fullName: "Nombre completo",
+    phone: "Teléfono",
+    email: "Correo electrónico",
+    totalOrders: "Órdenes totales",
+    totalSpent: "Total gastado",
+    firstOrderDate: "Primera orden",
+    lastOrderDate: "Última orden",
+    favoriteProducts: "Productos favoritos",
   },
   [Models.Products]: {
     image: "Imagen",

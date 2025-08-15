@@ -13,6 +13,7 @@ import { seedReviews } from "./seed-reviews";
 import { seedSizes } from "./seed-sizes";
 import { seedSuppliers } from "./seed-suppliers";
 import { seedTypes } from "./seed-types";
+import { seedCoupons } from "./seed-coupons";
 
 const prismadb = new PrismaClient();
 
@@ -21,6 +22,9 @@ async function main() {
   const store = await prismadb.store.findFirst({
     select: {
       id: true,
+    },
+    where: {
+      id: "4989cec3-307b-4dbb-af4b-114e21f7e00e",
     },
   });
   const STORE_ID = store?.id as string;
@@ -37,13 +41,14 @@ async function main() {
   await seedMainBanner(STORE_ID, prismadb);
   await seedBanners(STORE_ID, prismadb);
   await seedReviews(STORE_ID, prismadb);
+  await seedCoupons(STORE_ID, prismadb);
   await seedOrders(STORE_ID, prismadb);
-  console.log("Seed data inserted successfully!");
+  console.log("🎉 Seed data inserted successfully!");
 }
 
 main()
   .catch((e) => {
-    console.error(e);
+    console.error("❌ Seed process failed: ", e);
     process.exit(1);
   })
   .finally(async () => {

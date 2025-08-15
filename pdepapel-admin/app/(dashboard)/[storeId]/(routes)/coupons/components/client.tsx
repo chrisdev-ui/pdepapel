@@ -13,6 +13,7 @@ import axios from "axios";
 import { Loader, Plus } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useId, useState } from "react";
+import { BulkCouponCodeGenerator } from "./bulk-coupon-code-generator";
 import { CouponColumn, columns } from "./columns";
 
 interface CouponClientProps {
@@ -57,6 +58,7 @@ const CouponClient: React.FC<CouponClientProps> = ({ data }) => {
         />
         <div className="flex items-center gap-x-2">
           <RefreshButton />
+          <BulkCouponCodeGenerator />
           <Button onClick={handleUpdate} disabled={loading} variant="outline">
             {loading ? (
               <>
