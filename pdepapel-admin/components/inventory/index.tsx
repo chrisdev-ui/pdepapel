@@ -91,20 +91,24 @@ export const Inventory: React.FC<InventoryProps> = async ({ params }) => {
           <CardHeader>
             <CardTitle>Inventario de productos</CardTitle>
           </CardHeader>
-          <CardContent className="flex-grow overflow-hidden">
-            <ScrollArea className="h-[300px] md:h-[400px] lg:h-[500px] xl:h-[870px]">
-              <InventoryClient data={products} />
-            </ScrollArea>
+          <CardContent className="w-full flex-grow">
+            <div className="w-full overflow-auto">
+              <ScrollArea className="h-[300px] w-full min-w-max md:h-[400px] lg:h-[500px] xl:h-[870px]">
+                <InventoryClient data={products} />
+              </ScrollArea>
+            </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
             <CardTitle>Inventario por categoría</CardTitle>
           </CardHeader>
-          <CardContent className="flex-grow overflow-hidden">
-            <ScrollArea className="h-[300px] md:h-[400px] lg:h-[500px] xl:h-[870px]">
-              <InventoryByCategory data={stockData} />
-            </ScrollArea>
+          <CardContent className="w-full flex-grow">
+            <div className="w-full overflow-auto">
+              <ScrollArea className="h-[300px] w-full min-w-max md:h-[400px] lg:h-[500px] xl:h-[870px]">
+                <InventoryByCategory data={stockData} />
+              </ScrollArea>
+            </div>
           </CardContent>
         </Card>
       </div>
