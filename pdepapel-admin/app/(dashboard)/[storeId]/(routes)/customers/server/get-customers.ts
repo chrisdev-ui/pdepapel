@@ -1,6 +1,5 @@
 "use server";
 
-import { EMPLOYEE_NAMES, EMPLOYEE_PHONES } from "@/constants";
 import prismadb from "@/lib/prismadb";
 import { OrderStatus } from "@prisma/client";
 import { headers } from "next/headers";
@@ -15,13 +14,9 @@ export async function getCustomers(storeId: string) {
         storeId,
         phone: {
           not: "",
-          notIn: EMPLOYEE_PHONES,
         },
         fullName: {
           not: "",
-        },
-        NOT: {
-          OR: EMPLOYEE_NAMES.map((name) => ({ fullName: name })),
         },
       },
       select: {

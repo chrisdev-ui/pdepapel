@@ -1,5 +1,6 @@
 "use server";
 
+import { EMPLOYEE_NAMES, EMPLOYEE_PHONES } from "@/constants";
 import prismadb from "@/lib/prismadb";
 
 export async function getCustomerAnalytics(storeId: string) {
@@ -20,6 +21,10 @@ export async function getCustomerAnalytics(storeId: string) {
         },
         phone: {
           not: "",
+          notIn: EMPLOYEE_PHONES,
+        },
+        NOT: {
+          OR: EMPLOYEE_NAMES.map((name) => ({ fullName: name })),
         },
       },
       _sum: {
@@ -109,7 +114,10 @@ export async function getCustomerAnalytics(storeId: string) {
         storeId,
         status: "PAID",
         fullName: { not: "" },
-        phone: { not: "" },
+        phone: { not: "", notIn: EMPLOYEE_PHONES },
+        NOT: {
+          OR: EMPLOYEE_NAMES.map((name) => ({ fullName: name })),
+        },
       };
 
       if (startDate) {
