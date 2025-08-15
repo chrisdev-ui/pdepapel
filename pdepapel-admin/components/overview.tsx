@@ -115,45 +115,58 @@ export const Overview: React.FC<OverviewProps> = ({ data, year }) => {
   );
 
   return (
-    <ResponsiveContainer width="100%" height={350}>
-      <BarChart
-        data={data}
-        margin={{
-          top: 20,
-          right: 30,
-          left: 20,
-          bottom: 5,
-        }}
-      >
-        <CartesianGrid strokeDasharray="3 3" />
-        <XAxis
-          dataKey="name"
-          stroke="#888888"
-          fontSize={12}
-          tickLine={false}
-          axisLine={false}
-        />
-        <YAxis
-          stroke="#888888"
-          fontSize={12}
-          tickLine={false}
-          axisLine={false}
-          tickFormatter={(value: number) =>
-            shortCurrencyFormatter.format(value)
-          }
-        />
-        <Tooltip content={(props) => CustomTooltip(props as any)} />
-        <Legend />
-        {barConfigs.map((config) => (
-          <Bar
-            key={config.dataKey}
-            dataKey={config.dataKey}
-            name={config.name}
-            fill={config.fill}
-            radius={config.radius}
-          />
-        ))}
-      </BarChart>
-    </ResponsiveContainer>
+    <div className="w-full">
+      <div className="w-full overflow-x-auto">
+        <div className="w-full min-w-[1024px] md:min-w-full">
+          <ResponsiveContainer width="100%" height={350}>
+            <BarChart
+              data={data}
+              margin={{
+                top: 20,
+                right: 30,
+                left: 20,
+                bottom: 5,
+              }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis
+                dataKey="name"
+                stroke="#888888"
+                fontSize={12}
+                tickLine={false}
+                axisLine={false}
+              />
+              <YAxis
+                stroke="#888888"
+                fontSize={12}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(value: number) =>
+                  shortCurrencyFormatter.format(value)
+                }
+              />
+              <Tooltip content={(props) => CustomTooltip(props as any)} />
+              <Legend />
+              {barConfigs.map((config) => (
+                <Bar
+                  key={config.dataKey}
+                  dataKey={config.dataKey}
+                  name={config.name}
+                  fill={config.fill}
+                  radius={config.radius}
+                />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+      <div className="mt-2 flex justify-center sm:hidden">
+        <div className="flex items-center space-x-1 text-xs text-muted-foreground">
+          <span>←</span>
+          <span>Desliza para ver más</span>
+          <span>→</span>
+        </div>
+      </div>
+    </div>
   );
 };
