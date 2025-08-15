@@ -15,10 +15,10 @@ export async function getCustomers(storeId: string) {
       where: {
         storeId,
         phone: {
-          not: null,
+          not: "",
         },
         fullName: {
-          not: null,
+          not: "",
         },
       },
       _count: {
