@@ -1,5 +1,6 @@
 "use client";
 
+import { WhatsAppFloatingButton } from "@/components/whatsapp-floating-button";
 import { motion } from "framer-motion";
 
 export default function Template({ children }: { children: React.ReactNode }) {
@@ -11,6 +12,7 @@ export default function Template({ children }: { children: React.ReactNode }) {
       transition={{ ease: "easeInOut", duration: 0.75 }}
     >
       {children}
+      <WhatsAppFloatingButton />
     </motion.div>
   );
 }

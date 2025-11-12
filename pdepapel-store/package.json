@@ -11,6 +11,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@carlos8a/react-whatsapp-floating-button": "^1.1.5",
     "@clerk/localizations": "^1.26.6",
     "@clerk/nextjs": "^4.31.6",
     "@hookform/resolvers": "^3.3.2",
