@@ -34,6 +34,7 @@ const ShopSearchBar: React.FC<ShopSearchBarProps> = ({ className }) => {
     const query = {
       ...current,
       search: debouncedSearch || undefined,
+      page: undefined,
     };
 
     const url = qs.stringifyUrl(

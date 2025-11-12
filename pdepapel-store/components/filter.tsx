@@ -49,11 +49,10 @@ const Filter: React.FC<FilterProps> = ({
   useEffect(() => {
     const current = qs.parse(searchParams.toString(), { arrayFormat: "comma" });
 
-    delete current.page;
-
     const query = {
       ...current,
       [valueKey]: Array.from(selectedValues).map(String),
+      page: undefined,
     };
 
     const url = qs.stringifyUrl(
@@ -61,7 +60,7 @@ const Filter: React.FC<FilterProps> = ({
         url: pathname,
         query,
       },
-      { skipNull: true, arrayFormat: "comma" },
+      { skipNull: true, skipEmptyString: true, arrayFormat: "comma" },
     );
 
     router.push(url);

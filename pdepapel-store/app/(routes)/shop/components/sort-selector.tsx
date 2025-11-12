@@ -42,6 +42,7 @@ const SortSelector: React.FC<SortSelectorProps> = ({
     const query = {
       ...current,
       sortOption: selectedSortOption || undefined,
+      page: undefined,
     };
 
     const url = qs.stringifyUrl(
