@@ -31,6 +31,20 @@ export async function POST(
       throw ErrorFactory.InvalidRequest("El valor del tamaño es requerido");
     }
 
+    // Check if size with same value already exists in this store
+    const existingSize = await prismadb.size.findFirst({
+      where: {
+        storeId: params.storeId,
+        value: value.trim(),
+      },
+    });
+
+    if (existingSize) {
+      throw ErrorFactory.Conflict(
+        `Ya existe un tamaño con el valor "${value.trim()}" en esta tienda`,
+      );
+    }
+
     const size = await prismadb.size.create({
       data: {
         name: name.trim(),

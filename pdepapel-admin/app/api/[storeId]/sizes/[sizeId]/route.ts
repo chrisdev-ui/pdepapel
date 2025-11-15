@@ -67,6 +67,21 @@ export async function PATCH(
       );
     }
 
+    // Check if another size with same value already exists in this store
+    const duplicateSize = await prismadb.size.findFirst({
+      where: {
+        storeId: params.storeId,
+        value: value.trim(),
+        id: { not: params.sizeId }, // Exclude current size
+      },
+    });
+
+    if (duplicateSize) {
+      throw ErrorFactory.Conflict(
+        `Ya existe otro tamaño con el valor "${value.trim()}" en esta tienda`,
+      );
+    }
+
     const updatedSize = await prismadb.size.update({
       where: {
         id: params.sizeId,
