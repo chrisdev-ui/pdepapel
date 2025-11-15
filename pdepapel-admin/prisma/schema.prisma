@@ -107,6 +107,7 @@ model Size {
   products  Product[]
 
   @@index([storeId])
+  @@unique([storeId, value])
 }
 
 model Color {
