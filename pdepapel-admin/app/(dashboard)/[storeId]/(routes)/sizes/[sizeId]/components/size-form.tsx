@@ -15,18 +15,34 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form";
 import { Heading } from "@/components/ui/heading";
-import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Models } from "@/constants";
+import {
+  DIMENSIONS,
+  WEIGHTS,
+  generateSizeName,
+  generateSizeValue,
+  parseSizeValue,
+} from "@/constants/sizes";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 
 const formSchema = z.object({
+  dimension: z.string().min(1, "Debes seleccionar una dimensión"),
+  weight: z.string().min(1, "Debes seleccionar un peso"),
   name: z.string().min(1, "El nombre del tamaño no puede estar vacío"),
   value: z.string().min(1, "El valor del tamaño no puede estar vacío"),
 });
@@ -48,30 +64,74 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
   const { title, description, toastMessage, action } = useMemo(
     () => ({
       title: initialData ? "Editar tamaño" : "Crear tamaño",
-      description: initialData ? "Editar un tamaño" : "Crear un nuevo tamaño",
+      description: initialData
+        ? "Editar un tamaño"
+        : "Crear un nuevo tamaño combinando dimensión y peso",
       toastMessage: initialData ? "Tamaño actualizado" : "Tamaño creado",
       action: initialData ? "Guardar cambios" : "Crear",
     }),
     [initialData],
   );
 
+  // Parse initial data if editing existing size
+  const parsedSize = useMemo(() => {
+    if (initialData) {
+      const parsed = parseSizeValue(initialData.value);
+      return parsed || { dimension: "", weight: "" };
+    }
+    return { dimension: "", weight: "" };
+  }, [initialData]);
+
   const form = useForm<SizeFormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: initialData || {
-      name: "",
-      value: "",
-    },
+    defaultValues: initialData
+      ? {
+          dimension: parsedSize.dimension,
+          weight: parsedSize.weight,
+          name: initialData.name,
+          value: initialData.value,
+        }
+      : {
+          dimension: "",
+          weight: "",
+          name: "",
+          value: "",
+        },
   });
+
+  // Watch dimension and weight to auto-generate name and value
+  const dimension = form.watch("dimension");
+  const weight = form.watch("weight");
+
+  useEffect(() => {
+    if (dimension && weight) {
+      try {
+        const generatedName = generateSizeName(dimension, weight);
+        const generatedValue = generateSizeValue(dimension, weight);
+
+        form.setValue("name", generatedName);
+        form.setValue("value", generatedValue);
+      } catch (error) {
+        console.error("Error generating size name/value:", error);
+      }
+    }
+  }, [dimension, weight, form]);
   const onSubmit = async (data: SizeFormValues) => {
     try {
       setLoading(true);
+      // Only send name and value to API (dimension and weight are just for UI)
+      const payload = {
+        name: data.name,
+        value: data.value,
+      };
+
       if (initialData) {
         await axios.patch(
           `/api/${params.storeId}/${Models.Sizes}/${params.sizeId}`,
-          data,
+          payload,
         );
       } else {
-        await axios.post(`/api/${params.storeId}/${Models.Sizes}`, data);
+        await axios.post(`/api/${params.storeId}/${Models.Sizes}`, payload);
       }
       router.refresh();
       router.push(`/${params.storeId}/${Models.Sizes}`);
@@ -137,42 +197,126 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
           onSubmit={form.handleSubmit(onSubmit)}
           className="w-full space-y-8"
         >
-          <div className="grid grid-cols-3 gap-8">
+          {/* Dimension and Weight Selectors */}
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
             <FormField
               control={form.control}
-              name="name"
+              name="dimension"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Nombre</FormLabel>
-                  <FormControl>
-                    <Input
-                      disabled={loading}
-                      placeholder="Nombre del tamaño"
-                      {...field}
-                    />
-                  </FormControl>
+                  <FormLabel>Dimensión</FormLabel>
+                  <Select
+                    disabled={loading}
+                    onValueChange={field.onChange}
+                    value={field.value}
+                    defaultValue={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue
+                          defaultValue={field.value}
+                          placeholder="Selecciona una dimensión"
+                        />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {DIMENSIONS.map((dimension) => (
+                        <SelectItem
+                          key={dimension.value}
+                          value={dimension.value}
+                        >
+                          {dimension.value} - {dimension.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Tamaño del producto (XS, S, M, L, XL)
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
             <FormField
               control={form.control}
-              name="value"
+              name="weight"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Valor</FormLabel>
-                  <FormControl>
-                    <Input
-                      disabled={loading}
-                      placeholder="Valor del tamaño"
-                      {...field}
-                    />
-                  </FormControl>
+                  <FormLabel>Peso</FormLabel>
+                  <Select
+                    disabled={loading}
+                    onValueChange={field.onChange}
+                    value={field.value}
+                    defaultValue={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue
+                          defaultValue={field.value}
+                          placeholder="Selecciona un peso"
+                        />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {WEIGHTS.map((weight) => (
+                        <SelectItem key={weight.value} value={weight.value}>
+                          {weight.value} - {weight.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Peso del producto (Liviano o Pesado)
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
           </div>
+
+          {/* Generated Name and Value (Read-only preview) */}
+          {dimension && weight && (
+            <div className="rounded-md border bg-muted/50 p-4">
+              <h3 className="mb-3 text-sm font-medium">
+                Vista previa del tamaño:
+              </h3>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <p className="text-xs text-muted-foreground">Nombre</p>
+                  <p className="font-medium">{form.watch("name")}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Valor</p>
+                  <p className="font-medium">{form.watch("value")}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Hidden fields for name and value */}
+          <FormField
+            control={form.control}
+            name="name"
+            render={({ field }) => (
+              <FormItem className="hidden">
+                <FormControl>
+                  <input type="hidden" {...field} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="value"
+            render={({ field }) => (
+              <FormItem className="hidden">
+                <FormControl>
+                  <input type="hidden" {...field} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
           <Button disabled={loading} className="ml-auto" type="submit">
             {action}
           </Button>

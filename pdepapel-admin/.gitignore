@@ -43,5 +43,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# Mac DS_Store files
+.DS_Store
+
 google_merchant_*
-CLAUDE.*
+*md
