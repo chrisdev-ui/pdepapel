@@ -550,7 +550,6 @@ export const OrderForm: React.FC<OrderFormProps> = ({
       });
 
       router.push(`/${params.storeId}/${Models.Orders}`);
-      router.refresh();
     }
   };
 
@@ -568,10 +567,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         description: "La guía de envío se creará automáticamente",
       });
 
-      setTimeout(() => {
-        router.refresh();
-        router.push(`/${params.storeId}/${Models.Orders}`);
-      }, 1500);
+      router.push(`/${params.storeId}/${Models.Orders}`);
     } catch (error) {
       toast({
         title: "Error",
@@ -589,7 +585,6 @@ export const OrderForm: React.FC<OrderFormProps> = ({
       await axios.delete(
         `/api/${params.storeId}/${Models.Orders}/${params.orderId}`,
       );
-      router.refresh();
       router.push(`/${params.storeId}/${Models.Orders}`);
       toast({
         description: "Orden eliminada",
