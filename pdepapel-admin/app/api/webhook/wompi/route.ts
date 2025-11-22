@@ -1,6 +1,7 @@
 import { sendOrderEmail } from "@/lib/email";
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
+import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { batchUpdateProductStockResilient } from "@/lib/utils";
 import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
 import crypto from "crypto";
@@ -302,6 +303,16 @@ async function updateOrderData(order: any, transaction: any) {
 
     // Send email notification (admin + customer)
     if (updatedOrder) {
+      if (
+        updatedOrder.status === OrderStatus.PAID &&
+        updatedOrder.shipping &&
+        !updatedOrder.shipping.envioClickIdOrder &&
+        updatedOrder.shipping.envioClickIdRate
+      ) {
+        setImmediate(async () => {
+          await createGuideForOrder(updatedOrder.id, updatedOrder.storeId);
+        });
+      }
       await sendOrderEmail(
         {
           ...updatedOrder,

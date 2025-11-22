@@ -1,3 +1,4 @@
+/* eslint-disable jsx-a11y/alt-text */
 import {
   currencyFormatter,
   formatPhoneNumber,
@@ -456,6 +457,7 @@ const ProductsPage = ({
       {products.map((product) => (
         <View key={product.id} style={styles.productCard}>
           {product.images.length > 0 && (
+            // eslint-disable-next-line jsx-a11y/alt-text
             <Image
               src={
                 product.images.find((img) => img.isMain)?.url ||

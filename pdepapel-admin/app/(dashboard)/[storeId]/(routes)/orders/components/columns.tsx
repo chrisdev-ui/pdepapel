@@ -208,17 +208,37 @@ export const columns: ColumnDef<OrderColumn>[] = [
           variant: "secondary",
           text: "🚀 Despachada",
         },
+        [ShippingStatus.PickedUp]: {
+          variant: "secondary",
+          text: "📮 Recogido",
+        },
         [ShippingStatus.InTransit]: {
           variant: "secondary",
           text: "⛟ En tránsito",
+        },
+        [ShippingStatus.OutForDelivery]: {
+          variant: "secondary",
+          text: "🚚 En reparto",
         },
         [ShippingStatus.Delivered]: {
           variant: "success",
           text: "🏠 Entregado",
         },
+        [ShippingStatus.FailedDelivery]: {
+          variant: "destructive",
+          text: "❌ Entrega fallida",
+        },
         [ShippingStatus.Returned]: {
           variant: "destructive",
-          text: "🚫 Retornado",
+          text: "🔙 Retornado",
+        },
+        [ShippingStatus.Cancelled]: {
+          variant: "destructive",
+          text: "🚫 Cancelado",
+        },
+        [ShippingStatus.Exception]: {
+          variant: "destructive",
+          text: "⚠️ Incidencia",
         },
       };
       return (

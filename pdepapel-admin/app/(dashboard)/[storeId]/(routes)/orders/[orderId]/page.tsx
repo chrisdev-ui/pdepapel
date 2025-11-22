@@ -1,6 +1,8 @@
+import { getDaneLocations } from "@/actions/get-dane-locations";
 import { clerkClient } from "@clerk/nextjs";
 import { v4 as uuidv4 } from "uuid";
 import { OrderForm } from "./components/order-form";
+import { ShippingInfo } from "./components/shipping-info";
 import { getCoupons } from "./server/get-coupons";
 import { getOrder } from "./server/get-order";
 
@@ -11,10 +13,11 @@ export default async function OrderPage({
 }: {
   params: { orderId: string; storeId: string };
 }) {
-  const [{ order, products }, coupons, users] = await Promise.all([
+  const [{ order, products }, coupons, users, locations] = await Promise.all([
     getOrder(params.orderId, params.storeId),
     getCoupons(params.storeId),
     clerkClient.users.getUserList(),
+    getDaneLocations(),
   ]);
 
   const formattedUsers = users.map((user) => ({
@@ -36,8 +39,11 @@ export default async function OrderPage({
           initialData={order}
           availableCoupons={coupons}
           users={formattedUsers}
+          locations={locations}
           key={uuidv4()}
         />
+
+        {order && <ShippingInfo shipping={order.shipping} orderStatus={order.status} />}
       </div>
     </div>
   );

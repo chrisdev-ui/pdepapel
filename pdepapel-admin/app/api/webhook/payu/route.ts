@@ -1,6 +1,7 @@
 import { sendOrderEmail } from "@/lib/email";
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
+import { createGuideForOrder } from "@/lib/shipping-helpers";
 import {
   formatPayUValue,
   generatePayUSignature,
@@ -316,6 +317,16 @@ async function updateOrderData({
 
     // Send email notification (admin + customer)
     if (updatedOrder) {
+      if (
+        updatedOrder.status === OrderStatus.PAID &&
+        updatedOrder.shipping &&
+        !updatedOrder.shipping.envioClickIdOrder &&
+        updatedOrder.shipping.envioClickIdRate
+      ) {
+        setImmediate(async () => {
+          await createGuideForOrder(updatedOrder.id, updatedOrder.storeId);
+        });
+      }
       await sendOrderEmail(
         {
           ...updatedOrder,

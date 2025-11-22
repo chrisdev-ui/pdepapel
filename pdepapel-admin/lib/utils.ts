@@ -348,6 +348,7 @@ export function calculateOrderTotals(
   config?: {
     discount?: DiscountConfig;
     coupon?: DiscountConfig;
+    shippingCost?: number;
   },
 ): OrderTotals {
   const subtotal = orderItems.reduce(
@@ -372,7 +373,10 @@ export function calculateOrderTotals(
         : Math.min(config.coupon.amount, afterDiscount);
   }
 
-  const total = Math.max(0, subtotal - discount - couponDiscount);
+  const total = Math.max(
+    0,
+    subtotal - discount - couponDiscount + (config?.shippingCost || 0),
+  );
 
   return {
     subtotal,

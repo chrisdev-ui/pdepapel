@@ -1,11 +1,12 @@
 "use server";
 
 import { EMPLOYEE_NAMES, EMPLOYEE_PHONES } from "@/constants";
+import { getColombiaDate } from "@/lib/date-utils";
 import prismadb from "@/lib/prismadb";
 
 export async function getCustomerAnalytics(storeId: string) {
   try {
-    const now = new Date();
+    const now = getColombiaDate();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfSixMonths = new Date(now.getFullYear(), now.getMonth() - 6, 1);
     const startOfYear = new Date(now.getFullYear(), 0, 1);

@@ -75,10 +75,15 @@ export const discountOptions = {
 
 export const shippingOptions = {
   [ShippingStatus.Preparing]: "En preparación",
-  [ShippingStatus.Shipped]: "Enviada",
+  [ShippingStatus.Shipped]: "Enviado",
+  [ShippingStatus.PickedUp]: "Recogido",
   [ShippingStatus.InTransit]: "En tránsito",
-  [ShippingStatus.Delivered]: "Entregada",
-  [ShippingStatus.Returned]: "Devuelta",
+  [ShippingStatus.OutForDelivery]: "En reparto",
+  [ShippingStatus.Delivered]: "Entregado",
+  [ShippingStatus.FailedDelivery]: "Entrega fallida",
+  [ShippingStatus.Returned]: "Devuelto",
+  [ShippingStatus.Cancelled]: "Cancelado",
+  [ShippingStatus.Exception]: "Incidencia",
 };
 
 export const detailsTitleOptions: { [key: string]: string } = {
@@ -155,6 +160,7 @@ export enum Models {
   Inventory = "inventory",
   SalesByCategory = "sales-by-category",
   Coupons = "coupons",
+  Shipments = "shipments",
 }
 
 export const ModelLabels: Record<Models, string> = {
@@ -177,6 +183,7 @@ export const ModelLabels: Record<Models, string> = {
   [Models.SalesByCategory]: "Ventas por categoría",
   [Models.Coupons]: "Cupones",
   [Models.Customers]: "Clientes",
+  [Models.Shipments]: "Envíos",
 };
 
 export const ModelsColumns: Record<Models, { [key: string]: string }> = {
@@ -320,20 +327,53 @@ export const ModelsColumns: Record<Models, { [key: string]: string }> = {
     isActive: "Vigencia",
     createdAt: "Fecha de creación",
   },
+  [Models.Shipments]: {
+    trackingCode: "Código de rastreo",
+    carrierName: "Transportadora",
+    status: "Estado",
+    cost: "Costo",
+    createdAt: "Fecha de creación",
+  },
 };
 
 export const ALLOWED_TRANSITIONS: Record<ShippingStatus, ShippingStatus[]> = {
-  [ShippingStatus.Preparing]: [ShippingStatus.Shipped, ShippingStatus.Returned],
-  [ShippingStatus.Shipped]: [ShippingStatus.InTransit, ShippingStatus.Returned],
+  [ShippingStatus.Preparing]: [
+    ShippingStatus.Shipped,
+    ShippingStatus.Cancelled,
+  ],
+  [ShippingStatus.Shipped]: [
+    ShippingStatus.PickedUp,
+    ShippingStatus.InTransit,
+    ShippingStatus.Cancelled,
+    ShippingStatus.Exception,
+  ],
+  [ShippingStatus.PickedUp]: [
+    ShippingStatus.InTransit,
+    ShippingStatus.Exception,
+    ShippingStatus.Cancelled,
+  ],
   [ShippingStatus.InTransit]: [
-    ShippingStatus.Delivered,
+    ShippingStatus.OutForDelivery,
+    ShippingStatus.Exception,
     ShippingStatus.Returned,
   ],
-  [ShippingStatus.Delivered]: [ShippingStatus.Returned],
-  [ShippingStatus.Returned]: [
-    ShippingStatus.Preparing,
-    ShippingStatus.Shipped,
-    ShippingStatus.InTransit,
+  [ShippingStatus.OutForDelivery]: [
     ShippingStatus.Delivered,
+    ShippingStatus.FailedDelivery,
+    ShippingStatus.Exception,
+  ],
+  [ShippingStatus.Delivered]: [ShippingStatus.Returned],
+  [ShippingStatus.FailedDelivery]: [
+    ShippingStatus.OutForDelivery,
+    ShippingStatus.Returned,
+    ShippingStatus.Exception,
+  ],
+  [ShippingStatus.Returned]: [ShippingStatus.Preparing],
+  [ShippingStatus.Cancelled]: [],
+  [ShippingStatus.Exception]: [
+    ShippingStatus.InTransit,
+    ShippingStatus.OutForDelivery,
+    ShippingStatus.Returned,
+    ShippingStatus.Cancelled,
   ],
 };

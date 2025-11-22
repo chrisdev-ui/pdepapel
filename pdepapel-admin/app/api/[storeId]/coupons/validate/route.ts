@@ -1,4 +1,5 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { getColombiaDate } from "@/lib/date-utils";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, currencyFormatter } from "@/lib/utils";
 import { NextResponse } from "next/server";
@@ -29,13 +30,14 @@ export async function POST(
       throw ErrorFactory.InvalidRequest("Se requiere el subtotal del pedido");
     }
 
+    const now = getColombiaDate();
     const coupon = await prismadb.coupon.findFirst({
       where: {
         storeId: params.storeId,
         code: code.toUpperCase(),
         isActive: true,
-        startDate: { lte: new Date() },
-        endDate: { gte: new Date() },
+        startDate: { lte: now },
+        endDate: { gte: now },
         OR: [
           { maxUses: null },
           {

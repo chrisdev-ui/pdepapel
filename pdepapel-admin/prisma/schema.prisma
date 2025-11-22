@@ -23,6 +23,14 @@ model Store {
   twitter    String?          @default("")
   pinterest  String?          @default("")
   policies   Json?            @default("{}")
+  daneCode      String?       @default("")     
+  neighborhood  String?       @default("")     
+  addressReference String?    @default("")     
+  contactName   String?       @default("")
+  defaultPackageWeight  Float?  @default(1.0)     // Peso por defecto (kg)
+  defaultPackageHeight  Float?  @default(10.0)    // Alto por defecto (cm)
+  defaultPackageWidth   Float?  @default(10.0)    // Ancho por defecto (cm)
+  defaultPackageLength  Float?  @default(10.0)    // Largo por defecto (cm)
   createdAt  DateTime         @default(now())
   updatedAt  DateTime         @updatedAt
   types      Type[]           @relation("StoreToType")
@@ -41,6 +49,7 @@ model Store {
   payments   PaymentDetails[] @relation("StoreToPaymentDetails")
   suppliers  Supplier[]       @relation("StoreToSupplier")
   coupons    Coupon[]         @relation("StoreToCoupons")
+  shippingQuotes ShippingQuote[] @relation("StoreToShippingQuotes")
 }
 
 model Billboard {
@@ -211,6 +220,13 @@ model Order {
   email       String?         @default("")
   phone       String          @default("")
   address     String          @default("")
+  address2    String?         @default("")
+  city        String?         @default("")
+  department  String?         @default("")
+  daneCode    String?         @default("")
+  neighborhood String?        @default("")  // suburb en EnvioClick
+  addressReference String?    @default("") // reference en EnvioClick
+  company     String?         @default("")
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
   orderNumber String          @unique
@@ -311,20 +327,100 @@ model Review {
 }
 
 model Shipping {
-  id           String         @id @default(uuid())
-  orderId      String         @unique
-  status       ShippingStatus @default(Preparing)
+  id           String           @id @default(uuid())
+  orderId      String           @unique
+  status       ShippingStatus   @default(Preparing)
+  provider     ShippingProvider @default(MANUAL)
+  envioClickIdRate  Int?            // ⭐ idRate de cotización (guardado al cotizar)
+  envioClickIdOrder Int?            // ⭐ idOrder de guía (retornado al crear guía)
+  myShipmentReference String?       // Referencia de tu sistema (orderNumber)
+  externalOrderId   String?         // ID externo adicional
+  carrierId         Int?            // idCarrier de EnvioClick
+  carrierName       String?         // Nombre: "COORDINADORA", "ENVIA", etc.
+  productId         Int?            // idProduct de EnvioClick
+  productName       String?         // "Normal", "Normal COD", etc.
+  flete             Float?          // Costo base de envío
+  minimumInsurance  Float?          // Seguro obligatorio
+  extraInsurance    Float?          // Seguro extra
+  hasInsurance      Boolean         @default(false)
+  isCOD             Boolean         @default(false)
+  codValue          Float?          // Valor a recaudar
+  codCost           Float?          // Costo adicional por COD
+  includeGuideCost  Boolean         @default(false)
+  codPaymentMethod  String?         // "cash" | "data_phone"
+  trackingCode      String?         // tracker de EnvioClick
+  trackingUrl       String?         // URL de tracking (si existe)
+  guideUrl          String?         // URL del PDF de guía (S3)
+  guidePdfBase64    String?         @db.LongText // PDF en base64 (opcional)
+  requestPickup     Boolean         @default(false)
+  pickupDate        DateTime?
+  quotationData     Json?
+  originData        Json?           // Datos completos de origen
+  destinationData   Json?           // Datos completos de destino
+  deliveryDays      Int?            // Días estimados de EnvioClick
+  estimatedDeliveryDate DateTime?
+  actualDeliveryDate    DateTime?
+  notes             String?         @db.Text
   courier      String?
   cost         Float?
-  trackingCode String?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
   storeId      String
-  store        Store          @relation("StoreToShipping", fields: [storeId], references: [id])
-  order        Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  store        Store            @relation("StoreToShipping", fields: [storeId], references: [id])
+  order        Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  trackingEvents    ShippingTrackingEvent[]
 
   @@index([orderId])
   @@index([storeId])
+  @@index([envioClickIdOrder])
+  @@index([envioClickIdRate])
+  @@index([trackingCode])
+  @@index([provider])
+  @@index([status])
+  @@index([storeId, status])
+  @@index([storeId, provider])
+  @@index([carrierName])
+}
+
+model ShippingTrackingEvent {
+  id          String    @id @default(uuid())
+  shippingId  String
+  status      String
+  description String    @db.Text
+  location    String?
+  timestamp   DateTime
+  createdAt   DateTime  @default(now())
+
+  shipping    Shipping  @relation(fields: [shippingId], references: [id], onDelete: Cascade)
+
+  @@index([shippingId])
+  @@index([timestamp])
+  @@index([shippingId, timestamp])
+}
+
+model ShippingQuote {
+  id              String    @id @default(uuid())
+  storeId         String
+  originDaneCode  String    // Código DANE origen
+  destDaneCode    String    // Código DANE destino
+  weight          Float     // Peso en kg
+  declaredValue   Float     // Valor declarado
+  height          Float?
+  width           Float?
+  length          Float?
+  quotesData      Json      // Array completo de rates
+  expiresAt       DateTime
+  hitCount        Int       @default(0)  // Cuántas veces se usó
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  store           Store     @relation("StoreToShippingQuotes", fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, originDaneCode, destDaneCode, weight, declaredValue])
+  @@index([storeId])
+  @@index([expiresAt])
+  @@index([storeId, originDaneCode, destDaneCode])
+  @@index([createdAt])
+  @@index([hitCount])
 }
 
 model PaymentDetails {
@@ -391,11 +487,16 @@ enum PaymentMethod {
 }
 
 enum ShippingStatus {
-  Preparing
-  Shipped
-  InTransit
-  Delivered
-  Returned
+  Preparing      
+  Shipped        
+  PickedUp       
+  InTransit      
+  OutForDelivery 
+  Delivered      
+  FailedDelivery 
+  Returned       
+  Cancelled      
+  Exception      
 }
 
 enum Social {
@@ -405,4 +506,10 @@ enum Social {
   TikTok
   Pinterest
   Youtube
+}
+
+enum ShippingProvider {
+  ENVIOCLICK
+  MANUAL
+  NONE
 }

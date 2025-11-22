@@ -7,6 +7,7 @@ import {
   isBefore,
   isEqual,
 } from "date-fns";
+import { utcToZonedTime } from "date-fns-tz";
 
 export function getTimeStatus(startDate: Date, endDate: Date): TimeStatus {
   const now = new Date();
@@ -49,4 +50,9 @@ export function getTimeStatus(startDate: Date, endDate: Date): TimeStatus {
           ? `${hours} ${hours === 1 ? "hora" : "horas"}`
           : `${minutes} ${minutes === 1 ? "minuto" : "minutos"}`,
   };
+}
+
+export function getColombiaDate(date?: Date): Date {
+  if (!date) return utcToZonedTime(new Date(), "America/Bogota");
+  return utcToZonedTime(date, "America/Bogota");
 }

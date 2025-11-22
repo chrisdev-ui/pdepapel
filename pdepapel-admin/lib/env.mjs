@@ -20,6 +20,17 @@ export const env = createEnv({
     PAYU_MERCHANT_ID: z.string().min(1),
     PAYU_API_KEY: z.string().min(1),
     CRON_SECRET: z.string().min(1),
+    // Internal API authentication for server-to-server calls (webhooks, etc.)
+    INTERNAL_API_SECRET: z.string().min(1),
+    // EnvioClick API
+    ENVIOCLICK_API_KEY: z.string().min(1),
+    ENVIOCLICK_API_URL: z.string().url().default("https://api.envioclickpro.com.co"),
+    // MiPaquete API (para códigos DANE)
+    MIPAQUETE_API_KEY: z.string().min(1),
+    // Upstash Redis (para caché de ubicaciones DANE)
+    KV_REST_API_URL: z.string().url(),
+    KV_REST_API_TOKEN: z.string().min(1),
+    KV_REST_API_READ_ONLY_TOKEN: z.string().min(1).optional(),
   },
   client: {
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().min(1),

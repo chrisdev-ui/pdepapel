@@ -1,4 +1,5 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { getColombiaDate } from "@/lib/date-utils";
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
     if (!authToken || authToken !== env.CRON_SECRET)
       throw ErrorFactory.Unauthorized();
 
-    const now = new Date();
+    const now = getColombiaDate();
 
     const [expiredCoupons, validCoupons] = await prismadb.$transaction([
       // Update expired coupons

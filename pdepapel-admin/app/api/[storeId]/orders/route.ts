@@ -1,7 +1,9 @@
 import { BATCH_SIZE } from "@/constants";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { getColombiaDate } from "@/lib/date-utils";
 import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
+import { createGuideForOrder } from "@/lib/shipping-helpers";
 
 import {
   batchUpdateProductStock,
@@ -21,6 +23,7 @@ import {
   DiscountType,
   OrderStatus,
   PaymentMethod,
+  ShippingProvider,
   ShippingStatus,
 } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
@@ -35,6 +38,13 @@ type OrderData = {
   email?: string;
   address: string;
   documentId?: string | null;
+  city?: string;
+  department?: string;
+  daneCode?: string;
+  neighborhood?: string | null;
+  address2?: string | null;
+  addressReference?: string | null;
+  company?: string | null;
   subtotal: number;
   discount?: number;
   discountType?: DiscountType;
@@ -75,12 +85,21 @@ export async function POST(
     const {
       fullName,
       phone,
-      address,
+      email,
       orderItems,
       status,
       payment,
+      city,
+      department,
+      daneCode,
+      neighborhood,
+      address,
+      address2,
+      addressReference,
+      company,
       shipping,
-      email,
+      shippingProvider,
+      envioClickIdRate,
       userId,
       guestId,
       documentId,
@@ -121,6 +140,25 @@ export async function POST(
           authenticatedUserId = user.id;
         } else {
           throw ErrorFactory.Unauthenticated();
+        }
+      }
+    }
+
+    if (isStoreOwner && shipping) {
+      if (shippingProvider === ShippingProvider.ENVIOCLICK) {
+        if (!envioClickIdRate)
+          throw ErrorFactory.InvalidRequest(
+            "Se requiere seleccionar una tarifa de EnvioClick para el envío",
+          );
+        if (!city || !department || !daneCode)
+          throw ErrorFactory.InvalidRequest(
+            "Se requieren ciudad, departamento y código DANE para envíos con EnvioClick",
+          );
+      } else if (shipping.provider === "MANUAL") {
+        if (!shipping.courier || !shipping.carrierName) {
+          throw ErrorFactory.InvalidRequest(
+            "Se requiere el nombre del transportista para envíos manuales",
+          );
         }
       }
     }
@@ -183,13 +221,14 @@ export async function POST(
     let coupon: Coupon | null = null;
 
     if (couponCode) {
+      const now = getColombiaDate();
       coupon = await prismadb.coupon.findFirst({
         where: {
           storeId: params.storeId,
           code: couponCode.toUpperCase(),
           isActive: true,
-          startDate: { lte: new Date() },
-          endDate: { gte: new Date() },
+          startDate: { lte: now },
+          endDate: { gte: now },
           OR: [
             { maxUses: null },
             {
@@ -253,6 +292,7 @@ export async function POST(
               amount: coupon.amount,
             }
           : undefined,
+        shippingCost: shipping?.cost || 0,
       });
 
       if (
@@ -298,6 +338,13 @@ export async function POST(
         address,
         email,
         documentId,
+        city,
+        department,
+        daneCode,
+        neighborhood,
+        address2,
+        addressReference,
+        company,
         subtotal: totals.subtotal,
         discount: totals.discount,
         discountType: discount?.type as DiscountType,
@@ -322,7 +369,12 @@ export async function POST(
         };
       if (shipping)
         orderData.shipping = {
-          create: { ...shipping, storeId: params.storeId },
+          create: {
+            ...shipping,
+            provider: shippingProvider,
+            envioClickIdRate: envioClickIdRate || null,
+            storeId: params.storeId,
+          },
         };
 
       const createdOrder = await tx.order.create({
@@ -370,6 +422,27 @@ export async function POST(
 
       return createdOrder;
     });
+
+    if (
+      isStoreOwner &&
+      status === OrderStatus.PAID &&
+      shippingProvider === ShippingProvider.ENVIOCLICK &&
+      envioClickIdRate
+    ) {
+      setImmediate(async () => {
+        try {
+          await createGuideForOrder(order.id, params.storeId);
+          console.log(
+            `[ADMIN_ORDER_CREATE] Guide created for order ${order.orderNumber}`,
+          );
+        } catch (error) {
+          console.error(
+            `[ADMIN_ORDER_CREATE] Failed to create guide for order ${order.orderNumber}:`,
+            error,
+          );
+        }
+      });
+    }
 
     // Queue email sending asynchronously (don't wait for it)
     if (!isStoreOwner) {

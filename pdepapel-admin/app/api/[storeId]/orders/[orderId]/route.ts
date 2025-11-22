@@ -2,6 +2,7 @@ import { BATCH_SIZE } from "@/constants";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
+import { createGuideForOrder } from "@/lib/shipping-helpers";
 import {
   batchUpdateProductStock,
   batchUpdateProductStockResilient,
@@ -88,6 +89,8 @@ export async function PATCH(
       status,
       payment,
       shipping,
+      shippingProvider,
+      envioClickIdRate,
       email,
       userId: requestUserId,
       guestId,
@@ -96,6 +99,13 @@ export async function PATCH(
       total,
       discount,
       couponCode,
+      city,
+      department,
+      daneCode,
+      neighborhood,
+      address2,
+      addressReference,
+      company,
     } = body;
 
     // Validate order items count
@@ -237,7 +247,7 @@ export async function PATCH(
         };
       });
 
-      // Calculate totals
+      // Calculate totals (including shipping cost)
       const totals = calculateOrderTotals(itemsWithPrices, {
         discount:
           discount?.type && discount?.amount
@@ -253,6 +263,7 @@ export async function PATCH(
                 amount: order.coupon.amount,
               }
             : undefined,
+        shippingCost: shipping?.cost || 0,
       });
 
       // Validate calculated totals
@@ -355,9 +366,17 @@ export async function PATCH(
           fullName,
           phone,
           address,
+          email,
           userId: verifiedUserId,
           guestId: verifiedUserId ? null : guestId,
           documentId,
+          city,
+          department,
+          daneCode,
+          neighborhood,
+          address2,
+          addressReference,
+          company,
           subtotal: totals.subtotal,
           discount: totals.discount,
           discountType: discount?.type as DiscountType,
@@ -368,19 +387,57 @@ export async function PATCH(
           payment: payment && {
             upsert: {
               create: {
-                ...payment,
+                method: payment.method,
+                transactionId: payment.transactionId,
+                details: payment.details,
                 store: { connect: { id: params.storeId } },
               },
-              update: payment,
+              update: {
+                method: payment.method,
+                transactionId: payment.transactionId,
+                details: payment.details,
+              },
             },
           },
           shipping: shipping && {
             upsert: {
               create: {
-                ...shipping,
+                status: shipping.status,
+                provider: shippingProvider,
+                envioClickIdRate: envioClickIdRate || null,
+                carrierId: shipping.carrierId,
+                carrierName: shipping.carrierName,
+                courier: shipping.courier,
+                productId: shipping.productId,
+                productName: shipping.productName,
+                flete: shipping.flete,
+                minimumInsurance: shipping.minimumInsurance,
+                deliveryDays: shipping.deliveryDays,
+                isCOD: shipping.isCOD,
+                cost: shipping.cost,
+                trackingCode: shipping.trackingCode,
+                estimatedDeliveryDate: shipping.estimatedDeliveryDate,
+                notes: shipping.notes,
                 store: { connect: { id: params.storeId } },
               },
-              update: shipping,
+              update: {
+                status: shipping.status,
+                ...(shippingProvider && { provider: shippingProvider }),
+                ...(envioClickIdRate !== undefined && { envioClickIdRate: envioClickIdRate || null }),
+                carrierId: shipping.carrierId,
+                carrierName: shipping.carrierName,
+                courier: shipping.courier,
+                productId: shipping.productId,
+                productName: shipping.productName,
+                flete: shipping.flete,
+                minimumInsurance: shipping.minimumInsurance,
+                deliveryDays: shipping.deliveryDays,
+                isCOD: shipping.isCOD,
+                cost: shipping.cost,
+                trackingCode: shipping.trackingCode,
+                estimatedDeliveryDate: shipping.estimatedDeliveryDate,
+                notes: shipping.notes,
+              },
             },
           },
         },
@@ -395,6 +452,28 @@ export async function PATCH(
       // Handle stock changes with batching
       wasPaid = order.status === OrderStatus.PAID;
       isNowPaid = updated.status === OrderStatus.PAID;
+
+      if (
+        isNowPaid &&
+        updated.shipping &&
+        !updated.shipping?.envioClickIdOrder &&
+        updated.shipping.envioClickIdRate
+      ) {
+        try {
+          console.log("[ORDER_UPDATE] Attempting to create guide automatically...");
+          // Pass the updated order data and transaction client to avoid re-querying and locks
+          await createGuideForOrder(updated.id, params.storeId, updated, tx);
+          console.log("[ORDER_UPDATE] Guide created automatically");
+        } catch (error: any) {
+          console.error("[ORDER_UPDATE] Failed to create guide:", error);
+          // Guide creation failed, but order update should still succeed
+          // User can manually create guide later
+        }
+      } else {
+        if (isNowPaid && updated.shipping && !updated.shipping?.envioClickIdOrder) {
+          console.log("[ORDER_UPDATE] Skipping automatic guide creation - no shipping rate available");
+        }
+      }
 
       if (isNowPaid && !wasPaid) {
         // Prepare stock updates for decrementing

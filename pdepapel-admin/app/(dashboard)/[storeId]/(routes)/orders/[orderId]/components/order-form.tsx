@@ -5,6 +5,7 @@ import {
   DiscountType,
   OrderStatus,
   PaymentMethod,
+  ShippingProvider,
   ShippingStatus,
 } from "@prisma/client";
 import Image from "next/image";
@@ -13,10 +14,12 @@ import { useEffect, useMemo, useState } from "react";
 import z from "zod";
 
 import { AlertModal } from "@/components/modals/alert-modal";
+import { GuideConfirmationModal } from "@/components/modals/guide-confirmation-modal";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AutoComplete } from "@/components/ui/autocomplete";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Command,
   CommandEmpty,
@@ -24,9 +27,11 @@ import {
   CommandInput,
   CommandItem,
 } from "@/components/ui/command";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -34,11 +39,18 @@ import {
 } from "@/components/ui/form";
 import { Heading } from "@/components/ui/heading";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  LocationCombobox,
+  LocationOption,
+} from "@/components/ui/location-combobox";
+import { OrderStatusSelector } from "@/components/ui/order-status-selector";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -57,8 +69,8 @@ import {
   paymentMethodsByOption,
   paymentOptions,
   shippingOptions,
-  statusOptions,
 } from "@/constants";
+import { ENVIOCLICK_LIMITS, getCarrierInfo } from "@/constants/shipping";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import {
@@ -74,9 +86,15 @@ import {
   Check,
   ChevronsUpDown,
   DollarSign,
+  Loader2,
+  Package,
   Percent,
+  RefreshCw,
+  Store,
   Ticket,
   Trash,
+  Truck,
+  Wallet,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { getCoupons } from "../server/get-coupons";
@@ -97,8 +115,21 @@ const shippingSchema = z
   .object({
     status: z.nativeEnum(ShippingStatus),
     courier: z.string(),
+    carrierName: z.string(),
+    productName: z.string(),
+    flete: z.coerce.number(),
+    minimumInsurance: z.coerce.number(),
+    deliveryDays: z.coerce.number(),
+    isCOD: z.boolean(),
     cost: z.coerce.number(),
     trackingCode: z.string(),
+    estimatedDeliveryDate: z
+      .date({
+        required_error: "La fecha de inicio es requerida",
+        invalid_type_error: "La fecha de inicio debe ser una fecha válida",
+      })
+      .optional(),
+    notes: z.string().optional(),
   })
   .partial();
 
@@ -110,36 +141,113 @@ const discountSchema = z
   })
   .partial();
 
-const formSchema = z.object({
-  userId: z.string().default(""),
-  guestId: z.string().default(""),
-  fullName: z.string().min(1, "Debes agregar un nombre"),
-  email: z
-    .string()
-    .email("Debes agregar un correo electrónico válido")
-    .optional()
-    .or(z.literal("")),
-  phone: z
-    .string()
-    .min(10, "El número telefónico debe tener 10 dígitos")
-    .max(13, "El número telefónico debe tener 13 dígitos"),
-  address: z.string().min(1, "Debes agregar una dirección"),
-  orderItems: z
-    .array(
-      z.object({ productId: z.string(), quantity: z.coerce.number().min(1) }),
-    )
-    .nonempty({ message: "Debes agregar al menos 1 producto" }),
-  status: z.nativeEnum(OrderStatus),
-  payment: paymentSchema,
-  shipping: shippingSchema,
-  documentId: z.string().default(""),
-  subtotal: z.coerce.number().default(0),
-  total: z.coerce.number().default(0),
-  discount: discountSchema,
-  couponCode: z.string().optional(),
-});
+const formSchema = z
+  .object({
+    userId: z.string().default(""),
+    guestId: z.string().default(""),
+    fullName: z
+      .string()
+      .min(1, "Debes agregar un nombre")
+      .max(
+        29,
+        "El nombre completo no puede exceder 28 caracteres (límite de envío)",
+      ),
+    email: z
+      .string()
+      .email("Debes agregar un correo electrónico válido")
+      .max(
+        ENVIOCLICK_LIMITS.email.max,
+        `El correo no puede exceder ${ENVIOCLICK_LIMITS.email.max} caracteres`,
+      )
+      .optional()
+      .or(z.literal("")),
+    phone: z
+      .string()
+      .min(10, "El número telefónico debe tener 10 dígitos")
+      .max(10, "El número telefónico debe tener 10 dígitos")
+      .regex(/^\d+$/, "Solo se permiten números"),
+    address: z
+      .string()
+      .min(1, "Debes agregar una dirección")
+      .max(
+        ENVIOCLICK_LIMITS.address.max,
+        `La dirección no puede exceder ${ENVIOCLICK_LIMITS.address.max} caracteres`,
+      ),
+    city: z.string().optional(),
+    department: z.string().optional(),
+    daneCode: z.string().optional(),
+    neighborhood: z
+      .string()
+      .max(
+        ENVIOCLICK_LIMITS.suburb.max,
+        `El barrio no puede exceder ${ENVIOCLICK_LIMITS.suburb.max} caracteres`,
+      )
+      .optional(),
+    addressReference: z
+      .string()
+      .max(
+        ENVIOCLICK_LIMITS.reference.max,
+        `La referencia no puede exceder ${ENVIOCLICK_LIMITS.reference.max} caracteres`,
+      )
+      .optional(),
+    address2: z
+      .string()
+      .max(
+        ENVIOCLICK_LIMITS.crossStreet.max,
+        `La intersección no puede exceder ${ENVIOCLICK_LIMITS.crossStreet.max} caracteres`,
+      )
+      .optional(),
+    company: z
+      .string()
+      .max(
+        ENVIOCLICK_LIMITS.company.max,
+        `La empresa no puede exceder ${ENVIOCLICK_LIMITS.company.max} caracteres`,
+      )
+      .optional(),
+    orderItems: z
+      .array(
+        z.object({ productId: z.string(), quantity: z.coerce.number().min(1) }),
+      )
+      .nonempty({ message: "Debes agregar al menos 1 producto" }),
+    status: z.nativeEnum(OrderStatus),
+    payment: paymentSchema,
+    shipping: shippingSchema,
+    shippingProvider: z
+      .nativeEnum(ShippingProvider)
+      .default(ShippingProvider.NONE),
+    envioClickIdRate: z.number().optional(),
+    documentId: z.string().default(""),
+    subtotal: z.coerce.number().default(0),
+    total: z.coerce.number().default(0),
+    discount: discountSchema,
+    couponCode: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.shippingProvider === "ENVIOCLICK") {
+        return !!(data.city && data.department && data.daneCode);
+      }
+      return true;
+    },
+    {
+      message:
+        "Ciudad, departamento y código DANE son requeridos para EnvioClick",
+      path: ["daneCode"],
+    },
+  );
 
 type OrderFormValues = z.infer<typeof formSchema>;
+
+interface ShippingQuote {
+  idRate: number;
+  carrier: string;
+  product: string;
+  flete: number;
+  minimumInsurance: number;
+  totalCost: number;
+  deliveryDays: string | number;
+  isCOD: boolean;
+}
 
 interface OrderFormProps {
   initialData: GetOrderResult["order"];
@@ -150,6 +258,7 @@ interface OrderFormProps {
     label: string;
     image?: string;
   }[];
+  locations: LocationOption[];
 }
 
 export const OrderForm: React.FC<OrderFormProps> = ({
@@ -157,6 +266,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   products,
   availableCoupons,
   users,
+  locations,
 }) => {
   const params = useParams();
   const router = useRouter();
@@ -165,6 +275,13 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   const [open, setOpen] = useState(false);
   const [validatingCoupon, setValidatingCoupon] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingQuotes, setLoadingQuotes] = useState(false);
+  const [shippingQuotes, setShippingQuotes] = useState<ShippingQuote[]>([]);
+  const [selectedRateId, setSelectedRateId] = useState<number | null>(
+    initialData?.shipping?.envioClickIdRate || null,
+  );
+
+  const [showGuideConfirmation, setShowGuideConfirmation] = useState(false);
 
   const [coupon, setCoupon] = useState<Coupon | null>(null);
 
@@ -224,6 +341,14 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           guestId: initialData.guestId || "",
           documentId: initialData.documentId || "",
           email: initialData.email || "",
+          address: initialData.address || "",
+          city: initialData.city || "",
+          department: initialData.department || "",
+          daneCode: initialData.daneCode || "",
+          neighborhood: initialData.neighborhood || "",
+          addressReference: initialData.addressReference || "",
+          address2: initialData.address2 || "",
+          company: initialData.company || "",
           subtotal: initialData.subtotal || 0,
           total: initialData.total || 0,
           discount: {
@@ -240,11 +365,25 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             ...initialData.payment,
             transactionId: initialData.payment?.transactionId || undefined,
           },
+          shippingProvider:
+            initialData.shipping?.provider || ShippingProvider.NONE,
+          envioClickIdRate: initialData.shipping?.envioClickIdRate || undefined,
           shipping: {
             ...initialData.shipping,
+            status: initialData.shipping?.status || ShippingStatus.Preparing,
             courier: initialData.shipping?.courier || undefined,
+            carrierName: initialData.shipping?.carrierName || undefined,
+            productName: initialData.shipping?.productName || undefined,
+            flete: initialData.shipping?.flete || undefined,
+            minimumInsurance:
+              initialData.shipping?.minimumInsurance || undefined,
+            deliveryDays: initialData.shipping?.deliveryDays || undefined,
+            isCOD: initialData.shipping?.isCOD || false,
             trackingCode: initialData.shipping?.trackingCode || undefined,
-            cost: initialData.shipping?.cost || undefined,
+            cost: initialData.shipping?.cost || 0,
+            estimatedDeliveryDate:
+              initialData.shipping?.estimatedDeliveryDate || undefined,
+            notes: initialData.shipping?.notes || undefined,
           },
         }
       : {
@@ -255,10 +394,32 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           phone: "",
           email: "",
           address: "",
+          city: "",
+          department: "",
+          daneCode: "",
+          neighborhood: "",
+          addressReference: "",
+          address2: "",
+          company: "",
           documentId: "",
           status: OrderStatus.CREATED,
           payment: {},
-          shipping: {},
+          shippingProvider: ShippingProvider.NONE,
+          envioClickIdRate: undefined,
+          shipping: {
+            status: ShippingStatus.Preparing,
+            courier: "",
+            carrierName: "",
+            productName: "",
+            flete: 0,
+            minimumInsurance: 0,
+            deliveryDays: 0,
+            isCOD: false,
+            trackingCode: "",
+            cost: 0,
+            estimatedDeliveryDate: undefined,
+            notes: undefined,
+          },
           subtotal: 0,
           total: 0,
           discount: {},
@@ -268,20 +429,21 @@ export const OrderForm: React.FC<OrderFormProps> = ({
 
   const discountType = form.watch("discount.type");
   const discountAmount = form.watch("discount.amount");
+  const shippingCost = form.watch("shipping.cost");
+  const carrierInfo = useMemo(() => {
+    return getCarrierInfo(
+      form.watch("shipping.courier") ||
+        form.watch("shipping.carrierName") ||
+        "",
+    );
+  }, [form]);
 
   const {
     formState: { isDirty },
   } = form;
 
   const orderTotals = useMemo(() => {
-    if (!isDirty && initialData) {
-      return {
-        subtotal: initialData.subtotal,
-        discount: initialData.discount,
-        couponDiscount: initialData.couponDiscount,
-        total: initialData.total,
-      };
-    }
+    // Calculate subtotal from selected products
     const subtotal = productsSelected.reduce(
       (sum, product) =>
         sum + Number(product.price) * (quantities[product.value] || 1),
@@ -305,7 +467,12 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           : Math.min(Number(coupon.amount), afterDiscount);
     }
 
-    const total = Math.max(0, subtotal - discountValue - couponDiscount);
+    // Include shipping cost in total calculation
+    const shipping = Number(shippingCost) || 0;
+    const total = Math.max(
+      0,
+      subtotal - discountValue - couponDiscount + shipping,
+    );
 
     return {
       subtotal,
@@ -314,49 +481,100 @@ export const OrderForm: React.FC<OrderFormProps> = ({
       total,
     };
   }, [
-    isDirty,
-    initialData,
     productsSelected,
     quantities,
     discountType,
     discountAmount,
     coupon,
+    shippingCost,
   ]);
 
   const onSubmit = async (data: OrderFormValues) => {
     try {
       setLoading(true);
-      const updatedOrderItems = data.orderItems.map((item) => ({
-        ...item,
-        quantity: quantities[item.productId] || item.quantity,
-      }));
 
-      const payload = {
-        ...data,
-        orderItems: updatedOrderItems,
-        subtotal: orderTotals.subtotal,
-        total: orderTotals.total,
-        discountType: data.discount?.type,
-        discountAmount: data.discount?.amount,
-        discountReason: data.discount?.reason,
-      };
+      // Check if order will be PAID with ENVIOCLICK and has selected rate
+      const willBePaid = data.status === "PAID";
+      const hasEnvioClickRate =
+        data.shippingProvider === "ENVIOCLICK" && data.envioClickIdRate;
+      const hasGuideAlready = initialData?.shipping?.envioClickIdOrder;
 
-      if (initialData) {
-        await axios.patch(
-          `/api/${params.storeId}/${Models.Orders}/${params.orderId}`,
-          payload,
-        );
-      } else {
-        await axios.post(`/api/${params.storeId}/${Models.Orders}`, payload);
+      if (willBePaid && hasEnvioClickRate && !hasGuideAlready) {
+        // Show confirmation modal for guide creation
+        setShowGuideConfirmation(true);
+        setLoading(false);
+        return; // Don't submit yet, wait for confirmation
       }
-      router.refresh();
-      router.push(`/${params.storeId}/${Models.Orders}`);
+
+      // Normal submission
+      await submitOrder(data);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const submitOrder = async (data: OrderFormValues, forceRedirect = true) => {
+    const updatedOrderItems = data.orderItems.map((item) => ({
+      ...item,
+      quantity: quantities[item.productId] || item.quantity,
+    }));
+
+    const payload = {
+      ...data,
+      orderItems: updatedOrderItems,
+      subtotal: orderTotals.subtotal,
+      total: orderTotals.total,
+      discountType: data.discount?.type,
+      discountAmount: data.discount?.amount,
+      discountReason: data.discount?.reason,
+    };
+
+    if (initialData) {
+      await axios.patch(
+        `/api/${params.storeId}/${Models.Orders}/${params.orderId}`,
+        payload,
+      );
+    } else {
+      await axios.post(`/api/${params.storeId}/${Models.Orders}`, payload);
+    }
+    if (forceRedirect) {
       toast({
         description: toastMessage,
         variant: "success",
       });
+
+      router.push(`/${params.storeId}/${Models.Orders}`);
+      router.refresh();
+    }
+  };
+
+  const confirmAndCreateGuide = async () => {
+    try {
+      setLoading(true);
+      const data = form.getValues();
+
+      await submitOrder(data, false);
+
+      setShowGuideConfirmation(false);
+
+      toast({
+        title: "Orden guardada y guía creada",
+        description: "La guía de envío se creará automáticamente",
+      });
+
+      setTimeout(() => {
+        router.refresh();
+        router.push(`/${params.storeId}/${Models.Orders}`);
+      }, 1500);
     } catch (error) {
       toast({
+        title: "Error",
         description: getErrorMessage(error),
         variant: "destructive",
       });
@@ -390,6 +608,101 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     }
   };
 
+  const onGetShippingQuotes = async () => {
+    const formData = form.getValues();
+
+    if (!formData.city || !formData.department || !formData.daneCode) {
+      toast({
+        title: "Error",
+        description:
+          "Debes seleccionar una ciudad con el buscador para cotizar",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (formData.orderItems.length === 0) {
+      toast({
+        title: "Error",
+        description: "Debes agregar al menos un producto al pedido",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setLoadingQuotes(true);
+      const response = await axios.post(
+        `/api/${params.storeId}/shipment/quote`,
+        {
+          destination: {
+            daneCode: formData.daneCode || "",
+            address: formData.address || "",
+          },
+          orderTotal: orderTotals.total,
+          items: formData.orderItems.map((item) => ({
+            ...item,
+            quantity: quantities[item.productId] || item.quantity,
+          })),
+          forceRefresh: true,
+        },
+      );
+
+      setShippingQuotes(response.data.quotes);
+
+      if (response.data.quotes.length === 0) {
+        toast({
+          title: "Sin resultados",
+          description:
+            "No se encontraron tarifas disponibles para esta ubicación",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Cotización exitosa",
+          description: `Se encontraron ${response.data.quotes.length} tarifas disponibles`,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error al cotizar",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingQuotes(false);
+    }
+  };
+
+  const handleSelectRate = (quote: ShippingQuote) => {
+    setSelectedRateId(quote.idRate);
+
+    // Update form with selected rate data
+    form.setValue("shippingProvider", "ENVIOCLICK");
+    form.setValue("envioClickIdRate", quote.idRate);
+
+    // Store all quotation data including carrier info for guide creation
+    form.setValue("shipping", {
+      carrierName: quote.carrier,
+      courier: quote.carrier, // Set both for compatibility
+      productName: quote.product,
+      flete: quote.flete,
+      minimumInsurance: quote.minimumInsurance,
+      deliveryDays:
+        typeof quote.deliveryDays === "string"
+          ? parseInt(quote.deliveryDays)
+          : quote.deliveryDays,
+      isCOD: quote.isCOD,
+      cost: quote.totalCost,
+      status: ShippingStatus.Preparing,
+    } as any);
+
+    toast({
+      title: "Tarifa seleccionada",
+      description: `${quote.carrier} - ${currencyFormatter.format(quote.totalCost)}`,
+    });
+  };
+
   const parsedDetails = parseOrderDetails(initialData?.payment?.details);
 
   useEffect(() => {
@@ -405,6 +718,24 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         onClose={() => setOpen(false)}
         onConfirm={onDelete}
         loading={loading}
+      />
+      <GuideConfirmationModal
+        isOpen={showGuideConfirmation}
+        onClose={() => setShowGuideConfirmation(false)}
+        onConfirm={confirmAndCreateGuide}
+        loading={loading}
+        selectedQuote={
+          shippingQuotes.find((q) => q.idRate === selectedRateId) || {
+            idRate: form.getValues("envioClickIdRate") || 0,
+            carrier: form.getValues("shipping.carrierName") || "",
+            product: form.getValues("shipping.productName") || "",
+            flete: form.getValues("shipping.flete") || 0,
+            minimumInsurance: form.getValues("shipping.minimumInsurance") || 0,
+            totalCost: form.getValues("shipping.cost") || 0,
+            deliveryDays: form.getValues("shipping.deliveryDays") || 0,
+            isCOD: form.getValues("shipping.isCOD") || false,
+          }
+        }
       />
       <div className="flex items-center justify-between">
         <Heading title={title} description={description} />
@@ -488,6 +819,11 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 )}
               </div>
             )}
+            {Number(shippingCost || 0) > 0 && (
+              <div className="text-lg text-primary">
+                Envío: +{currencyFormatter.format(Number(shippingCost || 0))}
+              </div>
+            )}
             <div className="text-xl font-bold">
               Total: {currencyFormatter.format(orderTotals.total)}
             </div>
@@ -498,7 +834,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
               name="orderItems"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Lista de Productos</FormLabel>
+                  <FormLabel isRequired>Lista de Productos</FormLabel>
                   <FormControl>
                     <AutoComplete
                       options={products}
@@ -615,7 +951,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
               name="fullName"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Nombre</FormLabel>
+                  <FormLabel isRequired>Nombre</FormLabel>
                   <FormControl>
                     <Input
                       disabled={loading}
@@ -666,7 +1002,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
               name="phone"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Teléfono</FormLabel>
+                  <FormLabel isRequired>Teléfono</FormLabel>
                   <FormControl>
                     <div className="flex items-center gap-x-1">
                       {(initialData || field.value.length >= 10) && (
@@ -699,14 +1035,152 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             />
             <FormField
               control={form.control}
-              name="address"
+              name="daneCode"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Dirección</FormLabel>
+                  <FormLabel isRequired>
+                    Ciudad y Departamento
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      (Requerido para cotización de envío)
+                    </span>
+                  </FormLabel>
+                  <FormControl>
+                    <LocationCombobox
+                      options={locations}
+                      value={field.value || ""}
+                      onChange={(value, location) => {
+                        field.onChange(value);
+                        if (location) {
+                          form.setValue("city", location.city);
+                          form.setValue("department", location.department);
+                        }
+                      }}
+                      disabled={loading}
+                      placeholder="Buscar ciudad..."
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="city"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Ciudad</FormLabel>
                   <FormControl>
                     <Input
                       disabled={loading}
-                      placeholder="Dirección"
+                      placeholder="Ej: Bogotá"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="department"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Departamento</FormLabel>
+                  <FormControl>
+                    <Input
+                      disabled={loading}
+                      placeholder="Ej: Cundinamarca"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="address"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel isRequired>Dirección</FormLabel>
+                  <FormControl>
+                    <Input
+                      disabled={loading}
+                      placeholder="Ej: Calle 123 #45-67"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="address2"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Dirección 2</FormLabel>
+                  <FormControl>
+                    <Input
+                      disabled={loading}
+                      placeholder="Ej: Apto 501, Torre B"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="neighborhood"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Barrio (Opcional)</FormLabel>
+                  <FormControl>
+                    <Input
+                      disabled={loading}
+                      placeholder="Ej: Laureles"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="addressReference"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Referencia de dirección</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      disabled={loading}
+                      placeholder="Ej: Frente al parque, edificio azul"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="company"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Empresa</FormLabel>
+                  <FormControl>
+                    <Input
+                      disabled={loading}
+                      placeholder="Ej: Acme Corp"
                       {...field}
                     />
                   </FormControl>
@@ -718,30 +1192,19 @@ export const OrderForm: React.FC<OrderFormProps> = ({
               control={form.control}
               name="status"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Estado de la orden</FormLabel>
-                  <Select
-                    disabled={loading}
-                    onValueChange={field.onChange}
-                    value={field.value}
-                    defaultValue={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue
-                          defaultValue={field.value}
-                          placeholder="Selecciona un estado para la orden"
-                        />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {Object.values(OrderStatus).map((state) => (
-                        <SelectItem key={state} value={state}>
-                          {statusOptions[state]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <FormItem className="col-span-1 md:col-span-2 lg:col-span-3 xl:col-span-4">
+                  <FormLabel isRequired>Estado de la orden</FormLabel>
+                  <FormDescription>
+                    Selecciona el estado actual de la orden
+                  </FormDescription>
+                  <FormControl>
+                    <OrderStatusSelector
+                      currentStatus={field.value}
+                      onStatusChange={field.onChange}
+                      readOnly={loading}
+                      className="py-4"
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -1005,8 +1468,12 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             />
           </div>
           <Separator />
-          <h2 className="text-lg font-semibold">
-            Estado del pago # {initialData?.payment?.id}
+          <h2 className="flex items-center gap-2 text-lg font-semibold">
+            <Wallet className="h-5 w-5" />
+            Estado del pago{" "}
+            {initialData?.payment?.transactionId
+              ? `# (${initialData?.payment?.transactionId})`
+              : ""}
           </h2>
           <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-3">
             <FormField
@@ -1050,7 +1517,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   <FormControl>
                     <Input
                       disabled={loading}
-                      placeholder="Número de la transacción (opcional)"
+                      placeholder="000-000000-000"
                       {...field}
                     />
                   </FormControl>
@@ -1090,98 +1557,483 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             )}
           </div>
           <Separator />
-          <h2 className="text-lg font-semibold">
-            Estado del envío # {initialData?.shipping?.id}
+          <h2 className="flex items-center gap-2 text-lg font-semibold">
+            <Package className="h-5 w-5" />
+            Información de envío{" "}
+            {initialData?.shipping?.envioClickIdOrder
+              ? `# (${initialData?.shipping?.envioClickIdOrder})`
+              : ""}
           </h2>
-          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-8">
             <FormField
               control={form.control}
-              name="shipping.status"
+              name="shippingProvider"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Estado del envío</FormLabel>
-                  <Select
-                    disabled={loading}
-                    onValueChange={field.onChange}
-                    value={field.value}
-                    defaultValue={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue
-                          defaultValue={field.value}
-                          placeholder="Selecciona un estado para el envío"
-                        />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {Object.values(ShippingStatus).map((state) => (
-                        <SelectItem key={state} value={state}>
-                          {shippingOptions[state]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="shipping.courier"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Nombre de la transportadora</FormLabel>
+                  <FormLabel isRequired>Tipo de Envío</FormLabel>
                   <FormControl>
-                    <Input
-                      disabled={loading}
-                      placeholder="Empresa (opcional)"
-                      {...field}
-                    />
+                    <RadioGroup
+                      onValueChange={field.onChange}
+                      value={field.value}
+                      defaultValue={ShippingProvider.NONE}
+                      className="grid grid-cols-1 gap-4 md:grid-cols-3"
+                      disabled={
+                        loading || !!initialData?.shipping?.envioClickIdOrder
+                      }
+                    >
+                      {/* NONE - Store Pickup */}
+                      <Label
+                        htmlFor="none"
+                        className={cn("cursor-pointer transition-all")}
+                      >
+                        <Card className="h-full hover:border-primary/50">
+                          <CardContent className="flex items-start gap-3 p-5">
+                            <RadioGroupItem
+                              value={ShippingProvider.NONE}
+                              id="none"
+                              className="mt-0.5"
+                            />
+                            <div className="flex flex-1 flex-col gap-1">
+                              <div className="flex items-center gap-2">
+                                <Store className="h-5 w-5 text-primary" />
+                                <span className="font-semibold">
+                                  Recoger en tienda
+                                </span>
+                              </div>
+                              <span className="text-xs text-muted-foreground">
+                                El cliente recogerá el pedido en la ubicación
+                                física
+                              </span>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </Label>
+
+                      {/* ENVIOCLICK - Integrated Shipping */}
+                      <Label
+                        htmlFor="envioclick"
+                        className={cn(
+                          "cursor-pointer transition-all",
+                          field.value === ShippingProvider.ENVIOCLICK &&
+                            "ring-2 ring-white ring-offset-2",
+                        )}
+                      >
+                        <Card className="h-full overflow-hidden hover:border-blue-400">
+                          <CardContent className="flex items-start gap-3 rounded-md p-5 text-white [background:linear-gradient(135deg,#010019,#020a47)]">
+                            <RadioGroupItem
+                              value={ShippingProvider.ENVIOCLICK}
+                              id="envioclick"
+                              className="mt-0.5 border-white text-white"
+                            />
+                            <div className="flex flex-1 flex-col gap-2">
+                              <div className="flex items-center gap-2">
+                                <Image
+                                  src="https://www.envioclickpro.com.co/img/register/logo_solo.svg"
+                                  alt="EnvíoClick"
+                                  width={100}
+                                  height={32}
+                                  className="h-8 w-auto object-contain"
+                                />
+                              </div>
+                              <span className="text-xs text-blue-100">
+                                Transportadora integrada para envíos nacionales
+                                con múltiples opciones
+                              </span>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </Label>
+
+                      {/* MANUAL - Other Carriers */}
+                      <Label
+                        htmlFor="manual"
+                        className={cn(
+                          "cursor-pointer transition-all",
+                          field.value === ShippingProvider.MANUAL &&
+                            "ring-2 ring-primary ring-offset-2",
+                        )}
+                      >
+                        <Card className="h-full hover:border-primary/50">
+                          <CardContent className="flex items-start gap-3 p-5">
+                            <RadioGroupItem
+                              value={ShippingProvider.MANUAL}
+                              id="manual"
+                              className="mt-0.5"
+                            />
+                            <div className="flex flex-1 flex-col gap-1">
+                              <div className="flex items-center gap-2">
+                                <Truck className="h-5 w-5 text-primary" />
+                                <span className="font-semibold">
+                                  Envío Manual
+                                </span>
+                              </div>
+                              <span className="text-xs text-muted-foreground">
+                                Usar otra transportadora o servicio de
+                                mensajería personalizado
+                              </span>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </Label>
+                    </RadioGroup>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="shipping.cost"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Costo</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <DollarSign className="absolute left-3 top-3 h-4 w-4" />
-                      <Input
-                        type="number"
-                        disabled={loading}
-                        placeholder="10000 (opcional)"
-                        className="pl-8"
-                        {...field}
+
+            {/* EnvioClick Quotation Section */}
+            {form.watch("shippingProvider") === ShippingProvider.ENVIOCLICK && (
+              <div className="space-y-4">
+                {/* Quote Button */}
+                <Button
+                  type="button"
+                  onClick={onGetShippingQuotes}
+                  disabled={
+                    loadingQuotes ||
+                    !form.watch("city") ||
+                    !form.watch("daneCode") ||
+                    !!initialData?.shipping?.envioClickIdOrder
+                  }
+                  className="w-full text-white [background:linear-gradient(90deg,#010019,#020a47)] hover:brightness-105"
+                >
+                  {loadingQuotes && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  {loadingQuotes
+                    ? "Cotizando..."
+                    : "Obtener Cotizaciones de Envío"}
+                </Button>
+
+                {/* Rates Display */}
+                {shippingQuotes.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label>Selecciona una tarifa:</Label>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={onGetShippingQuotes}
+                        disabled={loadingQuotes}
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    <RadioGroup
+                      value={selectedRateId?.toString() || ""}
+                      defaultValue={selectedRateId?.toString() || undefined}
+                      onValueChange={(value) => {
+                        const quote = shippingQuotes.find(
+                          (q) => q.idRate === parseInt(value),
+                        );
+                        if (quote) handleSelectRate(quote);
+                      }}
+                      className="space-y-3"
+                    >
+                      {shippingQuotes.map((quote) => {
+                        const carrierInfo = getCarrierInfo(quote.carrier);
+                        const bgColor = carrierInfo?.color || "#FFFFFF";
+                        return (
+                          <div key={quote.idRate} className="relative">
+                            <RadioGroupItem
+                              value={quote.idRate.toString()}
+                              id={`rate-${quote.idRate}`}
+                              className="peer sr-only"
+                              disabled={
+                                !!initialData?.shipping?.envioClickIdOrder
+                              }
+                            />
+                            <Label
+                              htmlFor={`rate-${quote.idRate}`}
+                              className={cn(
+                                "flex cursor-pointer flex-col rounded-lg border-2 p-4 transition-all",
+                                selectedRateId === quote.idRate
+                                  ? "border-primary bg-primary/5"
+                                  : "border-border hover:border-primary/50",
+                                !!initialData?.shipping?.envioClickIdOrder &&
+                                  "cursor-not-allowed opacity-50",
+                              )}
+                            >
+                              <div className="flex items-start justify-between gap-4">
+                                {/* Carrier Logo with Brand Color */}
+                                <div className="flex flex-1 items-center gap-3">
+                                  {carrierInfo && (
+                                    <div
+                                      className="flex h-12 w-20 flex-shrink-0 items-center justify-center rounded-md p-2"
+                                      style={{ backgroundColor: bgColor }}
+                                    >
+                                      <Image
+                                        src={carrierInfo.logoUrl}
+                                        alt={carrierInfo.comercialName}
+                                        width={64}
+                                        height={32}
+                                        className="h-full w-full object-contain"
+                                      />
+                                    </div>
+                                  )}
+
+                                  <div className="flex-1 space-y-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className="font-semibold">
+                                        {quote.carrier}
+                                      </span>
+                                      {quote.isCOD && (
+                                        <Badge
+                                          variant="secondary"
+                                          className="text-xs"
+                                        >
+                                          Contra entrega
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    <p className="text-sm text-muted-foreground">
+                                      {quote.product}
+                                    </p>
+                                    <div className="flex items-center gap-4 text-sm">
+                                      <span className="text-muted-foreground">
+                                        Entrega aprox. {quote.deliveryDays}{" "}
+                                        {quote.deliveryDays === 1
+                                          ? "día"
+                                          : "días"}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                                {/* Price Section */}
+                                <div className="flex-shrink-0 space-y-1 text-right">
+                                  <p className="text-2xl font-bold">
+                                    {currencyFormatter.format(quote.totalCost)}
+                                  </p>
+                                  <div className="space-y-0.5 text-xs text-muted-foreground">
+                                    <p>
+                                      Flete:{" "}
+                                      {currencyFormatter.format(quote.flete)}
+                                    </p>
+                                    <p>
+                                      Seguro:{" "}
+                                      {currencyFormatter.format(
+                                        quote.minimumInsurance,
+                                      )}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            </Label>
+                          </div>
+                        );
+                      })}
+                    </RadioGroup>
+
+                    {selectedRateId && (
+                      <Alert>
+                        <AlertDescription>
+                          <Check className="inline h-4 w-4 text-green-500" />{" "}
+                          Tarifa seleccionada.{" "}
+                          {form.watch("status") === "PAID"
+                            ? "Al guardar se creará automáticamente la guía de envío."
+                            : "Cambia el estado a PAGADO para crear la guía de envío."}
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
+                )}
+
+                {/* Guide already created warning */}
+                {initialData?.shipping?.envioClickIdOrder && (
+                  <Alert>
+                    <AlertDescription>
+                      Esta orden ya tiene una guía de EnvioClick creada. Los
+                      datos de envío no se pueden modificar.
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            )}
+
+            {/* Manual Shipping Info */}
+            {form.watch("shippingProvider") === "MANUAL" && (
+              <div className="space-y-4 rounded-lg bg-muted/50 p-4">
+                <Alert>
+                  <AlertDescription>
+                    Completa los datos del envío con una transportadora que no
+                    está en EnvioClick.
+                  </AlertDescription>
+                </Alert>
+
+                {/* Carrier Name */}
+                <FormField
+                  control={form.control}
+                  name="shipping.carrierName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel isRequired>Transportadora</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Ej: Servientrega, TCC, Coordinadora"
+                          disabled={loading}
+                          {...field}
+                          value={field.value || ""}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Tracking Code */}
+                <FormField
+                  control={form.control}
+                  name="shipping.trackingCode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Número de Guía</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Ej: SER123456789"
+                          disabled={loading}
+                          {...field}
+                          value={field.value || ""}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Código de seguimiento de la transportadora
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Cost and Status in Grid */}
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="shipping.cost"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Costo del Envío</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="100"
+                            placeholder="15000"
+                            disabled={loading}
+                            {...field}
+                            value={field.value || ""}
+                            onChange={(e) =>
+                              field.onChange(parseFloat(e.target.value) || 0)
+                            }
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Cantidad que el cliente pagará por el envío
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="shipping.status"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Estado del Envío</FormLabel>
+                        <Select
+                          disabled={loading}
+                          onValueChange={field.onChange}
+                          value={field.value}
+                          defaultValue={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecciona un estado" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {Object.entries(shippingOptions).map(
+                              ([key, label]) => (
+                                <SelectItem key={key} value={key}>
+                                  {label}
+                                </SelectItem>
+                              ),
+                            )}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="shipping.estimatedDeliveryDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Fecha de Entrega Estimada</FormLabel>
+                      <FormControl>
+                        <DatePicker
+                          name={field.name}
+                          control={form.control}
+                          disabled={loading}
+                          placeholder="Selecciona una fecha"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="shipping.notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Notas adicionales para el envío</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          disabled={loading}
+                          placeholder="Ej: Entregar en la portería"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Show carrier logo if available */}
+                {carrierInfo && (
+                  <div className="flex items-center gap-3 rounded-md border p-3">
+                    <div
+                      className="flex h-12 w-20 flex-shrink-0 items-center justify-center rounded-md p-2"
+                      style={{
+                        backgroundColor: carrierInfo.color || "#FFFFFF",
+                      }}
+                    >
+                      <Image
+                        src={carrierInfo.logoUrl}
+                        alt={carrierInfo.comercialName}
+                        width={64}
+                        height={32}
+                        className="h-full w-full object-contain"
                       />
                     </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="shipping.trackingCode"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Número de guía</FormLabel>
-                  <FormControl>
-                    <Input
-                      disabled={loading}
-                      placeholder="Guía (opcional)"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                    <div>
+                      <p className="text-sm font-medium">
+                        {carrierInfo.comercialName}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Transportadora registrada
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <Button disabled={loading} className="ml-auto" type="submit">
             {action}

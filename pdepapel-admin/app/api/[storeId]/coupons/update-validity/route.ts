@@ -1,4 +1,5 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { getColombiaDate } from "@/lib/date-utils";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
@@ -17,7 +18,7 @@ export async function POST(
 
     await verifyStoreOwner(userId, params.storeId);
 
-    const now = new Date();
+    const now = getColombiaDate();
 
     await prismadb.$transaction([
       prismadb.coupon.updateMany({
