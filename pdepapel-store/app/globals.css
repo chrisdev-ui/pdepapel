@@ -100,4 +100,16 @@
   body {
     @apply pt-36;
   }
+
+  /* Hide WhatsApp tooltip on mobile devices */
+  @media (max-width: 767px) {
+    ._floatingWhatsapp_181xn_1 > div[class*="_tooltip"],
+    .floating-whatsapp > div[class*="_tooltip"],
+    div[class*="_tooltip"] {
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+  }
 }
