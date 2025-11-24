@@ -19,7 +19,10 @@ export async function getShipments(params: GetShipmentsParams | string) {
   const filters: Partial<GetShipmentsParams> =
     typeof params === "string" ? {} : params;
 
-  const where: any = { storeId };
+  const where: any = {
+    storeId,
+    orderId: { not: null }, // Defensive: only get shipments with orders
+  };
 
   if (filters.status && filters.status.length > 0) {
     where.status = { in: filters.status as ShippingStatus[] };
