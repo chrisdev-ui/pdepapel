@@ -367,6 +367,7 @@ export async function POST(
         orderData.payment = {
           create: { ...payment, storeId: params.storeId },
         };
+
       if (shipping)
         orderData.shipping = {
           create: {

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { KAWAII_FACE_WELCOME } from "@/constants";
-import { CheckoutForm } from "./components/checkout-form";
+import { MultiStepCheckoutForm } from "./components/multi-step-checkout-form";
 
 export const metadata: Metadata = {
   title: "Finaliza tu compra",
@@ -49,7 +49,7 @@ export default async function CheckoutPage() {
             </span>
           </SignedIn>
         </div>
-        <CheckoutForm currentUser={formattedUser} />
+        <MultiStepCheckoutForm currentUser={formattedUser} />
       </Container>
     </>
   );

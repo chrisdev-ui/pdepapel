@@ -112,7 +112,15 @@ export interface Order {
   status: string;
   fullName: string;
   phone: string;
+  email?: string;
   address: string;
+  city?: string;
+  department?: string;
+  daneCode?: string;
+  neighborhood?: string | null;
+  address2?: string | null;
+  addressReference?: string | null;
+  company?: string | null;
   orderItems: OrderItem[];
   payment: Payment;
   shipping: Shipping;
@@ -140,12 +148,36 @@ export interface Payment {
 
 export interface Shipping {
   id: string;
+  provider: "ENVIOCLICK" | "MANUAL" | "NONE";
   status: string;
-  courier: string;
+  courier?: string;
+  carrierName?: string;
+  productName?: string;
+  flete?: number;
+  minimumInsurance?: number;
+  deliveryDays?: number;
+  isCOD?: boolean;
   cost: number;
-  trackingCode: string;
+  trackingCode?: string;
+  trackingUrl?: string;
+  guideUrl?: string;
+  envioClickIdRate?: number | null;
+  envioClickIdOrder?: number | null;
+  estimatedDeliveryDate?: string | null;
+  actualDeliveryDate?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ShippingQuote {
+  idRate: number;
+  carrier: string;
+  product: string;
+  flete: number;
+  minimumInsurance: number;
+  totalCost: number;
+  deliveryDays: string | number;
+  isCOD: boolean;
 }
 
 export interface Post {
@@ -189,14 +221,21 @@ export type CheckoutByOrderResponse = PayUFormState | WompiResponse;
 export interface CheckoutOrder {
   fullName: string;
   phone: string;
-  address: string;
   email: string | null | undefined;
+  address: string;
+  city?: string;
+  department?: string;
+  daneCode?: string;
+  neighborhood?: string;
+  address2?: string;
+  addressReference?: string;
+  company?: string;
   userId: string | null | undefined;
   guestId: string | null;
+  documentId: string | null | undefined;
   couponCode: string | null;
   subtotal: number;
   total: number;
-  documentId: string | null | undefined;
   orderItems: {
     productId: string;
     quantity: number | undefined;
@@ -204,4 +243,78 @@ export interface CheckoutOrder {
   payment: {
     method: PaymentMethod;
   };
+  shipping?: {
+    carrierName?: string;
+    courier?: string;
+    productName?: string;
+    flete?: number;
+    minimumInsurance?: number;
+    deliveryDays?: number;
+    isCOD?: boolean;
+    cost?: number;
+    status?: string;
+  };
+  shippingProvider?: "ENVIOCLICK" | "NONE";
+  envioClickIdRate?: number;
+}
+
+export interface DaneLocation {
+  _id: string;
+  locationName: string;
+  departmentOrStateName: string;
+  locationCode: string; // Código DANE (8 dígitos)
+  departmentOrStateCode: string;
+  countryId: string;
+  countryCode: string;
+  countryName: string;
+  departmentCode: string;
+  tccCode?: string;
+  deprisaCode?: string;
+  deprisaName?: string;
+}
+
+export interface LocationOption {
+  value: string; // daneCode: "05001000"
+  label: string; // "Medellín - Antioquia"
+  city: string; // "Medellín"
+  department: string; // "Antioquia"
+  daneCode: string; // "05001000"
+  raw: DaneLocation;
+}
+
+export interface ShippingQuoteRequest {
+  destination: {
+    daneCode: string;
+    address: string;
+  };
+  orderTotal: number;
+  items: {
+    productId: string;
+    quantity: number;
+  }[];
+  forceRefresh?: boolean;
+}
+
+export interface ShippingQuoteResponse {
+  success: boolean;
+  quotes: ShippingQuote[];
+  daneCode: string;
+  packageDimensions: {
+    weight: number;
+    height: number;
+    width: number;
+    length: number;
+    type?: string;
+    size?: string;
+  };
+  cached?: boolean;
+}
+
+export interface ShippingCarrier {
+  idCarrier: number;
+  carrier: string;
+  code: string;
+  comercialName: string;
+  logoUrl: string;
+  color: string;
 }

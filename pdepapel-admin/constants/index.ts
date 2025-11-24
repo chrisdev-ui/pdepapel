@@ -377,3 +377,16 @@ export const ALLOWED_TRANSITIONS: Record<ShippingStatus, ShippingStatus[]> = {
     ShippingStatus.Cancelled,
   ],
 };
+
+export const POPULAR_CITY_CODES = [
+  "11001000", // Bogotá D.C.
+  "05001000", // Medellín
+  "76001000", // Cali
+  "08001000", // Barranquilla
+  "13001000", // Cartagena
+  "54001000", // Cúcuta
+  "68001000", // Bucaramanga
+  "66001000", // Pereira
+  "17001000", // Manizales
+  "73001000", // Ibagué
+];

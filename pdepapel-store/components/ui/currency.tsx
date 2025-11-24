@@ -31,7 +31,7 @@ export const Currency: React.FC<CurrencyProps> = ({
     return null;
   }
   return (
-    <div className={cn("text-2xl", className)}>
+    <div className={cn("font-serif text-2xl", className)}>
       {isNegative ? "-" : ""}
       {formatter.format(Number(value))}
     </div>

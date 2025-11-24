@@ -131,6 +131,7 @@ export function base64ToHex(str: string) {
 export const calculateTotals = (
   orderItems: Product[],
   coupon: Coupon | null,
+  shippingCost: number = 0,
 ) => {
   const subtotal = orderItems.reduce(
     (total, item) => total + Number(item.price) * Number(item.quantity ?? 1),
@@ -149,7 +150,7 @@ export const calculateTotals = (
         : Math.min(coupon.amount, subtotal);
   }
 
-  const total = Math.max(subtotal - couponDiscount, 0);
+  const total = Math.max(subtotal - couponDiscount + shippingCost, 0);
 
   return {
     subtotal,

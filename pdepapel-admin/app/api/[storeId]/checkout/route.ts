@@ -69,6 +69,8 @@ export async function POST(
       neighborhood, // Barrio (opcional)
       company, // Empresa (opcional)
       shipping,
+      envioClickIdRate, // ⭐ ID de tarifa de EnvioClick (top level)
+      documentId, // ⭐ Cédula/NIT (opcional)
     } = await req.json();
 
     if (!fullName)
@@ -89,7 +91,10 @@ export async function POST(
       throw ErrorFactory.InvalidRequest(
         "El código DANE es obligatorio para el envío",
       );
-    if (!shipping?.idRate)
+
+    // Validar que exista un ID de tarifa (ya sea en shipping o top level)
+    const rateId = envioClickIdRate || shipping?.idRate;
+    if (!rateId)
       throw ErrorFactory.InvalidRequest("Debe seleccionar un método de envío");
 
     // Validate order items count
@@ -143,14 +148,16 @@ export async function POST(
     const quotesData = shippingCache.quotesData as any;
 
     const quotes = quotesData?.rates || [];
-    const selectedQuote = quotes.find((q: any) => q.idRate === shipping.idRate);
+    const selectedQuote = quotes.find((q: any) => q.idRate === rateId);
 
     if (!selectedQuote)
       throw ErrorFactory.InvalidRequest(
         "El método de envío seleccionado no es válido. Por favor, selecciona una opción válida.",
       );
 
-    const costDifference = Math.abs(selectedQuote.totalCost - shipping.cost);
+    const costDifference = Math.abs(
+      selectedQuote.totalCost - (shipping?.cost || 0),
+    );
     const TOLERANCE = 1; // Tolerancia de $1 por redondeos
 
     if (costDifference > TOLERANCE) {
@@ -278,6 +285,7 @@ export async function POST(
         fullName,
         phone,
         email,
+        documentId: documentId || null, // ⭐ Guardar documento
         address,
         address2: address2 || null,
         addressReference: addressReference || null,

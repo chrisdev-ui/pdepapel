@@ -371,7 +371,7 @@ export async function searchLocations(
     const allLocations = await getAllLocationsWithCache();
 
     if (!query || query.trim().length < 2) {
-      return [];
+      return allLocations;
     }
 
     const normalizedQuery = normalizeText(query);

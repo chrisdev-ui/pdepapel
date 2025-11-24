@@ -14,6 +14,8 @@ const config: Config = {
       center: true,
       padding: "2rem",
       screens: {
+        xs: "375px",
+        s: "425px",
         "2xl": "1400px",
       },
     },
@@ -208,6 +210,19 @@ const config: Config = {
             var(--bg-09-b), var(--bg-10-b)`,
           },
         },
+        shimmer: {
+          "0%": { backgroundPosition: "-1000px 0" },
+          "100%": { backgroundPosition: "1000px 0" },
+        },
+        "pulse-glow": {
+          "0%, 100%": {
+            boxShadow: "0 0 20px hsl(var(--froly) / 0.5)",
+          },
+          "50%": {
+            boxShadow:
+              "0 0 40px hsl(var(--froly) / 0.8), 0 0 60px hsl(var(--froly) / 0.4)",
+          },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -215,6 +230,8 @@ const config: Config = {
         "move-marker": "infinite alternate move-marker 5000ms ease-in-out",
         "rainbow-fill": "infinite alternate rainbow-fill 5000ms ease-in-out",
         "dot-pulse": "dot-pulse 1s infinite",
+        shimmer: "shimmer 2s linear infinite",
+        "pulse-glow": "pulse-glow 2s ease-in-out infinite",
       },
     },
   },

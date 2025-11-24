@@ -119,7 +119,7 @@ export async function POST(
     });
 
     const processedPackage = quotation.data.packages?.[0] || packageForApi;
-    
+
     const finalDimensions = {
       weight: processedPackage.weight ?? packageForApi.weight,
       height: processedPackage.height ?? packageForApi.height,
@@ -184,7 +184,6 @@ export async function POST(
           type: packageDimensions.type,
           size: packageDimensions.size,
         },
-        cached: false,
       },
       {
         headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
