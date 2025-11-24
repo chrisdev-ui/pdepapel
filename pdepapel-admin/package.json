@@ -14,7 +14,8 @@
     "format:prettier": "prettier --write \"./**/*.{js,jsx,mjs,cjs,ts,tsx,json}\"",
     "export:products": "ts-node prisma/utils/products-to-csv.ts",
     "export:products-merchant": "ts-node prisma/utils/products-to-google-merchant.ts",
-    "update:orders": "ts-node prisma/scripts/update-orders-totals.ts"
+    "update:orders": "ts-node prisma/scripts/update-orders-totals.ts",
+    "cleanup:orphaned-shipments": "ts-node scripts/cleanup-orphaned-shipments.ts"
   },
   "dependencies": {
     "@clerk/localizations": "^1.26.4",
