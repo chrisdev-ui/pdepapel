@@ -6,23 +6,53 @@ import { auth } from "@clerk/nextjs";
 import { ShippingStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders });
+}
+
 export async function POST(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
   try {
-    const { userId } = auth();
-    if (!userId) throw ErrorFactory.Unauthenticated();
+    const { userId: userLogged } = auth();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
-    const { shippingId } = await req.json();
+    const body = await req.json();
+    const { shippingId, userId, guestId } = body;
 
+    if (!shippingId)
+      throw ErrorFactory.InvalidRequest("El ID de envío es requerido");
+
+    // Allow authenticated users, guest users, or frontend users with userId
+    if (!userLogged && !userId && !guestId) {
+      throw ErrorFactory.Unauthenticated();
+    }
+
+    // Find shipping with order relation to verify ownership
     const shipping = await prismadb.shipping.findUnique({
       where: { id: shippingId, storeId: params.storeId },
+      include: {
+        order: true,
+      },
     });
 
     if (!shipping)
       throw ErrorFactory.NotFound("Información de envío no encontrada");
+
+    // Verify ownership: must match logged user, provided userId, or guestId
+    const isOwner =
+      (userLogged && shipping.order.userId === userLogged) ||
+      (userId && shipping.order.userId === userId) ||
+      (guestId && shipping.order.guestId === guestId);
+
+    if (!isOwner) throw ErrorFactory.Unauthorized();
 
     if (!shipping.envioClickIdOrder)
       throw ErrorFactory.InvalidRequest(
@@ -116,11 +146,13 @@ export async function POST(
         tracking: trackingData.data,
         events,
       },
-      { headers: CACHE_HEADERS.NO_CACHE },
+      {
+        headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
+      },
     );
   } catch (error: any) {
     return handleErrorResponse(error, "TRACK_SHIPMENT", {
-      headers: CACHE_HEADERS.NO_CACHE,
+      headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
     });
   }
 }

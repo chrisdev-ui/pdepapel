@@ -169,6 +169,16 @@ export interface Shipping {
   updatedAt: string;
 }
 
+export interface ShippingTrackingEvent {
+  id: string;
+  shippingId: string;
+  status: string;
+  description: string;
+  location: string | null;
+  timestamp: string;
+  createdAt: string;
+}
+
 export interface ShippingQuote {
   idRate: number;
   carrier: string;

@@ -24,14 +24,12 @@ import Link from "next/link";
 import { Forbidden } from "@/components/forbidden";
 import { Icons } from "@/components/icons";
 import { PayUForm } from "@/components/payu-form";
-import { Button } from "@/components/ui/button";
 import { CldImage } from "@/components/ui/CldImage";
+import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { Currency } from "@/components/ui/currency";
 import {
   ADMIN_USER_IDS,
-  INTERRAPIDISIMO_PASSWORD,
-  INTERRAPIDISIMO_URL,
   OrderStatus,
   PaymentMethod,
   ShippingStatus,
@@ -41,8 +39,14 @@ import { useCart } from "@/hooks/use-cart";
 import useCheckoutOrder from "@/hooks/use-checkout-order";
 import { useGuestUser } from "@/hooks/use-guest-user";
 import { useToast } from "@/hooks/use-toast";
-import { cn, encrypt, formatPhoneNumber } from "@/lib/utils";
-import { Order, PayUFormState, WompiResponse } from "@/types";
+import useTrackShipment from "@/hooks/use-track-shipment";
+import { cn, formatPhoneNumber } from "@/lib/utils";
+import {
+  Order,
+  PayUFormState,
+  ShippingTrackingEvent,
+  WompiResponse,
+} from "@/types";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Courier } from "./courier";
@@ -82,6 +86,9 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
   const { toast } = useToast();
   const guestId = useGuestUser((state) => state.guestId ?? "");
   const [payUformData, setPayUformData] = useState<PayUFormState>();
+  const [trackingEvents, setTrackingEvents] = useState<ShippingTrackingEvent[]>(
+    [],
+  );
   const removeAll = useCart((state) => state.removeAll);
 
   const { mutate, status } = useCheckoutOrder({
@@ -101,6 +108,25 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
         const { url } = data as WompiResponse;
         window.location.href = url;
       }
+    },
+  });
+
+  const { mutate: trackShipment, status: trackingStatus } = useTrackShipment({
+    onError(err) {
+      console.error(err);
+      toast({
+        title: "Error",
+        description: "No se pudo obtener el rastreo del envío",
+        variant: "destructive",
+      });
+    },
+    onSuccess(data) {
+      setTrackingEvents(data.events);
+      toast({
+        title: "Rastreo actualizado",
+        description: "Se ha actualizado la información de rastreo",
+        variant: "success",
+      });
     },
   });
 
@@ -229,7 +255,6 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
     }
   }, [order, removeAll, searchParams, toast]);
 
-  const addresses = useMemo(() => order?.address?.split(","), [order]);
   const shippingStatus = useMemo(
     () =>
       steps.slice(
@@ -242,17 +267,9 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
     [order],
   );
 
-  const redirectGuideUrl = useCallback(() => {
-    const encryptedGuide = encrypt(
-      order.shipping?.trackingCode as string,
-      INTERRAPIDISIMO_PASSWORD,
-    );
-
-    const encodedURL =
-      INTERRAPIDISIMO_URL +
-      encodeURIComponent(encryptedGuide).replace(/%/g, "_");
-
-    return encodedURL;
+  const getTrackingUrl = useCallback(() => {
+    if (!order?.shipping?.trackingCode) return "#";
+    return `https://www.envioclick.com/co/track/${order.shipping.trackingCode}`;
   }, [order?.shipping?.trackingCode]);
 
   const isAdmin = (user: string) => ADMIN_USER_IDS.includes(user);
@@ -309,12 +326,24 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
               <div className="flex flex-1 flex-col text-xs leading-5">
                 <MapPin className="h-8 w-8" />
                 <div className="mb-4 font-serif text-base">Dirección</div>
-                <span>{order.fullName}</span>
-                {addresses?.map((address, index) => (
-                  <span key={`${address}+${index}`}>{address}</span>
-                ))}
+                <span className="font-medium">{order.fullName}</span>
+                {order.company && (
+                  <span className="text-muted-foreground">{order.company}</span>
+                )}
+                <span>{order.address}</span>
+                {order.address2 && <span>{order.address2}</span>}
+                {order.neighborhood && (
+                  <span>Barrio: {order.neighborhood}</span>
+                )}
+                <span>
+                  {order.city}, {order.department}
+                </span>
+                {order.addressReference && (
+                  <span className="text-muted-foreground">
+                    Ref: {order.addressReference}
+                  </span>
+                )}
                 <span className="flex gap-1">
-                  {" "}
                   <Icons.flags.colombia className="h-4 w-4" /> Colombia
                 </span>
                 {order.phone && (
@@ -326,59 +355,152 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
               </div>
             </div>
             <div className="flex border-b p-7 md:border-b-0 md:border-r lg:p-14">
-              <div className="flex flex-col text-xs leading-5">
+              <div className="flex w-full flex-col text-xs leading-5">
                 <Truck className="h-8 w-8" />
                 <div className="mb-4 font-serif text-base">
                   Estado del envío
                 </div>
                 <div className="flex flex-col space-y-3">
-                  {(order?.shipping?.courier ||
-                    order?.shipping?.trackingCode) && (
+                  {/* Carrier Info */}
+                  {order?.shipping?.carrierName && (
                     <div className="flex flex-col gap-1">
-                      <span>Empresa transportadora:</span>
+                      <span className="font-medium">Transportadora:</span>
                       <div className="flex w-full flex-wrap items-center gap-2">
-                        <Courier name={order.shipping?.courier ?? ""} />
-                        <Link href={redirectGuideUrl()}>
-                          No. guía: {order.shipping?.trackingCode ?? "N/D"}
-                        </Link>
+                        <Courier name={order.shipping.carrierName} />
+                        {order.shipping.productName && (
+                          <span className="text-xs text-muted-foreground">
+                            {order.shipping.productName}
+                          </span>
+                        )}
                       </div>
                     </div>
                   )}
-                  {shippingStatus.map((step, index) => (
-                    <div
-                      key={index}
-                      className="flex h-[4.375rem] last:h-[2.5rem]"
+
+                  {/* Tracking Number */}
+                  {order?.shipping?.trackingCode && (
+                    <div className="flex flex-col gap-1">
+                      <span className="font-medium">No. Guía:</span>
+                      <Link
+                        href={
+                          order.shipping.trackingUrl ||
+                          order.shipping.guideUrl ||
+                          getTrackingUrl()
+                        }
+                        className="text-primary hover:underline"
+                        target="_blank"
+                      >
+                        {order.shipping.trackingCode}
+                      </Link>
+                    </div>
+                  )}
+
+                  {/* Delivery Estimate */}
+                  {(order?.shipping?.deliveryDays ||
+                    order?.shipping?.estimatedDeliveryDate) && (
+                    <div className="flex flex-col gap-1">
+                      <span className="font-medium">Tiempo estimado:</span>
+                      <span className="text-muted-foreground">
+                        {order.shipping.estimatedDeliveryDate
+                          ? format(
+                              new Date(order.shipping.estimatedDeliveryDate),
+                              "d 'de' MMMM, yyyy",
+                              { locale: es },
+                            )
+                          : `${order.shipping.deliveryDays} días`}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Track Button */}
+                  {order?.shipping?.envioClickIdOrder && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        trackShipment({
+                          shippingId: order.shipping.id,
+                          userId: userId || null,
+                          guestId: guestId || null,
+                        })
+                      }
+                      disabled={trackingStatus === "pending"}
+                      className="mt-2 w-full"
                     >
-                      <div className="relative mr-2">
-                        <span className="block h-4 w-4 rounded-full bg-pink-shell" />
-                        <span className="mx-auto my-0 block h-[4.375rem] w-0.5 bg-pink-shell" />
+                      {trackingStatus === "pending"
+                        ? "Rastreando..."
+                        : "Rastrear paquete"}
+                    </Button>
+                  )}
+
+                  {/* Shipping Status Timeline */}
+                  <div className="mt-4">
+                    {shippingStatus.map((step, index) => (
+                      <div
+                        key={index}
+                        className="flex h-[4.375rem] last:h-[2.5rem]"
+                      >
+                        <div className="relative mr-2">
+                          <span className="block h-4 w-4 rounded-full bg-pink-shell" />
+                          <span className="mx-auto my-0 block h-[4.375rem] w-0.5 bg-pink-shell" />
+                        </div>
+                        <div>
+                          <p className="mb-1 mt-0 font-serif text-sm font-medium">
+                            {step.value}
+                          </p>
+                          <span className="font-serif text-xs font-light">
+                            {index === 0
+                              ? format(
+                                  new Date(order.createdAt),
+                                  "d 'de' MMMM, yyyy",
+                                  { locale: es },
+                                )
+                              : index === 1
+                              ? format(
+                                  new Date(order.shipping.createdAt),
+                                  "d 'de' MMMM, yyyy",
+                                  { locale: es },
+                                )
+                              : format(
+                                  new Date(order.shipping.updatedAt),
+                                  "d 'de' MMMM, yyyy",
+                                  { locale: es },
+                                )}
+                          </span>
+                        </div>
                       </div>
-                      <div>
-                        <p className="mb-1 mt-0 font-serif text-sm font-medium">
-                          {step.value}
-                        </p>
-                        <span className="font-serif text-xs font-light">
-                          {index === 0
-                            ? format(
-                                new Date(order.createdAt),
-                                "d 'de' MMMM, yyyy",
-                                { locale: es },
-                              )
-                            : index === 1
-                            ? format(
-                                new Date(order.shipping.createdAt),
-                                "d 'de' MMMM, yyyy",
-                                { locale: es },
-                              )
-                            : format(
-                                new Date(order.shipping.updatedAt),
-                                "d 'de' MMMM, yyyy",
-                                { locale: es },
-                              )}
-                        </span>
+                    ))}
+                  </div>
+
+                  {/* Tracking Events */}
+                  {trackingEvents.length > 0 && (
+                    <div className="mt-4 border-t pt-4">
+                      <span className="mb-2 block text-sm font-medium">
+                        Historial de rastreo:
+                      </span>
+                      <div className="max-h-64 space-y-3 overflow-y-auto">
+                        {trackingEvents.map((event) => (
+                          <div key={event.id} className="flex gap-2">
+                            <div className="relative">
+                              <span className="block h-3 w-3 rounded-full bg-primary" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-xs font-medium">
+                                {event.description}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {event.location && `${event.location} - `}
+                                {format(
+                                  new Date(event.timestamp),
+                                  "d MMM yyyy, HH:mm",
+                                  { locale: es },
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
             </div>
