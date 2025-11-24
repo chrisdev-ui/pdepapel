@@ -5,6 +5,13 @@ import prismadb from "@/lib/prismadb";
 import { ShippingStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
+// CORS headers for webhook
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
 // Map EnvioClick status strings to our ShippingStatus enum
 const STATUS_MAP: Record<string, ShippingStatus> = {
   // EnvioClick text-based statuses
@@ -29,6 +36,11 @@ const STATUS_MAP: Record<string, ShippingStatus> = {
   "08": ShippingStatus.Cancelled,
   "09": ShippingStatus.Exception,
 };
+
+// Handle OPTIONS request for CORS preflight
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders });
+}
 
 export async function POST(req: Request) {
   try {
@@ -68,7 +80,7 @@ export async function POST(req: Request) {
       });
       return NextResponse.json(
         { error: "Shipping record not found" },
-        { status: 404 },
+        { status: 404, headers: corsHeaders },
       );
     }
 
@@ -167,11 +179,14 @@ export async function POST(req: Request) {
     }
 
     console.log("[ENVIOCLICK_WEBHOOK] Successfully processed webhook");
-    return NextResponse.json({ success: true }, { status: 200 });
+    return NextResponse.json(
+      { success: true },
+      { status: 200, headers: corsHeaders },
+    );
   } catch (error: any) {
     console.error("[ENVIOCLICK_WEBHOOK] Error processing webhook:", error);
     return handleErrorResponse(error, "ENVIOCLICK_WEBHOOK", {
-      headers: { "Content-Type": "application/json" },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 }
