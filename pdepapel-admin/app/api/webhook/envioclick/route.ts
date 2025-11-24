@@ -42,6 +42,18 @@ export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
 }
 
+// Handle GET request for webhook verification
+export async function GET() {
+  return NextResponse.json(
+    {
+      status: "active",
+      message: "EnvioClick webhook endpoint is ready",
+      timestamp: new Date().toISOString(),
+    },
+    { headers: corsHeaders },
+  );
+}
+
 export async function POST(req: Request) {
   try {
     const payload = await req.json();
