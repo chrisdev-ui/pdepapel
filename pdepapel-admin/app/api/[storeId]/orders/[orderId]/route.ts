@@ -399,47 +399,54 @@ export async function PATCH(
               },
             },
           },
-          shipping: shipping && {
-            upsert: {
-              create: {
-                status: shipping.status,
-                provider: shippingProvider,
-                envioClickIdRate: envioClickIdRate || null,
-                carrierId: shipping.carrierId,
-                carrierName: shipping.carrierName,
-                courier: shipping.courier,
-                productId: shipping.productId,
-                productName: shipping.productName,
-                flete: shipping.flete,
-                minimumInsurance: shipping.minimumInsurance,
-                deliveryDays: shipping.deliveryDays,
-                isCOD: shipping.isCOD,
-                cost: shipping.cost,
-                trackingCode: shipping.trackingCode,
-                estimatedDeliveryDate: shipping.estimatedDeliveryDate,
-                notes: shipping.notes,
-                store: { connect: { id: params.storeId } },
-              },
-              update: {
-                status: shipping.status,
-                ...(shippingProvider && { provider: shippingProvider }),
-                ...(envioClickIdRate !== undefined && { envioClickIdRate: envioClickIdRate || null }),
-                carrierId: shipping.carrierId,
-                carrierName: shipping.carrierName,
-                courier: shipping.courier,
-                productId: shipping.productId,
-                productName: shipping.productName,
-                flete: shipping.flete,
-                minimumInsurance: shipping.minimumInsurance,
-                deliveryDays: shipping.deliveryDays,
-                isCOD: shipping.isCOD,
-                cost: shipping.cost,
-                trackingCode: shipping.trackingCode,
-                estimatedDeliveryDate: shipping.estimatedDeliveryDate,
-                notes: shipping.notes,
-              },
-            },
-          },
+          // Only upsert shipping if there's a valid provider (not NONE)
+          ...(shipping && shippingProvider && shippingProvider !== "NONE"
+            ? {
+                shipping: {
+                  upsert: {
+                    create: {
+                      status: shipping.status,
+                      provider: shippingProvider,
+                      envioClickIdRate: envioClickIdRate || null,
+                      carrierId: shipping.carrierId,
+                      carrierName: shipping.carrierName,
+                      courier: shipping.courier,
+                      productId: shipping.productId,
+                      productName: shipping.productName,
+                      flete: shipping.flete,
+                      minimumInsurance: shipping.minimumInsurance,
+                      deliveryDays: shipping.deliveryDays,
+                      isCOD: shipping.isCOD,
+                      cost: shipping.cost,
+                      trackingCode: shipping.trackingCode,
+                      estimatedDeliveryDate: shipping.estimatedDeliveryDate,
+                      notes: shipping.notes,
+                      store: { connect: { id: params.storeId } },
+                    },
+                    update: {
+                      status: shipping.status,
+                      ...(shippingProvider && { provider: shippingProvider }),
+                      ...(envioClickIdRate !== undefined && {
+                        envioClickIdRate: envioClickIdRate || null,
+                      }),
+                      carrierId: shipping.carrierId,
+                      carrierName: shipping.carrierName,
+                      courier: shipping.courier,
+                      productId: shipping.productId,
+                      productName: shipping.productName,
+                      flete: shipping.flete,
+                      minimumInsurance: shipping.minimumInsurance,
+                      deliveryDays: shipping.deliveryDays,
+                      isCOD: shipping.isCOD,
+                      cost: shipping.cost,
+                      trackingCode: shipping.trackingCode,
+                      estimatedDeliveryDate: shipping.estimatedDeliveryDate,
+                      notes: shipping.notes,
+                    },
+                  },
+                },
+              }
+            : {}),
         },
         include: {
           orderItems: { include: { product: true } },
@@ -460,7 +467,9 @@ export async function PATCH(
         updated.shipping.envioClickIdRate
       ) {
         try {
-          console.log("[ORDER_UPDATE] Attempting to create guide automatically...");
+          console.log(
+            "[ORDER_UPDATE] Attempting to create guide automatically...",
+          );
           // Pass the updated order data and transaction client to avoid re-querying and locks
           await createGuideForOrder(updated.id, params.storeId, updated, tx);
           console.log("[ORDER_UPDATE] Guide created automatically");
@@ -470,8 +479,14 @@ export async function PATCH(
           // User can manually create guide later
         }
       } else {
-        if (isNowPaid && updated.shipping && !updated.shipping?.envioClickIdOrder) {
-          console.log("[ORDER_UPDATE] Skipping automatic guide creation - no shipping rate available");
+        if (
+          isNowPaid &&
+          updated.shipping &&
+          !updated.shipping?.envioClickIdOrder
+        ) {
+          console.log(
+            "[ORDER_UPDATE] Skipping automatic guide creation - no shipping rate available",
+          );
         }
       }
 
