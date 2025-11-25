@@ -368,7 +368,8 @@ export async function POST(
           create: { ...payment, storeId: params.storeId },
         };
 
-      if (shipping)
+      // Only create shipping record if there's a valid provider (not NONE)
+      if (shipping && shippingProvider && shippingProvider !== "NONE")
         orderData.shipping = {
           create: {
             ...shipping,
