@@ -200,7 +200,7 @@ const ERROR_MAPPINGS: Record<string, string> = {
     "Las dimensiones del paquete exceden los límites permitidos.",
   "Authentication failed": "Error de configuración en el servicio de envíos.",
   "Rate not found": "No se encontraron cotizaciones para este destino.",
-  "not_valid_orders":
+  not_valid_orders:
     "La orden no es válida para esta operación o ya fue procesada.",
   "Error al cancelar":
     "No se pudo cancelar el envío. Verifica el estado o intenta más tarde.",
@@ -228,8 +228,6 @@ export class EnvioClickClient {
     };
   }
 
-
-
   /**
    * Obtiene un mensaje de error amigable basado en el error original
    */
@@ -253,7 +251,14 @@ export class EnvioClickClient {
    * Manejo de errores de la API
    */
   private handleApiError(error: any, method: string): never {
-    console.error(`[EnvioClick] Error in ${method}:`, error);
+    // Log full error details for debugging
+    console.error(`[EnvioClick] Error in ${method}:`, {
+      message: error?.message,
+      response: error?.response?.data,
+      status: error?.response?.status,
+      stack: error?.stack,
+      fullError: JSON.stringify(error, Object.getOwnPropertyNames(error), 2),
+    });
 
     // Handle Fetch Network Errors
     if (error instanceof TypeError && error.message === "Failed to fetch") {
@@ -265,7 +270,9 @@ export class EnvioClickClient {
     }
 
     // Handle Custom Errors thrown by us (e.g. data.status !== "OK")
-    const friendlyMessage = this.getFriendlyErrorMessage(error);
+    const friendlyMessage = this.getFriendlyErrorMessage(
+      error?.message || String(error),
+    );
     const customError: any = new Error(friendlyMessage);
     customError.originalError = error;
     customError.code = "ENVIOCLICK_API_ERROR";
@@ -314,7 +321,12 @@ export class EnvioClickClient {
           : `${this.baseUrl}/api/v2/shipment_sandbox`;
 
       const body = JSON.stringify(params);
-      
+
+      console.log(
+        "[EnvioClick] Creating shipment with params:",
+        JSON.stringify(params, null, 2),
+      );
+
       const response = await fetch(apiUrl, {
         method: "POST",
         headers: this.getHeaders(),
@@ -323,12 +335,29 @@ export class EnvioClickClient {
 
       const data = await response.json();
 
+      console.log("[EnvioClick] API Response:", JSON.stringify(data, null, 2));
+
       if (data.status !== "OK") {
-        console.error("Error al crear guía:", JSON.stringify(data, null, 2));
-        const errorMsg =
-          data.status_messages?.[0]?.error ||
-          data.status_messages?.error ||
-          "Error al crear guía";
+        // Extract detailed error information
+        const statusMessages = data.status_messages || [];
+        const errorDetails = Array.isArray(statusMessages)
+          ? statusMessages
+              .map((msg: any) =>
+                typeof msg === "object" ? JSON.stringify(msg) : String(msg),
+              )
+              .join(", ")
+          : String(statusMessages);
+
+        const errorMsg = `EnvioClick API Error: ${data.status || "FAILED"}. Details: ${errorDetails}`;
+
+        console.error("[EnvioClick] Shipment creation failed:", {
+          status: data.status,
+          statusCodes: data.status_codes,
+          statusMessages: data.status_messages,
+          data: data.data,
+          requestParams: params,
+        });
+
         throw new Error(errorMsg);
       }
 

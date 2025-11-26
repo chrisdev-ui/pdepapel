@@ -130,7 +130,7 @@ export async function createGuideForOrder(
   // 4. Crear guía (with error handling for expired rates)
   let result;
   try {
-    result = await envioClickClient.createShipment({
+    const shipmentParams = {
       idRate: order.shipping.envioClickIdRate,
       myShipmentReference: order.orderNumber,
       requestPickup: ENVIOCLICK_DEFAULTS.requestPickup,
@@ -178,7 +178,21 @@ export async function createGuideForOrder(
         reference: truncateField(order.addressReference || "NA", "reference"),
         daneCode: order.daneCode!,
       },
-    });
+    };
+
+    console.log(
+      "[ORDER_SHIPPING_CREATE_GUIDE] Attempting to create guide with params:",
+      {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        idRate: shipmentParams.idRate,
+        origin: shipmentParams.origin,
+        destination: shipmentParams.destination,
+        packages: shipmentParams.packages,
+      },
+    );
+
+    result = await envioClickClient.createShipment(shipmentParams);
   } catch (error: any) {
     // Check if error is due to invalid/expired idRate
     const errorMessage =
