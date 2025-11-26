@@ -63,9 +63,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { UserCombobox } from "@/components/ui/user-combobox";
 import { WhatsappButton } from "@/components/whatsapp-button";
 import {
+  Models,
   detailsTitleOptions,
   discountOptions,
-  Models,
   paymentMethodsByOption,
   paymentOptions,
   shippingOptions,
@@ -154,13 +154,12 @@ const formSchema = z
       ),
     email: z
       .string()
+      .min(1, "El correo electrónico es requerido")
       .email("Debes agregar un correo electrónico válido")
       .max(
         ENVIOCLICK_LIMITS.email.max,
         `El correo no puede exceder ${ENVIOCLICK_LIMITS.email.max} caracteres`,
-      )
-      .optional()
-      .or(z.literal("")),
+      ),
     phone: z
       .string()
       .min(10, "El número telefónico debe tener 10 dígitos")

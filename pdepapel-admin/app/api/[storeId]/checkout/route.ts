@@ -77,6 +77,8 @@ export async function POST(
       throw ErrorFactory.InvalidRequest("El nombre completo es obligatorio");
     if (!phone)
       throw ErrorFactory.InvalidRequest("El número de teléfono es obligatorio");
+    if (!email)
+      throw ErrorFactory.InvalidRequest("El correo electrónico es obligatorio");
     if (!address)
       throw ErrorFactory.InvalidRequest("La dirección es obligatoria");
     if (!orderItems || orderItems.length === 0)

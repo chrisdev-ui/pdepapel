@@ -112,11 +112,14 @@ export async function POST(
     if (
       !fullName ||
       !phone ||
+      !email ||
       !address ||
       !orderItems ||
       orderItems.length === 0
     ) {
-      throw ErrorFactory.InvalidRequest("Faltan campos obligatorios");
+      throw ErrorFactory.InvalidRequest(
+        "Faltan campos obligatorios (nombre, teléfono, email, dirección, productos)",
+      );
     }
 
     if (orderItems.length > 1000) {
