@@ -7,10 +7,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  SignedIn,
-  SignedOut,
   SignInButton,
   SignOutButton,
+  SignedIn,
+  SignedOut,
   UserButton,
 } from "@clerk/nextjs";
 import {
@@ -26,47 +26,91 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 
 export const HamburgerMenu: React.FC = () => {
   const pathname = usePathname();
+  const [open, setOpen] = useState(false);
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <Menu className="h-6 w-6 md:h-10 md:w-10 lg:hidden" />
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-72" align="end" sideOffset={10}>
-        <DropdownMenuItem className="flex w-full px-6 py-3 text-xl hover:bg-blue-purple hover:text-white">
-          <Link className="flex w-full items-center gap-6" href="/">
+        <DropdownMenuItem
+          className="flex w-full px-6 py-3 text-xl hover:bg-blue-purple hover:text-white"
+          asChild
+        >
+          <Link
+            className="flex w-full items-center gap-6"
+            href="/"
+            onClick={() => setOpen(false)}
+          >
             <Home className="h-6 w-6" />
             Inicio
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem className="flex w-full px-6 py-3 text-xl hover:bg-blue-purple hover:text-white">
-          <Link className="flex w-full items-center gap-6" href="/shop">
+        <DropdownMenuItem
+          className="flex w-full px-6 py-3 text-xl hover:bg-blue-purple hover:text-white"
+          asChild
+        >
+          <Link
+            className="flex w-full items-center gap-6"
+            href="/shop"
+            onClick={() => setOpen(false)}
+          >
             <Store className="h-6 w-6" />
             Tienda
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem className="flex w-full px-6 py-3 text-xl hover:bg-blue-purple hover:text-white">
-          <Link className="flex w-full items-center gap-6" href="/about">
+        <DropdownMenuItem
+          className="flex w-full px-6 py-3 text-xl hover:bg-blue-purple hover:text-white"
+          asChild
+        >
+          <Link
+            className="flex w-full items-center gap-6"
+            href="/about"
+            onClick={() => setOpen(false)}
+          >
             <Info className="h-6 w-6" />
             Nosotros
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem className="flex w-full px-6 py-3 text-xl hover:bg-blue-purple hover:text-white">
-          <Link className="flex w-full items-center gap-6" href="/contact">
+        <DropdownMenuItem
+          className="flex w-full px-6 py-3 text-xl hover:bg-blue-purple hover:text-white"
+          asChild
+        >
+          <Link
+            className="flex w-full items-center gap-6"
+            href="/contact"
+            onClick={() => setOpen(false)}
+          >
             <Contact className="h-6 w-6" />
             Contacto
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem className="flex w-full px-6 py-3 text-xl hover:bg-blue-purple hover:text-white">
-          <Link className="flex w-full items-center gap-6" href="/wishlist">
+        <DropdownMenuItem
+          className="flex w-full px-6 py-3 text-xl hover:bg-blue-purple hover:text-white"
+          asChild
+        >
+          <Link
+            className="flex w-full items-center gap-6"
+            href="/wishlist"
+            onClick={() => setOpen(false)}
+          >
             <Heart className="h-6 w-6" />
             Lista de deseos
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem className="flex w-full px-6 py-3 text-xl hover:bg-blue-purple hover:text-white xs:hidden">
-          <Link className="flex w-full items-center gap-6" href="/cart">
+        <DropdownMenuItem
+          className="flex w-full px-6 py-3 text-xl hover:bg-blue-purple hover:text-white xs:hidden"
+          asChild
+        >
+          <Link
+            className="flex w-full items-center gap-6"
+            href="/cart"
+            onClick={() => setOpen(false)}
+          >
             <ShoppingCart className="h-6 w-6" />
             Carrito
           </Link>
@@ -86,8 +130,15 @@ export const HamburgerMenu: React.FC = () => {
               }}
             />
           </DropdownMenuItem>
-          <DropdownMenuItem className="flex w-full px-6 py-3 text-xl hover:bg-blue-purple hover:text-white">
-            <Link className="flex w-full items-center gap-6" href="/my-orders">
+          <DropdownMenuItem
+            className="flex w-full px-6 py-3 text-xl hover:bg-blue-purple hover:text-white"
+            asChild
+          >
+            <Link
+              className="flex w-full items-center gap-6"
+              href="/my-orders"
+              onClick={() => setOpen(false)}
+            >
               <Contact className="h-6 w-6" />
               Mis órdenes
             </Link>
@@ -95,7 +146,12 @@ export const HamburgerMenu: React.FC = () => {
           <DropdownMenuItem className="flex w-full gap-6 px-6 py-3 text-xl hover:bg-blue-purple hover:text-white">
             <LogOut className="h-6 w-6" />
             <SignOutButton>
-              <button className="w-full text-left">Cerrar sesión</button>
+              <button
+                className="w-full text-left"
+                onClick={() => setOpen(false)}
+              >
+                Cerrar sesión
+              </button>
             </SignOutButton>
           </DropdownMenuItem>
         </SignedIn>

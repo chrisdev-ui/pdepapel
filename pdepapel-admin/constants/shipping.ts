@@ -285,13 +285,43 @@ export function truncateForEnvioClick(
 }
 
 /**
- * Divide nombre completo en firstName y lastName respetando límites
+ * Alias simplificado para truncar campos (wrapper de truncateForEnvioClick)
+ */
+export function truncateField(
+  text: string,
+  field: keyof typeof ENVIOCLICK_LIMITS,
+): string {
+  return truncateForEnvioClick(text, field);
+}
+
+/**
+ * Divide nombre completo en firstName y lastName respetando límites de EnvioClick
+ *
+ * Límites: firstName max 14 chars, lastName max 14 chars
+ *
+ * Estrategia:
+ * - 1 nombre: firstName solo, lastName vacío
+ * - 2 nombres: firstName = primer nombre, lastName = segundo nombre
+ * - 3 nombres:
+ *   - Si ambos caben en 14 chars: firstName = primero, lastName = segundo + tercero
+ *   - Si no caben: firstName = primero, lastName = segundo (omitir tercero)
+ * - 4+ nombres:
+ *   - Si ambos caben en 14 chars: firstName = primero, lastName = segundo + resto
+ *   - Si no caben: firstName = primero, lastName = tercero (omitir segundo y cuarto+)
  */
 export function splitFullName(fullName: string): {
   firstName: string;
   lastName: string;
 } {
-  const parts = fullName.trim().split(/\s+/);
+  const parts = fullName
+    .trim()
+    .split(/\s+/)
+    .filter((p) => p.length > 0);
+
+  // 1 nombre: solo firstName
+  if (parts.length === 0) {
+    return { firstName: "", lastName: "" };
+  }
 
   if (parts.length === 1) {
     return {
@@ -300,10 +330,47 @@ export function splitFullName(fullName: string): {
     };
   }
 
-  const firstName = parts[0].substring(0, 14);
-  const lastName = parts.slice(1).join(" ").substring(0, 14);
+  // 2 nombres: perfecto, uno para cada campo
+  if (parts.length === 2) {
+    return {
+      firstName: parts[0].substring(0, 14),
+      lastName: parts[1].substring(0, 14),
+    };
+  }
 
-  return { firstName, lastName };
+  // 3 nombres: intentar usar primero + (segundo + tercero) si cabe
+  if (parts.length === 3) {
+    const secondAndThird = `${parts[1]} ${parts[2]}`;
+
+    if (parts[0].length <= 14 && secondAndThird.length <= 14) {
+      return {
+        firstName: parts[0],
+        lastName: secondAndThird,
+      };
+    }
+
+    // No cabe, usar solo primero y segundo
+    return {
+      firstName: parts[0].substring(0, 14),
+      lastName: parts[1].substring(0, 14),
+    };
+  }
+
+  // 4+ nombres: intentar primero + (resto) si cabe, sino primero + tercero
+  const restNames = parts.slice(1).join(" ");
+
+  if (parts[0].length <= 14 && restNames.length <= 14) {
+    return {
+      firstName: parts[0],
+      lastName: restNames,
+    };
+  }
+
+  // No cabe, estrategia: primer nombre + tercer nombre (omitir segundo)
+  return {
+    firstName: parts[0].substring(0, 14),
+    lastName: parts[2].substring(0, 14), // Usar el tercero
+  };
 }
 
 /**
