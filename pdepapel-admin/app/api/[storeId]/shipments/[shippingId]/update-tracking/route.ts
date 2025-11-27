@@ -8,19 +8,23 @@ import { checkIfStoreOwner } from "@/lib/utils";
 
 // Map EnvioClick status to our ShippingStatus
 function mapEnvioClickStatus(status: string): ShippingStatus {
+  // EnvioClick uses uppercase English status codes
+  const normalizedStatus = status.toUpperCase();
+
   const statusMap: Record<string, ShippingStatus> = {
-    "En preparación": ShippingStatus.Preparing,
-    Despachado: ShippingStatus.Shipped,
-    Recogido: ShippingStatus.PickedUp,
-    "En tránsito": ShippingStatus.InTransit,
-    "En reparto": ShippingStatus.OutForDelivery,
-    Entregado: ShippingStatus.Delivered,
-    "Entrega fallida": ShippingStatus.FailedDelivery,
-    Devuelto: ShippingStatus.Returned,
-    Cancelado: ShippingStatus.Cancelled,
+    GENERATED: ShippingStatus.Shipped,
+    PICKED_UP: ShippingStatus.PickedUp,
+    ON_TRANSIT: ShippingStatus.InTransit,
+    WITH_DELIVERY_COURIER: ShippingStatus.OutForDelivery,
+    DELIVERED: ShippingStatus.Delivered,
+    CANCELED: ShippingStatus.Cancelled,
+    CANCELLED: ShippingStatus.Cancelled,
+    RETURNED: ShippingStatus.Returned,
+    EXCEPTION: ShippingStatus.Exception,
+    FAILED_DELIVERY: ShippingStatus.FailedDelivery,
   };
 
-  return statusMap[status] || ShippingStatus.Exception;
+  return statusMap[normalizedStatus] || ShippingStatus.Exception;
 }
 
 export async function POST(
@@ -77,11 +81,28 @@ export async function POST(
       throw new Error(trackingData); // Error message from API
     }
 
+    // Determine the latest status from events if available
+    let newStatus = shipping.status;
+
+    if (Array.isArray(trackingData) && trackingData.length > 0) {
+      // Sort by date desc to get latest event
+      const sortedEvents = [...trackingData].sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+      );
+      const latestEvent = sortedEvents[0];
+      if (latestEvent?.status) {
+        newStatus = mapEnvioClickStatus(latestEvent.status);
+      }
+    } else if (trackingData?.status) {
+      // If data is an object with status field
+      newStatus = mapEnvioClickStatus(trackingData.status);
+    }
+
     // Update shipping record
     const updatedShipping = await prismadb.shipping.update({
       where: { id: params.shippingId },
       data: {
-        status: mapEnvioClickStatus(trackingData.status),
+        status: newStatus,
         // Additional fields from tracking
         ...(trackingData.realDeliveryDate && {
           estimatedDeliveryDate: new Date(trackingData.realDeliveryDate),
