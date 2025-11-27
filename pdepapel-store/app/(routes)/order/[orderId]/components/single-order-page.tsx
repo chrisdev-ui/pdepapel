@@ -381,12 +381,8 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                     <div className="flex flex-col gap-1">
                       <span className="font-medium">No. Guía:</span>
                       <Link
-                        href={
-                          order.shipping.trackingUrl ||
-                          order.shipping.guideUrl ||
-                          getTrackingUrl()
-                        }
-                        className="text-primary hover:underline"
+                        href={getTrackingUrl()}
+                        className="w-fit text-primary hover:underline"
                         target="_blank"
                       >
                         {order.shipping.trackingCode}
