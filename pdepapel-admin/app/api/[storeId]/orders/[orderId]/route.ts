@@ -406,7 +406,7 @@ export async function PATCH(
                 shipping: {
                   upsert: {
                     create: {
-                      status: shipping.status,
+                      status: ShippingStatus.Preparing, // Always start new shipments with Preparing
                       provider: shippingProvider,
                       envioClickIdRate: envioClickIdRate || null,
                       carrierId: shipping.carrierId,
@@ -425,7 +425,7 @@ export async function PATCH(
                       store: { connect: { id: params.storeId } },
                     },
                     update: {
-                      status: shipping.status,
+                      // Don't update status on existing shipments - preserve current status
                       ...(shippingProvider && { provider: shippingProvider }),
                       ...(envioClickIdRate !== undefined && {
                         envioClickIdRate: envioClickIdRate || null,

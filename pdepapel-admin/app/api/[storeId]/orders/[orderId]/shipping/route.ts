@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
+import { ShippingStatus } from "@prisma/client";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
@@ -55,7 +56,7 @@ export async function POST(
         storeId: params.storeId,
         orderId: params.orderId,
         provider,
-        status: "Preparing",
+        status: ShippingStatus.Preparing,
         carrierName,
         trackingCode: trackingCode || null,
         cost: cost || 0,

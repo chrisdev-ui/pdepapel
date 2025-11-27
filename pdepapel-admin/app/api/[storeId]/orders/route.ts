@@ -377,6 +377,7 @@ export async function POST(
         orderData.shipping = {
           create: {
             ...shipping,
+            status: ShippingStatus.Preparing, // Always start with Preparing
             provider: shippingProvider,
             envioClickIdRate: envioClickIdRate || null,
             storeId: params.storeId,

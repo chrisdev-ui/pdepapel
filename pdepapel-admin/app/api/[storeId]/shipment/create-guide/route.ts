@@ -144,7 +144,7 @@ export async function POST(
         guideUrl: result.data.url,
         guidePdfBase64: result.data.guide,
         requestPickup: result.data.requestPickup,
-        status: ShippingStatus.Shipped,
+        status: ShippingStatus.Preparing,
         externalOrderId: result.data.external_order_id,
         originData: JSON.stringify(result.data.origin),
         destinationData: JSON.stringify(result.data.destination),
