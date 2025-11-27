@@ -53,6 +53,8 @@ const CommandInput = React.forwardRef<
         className,
       )}
       {...props}
+      autoComplete="new-password"
+      aria-autocomplete="none"
     />
   </div>
 ));
