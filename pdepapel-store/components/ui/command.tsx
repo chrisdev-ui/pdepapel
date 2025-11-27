@@ -38,21 +38,36 @@ const CommandDialog = ({ children, ...props }: DialogProps) => {
 const CommandInput = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.Input>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
->(({ className, ...props }, ref) => (
-  <div className="flex items-center border-b px-3" cmdk-input-wrapper="">
-    <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-    <CommandPrimitive.Input
-      ref={ref}
-      className={cn(
-        "flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
-        className,
-      )}
-      {...props}
-      autoComplete="new-password"
-      aria-autocomplete="none"
-    />
-  </div>
-));
+>(({ className, ...props }, ref) => {
+  const internalRef = React.useRef<HTMLInputElement>(null);
+
+  React.useImperativeHandle(ref, () => internalRef.current as HTMLInputElement);
+
+  React.useEffect(() => {
+    if (internalRef.current) {
+      internalRef.current.setAttribute("autocomplete", "new-password");
+      internalRef.current.setAttribute("data-lpignore", "true");
+    }
+  }, []);
+
+  return (
+    <div
+      className="flex items-center rounded-md border border-input px-3"
+      cmdk-input-wrapper=""
+    >
+      <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+      <CommandPrimitive.Input
+        ref={internalRef}
+        className={cn(
+          "flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
+          className,
+        )}
+        {...props}
+        autoComplete="new-password"
+      />
+    </div>
+  );
+});
 
 CommandInput.displayName = CommandPrimitive.Input.displayName;
 
