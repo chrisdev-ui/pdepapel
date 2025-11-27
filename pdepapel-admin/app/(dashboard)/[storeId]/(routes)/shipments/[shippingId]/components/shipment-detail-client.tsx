@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
 import { Models } from "@/constants";
-import { getCarrierInfo, isLightColor } from "@/constants/shipping";
+import { getCarrierInfo } from "@/constants/shipping";
 import { useToast } from "@/hooks/use-toast";
 import { currencyFormatter } from "@/lib/utils";
 import { Prisma, ShippingProvider, ShippingStatus } from "@prisma/client";
@@ -251,9 +251,7 @@ export function ShipmentDetailClient({ shipment }: ShipmentDetailClientProps) {
                     alt={carrierInfo.comercialName}
                     width={96}
                     height={48}
-                    className={`h-full w-full object-contain ${
-                      !isLightColor(carrierInfo.color) ? "invert" : ""
-                    }`}
+                    className="h-full w-full object-contain"
                   />
                 </div>
                 <div>
