@@ -4,6 +4,7 @@ import { ShippingProvider, ShippingStatus } from "@prisma/client";
 import prismadb from "@/lib/prismadb";
 import { envioClickClient } from "@/lib/envioclick";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { checkIfStoreOwner } from "@/lib/utils";
 
 // Map EnvioClick status to our ShippingStatus
 function mapEnvioClickStatus(status: string): ShippingStatus {
@@ -33,6 +34,10 @@ export async function POST(
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.shippingId)
       throw ErrorFactory.InvalidRequest("Se requiere ID de envío");
+
+    // Verify user is store owner
+    const isStoreOwner = await checkIfStoreOwner(userId, params.storeId);
+    if (!isStoreOwner) throw ErrorFactory.Unauthorized();
 
     // Fetch shipping record
     const shipping = await prismadb.shipping.findUnique({
