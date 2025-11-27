@@ -1,7 +1,7 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { envioClickClient } from "@/lib/envioclick";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS } from "@/lib/utils";
+import { CACHE_HEADERS, checkIfStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { ShippingStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
@@ -23,6 +23,10 @@ export async function POST(
   try {
     const { userId: userLogged } = auth();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
+
+    const isStoreOwner = userLogged
+      ? await checkIfStoreOwner(userLogged, params.storeId)
+      : false;
 
     const body = await req.json();
     const { shippingId, userId, guestId } = body;
@@ -46,8 +50,9 @@ export async function POST(
     if (!shipping)
       throw ErrorFactory.NotFound("Información de envío no encontrada");
 
-    // Verify ownership: must match logged user, provided userId, or guestId
+    // Verify ownership: must match logged user, provided userId, guestId, OR be store owner
     const isOwner =
+      isStoreOwner ||
       (userLogged && shipping.order.userId === userLogged) ||
       (userId && shipping.order.userId === userId) ||
       (guestId && shipping.order.guestId === guestId);
