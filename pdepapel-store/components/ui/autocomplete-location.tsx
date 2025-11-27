@@ -163,7 +163,6 @@ export const AutocompleteLocation: React.FC<AutocompleteLocationProps> = ({
           onFocus={() => setOpen(true)}
           placeholder={placeholder}
           disabled={disabled}
-          autoComplete="new-password"
         />
       </div>
       <div className="relative mt-1">

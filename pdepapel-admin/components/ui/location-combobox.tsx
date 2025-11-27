@@ -166,7 +166,6 @@ export const LocationCombobox: React.FC<LocationComboboxProps> = ({
           onFocus={() => setOpen(true)}
           placeholder={placeholder}
           disabled={disabled}
-          autoComplete="new-password"
         />
       </div>
       <div className="relative mt-1">

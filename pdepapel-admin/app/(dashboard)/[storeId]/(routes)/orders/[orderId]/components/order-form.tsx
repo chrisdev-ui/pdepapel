@@ -749,6 +749,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         <form
           onSubmit={form.handleSubmit(onSubmit)}
           className="w-full space-y-8"
+          autoComplete="off"
         >
           <h2 className="text-lg font-semibold">
             Orden # {initialData?.orderNumber}
