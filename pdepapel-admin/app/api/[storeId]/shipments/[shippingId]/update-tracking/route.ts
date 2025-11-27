@@ -81,6 +81,11 @@ export async function POST(
       throw new Error(trackingData); // Error message from API
     }
 
+    console.log(
+      "[UPDATE_TRACKING] EnvioClick response data:",
+      JSON.stringify(trackingData, null, 2),
+    );
+
     // Determine the latest status from events if available
     let newStatus = shipping.status;
 
@@ -90,13 +95,32 @@ export async function POST(
         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
       );
       const latestEvent = sortedEvents[0];
+      console.log("[UPDATE_TRACKING] Latest event:", latestEvent);
       if (latestEvent?.status) {
         newStatus = mapEnvioClickStatus(latestEvent.status);
+        console.log(
+          "[UPDATE_TRACKING] Mapped status from event:",
+          latestEvent.status,
+          "->",
+          newStatus,
+        );
       }
     } else if (trackingData?.status) {
       // If data is an object with status field
+      console.log(
+        "[UPDATE_TRACKING] Direct status from data:",
+        trackingData.status,
+      );
       newStatus = mapEnvioClickStatus(trackingData.status);
+      console.log("[UPDATE_TRACKING] Mapped status:", newStatus);
     }
+
+    console.log(
+      "[UPDATE_TRACKING] Final status to save:",
+      newStatus,
+      "Type:",
+      typeof newStatus,
+    );
 
     // Update shipping record
     const updatedShipping = await prismadb.shipping.update({
