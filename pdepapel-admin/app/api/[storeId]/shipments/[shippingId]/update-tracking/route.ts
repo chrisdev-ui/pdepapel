@@ -8,10 +8,11 @@ import { checkIfStoreOwner } from "@/lib/utils";
 
 // Map EnvioClick status to our ShippingStatus
 function mapEnvioClickStatus(status: string): ShippingStatus {
-  // EnvioClick uses uppercase English status codes
+  // EnvioClick can return either English codes or Spanish text
   const normalizedStatus = status.toUpperCase();
 
   const statusMap: Record<string, ShippingStatus> = {
+    // English status codes
     GENERATED: ShippingStatus.Shipped,
     PICKED_UP: ShippingStatus.PickedUp,
     ON_TRANSIT: ShippingStatus.InTransit,
@@ -22,6 +23,20 @@ function mapEnvioClickStatus(status: string): ShippingStatus {
     RETURNED: ShippingStatus.Returned,
     EXCEPTION: ShippingStatus.Exception,
     FAILED_DELIVERY: ShippingStatus.FailedDelivery,
+    // Spanish status text (from tracking API)
+    "PENDIENTE DE RECOLECCIÓN": ShippingStatus.Preparing,
+    "PENDIENTE DE RECOLECCION": ShippingStatus.Preparing,
+    "EN PREPARACIÓN": ShippingStatus.Preparing,
+    "EN PREPARACION": ShippingStatus.Preparing,
+    DESPACHADO: ShippingStatus.Shipped,
+    RECOGIDO: ShippingStatus.PickedUp,
+    "EN TRÁNSITO": ShippingStatus.InTransit,
+    "EN TRANSITO": ShippingStatus.InTransit,
+    "EN REPARTO": ShippingStatus.OutForDelivery,
+    ENTREGADO: ShippingStatus.Delivered,
+    "ENTREGA FALLIDA": ShippingStatus.FailedDelivery,
+    DEVUELTO: ShippingStatus.Returned,
+    CANCELADO: ShippingStatus.Cancelled,
   };
 
   return statusMap[normalizedStatus] || ShippingStatus.Exception;
