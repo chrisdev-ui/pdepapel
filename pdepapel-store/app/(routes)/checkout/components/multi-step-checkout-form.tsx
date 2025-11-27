@@ -31,7 +31,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { isValidPhoneNumber } from "react-phone-number-input";
+import {
+  formatPhoneNumber,
+  isValidPhoneNumber,
+} from "react-phone-number-input";
 import { MultiStepForm } from "./multi-step-form";
 import { StepNavigation } from "./step-navigation";
 import { BasicInfoStep } from "./steps/basic-info-step";
@@ -385,7 +388,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     }
     const formattedData = {
       fullName: `${firstName} ${lastName}`,
-      phone: telephone,
+      phone: formatPhoneNumber(telephone),
       email,
       orderItems,
       userId: isUserLoggedIn ? userId : null,

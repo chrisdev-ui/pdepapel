@@ -1,4 +1,5 @@
 import { BATCH_SIZE } from "@/constants";
+import { cleanPhoneNumber } from "@/constants/shipping";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
@@ -364,7 +365,7 @@ export async function PATCH(
         where: { id: params.orderId },
         data: {
           fullName,
-          phone,
+          phone: cleanPhoneNumber(phone),
           address,
           email,
           userId: verifiedUserId,

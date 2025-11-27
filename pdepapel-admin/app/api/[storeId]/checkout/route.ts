@@ -6,6 +6,7 @@ import {
   ShippingStatus,
 } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { cleanPhoneNumber } from "@/constants/shipping";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { getColombiaDate } from "@/lib/date-utils";
 import prismadb from "@/lib/prismadb";
@@ -285,7 +286,7 @@ export async function POST(
         orderNumber: orderNumber,
         status: OrderStatus.PENDING,
         fullName,
-        phone,
+        phone: cleanPhoneNumber(phone),
         email,
         documentId: documentId || null, // ⭐ Guardar documento
         address,
