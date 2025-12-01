@@ -135,28 +135,44 @@ export async function POST(
     if (lastOrderTimestamp && lastOrderTimestamp > threeMinutesAgo)
       throw ErrorFactory.OrderLimit();
 
-    const shippingCache = await prismadb.shippingQuote.findFirst({
+    const shippingCaches = await prismadb.shippingQuote.findMany({
       where: {
         storeId: params.storeId,
         destDaneCode: daneCode,
         expiresAt: { gte: getColombiaDate() },
       },
+      orderBy: {
+        createdAt: "desc",
+      },
     });
 
-    if (!shippingCache)
+    if (!shippingCaches || shippingCaches.length === 0)
       throw ErrorFactory.InvalidRequest(
         "La cotización de envío ha expirado. Por favor, solicita una nueva cotización.",
       );
 
-    const quotesData = shippingCache.quotesData as any;
+    let selectedQuote: any = null;
 
-    const quotes = quotesData?.rates || [];
-    const selectedQuote = quotes.find((q: any) => q.idRate === rateId);
+    // Buscar el rateId en todos los caches válidos
+    for (const cache of shippingCaches) {
+      const quotesData = cache.quotesData as any;
+      const quotes = quotesData?.rates || [];
+      const found = quotes.find((q: any) => q.idRate === rateId);
 
-    if (!selectedQuote)
+      if (found) {
+        selectedQuote = found;
+        break;
+      }
+    }
+
+    if (!selectedQuote) {
+      console.error(
+        `Rate ID ${rateId} not found in any of the ${shippingCaches.length} active caches for store ${params.storeId}`,
+      );
       throw ErrorFactory.InvalidRequest(
         "El método de envío seleccionado no es válido. Por favor, selecciona una opción válida.",
       );
+    }
 
     const costDifference = Math.abs(
       selectedQuote.totalCost - (shipping?.cost || 0),
