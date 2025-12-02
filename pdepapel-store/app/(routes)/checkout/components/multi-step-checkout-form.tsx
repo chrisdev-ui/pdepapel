@@ -359,6 +359,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   const { mutate, status } = useCheckout({
     onError(err) {
       console.error(err);
+      resetCheckout(); // Clear persisted state to prevent issues on retry
       toast({
         title: "Error",
         description:
@@ -367,7 +368,23 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       });
     },
     onSuccess(data) {
-      if ((data as Order).id !== undefined) {
+      // Check for PayU response first
+      if (
+        (data as CheckoutByOrderResponse as PayUFormState).referenceCode !==
+        undefined
+      ) {
+        const payUData = data as CheckoutByOrderResponse as PayUFormState;
+        setPayUformData(payUData);
+      }
+      // Check for Wompi response second
+      else if (
+        (data as CheckoutByOrderResponse as WompiResponse).url !== undefined
+      ) {
+        const { url } = data as CheckoutByOrderResponse as WompiResponse;
+        window.location.href = url;
+      }
+      // Finally check for direct order creation (COD/BankTransfer)
+      else if ((data as Order).id !== undefined) {
         const order = data as Order;
         fireConfetti();
         toast({
@@ -380,17 +397,6 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         form.reset();
         resetCheckout();
         if (userId) clearGuestId();
-      } else if (
-        (data as CheckoutByOrderResponse as WompiResponse).url !== undefined
-      ) {
-        const { url } = data as CheckoutByOrderResponse as WompiResponse;
-        window.location.href = url;
-      } else if (
-        (data as CheckoutByOrderResponse as PayUFormState).referenceCode !==
-        undefined
-      ) {
-        const payUData = data as CheckoutByOrderResponse as PayUFormState;
-        setPayUformData(payUData);
       }
     },
   });

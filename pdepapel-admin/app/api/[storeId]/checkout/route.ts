@@ -160,6 +160,13 @@ export async function POST(
       carrier: shipping.carrierName || shipping.courier,
       product: shipping.productName,
       idRate: shipping.idRate || envioClickIdRate,
+      // Provide fallback values for fields that might not exist in frontend shipping object
+      idCarrier: shipping.carrierId || null,
+      idProduct: shipping.productId || null,
+      flete: shipping.flete || shipping.cost || 0,
+      minimumInsurance: shipping.minimumInsurance || 0,
+      deliveryDays: shipping.deliveryDays || 0,
+      isCOD: shipping.isCOD || false,
     };
 
     let selectedQuote: any = fallbackQuote; // Default to provided shipping data (normalized)
