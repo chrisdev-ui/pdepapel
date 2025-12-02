@@ -74,6 +74,10 @@ export async function POST(
       documentId, // ⭐ Cédula/NIT (opcional)
     } = await req.json();
 
+    console.log(
+      `📥 Checkout request received - Store: ${params.storeId}, Payment: ${payment.method}, Items: ${orderItems.length}, Total: ${currencyFormatter.format(total)}`,
+    );
+
     if (!fullName)
       throw ErrorFactory.InvalidRequest("El nombre completo es obligatorio");
     if (!phone)
@@ -413,22 +417,32 @@ export async function POST(
     );
 
     // Generate payment based on method
-    console.log(
-      `🔐 Generating ${payment.method} payment for order ${order.orderNumber}`,
-    );
-    if (payment.method === PaymentMethod.PayU) {
-      const payUData = generatePayUPayment(order);
+    try {
       console.log(
-        `✅ PayU payment data generated - Reference: ${payUData.referenceCode}, Amount: ${currencyFormatter.format(payUData.amount)}`,
+        `🔐 Generating ${payment.method} payment for order ${order.orderNumber}`,
       );
-      return NextResponse.json({ ...payUData }, { headers: corsHeaders });
-    }
+      if (payment.method === PaymentMethod.PayU) {
+        const payUData = generatePayUPayment(order);
+        console.log(
+          `✅ PayU payment data generated - Reference: ${payUData.referenceCode}, Amount: ${currencyFormatter.format(payUData.amount)}`,
+        );
+        return NextResponse.json({ ...payUData }, { headers: corsHeaders });
+      }
 
-    const url = await generateWompiPayment(order);
-    console.log(
-      `✅ Wompi payment URL generated for order ${order.orderNumber}`,
-    );
-    return NextResponse.json({ url }, { headers: corsHeaders });
+      const url = await generateWompiPayment(order);
+      console.log(
+        `✅ Wompi payment URL generated for order ${order.orderNumber}`,
+      );
+      return NextResponse.json({ url }, { headers: corsHeaders });
+    } catch (paymentError: any) {
+      console.error(
+        `❌ Payment generation failed for order ${order.orderNumber}:`,
+        paymentError,
+      );
+      throw ErrorFactory.InvalidRequest(
+        `Error al generar datos de pago: ${paymentError.message}`,
+      );
+    }
   } catch (error: any) {
     return handleErrorResponse(error, "ORDER_CHECKOUT", {
       headers: corsHeaders,
