@@ -190,6 +190,10 @@ export async function POST(
           `⚠️ Rate ID ${rateId} not found in active caches for store ${params.storeId}. ` +
             `Using provided shipping data. This may indicate an expired quote.`,
         );
+      } else {
+        console.log(
+          `✅ Using cached quote for rate ID ${rateId}, carrier: ${selectedQuote.carrier}, cost: ${currencyFormatter.format(selectedQuote.totalCost)}`,
+        );
       }
     } else {
       // No active caches, use provided shipping data
@@ -404,13 +408,26 @@ export async function POST(
       }
     });
 
+    console.log(
+      `✅ Order created successfully - ID: ${order.id}, Number: ${order.orderNumber}, Total: ${currencyFormatter.format(order.total)}, Items: ${order.orderItems.length}`,
+    );
+
     // Generate payment based on method
+    console.log(
+      `🔐 Generating ${payment.method} payment for order ${order.orderNumber}`,
+    );
     if (payment.method === PaymentMethod.PayU) {
       const payUData = generatePayUPayment(order);
+      console.log(
+        `✅ PayU payment data generated - Reference: ${payUData.referenceCode}, Amount: ${currencyFormatter.format(payUData.amount)}`,
+      );
       return NextResponse.json({ ...payUData }, { headers: corsHeaders });
     }
 
     const url = await generateWompiPayment(order);
+    console.log(
+      `✅ Wompi payment URL generated for order ${order.orderNumber}`,
+    );
     return NextResponse.json({ url }, { headers: corsHeaders });
   } catch (error: any) {
     return handleErrorResponse(error, "ORDER_CHECKOUT", {
