@@ -20,6 +20,7 @@ import { AutoComplete } from "@/components/ui/autocomplete";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Command,
   CommandEmpty,
@@ -123,6 +124,8 @@ const shippingSchema = z
     isCOD: z.boolean(),
     cost: z.coerce.number(),
     trackingCode: z.string(),
+    trackingUrl: z.string().optional(),
+    guideUrl: z.string().optional(),
     estimatedDeliveryDate: z
       .date({
         required_error: "La fecha de inicio es requerida",
@@ -379,6 +382,8 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             deliveryDays: initialData.shipping?.deliveryDays || undefined,
             isCOD: initialData.shipping?.isCOD || false,
             trackingCode: initialData.shipping?.trackingCode || undefined,
+            trackingUrl: initialData.shipping?.trackingUrl || undefined,
+            guideUrl: initialData.shipping?.guideUrl || undefined,
             cost: initialData.shipping?.cost || 0,
             estimatedDeliveryDate:
               initialData.shipping?.estimatedDeliveryDate || undefined,
@@ -415,6 +420,8 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             deliveryDays: 0,
             isCOD: false,
             trackingCode: "",
+            trackingUrl: "",
+            guideUrl: "",
             cost: 0,
             estimatedDeliveryDate: undefined,
             notes: undefined,
@@ -1900,6 +1907,46 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   )}
                 />
 
+                {/* Tracking URL */}
+                <FormField
+                  control={form.control}
+                  name="shipping.trackingUrl"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>URL de Rastreo</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Ej: https://..."
+                          disabled={loading}
+                          {...field}
+                          value={field.value || ""}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Guide URL */}
+                <FormField
+                  control={form.control}
+                  name="shipping.guideUrl"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>URL de la Guía (PDF)</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Ej: https://..."
+                          disabled={loading}
+                          {...field}
+                          value={field.value || ""}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 {/* Cost and Status in Grid */}
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
@@ -1958,6 +2005,53 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                           </SelectContent>
                         </Select>
                         <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="shipping.deliveryDays"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Días de entrega</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min="0"
+                            placeholder="Ej: 3"
+                            disabled={loading}
+                            {...field}
+                            value={field.value || ""}
+                            onChange={(e) =>
+                              field.onChange(parseInt(e.target.value) || 0)
+                            }
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="shipping.isCOD"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel>Pago Contra Entrega</FormLabel>
+                          <FormDescription>
+                            ¿Este envío es con recaudo?
+                          </FormDescription>
+                        </div>
                       </FormItem>
                     )}
                   />

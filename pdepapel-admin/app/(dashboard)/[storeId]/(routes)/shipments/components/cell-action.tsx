@@ -13,7 +13,13 @@ import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import { ShippingProvider } from "@prisma/client";
-import { ExternalLink, Eye, MoreHorizontal, RefreshCw } from "lucide-react";
+import {
+  ExternalLink,
+  Eye,
+  MoreHorizontal,
+  RefreshCw,
+  Truck,
+} from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { ShipmentColumn } from "./columns";
@@ -95,6 +101,20 @@ export function CellAction({ data }: CellActionProps) {
           >
             <ExternalLink className="mr-2 h-4 w-4" />
             Ver guía PDF
+          </DropdownMenuItem>
+        )}
+
+        {data.trackingCode && (
+          <DropdownMenuItem
+            onClick={() =>
+              window.open(
+                `https://www.envioclick.com/co/track/${data.trackingCode}`,
+                "_blank",
+              )
+            }
+          >
+            <Truck className="mr-2 h-4 w-4" />
+            Rastrear envío
           </DropdownMenuItem>
         )}
 

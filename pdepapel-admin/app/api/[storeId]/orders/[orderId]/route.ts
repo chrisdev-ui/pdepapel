@@ -406,7 +406,7 @@ export async function PATCH(
                 shipping: {
                   upsert: {
                     create: {
-                      status: ShippingStatus.Preparing, // Always start new shipments with Preparing
+                      status: shipping.status || ShippingStatus.Preparing,
                       provider: shippingProvider,
                       envioClickIdRate: envioClickIdRate || null,
                       carrierId: shipping.carrierId,
@@ -420,6 +420,8 @@ export async function PATCH(
                       isCOD: shipping.isCOD,
                       cost: shipping.cost,
                       trackingCode: shipping.trackingCode,
+                      trackingUrl: shipping.trackingUrl,
+                      guideUrl: shipping.guideUrl,
                       estimatedDeliveryDate: shipping.estimatedDeliveryDate,
                       notes: shipping.notes,
                       store: { connect: { id: params.storeId } },
@@ -427,6 +429,7 @@ export async function PATCH(
                     update: {
                       // Don't update status on existing shipments - preserve current status
                       ...(shippingProvider && { provider: shippingProvider }),
+                      ...(shipping.status && { status: shipping.status }),
                       ...(envioClickIdRate !== undefined && {
                         envioClickIdRate: envioClickIdRate || null,
                       }),
@@ -441,6 +444,8 @@ export async function PATCH(
                       isCOD: shipping.isCOD,
                       cost: shipping.cost,
                       trackingCode: shipping.trackingCode,
+                      trackingUrl: shipping.trackingUrl,
+                      guideUrl: shipping.guideUrl,
                       estimatedDeliveryDate: shipping.estimatedDeliveryDate,
                       notes: shipping.notes,
                     },
