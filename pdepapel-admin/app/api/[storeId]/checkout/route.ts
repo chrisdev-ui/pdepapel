@@ -154,7 +154,15 @@ export async function POST(
       },
     });
 
-    let selectedQuote: any = shipping; // Default to provided shipping data
+    const fallbackQuote = {
+      ...shipping,
+      totalCost: shipping.cost,
+      carrier: shipping.carrierName || shipping.courier,
+      product: shipping.productName,
+      idRate: shipping.idRate || envioClickIdRate,
+    };
+
+    let selectedQuote: any = fallbackQuote; // Default to provided shipping data (normalized)
 
     // If we have active caches, try to validate
     if (shippingCaches && shippingCaches.length > 0) {
@@ -170,7 +178,7 @@ export async function POST(
       }
 
       // If rate not found in cache but we have shipping data, log warning and continue
-      if (selectedQuote === shipping) {
+      if (selectedQuote === fallbackQuote) {
         console.warn(
           `⚠️ Rate ID ${rateId} not found in active caches for store ${params.storeId}. ` +
             `Using provided shipping data. This may indicate an expired quote.`,

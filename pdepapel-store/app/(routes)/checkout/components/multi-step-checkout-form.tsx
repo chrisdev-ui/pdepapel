@@ -14,7 +14,9 @@ import { Separator } from "@/components/ui/separator";
 import { KAWAII_FACE_SAD, PaymentMethod } from "@/constants";
 import { useCart } from "@/hooks/use-cart";
 import useCheckout from "@/hooks/use-checkout";
+import { useCheckoutStore } from "@/hooks/use-checkout-store";
 import { useConfetti } from "@/hooks/use-confetti";
+import { useDebounce } from "@/hooks/use-debounce";
 import { useGuestUser } from "@/hooks/use-guest-user";
 import { useToast } from "@/hooks/use-toast";
 import useValidateCoupon from "@/hooks/use-validate-coupon";
@@ -178,8 +180,16 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   const [isMounted, setIsMounted] = useState(false);
   const { toast } = useToast();
   const { fireConfetti } = useConfetti();
-  const [currentStep, setCurrentStep] = useState(1);
+  const storedStep = useCheckoutStore((state) => state.currentStep);
+  const storedCouponState = useCheckoutStore((state) => state.couponState);
+  const setStoredStep = useCheckoutStore((state) => state.setCurrentStep);
+  const setStoredFormData = useCheckoutStore((state) => state.setFormData);
+  const setStoredCouponState = useCheckoutStore(
+    (state) => state.setCouponState,
+  );
+  const resetCheckout = useCheckoutStore((state) => state.resetCheckout);
 
+  const [currentStep, setCurrentStep] = useState(1);
   const [isNavigating, setIsNavigating] = useState(false);
 
   const [couponState, setCouponState] = useState<CouponState>({
@@ -187,39 +197,62 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     isValid: null,
   });
 
+  // Initialize state from store on mount
+  useEffect(() => {
+    if (storedStep) setCurrentStep(storedStep);
+    if (storedCouponState) setCouponState(storedCouponState);
+  }, [storedStep, storedCouponState]);
+
+  // Update store when coupon state changes
+  useEffect(() => {
+    setStoredCouponState(couponState);
+  }, [couponState, setStoredCouponState]);
+
   const form = useForm<CheckoutFormValue>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      firstName: currentUser?.firstName ?? "",
-      lastName: currentUser?.lastName ?? "",
-      telephone: currentUser?.telephone ?? "",
-      email: currentUser?.email ?? "",
-      documentId: "",
-      address1: "",
-      address2: "",
-      neighborhood: "",
-      addressReference: "",
-      company: "",
-      city: "",
-      department: "",
-      daneCode: "",
-      couponCode: "",
-      shippingProvider: "ENVIOCLICK",
-      envioClickIdRate: 0,
-      paymentMethod: PaymentMethod.BankTransfer,
-      shipping: {
-        carrierName: "",
-        courier: "",
-        productName: "",
-        flete: 0,
-        minimumInsurance: 0,
-        deliveryDays: 0,
-        isCOD: false,
-        cost: 0,
-        status: "",
-      },
+    defaultValues: async () => {
+      const storedFormData = useCheckoutStore.getState().formData;
+      return {
+        firstName: storedFormData.firstName ?? currentUser?.firstName ?? "",
+        lastName: storedFormData.lastName ?? currentUser?.lastName ?? "",
+        telephone: storedFormData.telephone ?? currentUser?.telephone ?? "",
+        email: storedFormData.email ?? currentUser?.email ?? "",
+        documentId: storedFormData.documentId ?? "",
+        address1: storedFormData.address1 ?? "",
+        address2: storedFormData.address2 ?? "",
+        neighborhood: storedFormData.neighborhood ?? "",
+        addressReference: storedFormData.addressReference ?? "",
+        company: storedFormData.company ?? "",
+        city: storedFormData.city ?? "",
+        department: storedFormData.department ?? "",
+        daneCode: storedFormData.daneCode ?? "",
+        couponCode: storedFormData.couponCode ?? "",
+        shippingProvider: "ENVIOCLICK",
+        envioClickIdRate: storedFormData.envioClickIdRate ?? 0,
+        paymentMethod:
+          storedFormData.paymentMethod ?? PaymentMethod.BankTransfer,
+        shipping: {
+          carrierName: storedFormData.shipping?.carrierName ?? "",
+          courier: storedFormData.shipping?.courier ?? "",
+          productName: storedFormData.shipping?.productName ?? "",
+          flete: storedFormData.shipping?.flete ?? 0,
+          minimumInsurance: storedFormData.shipping?.minimumInsurance ?? 0,
+          deliveryDays: storedFormData.shipping?.deliveryDays ?? 0,
+          isCOD: storedFormData.shipping?.isCOD ?? false,
+          cost: storedFormData.shipping?.cost ?? 0,
+          status: storedFormData.shipping?.status ?? "",
+        },
+      };
     },
   });
+
+  // Watch form changes and update store with debounce
+  const watchedFormData = form.watch();
+  const debouncedFormData = useDebounce(watchedFormData, 500);
+
+  useEffect(() => {
+    setStoredFormData(debouncedFormData as Partial<CheckoutFormValue>);
+  }, [debouncedFormData, setStoredFormData]);
 
   const shippingCost = form.watch("shipping.cost");
 
@@ -257,13 +290,31 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     return result;
   };
 
+  const scrollToFirstError = () => {
+    const { errors } = form.formState;
+    const firstErrorKey = Object.keys(errors)[0];
+    if (firstErrorKey) {
+      const element = document.querySelector(
+        `[name="${firstErrorKey}"]`,
+      ) as HTMLElement;
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth", block: "center" });
+        element.focus();
+      }
+    }
+  };
+
   const handleNext = async () => {
     if (isNavigating) return;
     setIsNavigating(true);
     try {
       const isValid = await validateStep(currentStep);
       if (isValid) {
-        setCurrentStep((prev) => Math.min(prev + 1, FORM_STEPS.length));
+        const nextStep = Math.min(currentStep + 1, FORM_STEPS.length);
+        setCurrentStep(nextStep);
+        setStoredStep(nextStep);
+      } else {
+        scrollToFirstError();
       }
     } finally {
       setTimeout(() => setIsNavigating(false), 500);
@@ -271,7 +322,9 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   };
 
   const handleBack = () => {
-    setCurrentStep((prev) => Math.max(prev - 1, 1));
+    const prevStep = Math.max(currentStep - 1, 1);
+    setCurrentStep(prevStep);
+    setStoredStep(prevStep);
   };
 
   const { mutate: validateCouponMutate, status: validateCouponStatus } =
@@ -325,6 +378,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         router.push(`/order/${order.id}`);
         cart.removeAll();
         form.reset();
+        resetCheckout();
         if (userId) clearGuestId();
       } else if (
         (data as CheckoutByOrderResponse as WompiResponse).url !== undefined
