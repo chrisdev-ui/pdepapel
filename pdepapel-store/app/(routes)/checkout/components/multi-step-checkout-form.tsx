@@ -180,8 +180,6 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   const [isMounted, setIsMounted] = useState(false);
   const { toast } = useToast();
   const { fireConfetti } = useConfetti();
-  const storedStep = useCheckoutStore((state) => state.currentStep);
-  const storedCouponState = useCheckoutStore((state) => state.couponState);
   const setStoredStep = useCheckoutStore((state) => state.setCurrentStep);
   const setStoredFormData = useCheckoutStore((state) => state.setFormData);
   const setStoredCouponState = useCheckoutStore(
@@ -189,19 +187,20 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   );
   const resetCheckout = useCheckoutStore((state) => state.resetCheckout);
 
-  const [currentStep, setCurrentStep] = useState(1);
+  // Initialize state from store only once on mount
+  const [currentStep, setCurrentStep] = useState(() => {
+    return useCheckoutStore.getState().currentStep || 1;
+  });
   const [isNavigating, setIsNavigating] = useState(false);
 
-  const [couponState, setCouponState] = useState<CouponState>({
-    coupon: null,
-    isValid: null,
+  const [couponState, setCouponState] = useState<CouponState>(() => {
+    return (
+      useCheckoutStore.getState().couponState || {
+        coupon: null,
+        isValid: null,
+      }
+    );
   });
-
-  // Initialize state from store on mount
-  useEffect(() => {
-    if (storedStep) setCurrentStep(storedStep);
-    if (storedCouponState) setCouponState(storedCouponState);
-  }, [storedStep, storedCouponState]);
 
   // Update store when coupon state changes
   useEffect(() => {

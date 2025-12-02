@@ -3,11 +3,22 @@ import { BASE_URL } from "@/constants";
 import { MetadataRoute } from "next";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const { products } = await getProducts({});
-  const productsUrls = products?.map((product) => ({
-    url: `${BASE_URL}/product/${product.id}`,
-    lastModified: new Date(),
-  }));
+  let productsUrls: MetadataRoute.Sitemap = [];
+
+  try {
+    const { products } = await getProducts({});
+    productsUrls =
+      products?.map((product) => ({
+        url: `${BASE_URL}/product/${product.id}`,
+        lastModified: new Date(),
+      })) || [];
+  } catch (error) {
+    console.warn(
+      "Failed to fetch products for sitemap, using static routes only:",
+      error,
+    );
+  }
+
   return [
     {
       url: BASE_URL,
