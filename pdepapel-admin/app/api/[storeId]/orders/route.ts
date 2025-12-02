@@ -430,25 +430,33 @@ export async function POST(
       return createdOrder;
     });
 
+    let guideCreationResult = {
+      attempted: false,
+      success: false,
+      error: null as string | null,
+    };
+
     if (
       isStoreOwner &&
       status === OrderStatus.PAID &&
       shippingProvider === ShippingProvider.ENVIOCLICK &&
       envioClickIdRate
     ) {
-      setImmediate(async () => {
-        try {
-          await createGuideForOrder(order.id, params.storeId);
-          console.log(
-            `[ADMIN_ORDER_CREATE] Guide created for order ${order.orderNumber}`,
-          );
-        } catch (error) {
-          console.error(
-            `[ADMIN_ORDER_CREATE] Failed to create guide for order ${order.orderNumber}:`,
-            error,
-          );
-        }
-      });
+      guideCreationResult.attempted = true;
+      try {
+        await createGuideForOrder(order.id, params.storeId);
+        guideCreationResult.success = true;
+        console.log(
+          `[ADMIN_ORDER_CREATE] Guide created for order ${order.orderNumber}`,
+        );
+      } catch (error: any) {
+        guideCreationResult.success = false;
+        guideCreationResult.error = error.message || "Unknown error";
+        console.error(
+          `[ADMIN_ORDER_CREATE] Failed to create guide for order ${order.orderNumber}:`,
+          error,
+        );
+      }
     }
 
     // Queue email sending asynchronously (don't wait for it)
@@ -486,9 +494,12 @@ export async function POST(
       });
     }
 
-    return NextResponse.json(order, {
-      headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
-    });
+    return NextResponse.json(
+      { ...order, guideCreation: guideCreationResult },
+      {
+        headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
+      },
+    );
   } catch (error) {
     return handleErrorResponse(error, "ORDERS_POST", {
       headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },

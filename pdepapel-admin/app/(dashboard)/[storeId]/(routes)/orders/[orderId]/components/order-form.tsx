@@ -541,19 +541,42 @@ export const OrderForm: React.FC<OrderFormProps> = ({
       discountReason: data.discount?.reason,
     };
 
+    let response;
     if (initialData) {
-      await axios.patch(
+      response = await axios.patch(
         `/api/${params.storeId}/${Models.Orders}/${params.orderId}`,
         payload,
       );
     } else {
-      await axios.post(`/api/${params.storeId}/${Models.Orders}`, payload);
+      response = await axios.post(
+        `/api/${params.storeId}/${Models.Orders}`,
+        payload,
+      );
     }
     if (forceRedirect) {
-      toast({
-        description: toastMessage,
-        variant: "success",
-      });
+      const guideCreation = response.data.guideCreation;
+
+      if (guideCreation?.attempted) {
+        if (guideCreation.success) {
+          toast({
+            title: "Éxito",
+            description: "Orden creada y guía generada exitosamente.",
+            variant: "success",
+          });
+        } else {
+          toast({
+            title: "Atención",
+            description:
+              "Orden creada, pero falló la generación de la guía. Por favor créala manualmente.",
+            variant: "warning",
+          });
+        }
+      } else {
+        toast({
+          description: toastMessage,
+          variant: "success",
+        });
+      }
 
       router.push(`/${params.storeId}/${Models.Orders}`);
     }
