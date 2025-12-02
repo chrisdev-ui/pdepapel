@@ -175,6 +175,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   const router = useRouter();
   const payUFormRef = useRef<HTMLFormElement>(null);
   const [payUformData, setPayUformData] = useState<PayUFormState>();
+  const [hasSubmittedPayU, setHasSubmittedPayU] = useState(false);
   const { guestId, setGuestId, clearGuestId } = useGuestUser();
   const cart = useCart();
   const [isMounted, setIsMounted] = useState(false);
@@ -252,6 +253,16 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   useEffect(() => {
     setStoredFormData(debouncedFormData as Partial<CheckoutFormValue>);
   }, [debouncedFormData, setStoredFormData]);
+
+  useEffect(() => {
+    if (payUformData && payUFormRef.current && !hasSubmittedPayU) {
+      setHasSubmittedPayU(true);
+      // Small delay to ensure DOM is ready
+      setTimeout(() => {
+        payUFormRef.current?.submit();
+      }, 100);
+    }
+  }, [payUformData, hasSubmittedPayU]);
 
   const shippingCost = form.watch("shipping.cost");
 
