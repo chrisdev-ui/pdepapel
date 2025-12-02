@@ -369,7 +369,6 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   const { mutate, status } = useCheckout({
     onError(err) {
       console.error(err);
-      resetCheckout(); // Clear persisted state to prevent issues on retry
       toast({
         title: "Error",
         description:

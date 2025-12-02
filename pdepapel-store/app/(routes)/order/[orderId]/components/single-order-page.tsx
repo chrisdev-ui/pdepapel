@@ -37,6 +37,7 @@ import {
 } from "@/constants";
 import { useCart } from "@/hooks/use-cart";
 import useCheckoutOrder from "@/hooks/use-checkout-order";
+import { useConfetti } from "@/hooks/use-confetti";
 import { useGuestUser } from "@/hooks/use-guest-user";
 import { useToast } from "@/hooks/use-toast";
 import useTrackShipment from "@/hooks/use-track-shipment";
@@ -90,6 +91,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
     [],
   );
   const removeAll = useCart((state) => state.removeAll);
+  const { fireConfetti } = useConfetti();
 
   const { mutate, status } = useCheckoutOrder({
     orderId: order.id,
@@ -143,6 +145,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
         description: "Tu pago ha sido recibido.",
         duration: 10000,
       });
+      fireConfetti();
       removeAll();
     }
 
@@ -177,7 +180,13 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
       });
       removeAll();
     }
-  }, [order, removeAll, searchParams, toast]);
+  }, [order, removeAll, searchParams, toast, fireConfetti]);
+
+  useEffect(() => {
+    if (payUformData && payUFormRef.current) {
+      payUFormRef.current?.submit();
+    }
+  }, [payUformData]);
 
   useEffect(() => {
     const transactionState = Number(searchParams.get("transactionState"));
@@ -197,6 +206,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
             description: "Tu pago ha sido recibido.",
             duration: 10000,
           });
+          fireConfetti();
           removeAll();
           break;
         }
@@ -253,7 +263,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
         }
       }
     }
-  }, [order, removeAll, searchParams, toast]);
+  }, [order, removeAll, searchParams, toast, fireConfetti]);
 
   const shippingStatus = useMemo(
     () =>
