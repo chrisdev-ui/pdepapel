@@ -1,10 +1,11 @@
+import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SHIPPINGCARRIERS } from "@/constants";
 import { cn } from "@/lib/utils";
 import { ShippingQuote } from "@/types";
-import { Package, Truck } from "lucide-react";
+import { Package, Truck, X } from "lucide-react";
 import Image from "next/image";
 import { Currency } from "./currency";
 
@@ -12,6 +13,7 @@ interface ShippingRatesSelectorProps {
   quotes: ShippingQuote[];
   selectedRate?: number;
   onSelect: (idRate: number) => void;
+  onClear?: () => void;
   isLoading?: boolean;
   error?: string | null;
 }
@@ -20,6 +22,7 @@ export const ShippingRatesSelector = ({
   quotes,
   selectedRate,
   onSelect,
+  onClear,
   isLoading,
   error,
 }: ShippingRatesSelectorProps) => {
@@ -150,6 +153,18 @@ export const ShippingRatesSelector = ({
           </div>
         ))}
       </RadioGroup>
+      {selectedRate && onClear ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onClear}
+          className="w-full"
+        >
+          <X className="mr-2 h-4 w-4" />
+          Limpiar selección de envío
+        </Button>
+      ) : null}
     </div>
   );
 };

@@ -1,15 +1,17 @@
 import { cn } from "@/lib/utils";
 import { LocationOption } from "@/types";
 import { Command as CommandPrimitive } from "cmdk";
-import { Check, MapPin } from "lucide-react";
+import { Check, MapPin, X } from "lucide-react";
 import {
   useCallback,
   useDeferredValue,
+  useEffect,
   useMemo,
   useRef,
   useState,
   type KeyboardEvent,
 } from "react";
+import { Button } from "./button";
 import {
   CommandGroup,
   CommandInput,
@@ -22,6 +24,7 @@ interface AutocompleteLocationProps {
   options: LocationOption[];
   value?: string; // daneCode
   onChange: (value: string, location?: LocationOption) => void;
+  onClear?: () => void;
   disabled?: boolean;
   placeholder?: string;
   isLoading?: boolean;
@@ -41,6 +44,7 @@ export const AutocompleteLocation: React.FC<AutocompleteLocationProps> = ({
   value,
   onChange,
   onSearch,
+  onClear,
   disabled,
   placeholder = "Seleccionar ciudad...",
   isLoading = false,
@@ -56,6 +60,23 @@ export const AutocompleteLocation: React.FC<AutocompleteLocationProps> = ({
   const [inputValue, setInputValue] = useState<string>(selected?.label || "");
 
   const deferredInputValue = useDeferredValue(inputValue);
+
+  // Sync internal state when value or options change (e.g., after page refresh when options load)
+  useEffect(() => {
+    if (value && options && options.length > 0) {
+      const matchedLocation = options.find(
+        (location) => location.value === value,
+      );
+      if (matchedLocation && matchedLocation.value !== selected?.value) {
+        setSelected(matchedLocation);
+        setInputValue(matchedLocation.label);
+      }
+    } else if (!value) {
+      // Clear internal state if value is cleared externally
+      setSelected(undefined);
+      setInputValue("");
+    }
+  }, [value, options, selected?.value]);
 
   // Memoize filtered results to avoid re-filtering on every render
   const filteredOptions = useMemo(() => {
@@ -149,9 +170,17 @@ export const AutocompleteLocation: React.FC<AutocompleteLocationProps> = ({
     [onChange],
   );
 
+  const handleClear = useCallback(() => {
+    setInputValue("");
+    setSelected(undefined);
+    onChange("", undefined);
+    onClear?.();
+    inputRef?.current?.focus();
+  }, [onChange, onClear]);
+
   return (
     <CommandPrimitive onKeyDown={handleKeyDown}>
-      <div>
+      <div className="relative">
         <CommandInput
           ref={inputRef}
           value={inputValue}
@@ -164,6 +193,18 @@ export const AutocompleteLocation: React.FC<AutocompleteLocationProps> = ({
           placeholder={placeholder}
           disabled={disabled}
         />
+        {selected && !disabled && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="absolute right-2 top-1/2 h-6 w-6 -translate-y-1/2 p-0 hover:bg-muted"
+            onClick={handleClear}
+            tabIndex={-1}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        )}
       </div>
       <div className="relative mt-1">
         <div

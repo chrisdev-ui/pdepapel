@@ -12,11 +12,12 @@ import { Input } from "@/components/ui/input";
 import { ShippingRatesSelector } from "@/components/ui/shipping-rates-selector";
 import { Textarea } from "@/components/ui/textarea";
 import { ShippingStatus } from "@/constants";
+import { useCheckoutStore } from "@/hooks/use-checkout-store";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useLocations } from "@/hooks/use-locations";
 import { useShippingQuote } from "@/hooks/use-shipping-quote";
 import { Loader2, PackageSearch } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { UseFormReturn } from "react-hook-form";
 import { CheckoutFormValue } from "../multi-step-checkout-form";
 
@@ -46,6 +47,10 @@ export const ShippingInfoStep = ({
   const address1 = form.watch("address1");
   const locationsDisabled = isLoading || isLoadingLocations;
 
+  // Get quote data from store
+  const storedQuoteData = useCheckoutStore((state) => state.quoteData);
+  const setStoredQuoteData = useCheckoutStore((state) => state.setQuoteData);
+
   // Use mutation for manual quote fetching
   const {
     mutate: fetchQuotes,
@@ -54,6 +59,19 @@ export const ShippingInfoStep = ({
     error: quoteError,
     reset: resetQuotes,
   } = useShippingQuote();
+
+  // Initialize quote data from store on mount
+  const [localQuoteData, setLocalQuoteData] = useState(storedQuoteData);
+
+  // Sync local quote data with both mutation data and stored data
+  useEffect(() => {
+    if (quoteData) {
+      setLocalQuoteData(quoteData);
+      setStoredQuoteData(quoteData);
+    } else if (storedQuoteData && !localQuoteData) {
+      setLocalQuoteData(storedQuoteData);
+    }
+  }, [quoteData, storedQuoteData, localQuoteData, setStoredQuoteData]);
 
   // Check if required fields are filled for button enable
   const canFetchQuotes =
@@ -74,6 +92,15 @@ export const ShippingInfoStep = ({
         quantity: item.quantity,
       })),
     });
+  };
+
+  // Handle reset quotes
+  const handleResetQuotes = () => {
+    setLocalQuoteData(null);
+    setStoredQuoteData(null);
+    resetQuotes();
+    form.setValue("envioClickIdRate", 0);
+    form.setValue("shipping", {});
   };
 
   return (
@@ -100,12 +127,18 @@ export const ShippingInfoStep = ({
                     options={locations || []}
                     value={field.value || ""}
                     onSearch={setSearchQuery}
-                    onChange={(value, location) => {
+                    onChange={async (value, location) => {
                       field.onChange(value);
                       if (location) {
                         form.setValue("city", location.city);
                         form.setValue("department", location.department);
+                        // Trigger validation to clear any errors
+                        await form.trigger(["city", "department"]);
                       }
+                    }}
+                    onClear={() => {
+                      form.setValue("city", "");
+                      form.setValue("department", "");
                     }}
                     isLoading={isLoadingLocations}
                     disabled={isLoading}
@@ -263,7 +296,7 @@ export const ShippingInfoStep = ({
 
         {/* Calculate Rates Button */}
         <div className="col-span-1 sm:col-span-2">
-          {!quoteData && (
+          {!localQuoteData && (
             <Button
               type="button"
               onClick={handleFetchQuotes}
@@ -283,7 +316,18 @@ export const ShippingInfoStep = ({
               )}
             </Button>
           )}
-          {!canFetchQuotes && !quoteData && (
+          {localQuoteData && (
+            <Button
+              type="button"
+              onClick={handleResetQuotes}
+              variant="outline"
+              className="w-full"
+            >
+              <PackageSearch className="mr-2 h-5 w-5" />
+              Recalcular tarifas de envío
+            </Button>
+          )}
+          {!canFetchQuotes && !localQuoteData && (
             <p className="mt-2 text-center text-sm text-muted-foreground">
               Completa la ubicación y dirección para calcular las tarifas
             </p>
@@ -295,26 +339,28 @@ export const ShippingInfoStep = ({
           )}
         </div>
 
-        {/* Shipping Rates - Show when quotes are available */}
-        {quoteData && (
-          <div className="col-span-1 sm:col-span-2">
-            <FormField
-              control={form.control}
-              name="envioClickIdRate"
-              render={({ field }) => (
-                <FormItem>
+        {/* Shipping Rates - Always render field for validation */}
+        <div className="col-span-1 sm:col-span-2">
+          <FormField
+            control={form.control}
+            name="envioClickIdRate"
+            render={({ field }) => (
+              <FormItem>
+                {localQuoteData && (
                   <FormLabel className="text-foreground/90">
                     Selecciona una tarifa de envío *
                   </FormLabel>
-                  <FormControl>
+                )}
+                <FormControl>
+                  {localQuoteData ? (
                     <ShippingRatesSelector
-                      quotes={quoteData?.quotes || []}
+                      quotes={localQuoteData?.quotes || []}
                       selectedRate={field.value}
-                      onSelect={(idRate) => {
+                      onSelect={async (idRate) => {
                         field.onChange(idRate);
 
                         // Find selected quote and update shipping details
-                        const selectedQuote = quoteData?.quotes.find(
+                        const selectedQuote = localQuoteData?.quotes.find(
                           (q) => q.idRate === idRate,
                         );
 
@@ -331,19 +377,30 @@ export const ShippingInfoStep = ({
                             status: ShippingStatus.Preparing,
                           });
                         }
+
+                        // Trigger validation to clear any errors
+                        await form.trigger("envioClickIdRate");
+                      }}
+                      onClear={() => {
+                        field.onChange(undefined);
+                        form.setValue("shipping", {});
                       }}
                       isLoading={isLoadingQuotes}
                     />
-                  </FormControl>
+                  ) : (
+                    <input type="hidden" {...field} />
+                  )}
+                </FormControl>
+                {localQuoteData && (
                   <FormDescription>
                     Selecciona la tarifa de envío que deseas utilizar.
                   </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-        )}
+                )}
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
       </div>
     </div>
   );

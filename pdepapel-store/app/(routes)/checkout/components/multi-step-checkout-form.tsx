@@ -84,7 +84,7 @@ const formSchema = z.object({
   }),
   address1: z
     .string()
-    .min(8, "La dirección debe tener al menos 8 caracteres")
+    .min(2, "Por favor, escribe tu dirección principal")
     .max(50, "La dirección debe tener menos de 50 caracteres"),
   address2: z
     .string()
@@ -110,23 +110,38 @@ const formSchema = z.object({
     .max(50, "El nombre de tu empresa debe tener menos de 50 caracteres")
     .optional()
     .or(z.literal("")),
-  city: z.string().optional().or(z.literal("")),
-  department: z.string().optional().or(z.literal("")),
-  daneCode: z
+  city: z
     .string()
-    .length(8, "El código DANE debe tener exactamente 8 caracteres")
-    .optional()
-    .or(z.literal("")),
-  documentId: z.string().optional().or(z.literal("")),
+    .min(1, "Por favor, escribe tu ciudad")
+    .max(50, "La ciudad debe tener menos de 50 caracteres"),
+  department: z
+    .string()
+    .min(1, "Por favor, escribe tu departamento")
+    .max(50, "El departamento debe tener menos de 50 caracteres"),
+  daneCode: z
+    .string({
+      required_error:
+        "Selecciona tu ciudad y departamento. Si no encuentras tu ciudad, comunica tu domicilio a nuestro WhatsApp.",
+    })
+    .length(
+      8,
+      "Selecciona tu ciudad y departamento. Si no encuentras tu ciudad, comunica tu domicilio a nuestro WhatsApp.",
+    ),
+  documentId: z
+    .string()
+    .min(1, "Por favor, escribe tu número de identificación")
+    .max(15, "El número de identificación debe tener menos de 15 caracteres"),
   couponCode: z.string().optional().or(z.literal("")),
   paymentMethod: z
     .nativeEnum(PaymentMethod)
     .default(PaymentMethod.BankTransfer),
   shippingProvider: z.literal("ENVIOCLICK"),
-  envioClickIdRate: z.number({
-    required_error: "Escoge una tarifa para el envío",
-    invalid_type_error: "La tarifa debe ser un número",
-  }),
+  envioClickIdRate: z
+    .number({
+      required_error: "Escoge una tarifa para el envío",
+      invalid_type_error: "La tarifa debe ser un número",
+    })
+    .min(1, "Debes calcular y seleccionar una tarifa de envío"),
   shipping: shippingSchema,
 });
 
@@ -209,6 +224,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   }, [couponState, setStoredCouponState]);
 
   const form = useForm<CheckoutFormValue>({
+    mode: "onChange",
     resolver: zodResolver(formSchema),
     defaultValues: async () => {
       const storedFormData = useCheckoutStore.getState().formData;
