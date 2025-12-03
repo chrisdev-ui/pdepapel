@@ -436,13 +436,12 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   const discountType = form.watch("discount.type");
   const discountAmount = form.watch("discount.amount");
   const shippingCost = form.watch("shipping.cost");
+  const shippingCourier = form.watch("shipping.courier");
+  const shippingCarrierName = form.watch("shipping.carrierName");
+
   const carrierInfo = useMemo(() => {
-    return getCarrierInfo(
-      form.watch("shipping.courier") ||
-        form.watch("shipping.carrierName") ||
-        "",
-    );
-  }, [form]);
+    return getCarrierInfo(shippingCourier || shippingCarrierName || "");
+  }, [shippingCourier, shippingCarrierName]);
 
   const {
     formState: { isDirty },
