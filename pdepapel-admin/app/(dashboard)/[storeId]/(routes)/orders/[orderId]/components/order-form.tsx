@@ -151,10 +151,7 @@ const formSchema = z
     fullName: z
       .string()
       .min(1, "Debes agregar un nombre")
-      .max(
-        29,
-        "El nombre completo no puede exceder 28 caracteres (límite de envío)",
-      ),
+      .max(50, "El nombre completo no puede exceder 50 caracteres"),
     email: z
       .string()
       .min(1, "El correo electrónico es requerido")
