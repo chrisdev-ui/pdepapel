@@ -11,14 +11,21 @@ export async function getPotentialProfit(storeId: string) {
       },
     },
     select: {
+      id: true,
+      categoryId: true,
       stock: true,
       price: true,
       acqPrice: true,
     },
   });
 
+  const { getProductsPrices } = await import("@/lib/discount-engine");
+  const pricesMap = await getProductsPrices(products, storeId);
+
   const potentialProfit = products.reduce((sum, product) => {
-    const profit = product.stock * (product.price - (product.acqPrice || 0));
+    const priceInfo = pricesMap.get(product.id);
+    const finalPrice = priceInfo ? priceInfo.price : product.price;
+    const profit = product.stock * (finalPrice - (product.acqPrice || 0));
     return sum + profit;
   }, 0);
 

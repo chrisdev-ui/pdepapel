@@ -11,13 +11,20 @@ export async function getPotentialRevenue(storeId: string) {
       },
     },
     select: {
+      id: true,
+      categoryId: true,
       stock: true,
       price: true,
     },
   });
 
+  const { getProductsPrices } = await import("@/lib/discount-engine");
+  const pricesMap = await getProductsPrices(products, storeId);
+
   const potentialRevenue = products.reduce((sum, product) => {
-    return sum + product.stock * product.price;
+    const priceInfo = pricesMap.get(product.id);
+    const finalPrice = priceInfo ? priceInfo.price : product.price;
+    return sum + product.stock * finalPrice;
   }, 0);
 
   return potentialRevenue;
