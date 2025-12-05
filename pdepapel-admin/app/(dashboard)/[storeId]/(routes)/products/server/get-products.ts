@@ -14,6 +14,9 @@ export async function getProducts(storeId: string) {
       name: true,
       price: true,
       stock: true,
+      color: true,
+      isArchived: true,
+      isFeatured: true,
       images: {
         select: {
           url: true,
