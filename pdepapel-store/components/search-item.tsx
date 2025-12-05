@@ -5,7 +5,7 @@ import { Currency } from "./ui/currency";
 
 interface SearchItemProps {
   id: string;
-  image: Image;
+  image?: Image;
   name: string;
   price: number | string;
   innerRef?: React.Ref<HTMLAnchorElement>;
@@ -34,7 +34,7 @@ export const SearchItem: React.FC<SearchItemProps> = ({
     >
       <div className="relative h-10 w-10">
         <NextImage
-          src={image.url}
+          src={image?.url ?? "/images/placeholder.png"}
           alt={name ?? "Imagen del producto"}
           fill
           sizes="(max-width: 640px) 40px, 120px"
@@ -43,8 +43,8 @@ export const SearchItem: React.FC<SearchItemProps> = ({
         />
       </div>
       <div className="flex max-h-10 grow items-center justify-between">
-        <div className="flex h-full w-full max-w-xs flex-col items-center justify-center font-serif text-xs font-normal tracking-tight">
-          <span className="w-full truncate">{name}</span>
+        <div className="flex h-full w-full max-w-xs flex-col justify-center font-serif text-xs font-normal tracking-tight">
+          <p className="w-full truncate text-left">{name}</p>
         </div>
         <Currency className="text-sm" value={price} />
       </div>

@@ -46,7 +46,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
                     products.length === index + 1 ? innerRef : undefined
                   }
                   key={product.id}
-                  image={product.images[0]}
+                  image={product.images?.[0]}
                   closeAll={closeAll}
                   {...product}
                 />

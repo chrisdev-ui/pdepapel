@@ -26,7 +26,7 @@ export async function generateMetadata({
     };
   }
 
-  const images = product.images.map((image) => image.url);
+  const images = product.images?.map((image) => image.url);
 
   return {
     title: product.name,
@@ -61,7 +61,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
   if (!product) return notFound();
 
   const { products: suggestedProducts } = await getProducts({
-    categoryId: product.category.id,
+    categoryId: product.category?.id,
     excludeProducts: params.productId,
     limit: 4,
   });

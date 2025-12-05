@@ -6,7 +6,6 @@ export async function getProducts(storeId: string) {
   return await prismadb.product.findMany({
     where: {
       storeId,
-      isArchived: false,
     },
     select: {
       id: true,
