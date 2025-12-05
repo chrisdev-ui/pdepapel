@@ -14,6 +14,7 @@ import { usePreviewModal } from "@/hooks/use-preview-modal";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { calculateAverageRating, cn } from "@/lib/utils";
 import { Product } from "@/types";
+import { OfferBadge } from "./offer-badge";
 
 interface ProductCardProps {
   product: Product;
@@ -122,16 +123,49 @@ const ProductCard: React.FC<ProductCardProps> = ({
         currentRating={calculateAverageRating(product.reviews)}
         isDisabled
       />
-      <div className="flex items-center justify-between font-serif">
-        <Currency value={product.price} />
+      <div className="flex flex-col gap-1 font-serif">
+        {product.discountedPrice &&
+        product.discountedPrice < Number(product.price) ? (
+          <>
+            <div className="flex items-center gap-2">
+              <Currency value={product.discountedPrice} className="text-2xl" />
+              <Currency
+                value={product.price}
+                className="text-sm text-gray-500 line-through"
+              />
+            </div>
+            <span className="text-xs text-green-600">
+              Ahorra{" "}
+              {new Intl.NumberFormat("es-CO", {
+                style: "currency",
+                currency: "COP",
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0,
+              }).format(Number(product.price) - product.discountedPrice)}{" "}
+              (
+              {Math.round(
+                ((Number(product.price) - product.discountedPrice) /
+                  Number(product.price)) *
+                  100,
+              )}
+              %)
+            </span>
+          </>
+        ) : (
+          <Currency value={product.price} />
+        )}
       </div>
-      {product.stock === 0 && (
+      {/* Smart Badge Priority: Out of Stock > Offer > New */}
+      {product.stock === 0 ? (
         <ProductCardBadge
           text="¡Agotado!"
           spanClasses="border-white bg-red-500 text-white outline-white"
         />
-      )}
-      {isNew && <ProductCardBadge text="¡Nuevo!" />}
+      ) : product.offerLabel ? (
+        <OfferBadge text={product.offerLabel} />
+      ) : isNew ? (
+        <ProductCardBadge text="¡Nuevo!" />
+      ) : null}
     </div>
   );
 };

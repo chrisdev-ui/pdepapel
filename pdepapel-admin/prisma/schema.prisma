@@ -50,6 +50,7 @@ model Store {
   suppliers  Supplier[]       @relation("StoreToSupplier")
   coupons    Coupon[]         @relation("StoreToCoupons")
   shippingQuotes ShippingQuote[] @relation("StoreToShippingQuotes")
+  offers         Offer[]         @relation("StoreToOffer")
 }
 
 model Billboard {
@@ -64,6 +65,51 @@ model Billboard {
   store       Store    @relation("StoreToBillboard", fields: [storeId], references: [id])
 
   @@index([storeId])
+}
+
+model Offer {
+  id          String      @id @default(uuid())
+  storeId     String
+  name        String      // Internal name e.g. "Summer Sale"
+  label       String?     // Public label e.g. "20% OFF"
+  type        DiscountType // PERCENTAGE | FIXED (Reuse existing enum)
+  amount      Float       // e.g. 20 for 20%, or 5000 for $5000 off
+  startDate   DateTime
+  endDate     DateTime
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  store       Store       @relation("StoreToOffer", fields: [storeId], references: [id])
+  products    OfferProduct[]
+  categories  OfferCategory[]
+
+  @@index([storeId])
+  @@index([isActive, startDate, endDate])
+}
+
+model OfferProduct {
+  id        String   @id @default(uuid())
+  offerId   String
+  productId String
+  
+  offer     Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([offerId, productId])
+  @@index([productId])
+}
+
+model OfferCategory {
+  id         String   @id @default(uuid())
+  offerId    String
+  categoryId String
+  
+  offer      Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([offerId, categoryId])
+  @@index([categoryId])
 }
 
 model Post {
@@ -100,6 +146,7 @@ model Category {
   store     Store     @relation("StoreToCategory", fields: [storeId], references: [id])
   type      Type      @relation(fields: [typeId], references: [id])
   products  Product[] @relation("CategoryToProduct")
+  offers    OfferCategory[]
 
   @@index([storeId])
   @@index([typeId])
@@ -171,6 +218,7 @@ model Product {
   reviews     Review[]
   supplierId  String?
   supplier    Supplier?   @relation(fields: [supplierId], references: [id])
+  offers      OfferProduct[]
 
   @@index([storeId])
   @@index([categoryId])

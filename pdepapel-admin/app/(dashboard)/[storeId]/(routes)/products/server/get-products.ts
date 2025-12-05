@@ -6,43 +6,29 @@ export async function getProducts(storeId: string) {
   return await prismadb.product.findMany({
     where: {
       storeId,
+      isArchived: false,
     },
     select: {
       id: true,
       sku: true,
       name: true,
-      description: true,
-      stock: true,
       price: true,
-      category: {
-        select: {
-          name: true,
-        },
-      },
-      size: {
-        select: {
-          name: true,
-        },
-      },
-      color: {
-        select: {
-          value: true,
-        },
-      },
-      design: {
-        select: {
-          name: true,
-        },
-      },
+      stock: true,
       images: {
         select: {
           url: true,
           isMain: true,
         },
+        take: 1,
+        orderBy: {
+          isMain: "desc",
+        },
       },
-      acqPrice: true,
-      isFeatured: true,
-      isArchived: true,
+      category: {
+        select: {
+          name: true,
+        },
+      },
       createdAt: true,
     },
     orderBy: {

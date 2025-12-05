@@ -33,7 +33,18 @@ export async function GET(
       },
     });
 
-    return NextResponse.json(product, {
+    if (!product) {
+      throw ErrorFactory.NotFound("Producto no encontrado");
+    }
+
+    // Calculate discounted price
+    const { calculateDiscountedPrice } = await import("@/lib/discount-engine");
+    const productWithDiscount = await calculateDiscountedPrice(
+      product,
+      params.storeId,
+    );
+
+    return NextResponse.json(productWithDiscount, {
       headers: CACHE_HEADERS.DYNAMIC,
     });
   } catch (error) {
@@ -171,6 +182,20 @@ export async function PATCH(
         },
       });
     });
+
+    // Invalidate all product cache entries for this store
+    try {
+      const { Redis } = await import("@upstash/redis");
+      const redis = Redis.fromEnv();
+      const pattern = `store:${params.storeId}:products:*`;
+      const keys = await redis.keys(pattern);
+      if (keys.length > 0) {
+        await redis.del(...keys);
+      }
+    } catch (error) {
+      console.error("Redis cache invalidation error:", error);
+    }
+
     return NextResponse.json(result, {
       headers: CACHE_HEADERS.NO_CACHE,
     });
@@ -252,6 +277,19 @@ export async function DELETE(
         where: { id: params.productId, storeId: params.storeId },
       });
     });
+
+    // Invalidate all product cache entries for this store
+    try {
+      const { Redis } = await import("@upstash/redis");
+      const redis = Redis.fromEnv();
+      const pattern = `store:${params.storeId}:products:*`;
+      const keys = await redis.keys(pattern);
+      if (keys.length > 0) {
+        await redis.del(...keys);
+      }
+    } catch (error) {
+      console.error("Redis cache invalidation error:", error);
+    }
 
     return NextResponse.json("El producto ha sido eliminado correctamente", {
       headers: CACHE_HEADERS.NO_CACHE,

@@ -123,7 +123,18 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
                         <span className="text-xs text-gray-400">{`Diseño: ${item.design.name}`}</span>
                         <span className="hidden text-xs text-gray-400 lg:block">{`Categoría: ${item.category.name}`}</span>
                       </div>
-                      <Currency className="text-lg" value={item.price} />
+                      <div className="flex items-center gap-1.5">
+                        <Currency
+                          className="text-lg"
+                          value={item.discountedPrice ?? item.price}
+                        />
+                        {item.discountedPrice &&
+                          item.discountedPrice < Number(item.price) && (
+                            <span className="animate-pulse rounded bg-pink-froly px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                              Oferta
+                            </span>
+                          )}
+                      </div>
                     </div>
                     <button
                       className="group h-8 w-8 rounded-full bg-gray-200 text-blue-yankees/50 hover:bg-blue-baby hover:text-blue-yankees"

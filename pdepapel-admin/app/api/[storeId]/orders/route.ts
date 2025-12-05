@@ -5,6 +5,7 @@ import { getColombiaDate } from "@/lib/date-utils";
 import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
+import { getProductsPrices } from "@/lib/discount-engine";
 
 import {
   batchUpdateProductStock,
@@ -267,6 +268,12 @@ export async function POST(
       // Create a map for faster lookups
       const productMap = new Map(products.map((p) => [p.id, p]));
 
+      // Calculate discounted prices for all products
+      const discountedPricesMap = await getProductsPrices(
+        products,
+        params.storeId,
+      );
+
       const itemsWithPrices = orderItems.map(
         (item: { productId: string; quantity?: number }) => {
           const product = productMap.get(item.productId);
@@ -275,8 +282,14 @@ export async function POST(
               `Producto ${item.productId} no encontrado`,
             );
           }
+
+          const pricing = discountedPricesMap.get(item.productId);
+          // Use the discounted price if available, otherwise fallback to base price
+          // Note: getProductsPrices always returns a valid object even if no discount
+          const finalPrice = pricing ? pricing.price : product.price;
+
           return {
-            product: { price: product.price },
+            product: { price: finalPrice },
             quantity: item.quantity,
           };
         },

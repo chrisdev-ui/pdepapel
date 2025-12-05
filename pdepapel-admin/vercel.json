@@ -2,7 +2,11 @@
   "crons": [
     {
       "path": "/api/cron/update-coupons",
-      "schedule": "0 0 * * *"
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/update-offers",
+      "schedule": "0 * * * *"
     }
   ],
   "functions": {

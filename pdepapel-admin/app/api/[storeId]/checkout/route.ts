@@ -237,6 +237,13 @@ export async function POST(
     // Create product map for O(1) lookups
     const productMap = new Map(products.map((p) => [p.id, p]));
 
+    // Calculate discounted prices
+    const { getProductsPrices } = await import("@/lib/discount-engine");
+    const discountedPricesMap = await getProductsPrices(
+      products,
+      params.storeId,
+    );
+
     const errors: string[] = [];
     const orderItemsData = [];
 
@@ -298,7 +305,7 @@ export async function POST(
       }
     }
 
-    // Create items with prices using product map
+    // Create items with prices using product map and discounted prices
     const itemsWithPrices = orderItems.map(
       ({
         productId,
@@ -311,8 +318,12 @@ export async function POST(
         if (!product) {
           throw ErrorFactory.NotFound(`Producto ${productId} no encontrado`);
         }
+
+        const pricing = discountedPricesMap.get(productId);
+        const finalPrice = pricing ? pricing.price : product.price;
+
         return {
-          product: { price: product.price },
+          product: { price: finalPrice },
           quantity,
         };
       },

@@ -282,7 +282,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
 
   const shippingCost = form.watch("shipping.cost");
 
-  const { total, subtotal, couponDiscount } = useMemo(
+  const { total, subtotal, couponDiscount, productSavings } = useMemo(
     () => calculateTotals(cart.items, couponState.coupon, shippingCost),
     [cart.items, couponState.coupon, shippingCost],
   );
@@ -616,7 +616,23 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                         <span className="text-xs text-gray-400">{`Diseño: ${item.design.name}`}</span>
                         <span className="hidden text-xs text-gray-400 lg:block">{`Categoría: ${item.category.name}`}</span>
                       </div>
-                      <Currency className="text-lg" value={item.price} />
+                      <div className="flex items-center gap-2">
+                        {item.discountedPrice &&
+                        item.discountedPrice < Number(item.price) ? (
+                          <>
+                            <Currency
+                              className="text-lg"
+                              value={item.discountedPrice}
+                            />
+                            <Currency
+                              className="text-sm text-gray-500 line-through"
+                              value={item.price}
+                            />
+                          </>
+                        ) : (
+                          <Currency className="text-lg" value={item.price} />
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -628,6 +644,17 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                 <span className="text-lg">Subtotal</span>
                 <Currency className="text-lg" value={subtotal} />
               </div>
+              {productSavings > 0 && (
+                <div className="flex flex-1 items-center justify-between">
+                  <span className="text-lg text-gray-600">
+                    Ahorros en ofertas
+                  </span>
+                  <Currency
+                    className="font-serif text-lg text-success"
+                    value={productSavings}
+                  />
+                </div>
+              )}
               {couponDiscount > 0 && (
                 <div className="flex flex-1 items-center justify-between">
                   <div className="ml-2 text-lg text-destructive">

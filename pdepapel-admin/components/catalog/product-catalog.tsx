@@ -271,6 +271,7 @@ interface Product {
   size: { name: string };
   color: { name: string };
   stock: number;
+  originalPrice?: number;
 }
 
 interface Store {
@@ -468,9 +469,36 @@ const ProductsPage = ({
           )}
           <Text style={styles.productName}>{product.name}</Text>
           <Text style={styles.productDetails}>SKU: {product.sku}</Text>
-          <Text style={[styles.productDetails, { fontWeight: 800 }]}>
-            Precio: {currencyFormatter.format(product.price)}
-          </Text>
+          {product.originalPrice && product.originalPrice > product.price ? (
+            <View
+              style={{
+                display: "flex",
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 5,
+              }}
+            >
+              <Text
+                style={[
+                  styles.productDetails,
+                  {
+                    textDecoration: "line-through",
+                    color: "#999",
+                    fontSize: 9,
+                  },
+                ]}
+              >
+                {currencyFormatter.format(product.originalPrice)}
+              </Text>
+              <Text style={[styles.productDetails, { fontWeight: 800 }]}>
+                {currencyFormatter.format(product.price)}
+              </Text>
+            </View>
+          ) : (
+            <Text style={[styles.productDetails, { fontWeight: 800 }]}>
+              Precio: {currencyFormatter.format(product.price)}
+            </Text>
+          )}
           <Text style={styles.productDetails}>Tamaño: {product.size.name}</Text>
           <Text style={styles.productDetails}>Color: {product.color.name}</Text>
           <Text style={styles.productDetails}>

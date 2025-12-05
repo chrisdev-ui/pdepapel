@@ -62,7 +62,15 @@ export async function GET(
         images: true,
       },
     });
-    return NextResponse.json(products, { headers: corsHeaders });
+    const { calculateDiscountedPrice } = await import("@/lib/discount-engine");
+
+    const productsWithDiscounts = await Promise.all(
+      products.map((product) =>
+        calculateDiscountedPrice(product, params.storeId),
+      ),
+    );
+
+    return NextResponse.json(productsWithDiscounts, { headers: corsHeaders });
   } catch (error) {
     return handleErrorResponse(error, "SEARCH_PRODUCTS", {
       headers: corsHeaders,

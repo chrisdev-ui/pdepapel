@@ -74,9 +74,26 @@ export async function GET(
       throw ErrorFactory.NotFound("La tienda no se encuentra");
     }
 
+    const { calculateDiscountedPrice } = await import("@/lib/discount-engine");
+
+    const productsWithDiscounts = await Promise.all(
+      products.map(async (product) => {
+        const priceInfo = await calculateDiscountedPrice(
+          product,
+          params.storeId,
+        );
+        return {
+          ...product,
+          price: priceInfo.price,
+          originalPrice: priceInfo.originalPrice,
+          offerLabel: priceInfo.offerLabel,
+        };
+      }),
+    );
+
     return NextResponse.json(
       {
-        products,
+        products: productsWithDiscounts,
         store: {
           ...store,
           policies: store.policies

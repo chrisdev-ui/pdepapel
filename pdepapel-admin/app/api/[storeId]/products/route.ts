@@ -14,6 +14,7 @@ import {
   parseErrorDetails,
   verifyStoreOwner,
 } from "@/lib/utils";
+import { getProductsPrices } from "@/lib/discount-engine";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
@@ -93,6 +94,22 @@ export async function POST(
       },
     });
 
+    // Invalidate all product cache entries for this store
+    try {
+      const { Redis } = await import("@upstash/redis");
+      const redis = Redis.fromEnv();
+      const pattern = `store:${params.storeId}:products:*`;
+
+      // Get all matching keys
+      const keys = await redis.keys(pattern);
+      if (keys.length > 0) {
+        // Delete all matching keys
+        await redis.del(...keys);
+      }
+    } catch (error) {
+      console.error("Redis cache invalidation error:", error);
+    }
+
     return NextResponse.json(product, {
       headers: CACHE_HEADERS.NO_CACHE,
     });
@@ -127,6 +144,45 @@ export async function GET(
     const sortOption = searchParams.get("sortOption") || "default";
     const priceRange = searchParams.get("priceRange") || undefined;
     const excludeProducts = searchParams.get("excludeProducts") || undefined;
+
+    // Create cache key based on query parameters
+    const cacheKey = `store:${params.storeId}:products:${JSON.stringify({
+      page,
+      itemsPerPage,
+      typeId: typeId.sort(),
+      categoryId: categoryId.sort(),
+      colorId: colorId.sort(),
+      sizeId: sizeId.sort(),
+      designId: designId.sort(),
+      isFeatured,
+      includeSupplier,
+      onlyNew,
+      fromShop,
+      limit,
+      search,
+      sortOption,
+      priceRange,
+      excludeProducts,
+    })}`;
+
+    // Try to get from Redis cache
+    try {
+      const { Redis } = await import("@upstash/redis");
+      const redis = Redis.fromEnv();
+      const cached = await redis.get(cacheKey);
+
+      if (cached) {
+        return NextResponse.json(cached, {
+          headers: {
+            ...CACHE_HEADERS.DYNAMIC,
+            "X-Cache": "HIT",
+          },
+        });
+      }
+    } catch (error) {
+      console.error("Redis get error:", error);
+    }
+
     let categoriesIds: string[] = [];
     if (typeId.length > 0) {
       const categoriesForType = await prismadb.category.findMany({
@@ -259,16 +315,41 @@ export async function GET(
       });
     }
     const totalPages = fromShop ? Math.ceil(totalItems / itemsPerPage) : 1;
-    return NextResponse.json(
-      {
-        products,
-        totalItems,
-        totalPages: fromShop ? totalPages : 1,
+
+    // Calculate discounted prices
+    const pricesMap = await getProductsPrices(products, params.storeId);
+    const productsWithPrices = products.map((product) => {
+      const pricing = pricesMap.get(product.id);
+      return {
+        ...product,
+        discountedPrice: pricing?.price ?? Number(product.price),
+        originalPrice: Number(product.price),
+        offerLabel: pricing?.offerLabel ?? null,
+      };
+    });
+
+    const response = {
+      products: productsWithPrices,
+      totalItems,
+      totalPages: fromShop ? totalPages : 1,
+    };
+
+    // Cache the response (5 minutes for shop queries, 15 minutes for others)
+    try {
+      const { Redis } = await import("@upstash/redis");
+      const redis = Redis.fromEnv();
+      const ttl = fromShop ? 5 * 60 : 15 * 60;
+      await redis.set(cacheKey, response, { ex: ttl });
+    } catch (error) {
+      console.error("Redis set error:", error);
+    }
+
+    return NextResponse.json(response, {
+      headers: {
+        ...CACHE_HEADERS.DYNAMIC,
+        "X-Cache": "MISS",
       },
-      {
-        headers: CACHE_HEADERS.DYNAMIC,
-      },
-    );
+    });
   } catch (error) {
     return handleErrorResponse(error, "PRODUCTS_GET", {
       headers: CACHE_HEADERS.DYNAMIC,

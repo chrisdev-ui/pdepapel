@@ -1,3 +1,4 @@
+import { getColombiaDate } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -12,9 +13,10 @@ export function DataTableCellDate({
   color,
   ...props
 }: DataTableCellDateProps) {
+  const colombiaDate = getColombiaDate(date);
   return (
     <div className={cn(className)} {...props}>
-      {format(date, "dd 'de' MMMM 'de' yyyy", {
+      {format(colombiaDate, "dd 'de' MMMM 'de' yyyy", {
         locale: es,
       })}
     </div>

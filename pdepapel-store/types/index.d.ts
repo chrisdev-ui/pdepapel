@@ -29,6 +29,10 @@ export interface Product {
   reviews: Review[];
   sku: string;
   quantity?: number;
+  // Discount fields
+  discountedPrice?: number;
+  originalPrice?: number;
+  offerLabel?: string | null;
 }
 
 export interface Category {

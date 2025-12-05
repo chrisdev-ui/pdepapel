@@ -133,10 +133,22 @@ export const calculateTotals = (
   coupon: Coupon | null,
   shippingCost: number = 0,
 ) => {
-  const subtotal = orderItems.reduce(
-    (total, item) => total + Number(item.price) * Number(item.quantity ?? 1),
-    0,
-  );
+  // Calculate subtotal using discounted prices when available
+  const subtotal = orderItems.reduce((total, item) => {
+    const itemPrice = item.discountedPrice ?? Number(item.price);
+    return total + itemPrice * Number(item.quantity ?? 1);
+  }, 0);
+
+  // Calculate total product-level savings (from offers)
+  const productSavings = orderItems.reduce((total, item) => {
+    if (item.discountedPrice && item.discountedPrice < Number(item.price)) {
+      const savings =
+        (Number(item.price) - item.discountedPrice) *
+        Number(item.quantity ?? 1);
+      return total + savings;
+    }
+    return total;
+  }, 0);
 
   let couponDiscount = 0;
   if (
@@ -156,5 +168,6 @@ export const calculateTotals = (
     subtotal,
     total,
     couponDiscount,
+    productSavings,
   };
 };

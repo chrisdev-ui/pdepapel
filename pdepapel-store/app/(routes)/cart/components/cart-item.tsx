@@ -60,7 +60,37 @@ export const CartItem: React.FC<CartItemProps> = ({ item }) => {
               initialValue={item?.quantity ?? 1}
               onValueChange={onUpdateQuantity}
             />
-            <Currency value={item.price} />
+            {item.discountedPrice &&
+            item.discountedPrice < Number(item.price) ? (
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <Currency value={item.discountedPrice} />
+                  <Currency
+                    value={item.price}
+                    className="text-sm text-gray-500 line-through"
+                  />
+                </div>
+                <span className="font-serif text-xs text-success">
+                  Ahorra{" "}
+                  {new Intl.NumberFormat("es-CO", {
+                    style: "currency",
+                    currency: "COP",
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0,
+                  }).format(
+                    (Number(item.price) - item.discountedPrice) *
+                      Number(item.quantity ?? 1),
+                  )}
+                </span>
+                {item.offerLabel && (
+                  <span className="inline-block animate-bounce rounded bg-pink-froly px-2 py-0.5 text-xs font-semibold uppercase text-white">
+                    {item.offerLabel}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <Currency value={item.price} />
+            )}
           </div>
         </div>
       </div>

@@ -52,8 +52,41 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
     <div>
       <h1 className="font-serif text-3xl font-bold">{data?.name}</h1>
       <div className="mt-3 flex items-end justify-between">
-        <div className="text-2xl">
-          <Currency value={data?.price} />
+        <div className="flex flex-col gap-1 text-2xl">
+          {data.discountedPrice && data.discountedPrice < Number(data.price) ? (
+            <>
+              <div className="flex items-center gap-3">
+                <Currency value={data.discountedPrice} />
+                <Currency
+                  value={data.price}
+                  className="text-lg text-gray-500 line-through"
+                />
+              </div>
+              <span className="text-sm text-green-600">
+                Ahorra{" "}
+                {new Intl.NumberFormat("es-CO", {
+                  style: "currency",
+                  currency: "COP",
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 0,
+                }).format(Number(data.price) - data.discountedPrice)}{" "}
+                (
+                {Math.round(
+                  ((Number(data.price) - data.discountedPrice) /
+                    Number(data.price)) *
+                    100,
+                )}
+                %)
+              </span>
+              {data.offerLabel && (
+                <span className="mt-1 inline-block rounded bg-red-500 px-2 py-1 text-xs font-semibold text-white">
+                  {data.offerLabel}
+                </span>
+              )}
+            </>
+          ) : (
+            <Currency value={data?.price} />
+          )}
         </div>
         <div className="flex items-center gap-2">
           {showReviews && (
