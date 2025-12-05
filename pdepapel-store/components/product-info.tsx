@@ -10,6 +10,7 @@ import { calculateAverageRating } from "@/lib/utils";
 import { Product } from "@/types";
 import { useRouter } from "next/navigation";
 import { RefObject, useState } from "react";
+import { RichTextDisplay } from "./ui/rich-text-display";
 
 interface ProductInfoProps {
   data: Product;
@@ -62,7 +63,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
                   className="text-lg text-gray-500 line-through"
                 />
               </div>
-              <span className="text-sm text-green-600">
+              <span className="text-sm text-success">
                 Ahorra{" "}
                 {new Intl.NumberFormat("es-CO", {
                   style: "currency",
@@ -79,7 +80,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
                 %)
               </span>
               {data.offerLabel && (
-                <span className="mt-1 inline-block rounded bg-red-500 px-2 py-1 text-xs font-semibold text-white">
+                <span className="mt-2 inline-block animate-bounce rounded bg-pink-froly px-2 py-1 text-xs font-semibold text-white">
                   {data.offerLabel}
                 </span>
               )}
@@ -155,7 +156,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
             <h3 className="font-serif font-semibold">
               Descripción del producto
             </h3>
-            <p className="mt-2 text-sm text-gray-500">{data?.description}</p>
+            <RichTextDisplay content={data?.description} />
           </div>
         </>
       )}

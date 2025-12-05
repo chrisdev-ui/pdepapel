@@ -5,6 +5,7 @@ import { DollarSign, PackageCheckIcon, Percent, Trash } from "lucide-react";
 import { useForm } from "react-hook-form";
 import z from "zod";
 
+import { RichTextEditor } from "@/components/editor/rich-text-editor";
 import { AlertModal } from "@/components/modals/alert-modal";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -29,7 +30,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Textarea } from "@/components/ui/textarea";
 import {
   INITIAL_MISC_COST,
   INITIAL_PERCENTAGE_INCREASE,
@@ -322,7 +322,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             name="images"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Imágenes</FormLabel>
+                <FormLabel isRequired>Imágenes</FormLabel>
                 <FormControl>
                   <ImageUpload
                     value={field.value}
@@ -345,7 +345,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Nombre</FormLabel>
+                  <FormLabel isRequired>Nombre</FormLabel>
                   <FormControl>
                     <Input
                       disabled={loading}
@@ -362,7 +362,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               name="acqPrice"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Precio de compra</FormLabel>
+                  <FormLabel isRequired>Precio de compra</FormLabel>
                   <FormControl>
                     <div className="relative">
                       <DollarSign className="absolute left-3 top-3 h-4 w-4" />
@@ -384,7 +384,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               name="percentageIncrease"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Porcentaje de incremento</FormLabel>
+                  <FormLabel isRequired>Porcentaje de incremento</FormLabel>
                   <FormControl>
                     <div className="relative">
                       <Percent className="absolute left-3 top-3 h-4 w-4" />
@@ -406,7 +406,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               name="transportationCost"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Costo de transporte</FormLabel>
+                  <FormLabel isRequired>Costo de transporte</FormLabel>
                   <FormControl>
                     <div className="relative">
                       <DollarSign className="absolute left-3 top-3 h-4 w-4" />
@@ -428,7 +428,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               name="miscCost"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Costos misceláneos</FormLabel>
+                  <FormLabel isRequired>Costos misceláneos</FormLabel>
                   <FormControl>
                     <div className="relative">
                       <DollarSign className="absolute left-3 top-3 h-4 w-4" />
@@ -450,7 +450,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               name="price"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Precio de venta (calculado)</FormLabel>
+                  <FormLabel isRequired>Precio de venta (calculado)</FormLabel>
                   <FormControl>
                     <div className="relative">
                       <DollarSign className="absolute left-3 top-3 h-4 w-4" />
@@ -472,7 +472,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               name="stock"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Cantidad</FormLabel>
+                  <FormLabel isRequired>Cantidad</FormLabel>
                   <FormControl>
                     <div className="relative">
                       <PackageCheckIcon className="absolute left-3 top-3 h-4 w-4" />
@@ -495,7 +495,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               name="categoryId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Categoría</FormLabel>
+                  <FormLabel isRequired>Categoría</FormLabel>
                   <Select
                     disabled={loading}
                     onValueChange={field.onChange}
@@ -536,7 +536,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               name="sizeId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Tamaño</FormLabel>
+                  <FormLabel isRequired>Tamaño</FormLabel>
                   <Select
                     disabled={loading}
                     onValueChange={field.onChange}
@@ -577,7 +577,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               name="colorId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Color</FormLabel>
+                  <FormLabel isRequired>Color</FormLabel>
                   <Select
                     disabled={loading}
                     onValueChange={field.onChange}
@@ -624,7 +624,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               name="designId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Diseño</FormLabel>
+                  <FormLabel isRequired>Diseño</FormLabel>
                   <Select
                     disabled={loading}
                     onValueChange={field.onChange}
@@ -665,7 +665,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               name="supplierId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Proveedor</FormLabel>
+                  <FormLabel isRequired>Proveedor</FormLabel>
                   <Select
                     disabled={loading}
                     onValueChange={field.onChange}
@@ -704,24 +704,6 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             />
             <FormField
               control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Descripción</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Agrega una descripción para el producto"
-                      disabled={loading}
-                      className="resize-none"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
               name="isFeatured"
               render={({ field }) => (
                 <FormItem className="mt-auto flex h-fit items-start space-x-3 space-y-0 rounded-md border p-4">
@@ -732,7 +714,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                     />
                   </FormControl>
                   <div className="space-y-1 leading-none">
-                    <FormLabel>Destacado</FormLabel>
+                    <FormLabel isRequired>Destacado</FormLabel>
                     <FormDescription>
                       Este producto aparecerá en la pagina principal
                     </FormDescription>
@@ -752,12 +734,33 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                     />
                   </FormControl>
                   <div className="space-y-1 leading-none">
-                    <FormLabel>Archivado</FormLabel>
+                    <FormLabel isRequired>Archivado</FormLabel>
                     <FormDescription>
                       Este producto no se mostrará en ninguna sección de la
                       tienda
                     </FormDescription>
                   </div>
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem className="col-span-3">
+                  <FormLabel isRequired>Descripción</FormLabel>
+                  <FormControl>
+                    <RichTextEditor
+                      placeholder="Describe las características y beneficios del producto 🚀..."
+                      value={field.value || ""}
+                      onChange={field.onChange}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Utiliza el editor para dar formato al texto con negritas,
+                    cursivas, listas y más.
+                  </FormDescription>
+                  <FormMessage />
                 </FormItem>
               )}
             />

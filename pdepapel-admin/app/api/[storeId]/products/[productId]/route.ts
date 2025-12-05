@@ -44,9 +44,16 @@ export async function GET(
       params.storeId,
     );
 
-    return NextResponse.json(productWithDiscount, {
-      headers: CACHE_HEADERS.DYNAMIC,
-    });
+    return NextResponse.json(
+      {
+        ...product,
+        discountedPrice: productWithDiscount.price,
+        offerLabel: productWithDiscount.offerLabel,
+      },
+      {
+        headers: CACHE_HEADERS.DYNAMIC,
+      },
+    );
   } catch (error) {
     return handleErrorResponse(error, "PRODUCT_GET", {
       headers: CACHE_HEADERS.DYNAMIC,
