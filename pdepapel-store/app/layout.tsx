@@ -3,7 +3,6 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata } from "next";
-import dynamic from "next/dynamic";
 
 import { Footer } from "@/components/footer";
 import { beautifulEveryTime, caudex, nunito, roboto } from "@/lib/fonts";
@@ -12,7 +11,7 @@ import { ReactQueryProvider } from "@/providers/query-client-provider";
 import { Toaster } from "@/providers/toaster";
 import "./globals.css";
 
-const Navbar = dynamic(() => import("@/components/navbar"), { ssr: false });
+import Navbar from "@/components/navbar";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://papeleriapdepapel.com"),
@@ -41,6 +40,15 @@ export const metadata: Metadata = {
     "Papelería japonesa",
     "P de Papel",
     "Papelería P de Papel",
+    "Calendario de adviento",
+    "Calendario de navidad",
+    "Harry Potter",
+    "Marcadores",
+    "Lapiceros",
+    "Cartucheras",
+    "Cuadernos",
+    "Llaveros",
+    "Utiles escolares",
   ],
   referrer: "origin-when-cross-origin",
   authors: [

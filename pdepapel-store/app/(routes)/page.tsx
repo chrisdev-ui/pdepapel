@@ -1,5 +1,4 @@
 import { Metadata } from "next";
-import dynamic from "next/dynamic";
 
 import { getBanners } from "@/actions/get-banners";
 import { getBillboards } from "@/actions/get-billboards";
@@ -7,27 +6,13 @@ import { getMainBanner } from "@/actions/get-main-banner";
 import { getProducts } from "@/actions/get-products";
 import { LIMIT_PER_ITEMS } from "@/constants";
 
-const HeroSlider = dynamic(() => import("@/components/hero-slider"), {
-  ssr: false,
-});
-const Features = dynamic(() => import("@/components/features"), { ssr: false });
-const FeaturedProducts = dynamic(
-  () => import("@/components/featured-products"),
-  { ssr: false },
-);
-const MainBanner = dynamic(() => import("@/components/main-banner"), {
-  ssr: false,
-});
-const NewArrivals = dynamic(() => import("@/components/new-arrivals"), {
-  ssr: false,
-});
-const BannersCta = dynamic(() => import("@/components/banners-cta"), {
-  ssr: false,
-});
-
-const Newsletter = dynamic(() => import("@/components/newsletter"), {
-  ssr: false,
-});
+import BannersCta from "@/components/banners-cta";
+import FeaturedProducts from "@/components/featured-products";
+import Features from "@/components/features";
+import HeroSlider from "@/components/hero-slider";
+import MainBanner from "@/components/main-banner";
+import NewArrivals from "@/components/new-arrivals";
+import Newsletter from "@/components/newsletter";
 
 export const revalidate = 0;
 

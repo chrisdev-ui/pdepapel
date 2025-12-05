@@ -11,6 +11,7 @@ export const caudex = Caudex({
 export const beautifulEveryTime = localFont({
   src: "../../public/fonts/BeautifulEveryTime-Dg4m.woff2",
   variable: "--font-beautiful-every-time-regular",
+  display: "swap",
 });
 export const nunito = Nunito({
   subsets: ["latin"],
