@@ -299,7 +299,7 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
                           <strong>Guía de envío:</strong> {trackingInfo}
                         </div>
                         <a
-                          href={`https://interrapidisimo.com/sigue-tu-envio/?codigo=${trackingInfo}`}
+                          href={`https://www.envioclick.com/co/track/${trackingInfo}`}
                           style={{
                             display: "inline-block",
                             backgroundColor: "#3b82f6",

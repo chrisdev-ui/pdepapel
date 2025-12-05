@@ -437,8 +437,8 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   const shippingCarrierName = form.watch("shipping.carrierName");
 
   const carrierInfo = useMemo(() => {
-    return getCarrierInfo(shippingCourier || shippingCarrierName || "");
-  }, [shippingCourier, shippingCarrierName]);
+    return getCarrierInfo(shippingCarrierName || shippingCourier || "");
+  }, [shippingCarrierName, shippingCourier]);
 
   const {
     formState: { isDirty },
