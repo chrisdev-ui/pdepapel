@@ -65,9 +65,18 @@ export async function GET(
     const { calculateDiscountedPrice } = await import("@/lib/discount-engine");
 
     const productsWithDiscounts = await Promise.all(
-      products.map((product) =>
-        calculateDiscountedPrice(product, params.storeId),
-      ),
+      products.map(async (product) => {
+        const priceInfo = await calculateDiscountedPrice(
+          product,
+          params.storeId,
+        );
+        return {
+          id: product.id,
+          name: product.name,
+          price: priceInfo.price,
+          image: product.images.find((img) => img.isMain) || product.images[0],
+        };
+      }),
     );
 
     return NextResponse.json(productsWithDiscounts, { headers: corsHeaders });
