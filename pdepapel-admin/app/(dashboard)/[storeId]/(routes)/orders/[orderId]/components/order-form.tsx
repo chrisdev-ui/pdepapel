@@ -445,10 +445,11 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   } = form;
 
   const orderTotals = useMemo(() => {
-    // Calculate subtotal from selected products
+    // Calculate subtotal from selected products using discounted prices
     const subtotal = productsSelected.reduce(
       (sum, product) =>
-        sum + Number(product.price) * (quantities[product.value] || 1),
+        sum +
+        Number(product.discountedPrice) * (quantities[product.value] || 1),
       0,
     );
 
@@ -798,19 +799,47 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                     <div className="flex flex-col gap-2">
                       <AlertTitle>{product.label}</AlertTitle>
                       <AlertDescription>
-                        {currencyFormatter.format(product.price || 0)} x{" "}
-                        <Input
-                          type="number"
-                          min={1}
-                          defaultValue={quantities[product.value] || 1}
-                          onChange={(event) => {
-                            const newQuantity = Number(event.target.value);
-                            setQuantity((prev) => ({
-                              ...prev,
-                              [product.value]: newQuantity,
-                            }));
-                          }}
-                        />
+                        <div className="flex flex-col gap-1">
+                          {product.offerLabel && (
+                            <Badge
+                              variant="secondary"
+                              className="w-fit text-xs"
+                            >
+                              {product.offerLabel}
+                            </Badge>
+                          )}
+                          <div className="flex items-center gap-2">
+                            {product.discountedPrice < product.price ? (
+                              <>
+                                <span className="text-xs text-muted-foreground line-through">
+                                  {currencyFormatter.format(product.price)}
+                                </span>
+                                <span className="font-semibold text-green-600">
+                                  {currencyFormatter.format(
+                                    product.discountedPrice,
+                                  )}
+                                </span>
+                              </>
+                            ) : (
+                              <span>
+                                {currencyFormatter.format(product.price || 0)}
+                              </span>
+                            )}
+                            <span>×</span>
+                            <Input
+                              type="number"
+                              min={1}
+                              defaultValue={quantities[product.value] || 1}
+                              onChange={(event) => {
+                                const newQuantity = Number(event.target.value);
+                                setQuantity((prev) => ({
+                                  ...prev,
+                                  [product.value]: newQuantity,
+                                }));
+                              }}
+                            />
+                          </div>
+                        </div>
                       </AlertDescription>
                     </div>
                   </div>

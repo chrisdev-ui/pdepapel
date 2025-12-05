@@ -27,6 +27,7 @@ export async function getOrder(orderId: string, storeId: string) {
     },
     select: {
       id: true,
+      categoryId: true,
       name: true,
       price: true,
       stock: true,
@@ -63,6 +64,7 @@ export async function getOrder(orderId: string, storeId: string) {
       },
       select: {
         id: true,
+        categoryId: true,
         name: true,
         price: true,
         stock: true,
@@ -81,10 +83,17 @@ export async function getOrder(orderId: string, storeId: string) {
     });
   }
 
+  // Calculate discounted prices for all products
+  const { getProductsPrices } = await import("@/lib/discount-engine");
+  const allProducts = [...availableProducts, ...existingOrderProducts];
+  const pricesMap = await getProductsPrices(allProducts, storeId);
+
   type ProductOption = {
     value: string;
     label: string;
     price: number;
+    discountedPrice: number;
+    offerLabel?: string;
     stock: number;
     image: string;
     isAvailable: boolean;
@@ -94,10 +103,13 @@ export async function getOrder(orderId: string, storeId: string) {
   const allProductsMap = new Map<string, ProductOption>();
 
   availableProducts.forEach((product) => {
+    const priceInfo = pricesMap.get(product.id);
     allProductsMap.set(product.id, {
       value: product.id,
       label: product.name,
       price: product.price,
+      discountedPrice: priceInfo?.price ?? product.price,
+      offerLabel: priceInfo?.offerLabel ?? undefined,
       stock: product.stock,
       image: product.images[0]?.url || "",
       isAvailable: true,
@@ -113,10 +125,13 @@ export async function getOrder(orderId: string, storeId: string) {
         ? `${product.name} (Sin stock)`
         : product.name;
 
+    const priceInfo = pricesMap.get(product.id);
     allProductsMap.set(product.id, {
       value: product.id,
       label,
       price: product.price,
+      discountedPrice: priceInfo?.price ?? product.price,
+      offerLabel: priceInfo?.offerLabel ?? undefined,
       stock: product.stock,
       image: product.images[0]?.url || "",
       isAvailable,
