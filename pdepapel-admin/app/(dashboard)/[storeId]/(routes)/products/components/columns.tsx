@@ -48,7 +48,43 @@ export const columns: ColumnDef<ProductColumn>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Precio" />
     ),
-    cell: ({ row }) => <DataTableCellCurrency value={row.original.price} />,
+    cell: ({ row }) => {
+      const hasDiscount = row.original.hasDiscount;
+      const basePrice = row.original.price;
+      const discountedPrice = row.original.discountedPrice;
+
+      return (
+        <div className="flex flex-col gap-1">
+          {hasDiscount ? (
+            <>
+              <span className="text-xs text-muted-foreground line-through">
+                <DataTableCellCurrency value={basePrice} />
+              </span>
+              <span className="font-semibold text-green-600">
+                <DataTableCellCurrency value={discountedPrice} />
+              </span>
+            </>
+          ) : (
+            <DataTableCellCurrency value={basePrice} />
+          )}
+        </div>
+      );
+    },
+  },
+  {
+    id: "offer",
+    accessorKey: "offerLabel",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Oferta" />
+    ),
+    cell: ({ row }) =>
+      row.original.offerLabel ? (
+        <Badge variant="secondary" className="text-xs">
+          {row.original.offerLabel}
+        </Badge>
+      ) : (
+        <span className="text-xs text-muted-foreground">-</span>
+      ),
   },
   {
     id: "category",
