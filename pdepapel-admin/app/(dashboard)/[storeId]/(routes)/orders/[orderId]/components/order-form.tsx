@@ -453,6 +453,15 @@ export const OrderForm: React.FC<OrderFormProps> = ({
       0,
     );
 
+    // Calculate offer savings (difference between original and discounted prices)
+    const offerSavings = productsSelected.reduce(
+      (sum, product) =>
+        sum +
+        (Number(product.price) - Number(product.discountedPrice)) *
+          (quantities[product.value] || 1),
+      0,
+    );
+
     let discountValue = 0;
     if (discountType && discountAmount && !isNaN(discountAmount)) {
       discountValue =
@@ -479,6 +488,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
 
     return {
       subtotal,
+      offerSavings,
       discount: discountValue,
       couponDiscount,
       total,
@@ -846,10 +856,17 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 </Alert>
               ))}
           </div>
+          {/* Totals */}
           <div className="ml-auto flex flex-col space-y-2 text-right">
             <div className="text-lg font-semibold">
               Subtotal: {currencyFormatter.format(orderTotals.subtotal)}
             </div>
+            {orderTotals.offerSavings > 0 && (
+              <div className="text-lg text-green-600">
+                Ahorro por ofertas: -
+                {currencyFormatter.format(orderTotals.offerSavings)}
+              </div>
+            )}
             {orderTotals.discount > 0 && (
               <div className="text-lg text-red-600">
                 Descuento: -{currencyFormatter.format(orderTotals.discount)}

@@ -240,10 +240,17 @@ export async function PATCH(
         }
       }
 
+      // Calculate discounted prices from active offers
+      const { getProductsPrices } = await import("@/lib/discount-engine");
+      const pricesMap = await getProductsPrices(products, params.storeId);
+
       const itemsWithPrices = orderItems.map((item: any) => {
         const product = productMap.get(item.productId);
+        const priceInfo = pricesMap.get(item.productId);
+        // Use discounted price if available, otherwise use original price
+        const effectivePrice = priceInfo?.price ?? product!.price;
         return {
-          product: { price: product!.price },
+          product: { price: effectivePrice },
           quantity: item.quantity || 1,
         };
       });
