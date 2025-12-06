@@ -41,6 +41,7 @@ const formSchema = z.object({
     ),
   subject: z.string().optional(),
   message: z.string().optional(),
+  mobile: z.string().optional(),
 });
 
 type ContactFormValue = z.infer<typeof formSchema>;
@@ -56,6 +57,7 @@ export const ContactForm: React.FC = () => {
       email: "",
       subject: "",
       message: "",
+      mobile: "",
     },
   });
 
@@ -139,6 +141,25 @@ export const ContactForm: React.FC = () => {
                   className="bg-blue-purple/20 invalid:bg-pink-froly/20"
                   disabled={isLoading}
                   placeholder="Escribe tu correo electrónico"
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        {/* Honeypot field - hidden from users but visible to bots */}
+        <FormField
+          control={form.control}
+          name="mobile"
+          render={({ field }) => (
+            <FormItem className="absolute -z-10 opacity-0">
+              <FormLabel>Mobile</FormLabel>
+              <FormControl>
+                <Input
+                  autoComplete="off"
+                  tabIndex={-1}
+                  placeholder="Mobile number"
                   {...field}
                 />
               </FormControl>
