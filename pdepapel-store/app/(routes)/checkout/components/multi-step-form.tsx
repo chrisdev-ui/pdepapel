@@ -1,4 +1,6 @@
+import { SEASON_CONFIG } from "@/constants";
 import { cn } from "@/lib/utils";
+import { Season } from "@/types";
 import { Check } from "lucide-react";
 import Image from "next/image";
 
@@ -14,6 +16,7 @@ interface MultiStepFormProps {
   currentStep: number;
   children: React.ReactNode;
   className?: string;
+  season?: Season;
 }
 
 export const MultiStepForm = ({
@@ -21,7 +24,10 @@ export const MultiStepForm = ({
   currentStep,
   children,
   className,
+  season = Season.Default,
 }: MultiStepFormProps) => {
+  const seasonConfig = SEASON_CONFIG[season];
+
   return (
     <div className={cn("w-full", className)}>
       {/* {Stepper} */}
@@ -58,6 +64,11 @@ export const MultiStepForm = ({
             const isActive = currentStep === stepNumber;
             const isComplete = currentStep > stepNumber;
 
+            const logoSrc = step.logo.replace(
+              ".webp",
+              `${seasonConfig.checkoutSuffix || ""}.webp`,
+            );
+
             return (
               <div
                 key={step.id}
@@ -81,7 +92,7 @@ export const MultiStepForm = ({
                     <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-full">
                       {/* Logo as background with opacity and blur */}
                       <Image
-                        src={`/images/${step.logo}`}
+                        src={`/images/${logoSrc}`}
                         alt={step.name}
                         fill
                         className="z-50 opacity-30 blur-[0.5px] duration-300 animate-in zoom-in"
@@ -93,7 +104,7 @@ export const MultiStepForm = ({
                     </div>
                   ) : (
                     <Image
-                      src={`/images/${step.logo}`}
+                      src={`/images/${logoSrc}`}
                       alt={step.name}
                       fill
                       className="duration-300 animate-in zoom-in"

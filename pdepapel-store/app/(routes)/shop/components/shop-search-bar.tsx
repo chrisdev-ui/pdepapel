@@ -1,8 +1,7 @@
 "use client";
 
 import { Search } from "lucide-react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import qs from "query-string";
+import { parseAsString, useQueryState } from "nuqs";
 import { useEffect, useState } from "react";
 
 import { Input } from "@/components/ui/input";
@@ -14,13 +13,11 @@ interface ShopSearchBarProps {
 }
 
 const ShopSearchBar: React.FC<ShopSearchBarProps> = ({ className }) => {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-
-  const [searchTerm, setSearchTerm] = useState<string>(
-    searchParams.get("search") || "",
+  const [query, setQuery] = useQueryState(
+    "search",
+    parseAsString.withDefault("").withOptions({ shallow: true }),
   );
+  const [searchTerm, setSearchTerm] = useState<string>(query);
 
   const debouncedSearch = useDebounce(searchTerm, 300);
 
@@ -29,25 +26,8 @@ const ShopSearchBar: React.FC<ShopSearchBarProps> = ({ className }) => {
   };
 
   useEffect(() => {
-    const current = qs.parse(searchParams.toString());
-
-    const query = {
-      ...current,
-      search: debouncedSearch || undefined,
-      page: undefined,
-    };
-
-    const url = qs.stringifyUrl(
-      {
-        url: pathname,
-        query,
-      },
-      { skipNull: true, skipEmptyString: true },
-    );
-
-    router.push(url);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, pathname, router]);
+    setQuery(debouncedSearch || null);
+  }, [debouncedSearch, setQuery]);
 
   return (
     <div

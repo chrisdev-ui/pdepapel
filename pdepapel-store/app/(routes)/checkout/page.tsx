@@ -17,6 +17,8 @@ export const metadata: Metadata = {
   },
 };
 
+import { getCurrentSeason } from "@/lib/date-utils";
+
 export default async function CheckoutPage() {
   const user = await currentUser();
   const formattedUser = {
@@ -25,6 +27,8 @@ export default async function CheckoutPage() {
     telephone: user?.phoneNumbers[0]?.phoneNumber,
     email: user?.emailAddresses[0]?.emailAddress,
   };
+  const currentSeason = getCurrentSeason();
+
   return (
     <>
       <Container>
@@ -49,7 +53,10 @@ export default async function CheckoutPage() {
             </span>
           </SignedIn>
         </div>
-        <MultiStepCheckoutForm currentUser={formattedUser} />
+        <MultiStepCheckoutForm
+          currentUser={formattedUser}
+          season={currentSeason}
+        />
       </Container>
     </>
   );

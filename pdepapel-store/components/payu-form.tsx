@@ -2,11 +2,6 @@ import { env } from "@/lib/env.mjs";
 import { PayUFormProps } from "@/types";
 import { useEffect } from "react";
 
-type formattedProduct = {
-  name: string;
-  quantity: number;
-};
-
 export const PayUForm: React.FC<PayUFormProps> = (props) => {
   const {
     tax = 0,

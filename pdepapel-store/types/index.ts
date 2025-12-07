@@ -1,5 +1,16 @@
 import { PaymentMethod, Social } from "@/constants";
 
+export enum Season {
+  Default = "DEFAULT",
+  Christmas = "CHRISTMAS",
+}
+
+export interface SeasonConfig {
+  navbarText: string;
+  navbarNoText: string;
+  checkoutSuffix?: string;
+}
+
 export interface Billboard {
   id: string;
   label: string;
@@ -77,11 +88,6 @@ export interface MainBanner {
 export interface Banner {
   imageUrl: string;
   callToAction: string;
-}
-
-export interface PriceRange {
-  id: string;
-  name: string;
 }
 
 export interface Review {
@@ -205,9 +211,20 @@ export interface ProductsResponse {
   products: Product[];
   totalPages: number;
   totalItems: number;
+  facets?: {
+    colors: { id: string; count: number }[];
+    formattedSizes: { id: string; count: number }[];
+    categories: { id: string; count: number }[];
+    designs: { id: string; count: number }[];
+  };
 }
 
 export type PayUFormState = Omit<PayUFormProps, "formRef" | "products">;
+
+type formattedProduct = {
+  name: string;
+  quantity: number;
+};
 
 export interface PayUFormProps {
   formRef: React.RefObject<HTMLFormElement>;

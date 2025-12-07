@@ -1,6 +1,5 @@
 "use client";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import qs from "query-string";
+import { parseAsInteger, useQueryState } from "nuqs";
 import { useEffect, useState } from "react";
 
 import {
@@ -20,10 +19,9 @@ interface PaginatorProps {
 
 const Paginator: React.FC<PaginatorProps> = ({ totalPages }) => {
   const [isMounted, setIsMounted] = useState(false);
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
-  const currentPage = Number(searchParams.get("page")) || 1;
+  const [page, setPage] = useQueryState("page", parseAsInteger.withDefault(1));
+
+  const currentPage = page ?? 1;
 
   const getPagesToShow = () => {
     if (totalPages <= MAX_PAGES) {
@@ -54,85 +52,18 @@ const Paginator: React.FC<PaginatorProps> = ({ totalPages }) => {
 
   const goToPreviousPage = () => {
     if (currentPage > 1) {
-      const current = qs.parse(searchParams.toString(), {
-        arrayFormat: "comma",
-      });
-
-      const query = {
-        ...current,
-        page: currentPage - 1,
-      };
-
-      const url = qs.stringifyUrl(
-        {
-          url: pathname,
-          query,
-        },
-        { skipNull: true, arrayFormat: "comma" },
-      );
-
-      router.push(url);
-    } else {
-      const current = qs.parse(searchParams.toString(), {
-        arrayFormat: "comma",
-      });
-
-      current.page = null;
-
-      const url = qs.stringifyUrl(
-        {
-          url: pathname,
-          query: current,
-        },
-        { skipNull: true, arrayFormat: "comma" },
-      );
-
-      router.push(url);
+      setPage(currentPage - 1);
     }
   };
 
   const goToNextPage = () => {
     if (currentPage < totalPages) {
-      const current = qs.parse(searchParams.toString(), {
-        arrayFormat: "comma",
-      });
-
-      const query = {
-        ...current,
-        page: currentPage + 1,
-      };
-
-      const url = qs.stringifyUrl(
-        {
-          url: pathname,
-          query,
-        },
-        { skipNull: true, arrayFormat: "comma" },
-      );
-
-      router.push(url);
+      setPage(currentPage + 1);
     }
   };
 
   const goToPage = (page: number) => {
-    const current = qs.parse(searchParams.toString(), {
-      arrayFormat: "comma",
-    });
-
-    const query = {
-      ...current,
-      page: page === 1 ? null : page,
-    };
-
-    const url = qs.stringifyUrl(
-      {
-        url: pathname,
-        query,
-      },
-      { skipNull: true, arrayFormat: "comma" },
-    );
-
-    router.push(url);
+    setPage(page === 1 ? null : page);
   };
 
   return (

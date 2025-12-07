@@ -1,19 +1,23 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import qs from "query-string";
-import { useEffect, useMemo, useState } from "react";
+import { parseAsArrayOf, parseAsString, useQueryState } from "nuqs";
+import { useMemo } from "react";
 
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
-import { Category, Color, Design, PriceRange, Size, Type } from "@/types";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Category, Color, Design, Size, Type } from "@/types";
 
 interface FilterProps {
   valueKey: string;
   name: string;
   emptyMessage?: string;
-  data: (Type | Category | Size | Color | Design | PriceRange)[];
+  data: (Type | Category | Size | Color | Design)[];
 }
 
 const Filter: React.FC<FilterProps> = ({
@@ -22,79 +26,76 @@ const Filter: React.FC<FilterProps> = ({
   data,
   emptyMessage,
 }) => {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const [selectedValues, setSelectedValues] = useQueryState(
+    valueKey,
+    parseAsArrayOf(parseAsString)
+      .withDefault([])
+      .withOptions({ shallow: true }),
+  );
 
-  const selectedValue = searchParams.get(valueKey);
+  const parsedSelectedValues = useMemo(() => {
+    return Array.isArray(selectedValues) ? selectedValues : [];
+  }, [selectedValues]);
 
   const sortedData = useMemo(() => {
     return [...data].sort((a, b) => a.name.localeCompare(b.name));
   }, [data]);
 
-  const [selectedValues, setSelectedValues] = useState(new Set());
-
-  const handleSelected = (id: string) => {
-    setSelectedValues((prevValues) => {
-      const newValues = new Set(prevValues);
-      if (newValues.has(id)) {
-        newValues.delete(id);
-      } else {
-        newValues.add(id);
-      }
-      return newValues;
-    });
+  const toggleFilter = (id: string) => {
+    const current = new Set(parsedSelectedValues);
+    if (current.has(id)) {
+      current.delete(id);
+    } else {
+      current.add(id);
+    }
+    const newValue = Array.from(current);
+    setSelectedValues(newValue.length > 0 ? newValue : null);
   };
 
-  useEffect(() => {
-    const current = qs.parse(searchParams.toString(), { arrayFormat: "comma" });
-
-    const query = {
-      ...current,
-      [valueKey]: Array.from(selectedValues).map(String),
-      page: undefined,
-    };
-
-    const url = qs.stringifyUrl(
-      {
-        url: pathname,
-        query,
-      },
-      { skipNull: true, skipEmptyString: true, arrayFormat: "comma" },
-    );
-
-    router.push(url);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedValues]);
-
   return (
-    <div className="mb-8">
-      <h3 className="font-serif text-lg font-semibold">{name}</h3>
-      <Separator className="my-4" />
-      <div className="flex flex-wrap gap-2">
-        {sortedData?.length === 0 && (
-          <div className="flex items-center">{emptyMessage}</div>
-        )}
-        {!!sortedData?.length &&
-          sortedData?.map((filter) => (
-            <div key={filter?.id} className="flex items-center">
-              <Button
-                className={cn(
-                  "rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-800 hover:bg-blue-baby hover:text-white",
-                  {
-                    "bg-blue-baby text-white": selectedValue?.includes(
-                      filter?.id,
-                    ),
-                  },
-                )}
-                onClick={() => handleSelected(filter?.id)}
-              >
-                {filter?.name}
-              </Button>
-            </div>
-          ))}
-      </div>
-    </div>
+    <Accordion type="single" collapsible defaultValue={name}>
+      <AccordionItem value={name} className="border-none">
+        <AccordionTrigger className="font-serif text-base font-semibold">
+          {name}
+        </AccordionTrigger>
+        <AccordionContent>
+          <div className="flex flex-col gap-3 pt-2">
+            {sortedData?.length === 0 && (
+              <div className="text-sm text-gray-500">{emptyMessage}</div>
+            )}
+            {!!sortedData?.length &&
+              sortedData?.map((filter: any) => (
+                <div key={filter.id} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`${valueKey}-${filter.id}`}
+                    checked={parsedSelectedValues.includes(filter.id)}
+                    onCheckedChange={() => toggleFilter(filter.id)}
+                  />
+                  <div className="flex items-center gap-x-2">
+                    {valueKey === "colorId" && filter.value && (
+                      <div
+                        className="h-4 w-4 rounded-full border border-gray-600"
+                        style={{ backgroundColor: filter.value }}
+                      />
+                    )}
+                    <Label
+                      htmlFor={`${valueKey}-${filter.id}`}
+                      className="cursor-pointer text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                      {filter.name}
+                      {filter.count !== undefined && (
+                        <span className="ml-1 text-gray-500">
+                          ({filter.count})
+                        </span>
+                      )}
+                    </Label>
+                  </div>
+                </div>
+              ))}
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
   );
 };
 

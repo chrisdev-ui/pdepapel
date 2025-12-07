@@ -85,7 +85,7 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
           Carrito de compras
         </SheetTitle>
         <div className="flex grow flex-col justify-between overflow-y-auto overflow-x-hidden px-6 py-0">
-          <div className="flex h-full w-full flex-col gap-4">
+          <div className="flex w-full flex-col gap-4">
             {cart.items.length === 0 && (
               <NoResults
                 message={`No hay productos en el carrito ${KAWAII_FACE_SAD}`}

@@ -1,5 +1,7 @@
 "use client";
 
+import { SEASON_CONFIG } from "@/constants";
+import { Season } from "@/types";
 import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import { FileSearch } from "lucide-react";
 import Image from "next/image";
@@ -17,12 +19,18 @@ import { WishlistButton } from "@/components/wishlist-button";
 import { useScrollPosition } from "@/hooks/use-scroll-position";
 import { cn } from "@/lib/utils";
 
-const Navbar: React.FC<{}> = () => {
+interface NavbarProps {
+  season?: Season;
+}
+
+const Navbar: React.FC<NavbarProps> = ({ season = Season.Default }) => {
   const scrollPosition = useScrollPosition();
   const pathname = usePathname();
 
   const navBarRef = useRef<HTMLElement>(null);
   const [displaySearchbox, setDisplaySearchbox] = useState<boolean>(false);
+
+  const seasonConfig = SEASON_CONFIG[season];
 
   const toggleSearch = useCallback((open: boolean) => {
     setDisplaySearchbox(open);
@@ -62,7 +70,7 @@ const Navbar: React.FC<{}> = () => {
             )}
           >
             <Image
-              src="/images/text-beside-transparent-bg.webp"
+              src={seasonConfig.navbarText}
               alt="Logo Papelería P de Papel con nombre al lado"
               fill
               sizes="(max-width: 640px) 100vw, 640px"
@@ -80,7 +88,7 @@ const Navbar: React.FC<{}> = () => {
             )}
           >
             <Image
-              src="/images/no-text-transparent-bg.webp"
+              src={seasonConfig.navbarNoText}
               alt="Logo Papelería P de Papel"
               fill
               sizes="(max-width: 640px) 100vw, 640px"

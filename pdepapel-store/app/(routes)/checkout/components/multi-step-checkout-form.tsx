@@ -147,8 +147,11 @@ const formSchema = z.object({
 
 export type CheckoutFormValue = z.infer<typeof formSchema>;
 
+import { Season } from "@/types";
+
 interface CheckoutFormProps {
   currentUser?: CheckoutFormUser | null;
+  season?: Season;
 }
 
 export interface CouponState {
@@ -185,6 +188,7 @@ const FORM_STEPS = [
 
 export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   currentUser,
+  season = Season.Default,
 }) => {
   const { userId } = useAuth();
   const router = useRouter();
@@ -519,7 +523,11 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       {cart.items.length > 0 && (
         <div className="mt-4 space-y-8 lg:mt-12 lg:grid lg:grid-cols-12 lg:items-start lg:gap-6 lg:space-y-0">
           <div className="rounded-md border p-5 lg:col-span-8">
-            <MultiStepForm steps={FORM_STEPS} currentStep={currentStep}>
+            <MultiStepForm
+              steps={FORM_STEPS}
+              currentStep={currentStep}
+              season={season}
+            >
               {/* Step Content */}
               <Form {...form}>
                 <form

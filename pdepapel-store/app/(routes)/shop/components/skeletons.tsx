@@ -65,6 +65,8 @@ export const ProductsContainerSkeleton: React.FC = () => (
   </>
 );
 
+export const ProductListSkeleton = ProductsContainerSkeleton;
+
 export const PaginatorSkeleton: React.FC = () => {
   return (
     <div className="flex w-full items-center justify-center gap-4">

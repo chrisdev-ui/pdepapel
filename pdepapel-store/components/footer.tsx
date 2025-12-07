@@ -1,9 +1,17 @@
 import { Icons } from "@/components/icons";
+import { SEASON_CONFIG } from "@/constants";
+import { Season } from "@/types";
 import { CalendarDays, Mail, Phone } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
-export const Footer: React.FC<{}> = () => {
+interface FooterProps {
+  season?: Season;
+}
+
+export const Footer: React.FC<FooterProps> = ({ season = Season.Default }) => {
+  const seasonConfig = SEASON_CONFIG[season];
+
   return (
     <footer className="divide-y px-4">
       <div className="container mx-auto flex flex-col justify-between space-y-8 py-10 lg:flex-row lg:space-y-0">
@@ -15,7 +23,7 @@ export const Footer: React.FC<{}> = () => {
           >
             <div className="relative flex h-32 w-full items-center justify-center sm:w-64">
               <Image
-                src="/images/text-beside-transparent-bg.webp"
+                src={seasonConfig.navbarText}
                 alt="Logo Papelería P de Papel con nombre al lado"
                 sizes="(max-width: 640px) 100vw, 640px"
                 className="object-cover"

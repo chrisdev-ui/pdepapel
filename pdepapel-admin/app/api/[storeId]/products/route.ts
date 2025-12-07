@@ -1,9 +1,4 @@
-import {
-  PRICE_RANGES,
-  PriceRanges,
-  SORT_OPTIONS,
-  SortOption,
-} from "@/constants";
+import { SORT_OPTIONS, SortOption } from "@/constants";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import cloudinaryInstance from "@/lib/cloudinary";
 import prismadb from "@/lib/prismadb";
@@ -17,6 +12,17 @@ import {
 import { getProductsPrices } from "@/lib/discount-engine";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  ...CACHE_HEADERS.DYNAMIC,
+};
+
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders });
+}
 
 export async function POST(
   req: Request,
@@ -111,11 +117,17 @@ export async function POST(
     }
 
     return NextResponse.json(product, {
-      headers: CACHE_HEADERS.NO_CACHE,
+      headers: {
+        ...CACHE_HEADERS.NO_CACHE,
+        ...corsHeaders,
+      },
     });
   } catch (error) {
     return handleErrorResponse(error, "PRODUCTS_POST", {
-      headers: CACHE_HEADERS.NO_CACHE,
+      headers: {
+        ...CACHE_HEADERS.NO_CACHE,
+        ...corsHeaders,
+      },
     });
   }
 }
@@ -142,8 +154,14 @@ export async function GET(
     const limit = Number(searchParams.get("limit"));
     const search = searchParams.get("search") || "";
     const sortOption = searchParams.get("sortOption") || "default";
-    const priceRange = searchParams.get("priceRange") || undefined;
     const excludeProducts = searchParams.get("excludeProducts") || undefined;
+
+    const minPrice = searchParams.get("minPrice")
+      ? Number(searchParams.get("minPrice"))
+      : undefined;
+    const maxPrice = searchParams.get("maxPrice")
+      ? Number(searchParams.get("maxPrice"))
+      : undefined;
 
     // Create cache key based on query parameters
     const cacheKey = `store:${params.storeId}:products:${JSON.stringify({
@@ -161,8 +179,9 @@ export async function GET(
       limit,
       search,
       sortOption,
-      priceRange,
       excludeProducts,
+      minPrice,
+      maxPrice,
     })}`;
 
     // Try to get from Redis cache
@@ -176,6 +195,7 @@ export async function GET(
           headers: {
             ...CACHE_HEADERS.DYNAMIC,
             "X-Cache": "HIT",
+            ...corsHeaders,
           },
         });
       }
@@ -198,6 +218,14 @@ export async function GET(
     }
     let products;
     let totalItems: number = 0;
+    let facets:
+      | {
+          colors: { id: string; count: number }[];
+          formattedSizes: { id: string; count: number }[];
+          categories: { id: string; count: number }[];
+          designs: { id: string; count: number }[];
+        }
+      | undefined;
 
     if (onlyNew) {
       products = await prismadb.product.findMany({
@@ -223,97 +251,127 @@ export async function GET(
       });
       totalItems = products.length;
     } else {
-      products = await prismadb.product.findMany({
-        where: {
-          storeId: params.storeId,
-          categoryId:
-            categoryId.length > 0
-              ? { in: categoryId }
-              : categoriesIds.length > 0
-                ? { in: categoriesIds }
-                : undefined,
-          colorId: colorId.length > 0 ? { in: colorId } : undefined,
-          sizeId: sizeId.length > 0 ? { in: sizeId } : undefined,
-          designId: designId.length > 0 ? { in: designId } : undefined,
-          OR: [
-            { name: search ? { search } : undefined },
-            { description: search ? { search } : undefined },
-            {
-              name: {
-                contains: search,
-              },
-            },
-            {
-              description: {
-                contains: search,
-              },
-            },
-          ],
-          isFeatured: isFeatured !== null ? isFeatured === "true" : undefined,
-          isArchived: false,
-          price: priceRange
-            ? PRICE_RANGES[priceRange as PriceRanges]
-            : undefined,
-          NOT: {
-            id: excludeProducts
-              ? { in: excludeProducts.split(",") }
+      let priceFilter: any = undefined;
+      if (minPrice !== undefined || maxPrice !== undefined) {
+        priceFilter = {};
+        if (minPrice !== undefined) priceFilter.gte = minPrice;
+        if (maxPrice !== undefined) priceFilter.lte = maxPrice;
+      }
+
+      const whereClause = {
+        storeId: params.storeId,
+        categoryId:
+          categoryId.length > 0
+            ? { in: categoryId }
+            : categoriesIds.length > 0
+              ? { in: categoriesIds }
               : undefined,
-          },
-        },
-        include: {
-          images: true,
-          category: true,
-          color: true,
-          design: true,
-          size: true,
-          supplier: includeSupplier ? true : undefined,
-          reviews: {
-            orderBy: { createdAt: "desc" },
-          },
-        },
-        orderBy: SORT_OPTIONS[sortOption as SortOption],
-        skip: fromShop ? (page - 1) * itemsPerPage : undefined,
-        take: limit || (fromShop ? itemsPerPage : undefined),
-      });
-      totalItems = await prismadb.product.count({
-        where: {
-          storeId: params.storeId,
-          categoryId:
-            categoryId.length > 0
-              ? { in: categoryId }
-              : categoriesIds.length > 0
-                ? { in: categoriesIds }
-                : undefined,
-          colorId: colorId.length > 0 ? { in: colorId } : undefined,
-          sizeId: sizeId.length > 0 ? { in: sizeId } : undefined,
-          designId: designId.length > 0 ? { in: designId } : undefined,
-          OR: [
-            { name: search ? { search } : undefined },
-            { description: search ? { search } : undefined },
-            {
-              name: {
-                contains: search,
-              },
+        colorId: colorId.length > 0 ? { in: colorId } : undefined,
+        sizeId: sizeId.length > 0 ? { in: sizeId } : undefined,
+        designId: designId.length > 0 ? { in: designId } : undefined,
+        OR: [
+          { name: search ? { search } : undefined },
+          { description: search ? { search } : undefined },
+          {
+            name: {
+              contains: search,
             },
-            {
-              description: {
-                contains: search,
-              },
-            },
-          ],
-          isFeatured: isFeatured !== null ? isFeatured === "true" : undefined,
-          isArchived: false,
-          price: priceRange
-            ? PRICE_RANGES[priceRange as PriceRanges]
-            : undefined,
-          NOT: {
-            id: excludeProducts
-              ? { in: excludeProducts.split(",") }
-              : undefined,
           },
+          {
+            description: {
+              contains: search,
+            },
+          },
+        ],
+        isFeatured: isFeatured !== null ? isFeatured === "true" : undefined,
+        isArchived: false,
+        price: priceFilter,
+        NOT: {
+          id: excludeProducts ? { in: excludeProducts.split(",") } : undefined,
         },
-      });
+      };
+
+      const [
+        productsData,
+        count,
+        colorFacets,
+        sizeFacets,
+        categoryFacets,
+        designFacets,
+      ] = await Promise.all([
+        prismadb.product.findMany({
+          where: whereClause,
+          include: {
+            images: true,
+            category: true,
+            color: true,
+            design: true,
+            size: true,
+            supplier: includeSupplier ? true : undefined,
+            reviews: {
+              orderBy: { createdAt: "desc" },
+            },
+          },
+          orderBy: SORT_OPTIONS[sortOption as SortOption],
+          skip: fromShop ? (page - 1) * itemsPerPage : undefined,
+          take: limit || (fromShop ? itemsPerPage : undefined),
+        }),
+        prismadb.product.count({
+          where: whereClause,
+        }),
+        prismadb.product.groupBy({
+          by: ["colorId"],
+          where: whereClause,
+          _count: {
+            colorId: true,
+          },
+        }),
+        prismadb.product.groupBy({
+          by: ["sizeId"],
+          where: whereClause,
+          _count: {
+            sizeId: true,
+          },
+        }),
+        prismadb.product.groupBy({
+          by: ["categoryId"],
+          where: whereClause,
+          _count: {
+            categoryId: true,
+          },
+        }),
+        prismadb.product.groupBy({
+          by: ["designId"],
+          where: whereClause,
+          _count: {
+            designId: true,
+          },
+        }),
+      ]);
+
+      products = productsData;
+      totalItems = count;
+
+      facets = {
+        colors: colorFacets.map((f) => ({
+          id: f.colorId,
+          count: f._count.colorId,
+        })),
+        formattedSizes: sizeFacets.map((f) => ({
+          id: f.sizeId,
+          count: f._count.sizeId,
+        })),
+        categories: categoryFacets.map((f) => ({
+          id: f.categoryId,
+          count: f._count.categoryId,
+        })),
+        designs: designFacets.map((f) => ({
+          id: f.designId,
+          count: f._count.designId,
+        })),
+      };
     }
+
     const totalPages = fromShop ? Math.ceil(totalItems / itemsPerPage) : 1;
 
     // Calculate discounted prices
@@ -332,6 +390,7 @@ export async function GET(
       products: productsWithPrices,
       totalItems,
       totalPages: fromShop ? totalPages : 1,
+      facets,
     };
 
     // Cache the response (5 minutes for shop queries, 15 minutes for others)
@@ -348,11 +407,15 @@ export async function GET(
       headers: {
         ...CACHE_HEADERS.DYNAMIC,
         "X-Cache": "MISS",
+        ...corsHeaders,
       },
     });
   } catch (error) {
     return handleErrorResponse(error, "PRODUCTS_GET", {
-      headers: CACHE_HEADERS.DYNAMIC,
+      headers: {
+        ...CACHE_HEADERS.DYNAMIC,
+        ...corsHeaders,
+      },
     });
   }
 }
@@ -458,15 +521,37 @@ export async function DELETE(
       });
     });
 
+    // Invalidate all product cache entries for this store
+    try {
+      const { Redis } = await import("@upstash/redis");
+      const redis = Redis.fromEnv();
+      const pattern = `store:${params.storeId}:products:*`;
+
+      // Get all matching keys
+      const keys = await redis.keys(pattern);
+      if (keys.length > 0) {
+        // Delete all matching keys
+        await redis.del(...keys);
+      }
+    } catch (error) {
+      console.error("Redis cache invalidation error:", error);
+    }
+
     return NextResponse.json(
       "Los productos han sido eliminados correctamente",
       {
-        headers: CACHE_HEADERS.NO_CACHE,
+        headers: {
+          ...CACHE_HEADERS.NO_CACHE,
+          ...corsHeaders,
+        },
       },
     );
   } catch (error) {
     return handleErrorResponse(error, "PRODUCTS_DELETE", {
-      headers: CACHE_HEADERS.NO_CACHE,
+      headers: {
+        ...CACHE_HEADERS.NO_CACHE,
+        ...corsHeaders,
+      },
     });
   }
 }
@@ -540,12 +625,34 @@ export async function PATCH(
       });
     });
 
+    // Invalidate all product cache entries for this store
+    try {
+      const { Redis } = await import("@upstash/redis");
+      const redis = Redis.fromEnv();
+      const pattern = `store:${params.storeId}:products:*`;
+
+      // Get all matching keys
+      const keys = await redis.keys(pattern);
+      if (keys.length > 0) {
+        // Delete all matching keys
+        await redis.del(...keys);
+      }
+    } catch (error) {
+      console.error("Redis cache invalidation error:", error);
+    }
+
     return NextResponse.json(result, {
-      headers: CACHE_HEADERS.NO_CACHE,
+      headers: {
+        ...CACHE_HEADERS.NO_CACHE,
+        ...corsHeaders,
+      },
     });
   } catch (error) {
     return handleErrorResponse(error, "PRODUCTS_PATCH", {
-      headers: CACHE_HEADERS.NO_CACHE,
+      headers: {
+        ...CACHE_HEADERS.NO_CACHE,
+        ...corsHeaders,
+      },
     });
   }
 }

@@ -3,9 +3,10 @@
 import { Plus } from "lucide-react";
 
 import Filter from "@/components/filter";
+import PriceFilter from "@/components/price-filter";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Category, Color, Design, PriceRange, Size, Type } from "@/types";
+import { Category, Color, Design, Size, Type } from "@/types";
 
 interface MobileFiltersProps {
   types: Type[];
@@ -13,7 +14,6 @@ interface MobileFiltersProps {
   sizes: Size[];
   colors: Color[];
   designs: Design[];
-  pricesRanges: PriceRange[];
 }
 
 const MobileFilters: React.FC<MobileFiltersProps> = ({
@@ -22,7 +22,6 @@ const MobileFilters: React.FC<MobileFiltersProps> = ({
   sizes,
   colors,
   designs,
-  pricesRanges,
 }) => {
   return (
     <Sheet>
@@ -65,11 +64,12 @@ const MobileFilters: React.FC<MobileFiltersProps> = ({
             data={designs}
           />
           <Filter
-            valueKey="priceRange"
-            name="Precios"
-            emptyMessage="No hay precios disponibles"
-            data={pricesRanges}
+            valueKey="designId"
+            name="Diseños"
+            emptyMessage="No hay diseños disponibles"
+            data={designs}
           />
+          <PriceFilter min={0} max={1000000} step={1000} />
         </div>
       </SheetContent>
     </Sheet>

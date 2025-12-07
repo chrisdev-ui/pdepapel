@@ -19,7 +19,7 @@ interface ProductsProps {
 
 const Products: React.FC<ProductsProps> = ({ products, totalPages }) => {
   return (
-    <>
+    <div>
       {products.length === 0 && (
         <NoResults
           className="h-96"
@@ -38,7 +38,7 @@ const Products: React.FC<ProductsProps> = ({ products, totalPages }) => {
           <Paginator totalPages={totalPages} />
         </div>
       )}
-    </>
+    </div>
   );
 };
 

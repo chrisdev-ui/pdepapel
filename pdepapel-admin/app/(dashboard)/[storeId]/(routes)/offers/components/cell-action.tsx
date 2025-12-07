@@ -37,6 +37,27 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
     });
   };
 
+  const onValidate = async () => {
+    try {
+      setLoading(true);
+      await axios.post(
+        `/api/${params.storeId}/${Models.Offers}/${data.id}/validate`,
+      );
+      router.refresh();
+      toast({
+        description: "Vigencia de la oferta validada correctamente",
+        variant: "success",
+      });
+    } catch (error) {
+      toast({
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const onDelete = async () => {
     try {
       setLoading(true);
@@ -85,6 +106,10 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
           >
             <Edit className="mr-2 h-4 w-4" />
             Actualizar
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onValidate} disabled={loading}>
+            <MoreHorizontal className="mr-2 h-4 w-4" />
+            Validar vigencia
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setOpen(true)}>
             <Trash className="mr-2 h-4 w-4" />

@@ -1,4 +1,4 @@
-import { PriceRange, ShippingCarrier } from "@/types";
+import { ShippingCarrier } from "@/types";
 
 export const DELAY = 5000;
 export const TOAST_DURATION = 2000;
@@ -107,17 +107,6 @@ export const SORT_OPTIONS = [
   { value: SortOptions.featuredFirst, label: "Destacados" },
 ];
 
-export const PRICES: PriceRange[] = [
-  { id: "[0,5000]", name: "Menos de $5,000" },
-  { id: "[5000,10000]", name: "Entre $5,000 y $10,000" },
-  { id: "[10000,20000]", name: "Entre $10,000 y $20,000" },
-  { id: "[20000,50000]", name: "Entre $20,000 y $50,000" },
-  { id: "[50000,99999999]", name: "Más de $50,000" },
-];
-
-export const INTERRAPIDISIMO_URL =
-  "https://www3.interrapidisimo.com:8082/SiguetuEnvio/shipment/";
-
 export const ADMIN_USER_IDS = [
   "user_2YuMElx5guOjtnY3RT0vXi9UA3b",
   "user_2edvPcKn4XDbCYSobmXRNJpGq9U",
@@ -222,3 +211,18 @@ export const SHIPPINGCARRIERS: ShippingCarrier[] = [
     color: "#55a962",
   },
 ];
+
+import { Season, SeasonConfig } from "@/types";
+
+export const SEASON_CONFIG: Record<Season, SeasonConfig> = {
+  [Season.Default]: {
+    navbarText: "/images/text-beside-transparent-bg.webp",
+    navbarNoText: "/images/no-text-transparent-bg.webp",
+    checkoutSuffix: "",
+  },
+  [Season.Christmas]: {
+    navbarText: "/images/text-beside-transparent-bg-christmas.webp",
+    navbarNoText: "/images/no-text-transparent-bg-christmas.webp",
+    checkoutSuffix: "-christmas",
+  },
+};

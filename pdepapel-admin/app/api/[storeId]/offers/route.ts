@@ -80,6 +80,12 @@ export async function POST(
       const { Redis } = await import("@upstash/redis");
       const redis = Redis.fromEnv();
       await redis.del(`store:${params.storeId}:active-offers`);
+      const productKeys = await redis.keys(
+        `store:${params.storeId}:products:*`,
+      );
+      if (productKeys.length > 0) {
+        await redis.del(...productKeys);
+      }
     } catch (error) {
       console.error("Redis delete error:", error);
     }

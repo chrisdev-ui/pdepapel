@@ -5,11 +5,22 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata } from "next";
 
 import { Footer } from "@/components/footer";
+import { getCurrentSeason } from "@/lib/date-utils";
 import { beautifulEveryTime, caudex, nunito, roboto } from "@/lib/fonts";
 import { ModalProvider } from "@/providers/modal-provider";
 import { ReactQueryProvider } from "@/providers/query-client-provider";
 import { Toaster } from "@/providers/toaster";
+import { Season } from "@/types";
 import "./globals.css";
+
+import dynamic from "next/dynamic";
+
+const Christmas = dynamic(
+  () => import("@/components/christmas").then((mod) => mod.Christmas),
+  {
+    ssr: false,
+  },
+);
 
 import Navbar from "@/components/navbar";
 
@@ -94,6 +105,8 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const currentSeason = getCurrentSeason();
+
   return (
     <ClerkProvider localization={esES}>
       <html lang="es">
@@ -102,9 +115,10 @@ export default function RootLayout({
         >
           <ReactQueryProvider>
             <ModalProvider />
-            <Navbar />
+            <Navbar season={currentSeason} />
             {children}
-            <Footer />
+            <Footer season={currentSeason} />
+            {currentSeason === Season.Christmas && <Christmas />}
             <Toaster />
             <Analytics />
             <SpeedInsights />
