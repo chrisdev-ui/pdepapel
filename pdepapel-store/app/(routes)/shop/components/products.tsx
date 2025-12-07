@@ -19,7 +19,7 @@ interface ProductsProps {
 
 const Products: React.FC<ProductsProps> = ({ products, totalPages }) => {
   return (
-    <div>
+    <div className="flex flex-col gap-8">
       {products.length === 0 && (
         <NoResults
           className="h-96"
