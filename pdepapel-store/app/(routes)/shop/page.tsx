@@ -10,7 +10,7 @@ import Features from "@/components/features";
 import Newsletter from "@/components/newsletter";
 import { ShopContent } from "@/components/shop-content";
 import { Container } from "@/components/ui/container";
-import { BASE_URL } from "@/constants";
+import { BASE_URL, LIMIT_SHOP_ITEMS } from "@/constants";
 
 export const revalidate = 60;
 
@@ -147,7 +147,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
     maxPrice: searchParams.maxPrice ? parseInt(searchParams.maxPrice) : null,
     fromShop: true,
     page: searchParams.page,
-    itemsPerPage: searchParams.itemsPerPage,
+    itemsPerPage: LIMIT_SHOP_ITEMS,
     search: searchParams.search,
   });
 

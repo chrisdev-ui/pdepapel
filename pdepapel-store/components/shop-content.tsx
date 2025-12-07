@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { getProducts } from "@/actions/get-products";
 import Filter from "@/components/filter";
 import PriceFilter from "@/components/price-filter";
-import { SORT_OPTIONS } from "@/constants";
+import { LIMIT_SHOP_ITEMS, SORT_OPTIONS } from "@/constants";
 import { useProductFilters } from "@/hooks/use-product-filters";
 import { Category, Color, Design, Product, Size, Type } from "@/types";
 
@@ -80,6 +80,7 @@ export const ShopContent: React.FC<ShopContentProps> = ({
         minPrice: filters.minPrice,
         maxPrice: filters.maxPrice,
         fromShop: true,
+        itemsPerPage: LIMIT_SHOP_ITEMS,
       }),
     initialData: isMounted
       ? undefined

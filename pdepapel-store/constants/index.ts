@@ -120,6 +120,9 @@ export const INTERRAPIDISIMO_SALTSIZE = 256;
 export const INTERRAPIDISIMO_ITERATIONS = 1000;
 export const INTERRAPIDISIMO_PASSWORD = "Int3rr4p1d1s1m0Cl4S33ncr1pc10nPt2022";
 
+export const LIMIT = 10;
+export const LIMIT_SHOP_ITEMS = 24;
+
 export const SHIPPINGCARRIERS: ShippingCarrier[] = [
   {
     idCarrier: 14,
