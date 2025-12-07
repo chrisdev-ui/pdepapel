@@ -13,7 +13,13 @@ import { SpinnerButton } from "@/components/ui/spinner-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { YearSelector } from "@/components/year-selector";
 import { CreditCard, Package } from "lucide-react";
+import type { Metadata } from "next";
 import { Suspense } from "react";
+
+export const metadata: Metadata = {
+  title: "Panel de Control | PdePapel Admin",
+  description: "Resumen de tu tienda",
+};
 
 interface DashboardPageProps {
   params: { storeId: string };

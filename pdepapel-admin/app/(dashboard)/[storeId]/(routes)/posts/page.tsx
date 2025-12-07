@@ -7,6 +7,13 @@ const PostClient = dynamic(() => import("./components/client"), {
 
 export const revalidate = 0;
 
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Publicaciones | PdePapel Admin",
+  description: "Gestión de publicaciones",
+};
+
 export default async function PostsPage({
   params,
 }: {

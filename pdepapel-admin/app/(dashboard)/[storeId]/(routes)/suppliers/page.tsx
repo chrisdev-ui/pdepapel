@@ -7,6 +7,13 @@ const SupplierClient = dynamic(() => import("./components/client"), {
 
 export const revalidate = 0;
 
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Proveedores | PdePapel Admin",
+  description: "Gestión de proveedores",
+};
+
 export default async function SuppliersPage({
   params,
 }: {

@@ -7,6 +7,13 @@ const SizesClient = dynamic(() => import("./components/client"), {
 
 export const revalidate = 0;
 
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Tamaños | PdePapel Admin",
+  description: "Gestión de tamaños",
+};
+
 export default async function SizesPage({
   params,
 }: {

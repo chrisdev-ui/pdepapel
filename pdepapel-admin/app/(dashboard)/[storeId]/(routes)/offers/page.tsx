@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import dynamic from "next/dynamic";
 import { getOffers } from "./server/get-offers";
 
@@ -6,6 +7,11 @@ const OffersClient = dynamic(() => import("./components/client"), {
 });
 
 export const revalidate = 0;
+
+export const metadata: Metadata = {
+  title: "Ofertas | PdePapel Admin",
+  description: "Gestión de descuentos y promociones",
+};
 
 export default async function OffersPage({
   params,

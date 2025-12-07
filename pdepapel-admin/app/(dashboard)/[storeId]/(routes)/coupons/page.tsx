@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import dynamic from "next/dynamic";
 import { v4 as uuidv4 } from "uuid";
 import { getCoupons } from "./server/get-coupons";
@@ -5,6 +6,11 @@ import { getCoupons } from "./server/get-coupons";
 const CouponClient = dynamic(() => import("./components/client"), {
   ssr: false,
 });
+
+export const metadata: Metadata = {
+  title: "Cupones | PdePapel Admin",
+  description: "Gestión de cupones de descuento",
+};
 
 export default async function CouponsPage({
   params,

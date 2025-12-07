@@ -7,6 +7,13 @@ const CategoryClient = dynamic(() => import("./components/client"), {
 
 export const revalidate = 0;
 
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Categorías | PdePapel Admin",
+  description: "Gestión de categorías",
+};
+
 export default async function CategoriesPage({
   params,
 }: {

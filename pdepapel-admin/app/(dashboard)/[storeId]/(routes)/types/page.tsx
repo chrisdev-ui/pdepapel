@@ -7,6 +7,13 @@ const TypeClient = dynamic(() => import("./components/client"), {
 
 export const revalidate = 0;
 
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Tipos | PdePapel Admin",
+  description: "Gestión de tipos de categorías",
+};
+
 export default async function TypesPage({
   params,
 }: {

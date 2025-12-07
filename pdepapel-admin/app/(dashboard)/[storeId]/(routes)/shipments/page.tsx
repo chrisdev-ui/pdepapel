@@ -8,6 +8,13 @@ import { getShipments } from "./server/get-shipments";
 
 export const revalidate = 0;
 
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Envíos | PdePapel Admin",
+  description: "Gestión de envíos y logística",
+};
+
 interface ShipmentsPageProps {
   params: {
     storeId: string;

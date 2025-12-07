@@ -7,6 +7,13 @@ const LowStockClient = dynamic(() => import("./components/client"), {
 
 export const revalidate = 0;
 
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Bajo Stock | PdePapel Admin",
+  description: "Productos con bajo inventario",
+};
+
 export default async function LowStockPage({
   params,
   searchParams,

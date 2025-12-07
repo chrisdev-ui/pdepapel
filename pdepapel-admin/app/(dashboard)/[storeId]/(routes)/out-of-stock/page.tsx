@@ -7,6 +7,13 @@ const OutOfStockClient = dynamic(() => import("./components/client"), {
 
 export const revalidate = 0;
 
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Sin Stock | PdePapel Admin",
+  description: "Productos agotados",
+};
+
 export default async function OutOfStockPage({
   params,
 }: {

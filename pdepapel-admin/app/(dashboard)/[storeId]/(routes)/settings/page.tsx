@@ -1,5 +1,6 @@
 import prismadb from "@/lib/prismadb";
 import { auth } from "@clerk/nextjs";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { SettingsForm } from "./components/settings-form";
 
@@ -8,6 +9,11 @@ interface SettingsPageProps {
     storeId: string;
   };
 }
+
+export const metadata: Metadata = {
+  title: "Configuración | PdePapel Admin",
+  description: "Ajustes de la tienda",
+};
 
 export default async function SettingsPage({ params }: SettingsPageProps) {
   const { userId } = auth();

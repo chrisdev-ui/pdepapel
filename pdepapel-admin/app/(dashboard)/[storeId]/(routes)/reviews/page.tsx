@@ -1,6 +1,11 @@
+import type { Metadata } from "next";
 import { ReviewsClient } from "./components/client";
 import { getReviews } from "./server/get-reviews";
 
+export const metadata: Metadata = {
+  title: "Reseñas | PdePapel Admin",
+  description: "Gestión de reseñas de clientes",
+};
 export default async function ReviewsPage({
   params,
 }: {

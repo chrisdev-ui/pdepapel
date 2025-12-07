@@ -7,6 +7,13 @@ const ColorsClient = dynamic(() => import("./components/client"), {
 
 export const revalidate = 0;
 
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Colores | PdePapel Admin",
+  description: "Gestión de colores",
+};
+
 export default async function ColorsPage({
   params,
 }: {

@@ -8,6 +8,13 @@ const BannerClient = dynamic(() => import("./components/client"), {
 
 export const revalidate = 0;
 
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Banners | PdePapel Admin",
+  description: "Gestión de banners",
+};
+
 export default async function BannersPage({
   params,
 }: {

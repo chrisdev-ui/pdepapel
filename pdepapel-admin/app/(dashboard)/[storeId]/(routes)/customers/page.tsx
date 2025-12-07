@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import CustomerClient from "./components/client";
 import { CustomerAnalytics } from "./components/customer-analytics";
@@ -10,6 +11,11 @@ interface CustomerPageProps {
     storeId: string;
   };
 }
+
+export const metadata: Metadata = {
+  title: "Clientes | PdePapel Admin",
+  description: "Base de datos de clientes",
+};
 
 const CustomerPage: React.FC<CustomerPageProps> = async ({ params }) => {
   const customers = await getCustomers(params.storeId);

@@ -7,6 +7,13 @@ const BillboardClient = dynamic(() => import("./components/client"), {
 
 export const revalidate = 0;
 
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Carteleras | PdePapel Admin",
+  description: "Gestión de carteleras",
+};
+
 export default async function BillboardsPage({
   params,
 }: {

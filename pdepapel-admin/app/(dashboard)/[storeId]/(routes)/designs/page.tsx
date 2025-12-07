@@ -7,6 +7,13 @@ const DesignsClient = dynamic(() => import("./components/client"), {
 
 export const revalidate = 0;
 
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Diseños | PdePapel Admin",
+  description: "Gestión de diseños",
+};
+
 export default async function DesignsPage({
   params,
 }: {

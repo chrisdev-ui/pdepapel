@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import dynamicImport from "next/dynamic";
 import { v4 as uuidv4 } from "uuid";
 import { getOrders } from "./server/get-orders";
@@ -7,6 +8,11 @@ const OrderClient = dynamicImport(() => import("./components/client"), {
 });
 
 export const revalidate = 0;
+
+export const metadata: Metadata = {
+  title: "Pedidos | PdePapel Admin",
+  description: "Gestión de pedidos",
+};
 
 export default async function OrdersPage({
   params,
