@@ -9,7 +9,7 @@ import {
 import { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { AboutPage, WithContext } from "schema-dts";
+import { AboutPage as AboutPageSchema, WithContext } from "schema-dts";
 
 import { getPosts } from "@/actions/get-posts";
 import { Icons } from "@/components/icons";
@@ -20,7 +20,7 @@ import SocialMedia from "./components/social-media";
 
 export const revalidate = 60;
 
-const jsonLd: WithContext<AboutPage> = {
+const jsonLd: WithContext<AboutPageSchema> = {
   "@context": "https://schema.org",
   "@type": "AboutPage",
   mainEntity: {

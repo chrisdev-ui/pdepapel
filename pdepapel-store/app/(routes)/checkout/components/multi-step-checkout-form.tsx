@@ -652,7 +652,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                 <span className="text-lg">Subtotal</span>
                 <Currency className="text-lg" value={subtotal} />
               </div>
-              {productSavings > 0 && (
+              {productSavings > 0 ? (
                 <div className="flex flex-1 items-center justify-between">
                   <span className="text-lg text-gray-600">
                     Ahorros en ofertas
@@ -662,8 +662,8 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                     value={productSavings}
                   />
                 </div>
-              )}
-              {couponDiscount > 0 && (
+              ) : null}
+              {couponDiscount > 0 ? (
                 <div className="flex flex-1 items-center justify-between">
                   <div className="ml-2 text-lg text-destructive">
                     Descuento{" "}
@@ -678,13 +678,13 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                     value={couponDiscount}
                   />
                 </div>
-              )}
-              {(shippingCost ?? 0) > 0 && (
+              ) : null}
+              {(shippingCost ?? 0) > 0 ? (
                 <div className="flex flex-1 items-center justify-between">
                   <span className="text-lg">Envío</span>
                   <Currency className="text-lg" value={shippingCost} />
                 </div>
-              )}
+              ) : null}
               <Separator />
               <div className="flex flex-1 items-center justify-between">
                 <span className="text-xl font-black text-pink-froly">
