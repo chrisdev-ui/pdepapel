@@ -10,6 +10,7 @@ import Features from "@/components/features";
 import Newsletter from "@/components/newsletter";
 import { ShopContent } from "@/components/shop-content";
 import { Container } from "@/components/ui/container";
+import { BASE_URL } from "@/constants";
 
 export const revalidate = 60;
 
@@ -78,7 +79,7 @@ export async function generateMetadata({
   if (search) keywords.push(search);
 
   // Construct canonical URL with essential filters
-  const canonicalUrl = new URL(`${process.env.NEXT_PUBLIC_APP_URL}/shop`);
+  const canonicalUrl = new URL(`${BASE_URL}/shop`);
   if (categoryId) canonicalUrl.searchParams.set("categoryId", categoryId);
   if (typeId) canonicalUrl.searchParams.set("typeId", typeId);
   if (search) canonicalUrl.searchParams.set("search", search);
