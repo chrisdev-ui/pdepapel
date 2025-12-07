@@ -79,6 +79,7 @@ export const ShopContent: React.FC<ShopContentProps> = ({
           : filters.designId,
         minPrice: filters.minPrice,
         maxPrice: filters.maxPrice,
+        fromShop: true,
       }),
     initialData: isMounted
       ? undefined
