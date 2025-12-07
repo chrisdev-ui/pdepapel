@@ -80,7 +80,7 @@ const Filter: React.FC<FilterProps> = ({
                     )}
                     <Label
                       htmlFor={`${valueKey}-${filter.id}`}
-                      className="cursor-pointer text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      className="cursor-pointer text-sm font-medium capitalize leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                     >
                       {filter.name}
                       {filter.count !== undefined && (

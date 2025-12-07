@@ -149,7 +149,7 @@ const PriceFilter: React.FC<PriceFilterProps> = ({
             Mínimo
           </span>
           <div className="relative">
-            <span className="font-serif text-lg font-bold tabular-nums text-gray-900">
+            <span className="text-lg font-bold tabular-nums text-gray-900">
               {formatPrice(minValue)}
             </span>
             <div
@@ -170,7 +170,7 @@ const PriceFilter: React.FC<PriceFilterProps> = ({
             Máximo
           </span>
           <div className="relative">
-            <span className="font-serif text-lg font-bold tabular-nums text-gray-900">
+            <span className="text-lg font-bold tabular-nums text-gray-900">
               {formatPrice(maxValue)}
             </span>
             <div
