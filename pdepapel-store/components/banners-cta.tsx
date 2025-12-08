@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { CldImage } from "@/components/ui/CldImage";
 import { Container } from "@/components/ui/container";
 import { cn } from "@/lib/utils";
 import { Banner } from "@/types";
@@ -35,7 +36,7 @@ const BannersCta: React.FC<BannersCtaProps> = ({ banners }) => {
         {banners.map((banner, index) => (
           <Link
             className={cn(
-              "flex items-center justify-center rounded-xl bg-cover bg-center bg-no-repeat px-10 py-32 transition hover:scale-105",
+              "group relative flex items-center justify-center overflow-hidden rounded-xl px-10 py-32 transition",
               {
                 [colSpan]: numberOfBanners !== 5,
                 "col-span-3": numberOfBanners === 5 && index <= 1,
@@ -47,11 +48,16 @@ const BannersCta: React.FC<BannersCtaProps> = ({ banners }) => {
               },
             )}
             key={`mini-banner${index}`}
-            style={{
-              backgroundImage: `url(${banner.imageUrl})`,
-            }}
             href={banner.callToAction ?? "#"}
-          />
+          >
+            <CldImage
+              src={banner.imageUrl}
+              alt={`Banner promocional ${index + 1}`}
+              fill
+              className="object-cover object-center transition-transform duration-500 group-hover:scale-110"
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            />
+          </Link>
         ))}
       </div>
     </Container>

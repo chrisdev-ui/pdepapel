@@ -80,7 +80,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
           src={mainImage.url}
           alt={product.name ?? "Imagen principal del producto"}
           fill
-          sizes="(max-width: 640px) 100vw, 640px"
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
           priority={priority}
           className="aspect-square rounded-md object-cover"
         />
