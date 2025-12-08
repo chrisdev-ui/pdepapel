@@ -63,12 +63,6 @@ const MobileFilters: React.FC<MobileFiltersProps> = ({
             emptyMessage="No hay diseños disponibles"
             data={designs}
           />
-          <Filter
-            valueKey="designId"
-            name="Diseños"
-            emptyMessage="No hay diseños disponibles"
-            data={designs}
-          />
           <PriceFilter min={0} max={1000000} step={1000} />
         </div>
       </SheetContent>
