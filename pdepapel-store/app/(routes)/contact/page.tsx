@@ -1,10 +1,12 @@
 import { Clock, Mail, MailCheck, PhoneCall } from "lucide-react";
 import { Metadata } from "next";
 import Image from "next/image";
+import { ContactPage as ContactPageSchema, WithContext } from "schema-dts";
 
 import { Icons } from "@/components/icons";
 import { Container } from "@/components/ui/container";
 import { Separator } from "@/components/ui/separator";
+import { BASE_URL } from "@/constants";
 import { ContactForm } from "./components/contact-form";
 
 export const metadata: Metadata = {
@@ -14,9 +16,39 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "/contact",
   },
+  keywords: [
+    "contacto",
+    "atención al cliente",
+    "papelería",
+    "soporte",
+    "ubicación",
+    "teléfono",
+    "email",
+  ],
 };
 
+export const revalidate = 60;
+
 export default function ContactPage() {
+  const jsonLd: WithContext<ContactPageSchema> = {
+    "@context": "https://schema.org",
+    "@type": "ContactPage",
+    name: "Contáctanos | Papelería P de Papel",
+    description: "Ponte en contacto con nosotros para cualquier duda o pedido.",
+    mainEntity: {
+      "@type": "Organization",
+      name: "Papelería P de Papel",
+      url: BASE_URL,
+      contactPoint: {
+        "@type": "ContactPoint",
+        telephone: "+57-313-258-2293",
+        contactType: "customer service",
+        areaServed: "CO",
+        availableLanguage: "es",
+      },
+    },
+  };
+
   return (
     <>
       <Container>
@@ -108,6 +140,10 @@ export default function ContactPage() {
           </section>
         </section>
       </Container>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
     </>
   );
 }

@@ -69,7 +69,7 @@ const HeroSlider: React.FC<HeroSliderProps> = ({ data }) => {
                 alt={title ?? "Imagen de la promoción"}
                 fill
                 className="h-full w-full object-cover"
-                sizes="100vw"
+                sizes="(max-width: 768px) 90vw, (max-width: 1200px) 80vw, 70vw"
                 priority={index === 0}
               />
               {title && (

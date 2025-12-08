@@ -19,11 +19,13 @@ import { OfferBadge } from "./offer-badge";
 interface ProductCardProps {
   product: Product;
   isNew?: boolean;
+  priority?: boolean;
 }
 
 const ProductCard: React.FC<ProductCardProps> = ({
   product,
   isNew = false,
+  priority = false,
 }) => {
   const [isMounted, setIsMounted] = useState(false);
   const router = useRouter();
@@ -79,7 +81,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
           alt={product.name ?? "Imagen principal del producto"}
           fill
           sizes="(max-width: 640px) 100vw, 640px"
-          priority
+          priority={priority}
           className="aspect-square rounded-md object-cover"
         />
         <div className="absolute bottom-5 w-full px-6 opacity-0 transition group-hover:opacity-100">

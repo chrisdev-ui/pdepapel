@@ -21,15 +21,15 @@ export const Gallery: React.FC<GalleryProps> = ({ images = [] }) => {
           </TabsList>
         </div>
         <div className="aspect-square w-full">
-          {images.map((image) => (
+          {images.map((image, index) => (
             <TabsContent key={image.id} value={image.id}>
               <div className="relative aspect-square h-full w-full overflow-hidden sm:rounded-lg">
                 <CldImage
                   fill
                   src={image.url}
                   alt="Imagen principal del producto"
-                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                  priority
+                  sizes="(max-width: 1024px) 100vw, 50vw"
+                  priority={index === 0}
                   className="object-cover object-center"
                 />
               </div>

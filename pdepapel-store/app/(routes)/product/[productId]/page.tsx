@@ -1,8 +1,11 @@
+import { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { Product as ProductSchema, WithContext } from "schema-dts";
+
 import { getProduct } from "@/actions/get-product";
 import { getProducts } from "@/actions/get-products";
 import { SingleProductPage } from "@/components/single-product-page";
-import { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { BASE_URL } from "@/constants";
 
 interface ProductPageProps {
   params: {
@@ -53,7 +56,7 @@ export async function generateMetadata({
   };
 }
 
-export const revalidate = 0;
+export const revalidate = 60;
 
 export default async function ProductPage({ params }: ProductPageProps) {
   const product = await getProduct(params.productId);
@@ -65,10 +68,50 @@ export default async function ProductPage({ params }: ProductPageProps) {
     excludeProducts: params.productId,
     limit: 4,
   });
+
+  const jsonLd: WithContext<ProductSchema> = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: product.name,
+    description: product.description,
+    image: product.images.map((img) => img.url),
+    sku: product.sku || product.id,
+    brand: {
+      "@type": "Brand",
+      name: "Papelería P de Papel",
+    },
+    offers: {
+      "@type": "Offer",
+      url: `${BASE_URL}/product/${product.id}`,
+      priceCurrency: "COP",
+      price: product.price,
+      priceValidUntil: new Date(
+        new Date().setFullYear(new Date().getFullYear() + 1),
+      )
+        .toISOString()
+        .split("T")[0],
+      itemCondition: "https://schema.org/NewCondition",
+      availability:
+        product.stock > 0
+          ? "https://schema.org/InStock"
+          : "https://schema.org/OutOfStock",
+      seller: {
+        "@type": "Organization",
+        name: "Papelería P de Papel",
+      },
+    },
+  };
+
   return (
-    <SingleProductPage
-      product={product}
-      suggestedProducts={suggestedProducts}
-    />
+    <>
+      <SingleProductPage
+        product={product}
+        suggestedProducts={suggestedProducts}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+    </>
   );
 }
