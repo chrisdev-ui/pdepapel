@@ -113,6 +113,8 @@ export default function RootLayout({
         <body
           className={`${beautifulEveryTime.variable} ${caudex.variable} ${nunito.variable} ${roboto.variable}`}
         >
+          <link rel="dns-prefetch" href="https://res.cloudinary.com" />
+          <link rel="preconnect" href="https://res.cloudinary.com" />
           <ReactQueryProvider>
             <ModalProvider />
             <Navbar season={currentSeason} />
