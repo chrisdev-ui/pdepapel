@@ -1,15 +1,17 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Trash } from "lucide-react";
+import { Lightbulb, Loader2, Trash } from "lucide-react";
 import { useForm } from "react-hook-form";
 import z from "zod";
 
 import { AlertModal } from "@/components/modals/alert-modal";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -28,10 +30,16 @@ import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 const formSchema = z.object({
-  label: z.string().min(1, "La etiqueta no puede estar vacía"),
-  title: z.string().optional(),
-  redirectUrl: z.string().optional(),
-  imageUrl: z.string().min(1, "La URL de la imagen no puede estar vacía"),
+  title: z.string().min(1, "El título es requerido"),
+  label: z.string().min(1, "La descripción es requerida"),
+  buttonLabel: z.string().min(1, "El texto del botón es requerido"),
+  redirectUrl: z.union([
+    z.string().url({ message: "Debe ser una URL válida (https://...)" }),
+    z.string().startsWith("/", {
+      message: "Las rutas internas deben comenzar con /",
+    }),
+  ]),
+  imageUrl: z.string().min(1, "La URL de la imagen es requerida"),
 });
 
 type BillboardFormValues = z.infer<typeof formSchema>;
@@ -50,16 +58,17 @@ export const BillboardForm: React.FC<BillboardFormProps> = ({
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const { title, description, toastMessage, action } = useMemo(
+  const { title, description, toastMessage, action, pendingText } = useMemo(
     () => ({
-      title: initialData ? "Editar publicación" : "Crear publicación",
+      title: initialData ? "Editar diapositiva" : "Crear diapositiva",
       description: initialData
-        ? "Editar una publicación"
-        : "Crear una nueva publicación",
+        ? "Editar una diapositiva"
+        : "Crear una nueva diapositiva",
       toastMessage: initialData
-        ? "Publicación actualizada"
+        ? "Diapositiva actualizada"
         : "Publicación creada",
       action: initialData ? "Guardar cambios" : "Crear",
+      pendingText: initialData ? "Actualizando..." : "Creando...",
     }),
     [initialData],
   );
@@ -71,12 +80,14 @@ export const BillboardForm: React.FC<BillboardFormProps> = ({
           ...initialData,
           title: initialData.title ?? "",
           redirectUrl: initialData.redirectUrl ?? "",
+          buttonLabel: initialData.buttonLabel ?? "",
         }
       : {
           label: "",
           imageUrl: "",
           title: "",
           redirectUrl: "",
+          buttonLabel: "",
         },
   });
   const onSubmit = async (data: BillboardFormValues) => {
@@ -114,7 +125,7 @@ export const BillboardForm: React.FC<BillboardFormProps> = ({
       router.refresh();
       router.push(`/${params.storeId}/${Models.Billboards}`);
       toast({
-        description: "Publicación eliminada",
+        description: "Diapositiva eliminada",
         variant: "success",
       });
     } catch (error) {
@@ -154,12 +165,29 @@ export const BillboardForm: React.FC<BillboardFormProps> = ({
           onSubmit={form.handleSubmit(onSubmit)}
           className="w-full space-y-8"
         >
+          <Alert>
+            <Lightbulb className="h-4 w-4" />
+            <AlertTitle>Tip</AlertTitle>
+            <AlertDescription>
+              Usa <code>Click Derecho &gt; Emojis y Símbolos</code> para
+              insertar emojis en los campos de texto, o visita{" "}
+              <a
+                href="https://getemoji.com"
+                target="_blank"
+                rel="noreferrer"
+                className="font-bold underline"
+              >
+                GetEmoji
+              </a>{" "}
+              para copiar y pegar.
+            </AlertDescription>
+          </Alert>
           <FormField
             control={form.control}
             name="imageUrl"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Background image</FormLabel>
+                <FormLabel isRequired>Imagen de fondo</FormLabel>
                 <FormControl>
                   <ImageUpload
                     value={
@@ -179,34 +207,64 @@ export const BillboardForm: React.FC<BillboardFormProps> = ({
           <div className="grid grid-cols-3 gap-8">
             <FormField
               control={form.control}
-              name="label"
+              name="title"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Etiqueta</FormLabel>
+                  <FormLabel isRequired>Título</FormLabel>
                   <FormControl>
                     <Input
                       disabled={loading}
-                      placeholder="Etiqueta de la publicación"
+                      placeholder="Título de la diapositiva"
                       {...field}
                     />
                   </FormControl>
+                  <FormDescription>
+                    Puedes usar emojis, símbolos y caracteres especiales para
+                    hacer el título más atractivo. Ejemplo: Nueva Colección ✨
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
             <FormField
               control={form.control}
-              name="title"
+              name="label"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Título</FormLabel>
+                  <FormLabel isRequired>Descripción</FormLabel>
                   <FormControl>
                     <Input
                       disabled={loading}
-                      placeholder="Título de la publicación (Opcional)"
+                      placeholder="Descripción de la diapositiva"
                       {...field}
                     />
                   </FormControl>
+                  <FormDescription>
+                    Puedes usar emojis, símbolos y caracteres especiales para
+                    hacer la descripción más atractiva. Ejemplo: Hasta 40% de
+                    descuento en tus favoritos 🌸
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="buttonLabel"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel isRequired>Texto del botón</FormLabel>
+                  <FormControl>
+                    <Input
+                      disabled={loading}
+                      placeholder="Texto del botón"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Puedes usar emojis, símbolos y caracteres especiales para
+                    hacer el texto del botón más atractivo. Ejemplo: ¡Explorar!
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -216,21 +274,32 @@ export const BillboardForm: React.FC<BillboardFormProps> = ({
               name="redirectUrl"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Link de redirección</FormLabel>
+                  <FormLabel isRequired>Link de redirección</FormLabel>
                   <FormControl>
                     <Input
                       disabled={loading}
-                      placeholder="Link de redirección (Opcional)"
+                      placeholder="Link de redirección"
                       {...field}
                     />
                   </FormControl>
+                  <FormDescription>
+                    La URL puede ser una página web o una ruta interna de la
+                    tienda. Ejemplo: /products/nuevo o https://google.com
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
           </div>
           <Button disabled={loading} className="ml-auto" type="submit">
-            {action}
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {pendingText}
+              </>
+            ) : (
+              action
+            )}
           </Button>
         </form>
       </Form>

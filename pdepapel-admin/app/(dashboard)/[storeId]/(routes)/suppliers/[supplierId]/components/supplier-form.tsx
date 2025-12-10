@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Supplier } from "@prisma/client";
-import { Trash } from "lucide-react";
+import { Loader2, Trash } from "lucide-react";
 import { useForm } from "react-hook-form";
 import z from "zod";
 
@@ -44,7 +44,7 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData }) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const { title, description, toastMessage, action } = useMemo(
+  const { title, description, toastMessage, action, pendingText } = useMemo(
     () => ({
       title: initialData ? "Editar proveedor" : "Crear proveedor",
       description: initialData
@@ -52,6 +52,7 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData }) => {
         : "Crear un nuevo proveedor",
       toastMessage: initialData ? "Proveedor actualizado" : "Proveedor creado",
       action: initialData ? "Guardar cambios" : "Crear",
+      pendingText: initialData ? "Actualizando..." : "Creando...",
     }),
     [initialData],
   );
@@ -157,7 +158,14 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData }) => {
             />
           </div>
           <Button disabled={loading} className="ml-auto" type="submit">
-            {action}
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {pendingText}
+              </>
+            ) : (
+              action
+            )}
           </Button>
         </form>
       </Form>

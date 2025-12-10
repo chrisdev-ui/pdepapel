@@ -18,6 +18,8 @@ const buttonVariants = cva(
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
+        kawaii:
+          "bg-gradient-to-r from-kawaii-pink-light via-[hsl(280_60%_80%)] to-[hsl(200_80%_75%)] text-primary-foreground font-bold shadow-lg hover:shadow-xl hover:-translate-y-1 hover:scale-105 border-2 border-kawaii-pink-light/20 active:scale-95",
       },
       size: {
         default: "h-10 px-4 py-2",

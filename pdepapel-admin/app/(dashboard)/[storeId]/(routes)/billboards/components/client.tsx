@@ -22,8 +22,8 @@ const BillboardClient: React.FC<BillboardClientProps> = ({ data }) => {
     <>
       <div className="flex items-center justify-between">
         <Heading
-          title={`Publicaciones (${data.length})`}
-          description="Maneja las publicaciones para tu tienda"
+          title={`Diapositivas (${data.length})`}
+          description="Maneja las diapositivas para tu tienda"
         />
         <Button
           onClick={() =>
@@ -31,7 +31,7 @@ const BillboardClient: React.FC<BillboardClientProps> = ({ data }) => {
           }
         >
           <Plus className="mr-2 h-4 w-4" />
-          Crear publicación
+          Crear diapositiva
         </Button>
       </div>
       <Separator />
@@ -41,7 +41,7 @@ const BillboardClient: React.FC<BillboardClientProps> = ({ data }) => {
         columns={columns}
         data={data}
       />
-      <Heading title="API" description="API calls para las publicaciones" />
+      <Heading title="API" description="API calls para las diapositivas" />
       <Separator />
       <ApiList entityName={Models.Billboards} entityIdName="billboardId" />
     </>

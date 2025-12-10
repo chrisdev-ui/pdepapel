@@ -88,6 +88,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
           <div className="flex justify-center gap-x-6">
             <IconButton
               onClick={onAddToWishlist}
+              ariaLabel="Agregar a la lista de deseos"
               icon={
                 <Heart
                   className={cn("h-5 w-5 text-gray-600", {
@@ -99,11 +100,13 @@ const ProductCard: React.FC<ProductCardProps> = ({
             />
             <IconButton
               onClick={onPreview}
+              ariaLabel="Vista previa del producto"
               className="hidden sm:flex"
               icon={<Expand className="h-5 w-5 text-gray-600" />}
             />
             <IconButton
               onClick={onAddToCart}
+              ariaLabel="Agregar al carrito"
               className="disabled:pointer-events-none disabled:opacity-50"
               isDisabled={product.stock === 0}
               icon={

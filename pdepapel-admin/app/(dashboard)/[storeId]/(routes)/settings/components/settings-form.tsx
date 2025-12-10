@@ -3,9 +3,11 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Store } from "@prisma/client";
 import {
+  AlertTriangle,
   AtSign,
   Facebook,
   Instagram,
+  Loader2,
   MapPinned,
   Phone,
   Store as StoreIcon,
@@ -36,6 +38,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useOrigin } from "@/hooks/use-origin";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
+import { env } from "@/lib/env.mjs";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -478,8 +481,77 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
             </div>
           </div>
 
+          {/* Development Tools Section - Only visible in DEV or if folder name is set */}
+          {env.NODE_ENV === "development" && (
+            <>
+              <Separator />
+              <div className="rounded-md border border-yellow-200 bg-yellow-50 p-4">
+                <div className="mb-4 flex items-center gap-2 text-yellow-800">
+                  <AlertTriangle className="h-5 w-5" />
+                  <h3 className="font-semibold">Zona de Desarrollo</h3>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-yellow-800">
+                      Limpiar imágenes de desarrollo
+                    </p>
+                    <p className="text-sm text-yellow-600">
+                      Elimina todas las imágenes en la carpeta{" "}
+                      <code className="rounded bg-yellow-100 px-1 font-bold">
+                        {process.env.NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME ||
+                          "No configurada"}
+                      </code>
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={loading}
+                    className="border-yellow-600 text-yellow-800 hover:bg-yellow-100"
+                    onClick={async () => {
+                      if (
+                        !confirm(
+                          "¿Estás seguro? Esto eliminará PERMANENTEMENTE todas las imágenes de desarrollo.",
+                        )
+                      )
+                        return;
+                      try {
+                        setLoading(true);
+                        await axios.post(
+                          `/api/${params.storeId}/cleanup-images`,
+                        );
+                        toast({
+                          title: "Limpieza completada",
+                          description:
+                            "Se han eliminado las imágenes de desarrollo.",
+                          variant: "success",
+                        });
+                      } catch (error) {
+                        toast({
+                          description: getErrorMessage(error),
+                          variant: "destructive",
+                        });
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                  >
+                    Limpiar Imágenes
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+
           <Button disabled={loading} className="ml-auto" type="submit">
-            Guardar cambios
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Guardando...
+              </>
+            ) : (
+              "Guardar cambios"
+            )}
           </Button>
         </form>
       </Form>

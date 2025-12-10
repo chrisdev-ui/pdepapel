@@ -306,12 +306,13 @@ export const OrderForm: React.FC<OrderFormProps> = ({
       : {},
   );
 
-  const { title, description, toastMessage, action } = useMemo(
+  const { title, description, toastMessage, action, pendingText } = useMemo(
     () => ({
       title: initialData ? "Editar orden" : "Crear orden",
       description: initialData ? "Editar una orden" : "Crear una nueva orden",
       toastMessage: initialData ? "Orden actualizada" : "Orden creada",
       action: initialData ? "Guardar cambios" : "Crear",
+      pendingText: initialData ? "Actualizando..." : "Creando...",
     }),
     [initialData],
   );
@@ -2190,7 +2191,14 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             )}
           </div>
           <Button disabled={loading} className="ml-auto" type="submit">
-            {action}
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {pendingText}
+              </>
+            ) : (
+              action
+            )}
           </Button>
         </form>
       </Form>

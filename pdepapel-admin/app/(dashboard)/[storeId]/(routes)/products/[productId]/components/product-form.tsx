@@ -1,7 +1,13 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { DollarSign, PackageCheckIcon, Percent, Trash } from "lucide-react";
+import {
+  DollarSign,
+  Loader2,
+  PackageCheckIcon,
+  Percent,
+  Trash,
+} from "lucide-react";
 import { useForm } from "react-hook-form";
 import z from "zod";
 
@@ -107,7 +113,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const { title, description, toastMessage, action } = useMemo(
+  const { title, description, toastMessage, action, pendingText } = useMemo(
     () => ({
       title: initialData ? "Editar producto" : "Crear producto",
       description: initialData
@@ -115,6 +121,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
         : "Crear un nuevo producto",
       toastMessage: initialData ? "Producto actualizado" : "Producto creado",
       action: initialData ? "Guardar cambios" : "Crear",
+      pendingText: initialData ? "Actualizando..." : "Creando...",
     }),
     [initialData],
   );
@@ -766,7 +773,14 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             />
           </div>
           <Button disabled={loading} className="ml-auto" type="submit">
-            {action}
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {pendingText}
+              </>
+            ) : (
+              action
+            )}
           </Button>
         </form>
       </Form>

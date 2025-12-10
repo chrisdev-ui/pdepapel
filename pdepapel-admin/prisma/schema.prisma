@@ -62,6 +62,8 @@ model Billboard {
   imageUrl    String
   redirectUrl String?
   title       String?
+  buttonLabel String?
+  
   store       Store    @relation("StoreToBillboard", fields: [storeId], references: [id])
 
   @@index([storeId])

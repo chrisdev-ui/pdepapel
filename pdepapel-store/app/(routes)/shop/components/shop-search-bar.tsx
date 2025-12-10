@@ -1,11 +1,11 @@
 "use client";
 
 import { Search } from "lucide-react";
-import { parseAsString, useQueryState } from "nuqs";
 import { useEffect, useState } from "react";
 
 import { Input } from "@/components/ui/input";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useProductFilters } from "@/hooks/use-product-filters";
 import { cn } from "@/lib/utils";
 
 interface ShopSearchBarProps {
@@ -13,11 +13,8 @@ interface ShopSearchBarProps {
 }
 
 const ShopSearchBar: React.FC<ShopSearchBarProps> = ({ className }) => {
-  const [query, setQuery] = useQueryState(
-    "search",
-    parseAsString.withDefault("").withOptions({ shallow: true }),
-  );
-  const [searchTerm, setSearchTerm] = useState<string>(query);
+  const { filters, setFilter } = useProductFilters();
+  const [searchTerm, setSearchTerm] = useState<string>(filters.search || "");
 
   const debouncedSearch = useDebounce(searchTerm, 300);
 
@@ -26,8 +23,11 @@ const ShopSearchBar: React.FC<ShopSearchBarProps> = ({ className }) => {
   };
 
   useEffect(() => {
-    setQuery(debouncedSearch || null);
-  }, [debouncedSearch, setQuery]);
+    // Only update if the value is different to avoid loops
+    if (debouncedSearch !== filters.search) {
+      setFilter("search", debouncedSearch || null);
+    }
+  }, [debouncedSearch, filters.search, setFilter]);
 
   return (
     <div

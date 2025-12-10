@@ -53,6 +53,33 @@
     --ring: 222.2 84% 4.9%;
 
     --radius: 0.5rem;
+
+    /* Kawaii custom tokens */
+    --kawaii-pink: 330 85% 70%;
+    --kawaii-pink-light: 330 85% 85%;
+    --kawaii-blue: 200 80% 75%;
+    --kawaii-blue-light: 200 80% 90%;
+    --kawaii-yellow: 45 100% 75%;
+    --kawaii-yellow-light: 45 100% 90%;
+    --kawaii-mint: 160 60% 75%;
+    --kawaii-mint-light: 160 60% 90%;
+    --kawaii-lavender: 280 60% 80%;
+    --kawaii-lavender-light: 280 60% 92%;
+    --kawaii-peach: 20 100% 85%;
+
+    --gradient-kawaii: linear-gradient(
+      135deg,
+      hsl(330 85% 85%) 0%,
+      hsl(200 80% 90%) 50%,
+      hsl(280 60% 92%) 100%
+    );
+    --gradient-candy: linear-gradient(
+      135deg,
+      hsl(330 85% 75%) 0%,
+      hsl(280 60% 80%) 100%
+    );
+    --shadow-kawaii: 0 8px 32px hsl(330 85% 70% / 0.25);
+    --shadow-soft: 0 4px 20px hsl(280 30% 70% / 0.15);
   }
 
   .dark {
@@ -115,6 +142,61 @@
 }
 
 @layer utilities {
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(
+      135deg,
+      hsl(var(--kawaii-pink)) 0%,
+      hsl(var(--kawaii-lavender)) 50%,
+      hsl(var(--kawaii-blue)) 100%
+    );
+  }
+
+  .glass {
+    @apply backdrop-blur-xl;
+    background: hsl(0 0% 100% / 0.7);
+    border: 2px solid hsl(330 85% 85% / 0.5);
+    box-shadow: 0 8px 32px hsl(330 85% 70% / 0.15);
+  }
+
+  .dark .glass {
+    background: hsl(280 25% 16% / 0.8);
+    border: 2px solid hsl(330 85% 70% / 0.2);
+  }
+
+  .glow {
+    box-shadow: var(--shadow-kawaii);
+  }
+
+  .kawaii-shadow {
+    box-shadow:
+      0 4px 0 hsl(var(--kawaii-pink-light)),
+      0 8px 20px hsl(330 85% 70% / 0.2);
+  }
+
+  .kawaii-border {
+    border: 3px solid hsl(var(--kawaii-pink-light));
+    border-radius: var(--radius);
+  }
+
+  .sparkle {
+    background-image: radial-gradient(
+        circle at 10% 20%,
+        hsl(45 100% 75% / 0.6) 0%,
+        transparent 8%
+      ),
+      radial-gradient(
+        circle at 90% 30%,
+        hsl(330 85% 85% / 0.6) 0%,
+        transparent 6%
+      ),
+      radial-gradient(
+        circle at 50% 80%,
+        hsl(200 80% 85% / 0.6) 0%,
+        transparent 7%
+      );
+  }
+
   @keyframes shimmer {
     0% {
       transform: translateX(-100%);

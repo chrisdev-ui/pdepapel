@@ -160,7 +160,7 @@ export enum Models {
 export const ModelLabels: Record<Models, string> = {
   [Models.Banners]: "Banners",
   [Models.MainBanner]: "Banner principal",
-  [Models.Billboards]: "Billboards",
+  [Models.Billboards]: "Diapositivas",
   [Models.Categories]: "Categorías",
   [Models.Colors]: "Colores",
   [Models.Designs]: "Diseños",

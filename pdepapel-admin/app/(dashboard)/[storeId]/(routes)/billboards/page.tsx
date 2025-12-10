@@ -10,8 +10,8 @@ export const revalidate = 0;
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Carteleras | PdePapel Admin",
-  description: "Gestión de carteleras",
+  title: "Diapositivas | PdePapel Admin",
+  description: "Gestión de diapositivas",
 };
 
 export default async function BillboardsPage({

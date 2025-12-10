@@ -28,7 +28,7 @@ export const columns: ColumnDef<BillboardColumn>[] = [
   {
     accessorKey: "label",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Etiqueta" />
+      <DataTableColumnHeader column={column} title="Descripción" />
     ),
   },
   {

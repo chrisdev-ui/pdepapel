@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Color } from "@prisma/client";
-import { Trash } from "lucide-react";
+import { Loader2, Trash } from "lucide-react";
 import { useForm } from "react-hook-form";
 import z from "zod";
 
@@ -47,12 +47,13 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData }) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const { title, description, toastMessage, action } = useMemo(
+  const { title, description, toastMessage, action, pendingText } = useMemo(
     () => ({
       title: initialData ? "Editar color" : "Crear color",
       description: initialData ? "Editar un color" : "Crear un nuevo color",
       toastMessage: initialData ? "Color actualizado" : "Color creado",
       action: initialData ? "Guardar cambios" : "Crear",
+      pendingText: initialData ? "Actualizando..." : "Creando...",
     }),
     [initialData],
   );
@@ -182,7 +183,14 @@ export const ColorForm: React.FC<ColorFormProps> = ({ initialData }) => {
             />
           </div>
           <Button disabled={loading} className="ml-auto" type="submit">
-            {action}
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {pendingText}
+              </>
+            ) : (
+              action
+            )}
           </Button>
         </form>
       </Form>

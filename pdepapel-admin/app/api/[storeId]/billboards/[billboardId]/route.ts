@@ -26,6 +26,7 @@ export async function GET(
         imageUrl: true,
         title: true,
         redirectUrl: true,
+        buttonLabel: true,
       },
     });
 
@@ -51,7 +52,12 @@ export async function PATCH(
     await verifyStoreOwner(userId, params.storeId);
 
     const body = await req.json();
-    const { label, imageUrl, title, redirectUrl } = body;
+    const { label, imageUrl, title, redirectUrl, buttonLabel } = body;
+
+    if (!title)
+      throw ErrorFactory.InvalidRequest(
+        "Se requiere un título para la publicación",
+      );
 
     if (!label)
       throw ErrorFactory.InvalidRequest(
@@ -93,8 +99,9 @@ export async function PATCH(
         data: {
           label,
           imageUrl,
-          title: title ?? "",
-          redirectUrl: redirectUrl ?? "",
+          title,
+          redirectUrl,
+          buttonLabel: buttonLabel ?? "",
         },
         select: {
           id: true,

@@ -32,7 +32,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const onCopy = (id: string) => {
     navigator.clipboard.writeText(id);
     toast({
-      description: "ID de la publicación copiada al portapapeles",
+      description: "ID de la diapositiva copiada al portapapeles",
       variant: "success",
     });
   };
@@ -45,7 +45,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
       );
       router.refresh();
       toast({
-        description: "Publicación eliminada",
+        description: "Diapositiva eliminada",
         variant: "success",
       });
     } catch (error) {

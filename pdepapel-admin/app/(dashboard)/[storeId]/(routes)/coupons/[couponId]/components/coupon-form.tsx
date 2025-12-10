@@ -23,14 +23,14 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
-import { discountOptions, Models } from "@/constants";
+import { Models, discountOptions } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import { datePresets } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Coupon, DiscountType } from "@prisma/client";
 import axios from "axios";
-import { DollarSign, Percent, Trash } from "lucide-react";
+import { DollarSign, Loader2, Percent, Trash } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -77,12 +77,13 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData }) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const { title, description, toastMessage, action } = useMemo(
+  const { title, description, toastMessage, action, pendingText } = useMemo(
     () => ({
       title: initialData ? "Editar cupón" : "Crear cupón",
       description: initialData ? "Editar un cupón" : "Crear un nuevo cupón",
       toastMessage: initialData ? "Cupón actualizado" : "Cupón creado",
       action: initialData ? "Guardar cambios" : "Crear",
+      pendingText: initialData ? "Actualizando..." : "Creando...",
     }),
     [initialData],
   );
@@ -352,7 +353,14 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData }) => {
             />
           </div>
           <Button disabled={loading} className="ml-auto" type="submit">
-            {action}
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {pendingText}
+              </>
+            ) : (
+              action
+            )}
           </Button>
         </form>
       </Form>

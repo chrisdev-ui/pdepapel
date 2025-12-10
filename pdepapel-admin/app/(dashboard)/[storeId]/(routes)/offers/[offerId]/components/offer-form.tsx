@@ -37,7 +37,14 @@ import {
   OfferProduct,
 } from "@prisma/client";
 import axios from "axios";
-import { CheckSquare, DollarSign, Percent, Square, Trash } from "lucide-react";
+import {
+  CheckSquare,
+  DollarSign,
+  Loader2,
+  Percent,
+  Square,
+  Trash,
+} from "lucide-react";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -107,6 +114,7 @@ export const OfferForm: React.FC<OfferFormProps> = ({
     : "Agregar una nueva oferta";
   const toastMessage = initialData ? "Oferta actualizada" : "Oferta creada";
   const action = initialData ? "Guardar cambios" : "Crear";
+  const pendingText = initialData ? "Actualizando..." : "Creando...";
 
   const defaultValues = initialData
     ? {
@@ -607,7 +615,14 @@ export const OfferForm: React.FC<OfferFormProps> = ({
           </div>
 
           <Button disabled={loading} className="ml-auto" type="submit">
-            {action}
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {pendingText}
+              </>
+            ) : (
+              action
+            )}
           </Button>
         </form>
       </Form>

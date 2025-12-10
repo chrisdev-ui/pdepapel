@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Size } from "@prisma/client";
-import { Trash } from "lucide-react";
+import { Loader2, Trash } from "lucide-react";
 import { useForm } from "react-hook-form";
 import z from "zod";
 
@@ -11,14 +11,13 @@ import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
-  FormDescription,
 } from "@/components/ui/form";
 import { Heading } from "@/components/ui/heading";
-import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -26,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import { Models } from "@/constants";
 import {
   DIMENSIONS,
@@ -38,7 +38,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
-import { useMemo, useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const formSchema = z.object({
   dimension: z.string().min(1, "Debes seleccionar una dimensión"),
@@ -61,7 +61,7 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const { title, description, toastMessage, action } = useMemo(
+  const { title, description, toastMessage, action, pendingText } = useMemo(
     () => ({
       title: initialData ? "Editar tamaño" : "Crear tamaño",
       description: initialData
@@ -69,6 +69,7 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
         : "Crear un nuevo tamaño combinando dimensión y peso",
       toastMessage: initialData ? "Tamaño actualizado" : "Tamaño creado",
       action: initialData ? "Guardar cambios" : "Crear",
+      pendingText: initialData ? "Actualizando..." : "Creando...",
     }),
     [initialData],
   );
@@ -318,7 +319,14 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
           />
 
           <Button disabled={loading} className="ml-auto" type="submit">
-            {action}
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {pendingText}
+              </>
+            ) : (
+              action
+            )}
           </Button>
         </form>
       </Form>

@@ -120,6 +120,19 @@ const config: Config = {
           DEFAULT: "hsl(var(--card) / <alpha-value>)",
           foreground: "hsl(var(--card-foreground) / <alpha-value>)",
         },
+        kawaii: {
+          pink: "hsl(var(--kawaii-pink))",
+          "pink-light": "hsl(var(--kawaii-pink-light))",
+          blue: "hsl(var(--kawaii-blue))",
+          "blue-light": "hsl(var(--kawaii-blue-light))",
+          yellow: "hsl(var(--kawaii-yellow))",
+          "yellow-light": "hsl(var(--kawaii-yellow-light))",
+          mint: "hsl(var(--kawaii-mint))",
+          "mint-light": "hsl(var(--kawaii-mint-light))",
+          lavender: "hsl(var(--kawaii-lavender))",
+          "lavender-light": "hsl(var(--kawaii-lavender-light))",
+          peach: "hsl(var(--kawaii-peach))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -140,6 +153,10 @@ const config: Config = {
           "25%": { opacity: "1" },
           "50%": { opacity: "0" },
           "100%": { opacity: "0" },
+        },
+        "bounce-soft": {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-8px)" },
         },
         "move-marker": {
           "10%": { transform: "translate(5%, 100%) rotate(2.5deg)" },
@@ -223,6 +240,29 @@ const config: Config = {
               "0 0 40px hsl(var(--froly) / 0.8), 0 0 60px hsl(var(--froly) / 0.4)",
           },
         },
+        wiggle: {
+          "0%, 100%": { transform: "rotate(-3deg)" },
+          "50%": { transform: "rotate(3deg)" },
+        },
+        float: {
+          "0%, 100%": { transform: "translateY(0) rotate(0deg)" },
+          "33%": { transform: "translateY(-10px) rotate(2deg)" },
+          "66%": { transform: "translateY(-5px) rotate(-2deg)" },
+        },
+        sparkle: {
+          "0%, 100%": { opacity: "1", transform: "scale(1)" },
+          "50%": { opacity: "0.5", transform: "scale(0.8)" },
+        },
+        "heart-beat": {
+          "0%, 100%": { transform: "scale(1)" },
+          "25%": { transform: "scale(1.1)" },
+          "50%": { transform: "scale(1)" },
+          "75%": { transform: "scale(1.1)" },
+        },
+        "slide-up-fade": {
+          "0%": { opacity: "0", transform: "translateY(20px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -232,6 +272,12 @@ const config: Config = {
         "dot-pulse": "dot-pulse 1s infinite",
         shimmer: "shimmer 2s linear infinite",
         "pulse-glow": "pulse-glow 2s ease-in-out infinite",
+        "bounce-soft": "bounce-soft 2s ease-in-out infinite",
+        wiggle: "wiggle 1s ease-in-out infinite",
+        float: "float 4s ease-in-out infinite",
+        sparkle: "sparkle 1.5s ease-in-out infinite",
+        "heart-beat": "heart-beat 1.5s ease-in-out infinite",
+        "slide-up-fade": "slide-up-fade 0.5s ease-out",
       },
     },
   },
