@@ -70,6 +70,8 @@ const HeroSlider: React.FC<HeroSliderProps> = ({
       className="relative mx-auto w-full max-w-full overflow-hidden px-4 py-6 sm:px-6 lg:px-8"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      onTouchStart={() => setIsHovered(true)}
+      onTouchEnd={() => setIsHovered(false)}
     >
       {/* Decorative floating elements - hidden on mobile */}
       <motion.div
@@ -116,11 +118,23 @@ const HeroSlider: React.FC<HeroSliderProps> = ({
         <AnimatePresence mode="wait">
           <motion.div
             key={currentIndex}
-            className="absolute inset-0"
+            className="absolute inset-0 touch-pan-y" // touch-pan-y allows vertical scrolling while dragging horizontally
             initial={{ opacity: 0, scale: 1.05 }}
-            animate={{ opacity: 1, scale: 1 }}
+            animate={{ opacity: 1, scale: 1, x: 0 }}
             exit={{ opacity: 0, scale: 0.98 }}
             transition={{ duration: 0.5, ease: "easeOut" }}
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={1}
+            onDragEnd={(e, { offset, velocity }) => {
+              const swipe = Math.abs(offset.x) * velocity.x;
+
+              if (swipe < -100 || offset.x < -100) {
+                goToNext();
+              } else if (swipe > 100 || offset.x > 100) {
+                goToPrevious();
+              }
+            }}
           >
             <SlideImage
               src={currentSlide.imageUrl}

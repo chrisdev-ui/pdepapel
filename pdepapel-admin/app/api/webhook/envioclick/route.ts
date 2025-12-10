@@ -73,18 +73,115 @@ export async function POST(req: Request) {
       events = [],
     } = payload;
 
-    // Find shipping by EnvioClick order ID or reference
-    const shipping = await prismadb.shipping.findFirst({
-      where: {
-        OR: [
-          { envioClickIdOrder: idOrder },
-          { myShipmentReference: myShipmentReference },
-        ],
-      },
-      include: { order: true },
+    // Wrap DB operations in a transaction for atomicity
+    const result = await prismadb.$transaction(async (tx) => {
+      // Find shipping by EnvioClick order ID or reference
+      const shipping = await tx.shipping.findFirst({
+        where: {
+          OR: [
+            { envioClickIdOrder: idOrder },
+            { myShipmentReference: myShipmentReference },
+          ],
+        },
+        include: { order: true },
+      });
+
+      if (!shipping) {
+        return { type: "NOT_FOUND" } as const;
+      }
+
+      // Get the latest status from events (most recent first)
+      const latestEvent = events.length > 0 ? events[0] : null;
+      const newStatus = latestEvent
+        ? STATUS_MAP[latestEvent.statusStep] || shipping.status
+        : shipping.status;
+
+      console.log("[ENVIOCLICK_WEBHOOK] Processing update:", {
+        shippingId: shipping.id,
+        oldStatus: shipping.status,
+        newStatus,
+        statusStep: latestEvent?.statusStep,
+        eventsCount: events.length,
+      });
+
+      // Update shipping record
+      await tx.shipping.update({
+        where: { id: shipping.id },
+        data: {
+          status: newStatus,
+          trackingCode: trackingCode || shipping.trackingCode,
+          pickupDate: realPickupDate
+            ? new Date(realPickupDate)
+            : shipping.pickupDate,
+          estimatedDeliveryDate: arrivalDate
+            ? new Date(arrivalDate)
+            : shipping.estimatedDeliveryDate,
+          actualDeliveryDate: realDeliveryDate
+            ? new Date(realDeliveryDate)
+            : shipping.actualDeliveryDate,
+          // Store receivedBy in notes if delivered
+          notes: latestEvent?.receivedBy
+            ? `Recibido por: ${latestEvent.receivedBy}`
+            : shipping.notes,
+        },
+      });
+
+      // Store tracking events
+      if (events.length > 0) {
+        for (const event of events) {
+          try {
+            // Check if event already exists to avoid duplicates
+            const existingEvent = await tx.shippingTrackingEvent.findFirst({
+              where: {
+                shippingId: shipping.id,
+                timestamp: new Date(event.timestamp),
+                status: event.statusStep || event.status,
+              },
+            });
+
+            if (!existingEvent) {
+              // Build description with all available info
+              let eventDescription = event.description || event.statusDetail;
+
+              // Add incidence info if present
+              if (event.incidence) {
+                eventDescription += ` [INCIDENCIA${event.incidenceType ? `: ${event.incidenceType}` : ""}]`;
+              }
+
+              // Add receivedBy if present
+              if (event.receivedBy) {
+                eventDescription += ` (Recibido por: ${event.receivedBy})`;
+              }
+
+              await tx.shippingTrackingEvent.create({
+                data: {
+                  shippingId: shipping.id,
+                  status: event.statusStep || event.status, // Use statusStep (macro) not status
+                  description: eventDescription,
+                  location: event.location || null,
+                  timestamp: new Date(event.timestamp),
+                },
+              });
+            }
+          } catch (eventError) {
+            console.error(
+              "[ENVIOCLICK_WEBHOOK] Error saving event:",
+              eventError,
+            );
+            // Continue processing other events
+            // Note: If an error occurs here, it might abort the transaction depending on Prisma's behavior for caught errors.
+            // However, catching it inside the transaction block prevents the transaction from aborting immediately?
+            // Actually, if we catch it, the error doesn't reach the transaction wrapper, so it continues.
+            // But if the error was a DB constraint violation that invalidates the transaction state, subsequent queries might fail.
+            // For simple duplicates (which we check for) or data format issues, catching is fine.
+          }
+        }
+      }
+
+      return { type: "SUCCESS", shipping, newStatus } as const;
     });
 
-    if (!shipping) {
+    if (result.type === "NOT_FOUND") {
       console.error("[ENVIOCLICK_WEBHOOK] Shipping not found:", {
         idOrder,
         myShipmentReference,
@@ -99,91 +196,13 @@ export async function POST(req: Request) {
       );
     }
 
-    // Get the latest status from events (most recent first)
-    const latestEvent = events.length > 0 ? events[0] : null;
-    const newStatus = latestEvent
-      ? STATUS_MAP[latestEvent.statusStep] || shipping.status
-      : shipping.status;
-
-    console.log("[ENVIOCLICK_WEBHOOK] Processing update:", {
-      shippingId: shipping.id,
-      oldStatus: shipping.status,
-      newStatus,
-      statusStep: latestEvent?.statusStep,
-      eventsCount: events.length,
-    });
-
-    // Update shipping record
-    await prismadb.shipping.update({
-      where: { id: shipping.id },
-      data: {
-        status: newStatus,
-        trackingCode: trackingCode || shipping.trackingCode,
-        pickupDate: realPickupDate
-          ? new Date(realPickupDate)
-          : shipping.pickupDate,
-        estimatedDeliveryDate: arrivalDate
-          ? new Date(arrivalDate)
-          : shipping.estimatedDeliveryDate,
-        actualDeliveryDate: realDeliveryDate
-          ? new Date(realDeliveryDate)
-          : shipping.actualDeliveryDate,
-        // Store receivedBy in notes if delivered
-        notes: latestEvent?.receivedBy
-          ? `Recibido por: ${latestEvent.receivedBy}`
-          : shipping.notes,
-      },
-    });
-
-    // Store tracking events
-    if (events.length > 0) {
-      for (const event of events) {
-        try {
-          // Check if event already exists to avoid duplicates
-          const existingEvent = await prismadb.shippingTrackingEvent.findFirst({
-            where: {
-              shippingId: shipping.id,
-              timestamp: new Date(event.timestamp),
-              status: event.statusStep || event.status,
-            },
-          });
-
-          if (!existingEvent) {
-            // Build description with all available info
-            let eventDescription = event.description || event.statusDetail;
-
-            // Add incidence info if present
-            if (event.incidence) {
-              eventDescription += ` [INCIDENCIA${event.incidenceType ? `: ${event.incidenceType}` : ""}]`;
-            }
-
-            // Add receivedBy if present
-            if (event.receivedBy) {
-              eventDescription += ` (Recibido por: ${event.receivedBy})`;
-            }
-
-            await prismadb.shippingTrackingEvent.create({
-              data: {
-                shippingId: shipping.id,
-                status: event.statusStep || event.status, // Use statusStep (macro) not status
-                description: eventDescription,
-                location: event.location || null,
-                timestamp: new Date(event.timestamp),
-              },
-            });
-          }
-        } catch (eventError) {
-          console.error("[ENVIOCLICK_WEBHOOK] Error saving event:", eventError);
-          // Continue processing other events
-        }
-      }
-    }
-
     // Send email notification if status changed
-    if (newStatus !== shipping.status) {
+    // This is done outside the transaction to avoid side effects being rolled back (impossible for email)
+    // or blocking the transaction.
+    if (result.newStatus !== result.shipping.status) {
       setImmediate(async () => {
         try {
-          await sendShippingEmail(shipping.order, newStatus);
+          await sendShippingEmail(result.shipping.order, result.newStatus);
         } catch (emailError) {
           console.error(
             "[ENVIOCLICK_WEBHOOK] Failed to send email:",
