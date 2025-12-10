@@ -38,7 +38,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { useOrigin } from "@/hooks/use-origin";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import { env } from "@/lib/env.mjs";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -482,7 +481,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
           </div>
 
           {/* Development Tools Section - Only visible in DEV or if folder name is set */}
-          {env.NODE_ENV === "development" && (
+          {process.env.NODE_ENV === "development" && (
             <>
               <Separator />
               <div className="rounded-md border border-yellow-200 bg-yellow-50 p-4">
