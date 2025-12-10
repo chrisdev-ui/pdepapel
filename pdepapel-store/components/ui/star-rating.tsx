@@ -52,6 +52,7 @@ export const StarRating: React.FC<StarRatingProps> = ({
               setHover(0);
             }}
             disabled={isDisabled}
+            aria-label={`${index} estrella${index > 1 ? "s" : ""}`}
           >
             <Star
               fill={

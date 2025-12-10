@@ -20,14 +20,14 @@ const MainBanner: React.FC<MainBannerProps> = ({ data }) => {
           sizes="100vw"
         />
         {data?.title && (
-          <h4 className="relative font-serif text-4xl">{data.title}</h4>
+          <h2 className="relative font-serif text-4xl">{data.title}</h2>
         )}
         {(data.label1 || data.label2 || data.highlight) && (
-          <h2 className="relative py-2.5 text-3xl">
+          <div className="relative py-2.5 text-3xl font-bold">
             {data?.label1 ?? ""}{" "}
             <span className="text-[#ef3636]">{data?.highlight ?? ""}</span>{" "}
             {data?.label2 ?? ""}
-          </h2>
+          </div>
         )}
         <Link href={data?.callToAction ?? "#"}>
           <Button className="relative rounded border-none bg-pink-froly px-8 py-4 text-sm font-semibold text-blue-yankees outline-none transition duration-200 hover:bg-pink-shell">

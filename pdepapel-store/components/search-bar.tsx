@@ -127,6 +127,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         />
 
         <button
+          aria-label="Buscar productos"
           className={cn(
             "absolute left-0 top-0 flex h-full w-[3.75rem] cursor-pointer items-center justify-center rounded-[6px] bg-white",
             {

@@ -1,19 +1,12 @@
 import { Metadata } from "next";
+import dynamic from "next/dynamic";
+import { Suspense } from "react";
 import { Organization, WebSite } from "schema-dts";
 
-import { getBanners } from "@/actions/get-banners";
 import { getBillboards } from "@/actions/get-billboards";
-import { getMainBanner } from "@/actions/get-main-banner";
-import { getProducts } from "@/actions/get-products";
-import { BASE_URL, LIMIT_PER_ITEMS } from "@/constants";
+import { BASE_URL } from "@/constants";
 
-import BannersCta from "@/components/banners-cta";
-import FeaturedProducts from "@/components/featured-products";
 import Features from "@/components/features";
-import HeroSlider from "@/components/hero-slider";
-import MainBanner from "@/components/main-banner";
-import NewArrivals from "@/components/new-arrivals";
-import Newsletter from "@/components/newsletter";
 
 export const revalidate = 60;
 
@@ -117,29 +110,40 @@ export const metadata: Metadata = {
   },
 };
 
+import HeroSlider from "@/components/hero-slider";
+const Newsletter = dynamic(() => import("@/components/newsletter"));
+
+import {
+  BannersCtaSkeleton,
+  FeaturedProductsSkeleton,
+  MainBannerSkeleton,
+  NewArrivalsSkeleton,
+} from "@/components/home-skeletons";
+
+import { BannersCtaSection } from "./components/banners-cta-section";
+import { FeaturedProductsSection } from "./components/featured-products-section";
+import { MainBannerSection } from "./components/main-banner-section";
+import { NewArrivalsSection } from "./components/new-arrivals-section";
+
 export default async function HomePage() {
-  const [
-    billboards,
-    { products: featureProducts },
-    { products: newProducts },
-    mainBanner,
-    banners,
-  ] = await Promise.all([
-    getBillboards(),
-    getProducts({ isFeatured: true, limit: LIMIT_PER_ITEMS }),
-    getProducts({ onlyNew: true, limit: LIMIT_PER_ITEMS }),
-    getMainBanner(),
-    getBanners(),
-  ]);
+  const billboards = await getBillboards();
 
   return (
     <>
       <HeroSlider data={billboards} />
       <Features />
-      <FeaturedProducts featureProducts={featureProducts} />
-      <MainBanner data={mainBanner} />
-      <NewArrivals newProducts={newProducts} />
-      <BannersCta banners={banners} />
+      <Suspense fallback={<FeaturedProductsSkeleton />}>
+        <FeaturedProductsSection />
+      </Suspense>
+      <Suspense fallback={<MainBannerSkeleton />}>
+        <MainBannerSection />
+      </Suspense>
+      <Suspense fallback={<NewArrivalsSkeleton />}>
+        <NewArrivalsSection />
+      </Suspense>
+      <Suspense fallback={<BannersCtaSkeleton />}>
+        <BannersCtaSection />
+      </Suspense>
       <Newsletter />
       <script
         type="application/ld+json"

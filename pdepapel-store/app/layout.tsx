@@ -118,7 +118,7 @@ export default function RootLayout({
           <ReactQueryProvider>
             <ModalProvider />
             <Navbar season={currentSeason} />
-            {children}
+            <main>{children}</main>
             <Footer season={currentSeason} />
             {currentSeason === Season.Christmas && <Christmas />}
             <Toaster />

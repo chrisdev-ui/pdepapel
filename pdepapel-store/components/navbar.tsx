@@ -73,7 +73,7 @@ const Navbar: React.FC<NavbarProps> = ({ season = Season.Default }) => {
               src={seasonConfig.navbarText}
               alt="Logo Papelería P de Papel con nombre al lado"
               fill
-              sizes="(max-width: 640px) 100vw, 640px"
+              sizes="(max-width: 768px) 100vw, 200px"
               priority
               quality="100"
             />
@@ -91,7 +91,7 @@ const Navbar: React.FC<NavbarProps> = ({ season = Season.Default }) => {
               src={seasonConfig.navbarNoText}
               alt="Logo Papelería P de Papel"
               fill
-              sizes="(max-width: 640px) 100vw, 640px"
+              sizes="100px" // Always small on mobile
               priority
               quality="100"
             />
@@ -132,6 +132,7 @@ const Navbar: React.FC<NavbarProps> = ({ season = Season.Default }) => {
               <Link
                 href={`/sign-in?redirectUrl=${pathname}`}
                 className="hover:opacity-75"
+                aria-label="Iniciar sesión"
               >
                 <Icons.user className="h-6 w-6" />
               </Link>

@@ -3,13 +3,13 @@ import { cn } from "@/lib/utils";
 interface ContainerProps {
   children: React.ReactNode;
   className?: string;
-  component?: "main" | "section";
+  component?: "main" | "section" | "div";
 }
 
 export const Container: React.FC<ContainerProps> = ({
   children,
   className,
-  component: Component = "main",
+  component: Component = "div",
 }) => {
   return (
     <Component
