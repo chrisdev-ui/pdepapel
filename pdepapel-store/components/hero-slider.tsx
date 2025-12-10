@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { DELAY } from "@/constants";
 import { cn } from "@/lib/utils";
 import { Billboard } from "@/types";
 import { ChevronLeft, ChevronRight, Star } from "lucide-react";
@@ -18,7 +19,7 @@ interface HeroSliderProps {
 
 const HeroSlider: React.FC<HeroSliderProps> = ({
   data,
-  autoPlayDelay = 6000,
+  autoPlayDelay = DELAY,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);

@@ -107,7 +107,7 @@ export const SlideContent: React.FC<SlideContentProps> = ({
         {title && (
           <motion.h2
             variants={itemVariants}
-            className="text-gradient mb-2 pt-1.5 text-xl font-bold leading-tight sm:mb-4 sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl"
+            className="text-gradient mb-2 pb-4 pt-1.5 text-xl font-bold leading-tight sm:mb-4 sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl"
           >
             {title}
           </motion.h2>

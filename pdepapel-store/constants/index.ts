@@ -1,6 +1,6 @@
 import { ShippingCarrier } from "@/types";
 
-export const DELAY = 5000;
+export const DELAY = 8000;
 export const TOAST_DURATION = 2000;
 export const KAWAII_FACE_EXCITED = `(,,>﹏<,,)`;
 export const KAWAII_FACE_SAD = `(｡-_-｡)`;
