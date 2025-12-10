@@ -5,6 +5,8 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 
+import Image from "next/image";
+
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import {
@@ -58,8 +60,15 @@ const Newsletter: React.FC<{}> = () => {
       component="section"
       className="mx-0 my-6 max-w-full p-0 sm:p-0 lg:p-0"
     >
-      <div className="flex w-full flex-wrap items-center justify-between gap-5 bg-pink-shell bg-[url('/images/pdp-signup.png')] bg-[20%_30%] bg-no-repeat px-2 py-10 sm:px-20 xl:gap-0">
-        <div>
+      <div className="relative flex w-full flex-wrap items-center justify-between gap-5 overflow-hidden bg-pink-shell px-2 py-10 sm:px-20 xl:gap-0">
+        <Image
+          src="/images/pdp-signup.png"
+          alt="Fondo de la sección de suscripción"
+          fill
+          className="-z-10 object-cover opacity-50"
+          sizes="100vw"
+        />
+        <div className="z-10">
           <h4 className="font-serif text-3xl font-bold text-white">
             Suscríbete para recibir nuestras novedades
           </h4>
@@ -68,7 +77,7 @@ const Newsletter: React.FC<{}> = () => {
             ofertas especiales.
           </p>
         </div>
-        <div>
+        <div className="z-10">
           <Form {...form}>
             <form
               onSubmit={form.handleSubmit(onSubmit)}

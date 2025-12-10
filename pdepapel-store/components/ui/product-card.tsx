@@ -83,6 +83,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
           sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
           priority={priority}
           className="aspect-square rounded-md object-cover"
+          format="auto"
         />
         <div className="absolute bottom-5 w-full px-6 opacity-0 transition group-hover:opacity-100">
           <div className="flex justify-center gap-x-6">

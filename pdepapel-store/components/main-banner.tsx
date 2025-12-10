@@ -17,7 +17,7 @@ const MainBanner: React.FC<MainBannerProps> = ({ data }) => {
           alt={data?.title ?? "Banner principal"}
           fill
           className="-z-10 object-cover object-center"
-          sizes="100vw"
+          sizes="(max-width: 1536px) 100vw, 1536px"
         />
         {data?.title && (
           <h2 className="relative font-serif text-4xl">{data.title}</h2>
