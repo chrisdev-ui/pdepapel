@@ -1,7 +1,7 @@
 "use client";
 
 import { Search } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 
 import { Input } from "@/components/ui/input";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -20,9 +20,12 @@ const ShopSearchBar: React.FC<ShopSearchBarProps> = ({ className }) => {
 
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(event.target.value);
-  };
+  const handleSearchChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      setSearchTerm(event.target.value);
+    },
+    [],
+  );
 
   // Sync local state with URL filters when not focused
   useEffect(() => {
@@ -67,4 +70,4 @@ const ShopSearchBar: React.FC<ShopSearchBarProps> = ({ className }) => {
   );
 };
 
-export default ShopSearchBar;
+export default memo(ShopSearchBar);
