@@ -133,7 +133,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
         {product.discountedPrice &&
         product.discountedPrice < Number(product.price) ? (
           <>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
               <Currency value={product.discountedPrice} className="text-2xl" />
               <Currency
                 value={product.price}

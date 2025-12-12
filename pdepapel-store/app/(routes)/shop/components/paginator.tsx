@@ -46,6 +46,11 @@ const Paginator: React.FC<PaginatorProps> = ({ totalPages }) => {
     setIsMounted(true);
   }, []);
 
+  useEffect(() => {
+    // Scroll to top when page changes
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [currentPage]);
+
   if (!isMounted) return null;
 
   const pagesToShow = getPagesToShow();
