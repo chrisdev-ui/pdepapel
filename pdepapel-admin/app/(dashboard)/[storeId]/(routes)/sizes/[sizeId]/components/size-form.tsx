@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Size } from "@prisma/client";
-import { Loader2, Trash } from "lucide-react";
+import { ArrowLeft, Loader2, Trash } from "lucide-react";
 import { useForm } from "react-hook-form";
 import z from "zod";
 
@@ -180,7 +180,12 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
         loading={loading}
       />
       <div className="flex items-center justify-between">
-        <Heading title={title} description={description} />
+        <div className="flex items-center gap-4">
+          <Button variant="outline" size="icon" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <Heading title={title} description={description} />
+        </div>
         {initialData && (
           <Button
             disabled={loading}
@@ -205,7 +210,7 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
               name="dimension"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Dimensión</FormLabel>
+                  <FormLabel isRequired>Dimensión</FormLabel>
                   <Select
                     disabled={loading}
                     onValueChange={field.onChange}
@@ -243,7 +248,7 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
               name="weight"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Peso</FormLabel>
+                  <FormLabel isRequired>Peso</FormLabel>
                   <Select
                     disabled={loading}
                     onValueChange={field.onChange}

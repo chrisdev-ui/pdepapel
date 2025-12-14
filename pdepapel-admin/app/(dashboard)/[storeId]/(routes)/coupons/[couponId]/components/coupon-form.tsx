@@ -30,7 +30,7 @@ import { datePresets } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Coupon, DiscountType } from "@prisma/client";
 import axios from "axios";
-import { DollarSign, Loader2, Percent, Trash } from "lucide-react";
+import { ArrowLeft, DollarSign, Loader2, Percent, Trash } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -178,7 +178,12 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData }) => {
         loading={loading}
       />
       <div className="flex items-center justify-between">
-        <Heading title={title} description={description} />
+        <div className="flex items-center gap-4">
+          <Button variant="outline" size="icon" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <Heading title={title} description={description} />
+        </div>
         {initialData && (
           <Button
             disabled={loading}
@@ -208,6 +213,7 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData }) => {
                       fieldName="code"
                       placeholder="VERANO2025 o generar automáticamente"
                       disabled={loading}
+                      isRequired
                     />
                   </FormControl>
                   <FormMessage />
@@ -219,7 +225,7 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData }) => {
               name="type"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Tipo de descuento</FormLabel>
+                  <FormLabel isRequired>Tipo de descuento</FormLabel>
                   <Select
                     disabled={loading}
                     onValueChange={field.onChange}
@@ -248,7 +254,7 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData }) => {
               name="amount"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Monto del descuento</FormLabel>
+                  <FormLabel isRequired>Monto del descuento</FormLabel>
                   <FormControl>
                     <div className="relative">
                       {form.watch("type") === DiscountType.PERCENTAGE ? (
@@ -278,7 +284,9 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData }) => {
               name="dateRange"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Fecha de inicio y finalización</FormLabel>
+                  <FormLabel isRequired>
+                    Fecha de inicio y finalización
+                  </FormLabel>
                   <FormControl>
                     <DateRangePicker
                       customDates={datePresets}

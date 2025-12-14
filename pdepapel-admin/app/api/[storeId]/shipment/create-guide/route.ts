@@ -11,7 +11,10 @@ import {
   splitFullName,
   STORE_SHIPPING_INFO,
 } from "@/constants/shipping";
-import { calculatePackageDimensions } from "@/lib/package-calculator";
+import {
+  calculatePackageDimensions,
+  BoxConfiguration,
+} from "@/lib/package-calculator";
 import { envioClickClient } from "@/lib/envioclick";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { env } from "@/lib/env.mjs";
@@ -98,7 +101,68 @@ export async function POST(
       quantity: oi.quantity,
     }));
     const products = order.orderItems.map((oi) => oi.product);
-    const packageDimensions = calculatePackageDimensions(items, products);
+
+    // Fetch boxes to ensure we have the latest config
+    const dbBoxes = await prismadb.box.findMany({
+      where: { storeId: params.storeId },
+    });
+
+    // Build configuration map
+    const boxConfigurations: Record<string, BoxConfiguration> = {};
+    const types = ["XS", "S", "M", "L", "XL"];
+
+    // Fill with defaults or fallbacks
+    types.forEach((type) => {
+      const defaultBox = dbBoxes.find((b) => b.type === type && b.isDefault);
+      const anyBox = dbBoxes.find((b) => b.type === type);
+      const boxToUse = defaultBox || anyBox;
+
+      if (boxToUse) {
+        boxConfigurations[type] = {
+          width: boxToUse.width,
+          height: boxToUse.height,
+          length: boxToUse.length,
+          type: "box",
+          size: boxToUse.type as "XS" | "S" | "M" | "L" | "XL",
+          id: boxToUse.id,
+          name: boxToUse.name,
+        };
+      }
+    });
+
+    // If manual box was used (saved in shipping), override/prioritize it
+    let packageDimensions;
+    const savedBoxId = order.shipping?.boxId;
+    if (savedBoxId) {
+      const manualBox = dbBoxes.find((b) => b.id === savedBoxId);
+      if (manualBox) {
+        const tempDims = calculatePackageDimensions(items, products); // Get weight
+        packageDimensions = {
+          weight: tempDims.weight,
+          width: manualBox.width,
+          height: manualBox.height,
+          length: manualBox.length,
+          type: "box" as const,
+          size: manualBox.type as "XS" | "S" | "M" | "L" | "XL",
+        };
+      } else {
+        // Fallback to auto if manual box deleted?
+        console.warn(
+          `[CREATE_GUIDE] Saved boxId ${order.shipping.boxId} not found in DB. Falling back to auto.`,
+        );
+        packageDimensions = calculatePackageDimensions(
+          items,
+          products,
+          boxConfigurations,
+        );
+      }
+    } else {
+      packageDimensions = calculatePackageDimensions(
+        items,
+        products,
+        boxConfigurations,
+      );
+    }
 
     // Crear guía en EnvioClick
     const result = await envioClickClient.createShipment({

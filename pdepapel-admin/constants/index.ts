@@ -155,6 +155,7 @@ export enum Models {
   Coupons = "coupons",
   Shipments = "shipments",
   Offers = "offers",
+  Boxes = "boxes",
 }
 
 export const ModelLabels: Record<Models, string> = {
@@ -179,6 +180,7 @@ export const ModelLabels: Record<Models, string> = {
   [Models.Customers]: "Clientes",
   [Models.Shipments]: "Envíos",
   [Models.Offers]: "Ofertas",
+  [Models.Boxes]: "Cajas",
 };
 
 export const ModelsColumns: Record<Models, { [key: string]: string }> = {
@@ -336,6 +338,13 @@ export const ModelsColumns: Record<Models, { [key: string]: string }> = {
     startDate: "Inicio",
     endDate: "Fin",
     isActive: "Activa",
+    createdAt: "Fecha de creación",
+  },
+  [Models.Boxes]: {
+    name: "Nombre",
+    type: "Tipo",
+    dimensions: "Dimensiones",
+    isDefault: "Por defecto",
     createdAt: "Fecha de creación",
   },
 };

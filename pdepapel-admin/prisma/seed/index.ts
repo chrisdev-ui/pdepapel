@@ -14,6 +14,7 @@ import { seedSizes } from "./seed-sizes";
 import { seedSuppliers } from "./seed-suppliers";
 import { seedTypes } from "./seed-types";
 import { seedCoupons } from "./seed-coupons";
+import { seedBoxes } from "./seed-boxes";
 
 const prismadb = new PrismaClient();
 
@@ -42,6 +43,7 @@ async function main() {
   await seedBanners(STORE_ID, prismadb);
   await seedReviews(STORE_ID, prismadb);
   await seedCoupons(STORE_ID, prismadb);
+  await seedBoxes(prismadb, STORE_ID);
   await seedOrders(STORE_ID, prismadb);
   console.log("🎉 Seed data inserted successfully!");
 }

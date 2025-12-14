@@ -51,6 +51,7 @@ model Store {
   coupons    Coupon[]         @relation("StoreToCoupons")
   shippingQuotes ShippingQuote[] @relation("StoreToShippingQuotes")
   offers         Offer[]         @relation("StoreToOffer")
+  boxes          Box[]           @relation("StoreToBox")
 }
 
 model Billboard {
@@ -381,6 +382,8 @@ model Shipping {
   orderId      String           @unique
   status       ShippingStatus   @default(Preparing)
   provider     ShippingProvider @default(MANUAL)
+  boxId        String?
+  box          Box?             @relation(fields: [boxId], references: [id])
   envioClickIdRate  Int?            // ⭐ idRate de cotización (guardado al cotizar)
   envioClickIdOrder Int?            // ⭐ idOrder de guía (retornado al crear guía)
   myShipmentReference String?       // Referencia de tu sistema (orderNumber)
@@ -430,6 +433,7 @@ model Shipping {
   @@index([storeId, status])
   @@index([storeId, provider])
   @@index([carrierName])
+  @@index([boxId])
 }
 
 model ShippingTrackingEvent {
@@ -562,4 +566,21 @@ enum ShippingProvider {
   ENVIOCLICK
   MANUAL
   NONE
+}
+
+model Box {
+  id        String   @id @default(uuid())
+  storeId   String
+  name      String
+  type      String   // "XS", "S", "M", "L", "XL"
+  width     Float
+  height    Float
+  length    Float
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  store     Store    @relation("StoreToBox", fields: [storeId], references: [id])
+  shippings Shipping[]
+
+  @@index([storeId])
 }

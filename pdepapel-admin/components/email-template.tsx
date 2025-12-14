@@ -12,6 +12,8 @@ interface EmailTemplateProps {
   trackingInfo?: string;
   address?: string;
   phone?: string;
+  email?: string;
+  total?: string;
   orderSummary?: string;
   orderLink?: string;
   thanksParagraph?: string;
@@ -26,6 +28,8 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
   trackingInfo,
   address,
   phone,
+  email,
+  total,
   orderSummary,
   orderLink,
   thanksParagraph,
@@ -121,13 +125,13 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
               cellSpacing="0"
               border={0}
             >
-              {/* Header with Logo */}
               <tr>
                 <td
                   style={{
-                    backgroundColor: "#f9d6e4",
+                    backgroundColor: isAdminEmail ? "#f1f5f9" : "#f9d6e4", // Neutral grey for admin, Brand pink for customer
                     padding: "30px 20px",
                     textAlign: "center",
+                    borderBottom: isAdminEmail ? "1px solid #e2e8f0" : "none",
                   }}
                 >
                   <img
@@ -143,29 +147,76 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
                       borderRadius: "8px",
                     }}
                   />
+                  {isAdminEmail && (
+                    <div
+                      style={{
+                        marginTop: "10px",
+                        color: "#475569",
+                        fontSize: "14px",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      Panel de Administración
+                    </div>
+                  )}
                 </td>
               </tr>
 
-              {/* Status Banner */}
-              <tr>
-                <td style={{ padding: "0" }}>
-                  <div
-                    style={{
-                      backgroundColor: getStatusColor(),
-                      color: "#ffffff",
-                      padding: "20px",
-                      textAlign: "center",
-                      fontSize: "18px",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    <span style={{ fontSize: "24px", marginRight: "10px" }}>
-                      {getStatusIcon()}
-                    </span>
-                    {getStatusMessage()}
-                  </div>
-                </td>
-              </tr>
+              {/* Admin Notification Banner */}
+              {isAdminEmail ? (
+                <tr>
+                  <td style={{ padding: "0" }}>
+                    <div
+                      style={{
+                        backgroundColor: "#1e293b", // Slate 800 - distinct dark header for admin
+                        color: "#ffffff",
+                        padding: "20px",
+                        textAlign: "center",
+                        fontSize: "18px",
+                        fontWeight: "bold",
+                        borderBottom: "4px solid " + getStatusColor(),
+                      }}
+                    >
+                      <div
+                        style={{
+                          textTransform: "uppercase",
+                          fontSize: "12px",
+                          letterSpacing: "1px",
+                          marginBottom: "10px",
+                          color: "#94a3b8", // Slate 400
+                        }}
+                      >
+                        Notificación Administrativa
+                      </div>
+                      <span style={{ fontSize: "24px", marginRight: "10px" }}>
+                        {getStatusIcon()}
+                      </span>
+                      {getStatusMessage()}
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                /* Customer Status Banner */
+                <tr>
+                  <td style={{ padding: "0" }}>
+                    <div
+                      style={{
+                        backgroundColor: getStatusColor(),
+                        color: "#ffffff",
+                        padding: "20px",
+                        textAlign: "center",
+                        fontSize: "18px",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      <span style={{ fontSize: "24px", marginRight: "10px" }}>
+                        {getStatusIcon()}
+                      </span>
+                      {getStatusMessage()}
+                    </div>
+                  </td>
+                </tr>
+              )}
 
               {/* Main Content */}
               <tr>
@@ -202,33 +253,90 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
                   {isAdminEmail && (
                     <div
                       style={{
-                        backgroundColor: "#fef3c7",
+                        backgroundColor: "#fefce8", // Light yellow background
                         padding: "20px",
                         borderRadius: "8px",
                         marginBottom: "25px",
-                        border: "1px solid #fbbf24",
+                        border: "1px solid #facc15", // Yellow border
                       }}
                     >
                       <h3
                         style={{
                           margin: "0 0 15px 0",
-                          color: "#92400e",
+                          color: "#854d0e", // Dark yellow/brown text
                           fontSize: "16px",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                          borderBottom: "1px solid #fde047",
+                          paddingBottom: "10px",
                         }}
                       >
-                        📋 Detalles del cliente
+                        � Detalles Técnicos del Pedido
                       </h3>
-                      <div style={{ lineHeight: "1.8", color: "#451a03" }}>
-                        <div>
-                          <strong>Nombre:</strong> {name}
-                        </div>
-                        <div>
-                          <strong>Teléfono:</strong> {phone}
-                        </div>
-                        <div>
-                          <strong>Dirección:</strong> {address}
-                        </div>
-                      </div>
+                      <table width="100%" cellPadding="5" border={0}>
+                        <tbody>
+                          <tr>
+                            <td
+                              style={{
+                                color: "#854d0e",
+                                fontWeight: "bold",
+                                width: "100px",
+                              }}
+                            >
+                              Cliente:
+                            </td>
+                            <td style={{ color: "#422006" }}>{name}</td>
+                          </tr>
+                          <tr>
+                            <td
+                              style={{ color: "#854d0e", fontWeight: "bold" }}
+                            >
+                              Email:
+                            </td>
+                            <td style={{ color: "#422006" }}>
+                              {email || "N/A"}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td
+                              style={{ color: "#854d0e", fontWeight: "bold" }}
+                            >
+                              Teléfono:
+                            </td>
+                            <td style={{ color: "#422006" }}>
+                              {phone || "N/A"}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td
+                              style={{ color: "#854d0e", fontWeight: "bold" }}
+                            >
+                              Dirección:
+                            </td>
+                            <td style={{ color: "#422006" }}>
+                              {address || "N/A"}
+                            </td>
+                          </tr>
+                          {total && (
+                            <tr>
+                              <td
+                                style={{ color: "#854d0e", fontWeight: "bold" }}
+                              >
+                                Total:
+                              </td>
+                              <td
+                                style={{
+                                  color: "#422006",
+                                  fontSize: "16px",
+                                  fontWeight: "bold",
+                                }}
+                              >
+                                {total}
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
                     </div>
                   )}
 

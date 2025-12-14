@@ -1,8 +1,8 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { FormLabel } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Copy, Dice6, RefreshCw } from "lucide-react";
 import { useParams } from "next/navigation";
@@ -16,6 +16,7 @@ interface CouponCodeFieldProps {
   label?: string;
   placeholder?: string;
   disabled?: boolean;
+  isRequired?: boolean;
 }
 
 export const CouponCodeField: React.FC<CouponCodeFieldProps> = ({
@@ -24,6 +25,7 @@ export const CouponCodeField: React.FC<CouponCodeFieldProps> = ({
   label = "Código del cupón",
   placeholder = "Ingresa o genera un código",
   disabled = false,
+  isRequired = false,
 }) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const { toast } = useToast();
@@ -84,7 +86,9 @@ export const CouponCodeField: React.FC<CouponCodeFieldProps> = ({
 
   return (
     <div className="space-y-2">
-      <Label htmlFor={fieldName}>{label}</Label>
+      <FormLabel htmlFor={fieldName} isRequired={isRequired}>
+        {label}
+      </FormLabel>
       <div className="flex space-x-2">
         <div className="flex-1">
           <Input

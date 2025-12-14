@@ -1,20 +1,58 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  Coupon,
   DiscountType,
   OrderStatus,
   PaymentMethod,
   ShippingProvider,
   ShippingStatus,
+  type Coupon,
 } from "@prisma/client";
+import axios from "axios";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Check,
+  ChevronsUpDown,
+  DollarSign,
+  Loader2,
+  Package,
+  Percent,
+  RefreshCw,
+  Store,
+  Ticket,
+  Trash,
+  Truck,
+  Wallet,
+} from "lucide-react";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
 import z from "zod";
 
 import { AlertModal } from "@/components/modals/alert-modal";
 import { GuideConfirmationModal } from "@/components/modals/guide-confirmation-modal";
+import { Heading } from "@/components/ui/heading";
+import { useToast } from "@/hooks/use-toast";
+
+const generateGuestId = () => {
+  return "guest_" + Math.random().toString(36).substr(2, 9);
+};
+
+const parseOrderDetails = (details: any) => {
+  if (!details) return {};
+  if (typeof details === "string") {
+    try {
+      return JSON.parse(details);
+    } catch {
+      return {};
+    }
+  }
+  return details;
+};
+
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AutoComplete } from "@/components/ui/autocomplete";
 import { Badge } from "@/components/ui/badge";
@@ -38,7 +76,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Heading } from "@/components/ui/heading";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -72,38 +109,11 @@ import {
   shippingOptions,
 } from "@/constants";
 import { ENVIOCLICK_LIMITS, getCarrierInfo } from "@/constants/shipping";
-import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import {
-  cn,
-  currencyFormatter,
-  generateGuestId,
-  parseOrderDetails,
-} from "@/lib/utils";
-import { zodResolver } from "@hookform/resolvers/zod";
-import axios from "axios";
-import {
-  AlertTriangle,
-  Check,
-  ChevronsUpDown,
-  DollarSign,
-  Loader2,
-  Package,
-  Percent,
-  RefreshCw,
-  Store,
-  Ticket,
-  Trash,
-  Truck,
-  Wallet,
-} from "lucide-react";
-import { useForm } from "react-hook-form";
+import { cn, currencyFormatter } from "@/lib/utils";
+import { getBoxes } from "../server/get-boxes";
 import { getCoupons } from "../server/get-coupons";
-import {
-  getOrder,
-  type GetOrderResult,
-  type ProductOption,
-} from "../server/get-order";
+import { type GetOrderResult, type ProductOption } from "../server/get-order";
 
 const paymentSchema = z
   .object({
@@ -133,6 +143,7 @@ const shippingSchema = z
       })
       .optional(),
     notes: z.string().optional(),
+    boxId: z.string().optional(),
   })
   .partial();
 
@@ -258,6 +269,7 @@ interface OrderFormProps {
     image?: string;
   }[];
   locations: LocationOption[];
+  boxes: Awaited<ReturnType<typeof getBoxes>>;
 }
 
 export const OrderForm: React.FC<OrderFormProps> = ({
@@ -266,6 +278,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   availableCoupons,
   users,
   locations,
+  boxes,
 }) => {
   const params = useParams();
   const router = useRouter();
@@ -279,6 +292,9 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   const [selectedRateId, setSelectedRateId] = useState<number | null>(
     initialData?.shipping?.envioClickIdRate || null,
   );
+
+  // State to store recommended box from quote response
+  const [recommendedBox, setRecommendedBox] = useState<any>(null);
 
   const [showGuideConfirmation, setShowGuideConfirmation] = useState(false);
 
@@ -317,9 +333,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     [initialData],
   );
 
-  const getOriginalDiscountAmount = (
-    initialData: Awaited<ReturnType<typeof getOrder>>["order"],
-  ) => {
+  const getOriginalDiscountAmount = (initialData: GetOrderResult["order"]) => {
     if (!initialData?.discount || !initialData?.discountType) return undefined;
 
     if (initialData.discountType === DiscountType.PERCENTAGE) {
@@ -379,13 +393,14 @@ export const OrderForm: React.FC<OrderFormProps> = ({
               initialData.shipping?.minimumInsurance || undefined,
             deliveryDays: initialData.shipping?.deliveryDays || undefined,
             isCOD: initialData.shipping?.isCOD || false,
+            cost: initialData.shipping?.cost || 0,
             trackingCode: initialData.shipping?.trackingCode || undefined,
             trackingUrl: initialData.shipping?.trackingUrl || undefined,
             guideUrl: initialData.shipping?.guideUrl || undefined,
-            cost: initialData.shipping?.cost || 0,
             estimatedDeliveryDate:
               initialData.shipping?.estimatedDeliveryDate || undefined,
             notes: initialData.shipping?.notes || undefined,
+            boxId: initialData.shipping?.boxId || undefined,
           },
         }
       : {
@@ -423,6 +438,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             cost: 0,
             estimatedDeliveryDate: undefined,
             notes: undefined,
+            boxId: undefined,
           },
           subtotal: 0,
           total: 0,
@@ -528,16 +544,17 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         description: getErrorMessage(error),
         variant: "destructive",
       });
-    } finally {
       setLoading(false);
     }
   };
 
   const submitOrder = async (data: OrderFormValues, forceRedirect = true) => {
-    const updatedOrderItems = data.orderItems.map((item) => ({
-      ...item,
-      quantity: quantities[item.productId] || item.quantity,
-    }));
+    const updatedOrderItems = data.orderItems.map(
+      (item: { productId: string; quantity: number }) => ({
+        ...item,
+        quantity: quantities[item.productId] || item.quantity,
+      }),
+    );
 
     const payload = {
       ...data,
@@ -547,6 +564,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
       discountType: data.discount?.type,
       discountAmount: data.discount?.amount,
       discountReason: data.discount?.reason,
+      // Ensure shipping.boxId is included in the payload if you added it to schema or pass explicitly
     };
 
     let response;
@@ -611,7 +629,6 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         description: getErrorMessage(error),
         variant: "destructive",
       });
-    } finally {
       setLoading(false);
     }
   };
@@ -672,15 +689,19 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             address: formData.address || "",
           },
           orderTotal: orderTotals.total,
-          items: formData.orderItems.map((item) => ({
-            ...item,
-            quantity: quantities[item.productId] || item.quantity,
-          })),
+          items: formData.orderItems.map(
+            (item: { productId: string; quantity: number }) => ({
+              ...item,
+              quantity: quantities[item.productId] || item.quantity,
+            }),
+          ),
+          boxId: formData.shipping.boxId,
           forceRefresh: true,
         },
       );
 
       setShippingQuotes(response.data.quotes);
+      setRecommendedBox(response.data.packageDimensions);
 
       if (response.data.quotes.length === 0) {
         toast({
@@ -706,12 +727,19 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     }
   };
 
+  const handleBoxChange = (boxId: string) => {
+    const value = boxId === "auto" ? undefined : boxId;
+    form.setValue("shipping.boxId", value);
+  };
+
   const handleSelectRate = (quote: ShippingQuote) => {
     setSelectedRateId(quote.idRate);
 
     // Update form with selected rate data
     form.setValue("shippingProvider", "ENVIOCLICK");
     form.setValue("envioClickIdRate", quote.idRate);
+
+    const boxId = form.getValues("shipping.boxId");
 
     // Store all quotation data including carrier info for guide creation
     form.setValue("shipping", {
@@ -727,7 +755,8 @@ export const OrderForm: React.FC<OrderFormProps> = ({
       isCOD: quote.isCOD,
       cost: quote.totalCost,
       status: ShippingStatus.Preparing,
-    } as any);
+      boxId,
+    });
 
     toast({
       title: "Tarifa seleccionada",
@@ -770,7 +799,12 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         }
       />
       <div className="flex items-center justify-between">
-        <Heading title={title} description={description} />
+        <div className="flex items-center gap-4">
+          <Button variant="outline" size="icon" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <Heading title={title} description={description} />
+        </div>
         {initialData && (
           <Button
             disabled={loading}
@@ -1053,7 +1087,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Correo electrónico</FormLabel>
+                  <FormLabel isRequired>Correo electrónico</FormLabel>
                   <FormControl>
                     <Input
                       disabled={loading}
@@ -1613,7 +1647,8 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                               {detailsTitleOptions[key] || key}
                             </span>
                             <span>
-                              {currentPaymentMethodObject?.[value] || value}
+                              {currentPaymentMethodObject?.[String(value)] ||
+                                String(value)}
                             </span>
                           </div>
                         );
@@ -1753,6 +1788,35 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             {/* EnvioClick Quotation Section */}
             {form.watch("shippingProvider") === ShippingProvider.ENVIOCLICK && (
               <div className="space-y-4">
+                {/* Box Selector UI for EnvioClick - Pre Quote */}
+                <div className="space-y-4 rounded-md border bg-muted/20 p-4">
+                  <h3 className="font-medium">Configuración de Empaque</h3>
+                  <div className="flex flex-wrap items-end gap-4">
+                    <div className="min-w-[200px] space-y-2">
+                      <Label>Seleccionar Caja Manual</Label>
+                      <Select
+                        value={form.watch("shipping.boxId") || "auto"}
+                        onValueChange={(val) => handleBoxChange(val)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Automático (Recomendado)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="auto">
+                            Automático (Recomendado)
+                          </SelectItem>
+                          {boxes?.map((box) => (
+                            <SelectItem key={box.id} value={box.id}>
+                              {box.name} ({box.width}x{box.height}x{box.length}
+                              cm)
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Quote Button */}
                 <Button
                   type="button"
@@ -1776,6 +1840,18 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 {/* Rates Display */}
                 {shippingQuotes.length > 0 && (
                   <div className="space-y-3">
+                    {/* Box Used Info */}
+                    {recommendedBox && (
+                      <Alert className="bg-blue-50">
+                        <Package className="h-4 w-4" />
+                        <AlertDescription>
+                          <strong>Caja Utilizada para Cotización:</strong>{" "}
+                          {recommendedBox.name} ({recommendedBox.width}x
+                          {recommendedBox.height}x{recommendedBox.length}cm)
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
                     <div className="flex items-center justify-between">
                       <Label>Selecciona una tarifa:</Label>
                       <Button
@@ -1929,6 +2005,35 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                     está en EnvioClick.
                   </AlertDescription>
                 </Alert>
+
+                {/* Box Selector UI for Manual */}
+                <div className="space-y-4 rounded-md border bg-white p-4">
+                  <h3 className="font-medium">Configuración de Empaque</h3>
+                  <div className="flex flex-wrap items-end gap-4">
+                    <div className="min-w-[200px] space-y-2">
+                      <Label>Seleccionar Caja Manual</Label>
+                      <Select
+                        value={form.watch("shipping.boxId") || "auto"}
+                        onValueChange={handleBoxChange}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Automático (Recomendado)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="auto">
+                            Automático (Recomendado)
+                          </SelectItem>
+                          {boxes?.map((box) => (
+                            <SelectItem key={box.id} value={box.id}>
+                              {box.name} ({box.width}x{box.height}x{box.length}
+                              cm)
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
 
                 {/* Carrier Name */}
                 <FormField

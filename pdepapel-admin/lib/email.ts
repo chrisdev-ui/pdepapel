@@ -92,6 +92,13 @@ export const sendOrderEmail = async (
           isAdminEmail: true,
           paymentMethod: readablePayment,
           trackingInfo: order.shipping?.trackingCode ?? undefined,
+          email: order.email || undefined,
+          total: order.total
+            ? new Intl.NumberFormat("es-CO", {
+                style: "currency",
+                currency: "COP",
+              }).format(order.total)
+            : undefined,
           address: order.address,
           phone: order.phone,
           orderSummary,
@@ -201,6 +208,13 @@ export const sendShippingEmail = async (
         isAdminEmail: true,
         paymentMethod: getReadablePaymentMethod(order.payment),
         trackingInfo: order.shipping?.trackingCode ?? undefined,
+        email: order.email || undefined,
+        total: order.total
+          ? new Intl.NumberFormat("es-CO", {
+              style: "currency",
+              currency: "COP",
+            }).format(order.total)
+          : undefined,
         address: order.address,
         phone: order.phone,
         orderSummary,

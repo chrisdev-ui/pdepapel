@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Trash } from "lucide-react";
+import { ArrowLeft, Loader2, Trash } from "lucide-react";
 import { useForm } from "react-hook-form";
 import z from "zod";
 
@@ -141,7 +141,12 @@ const MainBannerForm: React.FC<MainBannerFormProps> = ({ initialData }) => {
         loading={loading}
       />
       <div className="flex items-center justify-between">
-        <Heading title={title} description={description} />
+        <div className="flex items-center gap-4">
+          <Button variant="outline" size="icon" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <Heading title={title} description={description} />
+        </div>
         {initialData && (
           <Button
             disabled={loading}
@@ -164,7 +169,7 @@ const MainBannerForm: React.FC<MainBannerFormProps> = ({ initialData }) => {
             name="imageUrl"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Background image</FormLabel>
+                <FormLabel isRequired>Background image</FormLabel>
                 <FormControl>
                   <ImageUpload
                     value={
@@ -255,7 +260,9 @@ const MainBannerForm: React.FC<MainBannerFormProps> = ({ initialData }) => {
               name="callToAction"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>URL de redirección para la publicidad</FormLabel>
+                  <FormLabel isRequired>
+                    URL de redirección para la publicidad
+                  </FormLabel>
                   <FormControl>
                     <Input
                       disabled={loading}

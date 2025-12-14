@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Store } from "@prisma/client";
 import {
   AlertTriangle,
+  ArrowLeft,
   AtSign,
   Facebook,
   Instagram,
@@ -154,10 +155,15 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
         loading={loading}
       />
       <div className="flex items-center justify-between">
-        <Heading
-          title="Ajustes"
-          description="Maneja las preferencias e información de la tienda"
-        />
+        <div className="flex items-center gap-4">
+          <Button variant="outline" size="icon" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <Heading
+            title="Ajustes"
+            description="Maneja las preferencias e información de la tienda"
+          />
+        </div>
         <Button
           disabled={loading}
           variant="destructive"
@@ -207,7 +213,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
                   name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="flex items-center gap-2">
+                      <FormLabel isRequired className="flex items-center gap-2">
                         <StoreIcon className="h-4 w-4" />
                         Nombre
                       </FormLabel>

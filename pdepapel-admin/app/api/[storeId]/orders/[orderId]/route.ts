@@ -431,6 +431,7 @@ export async function PATCH(
                       guideUrl: shipping.guideUrl,
                       estimatedDeliveryDate: shipping.estimatedDeliveryDate,
                       notes: shipping.notes,
+                      boxId: shipping.boxId,
                       store: { connect: { id: params.storeId } },
                     },
                     update: {
@@ -455,6 +456,7 @@ export async function PATCH(
                       guideUrl: shipping.guideUrl,
                       estimatedDeliveryDate: shipping.estimatedDeliveryDate,
                       notes: shipping.notes,
+                      boxId: shipping.boxId,
                     },
                   },
                 },

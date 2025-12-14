@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Trash } from "lucide-react";
+import { ArrowLeft, Loader2, Trash } from "lucide-react";
 import { useForm } from "react-hook-form";
 import z from "zod";
 
@@ -128,7 +128,12 @@ export const PostForm: React.FC<PostFormProps> = ({ initialData }) => {
         loading={loading}
       />
       <div className="flex items-center justify-between">
-        <Heading title={title} description={description} />
+        <div className="flex items-center gap-4">
+          <Button variant="outline" size="icon" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <Heading title={title} description={description} />
+        </div>
         {initialData && (
           <Button
             disabled={loading}
@@ -152,7 +157,7 @@ export const PostForm: React.FC<PostFormProps> = ({ initialData }) => {
               name="social"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Red Social</FormLabel>
+                  <FormLabel isRequired>Red Social</FormLabel>
                   <Select
                     disabled={loading}
                     onValueChange={field.onChange}
@@ -188,7 +193,7 @@ export const PostForm: React.FC<PostFormProps> = ({ initialData }) => {
               name="postId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Id del post</FormLabel>
+                  <FormLabel isRequired>Id del post</FormLabel>
                   <FormControl>
                     <Input
                       disabled={loading}

@@ -5,6 +5,7 @@ import { esES } from "@clerk/localizations";
 import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import NextTopLoader from "nextjs-toploader";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -27,6 +28,13 @@ export default function RootLayout({
     <ClerkProvider localization={esES}>
       <html lang="es">
         <body className={inter.className}>
+          <NextTopLoader
+            color="#0f172a"
+            showSpinner
+            easing="ease"
+            zIndex={1600}
+            height={3}
+          />
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
             <Toaster />
             <ModalProvider />

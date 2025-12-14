@@ -3,6 +3,7 @@ import { clerkClient } from "@clerk/nextjs";
 import { v4 as uuidv4 } from "uuid";
 import { OrderForm } from "./components/order-form";
 import { ShippingInfo } from "./components/shipping-info";
+import { getBoxes } from "./server/get-boxes";
 import { getCoupons } from "./server/get-coupons";
 import { getOrder } from "./server/get-order";
 
@@ -13,12 +14,14 @@ export default async function OrderPage({
 }: {
   params: { orderId: string; storeId: string };
 }) {
-  const [{ order, products }, coupons, users, locations] = await Promise.all([
-    getOrder(params.orderId, params.storeId),
-    getCoupons(params.storeId),
-    clerkClient.users.getUserList(),
-    getDaneLocations(),
-  ]);
+  const [{ order, products }, coupons, users, locations, boxes] =
+    await Promise.all([
+      getOrder(params.orderId, params.storeId),
+      getCoupons(params.storeId),
+      clerkClient.users.getUserList(),
+      getDaneLocations(),
+      getBoxes(params.storeId),
+    ]);
 
   const formattedUsers = users.map((user) => ({
     value: user.id,
@@ -40,10 +43,13 @@ export default async function OrderPage({
           availableCoupons={coupons}
           users={formattedUsers}
           locations={locations}
+          boxes={boxes}
           key={uuidv4()}
         />
 
-        {order && <ShippingInfo shipping={order.shipping} orderStatus={order.status} />}
+        {order && (
+          <ShippingInfo shipping={order.shipping} orderStatus={order.status} />
+        )}
       </div>
     </div>
   );

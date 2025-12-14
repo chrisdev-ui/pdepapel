@@ -38,6 +38,7 @@ import {
 } from "@prisma/client";
 import axios from "axios";
 import {
+  ArrowLeft,
   CheckSquare,
   DollarSign,
   Loader2,
@@ -220,7 +221,12 @@ export const OfferForm: React.FC<OfferFormProps> = ({
         loading={loading}
       />
       <div className="flex items-center justify-between">
-        <Heading title={title} description={description} />
+        <div className="flex items-center gap-4">
+          <Button variant="outline" size="icon" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <Heading title={title} description={description} />
+        </div>
         {initialData && (
           <Button
             disabled={loading}

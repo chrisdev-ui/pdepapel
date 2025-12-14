@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Design } from "@prisma/client";
-import { Loader2, Trash } from "lucide-react";
+import { ArrowLeft, Loader2, Trash } from "lucide-react";
 import { useForm } from "react-hook-form";
 import z from "zod";
 
@@ -118,7 +118,12 @@ export const DesignForm: React.FC<DesignFormProps> = ({ initialData }) => {
         loading={loading}
       />
       <div className="flex items-center justify-between">
-        <Heading title={title} description={description} />
+        <div className="flex items-center gap-4">
+          <Button variant="outline" size="icon" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <Heading title={title} description={description} />
+        </div>
         {initialData && (
           <Button
             disabled={loading}
@@ -142,7 +147,7 @@ export const DesignForm: React.FC<DesignFormProps> = ({ initialData }) => {
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Nombre</FormLabel>
+                  <FormLabel isRequired>Nombre</FormLabel>
                   <FormControl>
                     <Input
                       disabled={loading}

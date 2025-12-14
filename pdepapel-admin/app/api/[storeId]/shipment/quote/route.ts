@@ -5,7 +5,10 @@ import {
   STORE_SHIPPING_INFO,
 } from "@/constants/shipping";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { calculatePackageDimensions } from "@/lib/package-calculator";
+import {
+  calculatePackageDimensions,
+  BoxConfiguration,
+} from "@/lib/package-calculator";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { envioClickClient } from "@/lib/envioclick";
@@ -25,7 +28,8 @@ export async function POST(
   { params }: { params: { storeId: string } },
 ) {
   try {
-    const { destination, orderTotal, items, forceRefresh } = await req.json();
+    const { destination, orderTotal, items, forceRefresh, boxId } =
+      await req.json();
 
     if (!orderTotal || isNaN(orderTotal) || orderTotal <= 0)
       throw ErrorFactory.InvalidRequest("El total del pedido es inválido");
@@ -56,7 +60,96 @@ export async function POST(
     if (products.length === 0)
       throw ErrorFactory.InvalidRequest("Productos no encontrados");
 
-    const packageDimensions = calculatePackageDimensions(items, products);
+    if (products.length === 0)
+      throw ErrorFactory.InvalidRequest("Productos no encontrados");
+
+    // Fetch all boxes for this store
+    const dbBoxes = await prismadb.box.findMany({
+      where: { storeId: params.storeId },
+      orderBy: { createdAt: "desc" },
+    });
+
+    let manualBox = null;
+
+    if (boxId) {
+      manualBox = dbBoxes.find((b) => b.id === boxId);
+    }
+
+    // Build configuration map prioritizing defaults
+    const boxConfigurations: Record<string, BoxConfiguration> = {};
+
+    // First fill with specific type defaults if any
+    const types = ["XS", "S", "M", "L", "XL"];
+    types.forEach((type) => {
+      const defaultBox = dbBoxes.find((b) => b.type === type && b.isDefault);
+      if (defaultBox) {
+        boxConfigurations[type] = {
+          width: defaultBox.width,
+          height: defaultBox.height,
+          length: defaultBox.length,
+          type: "box",
+          size: defaultBox.type as "XS" | "S" | "M" | "L" | "XL",
+          id: defaultBox.id,
+          name: defaultBox.name,
+        };
+      } else {
+        // Fallback to any box of that type if no default
+        const anyBox = dbBoxes.find((b) => b.type === type);
+        if (anyBox) {
+          boxConfigurations[type] = {
+            width: anyBox.width,
+            height: anyBox.height,
+            length: anyBox.length,
+            type: "box",
+            size: anyBox.type as "XS" | "S" | "M" | "L" | "XL",
+            id: anyBox.id,
+            name: anyBox.name,
+          };
+        }
+      }
+    });
+
+    let packageDimensions;
+
+    if (manualBox) {
+      // Manual Override: Use the selected box dimensions, but still calculate weight based on items
+      // We pass the manual box as the ONLY configuration for its type to force selection if logic matches?
+      // Actually, cleaner way: Calculate weight first, then combine with manual box dims.
+      // But calculatePackageDimensions handles weight summing logic.
+      // Let's pass a config where ALL types map to this manual box? No, that breaks logic.
+      // Better: Construct the dimensions manually here using the helper for weight only?
+      // Or: Update calculatePackageDimensions to support "forced box".
+      // START OF MANUAL OVERRIDE LOGIC
+      const tempDims = calculatePackageDimensions(items, products); // Get weight
+      packageDimensions = {
+        weight: tempDims.weight, // Keep calculated weight
+        width: manualBox.width,
+        height: manualBox.height,
+        length: manualBox.length,
+        type: "box" as const,
+        size: manualBox.type as "XS" | "S" | "M" | "L" | "XL",
+        id: manualBox.id,
+        name: manualBox.name,
+      };
+    } else {
+      packageDimensions = calculatePackageDimensions(
+        items,
+        products,
+        boxConfigurations,
+      );
+    }
+
+    // Find used box info if automatic and merge into packageDimensions
+    if (!manualBox && packageDimensions.type === "box") {
+      const size = packageDimensions.size;
+      // Try to find the box object that matches these dims/type in our config
+      if (boxConfigurations[size]) {
+        Object.assign(packageDimensions, {
+          id: boxConfigurations[size].id,
+          name: boxConfigurations[size].name,
+        });
+      }
+    }
 
     const cacheKey = {
       storeId: params.storeId,
@@ -183,6 +276,8 @@ export async function POST(
           ...finalDimensions,
           type: packageDimensions.type,
           size: packageDimensions.size,
+          id: (packageDimensions as any).id,
+          name: (packageDimensions as any).name,
         },
       },
       {

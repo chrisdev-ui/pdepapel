@@ -121,6 +121,13 @@ export function MainNav({
       group: "catalog",
       icon: Archive,
     },
+    {
+      href: `/${params.storeId}/${Models.Boxes}`,
+      label: ModelLabels[Models.Boxes],
+      active: pathname === `/${params.storeId}/${Models.Boxes}`,
+      group: "catalog",
+      icon: Package,
+    },
     // Ventas
     {
       href: `/${params.storeId}/${Models.Orders}`,

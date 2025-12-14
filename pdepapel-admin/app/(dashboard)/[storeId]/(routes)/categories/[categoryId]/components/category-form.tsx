@@ -157,7 +157,7 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Nombre</FormLabel>
+                  <FormLabel isRequired>Nombre</FormLabel>
                   <FormControl>
                     <Input
                       disabled={loading}
@@ -174,7 +174,7 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
               name="typeId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Tipo</FormLabel>
+                  <FormLabel isRequired>Tipo</FormLabel>
                   <Select
                     disabled={loading}
                     onValueChange={field.onChange}
