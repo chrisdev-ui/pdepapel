@@ -15,11 +15,14 @@ const corsHeaders = {
 const STATUS_MAP: Record<string, ShippingStatus> = {
   // EnvioClick text-based statuses
   Entregado: ShippingStatus.Delivered,
+  Entregada: ShippingStatus.Delivered,
   "En tránsito": ShippingStatus.InTransit,
   "Pendiente de Recolección": ShippingStatus.Preparing,
   "Envío Recolectado": ShippingStatus.PickedUp,
   Devuelto: ShippingStatus.Returned,
+  Devuelta: ShippingStatus.Returned,
   Cancelado: ShippingStatus.Cancelled,
+  Cancelada: ShippingStatus.Cancelled,
   Excepción: ShippingStatus.Exception,
   "En reparto": ShippingStatus.OutForDelivery,
   "Intento de entrega fallido": ShippingStatus.FailedDelivery,
