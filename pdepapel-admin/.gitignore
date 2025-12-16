@@ -48,3 +48,6 @@ next-env.d.ts
 
 google_merchant_*
 *md
+backup_prod_*.sql
+/scripts/backup-prod.ts
+/scripts/restore-db.ts

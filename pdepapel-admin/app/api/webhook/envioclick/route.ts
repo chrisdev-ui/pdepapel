@@ -200,16 +200,37 @@ export async function POST(req: Request) {
     // This is done outside the transaction to avoid side effects being rolled back (impossible for email)
     // or blocking the transaction.
     if (result.newStatus !== result.shipping.status) {
-      setImmediate(async () => {
-        try {
-          await sendShippingEmail(result.shipping.order, result.newStatus);
-        } catch (emailError) {
-          console.error(
-            "[ENVIOCLICK_WEBHOOK] Failed to send email:",
-            emailError,
-          );
-        }
+      const updatedOrder = await prismadb.order.findUnique({
+        where: { id: result.shipping.orderId },
+        include: {
+          payment: true,
+          shipping: true,
+          orderItems: {
+            include: {
+              product: true,
+            },
+          },
+        },
       });
+
+      if (updatedOrder) {
+        setImmediate(async () => {
+          try {
+            await sendShippingEmail(
+              {
+                ...updatedOrder,
+                payment: updatedOrder.payment?.method ?? undefined,
+              },
+              result.newStatus,
+            );
+          } catch (emailError) {
+            console.error(
+              "[ENVIOCLICK_WEBHOOK] Failed to send email:",
+              emailError,
+            );
+          }
+        });
+      }
     }
 
     console.log("[ENVIOCLICK_WEBHOOK] Successfully processed webhook");

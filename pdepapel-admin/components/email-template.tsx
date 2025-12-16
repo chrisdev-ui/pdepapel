@@ -135,7 +135,7 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
                   }}
                 >
                   <img
-                    src="https://res.cloudinary.com/dsogxa0hj/image/upload/v1704428256/wpl8rjmseskt2rzehpfg.png"
+                    src="https://papeleriapdepapel.com/_next/image?url=%2Fimages%2Ftext-below-transparent-bg.webp&w=256&q=100"
                     alt="Papelería P de Papel Logo"
                     width="200"
                     height="200"
@@ -271,7 +271,7 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
                           paddingBottom: "10px",
                         }}
                       >
-                        � Detalles Técnicos del Pedido
+                        🪪 Detalles Técnicos del Pedido
                       </h3>
                       <table width="100%" cellPadding="5" border={0}>
                         <tbody>
