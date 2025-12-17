@@ -135,7 +135,7 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
                   }}
                 >
                   <img
-                    src="https://papeleriapdepapel.com/_next/image?url=%2Fimages%2Ftext-below-transparent-bg.webp&w=256&q=100"
+                    src="https://papeleriapdepapel.com/images/text-below-transparent-bg.webp"
                     alt="Papelería P de Papel Logo"
                     width="200"
                     height="200"
