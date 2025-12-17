@@ -91,6 +91,7 @@ export const sendOrderEmail = async (
           status,
           isAdminEmail: true,
           paymentMethod: readablePayment,
+          city: order.city || undefined,
           trackingInfo: order.shipping?.trackingCode ?? undefined,
           email: order.email || undefined,
           total: order.total
@@ -123,6 +124,7 @@ export const sendOrderEmail = async (
           trackingInfo: order.shipping?.trackingCode ?? undefined,
           orderSummary,
           orderLink,
+          city: order.city || undefined,
           thanksParagraph,
         }),
         text: `Tu pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\n\n${orderSummary}\n\nVer detalles: ${orderLink}\n\n${thanksParagraph}`,
@@ -216,6 +218,7 @@ export const sendShippingEmail = async (
             }).format(order.total)
           : undefined,
         address: order.address,
+        city: order.city || undefined,
         phone: order.phone,
         orderSummary,
         orderLink,
@@ -237,6 +240,7 @@ export const sendShippingEmail = async (
           paymentMethod: getReadablePaymentMethod(order.payment),
           trackingInfo: order.shipping?.trackingCode ?? undefined,
           orderSummary,
+          city: order.city || undefined,
           orderLink,
           thanksParagraph,
         }),

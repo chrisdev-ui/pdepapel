@@ -17,6 +17,7 @@ interface EmailTemplateProps {
   orderSummary?: string;
   orderLink?: string;
   thanksParagraph?: string;
+  city?: string;
 }
 
 export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
@@ -27,6 +28,7 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
   paymentMethod,
   trackingInfo,
   address,
+  city,
   phone,
   email,
   total,
@@ -135,7 +137,7 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
                   }}
                 >
                   <img
-                    src="https://papeleriapdepapel.com/images/text-below-transparent-bg.webp"
+                    src="https://papeleriapdepapel.com/images/text-below-transparent-bg.png"
                     alt="Papelería P de Papel Logo"
                     width="200"
                     height="200"
@@ -315,6 +317,16 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
                             </td>
                             <td style={{ color: "#422006" }}>
                               {address || "N/A"}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td
+                              style={{ color: "#854d0e", fontWeight: "bold" }}
+                            >
+                              Ciudad:
+                            </td>
+                            <td style={{ color: "#422006" }}>
+                              {city || "N/A"}
                             </td>
                           </tr>
                           {total && (
