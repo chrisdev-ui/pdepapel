@@ -664,9 +664,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
               <div className="flex w-full px-0 py-8 text-xl">
                 <div className="flex w-full justify-between">
                   <span>Total</span>
-                  <Currency
-                    value={order.total + Number(order?.shipping?.cost ?? 0)}
-                  />
+                  <Currency value={order.total} />
                 </div>
               </div>
             </div>
