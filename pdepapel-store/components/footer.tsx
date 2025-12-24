@@ -34,8 +34,8 @@ export const Footer: React.FC<FooterProps> = ({ season = Season.Default }) => {
             </div>
           </Link>
         </div>
-        <div className="grid grid-cols-3 gap-x-3 gap-y-8 text-sm lg:w-2/3">
-          <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-x-3 gap-y-8 text-sm md:grid-cols-3 lg:w-2/3">
+          <div className="mx-auto mb-auto flex flex-col justify-center space-y-3 lg:block">
             <h3 className="uppercase tracking-wide">Contáctenos</h3>
             <ul className="space-y-1">
               <li className="">
@@ -71,7 +71,7 @@ export const Footer: React.FC<FooterProps> = ({ season = Season.Default }) => {
               </li>
             </ul>
           </div>
-          <div className="space-y-3">
+          <div className="mx-auto mb-auto flex flex-col justify-center space-y-3 lg:block">
             <h3 className="uppercase tracking-wide">Términos Legales</h3>
             <ul className="space-y-1">
               <li className="">
@@ -100,7 +100,7 @@ export const Footer: React.FC<FooterProps> = ({ season = Season.Default }) => {
               </li>
             </ul>
           </div>
-          <div className="space-y-3">
+          <div className="mx-auto mb-auto flex flex-col justify-center space-y-3 lg:block">
             <h3 className="uppercase tracking-wide">Redes Sociales</h3>
             <div className="flex justify-start space-x-3">
               <Link
