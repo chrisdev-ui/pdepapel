@@ -22,12 +22,23 @@ export interface GeneratedVariant {
 }
 
 export function cleanSlug(text: string): string {
-  return text
+  let cleaned = text
     .toUpperCase()
     .trim()
-    .replace(/\s+/g, "-") // Space to dash
+    .replace(/\s+/g, "") // Space to empty (remove spaces to form acronyms like MYM)
     .replace(/[^A-Z0-9-]/g, "") // Remove non-alphanumeric
-    .slice(0, 3); // Take first 3 chars as standard prefix
+    .replace(/-+/g, "-") // Consolidate dashes
+    .replace(/^-+|-+$/g, ""); // strip leading/trailing
+
+  // Take first 3 chars
+  cleaned = cleaned.slice(0, 3);
+
+  // If slicing resulted in a trailing dash (e.g. "EL-"), remove it
+  if (cleaned.endsWith("-")) {
+    cleaned = cleaned.slice(0, -1);
+  }
+
+  return cleaned;
 }
 
 export function cleanSlugFull(text: string): string {
@@ -35,7 +46,9 @@ export function cleanSlugFull(text: string): string {
     .toUpperCase()
     .trim()
     .replace(/\s+/g, "-")
-    .replace(/[^A-Z0-9-]/g, "");
+    .replace(/[^A-Z0-9-]/g, "")
+    .replace(/-+/g, "-") // Consolidate dashes
+    .replace(/^-+|-+$/g, ""); // strip leading/trailing
 }
 
 export function generateSemanticSKU(
