@@ -15,6 +15,7 @@ export async function getPotentialRevenue(storeId: string) {
       categoryId: true,
       stock: true,
       price: true,
+      productGroupId: true,
     },
   });
 

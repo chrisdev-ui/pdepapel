@@ -8,6 +8,7 @@ export const getOffer = async (offerId: string) => {
     include: {
       products: true,
       categories: true,
+      productGroups: true,
     },
   });
 

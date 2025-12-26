@@ -6,7 +6,9 @@ import { MouseEventHandler, useEffect, useState } from "react";
 
 import { CldImage } from "@/components/ui/CldImage";
 import { Currency } from "@/components/ui/currency";
+import { GroupBadge } from "@/components/ui/group-badge";
 import { IconButton } from "@/components/ui/icon-button";
+import { OfferBadge } from "@/components/ui/offer-badge";
 import { ProductCardBadge } from "@/components/ui/product-cart-badge";
 import { StarRating } from "@/components/ui/star-rating";
 import { useCart } from "@/hooks/use-cart";
@@ -14,7 +16,6 @@ import { usePreviewModal } from "@/hooks/use-preview-modal";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { calculateAverageRating, cn } from "@/lib/utils";
 import { Product } from "@/types";
-import { OfferBadge } from "./offer-badge";
 
 interface ProductCardProps {
   product: Product;
@@ -37,8 +38,6 @@ const ProductCard: React.FC<ProductCardProps> = ({
     setIsMounted(true);
   }, []);
 
-  if (!isMounted) return null;
-
   const mainImage =
     product?.images.find((image) => image.isMain) ?? product?.images[0];
 
@@ -55,34 +54,44 @@ const ProductCard: React.FC<ProductCardProps> = ({
   const onAddToCart: MouseEventHandler<HTMLButtonElement> = (event) => {
     event.stopPropagation();
 
+    if (product.isGroup) {
+      previewModal.onOpen(product);
+      return;
+    }
+
     cart.addItem(product);
   };
 
   const onAddToWishlist: MouseEventHandler<HTMLButtonElement> = (event) => {
     event.stopPropagation();
 
+    if (product.isGroup) {
+      previewModal.onOpen(product);
+      return;
+    }
+
     wishlist.addItem(product);
   };
 
-  const isWishlistProduct = wishlist.items.some(
-    (item) => item.id === product.id,
-  );
+  const isWishlistProduct =
+    isMounted && wishlist.items.some((item) => item.id === product.id);
 
-  const isCartProduct = cart.items.some((item) => item.id === product.id);
+  const isCartProduct =
+    isMounted && cart.items.some((item) => item.id === product.id);
 
   return (
     <div
       onClick={handleClick}
       className="group relative flex cursor-pointer flex-col justify-between space-y-4 rounded-xl border border-solid border-blue-baby px-3 py-2.5 shadow-card [transition:0.2s_ease] hover:shadow-card-hover"
     >
-      <div className="relative aspect-square rounded-xl bg-gray-100">
+      <div className="relative block aspect-square overflow-hidden rounded-xl bg-gray-100">
         <CldImage
           src={mainImage.url}
           alt={product.name ?? "Imagen principal del producto"}
           fill
           sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
           priority={priority}
-          className="aspect-square rounded-md object-cover"
+          className="object-cover"
           format="auto"
         />
         <div className="absolute bottom-5 w-full px-6 opacity-0 transition group-hover:opacity-100">
@@ -130,8 +139,56 @@ const ProductCard: React.FC<ProductCardProps> = ({
         isDisabled
       />
       <div className="flex flex-col gap-1 font-serif">
-        {product.discountedPrice &&
-        product.discountedPrice < Number(product.price) ? (
+        {product.minPrice &&
+        product.maxPrice &&
+        product.minPrice !== product.maxPrice ? (
+          <div className="flex items-center gap-1">
+            <Currency value={product.minPrice} />
+            <span className="text-gray-500">-</span>
+            <Currency value={product.maxPrice} />
+          </div>
+        ) : product.isGroup ? (
+          product.minPrice &&
+          product.maxPrice &&
+          product.minPrice === product.maxPrice ? (
+            product.originalPrice &&
+            product.minPrice < product.originalPrice ? (
+              <>
+                <div className="flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
+                  <Currency value={product.minPrice} className="text-2xl" />
+                  <Currency
+                    value={product.originalPrice}
+                    className="text-sm text-gray-500 line-through"
+                  />
+                </div>
+                <span className="text-xs text-green-600">
+                  Ahorra{" "}
+                  {new Intl.NumberFormat("es-CO", {
+                    style: "currency",
+                    currency: "COP",
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0,
+                  }).format(product.originalPrice - product.minPrice)}{" "}
+                  (
+                  {Math.round(
+                    ((product.originalPrice - product.minPrice) /
+                      product.originalPrice) *
+                      100,
+                  )}
+                  %)
+                </span>
+              </>
+            ) : (
+              <Currency value={product.minPrice} />
+            )
+          ) : (
+            <div className="flex items-center gap-1">
+              <span className="text-sm font-medium text-gray-500">Desde</span>
+              <Currency value={product.minPrice ?? product.price} />
+            </div>
+          )
+        ) : product.discountedPrice &&
+          product.discountedPrice < Number(product.price) ? (
           <>
             <div className="flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
               <Currency value={product.discountedPrice} className="text-2xl" />
@@ -161,7 +218,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
           <Currency value={product.price} />
         )}
       </div>
-      {/* Smart Badge Priority: Out of Stock > Offer > New */}
+      {/* Smart Badge Priority: Out of Stock > Offer > Group > New */}
       {product.stock === 0 ? (
         <ProductCardBadge
           text="¡Agotado!"
@@ -169,6 +226,8 @@ const ProductCard: React.FC<ProductCardProps> = ({
         />
       ) : product.offerLabel ? (
         <OfferBadge text={product.offerLabel} />
+      ) : product.isGroup ? (
+        <GroupBadge optionsCount={product.variantCount ?? 0} />
       ) : isNew ? (
         <ProductCardBadge text="¡Nuevo!" />
       ) : null}

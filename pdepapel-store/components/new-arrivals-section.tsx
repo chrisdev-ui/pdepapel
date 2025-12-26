@@ -6,6 +6,7 @@ export const NewArrivalsSection = async () => {
   const { products } = await getProducts({
     onlyNew: true,
     limit: LIMIT_PER_ITEMS,
+    groupBy: "parents",
   });
 
   return <NewArrivals newProducts={products} />;

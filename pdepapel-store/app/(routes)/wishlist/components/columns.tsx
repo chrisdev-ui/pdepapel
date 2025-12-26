@@ -4,6 +4,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { BadgeAlert, BadgeCheck } from "lucide-react";
+import Link from "next/link";
 
 import { CldImage } from "@/components/ui/CldImage";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -21,6 +22,9 @@ export type WishlistColumn = {
   offerLabel?: string | null;
   stock: string | number;
   createdAt: Date;
+  size?: string;
+  color?: string;
+  design?: string;
 };
 
 export const columns: ColumnDef<WishlistColumn>[] = [
@@ -51,7 +55,10 @@ export const columns: ColumnDef<WishlistColumn>[] = [
     accessorKey: "imageUrl",
     header: "",
     cell: ({ row }) => (
-      <div className="relative h-12 w-12 overflow-hidden rounded-md sm:h-24 sm:w-24">
+      <Link
+        href={`/product/${row.original.id}`}
+        className="relative block h-12 w-12 overflow-hidden rounded-md sm:h-24 sm:w-24"
+      >
         <CldImage
           fill
           src={row.original.imageUrl}
@@ -60,13 +67,30 @@ export const columns: ColumnDef<WishlistColumn>[] = [
           className="object-cover object-center"
           priority
         />
-      </div>
+      </Link>
     ),
   },
   {
     accessorKey: "name",
     header: () => (
       <div className="font-serif text-base font-bold">Nombre del producto</div>
+    ),
+    cell: ({ row }) => (
+      <Link
+        href={`/product/${row.original.id}`}
+        className="flex flex-col hover:underline"
+      >
+        <span className="font-medium">{row.original.name}</span>
+        {row.original.design && (
+          <span className="text-xs text-gray-400">{`Diseño: ${row.original.design}`}</span>
+        )}
+        {row.original.color && (
+          <span className="text-xs text-gray-400">{`Color: ${row.original.color}`}</span>
+        )}
+        {row.original.size && (
+          <span className="text-xs text-gray-400">{`Talla: ${row.original.size}`}</span>
+        )}
+      </Link>
     ),
   },
   {

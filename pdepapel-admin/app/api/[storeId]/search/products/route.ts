@@ -26,13 +26,33 @@ export async function GET(
     const limit = Number(req.nextUrl.searchParams.get("limit")) || 10;
     const skip = (page - 1) * limit;
 
+    // ---------------------------------------------------------
+    // REDIS CACHING (1 Hour)
+    // ---------------------------------------------------------
+    const cacheKey = `store:${params.storeId}:search:${search}:${page}:${limit}:v2`;
+    try {
+      const { Redis } = await import("@upstash/redis");
+      const redis = Redis.fromEnv();
+      const cached = await redis.get(cacheKey);
+      if (cached) {
+        return NextResponse.json(cached, {
+          headers: {
+            ...corsHeaders,
+            "X-Cache": "HIT",
+          },
+        });
+      }
+    } catch (error) {
+      console.error("Redis get error:", error);
+    }
+
     const products = await prismadb.product.findMany({
       where: {
         storeId: params.storeId,
         isArchived: false,
         OR: [
           {
-            name: search !== "" ? { search } : undefined,
+            name: search !== "" ? { search } : undefined, // Fulltext if supported
           },
           {
             description: search !== "" ? { search } : undefined,
@@ -56,30 +76,86 @@ export async function GET(
           sort: "asc",
         },
       },
-      take: limit,
+      take: limit * 5, // Fetch more to allow for grouping deduplication
       skip,
       include: {
-        images: true,
+        images: {
+          orderBy: { isMain: "desc" },
+          take: 1,
+        },
+        productGroup: {
+          include: {
+            images: {
+              orderBy: { isMain: "desc" },
+              take: 1,
+            },
+          },
+        },
       },
     });
-    const { calculateDiscountedPrice } = await import("@/lib/discount-engine");
+    const { getProductsPrices } = await import("@/lib/discount-engine");
+    const pricesMap = await getProductsPrices(products, params.storeId);
 
-    const productsWithDiscounts = await Promise.all(
-      products.map(async (product) => {
-        const priceInfo = await calculateDiscountedPrice(
-          product,
-          params.storeId,
-        );
-        return {
-          id: product.id,
-          name: product.name,
-          price: priceInfo.price,
-          image: product.images.find((img) => img.isMain) || product.images[0],
-        };
-      }),
+    const processedResults = new Map<string, any>();
+
+    for (const product of products) {
+      // If product belongs to a group, we show the Group
+      if (product.productGroup) {
+        const groupId = product.productGroup.id;
+        if (!processedResults.has(groupId)) {
+          // Use Group Data
+          const groupImage =
+            product.productGroup.images[0] || product.images[0];
+
+          const priceInfo = pricesMap.get(product.id);
+          const effectivePrice = priceInfo?.price ?? Number(product.price);
+
+          processedResults.set(groupId, {
+            id: groupId,
+            name: product.productGroup.name,
+            price: effectivePrice, // Representative price
+            image: groupImage,
+            isGroup: true,
+          });
+        }
+      } else {
+        // Standalone Product
+        if (!processedResults.has(product.id)) {
+          const priceInfo = pricesMap.get(product.id);
+          const effectivePrice = priceInfo?.price ?? Number(product.price);
+
+          processedResults.set(product.id, {
+            id: product.id,
+            name: product.name,
+            price: effectivePrice,
+            image: product.images[0],
+            isGroup: false,
+          });
+        }
+      }
+    }
+
+    // Convert Map to Array and Slice
+    const productsWithDiscounts = Array.from(processedResults.values()).slice(
+      0,
+      limit,
     );
 
-    return NextResponse.json(productsWithDiscounts, { headers: corsHeaders });
+    // Cache Response
+    try {
+      const { Redis } = await import("@upstash/redis");
+      const redis = Redis.fromEnv();
+      await redis.set(cacheKey, productsWithDiscounts, { ex: 3600 });
+    } catch (error) {
+      console.error("Redis set error:", error);
+    }
+
+    return NextResponse.json(productsWithDiscounts, {
+      headers: {
+        ...corsHeaders,
+        "X-Cache": "MISS",
+      },
+    });
   } catch (error) {
     return handleErrorResponse(error, "SEARCH_PRODUCTS", {
       headers: corsHeaders,

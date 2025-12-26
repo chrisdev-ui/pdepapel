@@ -25,6 +25,7 @@ export async function getOrders(storeId: string) {
             select: {
               id: true,
               name: true,
+              sku: true,
               price: true,
               images: true,
             },

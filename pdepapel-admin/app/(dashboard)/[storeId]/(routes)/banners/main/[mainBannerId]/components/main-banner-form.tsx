@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, Loader2, Trash } from "lucide-react";
+import { ArrowLeft, Eraser, Loader2, Trash } from "lucide-react";
 import { useForm } from "react-hook-form";
 import z from "zod";
 
@@ -20,6 +20,7 @@ import { ImageUpload } from "@/components/ui/image-upload";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Models } from "@/constants";
+import { useFormPersist } from "@/hooks/use-form-persist";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import { MainBanner } from "@prisma/client";
@@ -65,25 +66,46 @@ const MainBannerForm: React.FC<MainBannerFormProps> = ({ initialData }) => {
     [initialData],
   );
 
+  const defaultValues = useMemo(
+    () =>
+      initialData
+        ? {
+            ...initialData,
+            title: initialData.title || "",
+            label1: initialData.label1 || "",
+            label2: initialData.label2 || "",
+            highlight: initialData.highlight || "",
+          }
+        : {
+            title: "",
+            label1: "",
+            label2: "",
+            highlight: "",
+            callToAction: "",
+            imageUrl: "",
+          },
+    [initialData],
+  );
+
   const form = useForm<MainBannerFormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: initialData
-      ? {
-          ...initialData,
-          title: initialData.title || "",
-          label1: initialData.label1 || "",
-          label2: initialData.label2 || "",
-          highlight: initialData.highlight || "",
-        }
-      : {
-          title: "",
-          label1: "",
-          label2: "",
-          highlight: "",
-          callToAction: "",
-          imageUrl: "",
-        },
+    defaultValues,
   });
+
+  const { clearStorage } = useFormPersist({
+    form,
+    key: `main-banner-form-${params.storeId}-${initialData?.id ?? "new"}`,
+  });
+
+  const onClear = () => {
+    form.reset(defaultValues);
+    clearStorage();
+    toast({
+      title: "Formulario limpiado",
+      description: "Los datos han sido restablecidos.",
+    });
+  };
+
   const onSubmit = async (data: MainBannerFormValues) => {
     try {
       setLoading(true);
@@ -95,6 +117,7 @@ const MainBannerForm: React.FC<MainBannerFormProps> = ({ initialData }) => {
       } else {
         await axios.post(`/api/${params.storeId}/${Models.MainBanner}`, data);
       }
+      clearStorage();
       router.refresh();
       router.push(`/${params.storeId}/${Models.Banners}`);
       toast({
@@ -147,16 +170,22 @@ const MainBannerForm: React.FC<MainBannerFormProps> = ({ initialData }) => {
           </Button>
           <Heading title={title} description={description} />
         </div>
-        {initialData && (
-          <Button
-            disabled={loading}
-            variant="destructive"
-            size="sm"
-            onClick={() => setOpen(true)}
-          >
-            <Trash className="h-4 w-4" />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={onClear} type="button">
+            <Eraser className="mr-2 h-4 w-4" />
+            Limpiar Formulario
           </Button>
-        )}
+          {initialData && (
+            <Button
+              disabled={loading}
+              variant="destructive"
+              size="sm"
+              onClick={() => setOpen(true)}
+            >
+              <Trash className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
       <Separator />
       <Form {...form}>

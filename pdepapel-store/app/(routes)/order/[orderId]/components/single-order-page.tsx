@@ -25,6 +25,7 @@ import { Forbidden } from "@/components/forbidden";
 import { Icons } from "@/components/icons";
 import { PayUForm } from "@/components/payu-form";
 import { CldImage } from "@/components/ui/CldImage";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { Currency } from "@/components/ui/currency";
@@ -292,6 +293,15 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
     <>
       {hasAccess && (
         <Container>
+          <Breadcrumb
+            items={[
+              {
+                label: `Pedido #${order.orderNumber ?? order.id}`,
+                isCurrent: true,
+              },
+            ]}
+            className="mt-6"
+          />
           <div className="mt-5 flex items-center justify-center gap-5">
             <div className="relative h-20 w-20">
               <Image
@@ -605,6 +615,15 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                         <p className="mb-2 mt-0 font-serif text-sm font-semibold">
                           {product.name}
                         </p>
+                        {product.design && (
+                          <span className="text-xs text-gray-400">{`Diseño: ${product.design.name}`}</span>
+                        )}
+                        {product.color && (
+                          <span className="text-xs text-gray-400">{`Color: ${product.color.name}`}</span>
+                        )}
+                        {product.size && (
+                          <span className="text-xs text-gray-400">{`Talla: ${product.size.name}`}</span>
+                        )}
                         <span className="text-xs text-gray-400">
                           {`#${product.sku} | Cantidad: ${quantity}`}
                         </span>

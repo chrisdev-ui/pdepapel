@@ -1,5 +1,9 @@
-import { SpinnerButton } from "@/components/ui/spinner-button";
+import { BrandedLoader } from "@/components/ui/branded-loader";
 
 export default function Loading() {
-  return <SpinnerButton />;
+  return (
+    <div className="flex h-full w-full items-center justify-center">
+      <BrandedLoader />
+    </div>
+  );
 }

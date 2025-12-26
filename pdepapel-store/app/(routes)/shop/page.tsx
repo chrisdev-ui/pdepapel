@@ -9,6 +9,7 @@ import { getTypes } from "@/actions/get-types";
 import Features from "@/components/features";
 import Newsletter from "@/components/newsletter";
 import { ShopContent } from "@/components/shop-content";
+import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { Container } from "@/components/ui/container";
 import { BASE_URL, LIMIT_SHOP_ITEMS } from "@/constants";
 
@@ -149,6 +150,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
     page: searchParams.page,
     itemsPerPage: LIMIT_SHOP_ITEMS,
     search: searchParams.search,
+    groupBy: "parents",
   });
 
   const [types, sizes, colors, designs, categories] = await Promise.all([
@@ -159,10 +161,41 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
     getCategories(),
   ]);
 
+  const breadcrumbItems: BreadcrumbItem[] = [
+    { label: "Tienda", href: "/shop", isCurrent: true },
+  ];
+
+  if (searchParams.categoryId) {
+    const category = categories.find((c) => c.id === searchParams.categoryId);
+    if (category) {
+      breadcrumbItems[0].isCurrent = false;
+      breadcrumbItems.push({
+        label: category.name,
+        isCurrent: true,
+      });
+    }
+  } else if (searchParams.typeId) {
+    const type = types.find((t) => t.id === searchParams.typeId);
+    if (type) {
+      breadcrumbItems[0].isCurrent = false;
+      breadcrumbItems.push({
+        label: type.name,
+        isCurrent: true,
+      });
+    }
+  } else if (searchParams.search) {
+    breadcrumbItems[0].isCurrent = false;
+    breadcrumbItems.push({
+      label: `Resultados: ${searchParams.search}`,
+      isCurrent: true,
+    });
+  }
+
   return (
     <>
       <Features />
       <Container className="flex flex-col gap-y-8">
+        <Breadcrumb items={breadcrumbItems} className="mt-6" />
         <ShopContent
           initialProducts={products}
           initialTotalPages={totalPages}

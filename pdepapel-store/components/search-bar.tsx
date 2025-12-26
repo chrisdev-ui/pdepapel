@@ -5,7 +5,6 @@ import {
   ChangeEvent,
   KeyboardEvent,
   useCallback,
-  useEffect,
   useRef,
   useState,
 } from "react";
@@ -14,9 +13,9 @@ import { useInView } from "react-intersection-observer";
 import { SearchResults } from "@/components/search-results";
 import { Input } from "@/components/ui/input";
 import { useDebounce } from "@/hooks/use-debounce";
-import useFilteredProducts from "@/hooks/use-filtered-products";
+import useSearchProducts from "@/hooks/use-search-products";
 import { cn } from "@/lib/utils";
-import { Product } from "@/types";
+import { SearchResult } from "@/types";
 
 interface SearchBarProps {
   displaySearchbox: boolean;
@@ -45,15 +44,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     [],
   );
 
-  const {
-    data: filteredProducts,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    status,
-  } = useFilteredProducts(debouncedSearch);
-
-  const products = filteredProducts?.pages.flat();
+  const { data: products, status } = useSearchProducts(debouncedSearch);
 
   const handleKeydown = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
@@ -90,12 +81,6 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     setIsOpen(false);
     toggleSearch(false);
   }, [toggleSearch]);
-
-  useEffect(() => {
-    if (inView && hasNextPage) {
-      fetchNextPage();
-    }
-  }, [fetchNextPage, hasNextPage, inView]);
 
   return (
     <div className="relative">
@@ -154,12 +139,10 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       {displaySearchbox && isOpen ? (
         <SearchResults
           innerRef={ref}
-          products={products as Product[]}
+          products={(products as SearchResult[]) || []}
           isSuccess={status === "success"}
           isLoading={status === "pending"}
           isError={status === "error"}
-          isFetchingNextPage={isFetchingNextPage}
-          hasNextPage={hasNextPage}
           closeAll={closeAll}
         />
       ) : null}

@@ -1,7 +1,7 @@
 "use client";
 
 import { Command as CommandPrimitive } from "cmdk";
-import { Archive, Check, Package } from "lucide-react";
+import { Archive, Check, Package, Percent } from "lucide-react";
 import Image from "next/image";
 import { useCallback, useRef, useState, type KeyboardEvent } from "react";
 
@@ -19,6 +19,7 @@ export type Option = {
   value: string;
   label: string;
   price: number;
+  discountedPrice?: number;
   stock: number;
   image?: string;
   isAvailable: boolean;
@@ -190,6 +191,12 @@ export const AutoComplete = ({
                                   Archivado
                                 </Badge>
                               )}
+                              {option.offerLabel && (
+                                <Badge className="h-4 bg-green-600 text-xs hover:bg-green-700">
+                                  <Percent className="mr-1 h-2 w-2" />
+                                  {option.offerLabel}
+                                </Badge>
+                              )}
                               {option.stock === 0 && (
                                 <Badge
                                   variant="destructive"
@@ -207,10 +214,22 @@ export const AutoComplete = ({
                             </div>
                           </div>
                         </div>
-                        {option.price && (
-                          <span className="text-slate-500">
-                            {currencyFormatter.format(option.price)}
-                          </span>
+                        {option.discountedPrice &&
+                        option.discountedPrice < option.price ? (
+                          <div className="flex flex-col items-end">
+                            <span className="text-xs text-muted-foreground line-through">
+                              {currencyFormatter.format(option.price)}
+                            </span>
+                            <span className="font-medium text-green-600">
+                              {currencyFormatter.format(option.discountedPrice)}
+                            </span>
+                          </div>
+                        ) : (
+                          option.price && (
+                            <span className="text-slate-500">
+                              {currencyFormatter.format(option.price)}
+                            </span>
+                          )
                         )}
                       </CommandItem>
                     );

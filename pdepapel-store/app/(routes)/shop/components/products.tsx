@@ -1,14 +1,11 @@
 import dynamic from "next/dynamic";
 
 import { NoResults } from "@/components/ui/no-results";
+import ProductCard from "@/components/ui/product-card";
 import { KAWAII_FACE_SAD } from "@/constants";
 import { Product } from "@/types";
 
 const Paginator = dynamic(() => import("./paginator"), {
-  ssr: false,
-});
-
-const ProductCard = dynamic(() => import("@/components/ui/product-card"), {
   ssr: false,
 });
 
@@ -28,8 +25,12 @@ const Products: React.FC<ProductsProps> = ({ products, totalPages }) => {
       )}
       {!!products.length && (
         <div className="grid grid-cols-2 gap-1 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
-          {products.map((product) => (
-            <ProductCard key={product.id} product={product} />
+          {products.map((product, index) => (
+            <ProductCard
+              key={product.id}
+              product={product}
+              priority={index < 6}
+            />
           ))}
         </div>
       )}

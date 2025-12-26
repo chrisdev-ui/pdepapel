@@ -1,10 +1,12 @@
+import { X } from "lucide-react";
+import Link from "next/link";
+
 import { CldImage } from "@/components/ui/CldImage";
 import { Currency } from "@/components/ui/currency";
 import { IconButton } from "@/components/ui/icon-button";
 import { QuantitySelector } from "@/components/ui/quantity-selector";
 import { useCart } from "@/hooks/use-cart";
 import { Product } from "@/types";
-import { X } from "lucide-react";
 
 interface CartItemProps {
   item: Product;
@@ -27,14 +29,16 @@ export const CartItem: React.FC<CartItemProps> = ({ item }) => {
   return (
     <li className="flex border-b py-6">
       <div className="relative h-24 w-24 overflow-hidden rounded-md sm:h-48 sm:w-48">
-        <CldImage
-          fill
-          src={mainImage.url}
-          alt={item?.name ?? "Imagen del producto"}
-          sizes="(max-width: 640px) 100vw, 640px"
-          className="object-cover object-center"
-          priority
-        />
+        <Link href={`/product/${item.id}`}>
+          <CldImage
+            fill
+            src={mainImage.url}
+            alt={item?.name ?? "Imagen del producto"}
+            sizes="(max-width: 640px) 100vw, 640px"
+            className="object-cover object-center"
+            priority
+          />
+        </Link>
       </div>
       <div className="relative ml-4 flex flex-1 flex-col justify-between sm:ml-6">
         <div className="absolute right-0 top-0 z-10">
@@ -42,17 +46,25 @@ export const CartItem: React.FC<CartItemProps> = ({ item }) => {
         </div>
         <div className="relative pr-9 sm:grid sm:grid-cols-2 sm:gap-x-6 sm:pr-0">
           <div className="flex justify-between">
-            <p className="font-serif text-lg font-semibold">{item.name}</p>
+            <Link href={`/product/${item.id}`}>
+              <p className="font-serif text-lg font-semibold hover:underline">
+                {item.name}
+              </p>
+            </Link>
           </div>
 
           <div className="mb-3 mt-1 flex flex-wrap text-sm text-gray-500 lg:mb-0">
-            <p>{item.color.name}</p>
-            <p className="ml-4 border-l border-gray-200 pl-4">
-              {item.size.name}
-            </p>
-            <p className="ml-4 border-l border-gray-200 pl-4">
-              {item.design.name}
-            </p>
+            {item.color && <p>Color: {item.color.name}</p>}
+            {item.size && (
+              <p className="ml-4 border-l border-gray-200 pl-4">
+                Talla: {item.size.name}
+              </p>
+            )}
+            {item.design && (
+              <p className="ml-4 border-l border-gray-200 pl-4">
+                Diseño: {item.design.name}
+              </p>
+            )}
           </div>
           <div className="flex w-fit flex-col space-y-2">
             <QuantitySelector

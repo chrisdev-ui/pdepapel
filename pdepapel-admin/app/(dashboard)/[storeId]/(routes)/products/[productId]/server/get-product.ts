@@ -43,6 +43,28 @@ export async function getProduct(id: string, storeId: string) {
     },
   });
 
+  // Fetch all product groups for selection in the form
+  // We include products to check for existing variants (collision detection)
+  const productGroups = await prismadb.productGroup.findMany({
+    where: {
+      storeId,
+    },
+    select: {
+      id: true,
+      name: true,
+      products: {
+        select: {
+          id: true,
+          categoryId: true,
+          designId: true,
+          colorId: true,
+          sizeId: true,
+          price: true,
+        },
+      },
+    },
+  });
+
   const reviews =
     product?.reviews.map((review) => ({
       id: review.id,
@@ -56,6 +78,23 @@ export async function getProduct(id: string, storeId: string) {
       }),
     })) || [];
 
+  let productGroup = null;
+  if (product?.productGroupId) {
+    productGroup = await prismadb.productGroup.findUnique({
+      where: {
+        id: product.productGroupId,
+      },
+      include: {
+        images: true,
+        products: {
+          include: {
+            images: true,
+          },
+        },
+      },
+    });
+  }
+
   return {
     product,
     categories,
@@ -64,5 +103,7 @@ export async function getProduct(id: string, storeId: string) {
     designs,
     suppliers,
     reviews,
+    productGroup,
+    productGroups,
   };
 }

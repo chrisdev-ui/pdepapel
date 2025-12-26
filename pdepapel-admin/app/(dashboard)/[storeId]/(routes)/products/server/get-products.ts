@@ -17,6 +17,7 @@ export async function getProducts(storeId: string) {
       color: true,
       isArchived: true,
       isFeatured: true,
+      productGroupId: true,
       images: {
         select: {
           url: true,
@@ -39,6 +40,12 @@ export async function getProducts(storeId: string) {
       },
       design: {
         select: {
+          name: true,
+        },
+      },
+      productGroup: {
+        select: {
+          id: true,
           name: true,
         },
       },

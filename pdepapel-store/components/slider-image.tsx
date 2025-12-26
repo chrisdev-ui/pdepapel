@@ -1,3 +1,5 @@
+"use client";
+
 import { motion } from "framer-motion";
 import { getCldImageUrl } from "next-cloudinary";
 
@@ -55,7 +57,6 @@ export const SlideImage: React.FC<SlideImageProps> = ({
         sizes="(max-width: 768px) 100vw, (max-width: 1200px) 90vw, 80vw"
         alt={alt}
         className="h-full w-full object-cover"
-        fetchPriority={current === 0 ? "high" : "auto"}
         animate={isActive ? { scale: [1, 1.05] } : { scale: 1 }}
         transition={{
           duration: 8,

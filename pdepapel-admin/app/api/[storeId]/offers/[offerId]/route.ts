@@ -23,6 +23,7 @@ export async function GET(
       include: {
         products: true,
         categories: true,
+        productGroups: true,
       },
     });
 
@@ -60,6 +61,7 @@ export async function PATCH(
       isActive,
       productIds,
       categoryIds,
+      productGroupIds,
     } = body;
 
     if (!name) throw ErrorFactory.InvalidRequest("El nombre es requerido");
@@ -105,10 +107,17 @@ export async function PATCH(
             category: { connect: { id } },
           })),
         },
+        productGroups: {
+          deleteMany: {}, // Remove all existing links
+          create: (productGroupIds || []).map((id: string) => ({
+            productGroup: { connect: { id } },
+          })),
+        },
       },
       include: {
         products: true,
         categories: true,
+        productGroups: true,
       },
     });
 

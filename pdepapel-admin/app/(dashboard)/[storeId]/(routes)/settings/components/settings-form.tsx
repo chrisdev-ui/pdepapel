@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   AtSign,
+  Eraser,
   Facebook,
   Instagram,
   Loader2,
@@ -36,12 +37,13 @@ import { ImageUpload } from "@/components/ui/image-upload";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { useFormPersist } from "@/hooks/use-form-persist";
 import { useOrigin } from "@/hooks/use-origin";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 interface SettingsFormProps {
   initialData: Store & {
@@ -84,9 +86,8 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  const form = useForm<SettingsFormValues>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
+  const defaultValues = useMemo(
+    () => ({
       name: initialData.name,
       logoUrl: initialData.logoUrl || "",
       phone: initialData.phone || "",
@@ -106,12 +107,34 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
               returns: "",
               payment: "",
             },
-    },
+    }),
+    [initialData],
+  );
+
+  const form = useForm<SettingsFormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues,
   });
+
+  const { clearStorage } = useFormPersist({
+    form,
+    key: `settings-form-${params.storeId}`,
+  });
+
+  const onClear = () => {
+    form.reset(defaultValues);
+    clearStorage();
+    toast({
+      title: "Formulario limpiado",
+      description: "Los datos han sido restablecidos.",
+    });
+  };
+
   const onSubmit = async (values: SettingsFormValues) => {
     try {
       setLoading(true);
       await axios.patch(`/api/stores/${params.storeId}`, values);
+      clearStorage();
       router.refresh();
       toast({
         description: "¡Listo! Los cambios se han guardado correctamente.",
@@ -164,14 +187,20 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
             description="Maneja las preferencias e información de la tienda"
           />
         </div>
-        <Button
-          disabled={loading}
-          variant="destructive"
-          size="sm"
-          onClick={() => setOpen(true)}
-        >
-          <Trash className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={onClear} type="button">
+            <Eraser className="mr-2 h-4 w-4" />
+            Limpiar Formulario
+          </Button>
+          <Button
+            disabled={loading}
+            variant="destructive"
+            size="sm"
+            onClick={() => setOpen(true)}
+          >
+            <Trash className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
       <Separator />
       <Form {...form}>

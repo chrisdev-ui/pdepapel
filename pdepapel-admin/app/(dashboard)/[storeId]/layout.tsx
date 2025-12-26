@@ -1,4 +1,5 @@
 import { Navbar } from "@/components/navbar";
+import { StoreInitializer } from "@/components/store-initializer";
 import prismadb from "@/lib/prismadb";
 import { auth } from "@clerk/nextjs";
 import { redirect } from "next/navigation";
@@ -23,6 +24,7 @@ export default async function DashboardLayout({
 
   return (
     <>
+      <StoreInitializer logoUrl={store.logoUrl} />
       <Navbar />
       {children}
     </>

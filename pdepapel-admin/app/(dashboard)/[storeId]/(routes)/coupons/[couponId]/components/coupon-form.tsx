@@ -24,13 +24,21 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Models, discountOptions } from "@/constants";
+import { useFormPersist } from "@/hooks/use-form-persist";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import { datePresets } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Coupon, DiscountType } from "@prisma/client";
 import axios from "axios";
-import { ArrowLeft, DollarSign, Loader2, Percent, Trash } from "lucide-react";
+import {
+  ArrowLeft,
+  DollarSign,
+  Eraser,
+  Loader2,
+  Percent,
+  Trash,
+} from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -88,31 +96,51 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData }) => {
     [initialData],
   );
 
+  const defaultValues = useMemo(
+    () =>
+      initialData
+        ? {
+            ...initialData,
+            maxUses: initialData.maxUses as number,
+            minOrderValue: initialData.minOrderValue as number,
+            dateRange: {
+              from: initialData.startDate,
+              to: initialData.endDate,
+            },
+          }
+        : {
+            code: "",
+            type: undefined,
+            amount: undefined,
+            dateRange: {
+              from: undefined,
+              to: undefined,
+            },
+            maxUses: undefined,
+            minOrderValue: undefined,
+            isActive: true,
+          },
+    [initialData],
+  );
+
   const form = useForm<CouponFormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: initialData
-      ? {
-          ...initialData,
-          maxUses: initialData.maxUses as number,
-          minOrderValue: initialData.minOrderValue as number,
-          dateRange: {
-            from: initialData.startDate,
-            to: initialData.endDate,
-          },
-        }
-      : {
-          code: "",
-          type: undefined,
-          amount: undefined,
-          dateRange: {
-            from: undefined,
-            to: undefined,
-          },
-          maxUses: undefined,
-          minOrderValue: undefined,
-          isActive: true,
-        },
+    defaultValues,
   });
+
+  const { clearStorage } = useFormPersist({
+    form,
+    key: `coupon-form-${params.storeId}-${initialData?.id ?? "new"}`,
+  });
+
+  const onClear = () => {
+    form.reset(defaultValues);
+    clearStorage();
+    toast({
+      title: "Formulario limpiado",
+      description: "Los datos han sido restablecidos.",
+    });
+  };
 
   const onSubmit = async ({ dateRange, ...data }: CouponFormValues) => {
     const payload = {
@@ -130,6 +158,7 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData }) => {
       } else {
         await axios.post(`/api/${params.storeId}/${Models.Coupons}`, payload);
       }
+      clearStorage();
       router.refresh();
       router.push(`/${params.storeId}/${Models.Coupons}`);
       toast({
@@ -184,16 +213,22 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData }) => {
           </Button>
           <Heading title={title} description={description} />
         </div>
-        {initialData && (
-          <Button
-            disabled={loading}
-            variant="destructive"
-            size="sm"
-            onClick={() => setOpen(true)}
-          >
-            <Trash className="h-4 w-4" />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={onClear} type="button">
+            <Eraser className="mr-2 h-4 w-4" />
+            Limpiar Formulario
           </Button>
-        )}
+          {initialData && (
+            <Button
+              disabled={loading}
+              variant="destructive"
+              size="sm"
+              onClick={() => setOpen(true)}
+            >
+              <Trash className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
       <Separator />
       <Form {...form}>
@@ -227,6 +262,7 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData }) => {
                 <FormItem>
                   <FormLabel isRequired>Tipo de descuento</FormLabel>
                   <Select
+                    key={field.value}
                     disabled={loading}
                     onValueChange={field.onChange}
                     value={field.value}

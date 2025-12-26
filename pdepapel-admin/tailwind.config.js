@@ -19,6 +19,9 @@ module.exports = {
       spacing: {
         3.5: "0.875rem",
       },
+      minHeight: (theme) => ({
+        ...theme("spacing"),
+      }),
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

@@ -505,6 +505,7 @@ export async function processOrderItemsInBatches(
         stock: true,
         name: true,
         categoryId: true,
+        productGroupId: true,
       },
     });
     allProducts.push(...products);

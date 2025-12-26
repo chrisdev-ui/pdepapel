@@ -1,4 +1,5 @@
 import { getCategories } from "../../categories/server/get-categories";
+import { getProductGroups } from "../../products/server/get-product-groups";
 import { getProducts } from "../../products/server/get-products";
 import { OfferForm } from "./components/offer-form";
 import { getOffer } from "./server/get-offer";
@@ -13,6 +14,7 @@ export default async function OfferPage({
 
   const products = await getProducts(params.storeId);
   const categories = await getCategories(params.storeId);
+  const productGroups = await getProductGroups(params.storeId);
 
   return (
     <div className="flex-col">
@@ -21,6 +23,7 @@ export default async function OfferPage({
           initialData={offer}
           products={products}
           categories={categories}
+          productGroups={productGroups}
         />
       </div>
     </div>

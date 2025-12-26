@@ -1,6 +1,11 @@
 "use client";
 
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface ModalProps {
   open: boolean;
@@ -17,6 +22,10 @@ export const Modal: React.FC<ModalProps> = ({ open, onClose, children }) => {
   return (
     <Dialog open={open} onOpenChange={onChange}>
       <DialogContent className="w-full max-w-3xl overflow-hidden rounded-lg text-left align-middle shadow-2xl">
+        <DialogTitle className="sr-only">Vista previa del producto</DialogTitle>
+        <DialogDescription className="sr-only">
+          Detalles del producto seleccionado
+        </DialogDescription>
         <div className="relative flex w-full items-center overflow-hidden px-4 pb-8 pt-14 sm:px-6 sm:pt-8 md:p-6 lg:p-8">
           {children}
         </div>

@@ -44,6 +44,21 @@ export interface Product {
   discountedPrice?: number;
   originalPrice?: number;
   offerLabel?: string | null;
+  // Variant fields
+  isGroup?: boolean;
+  variantCount?: number;
+  productGroupId?: string | null;
+  hasDiscount?: boolean;
+  minPrice?: number;
+  maxPrice?: number;
+}
+
+export interface ProductVariant {
+  id: string;
+  size: Size;
+  color: Color;
+  design: Design;
+  stock: number;
 }
 
 export interface Category {
@@ -218,6 +233,17 @@ export interface ProductsResponse {
     designs: { id: string; count: number }[];
   };
 }
+
+export interface SearchResult {
+  id: string;
+  name: string;
+  price: string | number;
+  minPrice?: number;
+  isGroup?: boolean;
+  image: Image;
+}
+
+export type SearchResponse = SearchResult[] | { products: SearchResult[] };
 
 export type PayUFormState = Omit<PayUFormProps, "formRef" | "products">;
 

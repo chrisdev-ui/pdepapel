@@ -1,5 +1,6 @@
 import {
   parseAsArrayOf,
+  parseAsBoolean,
   parseAsInteger,
   parseAsString,
   useQueryStates,
@@ -18,6 +19,7 @@ export function useProductFilters() {
       sortOption: parseAsString.withDefault(""),
       page: parseAsInteger.withDefault(1),
       search: parseAsString.withDefault(""),
+      isOnSale: parseAsBoolean.withDefault(false),
     },
     {
       shallow: true,

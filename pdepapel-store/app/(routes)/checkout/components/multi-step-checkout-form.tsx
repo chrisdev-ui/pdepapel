@@ -621,8 +621,15 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                     <div className="flex h-full flex-col items-start justify-between">
                       <div className="flex flex-col text-left font-serif text-sm font-medium tracking-tight">
                         <span>{item.name}</span>
-                        <span className="text-xs text-gray-400">{`Diseño: ${item.design.name}`}</span>
-                        <span className="hidden text-xs text-gray-400 lg:block">{`Categoría: ${item.category.name}`}</span>
+                        {item.design && (
+                          <span className="text-xs text-gray-400">{`Diseño: ${item.design.name}`}</span>
+                        )}
+                        {item.color && (
+                          <span className="text-xs text-gray-400">{`Color: ${item.color.name}`}</span>
+                        )}
+                        {item.size && (
+                          <span className="text-xs text-gray-400">{`Talla: ${item.size.name}`}</span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         {item.discountedPrice &&

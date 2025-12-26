@@ -89,6 +89,7 @@ export async function PATCH(
       images,
       isArchived,
       isFeatured,
+      productGroupId,
     } = body;
 
     if (!name)
@@ -167,6 +168,7 @@ export async function PATCH(
           isArchived,
           isFeatured,
           stock,
+          productGroupId: productGroupId || null,
           description,
           images: {
             deleteMany: {},

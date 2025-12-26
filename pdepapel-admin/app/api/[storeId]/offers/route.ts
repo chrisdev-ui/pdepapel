@@ -28,6 +28,7 @@ export async function POST(
       isActive,
       productIds,
       categoryIds,
+      productGroupIds,
     } = body;
 
     if (!name) throw ErrorFactory.InvalidRequest("El nombre es requerido");
@@ -68,10 +69,16 @@ export async function POST(
             category: { connect: { id } },
           })),
         },
+        productGroups: {
+          create: (productGroupIds || []).map((id: string) => ({
+            productGroup: { connect: { id } },
+          })),
+        },
       },
       include: {
         products: true,
         categories: true,
+        productGroups: true,
       },
     });
 
@@ -118,6 +125,13 @@ export async function GET(
         categories: {
           include: {
             category: {
+              select: { name: true },
+            },
+          },
+        },
+        productGroups: {
+          include: {
+            productGroup: {
               select: { name: true },
             },
           },

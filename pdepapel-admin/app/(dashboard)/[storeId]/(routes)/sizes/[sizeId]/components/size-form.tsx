@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Size } from "@prisma/client";
-import { ArrowLeft, Loader2, Trash } from "lucide-react";
+import { ArrowLeft, Eraser, Loader2, Trash } from "lucide-react";
 import { useForm } from "react-hook-form";
 import z from "zod";
 
@@ -34,6 +34,7 @@ import {
   generateSizeValue,
   parseSizeValue,
 } from "@/constants/sizes";
+import { useFormPersist } from "@/hooks/use-form-persist";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import axios from "axios";
@@ -83,22 +84,42 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
     return { dimension: "", weight: "" };
   }, [initialData]);
 
+  const defaultValues = useMemo(
+    () =>
+      initialData
+        ? {
+            dimension: parsedSize.dimension,
+            weight: parsedSize.weight,
+            name: initialData.name,
+            value: initialData.value,
+          }
+        : {
+            dimension: "",
+            weight: "",
+            name: "",
+            value: "",
+          },
+    [initialData, parsedSize],
+  );
+
   const form = useForm<SizeFormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: initialData
-      ? {
-          dimension: parsedSize.dimension,
-          weight: parsedSize.weight,
-          name: initialData.name,
-          value: initialData.value,
-        }
-      : {
-          dimension: "",
-          weight: "",
-          name: "",
-          value: "",
-        },
+    defaultValues,
   });
+
+  const { clearStorage } = useFormPersist({
+    form,
+    key: `size-form-${params.storeId}-${initialData?.id ?? "new"}`,
+  });
+
+  const onClear = () => {
+    form.reset(defaultValues);
+    clearStorage();
+    toast({
+      title: "Formulario limpiado",
+      description: "Los datos han sido restablecidos.",
+    });
+  };
 
   // Watch dimension and weight to auto-generate name and value
   const dimension = form.watch("dimension");
@@ -134,6 +155,7 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
       } else {
         await axios.post(`/api/${params.storeId}/${Models.Sizes}`, payload);
       }
+      clearStorage();
       router.refresh();
       router.push(`/${params.storeId}/${Models.Sizes}`);
       toast({
@@ -186,16 +208,22 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
           </Button>
           <Heading title={title} description={description} />
         </div>
-        {initialData && (
-          <Button
-            disabled={loading}
-            variant="destructive"
-            size="sm"
-            onClick={() => setOpen(true)}
-          >
-            <Trash className="h-4 w-4" />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={onClear} type="button">
+            <Eraser className="mr-2 h-4 w-4" />
+            Limpiar Formulario
           </Button>
-        )}
+          {initialData && (
+            <Button
+              disabled={loading}
+              variant="destructive"
+              size="sm"
+              onClick={() => setOpen(true)}
+            >
+              <Trash className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
       <Separator />
       <Form {...form}>
@@ -212,6 +240,7 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
                 <FormItem>
                   <FormLabel isRequired>Dimensión</FormLabel>
                   <Select
+                    key={field.value}
                     disabled={loading}
                     onValueChange={field.onChange}
                     value={field.value}
@@ -219,10 +248,7 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue
-                          defaultValue={field.value}
-                          placeholder="Selecciona una dimensión"
-                        />
+                        <SelectValue placeholder="Selecciona una dimensión" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -250,6 +276,7 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
                 <FormItem>
                   <FormLabel isRequired>Peso</FormLabel>
                   <Select
+                    key={field.value}
                     disabled={loading}
                     onValueChange={field.onChange}
                     value={field.value}
@@ -257,10 +284,7 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue
-                          defaultValue={field.value}
-                          placeholder="Selecciona un peso"
-                        />
+                        <SelectValue placeholder="Selecciona un peso" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>

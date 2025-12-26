@@ -8,6 +8,8 @@ interface SearchItemProps {
   image?: Image;
   name: string;
   price: number | string;
+  minPrice?: number;
+  isGroup?: boolean;
   innerRef?: React.Ref<HTMLAnchorElement>;
   closeAll: () => void;
 }
@@ -17,6 +19,8 @@ export const SearchItem: React.FC<SearchItemProps> = ({
   image,
   name,
   price,
+  minPrice,
+  isGroup,
   innerRef,
   closeAll,
 }) => {
@@ -46,7 +50,13 @@ export const SearchItem: React.FC<SearchItemProps> = ({
         <div className="flex h-full w-full max-w-xs flex-col justify-center font-serif text-xs font-normal tracking-tight">
           <p className="w-full truncate text-left">{name}</p>
         </div>
-        <Currency className="text-sm" value={price} />
+        <div className="flex flex-col items-end">
+          {isGroup && <span className="text-[10px] text-gray-500">Desde</span>}
+          <Currency
+            className="text-sm"
+            value={isGroup && minPrice ? minPrice : price}
+          />
+        </div>
       </div>
     </Link>
   );

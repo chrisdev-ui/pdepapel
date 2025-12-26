@@ -16,6 +16,7 @@ export async function getPotentialProfit(storeId: string) {
       stock: true,
       price: true,
       acqPrice: true,
+      productGroupId: true,
     },
   });
 

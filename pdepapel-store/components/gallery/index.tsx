@@ -11,7 +11,7 @@ interface GalleryProps {
 
 export const Gallery: React.FC<GalleryProps> = ({ images = [] }) => {
   return (
-    <Tabs defaultValue={images[0]?.id}>
+    <Tabs defaultValue={images[0]?.id} key={images[0]?.id}>
       <div className="flex flex-col-reverse">
         <div className="mx-auto mt-6 w-full max-w-2xl lg:max-w-none">
           <TabsList className="grid grid-cols-4 gap-6">

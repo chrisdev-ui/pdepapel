@@ -6,8 +6,17 @@ export default async function ProductPage({
 }: {
   params: { productId: string; storeId: string };
 }) {
-  const { product, categories, sizes, colors, designs, suppliers, reviews } =
-    await getProduct(params.productId, params.storeId);
+  const {
+    product,
+    categories,
+    sizes,
+    colors,
+    designs,
+    suppliers,
+    reviews,
+    productGroup,
+    productGroups,
+  } = await getProduct(params.productId, params.storeId);
 
   return (
     <div className="flex-col">
@@ -20,6 +29,8 @@ export default async function ProductPage({
           initialData={product}
           reviews={reviews}
           suppliers={suppliers}
+          productGroup={productGroup}
+          productGroups={productGroups}
         />
       </div>
     </div>

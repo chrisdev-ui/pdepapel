@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, Lightbulb, Loader2, Trash } from "lucide-react";
+import { ArrowLeft, Eraser, Lightbulb, Loader2, Trash } from "lucide-react";
 import { useForm } from "react-hook-form";
 import z from "zod";
 
@@ -22,6 +22,7 @@ import { ImageUpload } from "@/components/ui/image-upload";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Models } from "@/constants";
+import { useFormPersist } from "@/hooks/use-form-persist";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import { Billboard } from "@prisma/client";
@@ -73,23 +74,44 @@ export const BillboardForm: React.FC<BillboardFormProps> = ({
     [initialData],
   );
 
+  const defaultValues = useMemo(
+    () =>
+      initialData
+        ? {
+            ...initialData,
+            title: initialData.title ?? "",
+            redirectUrl: initialData.redirectUrl ?? "",
+            buttonLabel: initialData.buttonLabel ?? "",
+          }
+        : {
+            label: "",
+            imageUrl: "",
+            title: "",
+            redirectUrl: "",
+            buttonLabel: "",
+          },
+    [initialData],
+  );
+
   const form = useForm<BillboardFormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: initialData
-      ? {
-          ...initialData,
-          title: initialData.title ?? "",
-          redirectUrl: initialData.redirectUrl ?? "",
-          buttonLabel: initialData.buttonLabel ?? "",
-        }
-      : {
-          label: "",
-          imageUrl: "",
-          title: "",
-          redirectUrl: "",
-          buttonLabel: "",
-        },
+    defaultValues,
   });
+
+  const { clearStorage } = useFormPersist({
+    form,
+    key: `billboard-form-${params.storeId}-${initialData?.id ?? "new"}`,
+  });
+
+  const onClear = () => {
+    form.reset(defaultValues);
+    clearStorage();
+    toast({
+      title: "Formulario limpiado",
+      description: "Los datos han sido restablecidos.",
+    });
+  };
+
   const onSubmit = async (data: BillboardFormValues) => {
     try {
       setLoading(true);
@@ -101,6 +123,7 @@ export const BillboardForm: React.FC<BillboardFormProps> = ({
       } else {
         await axios.post(`/api/${params.storeId}/${Models.Billboards}`, data);
       }
+      clearStorage();
       router.refresh();
       router.push(`/${params.storeId}/${Models.Billboards}`);
       toast({
@@ -153,16 +176,22 @@ export const BillboardForm: React.FC<BillboardFormProps> = ({
           </Button>
           <Heading title={title} description={description} />
         </div>
-        {initialData && (
-          <Button
-            disabled={loading}
-            variant="destructive"
-            size="sm"
-            onClick={() => setOpen(true)}
-          >
-            <Trash className="h-4 w-4" />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={onClear} type="button">
+            <Eraser className="mr-2 h-4 w-4" />
+            Limpiar Formulario
           </Button>
-        )}
+          {initialData && (
+            <Button
+              disabled={loading}
+              variant="destructive"
+              size="sm"
+              onClick={() => setOpen(true)}
+            >
+              <Trash className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
       <Separator />
       <Form {...form}>

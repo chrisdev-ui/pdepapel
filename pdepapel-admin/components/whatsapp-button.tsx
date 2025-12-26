@@ -13,7 +13,7 @@ interface OrderData {
   fullName: string;
   phone: string;
   totalPrice?: number | string;
-  products?: Array<{ name: string; quantity: number }>;
+  products?: Array<{ name: string; quantity: number; sku?: string }>;
 }
 
 interface CustomerData {
@@ -104,7 +104,10 @@ export const WhatsappButton: React.FC<WhatsappButtonProps> = ({
     // If it's order data, use the existing order-specific logic
     if (order) {
       const productsList = order.products
-        ?.map((p) => `- ${p.name} (${p.quantity} unidad/es)`)
+        ?.map(
+          (p) =>
+            `- ${p.name}${p.sku ? ` (${p.sku})` : ""} (${p.quantity} unidad/es)`,
+        )
         .join("\n");
 
       let message: string;

@@ -5,11 +5,11 @@ import { getTotalRevenue } from "@/actions/get-total-revenue";
 import { Analytics } from "@/components/analytics";
 import { Inventory } from "@/components/inventory";
 import { Overview } from "@/components/overview";
+import { BrandedLoader } from "@/components/ui/branded-loader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Heading } from "@/components/ui/heading";
 import { SensitiveDataCard } from "@/components/ui/sensitive-data-card";
 import { Separator } from "@/components/ui/separator";
-import { SpinnerButton } from "@/components/ui/spinner-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { YearSelector } from "@/components/year-selector";
 import { CreditCard, Package } from "lucide-react";
@@ -88,12 +88,12 @@ export default async function DashboardPage({
             </div>
           </TabsContent>
           <TabsContent value="inventory">
-            <Suspense fallback={<SpinnerButton />}>
+            <Suspense fallback={<BrandedLoader />}>
               <Inventory params={params} />
             </Suspense>
           </TabsContent>
           <TabsContent value="analytics">
-            <Suspense fallback={<SpinnerButton />}>
+            <Suspense fallback={<BrandedLoader />}>
               <Analytics params={params} year={year} salesData={salesCount} />
             </Suspense>
           </TabsContent>

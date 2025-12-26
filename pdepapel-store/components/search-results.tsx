@@ -1,17 +1,15 @@
 import { SearchItem } from "@/components/search-item";
-import { Product } from "@/types";
+import { SearchResult } from "@/types";
 import { AlertTriangle } from "lucide-react";
 import { SearchItemsSkeleton } from "./search-items-skeleton";
 import { ScrollArea } from "./ui/scroll-area";
 
 interface SearchResultsProps {
-  products: Product[];
+  products: SearchResult[];
   isSuccess?: boolean;
   isLoading?: boolean;
   isError?: boolean;
   innerRef: React.Ref<HTMLAnchorElement>;
-  isFetchingNextPage: boolean;
-  hasNextPage: boolean;
   closeAll: () => void;
 }
 
@@ -21,8 +19,6 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
   isLoading,
   isError,
   innerRef,
-  isFetchingNextPage,
-  hasNextPage,
   closeAll,
 }) => {
   return (
@@ -46,7 +42,6 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
                     products.length === index + 1 ? innerRef : undefined
                   }
                   key={product.id}
-                  image={product.images?.[0]}
                   closeAll={closeAll}
                   {...product}
                 />
@@ -54,20 +49,10 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
             })}
           </div>
         ) : null}
-        {isSuccess && products.length === 0 && !isFetchingNextPage ? (
+        {isSuccess && products.length === 0 ? (
           <div className="flex w-full items-center justify-center rounded p-2.5">
             <span className="font-serif text-xs tracking-tight">
               No se encontraron resultados.
-            </span>
-          </div>
-        ) : null}
-        {isFetchingNextPage && hasNextPage ? (
-          <SearchItemsSkeleton items={3} />
-        ) : null}
-        {isSuccess && products.length > 0 && !hasNextPage ? (
-          <div className="flex w-full items-center justify-center rounded p-2.5">
-            <span className="font-serif text-xs tracking-tight">
-              No hay más resultados.
             </span>
           </div>
         ) : null}

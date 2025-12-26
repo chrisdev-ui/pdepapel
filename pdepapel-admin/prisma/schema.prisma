@@ -52,6 +52,7 @@ model Store {
   shippingQuotes ShippingQuote[] @relation("StoreToShippingQuotes")
   offers         Offer[]         @relation("StoreToOffer")
   boxes          Box[]           @relation("StoreToBox")
+  productGroups  ProductGroup[]  @relation("StoreToProductGroup")
 }
 
 model Billboard {
@@ -86,6 +87,7 @@ model Offer {
   store       Store       @relation("StoreToOffer", fields: [storeId], references: [id])
   products    OfferProduct[]
   categories  OfferCategory[]
+  productGroups OfferProductGroup[]
 
   @@index([storeId])
   @@index([isActive, startDate, endDate])
@@ -113,6 +115,18 @@ model OfferCategory {
 
   @@unique([offerId, categoryId])
   @@index([categoryId])
+}
+
+model OfferProductGroup {
+  id             String       @id @default(uuid())
+  offerId        String
+  productGroupId String
+
+  offer          Offer        @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  productGroup   ProductGroup @relation(fields: [productGroupId], references: [id], onDelete: Cascade)
+
+  @@unique([offerId, productGroupId])
+  @@index([productGroupId])
 }
 
 model Post {
@@ -194,6 +208,24 @@ model Design {
   @@index([storeId])
 }
 
+model ProductGroup {
+  id          String    @id @default(uuid())
+  storeId     String
+  store       Store     @relation("StoreToProductGroup", fields: [storeId], references: [id])
+  name        String
+  description String    @db.Text
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  products    Product[]
+  images      Image[]
+  offers      OfferProductGroup[]
+
+  @@index([storeId])
+  @@index([createdAt])
+  @@fulltext([name])
+  @@fulltext([name, description])
+}
+
 model Product {
   id          String      @id @default(uuid())
   storeId     String
@@ -221,6 +253,8 @@ model Product {
   reviews     Review[]
   supplierId  String?
   supplier    Supplier?   @relation(fields: [supplierId], references: [id])
+  productGroupId String?
+  productGroup ProductGroup? @relation(fields: [productGroupId], references: [id])
   offers      OfferProduct[]
 
   @@index([storeId])
@@ -239,6 +273,7 @@ model Product {
   @@index([id, stock])
   @@fulltext([name])
   @@fulltext([name, description])
+  @@index([productGroupId])
 }
 
 model Supplier {
@@ -255,14 +290,17 @@ model Supplier {
 
 model Image {
   id        String   @id @default(uuid())
-  productId String
+  productId String?
+  product   Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productGroupId String?
+  productGroup ProductGroup? @relation(fields: [productGroupId], references: [id], onDelete: Cascade)
   url       String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   isMain    Boolean  @default(false)
 
   @@index([productId])
+  @@index([productGroupId])
 }
 
 model Order {

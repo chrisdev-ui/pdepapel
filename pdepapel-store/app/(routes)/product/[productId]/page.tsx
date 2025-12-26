@@ -31,8 +31,20 @@ export async function generateMetadata({
 
   const images = product.images?.map((image) => image.url);
 
+  const variantAttributes = [
+    product.design?.name,
+    product.color?.name,
+    product.size?.name,
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  const title = variantAttributes
+    ? `${product.name} - ${variantAttributes}`
+    : product.name;
+
   return {
-    title: product.name,
+    title: title,
     description:
       product.description ??
       `Descubre ${product.name} en Papelería P de Papel. Este artículo kawaii/oficina es perfecto para añadir un toque especial a tu espacio. Detalles, especificaciones, y todo lo que necesitas saber para tomar la mejor decisión. Calidad y diseño se unen para ofrecerte lo mejor en papelería.`,
@@ -40,14 +52,14 @@ export async function generateMetadata({
       canonical: `/product/${params.productId}`,
     },
     openGraph: {
-      title: product.name,
+      title: title,
       description: product.description,
       url: `https://papeleriapdepapel.com/product/${params.productId}`,
       siteName: "Papelería P de Papel",
       images,
     },
     twitter: {
-      title: product.name,
+      title: title,
       description: product.description,
       card: "summary_large_image",
       site: "Papelería P de Papel",
@@ -63,18 +75,39 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
   if (!product) return notFound();
 
-  const { products: suggestedProducts } = await getProducts({
+  const siblingsPromise = product.productGroupId
+    ? getProducts({
+        productGroupId: product.productGroupId,
+      })
+    : Promise.resolve({ products: [] });
+
+  const suggestedProductsPromise = getProducts({
     categoryId: product.category?.id,
     excludeProducts: params.productId,
+    groupBy: "parents",
     limit: 4,
   });
+
+  const [siblingsResponse, suggestedProductsResponse] = await Promise.all([
+    siblingsPromise,
+    suggestedProductsPromise,
+  ]);
+
+  const siblings = siblingsResponse.products.map((variant) => ({
+    id: variant.id,
+    size: variant.size,
+    color: variant.color,
+    design: variant.design,
+    stock: variant.stock,
+  }));
+  const suggestedProducts = suggestedProductsResponse.products;
 
   const jsonLd: WithContext<ProductSchema> = {
     "@context": "https://schema.org",
     "@type": "Product",
     name: product.name,
     description: product.description,
-    image: product.images.map((img) => img.url),
+    image: product.images?.map((img) => img.url) || [],
     sku: product.sku || product.id,
     brand: {
       "@type": "Brand",
@@ -107,6 +140,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
       <SingleProductPage
         product={product}
         suggestedProducts={suggestedProducts}
+        siblings={siblings}
       />
       <script
         type="application/ld+json"

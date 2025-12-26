@@ -105,10 +105,25 @@ export async function GET(
         `El producto ${params.productId} no existe o no pertenece a esta tienda`,
       );
 
-    const reviews = await prismadb.review.findMany({
-      where: { storeId: params.storeId, productId: params.productId },
-      orderBy: { createdAt: "desc" },
-    });
+    let reviews;
+    if (product.productGroupId) {
+      // Fetch reviews for ALL products in the group
+      reviews = await prismadb.review.findMany({
+        where: {
+          storeId: params.storeId,
+          product: {
+            productGroupId: product.productGroupId,
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+    } else {
+      // Fetch reviews for this specific product only
+      reviews = await prismadb.review.findMany({
+        where: { storeId: params.storeId, productId: params.productId },
+        orderBy: { createdAt: "desc" },
+      });
+    }
 
     return NextResponse.json(reviews, {
       headers: CACHE_HEADERS.DYNAMIC,

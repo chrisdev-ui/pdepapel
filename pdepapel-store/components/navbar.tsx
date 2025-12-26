@@ -73,7 +73,7 @@ const Navbar: React.FC<NavbarProps> = ({ season = Season.Default }) => {
               src={seasonConfig.navbarText}
               alt="Logo Papelería P de Papel con nombre al lado"
               fill
-              sizes="(max-width: 768px) 100vw, 200px"
+              sizes="(max-width: 768px) 1px, 200px"
               priority
               quality="100"
             />
@@ -91,8 +91,7 @@ const Navbar: React.FC<NavbarProps> = ({ season = Season.Default }) => {
               src={seasonConfig.navbarNoText}
               alt="Logo Papelería P de Papel"
               fill
-              sizes="100px" // Always small on mobile
-              priority
+              sizes="(min-width: 769px) 1px, 100px"
               quality="100"
             />
           </Link>

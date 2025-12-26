@@ -109,7 +109,7 @@ export default function RootLayout({
 
   return (
     <ClerkProvider localization={esES}>
-      <html lang="es">
+      <html lang="es" suppressHydrationWarning>
         <body
           className={`${beautifulEveryTime.variable} ${caudex.variable} ${nunito.variable} ${roboto.variable}`}
         >

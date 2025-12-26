@@ -113,17 +113,16 @@ export const metadata: Metadata = {
 import HeroSlider from "@/components/hero-slider";
 const Newsletter = dynamic(() => import("@/components/newsletter"));
 
+import { BannersCtaSection } from "@/components/banners-cta-section";
+import { FeaturedProductsSection } from "@/components/featured-products-section";
 import {
   BannersCtaSkeleton,
   FeaturedProductsSkeleton,
   MainBannerSkeleton,
   NewArrivalsSkeleton,
 } from "@/components/home-skeletons";
-
-import { BannersCtaSection } from "./components/banners-cta-section";
-import { FeaturedProductsSection } from "./components/featured-products-section";
-import { MainBannerSection } from "./components/main-banner-section";
-import { NewArrivalsSection } from "./components/new-arrivals-section";
+import { MainBannerSection } from "@/components/main-banner-section";
+import { NewArrivalsSection } from "@/components/new-arrivals-section";
 
 export default async function HomePage() {
   const billboards = await getBillboards();

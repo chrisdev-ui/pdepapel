@@ -3,11 +3,13 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   DollarSign,
+  Eraser,
   Loader2,
   PackageCheckIcon,
   Percent,
   Trash,
 } from "lucide-react";
+import Image from "next/image";
 import { useForm } from "react-hook-form";
 import z from "zod";
 
@@ -42,6 +44,7 @@ import {
   INITIAL_TRANSPORTATION_COST,
   Models,
 } from "@/constants";
+import { useFormPersist } from "@/hooks/use-form-persist";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import { Color, Design, Size, Supplier } from "@prisma/client";
@@ -79,6 +82,7 @@ const formSchema = z.object({
   supplierId: z.string().optional(),
   isFeatured: z.boolean().default(false).optional(),
   isArchived: z.boolean().default(false).optional(),
+  productGroupId: z.string().optional(),
 });
 
 type ProductFormValues = z.infer<typeof formSchema>;
@@ -86,6 +90,9 @@ type ProductFormValues = z.infer<typeof formSchema>;
 type Categories = Awaited<ReturnType<typeof getProduct>>["categories"][number];
 
 type InitialData = Awaited<ReturnType<typeof getProduct>>["product"];
+
+type ProductGroup = Awaited<ReturnType<typeof getProduct>>["productGroup"];
+type ProductGroups = Awaited<ReturnType<typeof getProduct>>["productGroups"];
 
 interface ProductFormProps {
   initialData: InitialData | null;
@@ -95,6 +102,8 @@ interface ProductFormProps {
   designs: Design[];
   reviews?: ReviewColumn[];
   suppliers: Supplier[];
+  productGroup: ProductGroup;
+  productGroups: ProductGroups;
 }
 
 export const ProductForm: React.FC<ProductFormProps> = ({
@@ -105,6 +114,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   designs,
   reviews,
   suppliers,
+  productGroup,
+  productGroups,
 }) => {
   const params = useParams();
   const router = useRouter();
@@ -112,6 +123,21 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const unavailableImages = useMemo(() => {
+    if (!productGroup) return new Set();
+    const set = new Set<string>();
+    productGroup.products.forEach((p: any) => {
+      // Skip current product
+      if (p.id === initialData?.id) return;
+      p.images.forEach((img: any) => set.add(img.url));
+    });
+    return set;
+  }, [productGroup, initialData]);
+
+  const onAssignImage = (url: string) => {
+    form.setValue("images", [{ url, isMain: true }]);
+  };
 
   const { title, description, toastMessage, action, pendingText } = useMemo(
     () => ({
@@ -140,6 +166,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             percentageIncrease: INITIAL_PERCENTAGE_INCREASE,
             transportationCost: INITIAL_TRANSPORTATION_COST,
             miscCost: INITIAL_MISC_COST,
+            productGroupId: initialData.productGroupId || "",
+            stock: initialData.stock,
           }
         : {
             name: "",
@@ -157,14 +185,29 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             percentageIncrease: INITIAL_PERCENTAGE_INCREASE,
             transportationCost: INITIAL_TRANSPORTATION_COST,
             miscCost: INITIAL_MISC_COST,
+            productGroupId: productGroup?.id || "",
           },
-    [initialData],
+    [initialData, productGroup],
   );
 
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues,
   });
+
+  const { clearStorage } = useFormPersist({
+    form,
+    key: `product-form-${params.storeId}-${initialData?.id ?? "new"}`,
+  });
+
+  const onClear = () => {
+    form.reset(defaultValues);
+    clearStorage();
+    toast({
+      title: "Formulario limpiado",
+      description: "Los datos han sido restablecidos.",
+    });
+  };
 
   const calculatePrice = useCallback((values: Partial<ProductFormValues>) => {
     const acqPrice = Number(values.acqPrice) || 0;
@@ -211,8 +254,73 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     return () => subscription.unsubscribe();
   }, [form, calculatePrice]);
 
+  const watchedGroupId = form.watch("productGroupId");
+  const watchedColorId = form.watch("colorId");
+  const watchedSizeId = form.watch("sizeId");
+  const watchedDesignId = form.watch("designId");
+
+  useEffect(() => {
+    if (watchedGroupId) {
+      const selectedGroup = productGroups?.find((g) => g.id === watchedGroupId);
+      if (selectedGroup && selectedGroup.products.length > 0) {
+        // 1. Auto-Inherit Category from the first product in the group
+        const groupCategory = selectedGroup.products[0].categoryId;
+        const currentCategory = form.getValues("categoryId");
+        if (groupCategory && groupCategory !== currentCategory) {
+          form.setValue("categoryId", groupCategory);
+          toast({
+            title: "Categoría Actualizada",
+            description: `La categoría se ha ajustado a "${categories.find((c) => c.id === groupCategory)?.name}" para coincidir con el grupo.`,
+          });
+        }
+      }
+    }
+  }, [watchedGroupId, productGroups, form, categories, toast]);
+
+  // Collision Detection
+  const collisionError = useMemo(() => {
+    if (
+      !watchedGroupId ||
+      !watchedColorId ||
+      !watchedSizeId ||
+      !watchedDesignId
+    )
+      return null;
+
+    const selectedGroup = productGroups?.find((g) => g.id === watchedGroupId);
+    if (!selectedGroup) return null;
+
+    const existingVariant = selectedGroup.products.find(
+      (p) =>
+        p.colorId === watchedColorId &&
+        p.sizeId === watchedSizeId &&
+        p.designId === watchedDesignId &&
+        p.id !== initialData?.id, // Exclude self if editing
+    );
+
+    if (existingVariant) {
+      return "Esta combinación (Color + Tamaño + Diseño) ya existe en este grupo.";
+    }
+    return null;
+  }, [
+    watchedGroupId,
+    watchedColorId,
+    watchedSizeId,
+    watchedDesignId,
+    productGroups,
+    initialData,
+  ]);
+
   const onSubmit = useCallback(
     async (data: ProductFormValues) => {
+      if (collisionError) {
+        toast({
+          title: "Error de validación",
+          description: collisionError,
+          variant: "destructive",
+        });
+        return;
+      }
       try {
         setLoading(true);
         if (initialData) {
@@ -223,6 +331,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
         } else {
           await axios.post(`/api/${params.storeId}/${Models.Products}`, data);
         }
+        clearStorage();
         router.refresh();
         router.push(`/${params.storeId}/${Models.Products}`);
         toast({
@@ -245,6 +354,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       toast,
       initialData,
       toastMessage,
+      collisionError,
+      clearStorage,
     ],
   );
   const onDelete = useCallback(async () => {
@@ -307,16 +418,22 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       />
       <div className="flex items-center justify-between">
         <Heading title={title} description={description} />
-        {initialData && (
-          <Button
-            disabled={loading}
-            variant="destructive"
-            size="sm"
-            onClick={() => setOpen(true)}
-          >
-            <Trash className="h-4 w-4" />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={onClear} type="button">
+            <Eraser className="mr-2 h-4 w-4" />
+            Limpiar Formulario
           </Button>
-        )}
+          {initialData && (
+            <Button
+              disabled={loading}
+              variant="destructive"
+              size="sm"
+              onClick={() => setOpen(true)}
+            >
+              <Trash className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
       <Separator />
       <Form {...form}>
@@ -324,12 +441,53 @@ export const ProductForm: React.FC<ProductFormProps> = ({
           onSubmit={form.handleSubmit(onSubmit)}
           className="w-full space-y-8"
         >
+          {productGroup && (
+            <div className="mb-8 space-y-4 rounded-md border p-4">
+              <div className="flex items-center justify-between">
+                <Heading
+                  title="Galería del Grupo"
+                  description="Selecciona una imagen del grupo para asignarla a este producto (Imágenes únicas por variante)"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-6">
+                {productGroup.images?.map((img) => {
+                  const isUnavailable = unavailableImages.has(img.url);
+                  const isSelected = form.watch("images")?.[0]?.url === img.url;
+
+                  return (
+                    <div
+                      key={img.url}
+                      className={`relative aspect-square cursor-pointer overflow-hidden rounded-md border-2 ${isSelected ? "border-black" : "border-transparent"} ${isUnavailable ? "cursor-not-allowed opacity-40" : "hover:opacity-80"}`}
+                      onClick={() => !isUnavailable && onAssignImage(img.url)}
+                    >
+                      <Image
+                        src={img.url}
+                        alt="Group Image"
+                        className="h-full w-full object-cover"
+                        width={200}
+                        height={200}
+                        unoptimized
+                      />
+                      {isUnavailable && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/10">
+                          <span className="rounded bg-black/50 px-2 py-1 text-xs text-white">
+                            Asignada
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <FormField
             control={form.control}
             name="images"
             render={({ field }) => (
               <FormItem>
-                <FormLabel isRequired>Imágenes</FormLabel>
+                <FormLabel isRequired>Imágenes del Producto</FormLabel>
                 <FormControl>
                   <ImageUpload
                     value={field.value}
@@ -432,6 +590,39 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             />
             <FormField
               control={form.control}
+              name="productGroupId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Asignar a Grupo</FormLabel>
+                  <Select
+                    disabled={loading}
+                    onValueChange={field.onChange}
+                    value={field.value}
+                    defaultValue={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona un grupo" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">-- Ninguno --</SelectItem>
+                      {productGroups?.map((group) => (
+                        <SelectItem key={group.id} value={group.id}>
+                          {group.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    El producto heredará la categoría del grupo.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="miscCost"
               render={({ field }) => (
                 <FormItem>
@@ -504,17 +695,17 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 <FormItem>
                   <FormLabel isRequired>Categoría</FormLabel>
                   <Select
-                    disabled={loading}
+                    key={field.value}
+                    disabled={
+                      loading || (!!watchedGroupId && watchedGroupId !== "none")
+                    }
                     onValueChange={field.onChange}
                     value={field.value}
                     defaultValue={field.value}
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue
-                          defaultValue={field.value}
-                          placeholder="Selecciona una categoría"
-                        />
+                        <SelectValue placeholder="Selecciona una categoría" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -545,17 +736,17 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 <FormItem>
                   <FormLabel isRequired>Tamaño</FormLabel>
                   <Select
-                    disabled={loading}
+                    key={field.value}
+                    disabled={
+                      loading || (!!watchedGroupId && watchedGroupId !== "none")
+                    }
                     onValueChange={field.onChange}
                     value={field.value}
                     defaultValue={field.value}
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue
-                          defaultValue={field.value}
-                          placeholder="Selecciona un tamaño"
-                        />
+                        <SelectValue placeholder="Selecciona un tamaño" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -575,6 +766,11 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                         ))}
                     </SelectContent>
                   </Select>
+                  {!!watchedGroupId && watchedGroupId !== "none" && (
+                    <FormDescription>
+                      Gestionado por el Grupo de Productos
+                    </FormDescription>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
@@ -586,17 +782,17 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 <FormItem>
                   <FormLabel isRequired>Color</FormLabel>
                   <Select
-                    disabled={loading}
+                    key={field.value}
+                    disabled={
+                      loading || (!!watchedGroupId && watchedGroupId !== "none")
+                    }
                     onValueChange={field.onChange}
                     value={field.value}
                     defaultValue={field.value}
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue
-                          defaultValue={field.value}
-                          placeholder="Selecciona un color"
-                        />
+                        <SelectValue placeholder="Selecciona un color" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -622,6 +818,12 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                         ))}
                     </SelectContent>
                   </Select>
+
+                  {!!watchedGroupId && watchedGroupId !== "none" && (
+                    <FormDescription>
+                      Gestionado por el Grupo de Productos
+                    </FormDescription>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
@@ -633,17 +835,17 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 <FormItem>
                   <FormLabel isRequired>Diseño</FormLabel>
                   <Select
-                    disabled={loading}
+                    key={field.value}
+                    disabled={
+                      loading || (!!watchedGroupId && watchedGroupId !== "none")
+                    }
                     onValueChange={field.onChange}
                     value={field.value}
                     defaultValue={field.value}
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue
-                          defaultValue={field.value}
-                          placeholder="Selecciona un diseño"
-                        />
+                        <SelectValue placeholder="Selecciona un diseño" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -663,10 +865,27 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                         ))}
                     </SelectContent>
                   </Select>
+
+                  {!!watchedGroupId && watchedGroupId !== "none" && (
+                    <FormDescription>
+                      Gestionado por el Grupo de Productos
+                    </FormDescription>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
             />
+
+            {collisionError && (
+              <div className="bg-destructive/15 col-span-3 rounded-md p-4 text-sm text-destructive">
+                <div className="flex items-center font-medium">
+                  <span className="mr-2">⚠️</span>
+                  Conflicto de Variantes Detectado
+                </div>
+                <div className="mt-1">{collisionError}</div>
+              </div>
+            )}
+
             <FormField
               control={form.control}
               name="supplierId"
@@ -674,6 +893,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 <FormItem>
                   <FormLabel isRequired>Proveedor</FormLabel>
                   <Select
+                    key={field.value}
                     disabled={loading}
                     onValueChange={field.onChange}
                     value={field.value}
@@ -681,10 +901,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue
-                          defaultValue={field.value}
-                          placeholder="Selecciona un proveedor"
-                        />
+                        <SelectValue placeholder="Selecciona un proveedor" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>

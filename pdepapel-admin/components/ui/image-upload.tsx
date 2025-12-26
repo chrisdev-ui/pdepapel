@@ -27,20 +27,16 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
 }) => {
   const [isMounted, setIsMounted] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [mainImageUrl, setMainImageUrl] = useState<string | null>(
-    value.find((image) => image.isMain)?.url ?? null,
-  );
   const { toast } = useToast();
   const params = useParams();
+
+  // DERIVED STATE: No need for useEffect synchronization
+  const mainImage = value.find((img) => img.isMain);
+  const mainImageUrl = mainImage?.url;
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
-
-  useEffect(() => {
-    const mainImage = value.find((img) => img.isMain);
-    setMainImageUrl(mainImage ? mainImage.url : null);
-  }, [value]);
 
   const onUpload = (result: any) => {
     const newImage = {
@@ -49,22 +45,22 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
     };
     const updatedImages = [...value, newImage];
     onChange(updatedImages);
-    if (value.length === 0) {
-      setMainImageUrl(newImage.url);
-    }
   };
 
   const handleRemove = async (url: string) => {
     try {
       setIsDeleting(true);
       await axios.post(`/api/${params.storeId}/cloudinary`, { imageUrl: url });
-      const filteredImages = value.filter((image) => image.url !== url);
-      if (filteredImages.length === 1) {
-        filteredImages[0].isMain = true;
-        setMainImageUrl(filteredImages[0].url);
-      } else if (url === mainImageUrl) {
-        setMainImageUrl(null);
+
+      // Calculate new state immediately
+      let filteredImages = value.filter((image) => image.url !== url);
+
+      // If we deleted the Main image, promote the first available one
+      const wasMain = value.find((img) => img.url === url)?.isMain;
+      if (wasMain && filteredImages.length > 0) {
+        filteredImages[0] = { ...filteredImages[0], isMain: true };
       }
+
       onChange(filteredImages);
     } catch (error) {
       toast({
@@ -78,7 +74,6 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
   };
 
   const handleSelectMainImage = (url: string) => {
-    setMainImageUrl(url);
     const updatedImages = value.map((image) => ({
       ...image,
       isMain: image.url === url,

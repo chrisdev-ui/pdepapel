@@ -98,6 +98,7 @@ const QuantitySelector = React.forwardRef<
           className={cn(buttonLeftVariants({ size }))}
           onClick={decrement}
           disabled={disableDec}
+          suppressHydrationWarning
         >
           <Minus
             className="h-3.5 w-3.5 group-disabled:text-gray-500"
@@ -114,6 +115,7 @@ const QuantitySelector = React.forwardRef<
           className={cn(buttonRightVariants({ size }))}
           onClick={increment}
           disabled={disableInc}
+          suppressHydrationWarning
         >
           <Plus
             className="h-3.5 w-3.5 group-disabled:text-gray-500"

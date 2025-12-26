@@ -13,6 +13,7 @@ export enum SortOptions {
   name = "name",
   dateAdded = "dateAdded",
   featuredFirst = "featuredFirst",
+  isOnSale = "isOnSale",
 }
 
 export enum OrderStatus {
@@ -105,6 +106,7 @@ export const SORT_OPTIONS = [
   { value: SortOptions.priceHighToLow, label: "Mayor precio" },
   { value: SortOptions.name, label: "Nombre de producto" },
   { value: SortOptions.featuredFirst, label: "Destacados" },
+  { value: SortOptions.isOnSale, label: "En oferta" },
 ];
 
 export const ADMIN_USER_IDS = [

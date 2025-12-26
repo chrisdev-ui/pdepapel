@@ -19,7 +19,7 @@ const CACHE_TTL = 60 * 60; // 1 hour
 /**
  * Fetches active offers for a store, using Redis cache.
  */
-async function getActiveOffers(storeId: string) {
+export async function getActiveOffers(storeId: string) {
   const cacheKey = `store:${storeId}:active-offers`;
 
   try {
@@ -43,6 +43,7 @@ async function getActiveOffers(storeId: string) {
     include: {
       products: true,
       categories: true,
+      productGroups: true,
     },
   });
 
@@ -64,7 +65,7 @@ async function getActiveOffers(storeId: string) {
  * Takes the offer with the highest discount amount (monetary value).
  */
 export async function calculateDiscountedPrice(
-  product: Pick<Product, "id" | "categoryId" | "price">,
+  product: Pick<Product, "id" | "categoryId" | "price" | "productGroupId">,
   storeId: string,
 ): Promise<DiscountedProduct> {
   const activeOffers = await getActiveOffers(storeId);
@@ -87,7 +88,10 @@ export async function calculateDiscountedPrice(
     const isCategoryLinked = offer.categories.some(
       (oc: any) => oc.categoryId === product.categoryId,
     );
-    return isProductLinked || isCategoryLinked;
+    const isGroupLinked = offer.productGroups.some(
+      (opg: any) => opg.productGroupId === product.productGroupId,
+    );
+    return isProductLinked || isCategoryLinked || isGroupLinked;
   });
 
   if (applicableOffers.length === 0) {
@@ -142,7 +146,7 @@ export async function calculateDiscountedPrice(
  * Batch version of getProductPrice to avoid N+1 queries.
  */
 export async function getProductsPrices(
-  products: Pick<Product, "id" | "categoryId" | "price">[],
+  products: Pick<Product, "id" | "categoryId" | "price" | "productGroupId">[],
   storeId: string,
 ): Promise<Map<string, DiscountedProduct>> {
   const activeOffers = await getActiveOffers(storeId);
@@ -157,7 +161,10 @@ export async function getProductsPrices(
       const isCategoryLinked = offer.categories.some(
         (oc: any) => oc.categoryId === product.categoryId,
       );
-      return isProductLinked || isCategoryLinked;
+      const isGroupLinked = offer.productGroups.some(
+        (opg: any) => opg.productGroupId === product.productGroupId,
+      );
+      return isProductLinked || isCategoryLinked || isGroupLinked;
     });
 
     if (applicableOffers.length === 0) {

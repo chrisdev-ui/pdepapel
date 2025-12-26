@@ -13,10 +13,7 @@ import { Category, Color, Design, Product, Size, Type } from "@/types";
 
 import Products from "../app/(routes)/shop/components/products";
 import ShopSearchBar from "../app/(routes)/shop/components/shop-search-bar";
-import {
-  FilterSkeleton,
-  ProductListSkeleton,
-} from "../app/(routes)/shop/components/skeletons";
+import { ProductListSkeleton } from "../app/(routes)/shop/components/skeletons";
 import SortSelector from "../app/(routes)/shop/components/sort-selector";
 
 const MobileFilters = dynamic(() => import("@/components/mobile-filters"), {
@@ -81,6 +78,7 @@ export const ShopContent: React.FC<ShopContentProps> = ({
         maxPrice: filters.maxPrice,
         fromShop: true,
         itemsPerPage: LIMIT_SHOP_ITEMS,
+        groupBy: "parents",
       }),
     initialData: isMounted
       ? undefined
@@ -94,33 +92,6 @@ export const ShopContent: React.FC<ShopContentProps> = ({
     enabled: isMounted,
     placeholderData: keepPreviousData,
   });
-
-  if (!isMounted) {
-    return (
-      <div className="lg:grid lg:grid-cols-5 lg:gap-x-8">
-        <div className="hidden lg:block">
-          <FilterSkeleton name="Tipos" items={3} />
-          <FilterSkeleton name="Categorías" items={3} />
-          <FilterSkeleton name="Tamaños" items={3} />
-          <FilterSkeleton name="Colores" items={3} />
-          <FilterSkeleton name="Diseños" items={3} />
-          <FilterSkeleton name="Precios" items={3} />
-        </div>
-        <div className="mt-6 space-y-8 lg:col-span-4 lg:mt-0">
-          {/* Header skeleton matches the real header height somewhat */}
-          <div className="mb-8 flex w-full items-center justify-between">
-            <div className="h-8 w-48 animate-pulse rounded bg-gray-200" />
-            <div className="flex items-center gap-4">
-              <div className="hidden h-10 w-72 animate-pulse rounded bg-gray-200 md:flex" />
-              <div className="h-10 w-64 animate-pulse rounded bg-gray-200" />
-            </div>
-          </div>
-
-          <ProductListSkeleton />
-        </div>
-      </div>
-    );
-  }
 
   // Helper to merge counts into static data
   const mergeCounts = (

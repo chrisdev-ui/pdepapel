@@ -98,6 +98,13 @@ export function RichTextEditor({
     },
   });
 
+  // Sync editor content when value prop changes externally (e.g. form reset/restore)
+  React.useEffect(() => {
+    if (editor && value !== editor.getHTML()) {
+      editor.commands.setContent(value);
+    }
+  }, [value, editor]);
+
   if (!editor) {
     return null;
   }

@@ -51,8 +51,9 @@ export const OfferBadge: React.FC<OfferBadgeProps> = ({
     Array.from({ length: points * 2 }, (_, i) => {
       const angle = (i * Math.PI) / points;
       const radius = i % 2 === 0 ? outerRadius : innerRadius;
-      const x = 50 + radius * Math.cos(angle - Math.PI / 2);
-      const y = 50 + radius * Math.sin(angle - Math.PI / 2);
+      // Use toFixed to avoid hydration mismatch due to floating point precision
+      const x = (50 + radius * Math.cos(angle - Math.PI / 2)).toFixed(2);
+      const y = (50 + radius * Math.sin(angle - Math.PI / 2)).toFixed(2);
       return `${i === 0 ? "M" : "L"} ${x} ${y}`;
     }).join(" ") + " Z";
 

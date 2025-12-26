@@ -31,6 +31,23 @@ export async function getOrder(orderId: string, storeId: string) {
       name: true,
       price: true,
       stock: true,
+      productGroupId: true,
+      sku: true,
+      size: {
+        select: {
+          name: true,
+        },
+      },
+      color: {
+        select: {
+          name: true,
+        },
+      },
+      design: {
+        select: {
+          name: true,
+        },
+      },
       images: {
         select: {
           url: true,
@@ -68,7 +85,24 @@ export async function getOrder(orderId: string, storeId: string) {
         name: true,
         price: true,
         stock: true,
+        productGroupId: true,
         isArchived: true,
+        sku: true,
+        size: {
+          select: {
+            name: true,
+          },
+        },
+        color: {
+          select: {
+            name: true,
+          },
+        },
+        design: {
+          select: {
+            name: true,
+          },
+        },
         images: {
           select: {
             url: true,
@@ -104,9 +138,21 @@ export async function getOrder(orderId: string, storeId: string) {
 
   availableProducts.forEach((product) => {
     const priceInfo = pricesMap.get(product.id);
+    const variantInfo = [
+      product.color?.name,
+      product.size?.name,
+      product.design?.name !== "Estándar" ? product.design?.name : null,
+    ]
+      .filter(Boolean)
+      .join(" / ");
+
+    const labelName = variantInfo
+      ? `${product.name} [${variantInfo}]`
+      : product.name;
+
     allProductsMap.set(product.id, {
       value: product.id,
-      label: product.name,
+      label: `${labelName} - ${product.sku}`,
       price: product.price,
       discountedPrice: priceInfo?.price ?? product.price,
       offerLabel: priceInfo?.offerLabel ?? undefined,
@@ -119,11 +165,24 @@ export async function getOrder(orderId: string, storeId: string) {
 
   existingOrderProducts.forEach((product) => {
     const isAvailable = !product.isArchived && product.stock > 0;
+
+    const variantInfo = [
+      product.color?.name,
+      product.size?.name,
+      product.design?.name !== "Estándar" ? product.design?.name : null,
+    ]
+      .filter(Boolean)
+      .join(" / ");
+
+    const baseName = variantInfo
+      ? `${product.name} [${variantInfo}]`
+      : product.name;
+
     const label = product.isArchived
-      ? `${product.name} (Archivado)`
+      ? `${baseName} (Archivado) - ${product.sku}`
       : product.stock === 0
-        ? `${product.name} (Sin stock)`
-        : product.name;
+        ? `${baseName} (Sin stock) - ${product.sku}`
+        : `${baseName} - ${product.sku}`;
 
     const priceInfo = pricesMap.get(product.id);
     allProductsMap.set(product.id, {

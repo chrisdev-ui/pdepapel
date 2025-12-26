@@ -11,6 +11,7 @@ import { NoResults } from "@/components/ui/no-results";
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetFooter,
   SheetTitle,
   SheetTrigger,
@@ -84,6 +85,9 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
         <SheetTitle className="flex w-full items-center justify-center bg-blue-baby p-5 font-serif">
           Carrito de compras
         </SheetTitle>
+        <SheetDescription className="sr-only">
+          Resumen de tu carrito de compras
+        </SheetDescription>
         <div className="flex grow flex-col justify-between overflow-y-auto overflow-x-hidden px-6 py-0">
           <div className="flex w-full flex-col gap-4">
             {cart.items.length === 0 && (
@@ -99,7 +103,7 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
                 >
                   <Link
                     href={`/product/${item.id}`}
-                    className="relative h-20 w-20"
+                    className="relative block h-20 w-20"
                   >
                     <CldImage
                       src={
@@ -109,8 +113,7 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
                       alt={item.name ?? "Imagen del producto"}
                       fill
                       sizes="(max-width: 640px) 80px, 120px"
-                      priority
-                      className="rounded-md"
+                      className="rounded-md object-cover"
                     />
                     <span className="absolute right-0 top-0 flex h-4 w-4 items-center justify-center rounded-full bg-blue-yankees font-serif text-xs text-white">
                       {item.quantity}
@@ -119,9 +122,16 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
                   <div className="flex max-h-20 items-center justify-between">
                     <div className="flex h-full flex-col items-start justify-between">
                       <div className="flex flex-col text-left font-serif text-sm font-medium tracking-tight">
-                        <span>{item.name}</span>
-                        <span className="text-xs text-gray-400">{`Diseño: ${item.design.name}`}</span>
-                        <span className="hidden text-xs text-gray-400 lg:block">{`Categoría: ${item.category.name}`}</span>
+                        <span className="line-clamp-1">{item.name}</span>
+                        {item.design && (
+                          <span className="text-xs text-gray-400">{`Diseño: ${item.design.name}`}</span>
+                        )}
+                        {item.color && (
+                          <span className="text-xs text-gray-400">{`Color: ${item.color.name}`}</span>
+                        )}
+                        {item.size && (
+                          <span className="text-xs text-gray-400">{`Talla: ${item.size.name}`}</span>
+                        )}
                       </div>
                       <div className="flex items-center gap-1.5">
                         <Currency

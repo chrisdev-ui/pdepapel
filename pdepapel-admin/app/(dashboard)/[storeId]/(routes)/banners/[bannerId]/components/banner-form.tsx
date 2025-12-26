@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, Loader2, Trash } from "lucide-react";
+import { ArrowLeft, Eraser, Loader2, Trash } from "lucide-react";
 import { useForm } from "react-hook-form";
 import z from "zod";
 
@@ -20,6 +20,7 @@ import { ImageUpload } from "@/components/ui/image-upload";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Models } from "@/constants";
+import { useFormPersist } from "@/hooks/use-form-persist";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import { Banner } from "@prisma/client";
@@ -57,13 +58,34 @@ export const BannerForm: React.FC<BannerFormProps> = ({ initialData }) => {
     [initialData],
   );
 
+  const defaultValues = useMemo(
+    () =>
+      initialData || {
+        callToAction: "",
+        imageUrl: "",
+      },
+    [initialData],
+  );
+
   const form = useForm<BannerFormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: initialData || {
-      callToAction: "",
-      imageUrl: "",
-    },
+    defaultValues,
   });
+
+  const { clearStorage } = useFormPersist({
+    form,
+    key: `banner-form-${params.storeId}-${initialData?.id ?? "new"}`,
+  });
+
+  const onClear = () => {
+    form.reset(defaultValues);
+    clearStorage();
+    toast({
+      title: "Formulario limpiado",
+      description: "Los datos han sido restablecidos.",
+    });
+  };
+
   const onSubmit = async (data: BannerFormValues) => {
     try {
       setLoading(true);
@@ -75,6 +97,7 @@ export const BannerForm: React.FC<BannerFormProps> = ({ initialData }) => {
       } else {
         await axios.post(`/api/${params.storeId}/${Models.Banners}`, data);
       }
+      clearStorage();
       router.refresh();
       router.push(`/${params.storeId}/${Models.Banners}`);
       toast({
@@ -127,16 +150,22 @@ export const BannerForm: React.FC<BannerFormProps> = ({ initialData }) => {
           </Button>
           <Heading title={title} description={description} />
         </div>
-        {initialData && (
-          <Button
-            disabled={loading}
-            variant="destructive"
-            size="sm"
-            onClick={() => setOpen(true)}
-          >
-            <Trash className="h-4 w-4" />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={onClear} type="button">
+            <Eraser className="mr-2 h-4 w-4" />
+            Limpiar Formulario
           </Button>
-        )}
+          {initialData && (
+            <Button
+              disabled={loading}
+              variant="destructive"
+              size="sm"
+              onClick={() => setOpen(true)}
+            >
+              <Trash className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
       <Separator />
       <Form {...form}>

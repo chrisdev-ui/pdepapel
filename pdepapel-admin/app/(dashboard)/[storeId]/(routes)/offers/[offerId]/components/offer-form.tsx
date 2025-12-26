@@ -26,6 +26,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Models, discountOptions } from "@/constants";
+import { useFormPersist } from "@/hooks/use-form-persist";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import { currencyFormatter, datePresets } from "@/lib/utils";
@@ -35,12 +36,14 @@ import {
   Offer,
   OfferCategory,
   OfferProduct,
+  OfferProductGroup,
 } from "@prisma/client";
 import axios from "axios";
 import {
   ArrowLeft,
   CheckSquare,
   DollarSign,
+  Eraser,
   Loader2,
   Percent,
   Square,
@@ -48,7 +51,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 
@@ -70,6 +73,7 @@ const formSchema = z.object({
   isActive: z.boolean().default(true),
   productIds: z.array(z.string()).optional(),
   categoryIds: z.array(z.string()).optional(),
+  productGroupIds: z.array(z.string()).optional(),
 });
 
 type OfferFormValues = z.infer<typeof formSchema>;
@@ -79,6 +83,7 @@ interface OfferFormProps {
     | (Offer & {
         products: OfferProduct[];
         categories: OfferCategory[];
+        productGroups: OfferProductGroup[];
       })
     | null;
   products: {
@@ -94,12 +99,17 @@ interface OfferFormProps {
     name: string;
     type: { name: string };
   }[];
+  productGroups: {
+    id: string;
+    name: string;
+  }[];
 }
 
 export const OfferForm: React.FC<OfferFormProps> = ({
   initialData,
   products,
   categories,
+  productGroups,
 }) => {
   const params = useParams();
   const router = useRouter();
@@ -108,6 +118,7 @@ export const OfferForm: React.FC<OfferFormProps> = ({
   const [loading, setLoading] = useState(false);
   const [productSearch, setProductSearch] = useState("");
   const [categorySearch, setCategorySearch] = useState("");
+  const [groupSearch, setGroupSearch] = useState("");
 
   const title = initialData ? "Editar oferta" : "Crear oferta";
   const description = initialData
@@ -117,35 +128,57 @@ export const OfferForm: React.FC<OfferFormProps> = ({
   const action = initialData ? "Guardar cambios" : "Crear";
   const pendingText = initialData ? "Actualizando..." : "Creando...";
 
-  const defaultValues = initialData
-    ? {
-        ...initialData,
-        label: initialData.label || "",
-        dateRange: {
-          from: initialData.startDate,
-          to: initialData.endDate,
-        },
-        productIds: initialData.products.map((p) => p.productId),
-        categoryIds: initialData.categories.map((c) => c.categoryId),
-      }
-    : {
-        name: "",
-        label: "",
-        type: DiscountType.PERCENTAGE,
-        amount: 0,
-        dateRange: {
-          from: undefined,
-          to: undefined,
-        },
-        isActive: true,
-        productIds: [],
-        categoryIds: [],
-      };
+  const defaultValues = useMemo(
+    () =>
+      initialData
+        ? {
+            ...initialData,
+            label: initialData.label || "",
+            dateRange: {
+              from: initialData.startDate,
+              to: initialData.endDate,
+            },
+            productIds: initialData.products.map((p) => p.productId),
+            categoryIds: initialData.categories.map((c) => c.categoryId),
+            productGroupIds: initialData.productGroups.map(
+              (g) => g.productGroupId,
+            ),
+          }
+        : {
+            name: "",
+            label: "",
+            type: DiscountType.PERCENTAGE,
+            amount: 0,
+            dateRange: {
+              from: undefined,
+              to: undefined,
+            },
+            isActive: true,
+            productIds: [],
+            categoryIds: [],
+            productGroupIds: [],
+          },
+    [initialData],
+  );
 
   const form = useForm<OfferFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues,
   });
+
+  const { clearStorage } = useFormPersist({
+    form,
+    key: `offer-form-${params.storeId}-${initialData?.id ?? "new"}`,
+  });
+
+  const onClear = () => {
+    form.reset(defaultValues);
+    clearStorage();
+    toast({
+      title: "Formulario limpiado",
+      description: "Los datos han sido restablecidos.",
+    });
+  };
 
   const onSubmit = async ({ dateRange, ...data }: OfferFormValues) => {
     const payload = {
@@ -163,6 +196,7 @@ export const OfferForm: React.FC<OfferFormProps> = ({
       } else {
         await axios.post(`/api/${params.storeId}/${Models.Offers}`, payload);
       }
+      clearStorage();
       router.refresh();
       router.push(`/${params.storeId}/${Models.Offers}`);
       toast({
@@ -212,6 +246,10 @@ export const OfferForm: React.FC<OfferFormProps> = ({
       category.type.name.toLowerCase().includes(categorySearch.toLowerCase()),
   );
 
+  const filteredGroups = productGroups.filter((group) =>
+    group.name.toLowerCase().includes(groupSearch.toLowerCase()),
+  );
+
   return (
     <>
       <AlertModal
@@ -227,16 +265,22 @@ export const OfferForm: React.FC<OfferFormProps> = ({
           </Button>
           <Heading title={title} description={description} />
         </div>
-        {initialData && (
-          <Button
-            disabled={loading}
-            variant="destructive"
-            size="sm"
-            onClick={() => setOpen(true)}
-          >
-            <Trash className="h-4 w-4" />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={onClear} type="button">
+            <Eraser className="mr-2 h-4 w-4" />
+            Limpiar Formulario
           </Button>
-        )}
+          {initialData && (
+            <Button
+              disabled={loading}
+              variant="destructive"
+              size="sm"
+              onClick={() => setOpen(true)}
+            >
+              <Trash className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
       <Separator />
       <Form {...form}>
@@ -495,6 +539,104 @@ export const OfferForm: React.FC<OfferFormProps> = ({
               )}
             />
 
+            <FormField
+              control={form.control}
+              name="productGroupIds"
+              render={() => (
+                <FormItem>
+                  <div className="mb-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <FormLabel isRequired className="text-base">
+                        Grupos de Productos
+                      </FormLabel>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const currentValues =
+                            form.getValues("productGroupIds") || [];
+                          const allGroupIds = filteredGroups.map((g) => g.id);
+                          if (currentValues.length === allGroupIds.length) {
+                            form.setValue("productGroupIds", []);
+                          } else {
+                            form.setValue("productGroupIds", allGroupIds);
+                          }
+                        }}
+                        className="group flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-all hover:bg-primary/10"
+                      >
+                        {(form.watch("productGroupIds")?.length || 0) ===
+                          filteredGroups.length && filteredGroups.length > 0 ? (
+                          <>
+                            <CheckSquare className="h-4 w-4 text-primary" />
+                            <span className="text-primary">
+                              Deseleccionar todo
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <Square className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
+                            <span className="text-muted-foreground group-hover:text-primary">
+                              Seleccionar todo
+                            </span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <FormDescription>
+                      Aplica el descuento a todas las variantes de estos grupos.
+                    </FormDescription>
+                    <Input
+                      placeholder="Buscar grupos..."
+                      value={groupSearch}
+                      onChange={(e) => setGroupSearch(e.target.value)}
+                    />
+                  </div>
+                  <ScrollArea className="h-96 rounded-md border p-4">
+                    {filteredGroups.map((group) => (
+                      <FormField
+                        key={group.id}
+                        control={form.control}
+                        name="productGroupIds"
+                        render={({ field }) => {
+                          return (
+                            <FormItem
+                              key={group.id}
+                              className="mb-3 flex flex-row items-center space-x-3 space-y-0 rounded-md border p-2 hover:bg-accent"
+                            >
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value?.includes(group.id)}
+                                  onCheckedChange={(checked) => {
+                                    return checked
+                                      ? field.onChange([
+                                          ...(field.value || []),
+                                          group.id,
+                                        ])
+                                      : field.onChange(
+                                          field.value?.filter(
+                                            (value) => value !== group.id,
+                                          ),
+                                        );
+                                  }}
+                                />
+                              </FormControl>
+                              <div className="flex-1 space-y-0.5">
+                                <FormLabel
+                                  isRequired
+                                  className="cursor-pointer font-normal"
+                                >
+                                  {group.name}
+                                </FormLabel>
+                              </div>
+                            </FormItem>
+                          );
+                        }}
+                      />
+                    ))}
+                  </ScrollArea>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name="productIds"

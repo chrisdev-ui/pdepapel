@@ -22,6 +22,9 @@ interface Query {
   maxPrice?: number | null;
   excludeProducts?: string;
   search?: string;
+  groupBy?: string;
+  productGroupId?: string;
+  isOnSale?: boolean;
 }
 
 export const getProducts = async (query: Query): Promise<ProductsResponse> => {
@@ -32,6 +35,9 @@ export const getProducts = async (query: Query): Promise<ProductsResponse> => {
   if (query.categoryId) url.searchParams.append("categoryId", query.categoryId);
   if (query.sizeId) url.searchParams.append("sizeId", query.sizeId);
   if (query.designId) url.searchParams.append("designId", query.designId);
+  if (query.groupBy) url.searchParams.append("groupBy", query.groupBy);
+  if (query.productGroupId)
+    url.searchParams.append("productGroupId", query.productGroupId);
   if (query.isFeatured !== undefined)
     url.searchParams.append("isFeatured", String(query.isFeatured));
   if (query.onlyNew !== undefined)
@@ -50,6 +56,7 @@ export const getProducts = async (query: Query): Promise<ProductsResponse> => {
   if (query.fromShop !== undefined)
     url.searchParams.append("fromShop", String(query.fromShop));
   if (query.search) url.searchParams.append("search", query.search);
+  if (query.isOnSale) url.searchParams.append("isOnSale", "true");
 
   const response = await fetch(url);
   return response.json();

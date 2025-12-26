@@ -14,6 +14,7 @@ interface ProductListProps {
     id: string;
     name: string;
     quantity: number;
+    sku: string;
     image: string;
   }[];
 }
@@ -47,7 +48,12 @@ export const ProductList: React.FC<ProductListProps> = ({ products }) => {
                 className="rounded-md"
                 unoptimized
               />
-              <span className="text-xs">{product.name}</span>
+              <div className="flex flex-col">
+                <span className="text-xs font-medium">{product.name}</span>
+                <span className="text-[10px] text-muted-foreground">
+                  {product.sku}
+                </span>
+              </div>
               <span className="ml-auto text-xs font-semibold">{`x${product.quantity}`}</span>
             </div>
           ))}

@@ -1,3 +1,5 @@
+import { Breadcrumb } from "@/components/ui/breadcrumb";
+import { Container } from "@/components/ui/container";
 import { Metadata } from "next";
 
 import { Wishlist } from "./components/wishlist";
@@ -12,5 +14,13 @@ export const metadata: Metadata = {
 };
 
 export default function WishlistPage() {
-  return <Wishlist />;
+  return (
+    <Container className="px-4 py-8 sm:px-6 lg:px-8">
+      <Breadcrumb
+        items={[{ label: "Lista de deseos", isCurrent: true }]}
+        className="mb-6"
+      />
+      <Wishlist />
+    </Container>
+  );
 }

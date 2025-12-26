@@ -1,5 +1,6 @@
 "use client";
 
+import { useFormPersist } from "@/hooks/use-form-persist";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   DiscountType,
@@ -16,6 +17,7 @@ import {
   Check,
   ChevronsUpDown,
   DollarSign,
+  Eraser,
   Loader2,
   Package,
   Percent,
@@ -346,105 +348,112 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     return initialData.discount;
   };
 
+  const defaultValues = useMemo(
+    () =>
+      initialData
+        ? {
+            ...initialData,
+            userId: initialData.userId || "",
+            guestId: initialData.guestId || "",
+            documentId: initialData.documentId || "",
+            email: initialData.email || "",
+            address: initialData.address || "",
+            city: initialData.city || "",
+            department: initialData.department || "",
+            daneCode: initialData.daneCode || "",
+            neighborhood: initialData.neighborhood || "",
+            addressReference: initialData.addressReference || "",
+            address2: initialData.address2 || "",
+            company: initialData.company || "",
+            subtotal: initialData.subtotal || 0,
+            total: initialData.total || 0,
+            discount: {
+              type: initialData.discountType || undefined,
+              amount: getOriginalDiscountAmount(initialData),
+              reason: initialData.discountReason || undefined,
+            },
+            couponCode: initialData.coupon?.code || "",
+            orderItems: initialData.orderItems.map((item) => ({
+              productId: item.productId,
+              quantity: item.quantity,
+            })),
+            payment: {
+              ...initialData.payment,
+              transactionId: initialData.payment?.transactionId || undefined,
+            },
+            shippingProvider:
+              initialData.shipping?.provider || ShippingProvider.NONE,
+            envioClickIdRate:
+              initialData.shipping?.envioClickIdRate || undefined,
+            shipping: {
+              ...initialData.shipping,
+              status: initialData.shipping?.status || ShippingStatus.Preparing,
+              courier: initialData.shipping?.courier || undefined,
+              carrierName: initialData.shipping?.carrierName || undefined,
+              productName: initialData.shipping?.productName || undefined,
+              flete: initialData.shipping?.flete || undefined,
+              minimumInsurance:
+                initialData.shipping?.minimumInsurance || undefined,
+              deliveryDays: initialData.shipping?.deliveryDays || undefined,
+              isCOD: initialData.shipping?.isCOD || false,
+              cost: initialData.shipping?.cost || 0,
+              trackingCode: initialData.shipping?.trackingCode || undefined,
+              trackingUrl: initialData.shipping?.trackingUrl || undefined,
+              guideUrl: initialData.shipping?.guideUrl || undefined,
+              estimatedDeliveryDate:
+                initialData.shipping?.estimatedDeliveryDate || undefined,
+              notes: initialData.shipping?.notes || undefined,
+              boxId: initialData.shipping?.boxId || undefined,
+            },
+          }
+        : {
+            userId: "",
+            guestId: generateGuestId(),
+            fullName: "",
+            orderItems: [],
+            phone: "",
+            email: "",
+            address: "",
+            city: "",
+            department: "",
+            daneCode: "",
+            neighborhood: "",
+            addressReference: "",
+            address2: "",
+            company: "",
+            documentId: "",
+            status: OrderStatus.CREATED,
+            payment: {},
+            shippingProvider: ShippingProvider.NONE,
+            envioClickIdRate: undefined,
+            shipping: {
+              status: ShippingStatus.Preparing,
+              courier: "",
+              carrierName: "",
+              productName: "",
+              flete: 0,
+              minimumInsurance: 0,
+              deliveryDays: 0,
+              isCOD: false,
+              trackingCode: "",
+              trackingUrl: "",
+              guideUrl: "",
+              cost: 0,
+              estimatedDeliveryDate: undefined,
+              notes: undefined,
+              boxId: undefined,
+            },
+            subtotal: 0,
+            total: 0,
+            discount: {},
+            couponCode: "",
+          },
+    [initialData],
+  );
+
   const form = useForm<OrderFormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: initialData
-      ? {
-          ...initialData,
-          userId: initialData.userId || "",
-          guestId: initialData.guestId || "",
-          documentId: initialData.documentId || "",
-          email: initialData.email || "",
-          address: initialData.address || "",
-          city: initialData.city || "",
-          department: initialData.department || "",
-          daneCode: initialData.daneCode || "",
-          neighborhood: initialData.neighborhood || "",
-          addressReference: initialData.addressReference || "",
-          address2: initialData.address2 || "",
-          company: initialData.company || "",
-          subtotal: initialData.subtotal || 0,
-          total: initialData.total || 0,
-          discount: {
-            type: initialData.discountType || undefined,
-            amount: getOriginalDiscountAmount(initialData),
-            reason: initialData.discountReason || undefined,
-          },
-          couponCode: initialData.coupon?.code || "",
-          orderItems: initialData.orderItems.map((item) => ({
-            productId: item.productId,
-            quantity: item.quantity,
-          })),
-          payment: {
-            ...initialData.payment,
-            transactionId: initialData.payment?.transactionId || undefined,
-          },
-          shippingProvider:
-            initialData.shipping?.provider || ShippingProvider.NONE,
-          envioClickIdRate: initialData.shipping?.envioClickIdRate || undefined,
-          shipping: {
-            ...initialData.shipping,
-            status: initialData.shipping?.status || ShippingStatus.Preparing,
-            courier: initialData.shipping?.courier || undefined,
-            carrierName: initialData.shipping?.carrierName || undefined,
-            productName: initialData.shipping?.productName || undefined,
-            flete: initialData.shipping?.flete || undefined,
-            minimumInsurance:
-              initialData.shipping?.minimumInsurance || undefined,
-            deliveryDays: initialData.shipping?.deliveryDays || undefined,
-            isCOD: initialData.shipping?.isCOD || false,
-            cost: initialData.shipping?.cost || 0,
-            trackingCode: initialData.shipping?.trackingCode || undefined,
-            trackingUrl: initialData.shipping?.trackingUrl || undefined,
-            guideUrl: initialData.shipping?.guideUrl || undefined,
-            estimatedDeliveryDate:
-              initialData.shipping?.estimatedDeliveryDate || undefined,
-            notes: initialData.shipping?.notes || undefined,
-            boxId: initialData.shipping?.boxId || undefined,
-          },
-        }
-      : {
-          userId: "",
-          guestId: generateGuestId(),
-          fullName: "",
-          orderItems: [],
-          phone: "",
-          email: "",
-          address: "",
-          city: "",
-          department: "",
-          daneCode: "",
-          neighborhood: "",
-          addressReference: "",
-          address2: "",
-          company: "",
-          documentId: "",
-          status: OrderStatus.CREATED,
-          payment: {},
-          shippingProvider: ShippingProvider.NONE,
-          envioClickIdRate: undefined,
-          shipping: {
-            status: ShippingStatus.Preparing,
-            courier: "",
-            carrierName: "",
-            productName: "",
-            flete: 0,
-            minimumInsurance: 0,
-            deliveryDays: 0,
-            isCOD: false,
-            trackingCode: "",
-            trackingUrl: "",
-            guideUrl: "",
-            cost: 0,
-            estimatedDeliveryDate: undefined,
-            notes: undefined,
-            boxId: undefined,
-          },
-          subtotal: 0,
-          total: 0,
-          discount: {},
-          couponCode: "",
-        },
+    defaultValues,
   });
 
   const discountType = form.watch("discount.type");
@@ -460,6 +469,20 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   const {
     formState: { isDirty },
   } = form;
+
+  const { clearStorage } = useFormPersist({
+    form,
+    key: `order-form-${params.storeId}-${initialData?.id ?? "new"}`,
+  });
+
+  const onClear = () => {
+    form.reset(defaultValues);
+    clearStorage();
+    toast({
+      title: "Formulario limpiado",
+      description: "Los datos han sido restablecidos.",
+    });
+  };
 
   const orderTotals = useMemo(() => {
     // Calculate subtotal from selected products using discounted prices
@@ -579,6 +602,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         payload,
       );
     }
+    clearStorage();
     if (forceRedirect) {
       const guideCreation = response.data.guideCreation;
 
@@ -805,16 +829,22 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           </Button>
           <Heading title={title} description={description} />
         </div>
-        {initialData && (
-          <Button
-            disabled={loading}
-            variant="destructive"
-            size="sm"
-            onClick={() => setOpen(true)}
-          >
-            <Trash className="h-4 w-4" />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={onClear} type="button">
+            <Eraser className="mr-2 h-4 w-4" />
+            Limpiar Formulario
           </Button>
-        )}
+          {initialData && (
+            <Button
+              disabled={loading}
+              variant="destructive"
+              size="sm"
+              onClick={() => setOpen(true)}
+            >
+              <Trash className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
       <Separator />
       <Form {...form}>
@@ -1345,12 +1375,14 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 <FormItem>
                   <FormLabel>Tipo de descuento</FormLabel>
                   <Select
+                    key={field.value}
                     disabled={loading}
                     onValueChange={field.onChange}
                     value={field.value || ""}
+                    defaultValue={field.value || ""}
                   >
                     <FormControl>
-                      <SelectTrigger value={field.value}>
+                      <SelectTrigger>
                         <SelectValue placeholder="Seleccionar tipo" />
                       </SelectTrigger>
                     </FormControl>
@@ -1676,9 +1708,10 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   <FormLabel isRequired>Tipo de Envío</FormLabel>
                   <FormControl>
                     <RadioGroup
+                      key={field.value}
                       onValueChange={field.onChange}
                       value={field.value}
-                      defaultValue={ShippingProvider.NONE}
+                      defaultValue={field.value}
                       className="grid grid-cols-1 gap-4 md:grid-cols-3"
                       disabled={
                         loading || !!initialData?.shipping?.envioClickIdOrder
@@ -1866,6 +1899,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                     </div>
 
                     <RadioGroup
+                      key={selectedRateId?.toString() || "no-rate"}
                       value={selectedRateId?.toString() || ""}
                       defaultValue={selectedRateId?.toString() || undefined}
                       onValueChange={(value) => {

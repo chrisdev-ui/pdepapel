@@ -18,7 +18,7 @@ export const columns: ColumnDef<ProductColumn>[] = [
     id: "image",
     accessorFn: (row) =>
       row.images.find((image) => image.isMain)?.url ??
-      row.images[0].url ??
+      row.images[0]?.url ??
       "https://placehold.co/400",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Imagen" />
@@ -27,7 +27,7 @@ export const columns: ColumnDef<ProductColumn>[] = [
       <DataTableCellImage
         src={
           row.original.images.find((image) => image.isMain)?.url ??
-          row.original.images[0].url ??
+          row.original.images[0]?.url ??
           "https://placehold.co/400"
         }
         alt={row.original.name}
@@ -41,6 +41,17 @@ export const columns: ColumnDef<ProductColumn>[] = [
     accessorKey: "name",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Nombre" />
+    ),
+  },
+  {
+    accessorKey: "productGroup.name",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Grupo" />
+    ),
+    cell: ({ row }) => (
+      <span className="text-muted-foreground">
+        {row.original.productGroup?.name || "-"}
+      </span>
     ),
   },
   {
@@ -87,6 +98,13 @@ export const columns: ColumnDef<ProductColumn>[] = [
       ),
   },
   {
+    accessorKey: "stock",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Stock" />
+    ),
+    cell: ({ row }) => <DataTableCellNumber value={row.original.stock} />,
+  },
+  {
     id: "category",
     accessorKey: "category.name",
     header: ({ column }) => (
@@ -107,13 +125,6 @@ export const columns: ColumnDef<ProductColumn>[] = [
       <DataTableColumnHeader column={column} title="Color" />
     ),
     cell: ({ row }) => <DataTableCellColor color={row.original.color.value} />,
-  },
-  {
-    accessorKey: "stock",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Stock" />
-    ),
-    cell: ({ row }) => <DataTableCellNumber value={row.original.stock} />,
   },
   {
     id: "design",

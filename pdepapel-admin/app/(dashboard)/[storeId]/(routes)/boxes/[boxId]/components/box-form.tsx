@@ -1,12 +1,13 @@
 "use client";
 
+import { useFormPersist } from "@/hooks/use-form-persist";
 import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Box } from "@prisma/client";
 import axios from "axios";
-import { ArrowLeft, Trash } from "lucide-react";
+import { ArrowLeft, Eraser, Trash } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 
@@ -66,17 +67,37 @@ export const BoxForm: React.FC<BoxFormProps> = ({
   const toastMessage = initialData ? "Caja actualizada." : "Caja creada.";
   const action = initialData ? "Guardar cambios" : "Crear";
 
+  const defaultValues = useMemo(
+    () =>
+      initialData || {
+        name: "",
+        type: "M",
+        width: 0,
+        height: 0,
+        length: 0,
+        isDefault: false,
+      },
+    [initialData],
+  );
+
   const form = useForm<BoxFormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: initialData || {
-      name: "",
-      type: "M",
-      width: 0,
-      height: 0,
-      length: 0,
-      isDefault: false,
-    },
+    defaultValues,
   });
+
+  const { clearStorage } = useFormPersist({
+    form,
+    key: `box-form-${params.storeId}-${initialData?.id ?? "new"}`,
+  });
+
+  const onClear = () => {
+    form.reset(defaultValues);
+    clearStorage();
+    toast({
+      title: "Formulario limpiado",
+      description: "Los datos han sido restablecidos.",
+    });
+  };
 
   const onSubmit = async (data: BoxFormValues) => {
     try {
@@ -86,6 +107,7 @@ export const BoxForm: React.FC<BoxFormProps> = ({
       } else {
         await axios.post(`/api/${params.storeId}/boxes`, data);
       }
+      clearStorage();
       router.refresh();
       router.push(`/${params.storeId}/boxes`);
       toast({
@@ -143,16 +165,22 @@ export const BoxForm: React.FC<BoxFormProps> = ({
           </Button>
           <Heading title={title} description={description} />
         </div>
-        {initialData && (
-          <Button
-            disabled={loading}
-            variant="destructive"
-            size="icon"
-            onClick={() => setOpen(true)}
-          >
-            <Trash className="h-4 w-4" />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={onClear} type="button">
+            <Eraser className="mr-2 h-4 w-4" />
+            Limpiar Formulario
           </Button>
-        )}
+          {initialData && (
+            <Button
+              disabled={loading}
+              variant="destructive"
+              size="icon"
+              onClick={() => setOpen(true)}
+            >
+              <Trash className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
       <Separator />
 
@@ -187,6 +215,7 @@ export const BoxForm: React.FC<BoxFormProps> = ({
                   <FormItem>
                     <FormLabel isRequired>Tipo</FormLabel>
                     <Select
+                      key={field.value}
                       disabled={loading}
                       onValueChange={field.onChange}
                       value={field.value}
@@ -194,10 +223,7 @@ export const BoxForm: React.FC<BoxFormProps> = ({
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue
-                            defaultValue={field.value}
-                            placeholder="Selecciona un tipo"
-                          />
+                          <SelectValue placeholder="Selecciona un tipo" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>

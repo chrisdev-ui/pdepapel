@@ -1,8 +1,9 @@
 "use client";
 
+import { useFormPersist } from "@/hooks/use-form-persist";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Category, Type } from "@prisma/client";
-import { Loader2, Trash } from "lucide-react";
+import { Eraser, Loader2, Trash } from "lucide-react";
 import { useForm } from "react-hook-form";
 import z from "zod";
 
@@ -69,13 +70,34 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
     [initialData],
   );
 
+  const defaultValues = useMemo(
+    () =>
+      initialData || {
+        name: "",
+        typeId: "",
+      },
+    [initialData],
+  );
+
   const form = useForm<CategoryFormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: initialData || {
-      name: "",
-      typeId: "",
-    },
+    defaultValues,
   });
+
+  const { clearStorage } = useFormPersist({
+    form,
+    key: `category-form-${params.storeId}-${initialData?.id ?? "new"}`,
+  });
+
+  const onClear = () => {
+    form.reset(defaultValues);
+    clearStorage();
+    toast({
+      title: "Formulario limpiado",
+      description: "Los datos han sido restablecidos.",
+    });
+  };
+
   const onSubmit = async (data: CategoryFormValues) => {
     try {
       setLoading(true);
@@ -87,6 +109,7 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
       } else {
         await axios.post(`/api/${params.storeId}/${Models.Categories}`, data);
       }
+      clearStorage();
       router.refresh();
       router.push(`/${params.storeId}/${Models.Categories}`);
       toast({
@@ -134,16 +157,22 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
       />
       <div className="flex items-center justify-between">
         <Heading title={title} description={description} />
-        {initialData && (
-          <Button
-            disabled={loading}
-            variant="destructive"
-            size="sm"
-            onClick={() => setOpen(true)}
-          >
-            <Trash className="h-4 w-4" />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={onClear} type="button">
+            <Eraser className="mr-2 h-4 w-4" />
+            Limpiar Formulario
           </Button>
-        )}
+          {initialData && (
+            <Button
+              disabled={loading}
+              variant="destructive"
+              size="sm"
+              onClick={() => setOpen(true)}
+            >
+              <Trash className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
       <Separator />
       <Form {...form}>
@@ -176,6 +205,7 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
                 <FormItem>
                   <FormLabel isRequired>Tipo</FormLabel>
                   <Select
+                    key={field.value}
                     disabled={loading}
                     onValueChange={field.onChange}
                     value={field.value}
@@ -183,10 +213,7 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue
-                          defaultValue={field.value}
-                          placeholder="Selecciona un tipo"
-                        />
+                        <SelectValue placeholder="Selecciona un tipo" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>

@@ -35,6 +35,9 @@ export function Wishlist() {
     offerLabel: item.offerLabel,
     stock: item.stock,
     createdAt: item.addedOn,
+    size: item.size?.name,
+    color: item.color?.name,
+    design: item.design?.name,
   }));
 
   return (

@@ -48,6 +48,7 @@ export const columns: ColumnDef<OrderColumn>[] = [
       row.orderItems.map((orderItem) => ({
         id: orderItem.product.id,
         name: orderItem.product.name,
+        sku: orderItem.product.sku,
         quantity: orderItem.quantity,
         image:
           orderItem.product.images.find((image) => image.isMain)?.url ??
@@ -61,6 +62,7 @@ export const columns: ColumnDef<OrderColumn>[] = [
         products={row.original.orderItems.map((orderItem) => ({
           id: orderItem.product.id,
           name: orderItem.product.name,
+          sku: orderItem.product.sku,
           quantity: orderItem.quantity,
           image:
             orderItem.product.images.find((image) => image.isMain)?.url ??
@@ -85,6 +87,7 @@ export const columns: ColumnDef<OrderColumn>[] = [
           totalPrice: currencyFormatter.format(row.original.total),
           products: row.original.orderItems.map((orderItem) => ({
             name: orderItem.product.name,
+            sku: orderItem.product.sku,
             quantity: orderItem.quantity,
           })),
         }}
