@@ -6,6 +6,7 @@ import {
   Eraser,
   Loader2,
   PackageCheckIcon,
+  Percent,
   Settings2,
   Trash,
 } from "lucide-react";
@@ -14,6 +15,7 @@ import { useForm } from "react-hook-form";
 import z from "zod";
 
 import { RichTextEditor } from "@/components/editor/rich-text-editor";
+import { ProductImportModal } from "@/components/modals/product-import-modal";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -38,13 +40,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
+import {
+  INITIAL_MISC_COST,
+  INITIAL_PERCENTAGE_INCREASE,
+  INITIAL_TRANSPORTATION_COST,
+} from "@/constants";
 import { useFormPersist } from "@/hooks/use-form-persist";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import { Category, Color, Design, Size, Supplier } from "@prisma/client";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getProduct } from "../[productId]/server/get-product";
 import { VariantGrid } from "./variant-grid";
 import { VariantMatrix } from "./variant-matrix";
@@ -60,11 +68,14 @@ const formSchema = z.object({
   sizeIds: z.array(z.string()).min(1, "Se requiere al menos un tamaño"),
   colorIds: z.array(z.string()).min(1, "Se requiere al menos un color"),
   designIds: z.array(z.string()).min(1, "Se requiere al menos un diseño"),
-  defaultPrice: z.coerce.number().min(1, "El precio debe ser mayor a 0"),
-  defaultCost: z.coerce
+  // Pricing Fields (Replaces defaultPrice/defaultCost)
+  acqPrice: z.coerce
     .number()
-    .min(0, "El costo no puede ser negativo")
-    .optional(),
+    .min(0, "El precio de compra debe ser mayor o igual a 0"),
+  percentageIncrease: z.coerce.number().min(0),
+  transportationCost: z.coerce.number().min(0),
+  miscCost: z.coerce.number().min(0),
+  price: z.coerce.number().min(1, "El precio de venta debe ser mayor a 0"),
   defaultStock: z.coerce.number().min(0, "El stock no puede ser negativo"),
   defaultSupplier: z.string().optional(),
   // New: Variants Array for editing
@@ -126,30 +137,41 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   const { toast } = useToast();
 
   const [loading, setLoading] = useState(false);
-  // Removed local imageScopes state in favor of form state for persistence
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
   const [open, setOpen] = useState(false);
   const [matrixOpen, setMatrixOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   // Determine if we are in "Edit" mode
   const isEdit = !!initialData;
 
   // We only support Creation for now in this form
-  const title = isEdit ? "Editar Grupo" : "Crear Grupo de Productos";
+  const title = isEdit ? "Editar Grupo" : "Crear Grupo";
   const description = isEdit
-    ? "Edita los detalles del grupo"
-    : "Crea un nuevo grupo de productos con variantes";
+    ? "Editar grupo de productos"
+    : "Agregar un nuevo grupo de productos con variantes";
   const toastMessage = isEdit
     ? "Grupo actualizado"
     : "Grupo de productos creado";
   const action = isEdit ? "Guardar Cambios" : "Crear Grupo";
   const pendingText = isEdit ? "Guardando..." : "Creando...";
 
-  // Helper to reconstruct image mapping from existing variants
-  const reconstructMapping = () => {
-    if (!initialData || !initialData.products || !initialData.images) return [];
+  const reconstructMapping = (
+    imagesOverride?: any[],
+    productsOverride?: any[],
+  ) => {
+    // If we have overrides, we don't need initialData checks
+    if (
+      !imagesOverride &&
+      !productsOverride &&
+      (!initialData || !initialData.products)
+    )
+      return [];
 
-    const products = initialData.products as any[];
-    const groupImages = initialData.images as { url: string }[];
+    const products = productsOverride || (initialData?.products as any[]) || [];
+    const groupImages =
+      imagesOverride || (initialData?.images as { url: string }[]) || [];
     const mapping: { url: string; scope: string }[] = [];
 
     groupImages.forEach((img) => {
@@ -253,11 +275,27 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     return mapping;
   };
 
+  const getAllImages = () => {
+    if (!initialData) return [];
+    const groupImages = initialData.images || [];
+    const variantImages =
+      initialData.products?.flatMap((p: any) => p.images || []) || [];
+
+    const map = new Map();
+    groupImages.forEach((img: any) => map.set(img.url, img));
+    variantImages.forEach((img: any) => {
+      if (!map.has(img.url)) {
+        map.set(img.url, { url: img.url, isMain: false });
+      }
+    });
+    return Array.from(map.values());
+  };
+
   const defaultValues = isEdit
     ? {
         name: initialData.name,
         description: initialData.description,
-        images: initialData.images || [],
+        images: getAllImages(),
         categoryId: initialData.products?.[0]?.categoryId || "",
         sizeIds: Array.from(
           new Set(initialData.products?.map((p: any) => p.sizeId) || []),
@@ -268,11 +306,19 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
         designIds: Array.from(
           new Set(initialData.products?.map((p: any) => p.designId) || []),
         ) as string[],
-        defaultPrice: initialData.products?.[0]?.price || 0,
-        defaultCost: initialData.products?.[0]?.acqPrice || 0,
+        // Mapping old fields to new fields?
+        // Note: Product Groups previously didn't store these calc fields, so we default them.
+        // We take price/acqPrice from the first product as a heuristic.
+        acqPrice: initialData.products?.[0]?.acqPrice || 0,
+        percentageIncrease: INITIAL_PERCENTAGE_INCREASE, // Default since we didn't store it
+        transportationCost: INITIAL_TRANSPORTATION_COST, // Default
+        miscCost: INITIAL_MISC_COST, // Default
+        price: initialData.products?.[0]?.price || 0,
         defaultStock: initialData.products?.[0]?.stock || 0,
         defaultSupplier: initialData.products?.[0]?.supplierId || "",
-        imageMapping: initialData.imageMapping || reconstructMapping(),
+        imageMapping:
+          initialData.imageMapping ||
+          reconstructMapping(getAllImages(), initialData.products),
         isFeatured: initialData.products?.[0]?.isFeatured || false,
         isArchived: initialData.products?.[0]?.isArchived || false,
         variants:
@@ -299,8 +345,11 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
         sizeIds: [],
         colorIds: [],
         designIds: [],
-        defaultPrice: 0,
-        defaultCost: 0,
+        acqPrice: 0,
+        percentageIncrease: INITIAL_PERCENTAGE_INCREASE,
+        transportationCost: INITIAL_TRANSPORTATION_COST,
+        miscCost: INITIAL_MISC_COST,
+        price: 0,
         defaultStock: 0,
         defaultSupplier: "",
         imageMapping: [],
@@ -318,6 +367,78 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   // This ensures getValues() returns it correctly in useFormPersist
   useEffect(() => {
     form.register("imageMapping");
+  }, [form]);
+
+  // Price Calculation Logic (Ported from ProductForm)
+  const calculatePrice = (values: Partial<ProductGroupFormValues>) => {
+    const acqPrice = Number(values.acqPrice) || 0;
+    const percentageIncrease = Number(values.percentageIncrease) || 0;
+    const transportationCost = Number(values.transportationCost) || 0;
+    const miscCost = Number(values.miscCost) || 0;
+
+    if (acqPrice > 0) {
+      return Number(
+        (
+          acqPrice * (1 + percentageIncrease / 100) +
+          transportationCost +
+          miscCost
+        ).toFixed(2),
+      );
+    }
+    return 0;
+  };
+
+  useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+      const watchedFields = [
+        "acqPrice",
+        "percentageIncrease",
+        "transportationCost",
+        "miscCost",
+        "defaultSupplier",
+        "defaultStock",
+      ];
+
+      if (name && watchedFields.includes(name)) {
+        if (debounceRef.current) {
+          clearTimeout(debounceRef.current);
+        }
+
+        debounceRef.current = setTimeout(() => {
+          const values = form.getValues();
+          const newPrice = calculatePrice({
+            acqPrice: values.acqPrice ?? 0,
+            percentageIncrease: values.percentageIncrease ?? 0,
+            transportationCost: values.transportationCost ?? 0,
+            miscCost: values.miscCost ?? 0,
+          });
+
+          if (newPrice > 0) {
+            form.setValue("price", newPrice);
+
+            // Sync variants - REACTIVE UPDATE
+            // User requested that inheriting properties should update all variants, ignoring saved state.
+            const currentVariants = form.getValues("variants") || [];
+            const updatedVariants = currentVariants.map((v) => ({
+              ...v,
+              price: newPrice,
+              acqPrice: values.acqPrice ?? 0,
+              supplierId: values.defaultSupplier || v.supplierId, // Enforce supplier if global is set, otherwise keep variant's
+              stock: values.defaultStock || 0, // Enforce stock if global is set, otherwise 0
+            }));
+
+            // Only update if there are variants to avoid unnecessary renders/overhead
+            if (updatedVariants.length > 0) {
+              form.setValue("variants", updatedVariants);
+            }
+          }
+        }, 500); // 500ms debounce to prevent lag on typing
+      }
+    });
+    return () => {
+      subscription.unsubscribe();
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
   }, [form]);
 
   // Form Persistence
@@ -433,8 +554,8 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   // LOGGING
   const currentMapping = form.watch("imageMapping") || [];
 
-  const defaultPrice = form.watch("defaultPrice");
-  const defaultCost = form.watch("defaultCost");
+  const currentPrice = form.watch("price");
+  const currentAcqPrice = form.watch("acqPrice");
   const defaultStock = form.watch("defaultStock");
   const defaultSupplier = form.watch("defaultSupplier");
 
@@ -504,8 +625,8 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       return {
         sku: gen.sku,
         name: gen.name,
-        price: defaultPrice || 0,
-        acqPrice: defaultCost || 0,
+        price: currentPrice || 0,
+        acqPrice: currentAcqPrice || 0,
         stock: defaultStock || 0,
         supplierId: defaultSupplier || "",
         isFeatured: false,
@@ -516,11 +637,142 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       };
     });
 
-    form.setValue("variants", mergedVariants);
+    const uniqueVariants = [
+      ...(currentVariants || []),
+      ...mergedVariants.filter((n) => {
+        // De-dupe based on SKU or attributes
+        const duplicate = currentVariants?.some(
+          (e) =>
+            (n.sku && e.sku === n.sku) ||
+            (e.size?.id === n.size?.id &&
+              e.color?.id === n.color?.id &&
+              e.design?.id === n.design?.id),
+        );
+        return !duplicate;
+      }),
+    ];
+
+    form.setValue("variants", uniqueVariants, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
     toast({
       description: `Se han generado ${mergedVariants.length} variantes.`,
       variant: "success",
     });
+  };
+
+  // Handle Import from Standalone Products
+  const handleImport = (products: any[]) => {
+    if (!products.length) return;
+
+    // 1. Determine Category (Verify consistency)
+    // The modal enforces filtering, so we take the first one's category if form blank
+    const firstCat = products[0].category.id;
+    const currentCat = form.getValues("categoryId");
+
+    if (!currentCat) {
+      form.setValue("categoryId", firstCat);
+    } else if (
+      currentCat !== firstCat &&
+      products.some((p) => p.category.id !== currentCat)
+    ) {
+      toast({
+        title: "Advertencia de Categoría",
+        description:
+          "Algunos productos importados no coinciden con la categoría actual. Verifica la consistencia.",
+        variant: "destructive",
+      });
+      // We allow proceed but warn? Or strictly enforce?
+      // Modal enforces, so this is just a safety check.
+    }
+
+    // 2. Merge Attributes (Sizes, Colors, Designs)
+    const currentSizes = new Set(form.getValues("sizeIds"));
+    const currentColors = new Set(form.getValues("colorIds"));
+    const currentDesigns = new Set(form.getValues("designIds"));
+
+    products.forEach((p) => {
+      if (p.size?.id) currentSizes.add(p.size.id);
+      if (p.color?.id) currentColors.add(p.color.id);
+      if (p.design?.id) currentDesigns.add(p.design.id);
+    });
+
+    form.setValue("sizeIds", Array.from(currentSizes));
+    form.setValue("colorIds", Array.from(currentColors));
+    form.setValue("designIds", Array.from(currentDesigns));
+
+    // 3. Smart Image Aggregation
+    const existingImages = form.getValues("images") || [];
+    const existingUrls = new Set(existingImages.map((img: any) => img.url));
+    const newImages: any[] = [];
+
+    products.forEach((p) => {
+      if (p.images && p.images.length > 0) {
+        p.images.forEach((img: any) => {
+          if (!existingUrls.has(img.url)) {
+            existingUrls.add(img.url);
+            newImages.push({ url: img.url, isMain: false });
+          }
+        });
+      }
+    });
+
+    if (newImages.length > 0) {
+      form.setValue("images", [...existingImages, ...newImages]);
+      toast({
+        description: `${newImages.length} nuevas imágenes agregadas de los productos importados.`,
+      });
+    }
+
+    // 4. Map to Variants
+    const newVariants = products.map((p) => ({
+      id: p.id, // KEEP ID so backend knows to update/adopt
+      sku: p.sku || "",
+      name: p.name,
+      price: form.getValues("price") || p.price,
+      acqPrice: form.getValues("acqPrice") || p.acqPrice || 0,
+      stock: form.getValues("defaultStock") || p.stock,
+      supplierId: form.getValues("defaultSupplier") || p.supplierId,
+      isFeatured: p.isFeatured || false,
+      isArchived: p.isArchived || false,
+      size: p.size,
+      color: p.color,
+      design: p.design,
+      images: p.images?.map((i: any) => i.url) || [],
+    }));
+
+    // Merge variants avoiding ID duplication
+    const currentVars = form.getValues("variants") || [];
+    const currentIds = new Set(
+      currentVars.map((v: any) => v.id).filter(Boolean),
+    );
+
+    const toAdd = newVariants.filter((v) => !currentIds.has(v.id));
+
+    if (toAdd.length > 0) {
+      const finalVariants = [...currentVars, ...toAdd];
+      const finalImages = [...existingImages, ...newImages];
+
+      form.setValue("variants", finalVariants);
+
+      // Recalculate Image Mapping for the new set of variants and images
+      form.setValue(
+        "imageMapping",
+        reconstructMapping(finalImages, finalVariants),
+      );
+
+      toast({
+        title: "Importación Exitosa",
+        description: `${toAdd.length} productos agregados como variantes.`,
+        variant: "success",
+      });
+    } else {
+      toast({
+        description: "Los productos seleccionados ya están en el grupo.",
+      });
+    }
   };
 
   const availableScopes = useMemo(() => {
@@ -589,27 +841,6 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
 
   return (
     <>
-      <div className="flex items-center justify-between">
-        <Heading title={title} description={description} />
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={onClear} type="button">
-            <Eraser className="mr-2 h-4 w-4" />
-            Limpiar Formulario
-          </Button>
-          {isEdit && (
-            <Button
-              disabled={loading}
-              variant="destructive"
-              size="icon"
-              onClick={() => setOpen(true)}
-            >
-              <Trash className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
-      </div>
-      <Separator />
-
       <Modal
         title="Eliminar Grupo"
         description="¿Cómo deseas eliminar este grupo?"
@@ -651,10 +882,48 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       <VariantMatrix
         isOpen={matrixOpen}
         onClose={() => setMatrixOpen(false)}
+        colors={colors.filter((c) => form.watch("colorIds").includes(c.id))}
+        designs={designs.filter((d) => form.watch("designIds").includes(d.id))}
         onConfirm={handleMatrixConfirm}
-        colors={colors.filter((c) => selectedColorIds?.includes(c.id))}
-        designs={designs.filter((d) => selectedDesignIds?.includes(d.id))}
       />
+
+      <ProductImportModal
+        isOpen={importOpen}
+        onClose={() => setImportOpen(false)}
+        onConfirm={handleImport}
+        currentCategoryId={form.watch("categoryId")}
+        categories={categories}
+      />
+
+      <div className="flex items-center justify-between">
+        <Heading title={title} description={description} />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={onClear} type="button">
+            <Eraser className="mr-2 h-4 w-4" />
+            Limpiar Formulario
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setImportOpen(true)}
+            type="button"
+          >
+            <PackageCheckIcon className="mr-2 h-4 w-4" />
+            Importar Productos
+          </Button>
+          {isEdit && (
+            <Button
+              disabled={loading}
+              variant="destructive"
+              size="icon"
+              onClick={() => setOpen(true)}
+            >
+              <Trash className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      </div>
+      <Separator />
 
       <Form {...form}>
         <form
@@ -779,11 +1048,11 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel isRequired>Nombre del Grupo</FormLabel>
+                  <FormLabel isRequired>Nombre</FormLabel>
                   <FormControl>
                     <Input
                       disabled={loading}
-                      placeholder="Ej. Colección de Camisetas Verano"
+                      placeholder="Nombre del producto"
                       {...field}
                     />
                   </FormControl>
@@ -793,31 +1062,10 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
             />
             <FormField
               control={form.control}
-              name="defaultPrice"
+              name="acqPrice"
               render={({ field }) => (
                 <FormItem>
-                  <div className="flex items-center justify-between">
-                    <FormLabel isRequired>Precio por defecto</FormLabel>
-                    <div
-                      className="cursor-pointer text-xs text-primary underline hover:text-primary/80"
-                      onClick={() => {
-                        const val = form.getValues("defaultPrice");
-                        const current = form.getValues("variants");
-                        if (val && current) {
-                          form.setValue(
-                            "variants",
-                            current.map((v: any) => ({ ...v, price: val })),
-                          );
-                          toast({
-                            description:
-                              "Precio aplicado a todas las variantes",
-                          });
-                        }
-                      }}
-                    >
-                      Aplicar a todo
-                    </div>
-                  </div>
+                  <FormLabel isRequired>Precio de compra</FormLabel>
                   <FormControl>
                     <div className="relative">
                       <DollarSign className="absolute left-3 top-3 h-4 w-4" />
@@ -836,37 +1084,83 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
             />
             <FormField
               control={form.control}
-              name="defaultCost"
+              name="percentageIncrease"
               render={({ field }) => (
                 <FormItem>
-                  <div className="flex items-center justify-between">
-                    <FormLabel isRequired>Costo por defecto</FormLabel>
-                    <div
-                      className="cursor-pointer text-xs text-primary underline hover:text-primary/80"
-                      onClick={() => {
-                        const val = form.getValues("defaultCost");
-                        const current = form.getValues("variants");
-                        if (val !== undefined && current) {
-                          form.setValue(
-                            "variants",
-                            current.map((v: any) => ({ ...v, acqPrice: val })),
-                          );
-                          toast({
-                            description: "Costo aplicado a todas las variantes",
-                          });
-                        }
-                      }}
-                    >
-                      Aplicar a todo
+                  <FormLabel isRequired>Porcentaje de incremento</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <Percent className="absolute left-3 top-3 h-4 w-4" />
+                      <Input
+                        type="number"
+                        disabled={loading}
+                        placeholder="30"
+                        className="pl-8"
+                        {...field}
+                      />
                     </div>
-                  </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="transportationCost"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel isRequired>Costo de transporte</FormLabel>
                   <FormControl>
                     <div className="relative">
                       <DollarSign className="absolute left-3 top-3 h-4 w-4" />
                       <Input
                         type="number"
                         disabled={loading}
-                        placeholder="800"
+                        placeholder="0"
+                        className="pl-8"
+                        {...field}
+                      />
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="miscCost"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel isRequired>Costos misceláneos</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <DollarSign className="absolute left-3 top-3 h-4 w-4" />
+                      <Input
+                        type="number"
+                        disabled={loading}
+                        placeholder="0"
+                        className="pl-8"
+                        {...field}
+                      />
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="price"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel isRequired>Precio de venta (calculado)</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <DollarSign className="absolute left-3 top-3 h-4 w-4" />
+                      <Input
+                        type="number"
+                        disabled={loading}
+                        placeholder="1000"
                         className="pl-8"
                         {...field}
                       />
@@ -906,14 +1200,10 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                   </div>
                   <FormControl>
                     <div className="relative">
-                      <PackageCheckIcon className="absolute left-3 top-3 h-4 w-4" />
-                      <Input
-                        type="number"
+                      <StockQuantityInput
                         disabled={loading}
-                        placeholder="10"
-                        className="pl-8"
-                        min="0"
-                        {...field}
+                        value={Number(field.value)}
+                        onChange={field.onChange}
                       />
                     </div>
                   </FormControl>
@@ -1025,7 +1315,9 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                   <FormLabel isRequired>Categoría</FormLabel>
                   <Select
                     key={field.value}
-                    disabled={loading}
+                    disabled={
+                      loading || currentVariants?.some((v: any) => v.id)
+                    }
                     onValueChange={field.onChange}
                     value={field.value}
                     defaultValue={field.value}
@@ -1044,6 +1336,13 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                         ))}
                     </SelectContent>
                   </Select>
+                  {currentVariants?.some((v: any) => v.id) && (
+                    <FormDescription className="text-yellow-600">
+                      La categoría está bloqueada porque hay productos
+                      existentes vinculados. Para cambiarla, primero desvincula
+                      o elimina los productos.
+                    </FormDescription>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
@@ -1124,7 +1423,15 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
               )}
             />
 
-            <div className="col-span-3 flex justify-end">
+            <div className="col-span-3 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setImportOpen(true)}
+                disabled={loading}
+              >
+                Importar Productos
+              </Button>
               <Button
                 type="button"
                 variant="outline"

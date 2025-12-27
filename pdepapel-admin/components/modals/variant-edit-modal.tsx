@@ -28,13 +28,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  INITIAL_MISC_COST,
-  INITIAL_PERCENTAGE_INCREASE,
-  INITIAL_TRANSPORTATION_COST,
-} from "@/constants";
+import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import { cn } from "@/lib/utils";
-import { Check, DollarSign, Percent, Truck } from "lucide-react";
+import { Check } from "lucide-react";
 import Image from "next/image";
 
 const variantSchema = z.object({
@@ -52,15 +48,9 @@ const variantSchema = z.object({
   isFeatured: z.boolean().default(false).optional(), // Add isFeatured
   description: z.string().optional(),
   images: z.array(z.string()).optional(),
-  // Virtual fields for calculator
-  percentageIncrease: z.coerce.number().optional(),
-  transportationCost: z.coerce.number().optional(),
-  miscCost: z.coerce.number().optional(),
 });
 
 type VariantFormValues = z.infer<typeof variantSchema>;
-
-// ... (previous imports and schema)
 
 interface VariantEditModalProps {
   isOpen: boolean;
@@ -99,6 +89,12 @@ export const VariantEditModal: React.FC<VariantEditModalProps> = ({
     }
   }, [initialData, form]);
 
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    form.handleSubmit(onSubmit)(e);
+  };
+
   const onSubmit = async (data: VariantFormValues) => {
     try {
       setLoading(true);
@@ -115,48 +111,6 @@ export const VariantEditModal: React.FC<VariantEditModalProps> = ({
     }
   };
 
-  // Price Calculator Logic
-  const acqPrice = form.watch("acqPrice");
-  const percentageIncrease = form.watch("percentageIncrease");
-  const transportationCost = form.watch("transportationCost");
-  const miscCost = form.watch("miscCost");
-
-  useEffect(() => {
-    // Only calculate if we have base values and user hasn't manually overridden price (complex)
-    // For now, simple auto-calc like ProductForm
-    const base = Number(acqPrice) || 0;
-    const pct = Number(percentageIncrease) || 0;
-    const transp = Number(transportationCost) || 0;
-    const misc = Number(miscCost) || 0;
-
-    if (base > 0) {
-      const calculated = base * (1 + pct / 100) + transp + misc;
-      // Round to nearest 100? Or keep raw?
-      // Let's round to nearest 50 or 100 for cleaner prices, or just Math.ceil
-      const rounded = Math.ceil(calculated / 50) * 50;
-      form.setValue("price", rounded, {
-        shouldDirty: true,
-        shouldTouch: true,
-      });
-    }
-  }, [acqPrice, percentageIncrease, transportationCost, miscCost, form]);
-
-  // Set defaults for calculator if missing
-  useEffect(() => {
-    if (isOpen) {
-      const current = form.getValues();
-      if (current.percentageIncrease === undefined) {
-        form.setValue("percentageIncrease", INITIAL_PERCENTAGE_INCREASE);
-      }
-      if (current.transportationCost === undefined) {
-        form.setValue("transportationCost", INITIAL_TRANSPORTATION_COST);
-      }
-      if (current.miscCost === undefined) {
-        form.setValue("miscCost", INITIAL_MISC_COST);
-      }
-    }
-  }, [isOpen, form]);
-
   const title = `Editar Variante: ${initialData?.name || "Variante"}`;
   const description =
     "Modifica los detalles, descripción e imágenes de esta variante.";
@@ -170,7 +124,7 @@ export const VariantEditModal: React.FC<VariantEditModalProps> = ({
       className="max-w-3xl"
     >
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <ScrollArea className="h-[60vh] px-1 pr-4">
             <div className="space-y-4 p-1">
               <div className="grid grid-cols-2 gap-4">
@@ -208,83 +162,6 @@ export const VariantEditModal: React.FC<VariantEditModalProps> = ({
                     </FormItem>
                   )}
                 />
-              </div>
-
-              <div className="rounded-md border p-4">
-                <div className="mb-4 flex items-center gap-2">
-                  <span className="font-semibold">Calculadora de Precios</span>
-                  <span className="text-xs text-muted-foreground">
-                    (Ayuda para definir el precio final)
-                  </span>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="percentageIncrease"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs">% Incremento</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <Percent className="absolute left-2 top-2.5 h-3 w-3" />
-                            <Input
-                              type="number"
-                              disabled={loading}
-                              placeholder="30"
-                              className="h-9 pl-7 text-xs"
-                              {...field}
-                            />
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="transportationCost"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs">Transporte</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <Truck className="absolute left-2 top-2.5 h-3 w-3" />
-                            <Input
-                              type="number"
-                              disabled={loading}
-                              placeholder="0"
-                              className="h-9 pl-7 text-xs"
-                              {...field}
-                            />
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="miscCost"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs">Misceláneos</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <DollarSign className="absolute left-2 top-2.5 h-3 w-3" />
-                            <Input
-                              type="number"
-                              disabled={loading}
-                              placeholder="0"
-                              className="h-9 pl-7 text-xs"
-                              {...field}
-                            />
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -334,11 +211,10 @@ export const VariantEditModal: React.FC<VariantEditModalProps> = ({
                     <FormItem>
                       <FormLabel isRequired>Stock</FormLabel>
                       <FormControl>
-                        <Input
-                          type="number"
+                        <StockQuantityInput
                           disabled={loading}
-                          placeholder="0"
-                          {...field}
+                          value={Number(field.value)}
+                          onChange={field.onChange}
                         />
                       </FormControl>
                       <FormMessage />

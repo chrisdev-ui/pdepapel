@@ -70,7 +70,7 @@ export async function POST(
         },
       });
 
-      // 2. Create Products from Frontend Variants
+      // 2. Create/Update Products from Frontend Variants
       await Promise.all(
         variantsPayload.map(async (variant: any) => {
           // Extract IDs from potentially nested objects (size: { id: ... } or sizeId: ...)
@@ -119,35 +119,64 @@ export async function POST(
 
           const finalSupplierId = variant.supplierId || defaultSupplier;
 
-          await tx.product.create({
-            data: {
-              storeId: params.storeId,
-              productGroupId: group.id,
-              categoryId,
-              name: variant.name || name, // Fallback to group name if variant name missing
-              sku: variant.sku,
-              description: variant.description || description || "",
-              price: finalPrice,
-              acqPrice: finalAcqPrice,
-              stock: finalStock,
-              supplierId: finalSupplierId || null,
-              sizeId,
-              colorId,
-              designId,
-              isFeatured: variant.isFeatured ?? isFeatured ?? false,
-              isArchived: variant.isArchived || false,
-              images: {
-                createMany: {
-                  data: applicableImages.map(
-                    (img: { url: string; isMain?: boolean }) => ({
-                      url: img.url,
-                      isMain: img.isMain || false,
-                    }),
-                  ),
+          const productData = {
+            storeId: params.storeId,
+            productGroupId: group.id,
+            categoryId,
+            name: variant.name || name, // Fallback to group name if variant name missing
+            sku: variant.sku,
+            description: variant.description || description || "",
+            price: finalPrice,
+            acqPrice: finalAcqPrice,
+            stock: finalStock,
+            supplierId: finalSupplierId || null,
+            sizeId,
+            colorId,
+            designId,
+            isFeatured: variant.isFeatured ?? isFeatured ?? false,
+            isArchived: variant.isArchived || false,
+            // Handle images carefully during update vs create?
+            // For now, simpler to always recreate images or upsert
+          };
+
+          if (variant.id) {
+            // ADOPT EXISTING PRODUCT
+            // Verify it belongs to the store to allow updating (implicit by storeId in where clause)
+            await tx.product.update({
+              where: { id: variant.id, storeId: params.storeId },
+              data: {
+                ...productData,
+                images: {
+                  deleteMany: {},
+                  createMany: {
+                    data: applicableImages.map(
+                      (img: { url: string; isMain?: boolean }) => ({
+                        url: img.url,
+                        isMain: img.isMain || false,
+                      }),
+                    ),
+                  },
                 },
               },
-            },
-          });
+            });
+          } else {
+            // CREATE NEW PRODUCT
+            await tx.product.create({
+              data: {
+                ...productData,
+                images: {
+                  createMany: {
+                    data: applicableImages.map(
+                      (img: { url: string; isMain?: boolean }) => ({
+                        url: img.url,
+                        isMain: img.isMain || false,
+                      }),
+                    ),
+                  },
+                },
+              },
+            });
+          }
         }),
       );
 

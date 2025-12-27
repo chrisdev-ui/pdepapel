@@ -1,14 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  DollarSign,
-  Eraser,
-  Loader2,
-  PackageCheckIcon,
-  Percent,
-  Trash,
-} from "lucide-react";
+import { DollarSign, Eraser, Loader2, Percent, Trash } from "lucide-react";
 import Image from "next/image";
 import { useForm } from "react-hook-form";
 import z from "zod";
@@ -38,6 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import {
   INITIAL_MISC_COST,
   INITIAL_PERCENTAGE_INCREASE,
@@ -673,14 +667,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   <FormLabel isRequired>Cantidad</FormLabel>
                   <FormControl>
                     <div className="relative">
-                      <PackageCheckIcon className="absolute left-3 top-3 h-4 w-4" />
-                      <Input
-                        type="number"
+                      <StockQuantityInput
                         disabled={loading}
-                        placeholder="10"
-                        className="pl-8"
-                        min="0"
-                        {...field}
+                        value={Number(field.value)}
+                        onChange={field.onChange}
                       />
                     </div>
                   </FormControl>
