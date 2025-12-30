@@ -30,11 +30,16 @@ export async function POST(
       imageMapping, // { url: string, scope: string }[]
       categoryId,
       defaultPrice,
-      defaultStock,
+      price, // Alias for defaultPrice
       defaultSupplier,
+      defaultCost,
+      acqPrice, // Alias for defaultCost
       isFeatured,
       variants: variantsPayload, // Array of manually created/edited variants
     } = body;
+
+    const effectiveDefaultPrice = defaultPrice ?? price;
+    const effectiveDefaultCost = defaultCost ?? acqPrice;
 
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
@@ -44,7 +49,7 @@ export async function POST(
     if (!categoryId) throw ErrorFactory.InvalidRequest("Category is required");
     if (!images || !images.length)
       throw ErrorFactory.InvalidRequest("Images are required");
-    if (!defaultPrice)
+    if (!effectiveDefaultPrice)
       throw ErrorFactory.InvalidRequest("Default price is required");
     if (!variantsPayload || !variantsPayload.length) {
       throw ErrorFactory.InvalidRequest("Variants are required");
@@ -109,13 +114,12 @@ export async function POST(
           const finalPrice =
             variant.price !== undefined
               ? parseFloat(variant.price)
-              : parseFloat(defaultPrice);
+              : parseFloat(effectiveDefaultPrice);
           const finalAcqPrice =
-            variant.acqPrice !== undefined ? parseFloat(variant.acqPrice) : 0;
-          const finalStock =
-            variant.stock !== undefined
-              ? parseInt(variant.stock)
-              : parseInt(defaultStock || "0");
+            variant.acqPrice !== undefined
+              ? parseFloat(variant.acqPrice)
+              : parseFloat(effectiveDefaultCost || "0");
+          const finalStock = 0; // Strict Inventory Control: Always 0 for new products.
 
           const finalSupplierId = variant.supplierId || defaultSupplier;
 
