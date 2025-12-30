@@ -31,6 +31,7 @@ export async function POST(
       categoryId,
       defaultPrice,
       price, // Alias for defaultPrice
+      defaultStock,
       defaultSupplier,
       defaultCost,
       acqPrice, // Alias for defaultCost
@@ -119,7 +120,10 @@ export async function POST(
             variant.acqPrice !== undefined
               ? parseFloat(variant.acqPrice)
               : parseFloat(effectiveDefaultCost || "0");
-          const finalStock = 0; // Strict Inventory Control: Always 0 for new products.
+          const finalStock =
+            variant.stock !== undefined
+              ? parseInt(variant.stock)
+              : parseInt(defaultStock || "0");
 
           const finalSupplierId = variant.supplierId || defaultSupplier;
 
