@@ -5,13 +5,16 @@ import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
 import {
-  batchUpdateProductStock,
-  batchUpdateProductStockResilient,
   CACHE_HEADERS,
   calculateOrderTotals,
   processOrderItemsInBatches,
   verifyStoreOwner,
 } from "@/lib/utils";
+import {
+  createInventoryMovementBatchResilient,
+  createInventoryMovementBatch,
+  validateStockAvailability,
+} from "@/lib/inventory";
 import { auth, clerkClient } from "@clerk/nextjs";
 import {
   DiscountType,
@@ -332,15 +335,7 @@ export async function PATCH(
           .map(([productId, change]) => ({ productId, quantity: change }));
 
         if (additionalStockNeeded.length > 0) {
-          await batchUpdateProductStock(tx, additionalStockNeeded, true);
-          // Revert validation
-          const revertUpdates = additionalStockNeeded.map(
-            ({ productId, quantity }) => ({
-              productId,
-              quantity: -quantity,
-            }),
-          );
-          await batchUpdateProductStock(tx, revertUpdates, false);
+          await validateStockAvailability(tx, additionalStockNeeded);
         }
       }
 
@@ -513,16 +508,20 @@ export async function PATCH(
       }
 
       if (isNowPaid && !wasPaid) {
-        // Prepare stock updates for decrementing
-        const stockUpdates = updated.orderItems.map((item) => ({
+        // Prepare stock updates for decrementing (Sales)
+        const stockMovements = updated.orderItems.map((item) => ({
           productId: item.productId,
-          quantity: item.quantity, // Positive for decrement
+          storeId: params.storeId,
+          type: "ORDER_PLACED" as const,
+          quantity: -item.quantity, // Negative for removal
+          reason: `Orden Actualizada #${updated.orderNumber}`,
+          referenceId: updated.id,
+          createdBy: userId || "SYSTEM",
         }));
 
-        const stockResult = await batchUpdateProductStockResilient(
+        const stockResult = await createInventoryMovementBatchResilient(
           tx,
-          stockUpdates,
-          true,
+          stockMovements,
         );
 
         // Log any stock update failures but don't throw errors
@@ -547,12 +546,18 @@ export async function PATCH(
           });
         }
       } else if (!isNowPaid && wasPaid) {
-        // Restock products (this should never fail)
-        const stockUpdates = updated.orderItems.map((item) => ({
+        // Restock products (Restock/Cancel)
+        const stockMovements = updated.orderItems.map((item) => ({
           productId: item.productId,
-          quantity: -item.quantity, // Negative for increment
+          storeId: params.storeId,
+          type: "ORDER_CANCELLED" as const,
+          quantity: item.quantity, // Positive for addition
+          reason: `Orden marcada como pendiente/cancelada #${updated.orderNumber}`,
+          referenceId: updated.id,
+          createdBy: userId || "SYSTEM",
         }));
-        await batchUpdateProductStock(tx, stockUpdates, false);
+
+        await createInventoryMovementBatch(tx, stockMovements, false);
 
         // CRITICAL FIX: Decrement coupon usage when PAID order becomes unpaid
         if (updated.coupon) {
@@ -662,15 +667,19 @@ export async function DELETE(
 
       // Restock products if order was paid
       if (order.status === OrderStatus.PAID) {
-        const stockUpdates = order.orderItems.map((item) => ({
+        const stockMovements = order.orderItems.map((item) => ({
           productId: item.productId,
-          quantity: -item.quantity, // Negative for increment
+          storeId: params.storeId,
+          type: "ORDER_CANCELLED" as const, // Effectively a return/refund
+          quantity: item.quantity, // Positive for addition
+          reason: `Orden Eliminada #${order.orderNumber}`,
+          referenceId: order.id,
+          createdBy: userId || "SYSTEM",
         }));
 
-        const stockResult = await batchUpdateProductStockResilient(
+        const stockResult = await createInventoryMovementBatchResilient(
           tx,
-          stockUpdates,
-          true,
+          stockMovements,
         );
 
         // Log any stock update failures but don't throw errors

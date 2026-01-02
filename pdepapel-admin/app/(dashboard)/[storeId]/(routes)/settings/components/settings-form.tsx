@@ -121,7 +121,13 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
     key: `settings-form-${params.storeId}`,
   });
 
-  const onClear = () => {
+  const onClear = async () => {
+    const currentLogo = form.getValues("logoUrl");
+    if (currentLogo && currentLogo !== initialData.logoUrl) {
+      const { cleanupImages } = await import("@/actions/cleanup-images");
+      await cleanupImages([currentLogo]);
+    }
+
     form.reset(defaultValues);
     clearStorage();
     toast({

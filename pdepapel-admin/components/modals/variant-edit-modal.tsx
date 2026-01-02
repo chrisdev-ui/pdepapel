@@ -28,9 +28,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import { cn } from "@/lib/utils";
-import { Check } from "lucide-react";
+import { Check, PackageCheckIcon, Plus } from "lucide-react";
 import Image from "next/image";
 
 const variantSchema = z.object({
@@ -61,6 +60,8 @@ interface VariantEditModalProps {
   groupImages: { url: string }[];
 }
 
+import { IntakeModal } from "@/components/modals/intake-modal";
+
 export const VariantEditModal: React.FC<VariantEditModalProps> = ({
   isOpen,
   onClose,
@@ -70,6 +71,7 @@ export const VariantEditModal: React.FC<VariantEditModalProps> = ({
   groupImages,
 }) => {
   const [loading, setLoading] = useState(false);
+  const [intakeOpen, setIntakeOpen] = useState(false);
 
   const form = useForm<VariantFormValues>({
     resolver: zodResolver(variantSchema),
@@ -210,17 +212,53 @@ export const VariantEditModal: React.FC<VariantEditModalProps> = ({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel isRequired>Stock</FormLabel>
+                      <div className="flex items-center justify-between rounded-md border bg-muted/50 px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <div className="rounded-full bg-primary/10 p-1">
+                            <PackageCheckIcon className="h-4 w-4 text-primary" />
+                          </div>
+                          <span className="text-sm font-semibold">
+                            {field.value ?? 0}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="mr-1 rounded border bg-background px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                            Inventario
+                          </span>
+                          {initialData?.id && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => setIntakeOpen(true)}
+                              title="Agregar Stock"
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
                       <FormControl>
-                        <StockQuantityInput
-                          disabled={loading}
-                          value={Number(field.value)}
-                          onChange={field.onChange}
-                        />
+                        <Input type="hidden" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+
+                {initialData?.id && (
+                  <IntakeModal
+                    isOpen={intakeOpen}
+                    onClose={() => setIntakeOpen(false)}
+                    productId={initialData.id} // Or variant id logic
+                    variantId={initialData.id}
+                    productName={initialData.name || "Variante"}
+                    defaultCost={form.watch("acqPrice") || 0}
+                    defaultSupplierId={initialData.supplierId || ""}
+                    suppliers={suppliers}
+                  />
+                )}
                 <FormField
                   control={form.control}
                   name="supplierId"

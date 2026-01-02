@@ -94,6 +94,7 @@ export async function PATCH(
     await verifyStoreOwner(userId, params.storeId);
 
     const updatedGroup = await prismadb.$transaction(async (tx) => {
+      const initialMovements: any[] = [];
       // 1. Update Group Details
       const groupData: any = {
         name,
@@ -203,7 +204,7 @@ export async function PATCH(
             description: variant.description || description || "",
             price: finalPrice,
             acqPrice: finalAcqPrice,
-            stock: finalStock,
+            stock: variant.id && payloadIds.has(variant.id) ? undefined : 0,
             supplierId: finalSupplierId,
             isFeatured: variant.isFeatured ?? isFeatured ?? false,
             isArchived: variant.isArchived || false,
@@ -228,12 +229,35 @@ export async function PATCH(
             });
           } else {
             // CREATE New
-            await tx.product.create({
+            const newProduct = await tx.product.create({
               data: dataToUpsert,
             });
+
+            if (finalStock > 0 && !dataToUpsert.stock) {
+              // Logic: dataToUpsert.stock is 0 for new items (line 206).
+              // So if finalStock (payload) > 0, we add movement.
+              initialMovements.push({
+                storeId: params.storeId,
+                productId: newProduct.id,
+                type: "INITIAL_INTAKE",
+                quantity: finalStock,
+                cost: finalAcqPrice,
+                price: finalPrice,
+                createdBy: userId,
+                reason: "Initial stock from Product Group update (new variant)",
+              });
+            }
           }
         }),
       );
+
+      // Execute Initial Movements
+      if (initialMovements.length > 0) {
+        const { createInventoryMovementBatch } = await import(
+          "@/lib/inventory"
+        );
+        await createInventoryMovementBatch(tx, initialMovements);
+      }
 
       return group;
     });

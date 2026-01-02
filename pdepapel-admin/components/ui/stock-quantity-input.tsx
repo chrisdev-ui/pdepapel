@@ -74,13 +74,13 @@ export const StockQuantityInput: React.FC<StockQuantityInputProps> = ({
       container: "h-8",
       button: "w-8 h-8",
       icon: "w-3.5 h-3.5",
-      input: "text-sm",
+      input: "w-12 text-sm",
     },
     sm: {
-      container: "h-9 gap-0.5",
-      button: "w-9 h-9",
-      icon: "w-3.5 h-3.5",
-      input: "w-10 text-sm",
+      container: "h-7",
+      button: "w-7 h-7",
+      icon: "w-2.5 h-2.5",
+      input: "w-14 text-sm",
     },
     md: {
       container: "h-12 gap-1",

@@ -40,7 +40,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import {
   INITIAL_MISC_COST,
   INITIAL_PERCENTAGE_INCREASE,
@@ -447,7 +446,46 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     key: `product-group-form-${params.storeId}-${initialData?.id ?? "new"}`,
   });
 
-  const onClear = () => {
+  const onClear = async () => {
+    // Diff Logic to clean up orphan images
+    const currentGroupImages = form.getValues("images") || [];
+    const currentVariants = form.getValues("variants") || [];
+
+    const currentUrls = new Set<string>();
+    currentGroupImages.forEach(
+      (img: any) => img.url && currentUrls.add(img.url),
+    );
+    currentVariants.forEach((v: any) => {
+      if (v.images && Array.isArray(v.images)) {
+        v.images.forEach((url: string) => url && currentUrls.add(url));
+      }
+    });
+
+    const initialUrls = new Set<string>();
+    if (initialData) {
+      if (initialData.images && Array.isArray(initialData.images)) {
+        initialData.images.forEach(
+          (img: any) => img.url && initialUrls.add(img.url),
+        );
+      }
+      if (initialData.products && Array.isArray(initialData.products)) {
+        initialData.products.forEach((p: any) => {
+          if (p.images && Array.isArray(p.images)) {
+            p.images.forEach((img: any) => img.url && initialUrls.add(img.url));
+          }
+        });
+      }
+    }
+
+    const imagesToDelete = Array.from(currentUrls).filter(
+      (url) => !initialUrls.has(url),
+    );
+
+    if (imagesToDelete.length > 0) {
+      const { cleanupImages } = await import("@/actions/cleanup-images");
+      await cleanupImages(imagesToDelete);
+    }
+
     form.reset(defaultValues);
     clearStorage();
     toast({
@@ -1175,37 +1213,28 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
               name="defaultStock"
               render={({ field }) => (
                 <FormItem>
-                  <div className="flex items-center justify-between">
-                    <FormLabel isRequired>
-                      Stock por defecto (por variante)
-                    </FormLabel>
-                    <div
-                      className="cursor-pointer text-xs text-primary underline hover:text-primary/80"
-                      onClick={() => {
-                        const val = form.getValues("defaultStock");
-                        const current = form.getValues("variants");
-                        if (val && current) {
-                          form.setValue(
-                            "variants",
-                            current.map((v: any) => ({ ...v, stock: val })),
-                          );
-                          toast({
-                            description: "Stock aplicado a todas las variantes",
-                          });
-                        }
-                      }}
-                    >
-                      Aplicar a todo
+                  <FormLabel>Stock Predeterminado</FormLabel>
+                  <div className="flex items-center justify-between rounded-md border bg-muted/50 px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <div className="rounded-full bg-slate-200/50 p-1">
+                        <PackageCheckIcon className="h-4 w-4 text-slate-500" />
+                      </div>
+                      <span className="text-sm font-semibold">
+                        Gestionado por variante
+                      </span>
                     </div>
+                    <span className="rounded border bg-background px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                      Ver Variantes
+                    </span>
                   </div>
                   <FormControl>
-                    <div className="relative">
-                      <StockQuantityInput
-                        disabled={loading}
-                        value={Number(field.value)}
-                        onChange={field.onChange}
-                      />
-                    </div>
+                    <Input
+                      type="hidden"
+                      disabled={true}
+                      placeholder="0"
+                      {...field}
+                      value={0}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

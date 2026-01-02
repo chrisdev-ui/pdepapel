@@ -2,12 +2,8 @@ import { sendOrderEmail } from "@/lib/email";
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
-import {
-  formatPayUValue,
-  generatePayUSignature,
-  batchUpdateProductStock,
-  batchUpdateProductStockResilient,
-} from "@/lib/utils";
+import { createInventoryMovementBatchResilient } from "@/lib/inventory";
+import { formatPayUValue, generatePayUSignature } from "@/lib/utils";
 import {
   Coupon,
   Order,
@@ -174,17 +170,23 @@ async function updateOrderData({
     });
     if (currentStatus === OrderStatus.PAID) {
       await prismadb.$transaction(async (tx) => {
-        // Prepare stock updates for batch processing
-        const stockUpdates = order.orderItems.map((orderItem) => ({
+        // Prepare stock updates for batch processing (Sales = Negative)
+        const stockMovements = order.orderItems.map((orderItem) => ({
           productId: orderItem.productId,
-          quantity: orderItem.quantity,
+          storeId: order.storeId,
+          type: "ORDER_PLACED" as const,
+          quantity: -orderItem.quantity, // Negative for removal
+          reason: `PayU: Pago confirmado ${transaction.id}`,
+          referenceId: order.id,
+          cost: Number(orderItem.product.acqPrice) || 0,
+          price: Number(orderItem.product.price),
+          createdBy: "SYSTEM_PAYU",
         }));
 
         // Use the resilient batch update function
-        const stockResult = await batchUpdateProductStockResilient(
+        const stockResult = await createInventoryMovementBatchResilient(
           tx,
-          stockUpdates,
-          true,
+          stockMovements,
         );
 
         // Log any stock update failures but don't throw errors
@@ -212,15 +214,21 @@ async function updateOrderData({
       await prismadb.$transaction(async (tx) => {
         // Restock products if order was previously paid
         if (order.status === OrderStatus.PAID) {
-          const stockUpdates = order.orderItems.map((orderItem) => ({
+          const stockMovements = order.orderItems.map((orderItem) => ({
             productId: orderItem.productId,
-            quantity: -orderItem.quantity, // Negative for increment
+            storeId: order.storeId,
+            type: "ORDER_CANCELLED" as const,
+            quantity: orderItem.quantity, // Positive for addition (Restock)
+            reason: `PayU: Transacción anulada/error ${transaction.id}`,
+            referenceId: order.id,
+            cost: Number(orderItem.product.acqPrice) || 0,
+            price: Number(orderItem.product.price),
+            createdBy: "SYSTEM_PAYU",
           }));
 
-          const stockResult = await batchUpdateProductStockResilient(
+          const stockResult = await createInventoryMovementBatchResilient(
             tx,
-            stockUpdates,
-            true,
+            stockMovements,
           );
 
           // Log any stock update failures but don't throw errors

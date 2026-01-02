@@ -77,7 +77,13 @@ export const BannerForm: React.FC<BannerFormProps> = ({ initialData }) => {
     key: `banner-form-${params.storeId}-${initialData?.id ?? "new"}`,
   });
 
-  const onClear = () => {
+  const onClear = async () => {
+    const currentImage = form.getValues("imageUrl");
+    if (currentImage && currentImage !== initialData?.imageUrl) {
+      const { cleanupImages } = await import("@/actions/cleanup-images");
+      await cleanupImages([currentImage]);
+    }
+
     form.reset(defaultValues);
     clearStorage();
     toast({

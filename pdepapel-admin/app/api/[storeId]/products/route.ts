@@ -109,7 +109,7 @@ export async function POST(
         price,
         acqPrice,
         description,
-        stock,
+        stock: 0, // Stock managed via Inventory System
         isArchived,
         isFeatured,
         categoryId,

@@ -17,7 +17,9 @@ import {
   Archive,
   Award,
   Box,
+  ClipboardList,
   CreditCard,
+  History,
   Home,
   Image as ImageIcon,
   Layout,
@@ -127,6 +129,29 @@ export function MainNav({
       active: pathname === `/${params.storeId}/${Models.Boxes}`,
       group: "catalog",
       icon: Package,
+    },
+    {
+      href: `/${params.storeId}/${Models.RestockOrders}`,
+      label: ModelLabels[Models.RestockOrders],
+      active: pathname.includes(`/${params.storeId}/${Models.RestockOrders}`),
+      group: "catalog",
+      icon: ClipboardList,
+    },
+    {
+      href: `/${params.storeId}/${Models.InventoryMovements}`,
+      label: ModelLabels[Models.InventoryMovements],
+      active: pathname.includes(
+        `/${params.storeId}/${Models.InventoryMovements}`,
+      ),
+      group: "catalog",
+      icon: History,
+    },
+    {
+      href: `/${params.storeId}/${Models.Inventory}`,
+      label: ModelLabels[Models.Inventory],
+      active: pathname === `/${params.storeId}/${Models.Inventory}`,
+      group: "catalog",
+      icon: LayoutDashboard,
     },
     // Ventas
     {

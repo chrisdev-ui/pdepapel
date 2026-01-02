@@ -156,6 +156,8 @@ export enum Models {
   Shipments = "shipments",
   Offers = "offers",
   Boxes = "boxes",
+  RestockOrders = "restock-orders",
+  InventoryMovements = "inventory-movements",
 }
 
 export const ModelLabels: Record<Models, string> = {
@@ -166,6 +168,9 @@ export const ModelLabels: Record<Models, string> = {
   [Models.Colors]: "Colores",
   [Models.Designs]: "Diseños",
   [Models.Orders]: "Órdenes",
+  [Models.RestockOrders]: "Aprovisionamiento",
+  [Models.InventoryMovements]: "Movimientos",
+  [Models.Inventory]: "Dashboard Inv.",
   [Models.Products]: "Productos",
   [Models.Posts]: "Publicaciones",
   [Models.Reviews]: "Reseñas",
@@ -174,7 +179,6 @@ export const ModelLabels: Record<Models, string> = {
   [Models.Types]: "Tipos",
   [Models.LowStock]: "Productos por agotarse",
   [Models.OutOfStock]: "Productos completamente agotados",
-  [Models.Inventory]: "Inventario",
   [Models.SalesByCategory]: "Ventas por categoría",
   [Models.Coupons]: "Cupones",
   [Models.Customers]: "Clientes",
@@ -346,6 +350,20 @@ export const ModelsColumns: Record<Models, { [key: string]: string }> = {
     dimensions: "Dimensiones",
     isDefault: "Por defecto",
     createdAt: "Fecha de creación",
+  },
+  [Models.RestockOrders]: {
+    orderNumber: "Pedido #",
+    supplier: "Proveedor",
+    status: "Estado",
+    totalAmount: "Total",
+    createdAt: "Fecha",
+  },
+  [Models.InventoryMovements]: {
+    productName: "Producto",
+    type: "Tipo",
+    quantity: "Cantidad",
+    reason: "Razón",
+    createdAt: "Fecha",
   },
 };
 

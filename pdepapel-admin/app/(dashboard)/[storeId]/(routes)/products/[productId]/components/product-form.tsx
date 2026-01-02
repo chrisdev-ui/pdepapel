@@ -1,13 +1,22 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { DollarSign, Eraser, Loader2, Percent, Trash } from "lucide-react";
+import {
+  DollarSign,
+  Eraser,
+  Loader2,
+  PackageCheckIcon,
+  Percent,
+  Plus,
+  Trash,
+} from "lucide-react";
 import Image from "next/image";
 import { useForm } from "react-hook-form";
 import z from "zod";
 
 import { RichTextEditor } from "@/components/editor/rich-text-editor";
 import { AlertModal } from "@/components/modals/alert-modal";
+import { IntakeModal } from "@/components/modals/intake-modal";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DataTable } from "@/components/ui/data-table";
@@ -31,7 +40,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import {
   INITIAL_MISC_COST,
   INITIAL_PERCENTAGE_INCREASE,
@@ -116,6 +124,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   const { toast } = useToast();
 
   const [open, setOpen] = useState(false);
+  const [intakeOpen, setIntakeOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const unavailableImages = useMemo(() => {
@@ -194,7 +203,26 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     key: `product-form-${params.storeId}-${initialData?.id ?? "new"}`,
   });
 
-  const onClear = () => {
+  const onClear = async () => {
+    const currentImages = form.getValues("images") || [];
+    const currentUrls = currentImages
+      .map((img: any) => img.url)
+      .filter(Boolean);
+
+    const initialUrls = new Set<string>();
+    if (initialData && initialData.images) {
+      initialData.images.forEach((img: any) => initialUrls.add(img.url));
+    }
+
+    const imagesToDelete = currentUrls.filter(
+      (url: string) => !initialUrls.has(url),
+    );
+
+    if (imagesToDelete.length > 0) {
+      const { cleanupImages } = await import("@/actions/cleanup-images");
+      await cleanupImages(imagesToDelete);
+    }
+
     form.reset(defaultValues);
     clearStorage();
     toast({
@@ -665,19 +693,52 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel isRequired>Cantidad</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <StockQuantityInput
-                        disabled={loading}
-                        value={Number(field.value)}
-                        onChange={field.onChange}
-                      />
+                  <div className="flex items-center justify-between rounded-md border bg-muted/50 px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <div className="rounded-full bg-primary/10 p-1">
+                        <PackageCheckIcon className="h-4 w-4 text-primary" />
+                      </div>
+                      <span className="text-sm font-semibold">
+                        {field.value ?? 0}
+                      </span>
                     </div>
+                    <div className="flex items-center gap-1">
+                      <span className="mr-1 rounded border bg-background px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                        Inventario
+                      </span>
+                      {initialData && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => setIntakeOpen(true)}
+                          title="Agregar Stock"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <FormControl>
+                    <Input type="hidden" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
+
+            {initialData && (
+              <IntakeModal
+                isOpen={intakeOpen}
+                onClose={() => setIntakeOpen(false)}
+                productId={initialData.id}
+                productName={initialData.name}
+                defaultCost={form.watch("acqPrice") || 0}
+                defaultSupplierId={initialData.supplierId || ""}
+                suppliers={suppliers}
+              />
+            )}
             <FormField
               control={form.control}
               name="categoryId"
@@ -940,7 +1001,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               control={form.control}
               name="isArchived"
               render={({ field }) => (
-                <FormItem className="flex h-fit items-start space-x-3 space-y-0 rounded-md border p-4">
+                <FormItem className="mt-auto flex h-fit items-start space-x-3 space-y-0 rounded-md border p-4">
                   <FormControl>
                     <Checkbox
                       checked={field.value}

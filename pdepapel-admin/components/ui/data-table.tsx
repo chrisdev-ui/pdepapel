@@ -7,6 +7,8 @@ import {
   VisibilityState,
   flexRender,
   getCoreRowModel,
+  getFacetedRowModel,
+  getFacetedUniqueValues,
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
@@ -28,6 +30,7 @@ import {
 import { Models } from "@/constants";
 import { useTableStore } from "@/hooks/use-table-store";
 import { useEffect, useState } from "react";
+import { DataTableFacetedFilter } from "./data-table-faceted-filter";
 import { DataTableViewOptions } from "./data-table-view-options";
 
 interface DataTableProps<TData, TValue> {
@@ -35,6 +38,15 @@ interface DataTableProps<TData, TValue> {
   data: TData[];
   searchKey: string;
   tableKey: Models;
+  filters?: {
+    columnKey: string;
+    title: string;
+    options: {
+      label: string;
+      value: string;
+      icon?: React.ComponentType<{ className?: string }>;
+    }[];
+  }[];
 }
 
 export function DataTable<TData, TValue>({
@@ -42,6 +54,7 @@ export function DataTable<TData, TValue>({
   data,
   searchKey,
   tableKey,
+  filters,
 }: DataTableProps<TData, TValue>) {
   const { tables, updateTableState } = useTableStore();
   const tableState = tables[tableKey] || {
@@ -100,6 +113,8 @@ export function DataTable<TData, TValue>({
     onColumnVisibilityChange: setColumnVisibility,
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    getFacetedRowModel: getFacetedRowModel(),
+    getFacetedUniqueValues: getFacetedUniqueValues(),
     onRowSelectionChange: setRowSelection,
     state: {
       sorting,
@@ -132,14 +147,30 @@ export function DataTable<TData, TValue>({
     <div>
       {/* Responsive Controls */}
       <div className="flex flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <Input
-          placeholder="Escribe para buscar..."
-          value={(table.getColumn(searchKey)?.getFilterValue() as string) ?? ""}
-          onChange={(event) =>
-            table.getColumn(searchKey)?.setFilterValue(event.target.value)
-          }
-          className="max-w-sm"
-        />
+        <div className="flex min-w-[400px] items-center gap-x-2">
+          <Input
+            placeholder="Escribe para buscar..."
+            value={
+              (table.getColumn(searchKey)?.getFilterValue() as string) ?? ""
+            }
+            onChange={(event) =>
+              table.getColumn(searchKey)?.setFilterValue(event.target.value)
+            }
+            className="max-w-md"
+          />
+          {filters &&
+            filters.map(
+              (filter) =>
+                table.getColumn(filter.columnKey) && (
+                  <DataTableFacetedFilter
+                    key={filter.columnKey}
+                    column={table.getColumn(filter.columnKey)}
+                    title={filter.title}
+                    options={filter.options}
+                  />
+                ),
+            )}
+        </div>
         <div className="flex items-center gap-x-2">
           {/* Hide DataTableViewOptions on mobile */}
           <div className="hidden sm:block">

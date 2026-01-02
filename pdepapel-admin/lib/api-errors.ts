@@ -51,6 +51,20 @@ export const ErrorFactory = {
       { productName, available, requested },
     ),
 
+  MultipleInsufficientStock: (
+    items: { productName: string; available: number; requested: number }[],
+  ) =>
+    new AppError(
+      `Stock insuficiente para múltiples productos:\n${items
+        .map(
+          (i) =>
+            `- ${i.productName} (Disponible: ${i.available}, Requerido: ${i.requested})`,
+        )
+        .join("\n")}`,
+      422,
+      { items },
+    ),
+
   OrderLimit: () =>
     new AppError(
       "Demasiadas órdenes recientes. Por favor espere unos minutos antes de realizar otro pedido.",

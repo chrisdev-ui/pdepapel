@@ -167,7 +167,6 @@ export async function PATCH(
           supplierId,
           isArchived,
           isFeatured,
-          stock,
           productGroupId: productGroupId || null,
           description,
           images: {

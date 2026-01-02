@@ -99,6 +99,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import { Textarea } from "@/components/ui/textarea";
 import { UserCombobox } from "@/components/ui/user-combobox";
 import { WhatsappButton } from "@/components/whatsapp-button";
@@ -883,7 +884,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                               {product.offerLabel}
                             </Badge>
                           )}
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             {product.discountedPrice < product.price ? (
                               <>
                                 <span className="text-xs text-muted-foreground line-through">
@@ -901,12 +902,11 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                               </span>
                             )}
                             <span>×</span>
-                            <Input
-                              type="number"
+                            <StockQuantityInput
+                              className="w-32"
                               min={1}
-                              defaultValue={quantities[product.value] || 1}
-                              onChange={(event) => {
-                                const newQuantity = Number(event.target.value);
+                              value={quantities[product.value] || 1}
+                              onChange={(newQuantity) => {
                                 setQuantity((prev) => ({
                                   ...prev,
                                   [product.value]: newQuantity,

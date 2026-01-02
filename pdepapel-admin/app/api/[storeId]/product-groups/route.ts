@@ -57,6 +57,7 @@ export async function POST(
     }
 
     const productGroup = await prismadb.$transaction(async (tx) => {
+      const initialMovements: any[] = [];
       // 1. Create Product Group
       const group = await tx.productGroup.create({
         data: {
@@ -167,11 +168,11 @@ export async function POST(
                 },
               },
             });
-          } else {
             // CREATE NEW PRODUCT
-            await tx.product.create({
+            const newProduct = await tx.product.create({
               data: {
                 ...productData,
+                stock: 0, // Always start at 0
                 images: {
                   createMany: {
                     data: applicableImages.map(
@@ -184,9 +185,31 @@ export async function POST(
                 },
               },
             });
+
+            // If payload has initial stock, create an INITIAL_INTAKE movement
+            if (finalStock > 0) {
+              initialMovements.push({
+                storeId: params.storeId,
+                productId: newProduct.id, // Use the real ID
+                type: "INITIAL_INTAKE",
+                quantity: finalStock,
+                cost: finalAcqPrice,
+                price: finalPrice,
+                createdBy: userId, // or "SYSTEM_IMPORT"
+                reason: "Initial stock from Product Group creation",
+              });
+            }
           }
         }),
       );
+
+      // Execute Initial Movements
+      if (initialMovements.length > 0) {
+        const { createInventoryMovementBatch } = await import(
+          "@/lib/inventory"
+        );
+        await createInventoryMovementBatch(tx, initialMovements);
+      }
 
       return group;
     });

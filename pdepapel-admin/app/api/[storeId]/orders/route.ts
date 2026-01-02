@@ -8,8 +8,6 @@ import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { getProductsPrices } from "@/lib/discount-engine";
 
 import {
-  batchUpdateProductStock,
-  batchUpdateProductStockResilient,
   CACHE_HEADERS,
   calculateOrderTotals,
   checkIfStoreOwner,
@@ -19,6 +17,12 @@ import {
   processOrderItemsInBatches,
   verifyStoreOwner,
 } from "@/lib/utils";
+import {
+  createInventoryMovementBatchResilient,
+  createInventoryMovementBatch,
+  validateStockAvailability,
+  CreateInventoryMovementParams,
+} from "@/lib/inventory";
 import { auth, clerkClient } from "@clerk/nextjs";
 import {
   Coupon,
@@ -328,21 +332,12 @@ export async function POST(
         const stockValidationUpdates = orderItems.map(
           (item: { productId: string; quantity: number }) => ({
             productId: item.productId,
-            quantity: item.quantity, // Positive for decrement validation
+            quantity: item.quantity,
           }),
         );
 
         // Use strict validation - will throw error if insufficient stock
-        await batchUpdateProductStock(tx, stockValidationUpdates, true);
-
-        // Revert the validation updates since we'll apply them after order creation
-        const revertUpdates = stockValidationUpdates.map(
-          (update: { productId: string; quantity: number }) => ({
-            productId: update.productId,
-            quantity: -update.quantity, // Negative to revert
-          }),
-        );
-        await batchUpdateProductStock(tx, revertUpdates, false);
+        await validateStockAvailability(tx, stockValidationUpdates);
       }
 
       const orderData: OrderData = {
@@ -400,21 +395,31 @@ export async function POST(
       const createdOrder = await tx.order.create({
         data: orderData,
         include: {
-          orderItems: true,
+          orderItems: {
+            include: {
+              product: true,
+            },
+          },
         },
       });
 
       // Batch update stock if order is paid
       if (status === OrderStatus.PAID) {
-        const stockUpdates = createdOrder.orderItems.map((item) => ({
+        const stockMovements = createdOrder.orderItems.map((item) => ({
           productId: item.productId,
-          quantity: item.quantity, // Positive for decrement
+          storeId: params.storeId,
+          type: "ORDER_PLACED" as const,
+          quantity: -item.quantity, // Negative for removal (Sale)
+          reason: `Orden #${createdOrder.orderNumber}`,
+          referenceId: createdOrder.id,
+          cost: Number(item.product.acqPrice) || 0,
+          price: Number(item.product.price),
+          createdBy: authenticatedUserId || "SYSTEM",
         }));
 
-        const stockResult = await batchUpdateProductStockResilient(
+        const stockResult = await createInventoryMovementBatchResilient(
           tx,
-          stockUpdates,
-          true,
+          stockMovements,
         );
 
         // Log stock update results but don't throw errors
@@ -602,7 +607,11 @@ export async function DELETE(
           shipping: true,
           payment: true,
           coupon: true,
-          orderItems: true,
+          orderItems: {
+            include: {
+              product: true,
+            },
+          },
         },
       });
 
@@ -617,25 +626,28 @@ export async function DELETE(
         (order) => order.status === OrderStatus.PAID,
       );
       if (paidOrders.length > 0) {
-        const stockUpdates: {
-          productId: string;
-          quantity: number;
-        }[] = [];
+        const stockMovements = [];
 
-        paidOrders.forEach((order) => {
-          order.orderItems.forEach((item) => {
-            stockUpdates.push({
+        for (const order of paidOrders) {
+          for (const item of order.orderItems) {
+            stockMovements.push({
               productId: item.productId,
-              quantity: -item.quantity, // Negative for increment
+              storeId: params.storeId,
+              type: "ORDER_CANCELLED" as const,
+              quantity: item.quantity, // Positive for addition (Refund/Cancel)
+              reason: `Orden Eliminada #${order.orderNumber}`,
+              referenceId: order.id,
+              cost: Number(item.product.acqPrice) || 0,
+              price: Number(item.product.price),
+              createdBy: userId || "SYSTEM",
             });
-          });
-        });
+          }
+        }
 
-        if (stockUpdates.length > 0) {
-          const stockResult = await batchUpdateProductStockResilient(
+        if (stockMovements.length > 0) {
+          const stockResult = await createInventoryMovementBatchResilient(
             tx,
-            stockUpdates,
-            true,
+            stockMovements,
           );
 
           // Log any stock update failures but don't throw errors
@@ -739,10 +751,7 @@ export async function PATCH(
       }
 
       // Collect all stock updates to batch them
-      const stockUpdates: {
-        productId: string;
-        quantity: number;
-      }[] = [];
+      const stockUpdates: CreateInventoryMovementParams[] = [];
 
       // CRITICAL FIX: First validate stock for orders becoming PAID
       if (status === OrderStatus.PAID) {
@@ -765,15 +774,8 @@ export async function PATCH(
 
           if (stockValidationUpdates.length > 0) {
             // Validate stock availability first
-            await batchUpdateProductStock(tx, stockValidationUpdates, true);
-            // Revert validation
-            const revertUpdates = stockValidationUpdates.map(
-              ({ productId, quantity }) => ({
-                productId,
-                quantity: -quantity,
-              }),
-            );
-            await batchUpdateProductStock(tx, revertUpdates, false);
+            // We only care about ensuring we have enough for the NEW requirements
+            await validateStockAvailability(tx, stockValidationUpdates);
           }
         }
       }
@@ -785,19 +787,33 @@ export async function PATCH(
           const willBePaid = status === OrderStatus.PAID;
 
           if (willBePaid && !wasPaid) {
-            // Will be paid - decrement stock (positive quantity)
+            // Will be paid - decrement stock (Sale)
             order.orderItems.forEach((item) => {
               stockUpdates.push({
                 productId: item.productId,
-                quantity: item.quantity, // Positive for decrement
+                storeId: params.storeId,
+                type: "ORDER_PLACED" as const,
+                quantity: -item.quantity, // Negative for removal
+                reason: `Orden #${order.orderNumber}`,
+                referenceId: order.id,
+                cost: Number(item.product.acqPrice) || 0,
+                price: Number(item.product.price),
+                createdBy: userId || "SYSTEM",
               });
             });
           } else if (!willBePaid && wasPaid) {
-            // Was paid, now unpaid - increment stock (negative quantity)
+            // Was paid, now unpaid - increment stock (Restock/Cancel)
             order.orderItems.forEach((item) => {
               stockUpdates.push({
                 productId: item.productId,
-                quantity: -item.quantity, // Negative for increment
+                storeId: params.storeId,
+                type: "ORDER_CANCELLED" as const,
+                quantity: item.quantity, // Positive for addition
+                reason: `Orden marcada como pendiente/cancelada #${order.orderNumber}`,
+                referenceId: order.id,
+                cost: Number(item.product.acqPrice) || 0,
+                price: Number(item.product.price),
+                createdBy: userId || "SYSTEM",
               });
             });
           }
@@ -806,10 +822,9 @@ export async function PATCH(
 
       // Batch execute stock updates using resilient method
       if (stockUpdates.length > 0) {
-        const stockResult = await batchUpdateProductStockResilient(
+        const stockResult = await createInventoryMovementBatchResilient(
           tx,
           stockUpdates,
-          true,
         );
 
         // Log stock update results but don't throw errors

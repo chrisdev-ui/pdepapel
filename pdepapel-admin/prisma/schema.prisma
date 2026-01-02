@@ -53,6 +53,8 @@ model Store {
   offers         Offer[]         @relation("StoreToOffer")
   boxes          Box[]           @relation("StoreToBox")
   productGroups  ProductGroup[]  @relation("StoreToProductGroup")
+  inventoryMovements InventoryMovement[] @relation("StoreToInventoryMovement")
+  restockOrders  RestockOrder[]  @relation("StoreToRestockOrder")
 }
 
 model Billboard {
@@ -256,6 +258,8 @@ model Product {
   productGroupId String?
   productGroup ProductGroup? @relation(fields: [productGroupId], references: [id])
   offers      OfferProduct[]
+  inventoryMovements InventoryMovement[]
+  restockOrderItems RestockOrderItem[]
 
   @@index([storeId])
   @@index([categoryId])
@@ -284,6 +288,7 @@ model Supplier {
   updatedAt DateTime @updatedAt
   store     Store    @relation("StoreToSupplier", fields: [storeId], references: [id])
   products  Product[]
+  restockOrders RestockOrder[]
 
   @@index([storeId])
 }
@@ -621,4 +626,90 @@ model Box {
   shippings Shipping[]
 
   @@index([storeId])
+}
+
+model InventoryMovement {
+  id            String                @id @default(uuid())
+  storeId       String
+  productId     String
+  product       Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type          InventoryMovementType
+  quantity      Int                   // Positive = Add, Negative = Remove
+  previousStock Int                   // Snapshot
+  newStock      Int                   // Snapshot
+  cost          Float?                // Unit cost at this moment
+  price         Float?                // Unit sell price (if applicable)
+  reason        String?
+  description   String?               @db.Text
+  referenceId   String?               // Order ID, etc.
+  createdAt     DateTime              @default(now())
+  createdBy     String?               // User ID or System
+
+  store Store @relation("StoreToInventoryMovement", fields: [storeId], references: [id])
+
+  @@index([storeId])
+  @@index([productId])
+  @@index([createdAt])
+  @@index([type])
+}
+
+enum InventoryMovementType {
+  ORDER_PLACED        // Decrease
+  ORDER_CANCELLED     // Increase (Restock)
+  MANUAL_ADJUSTMENT   // Increase/Decrease
+  INITIAL_MIGRATION   // Increase
+  RETURN              // Increase
+  DAMAGE              // Decrease
+  LOST                // Decrease
+  PROMOTION           // Decrease
+  PURCHASE            // Increase (Buying stock from supplier)
+  INITIAL_INTAKE      // First-time stock entry
+  RESTOCK_RECEIVED    // Supplier restock
+  STORE_USE           // Internal store consumption
+}
+
+model RestockOrder {
+  id          String             @id @default(uuid())
+  storeId     String
+  supplierId  String
+  orderNumber String             // Auto-generated e.g., PO-1001
+  status      RestockOrderStatus @default(DRAFT)
+  totalAmount Float              @default(0) // Expected total cost
+  shippingCost Float             @default(0) // Extra logistics cost to distribute
+  notes       String?            @db.Text
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  store       Store              @relation("StoreToRestockOrder", fields: [storeId], references: [id])
+  supplier    Supplier           @relation(fields: [supplierId], references: [id])
+  items       RestockOrderItem[]
+
+  @@index([storeId])
+  @@index([supplierId])
+  @@index([status])
+  @@unique([storeId, orderNumber])
+}
+
+model RestockOrderItem {
+  id             String       @id @default(uuid())
+  restockOrderId String
+  productId      String
+  quantity       Int          // Ordered quantity
+  quantityReceived Int        @default(0) // Track received amount
+  cost           Float        // Unit cost agreed
+  subtotal       Float        // quantity * cost
+
+  restockOrder   RestockOrder @relation(fields: [restockOrderId], references: [id], onDelete: Cascade)
+  product        Product      @relation(fields: [productId], references: [id])
+
+  @@index([restockOrderId])
+  @@index([productId])
+}
+
+enum RestockOrderStatus {
+  DRAFT
+  ORDERED
+  PARTIALLY_RECEIVED
+  COMPLETED
+  CANCELLED
 }
