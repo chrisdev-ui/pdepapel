@@ -24,7 +24,10 @@ export const env = createEnv({
     INTERNAL_API_SECRET: z.string().min(1),
     // EnvioClick API
     ENVIOCLICK_API_KEY: z.string().min(1),
-    ENVIOCLICK_API_URL: z.string().url().default("https://api.envioclickpro.com.co"),
+    ENVIOCLICK_API_URL: z
+      .string()
+      .url()
+      .default("https://api.envioclickpro.com.co"),
     // MiPaquete API (para códigos DANE)
     MIPAQUETE_API_KEY: z.string().min(1),
     // Upstash Redis (para caché de ubicaciones DANE)
@@ -50,9 +53,9 @@ export const env = createEnv({
       process.env.NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL,
     NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL:
       process.env.NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL,
-    NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME:
-      process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
     NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME:
       process.env.NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME,
   },
+  skipValidation: !!process.env.SKIP_ENV_VALIDATION,
+  emptyStringAsUndefined: true,
 });
