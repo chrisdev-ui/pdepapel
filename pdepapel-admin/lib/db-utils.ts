@@ -2,7 +2,7 @@ import prismadb from "@/lib/prismadb";
 import { clerkClient } from "@clerk/nextjs";
 import { ErrorFactory } from "./api-errors";
 import { BATCH_SIZE } from "@/constants";
-import { Prisma, PrismaClient } from "../prisma/generated/prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 
 export async function getLastOrderTimestamp(
   userId: string | null | undefined,

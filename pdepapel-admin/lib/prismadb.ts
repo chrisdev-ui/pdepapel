@@ -1,6 +1,6 @@
 import { MAX_WAIT_TIME, TIMEOUT_TIME } from "@/constants";
 import "dotenv/config";
-import { Prisma, PrismaClient } from "../prisma/generated/prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import { createPool } from "mariadb";
 

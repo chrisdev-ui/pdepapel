@@ -1,5 +1,5 @@
 import { fakerES_MX as faker } from "@faker-js/faker";
-import { Prisma, PrismaClient } from "../generated/prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 
 const getRandomTypeId = async (prismadb: PrismaClient, storeId: string) => {
   const types = await prismadb.type.findMany({ where: { storeId } });

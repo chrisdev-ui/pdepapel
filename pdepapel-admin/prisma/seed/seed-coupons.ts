@@ -1,5 +1,5 @@
 import { fakerES_MX as faker, simpleFaker } from "@faker-js/faker";
-import { DiscountType, PrismaClient } from "../generated/prisma/client";
+import { DiscountType, PrismaClient } from "@prisma/client";
 import { currencyFormatter } from "../../lib/utils";
 
 const NUMBER_OF_COUPONS = 25;

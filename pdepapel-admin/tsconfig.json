@@ -26,8 +26,6 @@
     ],
     "paths": {
       "@/*": ["./*"],
-      "@prisma/client": ["./prisma/generated/prisma/client"],
-      "@prisma/enums": ["./prisma/generated/prisma/enums"],
     },
   },
   "include": [

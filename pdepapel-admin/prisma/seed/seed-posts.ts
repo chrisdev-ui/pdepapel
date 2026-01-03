@@ -1,4 +1,4 @@
-import { Prisma, PrismaClient, Social } from "../generated/prisma/client";
+import { Prisma, PrismaClient, Social } from "@prisma/client";
 
 const postIds = ["Cr4eqKyJ9cr", "Cr2CqHTOUAf", "Cq62dI1Oc27", "Cq60futuRuf"];
 
