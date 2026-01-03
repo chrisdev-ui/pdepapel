@@ -55,6 +55,8 @@ export const env = createEnv({
       process.env.NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL,
     NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME:
       process.env.NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME,
+    NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME:
+      process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
   },
   // Skip validation if explicitly requested OR in CI environment (Vercel builds)
   skipValidation:
