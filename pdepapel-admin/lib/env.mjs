@@ -56,6 +56,10 @@ export const env = createEnv({
     NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME:
       process.env.NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME,
   },
-  skipValidation: !!process.env.SKIP_ENV_VALIDATION,
+  // Skip validation if explicitly requested OR in CI environment (Vercel builds)
+  skipValidation:
+    !!process.env.SKIP_ENV_VALIDATION ||
+    !!process.env.CI ||
+    !!process.env.VERCEL,
   emptyStringAsUndefined: true,
 });
