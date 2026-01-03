@@ -3,6 +3,7 @@ generator client {
 }
 
 datasource db {
+  // url = env("DATABASE_URL") // Comment this line when try to run prisma generate
   provider     = "mysql"
   relationMode = "prisma"
 }
