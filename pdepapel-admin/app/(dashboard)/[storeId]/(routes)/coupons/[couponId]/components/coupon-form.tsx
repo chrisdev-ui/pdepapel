@@ -31,7 +31,7 @@ import { getErrorMessage } from "@/lib/api-errors";
 import { datePresets } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { Coupon } from "@prisma/client";
-import { DiscountType } from "@prisma/enums";
+import { DiscountType } from "@prisma/client";
 import axios from "axios";
 import { ArrowLeft, Eraser, Loader2, Percent, Trash } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";

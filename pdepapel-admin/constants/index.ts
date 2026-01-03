@@ -1,4 +1,9 @@
-import { DiscountType, OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/enums";
+import {
+  DiscountType,
+  OrderStatus,
+  PaymentMethod,
+  ShippingStatus,
+} from "@prisma/client";
 
 export const DEFAULT_COUNTRY = "CO";
 

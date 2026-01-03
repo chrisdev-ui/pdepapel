@@ -9,7 +9,7 @@ import { DataTableColumnHeader } from "@/components/ui/data-table-column-header"
 import { UsageCount } from "@/components/usage-count";
 import { Models, ModelsColumns, discountOptions } from "@/constants";
 import type { Coupon } from "@prisma/client";
-import { DiscountType } from "@prisma/enums";
+import { DiscountType } from "@prisma/client";
 import { ColumnDef } from "@tanstack/react-table";
 import { CellAction } from "./cell-action";
 

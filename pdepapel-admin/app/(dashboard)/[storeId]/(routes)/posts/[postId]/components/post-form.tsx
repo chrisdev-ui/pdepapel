@@ -31,7 +31,7 @@ import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import type { Post } from "@prisma/client";
-import { Social } from "@prisma/enums";
+import { Social } from "@prisma/client";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";

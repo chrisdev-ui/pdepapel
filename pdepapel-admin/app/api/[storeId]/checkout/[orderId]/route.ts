@@ -10,7 +10,7 @@ import {
 } from "@/lib/utils";
 import { processOrderItemsInBatches } from "@/lib/db-utils";
 import { OrderStatus } from "@prisma/client";
-import { PaymentMethod } from "@prisma/enums";
+import { PaymentMethod } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { BATCH_SIZE } from "@/constants";
 

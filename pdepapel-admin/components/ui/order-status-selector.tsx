@@ -2,7 +2,7 @@
 
 import { statusOptions } from "@/constants";
 import { cn } from "@/lib/utils";
-import { OrderStatus as DbStatus } from "@prisma/enums";
+import { OrderStatus as DbStatus } from "@prisma/client";
 import { Check, CheckCircle2, Clock, Package, XCircle } from "lucide-react";
 
 export type OrderStatus = DbStatus;

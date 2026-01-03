@@ -20,7 +20,7 @@ import { getCarrierInfo } from "@/constants/shipping";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import { currencyFormatter } from "@/lib/utils";
-import { ShippingStatus } from "@prisma/enums";
+import { ShippingStatus } from "@prisma/client";
 import axios from "axios";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";

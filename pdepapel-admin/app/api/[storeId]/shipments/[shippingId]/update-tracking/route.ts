@@ -1,11 +1,11 @@
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 import { ShippingProvider } from "@prisma/client";
-import { ShippingStatus } from "@prisma/enums";
+import { ShippingStatus } from "@prisma/client";
 import prismadb from "@/lib/prismadb";
 import { envioClickClient } from "@/lib/envioclick";
 import { handleErrorResponse } from "@/lib/api-error-response";
-import { ErrorFactory } from "@/lib/api-errors";;
+import { ErrorFactory } from "@/lib/api-errors";
 import { checkIfStoreOwner } from "@/lib/db-utils";
 
 // Map EnvioClick status to our ShippingStatus

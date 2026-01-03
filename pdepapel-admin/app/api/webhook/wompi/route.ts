@@ -4,7 +4,7 @@ import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { createInventoryMovementBatchResilient } from "@/lib/inventory";
 import { OrderStatus } from "@prisma/client";
-import { PaymentMethod, ShippingStatus } from "@prisma/enums";
+import { PaymentMethod, ShippingStatus } from "@prisma/client";
 import crypto from "crypto";
 import { NextResponse } from "next/server";
 

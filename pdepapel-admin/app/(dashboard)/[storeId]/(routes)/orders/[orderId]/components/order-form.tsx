@@ -9,7 +9,7 @@ import {
   PaymentMethod,
   ShippingProvider,
   ShippingStatus,
-} from "@prisma/enums";
+} from "@prisma/client";
 import axios from "axios";
 import {
   AlertTriangle,

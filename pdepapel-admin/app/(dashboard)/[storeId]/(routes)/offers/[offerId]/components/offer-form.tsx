@@ -38,7 +38,7 @@ import type {
   OfferProduct,
   OfferProductGroup,
 } from "@prisma/client";
-import { DiscountType } from "@prisma/enums";
+import { DiscountType } from "@prisma/client";
 import axios from "axios";
 import {
   ArrowLeft,

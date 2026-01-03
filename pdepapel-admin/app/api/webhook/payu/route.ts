@@ -11,7 +11,7 @@ import {
   PaymentDetails,
   Product,
 } from "@prisma/client";
-import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/enums";
+import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 type PayUResponse = {

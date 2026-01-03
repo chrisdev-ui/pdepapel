@@ -1,7 +1,7 @@
 "use server";
 
 import prismadb from "@/lib/prismadb";
-import { ShippingStatus, ShippingProvider } from "@prisma/enums";
+import { ShippingStatus, ShippingProvider } from "@prisma/client";
 import { headers } from "next/headers";
 
 export async function getShippingAnalytics(storeId: string) {

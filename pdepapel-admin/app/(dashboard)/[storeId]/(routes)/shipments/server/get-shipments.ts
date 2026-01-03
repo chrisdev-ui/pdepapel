@@ -1,7 +1,7 @@
 "use server";
 
 import prismadb from "@/lib/prismadb";
-import { ShippingProvider, ShippingStatus } from "@prisma/enums";
+import { ShippingProvider, ShippingStatus } from "@prisma/client";
 import { headers } from "next/headers";
 
 interface GetShipmentsParams {

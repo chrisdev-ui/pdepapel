@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs";
 import prismadb from "@/lib/prismadb";
 import { ShippingStatus } from "@prisma/client";
-import { ShippingProvider } from "@prisma/enums";
+import { ShippingProvider } from "@prisma/client";
 
 export async function POST(
   req: Request,

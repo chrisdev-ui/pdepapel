@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/ui/icons";
 import { cn, currencyFormatter, formatPhoneNumber } from "@/lib/utils";
-import { OrderStatus } from "@prisma/enums";
+import { OrderStatus } from "@prisma/client";
 import Link from "next/link";
 import { useMemo } from "react";
 

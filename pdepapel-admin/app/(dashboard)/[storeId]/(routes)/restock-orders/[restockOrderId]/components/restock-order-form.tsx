@@ -1,8 +1,13 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import type { Product, RestockOrder, RestockOrderItem, Supplier } from "@prisma/client";
-import { RestockOrderStatus } from "@prisma/enums";
+import type {
+  Product,
+  RestockOrder,
+  RestockOrderItem,
+  Supplier,
+} from "@prisma/client";
+import { RestockOrderStatus } from "@prisma/client";
 import axios from "axios";
 import {
   AlertTriangle,

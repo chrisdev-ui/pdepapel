@@ -5,7 +5,7 @@ import {
   OrderStatus,
   PaymentMethod,
   ShippingStatus,
-} from "@prisma/enums";
+} from "@prisma/client";
 import { clsx, type ClassValue } from "clsx";
 import crypto from "crypto";
 import {

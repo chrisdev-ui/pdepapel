@@ -1,7 +1,7 @@
 "use server";
 
 import prismadb from "@/lib/prismadb";
-import { OrderStatus } from "@prisma/enums";
+import { OrderStatus } from "@prisma/client";
 import { headers } from "next/headers";
 
 export async function getCustomers(storeId: string) {

@@ -1,7 +1,7 @@
 import { getColombiaDate } from "@/lib/date-utils";
 import prismadb from "@/lib/prismadb";
 import type { Product } from "@prisma/client";
-import { DiscountType } from "@prisma/enums";
+import { DiscountType } from "@prisma/client";
 import { Redis } from "@upstash/redis";
 
 // Initialize Redis client

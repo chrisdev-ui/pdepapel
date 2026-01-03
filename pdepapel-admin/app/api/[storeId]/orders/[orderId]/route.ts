@@ -1,7 +1,7 @@
 import { BATCH_SIZE } from "@/constants";
 import { cleanPhoneNumber } from "@/constants/shipping";
 import { handleErrorResponse } from "@/lib/api-error-response";
-import { ErrorFactory } from "@/lib/api-errors";;
+import { ErrorFactory } from "@/lib/api-errors";
 import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
@@ -14,7 +14,7 @@ import {
 } from "@/lib/inventory";
 import { auth, clerkClient } from "@clerk/nextjs";
 import { DiscountType } from "@prisma/client";
-import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/enums";
+import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
 import { TIMEOUT } from "dns";
 import { NextResponse } from "next/server";
 

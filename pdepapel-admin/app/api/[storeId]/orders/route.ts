@@ -1,7 +1,7 @@
 import { BATCH_SIZE } from "@/constants";
 import { cleanPhoneNumber } from "@/constants/shipping";
 import { handleErrorResponse } from "@/lib/api-error-response";
-import { ErrorFactory } from "@/lib/api-errors";;
+import { ErrorFactory } from "@/lib/api-errors";
 import { getColombiaDate } from "@/lib/date-utils";
 import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
@@ -34,7 +34,7 @@ import {
   PaymentMethod,
   ShippingProvider,
   ShippingStatus,
-} from "@prisma/enums";
+} from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 type OrderData = {

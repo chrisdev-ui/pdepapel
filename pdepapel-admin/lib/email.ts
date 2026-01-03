@@ -1,5 +1,5 @@
 import type { Order, Shipping } from "@prisma/client";
-import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/enums";
+import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
 import { EmailTemplate } from "@/components/email-template";
 import { resend } from "@/lib/resend";
 import {

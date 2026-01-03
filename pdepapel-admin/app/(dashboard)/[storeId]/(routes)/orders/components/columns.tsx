@@ -14,7 +14,7 @@ import {
 import { WhatsappButton } from "@/components/whatsapp-button";
 import { paymentNames } from "@/constants";
 import { currencyFormatter } from "@/lib/utils";
-import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/enums";
+import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
 import { ColumnDef } from "@tanstack/react-table";
 import { Receipt } from "lucide-react";
 import { getOrders } from "../server/get-orders";
