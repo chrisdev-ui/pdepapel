@@ -1,6 +1,6 @@
 "use client";
 
-import { Supplier } from "@prisma/client";
+import type { Supplier } from "@prisma/client";
 
 import {
   HoverCard,

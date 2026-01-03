@@ -7,8 +7,9 @@ import { DataTableCellDate } from "@/components/ui/data-table-cell-date";
 import { DataTableCellNumber } from "@/components/ui/data-table-cell-number";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { UsageCount } from "@/components/usage-count";
-import { discountOptions, Models, ModelsColumns } from "@/constants";
-import { Coupon, DiscountType } from "@prisma/client";
+import { Models, ModelsColumns, discountOptions } from "@/constants";
+import type { Coupon } from "@prisma/client";
+import { DiscountType } from "@prisma/enums";
 import { ColumnDef } from "@tanstack/react-table";
 import { CellAction } from "./cell-action";
 

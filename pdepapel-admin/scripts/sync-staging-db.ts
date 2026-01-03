@@ -1,13 +1,29 @@
+import prismadb from "../lib/prismadb";
 import { PrismaClient } from "@prisma/client";
+import { PrismaMariaDb } from "@prisma/adapter-mariadb";
+import { createPool } from "mariadb";
 
-const prismaStaging = new PrismaClient();
-const prismaProd = new PrismaClient({
-  datasources: {
-    db: {
-      url: process.env.PROD_DATABASE_URL,
-    },
-  },
-});
+const prismaStaging = prismadb;
+
+const poolProd = (() => {
+  const url = new URL(process.env.PROD_DATABASE_URL || "");
+  return createPool({
+    host: url.hostname,
+    user: url.username,
+    password: url.password,
+    port: Number(url.port),
+    database: url.pathname.slice(1),
+    connectionLimit: 10,
+    acquireTimeout: 10000,
+    connectTimeout: 5000,
+    idleTimeout: 300,
+    ssl: { rejectUnauthorized: false },
+    pipelining: true,
+    insertIdAsNumber: true,
+  });
+})();
+const adapterProd = new PrismaMariaDb(poolProd as any);
+const prismaProd = new PrismaClient({ adapter: adapterProd });
 
 async function main() {
   if (!process.env.PROD_DATABASE_URL) {

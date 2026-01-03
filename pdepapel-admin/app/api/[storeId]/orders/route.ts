@@ -1,6 +1,7 @@
 import { BATCH_SIZE } from "@/constants";
 import { cleanPhoneNumber } from "@/constants/shipping";
-import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { handleErrorResponse } from "@/lib/api-error-response";
+import { ErrorFactory } from "@/lib/api-errors";;
 import { getColombiaDate } from "@/lib/date-utils";
 import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
@@ -10,13 +11,15 @@ import { getProductsPrices } from "@/lib/discount-engine";
 import {
   CACHE_HEADERS,
   calculateOrderTotals,
-  checkIfStoreOwner,
   currencyFormatter,
   generateOrderNumber,
+} from "@/lib/utils";
+import {
+  checkIfStoreOwner,
   getLastOrderTimestamp,
   processOrderItemsInBatches,
   verifyStoreOwner,
-} from "@/lib/utils";
+} from "@/lib/db-utils";
 import {
   createInventoryMovementBatchResilient,
   createInventoryMovementBatch,
@@ -24,14 +27,14 @@ import {
   CreateInventoryMovementParams,
 } from "@/lib/inventory";
 import { auth, clerkClient } from "@clerk/nextjs";
+import { Coupon } from "@prisma/client";
 import {
-  Coupon,
   DiscountType,
   OrderStatus,
   PaymentMethod,
   ShippingProvider,
   ShippingStatus,
-} from "@prisma/client";
+} from "@prisma/enums";
 import { NextRequest, NextResponse } from "next/server";
 
 type OrderData = {

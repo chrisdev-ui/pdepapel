@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs";
 
-import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { handleErrorResponse } from "@/lib/api-error-response";
+import { ErrorFactory } from "@/lib/api-errors";;
 import prismadb from "@/lib/prismadb";
 import { NextResponse } from "next/server";
 import { CACHE_HEADERS } from "@/lib/utils";

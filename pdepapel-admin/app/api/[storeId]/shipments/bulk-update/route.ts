@@ -2,7 +2,8 @@ import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 import { ShippingStatus } from "@prisma/client";
 import prismadb from "@/lib/prismadb";
-import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { handleErrorResponse } from "@/lib/api-error-response";
+import { ErrorFactory } from "@/lib/api-errors";;
 import { ALLOWED_TRANSITIONS } from "@/constants";
 
 export async function PATCH(

@@ -10,7 +10,8 @@ import { Models } from "@/constants";
 import { getCarrierInfo } from "@/constants/shipping";
 import { useToast } from "@/hooks/use-toast";
 import { currencyFormatter } from "@/lib/utils";
-import { Prisma, ShippingProvider, ShippingStatus } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
+import { ShippingProvider, ShippingStatus } from "@prisma/enums";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {

@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs";
 
 import prismadb from "@/lib/prismadb";
-import { verifyStoreOwner } from "@/lib/utils";
-import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { verifyStoreOwner } from "@/lib/db-utils";
+import { handleErrorResponse } from "@/lib/api-error-response";
+import { ErrorFactory } from "@/lib/api-errors";;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

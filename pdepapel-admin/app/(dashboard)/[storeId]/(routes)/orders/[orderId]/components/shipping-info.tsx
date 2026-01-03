@@ -20,7 +20,7 @@ import { getCarrierInfo } from "@/constants/shipping";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import { currencyFormatter } from "@/lib/utils";
-import { ShippingStatus } from "@prisma/client";
+import { ShippingStatus } from "@prisma/enums";
 import axios from "axios";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -203,8 +203,7 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
   const { loadingAction, activeModal } = state;
 
   const hasGuide = !!shipping?.envioClickIdOrder;
-  const hasRateWithoutGuide =
-    !!shipping?.envioClickIdRate && !hasGuide;
+  const hasRateWithoutGuide = !!shipping?.envioClickIdRate && !hasGuide;
   const canCreateGuide = hasRateWithoutGuide && orderStatus === "PAID";
   const carrierInfo = shipping?.carrierName
     ? getCarrierInfo(shipping.carrierName)
@@ -212,18 +211,18 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
       ? getCarrierInfo(shipping.courier)
       : null;
   const bgColor = carrierInfo?.color || "#FFFFFF";
-  const statusConfig = shipping
-    ? getStatusConfig(shipping.status)
-    : null;
+  const statusConfig = shipping ? getStatusConfig(shipping.status) : null;
 
   const canCancel =
     shipping &&
     hasGuide &&
-    !([
-      ShippingStatus.Delivered,
-      ShippingStatus.Cancelled,
-      ShippingStatus.Returned,
-    ] as ShippingStatus[]).includes(shipping.status);
+    !(
+      [
+        ShippingStatus.Delivered,
+        ShippingStatus.Cancelled,
+        ShippingStatus.Returned,
+      ] as ShippingStatus[]
+    ).includes(shipping.status);
 
   const handleCreateGuide = async () => {
     try {
@@ -239,7 +238,7 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
       });
 
       dispatch({ type: "ACTION_SUCCESS" });
-      
+
       router.refresh();
     } catch (error) {
       dispatch({ type: "ACTION_FAILURE" });
@@ -429,23 +428,18 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
                       </p>
                       <p className="text-sm font-medium">
                         {shipping.deliveryDays}{" "}
-                        {shipping.deliveryDays === 1
-                          ? "día"
-                          : "días"}
+                        {shipping.deliveryDays === 1 ? "día" : "días"}
                       </p>
                     </div>
                   )}
-                {shipping.flete !== null &&
-                  shipping.flete !== undefined && (
-                    <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">
-                        Flete base
-                      </p>
-                      <p className="text-sm font-medium">
-                        {currencyFormatter(shipping.flete)}
-                      </p>
-                    </div>
-                  )}
+                {shipping.flete !== null && shipping.flete !== undefined && (
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Flete base</p>
+                    <p className="text-sm font-medium">
+                      {currencyFormatter(shipping.flete)}
+                    </p>
+                  </div>
+                )}
                 {shipping.minimumInsurance !== null &&
                   shipping.minimumInsurance !== undefined && (
                     <div className="space-y-1">
@@ -453,9 +447,7 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
                         Seguro mínimo
                       </p>
                       <p className="text-sm font-medium">
-                        {currencyFormatter(
-                          shipping.minimumInsurance,
-                        )}
+                        {currencyFormatter(shipping.minimumInsurance)}
                       </p>
                     </div>
                   )}
@@ -478,16 +470,12 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
               Número de seguimiento
             </p>
             <div className="flex items-center gap-2">
-              <p className="font-mono font-medium">
-                {shipping.trackingCode}
-              </p>
+              <p className="font-mono font-medium">{shipping.trackingCode}</p>
               {shipping.trackingUrl && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() =>
-                    window.open(shipping.trackingUrl!, "_blank")
-                  }
+                  onClick={() => window.open(shipping.trackingUrl!, "_blank")}
                 >
                   <ExternalLink className="h-4 w-4" />
                 </Button>
@@ -508,8 +496,7 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
         )}
 
         {/* Dates */}
-        {(shipping.estimatedDeliveryDate ||
-          shipping.actualDeliveryDate) && (
+        {(shipping.estimatedDeliveryDate || shipping.actualDeliveryDate) && (
           <>
             <Separator />
             <div className="grid grid-cols-2 gap-4">
@@ -520,13 +507,9 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
                     Entrega estimada
                   </p>
                   <p className="text-sm font-medium">
-                    {format(
-                      new Date(shipping.estimatedDeliveryDate),
-                      "PPP",
-                      {
-                        locale: es,
-                      },
-                    )}
+                    {format(new Date(shipping.estimatedDeliveryDate), "PPP", {
+                      locale: es,
+                    })}
                   </p>
                 </div>
               )}
@@ -537,13 +520,9 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
                     Entrega real
                   </p>
                   <p className="text-sm font-medium">
-                    {format(
-                      new Date(shipping.actualDeliveryDate),
-                      "PPP",
-                      {
-                        locale: es,
-                      },
-                    )}
+                    {format(new Date(shipping.actualDeliveryDate), "PPP", {
+                      locale: es,
+                    })}
                   </p>
                 </div>
               )}
@@ -570,9 +549,7 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
             <Separator />
             <div className="flex flex-col gap-2">
               <Button
-                onClick={() =>
-                  window.open(shipping.guideUrl!, "_blank")
-                }
+                onClick={() => window.open(shipping.guideUrl!, "_blank")}
                 variant="outline"
                 className="w-full"
               >
@@ -665,9 +642,7 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
       {/* Delete Confirmation Dialog */}
       <AlertDialog
         open={activeModal === "delete-rate"}
-        onOpenChange={(open) =>
-          !open && dispatch({ type: "CLOSE_MODAL" })
-        }
+        onOpenChange={(open) => !open && dispatch({ type: "CLOSE_MODAL" })}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -709,9 +684,7 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
       {/* Cancel Shipment Dialog */}
       <AlertDialog
         open={activeModal === "cancel-shipment"}
-        onOpenChange={(open) =>
-          !open && dispatch({ type: "CLOSE_MODAL" })
-        }
+        onOpenChange={(open) => !open && dispatch({ type: "CLOSE_MODAL" })}
       >
         <AlertDialogContent>
           <AlertDialogHeader>

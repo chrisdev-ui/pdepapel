@@ -1,6 +1,6 @@
-import { PrismaClient } from "@prisma/client";
+import prismadb from "../../lib/prismadb";
 
-const prisma = new PrismaClient();
+const prisma = prismadb;
 
 // Map of Old Name -> New Name
 // This approach is safe for ANY environment (Dev or Prod) because it ignores IDs

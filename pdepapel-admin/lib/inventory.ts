@@ -1,4 +1,4 @@
-import { Prisma, PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { ErrorFactory } from "./api-errors";
 
 // Define a type that can be a transaction client or the main client

@@ -49,7 +49,7 @@ import {
 import { useFormPersist } from "@/hooks/use-form-persist";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import { Color, Design, Size, Supplier } from "@prisma/client";
+import type { Color, Design, Size, Supplier } from "@prisma/client";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";

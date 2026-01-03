@@ -1,8 +1,10 @@
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
-import { OrderStatus, ShippingStatus } from "@prisma/client";
+import { OrderStatus } from "@prisma/client";
+import { ShippingStatus } from "@prisma/enums";
 
-import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { handleErrorResponse } from "@/lib/api-error-response";
+import { ErrorFactory } from "@/lib/api-errors";;
 import prismadb from "@/lib/prismadb";
 import {
   cleanPhoneNumber,

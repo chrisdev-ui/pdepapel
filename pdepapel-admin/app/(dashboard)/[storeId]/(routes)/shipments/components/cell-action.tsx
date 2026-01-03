@@ -12,7 +12,7 @@ import {
 import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import { ShippingProvider } from "@prisma/client";
+import { ShippingProvider } from "@prisma/enums";
 import {
   ExternalLink,
   Eye,

@@ -8,12 +8,10 @@ import {
   Coupon,
   Order,
   OrderItem,
-  OrderStatus,
   PaymentDetails,
-  PaymentMethod,
   Product,
-  ShippingStatus,
 } from "@prisma/client";
+import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/enums";
 import { NextResponse } from "next/server";
 
 type PayUResponse = {

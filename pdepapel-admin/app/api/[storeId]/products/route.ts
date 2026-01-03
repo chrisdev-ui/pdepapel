@@ -1,5 +1,6 @@
 import { SORT_OPTIONS, SortOption } from "@/constants";
-import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { handleErrorResponse } from "@/lib/api-error-response";
+import { ErrorFactory } from "@/lib/api-errors";;
 import cloudinaryInstance from "@/lib/cloudinary";
 import prismadb from "@/lib/prismadb";
 import {
@@ -13,13 +14,8 @@ import {
   Supplier,
   Review,
 } from "@prisma/client";
-import {
-  CACHE_HEADERS,
-  generateRandomSKU,
-  getPublicIdFromCloudinaryUrl,
-  parseErrorDetails,
-  verifyStoreOwner,
-} from "@/lib/utils";
+import { CACHE_HEADERS, generateRandomSKU, getPublicIdFromCloudinaryUrl, parseErrorDetails } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/db-utils";
 import { generateSemanticSKU } from "@/lib/variant-generator";
 
 import { getActiveOffers, getProductsPrices } from "@/lib/discount-engine";

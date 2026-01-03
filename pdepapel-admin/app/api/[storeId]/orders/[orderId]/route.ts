@@ -1,27 +1,20 @@
 import { BATCH_SIZE } from "@/constants";
 import { cleanPhoneNumber } from "@/constants/shipping";
-import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { handleErrorResponse } from "@/lib/api-error-response";
+import { ErrorFactory } from "@/lib/api-errors";;
 import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
-import {
-  CACHE_HEADERS,
-  calculateOrderTotals,
-  processOrderItemsInBatches,
-  verifyStoreOwner,
-} from "@/lib/utils";
+import { CACHE_HEADERS, calculateOrderTotals } from "@/lib/utils";
+import { processOrderItemsInBatches, verifyStoreOwner } from "@/lib/db-utils";
 import {
   createInventoryMovementBatchResilient,
   createInventoryMovementBatch,
   validateStockAvailability,
 } from "@/lib/inventory";
 import { auth, clerkClient } from "@clerk/nextjs";
-import {
-  DiscountType,
-  OrderStatus,
-  PaymentMethod,
-  ShippingStatus,
-} from "@prisma/client";
+import { DiscountType } from "@prisma/client";
+import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/enums";
 import { TIMEOUT } from "dns";
 import { NextResponse } from "next/server";
 

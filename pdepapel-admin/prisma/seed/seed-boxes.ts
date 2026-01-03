@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "../generated/prisma/client";
 
 const BOX_CONFIGURATIONS = {
   XS: {
@@ -72,9 +72,12 @@ export const seedBoxes = async (prisma: PrismaClient, storeId: string) => {
   }
 };
 
+import { fileURLToPath } from "url";
+import prismadb from "../../lib/prismadb";
+
 // Allow running this seed script standalone
-if (require.main === module) {
-  const prisma = new PrismaClient();
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const prisma = prismadb;
 
   const main = async () => {
     // 1. Try to get STORE_ID from env variable

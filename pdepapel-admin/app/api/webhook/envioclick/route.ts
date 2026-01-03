@@ -1,4 +1,4 @@
-import { handleErrorResponse } from "@/lib/api-errors";
+import { handleErrorResponse } from "@/lib/api-error-response";
 import { sendShippingEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
 import { ShippingStatus } from "@prisma/client";

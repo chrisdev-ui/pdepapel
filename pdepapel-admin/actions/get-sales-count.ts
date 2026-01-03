@@ -1,5 +1,5 @@
 import prismadb from "@/lib/prismadb";
-import { OrderStatus } from "@prisma/client";
+import { OrderStatus } from "@prisma/enums";
 import { endOfYear, startOfYear } from "date-fns";
 
 export const getSalesCount = async (storeId: string, year: number) => {

@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import prismadb from "@/lib/prismadb";
 import { Prisma } from "@prisma/client";
 import { auth } from "@clerk/nextjs";
-import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { verifyStoreOwner } from "@/lib/utils";
+import { handleErrorResponse } from "@/lib/api-error-response";
+import { ErrorFactory } from "@/lib/api-errors";;
+import { verifyStoreOwner } from "@/lib/db-utils";
 
 // POST /api/[storeId]/migration/inventory
 export async function POST(

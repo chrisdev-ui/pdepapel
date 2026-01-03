@@ -1,7 +1,7 @@
-import { PrismaClient } from "@prisma/client";
+import prismadb from "../lib/prismadb";
 import { parsePhoneNumber } from "react-phone-number-input";
 
-const prisma = new PrismaClient();
+const prisma = prismadb;
 
 async function main() {
   console.log("☎️ Starting Phone Number Migration...");

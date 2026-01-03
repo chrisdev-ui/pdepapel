@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { DataTableCellCurrency } from "@/components/ui/data-table-cell-currency";
 import { DataTableCellDate } from "@/components/ui/data-table-cell-date";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
-import { RestockOrderStatus } from "@prisma/client";
+import { RestockOrderStatus } from "@prisma/enums";
 import { ColumnDef } from "@tanstack/react-table";
 import { getRestockOrders } from "../server/get-restock-orders";
 import { CellAction } from "./cell-action";

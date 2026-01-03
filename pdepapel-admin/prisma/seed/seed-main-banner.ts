@@ -1,5 +1,5 @@
 import { fakerES_MX as faker } from "@faker-js/faker";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "../generated/prisma/client";
 
 const getMainBanner = (storeId: string) => {
   return {

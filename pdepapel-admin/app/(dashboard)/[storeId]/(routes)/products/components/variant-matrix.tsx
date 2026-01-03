@@ -20,7 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { Color, Design } from "@prisma/client";
+import type { Color, Design } from "@prisma/client";
 import { MousePointerClick } from "lucide-react";
 import { useEffect, useState } from "react";
 

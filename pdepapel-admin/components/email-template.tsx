@@ -1,4 +1,4 @@
-import { OrderStatus, ShippingStatus } from "@prisma/client";
+import { OrderStatus, ShippingStatus } from "@prisma/enums";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 

@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs";
 import { Redis } from "@upstash/redis";
 
 import prismadb from "@/lib/prismadb";
-import { verifyStoreOwner } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/db-utils";
 
 // Cache Headers
 const corsHeaders = {

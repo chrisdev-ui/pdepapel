@@ -1,6 +1,4 @@
-import { PrismaClient } from "@prisma/client";
-
-const prismadb = new PrismaClient();
+import prismadb from "../lib/prismadb";
 
 async function verifyStockIntegrity() {
   console.log("🔍 Verifying Stock Integrity...");

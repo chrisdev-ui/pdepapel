@@ -51,3 +51,4 @@ google_merchant_*
 backup_prod_*.sql
 /scripts/backup-prod.ts
 /scripts/restore-db.ts
+/prisma/generated

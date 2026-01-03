@@ -22,7 +22,7 @@ import { Separator } from "@/components/ui/separator";
 import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import { Type } from "@prisma/client";
+import type { Type } from "@prisma/client";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";

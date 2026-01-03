@@ -2,7 +2,7 @@
 
 import { useFormPersist } from "@/hooks/use-form-persist";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Color } from "@prisma/client";
+import type { Color } from "@prisma/client";
 import { ArrowLeft, Eraser, Loader2, Trash } from "lucide-react";
 import { useForm } from "react-hook-form";
 import z from "zod";

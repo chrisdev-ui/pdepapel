@@ -11,10 +11,10 @@
  * npx tsx scripts/migrate-sizes.ts
  */
 
-import { PrismaClient } from "@prisma/client";
+import prismadb from "../lib/prismadb";
 import { generateSizeName, generateSizeValue } from "../constants/sizes";
 
-const prisma = new PrismaClient();
+const prisma = prismadb;
 
 /**
  * Mapeo de tamaños antiguos al nuevo sistema

@@ -1,6 +1,5 @@
 import { Prisma, PrismaClient } from "@prisma/client";
-
-const prismadb = new PrismaClient();
+import prismadb from "../../lib/prismadb";
 
 function calculateOrderTotals(
   orderItems: any[],

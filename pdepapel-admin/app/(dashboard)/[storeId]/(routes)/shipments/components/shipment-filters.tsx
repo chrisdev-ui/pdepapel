@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SHIPPINGCARRIERS } from "@/constants/shipping";
-import { ShippingProvider, ShippingStatus } from "@prisma/client";
+import { ShippingProvider, ShippingStatus } from "@prisma/enums";
 import { Filter } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback } from "react";

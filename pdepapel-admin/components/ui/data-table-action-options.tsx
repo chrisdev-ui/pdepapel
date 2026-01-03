@@ -14,7 +14,8 @@ import { useToast } from "@/hooks/use-toast";
 import { makeApiCall } from "@/lib/api";
 import { getErrorMessage } from "@/lib/api-errors";
 import { cn } from "@/lib/utils";
-import { OrderStatus, ShippingStatus } from "@prisma/client";
+import { OrderStatus } from "@prisma/enums";
+import { ShippingStatus } from "@prisma/enums";
 import { Table } from "@tanstack/react-table";
 import {
   Archive,

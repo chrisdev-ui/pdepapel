@@ -3,12 +3,10 @@ import { auth } from "@clerk/nextjs";
 
 import prismadb from "@/lib/prismadb";
 
-import {
-  CACHE_HEADERS,
-  getPublicIdFromCloudinaryUrl,
-  verifyStoreOwner,
-} from "@/lib/utils";
-import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { CACHE_HEADERS, getPublicIdFromCloudinaryUrl } from "@/lib/utils";
+import { verifyStoreOwner } from "@/lib/db-utils";
+import { handleErrorResponse } from "@/lib/api-error-response";
+import { ErrorFactory } from "@/lib/api-errors";;
 import cloudinaryInstance from "@/lib/cloudinary";
 
 const corsHeaders = {

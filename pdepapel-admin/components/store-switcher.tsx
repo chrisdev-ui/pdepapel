@@ -1,6 +1,6 @@
 "use client";
 
-import { Store } from "@prisma/client";
+import type { Store } from "@prisma/client";
 import {
   Check,
   ChevronsUpDown,

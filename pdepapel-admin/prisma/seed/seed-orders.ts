@@ -5,7 +5,7 @@ import {
   PaymentMethod,
   PrismaClient,
   ShippingStatus,
-} from "@prisma/client";
+} from "../generated/prisma/client";
 
 const NUMBER_OF_ORDERS = 300;
 

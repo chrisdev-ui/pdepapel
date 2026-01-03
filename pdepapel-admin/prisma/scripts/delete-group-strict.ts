@@ -1,6 +1,6 @@
-import { PrismaClient } from "@prisma/client";
+import prismadb from "../../lib/prismadb";
 
-const prismadb = new PrismaClient();
+const prisma = prismadb;
 const TARGET_GROUP_ID = "ea308d7b-d418-4048-93a0-2edb545537bc";
 
 async function main() {

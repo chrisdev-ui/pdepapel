@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Store } from "@prisma/client";
+import type { Store } from "@prisma/client";
 import {
   AlertTriangle,
   ArrowLeft,

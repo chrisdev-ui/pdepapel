@@ -1,5 +1,5 @@
 import prismadb from "@/lib/prismadb";
-import { OrderStatus } from "@prisma/client";
+import { OrderStatus } from "@prisma/enums";
 import { endOfYear, getMonth, startOfYear } from "date-fns";
 
 interface GraphData {

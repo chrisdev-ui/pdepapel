@@ -2,15 +2,14 @@
 
 import { useFormPersist } from "@/hooks/use-form-persist";
 import { zodResolver } from "@hookform/resolvers/zod";
+import type { Box, Coupon } from "@prisma/client";
 import {
   DiscountType,
   OrderStatus,
   PaymentMethod,
   ShippingProvider,
   ShippingStatus,
-  type Box,
-  type Coupon,
-} from "@prisma/client";
+} from "@prisma/enums";
 import axios from "axios";
 import {
   AlertTriangle,

@@ -22,7 +22,7 @@ import {
 import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import { ShippingStatus } from "@prisma/client";
+import { ShippingStatus } from "@prisma/enums";
 import { Table } from "@tanstack/react-table";
 import { CheckCircle2, X } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";

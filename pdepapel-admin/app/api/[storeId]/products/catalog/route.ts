@@ -1,5 +1,6 @@
 import { CAPSULAS_SORPRESA_ID, KITS_ID } from "@/constants";
-import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { handleErrorResponse } from "@/lib/api-error-response";
+import { ErrorFactory } from "@/lib/api-errors";;
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { NextResponse } from "next/server";

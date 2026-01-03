@@ -28,7 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
-import { Supplier } from "@prisma/client";
+import type { Supplier } from "@prisma/client";
 
 const formSchema = z.object({
   type: z.enum(["PURCHASE", "ADJUSTMENT"]),

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs";
 import prismadb from "@/lib/prismadb";
-import { ShippingProvider, ShippingStatus } from "@prisma/client";
+import { ShippingProvider } from "@prisma/client";
+import { ShippingStatus } from "@prisma/enums";
 import { envioClickClient } from "@/lib/envioclick";
 
 // Helper to map EnvioClick string status to our Enum

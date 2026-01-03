@@ -4,7 +4,8 @@ import {
   formatLocationForDisplay,
   getAllLocationsWithCache,
 } from "@/lib/dane-api";
-import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { handleErrorResponse } from "@/lib/api-error-response";
+import { ErrorFactory } from "@/lib/api-errors";;
 import { CACHE_HEADERS } from "@/lib/utils";
 import { POPULAR_CITY_CODES } from "@/constants";
 

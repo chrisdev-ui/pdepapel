@@ -1,8 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import path from "path";
 import * as fs from "fs";
-
-const prismadb = new PrismaClient();
+import prismadb from "../../lib/prismadb";
 
 // Your BASE_URL - adjust this to your actual domain
 const BASE_URL = "https://papeleriapdepapel.com";

@@ -3,7 +3,7 @@
 import { useFormPersist } from "@/hooks/use-form-persist";
 import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Box } from "@prisma/client";
+import type { Box } from "@prisma/client";
 import axios from "axios";
 import { ArrowLeft, Eraser, Trash } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";

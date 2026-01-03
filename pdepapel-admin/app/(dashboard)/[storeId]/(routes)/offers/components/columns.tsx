@@ -3,7 +3,7 @@
 import { DataTableCellDate } from "@/components/ui/data-table-cell-date";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { currencyFormatter } from "@/lib/utils";
-import { DiscountType } from "@prisma/client";
+import { DiscountType } from "@prisma/enums";
 import { ColumnDef } from "@tanstack/react-table";
 import { getOffers } from "../server/get-offers";
 import { CellAction } from "./cell-action";

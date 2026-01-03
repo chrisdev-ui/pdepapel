@@ -23,7 +23,7 @@ import { Models } from "@/constants";
 import { useFormPersist } from "@/hooks/use-form-persist";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import { MainBanner } from "@prisma/client";
+import type { MainBanner } from "@prisma/client";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";

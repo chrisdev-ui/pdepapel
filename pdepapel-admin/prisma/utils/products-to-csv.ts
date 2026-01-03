@@ -2,8 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { createObjectCsvWriter } from "csv-writer";
 import path from "path";
 import { currencyFormatter } from "../../lib/utils";
-
-const prismadb = new PrismaClient();
+import prismadb from "../../lib/prismadb";
 
 function generateUniqueName(baseName = "file") {
   const now = new Date();

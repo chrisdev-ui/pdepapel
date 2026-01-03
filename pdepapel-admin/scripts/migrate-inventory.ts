@@ -1,6 +1,6 @@
-import { PrismaClient } from "@prisma/client";
+import prismadb from "../lib/prismadb";
 
-const prisma = new PrismaClient();
+const prisma = prismadb;
 
 const STORE_ID = process.env.STORE_ID;
 const USER_ID = process.env.USER_ID; // The admin user running the migration

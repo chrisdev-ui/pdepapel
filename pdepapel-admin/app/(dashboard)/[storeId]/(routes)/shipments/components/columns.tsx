@@ -7,7 +7,7 @@ import { DataTableCellPhone } from "@/components/ui/data-table-cell-phone";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { Models } from "@/constants";
 import { getCarrierInfo } from "@/constants/shipping";
-import { ShippingProvider, ShippingStatus } from "@prisma/client";
+import { ShippingProvider, ShippingStatus } from "@prisma/enums";
 import { ColumnDef } from "@tanstack/react-table";
 import { ExternalLink, Package } from "lucide-react";
 import Image from "next/image";

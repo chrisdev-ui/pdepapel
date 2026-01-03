@@ -1,4 +1,7 @@
-import { PrismaClient } from "@prisma/client";
+import "dotenv/config";
+import { PrismaClient } from "../generated/prisma/client";
+import { PrismaMariaDb } from "@prisma/adapter-mariadb";
+import { createPool } from "mariadb";
 import { clearDB } from "./clear-db";
 import { seedBanners } from "./seed-banners";
 import { seedBillboards } from "./seed-billboards";
@@ -16,7 +19,9 @@ import { seedTypes } from "./seed-types";
 import { seedCoupons } from "./seed-coupons";
 import { seedBoxes } from "./seed-boxes";
 
-const prismadb = new PrismaClient();
+const pool = createPool(process.env.DATABASE_URL!);
+const adapter = new PrismaMariaDb(pool as any);
+const prismadb = new PrismaClient({ adapter });
 
 async function main() {
   await prismadb.$connect();

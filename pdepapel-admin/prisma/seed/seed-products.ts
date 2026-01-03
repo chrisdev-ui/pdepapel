@@ -1,5 +1,5 @@
 import { fakerES_MX as faker, simpleFaker } from "@faker-js/faker";
-import { Prisma, PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "../generated/prisma/client";
 
 let trueCount = 0;
 

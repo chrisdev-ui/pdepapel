@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Size } from "@prisma/client";
+import type { Size } from "@prisma/client";
 import { ArrowLeft, Eraser, Loader2, Trash } from "lucide-react";
 import { useForm } from "react-hook-form";
 import z from "zod";

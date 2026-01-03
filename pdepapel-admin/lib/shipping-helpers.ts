@@ -10,7 +10,7 @@ import {
 import prismadb from "@/lib/prismadb";
 import { ErrorFactory } from "./api-errors";
 import { envioClickClient } from "./envioclick";
-import { ShippingStatus } from "@prisma/client";
+import { ShippingStatus } from "@prisma/enums";
 import { getColombiaDate } from "./date-utils";
 
 export async function createGuideForOrder(

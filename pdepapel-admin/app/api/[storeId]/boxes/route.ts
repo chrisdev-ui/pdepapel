@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs";
 
 import prismadb from "@/lib/prismadb";
-import { checkIfStoreOwner, CACHE_HEADERS } from "@/lib/utils";
-import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { CACHE_HEADERS } from "@/lib/utils";
+import { checkIfStoreOwner } from "@/lib/db-utils";
+import { handleErrorResponse } from "@/lib/api-error-response";
+import { ErrorFactory } from "@/lib/api-errors";;
 
 export async function POST(
   req: Request,

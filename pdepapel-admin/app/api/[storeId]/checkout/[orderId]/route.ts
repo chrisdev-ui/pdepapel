@@ -1,4 +1,5 @@
-import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { handleErrorResponse } from "@/lib/api-error-response";
+import { ErrorFactory } from "@/lib/api-errors";
 import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
 import {
@@ -6,9 +7,10 @@ import {
   CheckoutOrder,
   generatePayUPayment,
   generateWompiPayment,
-  processOrderItemsInBatches,
 } from "@/lib/utils";
-import { OrderStatus, PaymentMethod } from "@prisma/client";
+import { processOrderItemsInBatches } from "@/lib/db-utils";
+import { OrderStatus } from "@prisma/client";
+import { PaymentMethod } from "@prisma/enums";
 import { NextResponse } from "next/server";
 import { BATCH_SIZE } from "@/constants";
 

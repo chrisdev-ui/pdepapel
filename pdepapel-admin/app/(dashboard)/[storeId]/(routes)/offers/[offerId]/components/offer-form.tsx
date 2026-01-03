@@ -32,13 +32,13 @@ import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import { currencyFormatter, datePresets } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  DiscountType,
+import type {
   Offer,
   OfferCategory,
   OfferProduct,
   OfferProductGroup,
 } from "@prisma/client";
+import { DiscountType } from "@prisma/enums";
 import axios from "axios";
 import {
   ArrowLeft,
