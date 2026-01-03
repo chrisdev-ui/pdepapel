@@ -46,13 +46,13 @@ export async function ShippingAnalytics({ storeId }: ShippingAnalyticsProps) {
     },
     {
       title: "Costo Total de Envíos",
-      value: currencyFormatter.format(analytics.totalShippingCost),
+      value: currencyFormatter(analytics.totalShippingCost),
       icon: DollarSign,
       description: "Suma de todos los costos",
     },
     {
       title: "Costo Promedio",
-      value: currencyFormatter.format(analytics.averageShippingCost),
+      value: currencyFormatter(analytics.averageShippingCost),
       icon: BarChart3,
       description: "Por envío",
     },

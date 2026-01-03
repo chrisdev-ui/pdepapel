@@ -8,6 +8,7 @@ import {
   PaymentMethod,
   ShippingProvider,
   ShippingStatus,
+  type Box,
   type Coupon,
 } from "@prisma/client";
 import axios from "axios";
@@ -16,7 +17,6 @@ import {
   ArrowLeft,
   Check,
   ChevronsUpDown,
-  DollarSign,
   Eraser,
   Loader2,
   Package,
@@ -68,6 +68,7 @@ import {
   CommandInput,
   CommandItem,
 } from "@/components/ui/command";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { DatePicker } from "@/components/ui/date-picker";
 import {
   Form,
@@ -85,11 +86,13 @@ import {
   LocationOption,
 } from "@/components/ui/location-combobox";
 import { OrderStatusSelector } from "@/components/ui/order-status-selector";
+import { PhoneInput } from "@/components/ui/phone-input";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { ProductSkuBadge } from "@/components/ui/product-sku-badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
@@ -306,7 +309,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   const [productsSelected, setProductsSelected] = useState<ProductOption[]>(
     initialData
       ? (initialData.orderItems
-          .map((item) =>
+          .map((item: { productId: string; quantity: number }) =>
             products.find((product) => product.value === item.productId),
           )
           .filter(Boolean) as ProductOption[])
@@ -316,7 +319,10 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   const [quantities, setQuantity] = useState(
     initialData
       ? initialData.orderItems.reduce(
-          (acc, item) => {
+          (
+            acc: { [key: string]: number },
+            item: { productId: string; quantity: number },
+          ) => {
             acc[item.productId] = item.quantity;
             return acc;
           },
@@ -374,10 +380,12 @@ export const OrderForm: React.FC<OrderFormProps> = ({
               reason: initialData.discountReason || undefined,
             },
             couponCode: initialData.coupon?.code || "",
-            orderItems: initialData.orderItems.map((item) => ({
-              productId: item.productId,
-              quantity: item.quantity,
-            })),
+            orderItems: initialData.orderItems.map(
+              (item: { productId: string; quantity: number }) => ({
+                productId: item.productId,
+                quantity: item.quantity,
+              }),
+            ),
             payment: {
               ...initialData.payment,
               transactionId: initialData.payment?.transactionId || undefined,
@@ -785,7 +793,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
 
     toast({
       title: "Tarifa seleccionada",
-      description: `${quote.carrier} - ${currencyFormatter.format(quote.totalCost)}`,
+      description: `${quote.carrier} - ${currencyFormatter(quote.totalCost)}`,
     });
   };
 
@@ -873,9 +881,22 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                       />
                     )}
                     <div className="flex flex-col gap-2">
-                      <AlertTitle>{product.label}</AlertTitle>
+                      <div className="flex items-center gap-2">
+                        <AlertTitle className="mb-0">{product.name}</AlertTitle>
+                        <ProductSkuBadge sku={product.sku} />
+                      </div>
                       <AlertDescription>
                         <div className="flex flex-col gap-1">
+                          <div className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+                            {product.size && <span>Talla: {product.size}</span>}
+                            {product.color && (
+                              <span>Color: {product.color}</span>
+                            )}
+                            {product.design &&
+                              product.design !== "Estándar" && (
+                                <span>Diseño: {product.design}</span>
+                              )}
+                          </div>
                           {product.offerLabel && (
                             <Badge
                               variant="secondary"
@@ -888,17 +909,15 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                             {product.discountedPrice < product.price ? (
                               <>
                                 <span className="text-xs text-muted-foreground line-through">
-                                  {currencyFormatter.format(product.price)}
+                                  {currencyFormatter(product.price)}
                                 </span>
                                 <span className="font-semibold text-green-600">
-                                  {currencyFormatter.format(
-                                    product.discountedPrice,
-                                  )}
+                                  {currencyFormatter(product.discountedPrice)}
                                 </span>
                               </>
                             ) : (
                               <span>
-                                {currencyFormatter.format(product.price || 0)}
+                                {currencyFormatter(product.price || 0)}
                               </span>
                             )}
                             <span>×</span>
@@ -907,10 +926,12 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                               min={1}
                               value={quantities[product.value] || 1}
                               onChange={(newQuantity) => {
-                                setQuantity((prev) => ({
-                                  ...prev,
-                                  [product.value]: newQuantity,
-                                }));
+                                setQuantity(
+                                  (prev: { [key: string]: number }) => ({
+                                    ...prev,
+                                    [product.value]: newQuantity,
+                                  }),
+                                );
                               }}
                             />
                           </div>
@@ -924,17 +945,17 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           {/* Totals */}
           <div className="ml-auto flex flex-col space-y-2 text-right">
             <div className="text-lg font-semibold">
-              Subtotal: {currencyFormatter.format(orderTotals.subtotal)}
+              Subtotal: {currencyFormatter(orderTotals.subtotal)}
             </div>
             {orderTotals.offerSavings > 0 && (
               <div className="text-lg text-green-600">
                 Ahorro por ofertas: -
-                {currencyFormatter.format(orderTotals.offerSavings)}
+                {currencyFormatter(orderTotals.offerSavings)}
               </div>
             )}
             {orderTotals.discount > 0 && (
               <div className="text-lg text-red-600">
-                Descuento: -{currencyFormatter.format(orderTotals.discount)}
+                Descuento: -{currencyFormatter(orderTotals.discount)}
                 {form.watch("discount.type") === DiscountType.PERCENTAGE && (
                   <span className="ml-1 text-xs">
                     ({form.watch("discount.amount")}%)
@@ -945,7 +966,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             {orderTotals.couponDiscount > 0 && (
               <div className="text-lg text-red-600">
                 Descuento cupón: -
-                {currencyFormatter.format(orderTotals.couponDiscount)}
+                {currencyFormatter(orderTotals.couponDiscount)}
                 {coupon?.type === DiscountType.PERCENTAGE && (
                   <span className="ml-1 text-xs">({coupon.amount}%)</span>
                 )}
@@ -953,11 +974,11 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             )}
             {Number(shippingCost || 0) > 0 && (
               <div className="text-lg text-primary">
-                Envío: +{currencyFormatter.format(Number(shippingCost || 0))}
+                Envío: +{currencyFormatter(Number(shippingCost || 0))}
               </div>
             )}
             <div className="text-xl font-bold">
-              Total: {currencyFormatter.format(orderTotals.total)}
+              Total: {currencyFormatter(orderTotals.total)}
             </div>
           </div>
           <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
@@ -1154,10 +1175,12 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                           size="md"
                         />
                       )}
-                      <Input
+                      <PhoneInput
                         disabled={loading}
-                        placeholder="Número de teléfono"
-                        {...field}
+                        placeholder=""
+                        value={field.value}
+                        onChange={field.onChange}
+                        defaultCountry="CO"
                       />
                     </div>
                   </FormControl>
@@ -1406,33 +1429,32 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 <FormItem>
                   <FormLabel>Monto del descuento</FormLabel>
                   <FormControl>
-                    <div className="relative">
-                      {form.watch("discount.type") ===
-                      DiscountType.PERCENTAGE ? (
+                    {form.watch("discount.type") === DiscountType.PERCENTAGE ? (
+                      <div className="relative">
                         <Percent className="absolute left-3 top-3 h-4 w-4" />
-                      ) : (
-                        <DollarSign className="absolute left-3 top-3 h-4 w-4" />
-                      )}
-                      <Input
-                        type="number"
+                        <Input
+                          type="number"
+                          disabled={loading || !form.watch("discount.type")}
+                          className="pl-8"
+                          placeholder="10"
+                          {...field}
+                          onChange={(e) =>
+                            field.onChange(
+                              e.target.value === ""
+                                ? undefined
+                                : Number(e.target.value),
+                            )
+                          }
+                        />
+                      </div>
+                    ) : (
+                      <CurrencyInput
+                        placeholder="$ 10.000"
                         disabled={loading || !form.watch("discount.type")}
-                        className="pl-8"
-                        placeholder={
-                          form.watch("discount.type") ===
-                          DiscountType.PERCENTAGE
-                            ? "10"
-                            : "10000"
-                        }
-                        {...field}
-                        onChange={(e) =>
-                          field.onChange(
-                            e.target.value === ""
-                              ? undefined
-                              : Number(e.target.value),
-                          )
-                        }
+                        value={field.value}
+                        onChange={field.onChange}
                       />
-                    </div>
+                    )}
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -1496,7 +1518,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                               />
                               {field.value
                                 ? availableCoupons.find(
-                                    (c) => c.code === field.value,
+                                    (c: Coupon) => c.code === field.value,
                                   )?.code || field.value
                                 : availableCoupons.length > 0
                                   ? "Seleccionar cupón"
@@ -1514,7 +1536,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                               No se encontraron cupones.
                             </CommandEmpty>
                             <CommandGroup>
-                              {availableCoupons.map((c) => (
+                              {availableCoupons.map((c: Coupon) => (
                                 <CommandItem
                                   key={c.code}
                                   value={c.code}
@@ -1567,7 +1589,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                                     <span className="text-xs text-muted-foreground">
                                       {c.type === DiscountType.PERCENTAGE
                                         ? `${c.amount}% de descuento`
-                                        : `${currencyFormatter.format(Number(c.amount))} de descuento`}
+                                        : `${currencyFormatter(Number(c.amount))} de descuento`}
                                     </span>
                                   </div>
                                 </CommandItem>
@@ -1838,7 +1860,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                           <SelectItem value="auto">
                             Automático (Recomendado)
                           </SelectItem>
-                          {boxes?.map((box) => (
+                          {boxes?.map((box: Box) => (
                             <SelectItem key={box.id} value={box.id}>
                               {box.name} ({box.width}x{box.height}x{box.length}
                               cm)
@@ -1982,16 +2004,15 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                                 {/* Price Section */}
                                 <div className="flex-shrink-0 space-y-1 text-right">
                                   <p className="text-2xl font-bold">
-                                    {currencyFormatter.format(quote.totalCost)}
+                                    {currencyFormatter(quote.totalCost)}
                                   </p>
                                   <div className="space-y-0.5 text-xs text-muted-foreground">
                                     <p>
-                                      Flete:{" "}
-                                      {currencyFormatter.format(quote.flete)}
+                                      Flete: {currencyFormatter(quote.flete)}
                                     </p>
                                     <p>
                                       Seguro:{" "}
-                                      {currencyFormatter.format(
+                                      {currencyFormatter(
                                         quote.minimumInsurance,
                                       )}
                                     </p>
@@ -2057,7 +2078,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                           <SelectItem value="auto">
                             Automático (Recomendado)
                           </SelectItem>
-                          {boxes?.map((box) => (
+                          {boxes?.map((box: Box) => (
                             <SelectItem key={box.id} value={box.id}>
                               {box.name} ({box.width}x{box.height}x{box.length}
                               cm)
@@ -2161,17 +2182,11 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                       <FormItem>
                         <FormLabel>Costo del Envío</FormLabel>
                         <FormControl>
-                          <Input
-                            type="number"
-                            min="0"
-                            step="100"
-                            placeholder="15000"
+                          <CurrencyInput
+                            placeholder="$ 15.000"
                             disabled={loading}
-                            {...field}
-                            value={field.value || ""}
-                            onChange={(e) =>
-                              field.onChange(parseFloat(e.target.value) || 0)
-                            }
+                            value={field.value}
+                            onChange={field.onChange}
                           />
                         </FormControl>
                         <FormDescription>

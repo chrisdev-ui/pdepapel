@@ -218,16 +218,16 @@ export const AutoComplete = ({
                         option.discountedPrice < option.price ? (
                           <div className="flex flex-col items-end">
                             <span className="text-xs text-muted-foreground line-through">
-                              {currencyFormatter.format(option.price)}
+                              {currencyFormatter(option.price)}
                             </span>
                             <span className="font-medium text-green-600">
-                              {currencyFormatter.format(option.discountedPrice)}
+                              {currencyFormatter(option.discountedPrice)}
                             </span>
                           </div>
                         ) : (
                           option.price && (
                             <span className="text-slate-500">
-                              {currencyFormatter.format(option.price)}
+                              {currencyFormatter(option.price)}
                             </span>
                           )
                         )}

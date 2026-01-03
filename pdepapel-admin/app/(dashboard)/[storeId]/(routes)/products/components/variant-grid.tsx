@@ -23,6 +23,7 @@ import { UseFormReturn } from "react-hook-form";
 import { VariantEditModal } from "@/components/modals/variant-edit-modal";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { currencyFormatter } from "@/lib/utils";
 import { Archive, Pencil, Star, Trash } from "lucide-react";
 import { ProductGroupFormValues } from "./product-group-form";
 
@@ -332,11 +333,7 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
                       </div>
                     </TableCell>
                     <TableCell className="text-xs">
-                      {new Intl.NumberFormat("es-CO", {
-                        style: "currency",
-                        currency: "COP",
-                        maximumFractionDigits: 0,
-                      }).format(variant.acqPrice || 0)}
+                      {currencyFormatter(variant.acqPrice || 0)}
                     </TableCell>
                     <TableCell
                       className="max-w-[120px] truncate text-xs"
@@ -345,11 +342,7 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
                       {supplierName}
                     </TableCell>
                     <TableCell className="text-xs">
-                      {new Intl.NumberFormat("es-CO", {
-                        style: "currency",
-                        currency: "COP",
-                        maximumFractionDigits: 0,
-                      }).format(variant.price || 0)}
+                      {currencyFormatter(variant.price || 0)}
                     </TableCell>
                     <TableCell className="text-xs">
                       {variant.stock || 0}

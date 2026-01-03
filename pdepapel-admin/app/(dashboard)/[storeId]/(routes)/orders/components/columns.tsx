@@ -84,7 +84,7 @@ export const columns: ColumnDef<OrderColumn>[] = [
           status: row.original.status,
           fullName: row.original.fullName,
           phone: row.original.phone,
-          totalPrice: currencyFormatter.format(row.original.total),
+          totalPrice: currencyFormatter(row.original.total),
           products: row.original.orderItems.map((orderItem) => ({
             name: orderItem.product.name,
             sku: orderItem.product.sku,

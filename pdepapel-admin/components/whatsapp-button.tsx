@@ -49,10 +49,18 @@ export const WhatsappButton: React.FC<WhatsappButtonProps> = ({
   const data = order || customer;
 
   // Always call useMemo hooks unconditionally
-  const formattedPhone = useMemo(
-    () => (data ? `57${data.phone.replace(/\D/g, "")}` : ""),
-    [data],
-  );
+  const formattedPhone = useMemo(() => {
+    if (!data?.phone) return "";
+    // If it's already +57... just strip +, otherwise ensure 57 prefix if missing?
+    // Safer to use parsePhoneNumber to get the digits if possible, or just strip non-digits.
+    // If input is +57 300..., replace(\D) -> 57300...
+    // If input is 300..., replace(\D) -> 300... -> prepend 57 -> 57300...
+    // This assumes Colombian numbers if no country code?
+    // Let's rely on standard logic:
+    const cleaned = data.phone.replace(/\D/g, "");
+    if (cleaned.startsWith("57")) return cleaned;
+    return `57${cleaned}`;
+  }, [data]);
 
   const firstName = useMemo(() => {
     return data ? data.fullName.split(" ")[0] : "";
@@ -61,7 +69,7 @@ export const WhatsappButton: React.FC<WhatsappButtonProps> = ({
   const orderPrice = useMemo(() => {
     if (order?.totalPrice) {
       return typeof order.totalPrice === "number"
-        ? currencyFormatter.format(order.totalPrice)
+        ? currencyFormatter(order.totalPrice)
         : order.totalPrice;
     }
     return "";
@@ -87,7 +95,7 @@ export const WhatsappButton: React.FC<WhatsappButtonProps> = ({
         .slice(0, 3)
         .map(
           (order) =>
-            `- #${order.orderNumber} - ${currencyFormatter.format(order.total)} (${order.status})`,
+            `- #${order.orderNumber} - ${currencyFormatter(order.total)} (${order.status})`,
         )
         .join("\n");
 
@@ -95,7 +103,7 @@ export const WhatsappButton: React.FC<WhatsappButtonProps> = ({
         `${baseMessage}Te contacto desde P de Papel ${USER}\n\n` +
           `${CHART} *Tu historial como cliente:*\n` +
           `📦 Total de órdenes: ${customer.totalOrders}\n` +
-          `💰 Total gastado: ${currencyFormatter.format(customer.totalSpent)}\n\n` +
+          `💰 Total gastado: ${currencyFormatter(customer.totalSpent)}\n\n` +
           `📋 *Tus órdenes recientes:*\n${recentOrdersList}\n\n` +
           `¿En qué puedo ayudarte hoy? ${SMILE}`,
       );

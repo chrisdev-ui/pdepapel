@@ -61,7 +61,7 @@ export const paymentOptions = {
   [PaymentMethod.Wompi]: "Wompi",
 };
 
-export const discountOptions = {
+export const discountOptions: Record<DiscountType, string> = {
   [DiscountType.PERCENTAGE]: "Porcentaje",
   [DiscountType.FIXED]: "Monto fijo",
 };

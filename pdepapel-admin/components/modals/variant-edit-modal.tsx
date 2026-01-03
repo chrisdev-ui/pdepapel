@@ -9,6 +9,7 @@ import * as z from "zod";
 import { RichTextEditor } from "@/components/editor/rich-text-editor";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import {
   Form,
   FormControl,
@@ -174,11 +175,11 @@ export const VariantEditModal: React.FC<VariantEditModalProps> = ({
                     <FormItem>
                       <FormLabel isRequired>Precio</FormLabel>
                       <FormControl>
-                        <Input
-                          type="number"
+                        <CurrencyInput
                           disabled={loading}
                           placeholder="0"
-                          {...field}
+                          value={field.value}
+                          onChange={field.onChange}
                         />
                       </FormControl>
                       <FormMessage />
@@ -192,11 +193,11 @@ export const VariantEditModal: React.FC<VariantEditModalProps> = ({
                     <FormItem>
                       <FormLabel>Costo (Adquisición)</FormLabel>
                       <FormControl>
-                        <Input
-                          type="number"
+                        <CurrencyInput
                           disabled={loading}
                           placeholder="0"
-                          {...field}
+                          value={field.value}
+                          onChange={field.onChange}
                         />
                       </FormControl>
                       <FormMessage />

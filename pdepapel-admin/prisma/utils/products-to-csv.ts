@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { createObjectCsvWriter } from "csv-writer";
 import path from "path";
+import { currencyFormatter } from "../../lib/utils";
 
 const prismadb = new PrismaClient();
 
@@ -75,10 +76,7 @@ async function exportProductsToCSV() {
       name: product.name,
       description: product.description,
       stock: `${product.stock} unidades`,
-      price: new Intl.NumberFormat("es-CO", {
-        style: "currency",
-        currency: "COP",
-      }).format(product.price),
+      price: currencyFormatter(product.price),
       isFeatured: product.isFeatured ? "Sí" : "No",
       isArchived: product.isArchived ? "Sí" : "No",
       sku: product.sku,

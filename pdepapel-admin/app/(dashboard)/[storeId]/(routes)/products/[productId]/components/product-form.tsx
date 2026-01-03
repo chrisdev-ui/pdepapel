@@ -2,7 +2,6 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  DollarSign,
   Eraser,
   Loader2,
   PackageCheckIcon,
@@ -19,6 +18,7 @@ import { AlertModal } from "@/components/modals/alert-modal";
 import { IntakeModal } from "@/components/modals/intake-modal";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { DataTable } from "@/components/ui/data-table";
 import {
   Form,
@@ -551,16 +551,12 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 <FormItem>
                   <FormLabel isRequired>Precio de compra</FormLabel>
                   <FormControl>
-                    <div className="relative">
-                      <DollarSign className="absolute left-3 top-3 h-4 w-4" />
-                      <Input
-                        type="number"
-                        disabled={loading}
-                        placeholder="1000"
-                        className="pl-8"
-                        {...field}
-                      />
-                    </div>
+                    <CurrencyInput
+                      placeholder="$ 1.000"
+                      disabled={loading}
+                      value={field.value}
+                      onChange={field.onChange}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -595,16 +591,12 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 <FormItem>
                   <FormLabel isRequired>Costo de transporte</FormLabel>
                   <FormControl>
-                    <div className="relative">
-                      <DollarSign className="absolute left-3 top-3 h-4 w-4" />
-                      <Input
-                        type="number"
-                        disabled={loading}
-                        placeholder="0"
-                        className="pl-8"
-                        {...field}
-                      />
-                    </div>
+                    <CurrencyInput
+                      placeholder="$ 0"
+                      disabled={loading}
+                      value={field.value}
+                      onChange={field.onChange}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -650,16 +642,12 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 <FormItem>
                   <FormLabel isRequired>Costos misceláneos</FormLabel>
                   <FormControl>
-                    <div className="relative">
-                      <DollarSign className="absolute left-3 top-3 h-4 w-4" />
-                      <Input
-                        type="number"
-                        disabled={loading}
-                        placeholder="0"
-                        className="pl-8"
-                        {...field}
-                      />
-                    </div>
+                    <CurrencyInput
+                      placeholder="$ 0"
+                      disabled={loading}
+                      value={field.value}
+                      onChange={field.onChange}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -672,16 +660,12 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 <FormItem>
                   <FormLabel isRequired>Precio de venta (calculado)</FormLabel>
                   <FormControl>
-                    <div className="relative">
-                      <DollarSign className="absolute left-3 top-3 h-4 w-4" />
-                      <Input
-                        type="number"
-                        disabled={loading}
-                        placeholder="1000"
-                        className="pl-8"
-                        {...field}
-                      />
-                    </div>
+                    <CurrencyInput
+                      placeholder="$ 1.000"
+                      disabled={loading}
+                      value={field.value}
+                      onChange={field.onChange}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

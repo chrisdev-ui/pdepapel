@@ -36,7 +36,7 @@ export function exportShipmentsToCSV(shipments: ShipmentWithOrder[]): string {
   const rows = shipments.map((shipment) => {
     const carrierName = shipment.carrierName || shipment.courier || "N/A";
     const costFormatted = shipment.cost
-      ? `${currencyFormatter.format(shipment.cost)}`
+      ? `${currencyFormatter(shipment.cost)}`
       : "N/A";
     const estimatedDate = shipment.estimatedDeliveryDate
       ? format(new Date(shipment.estimatedDeliveryDate), "dd/MM/yyyy", {

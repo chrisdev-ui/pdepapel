@@ -148,7 +148,7 @@ export const CustomerAnalytics: React.FC<CustomerAnalyticsProps> = ({
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">
-            {currencyFormatter.format(analytics.averageLifetimeValue)}
+            {currencyFormatter(analytics.averageLifetimeValue)}
           </div>
           <p className="text-xs text-muted-foreground">
             Total gastado ÷ número de clientes
@@ -223,7 +223,7 @@ const MostValuableCustomerCard: React.FC<MostValuableCustomerCardProps> = ({
               {customer.name}
             </div>
             <div className="text-xl font-bold text-green-600">
-              {currencyFormatter.format(customer.totalSpent)}
+              {currencyFormatter(customer.totalSpent)}
             </div>
             <div className="mt-2 flex items-center justify-between">
               <p className="text-xs text-muted-foreground">

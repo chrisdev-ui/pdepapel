@@ -28,7 +28,7 @@ export const SensitiveDataCard: React.FC<SensitiveDataCardProps> = ({
   const formattedValue = useMemo(
     () =>
       format === "currency"
-        ? currencyFormatter.format(value)
+        ? currencyFormatter(value)
         : numberFormatter.format(value),
     [format, value],
   );

@@ -3,6 +3,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DataTableCellPhone } from "@/components/ui/data-table-cell-phone";
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
 import { Models } from "@/constants";
@@ -209,7 +210,7 @@ export function ShipmentDetailClient({ shipment }: ShipmentDetailClientProps) {
                 <div>
                   <p className="mb-1 text-sm text-muted-foreground">Costo</p>
                   <p className="font-medium">
-                    {currencyFormatter.format(shipment.cost)}
+                    {currencyFormatter(shipment.cost)}
                   </p>
                 </div>
               )}
@@ -295,7 +296,10 @@ export function ShipmentDetailClient({ shipment }: ShipmentDetailClientProps) {
                 </div>
                 <div>
                   <p className="mb-1 text-sm text-muted-foreground">Teléfono</p>
-                  <p className="font-medium">{shipment.order.phone}</p>
+                  <DataTableCellPhone
+                    phoneNumber={shipment.order.phone}
+                    className="font-medium"
+                  />
                 </div>
               </div>
 

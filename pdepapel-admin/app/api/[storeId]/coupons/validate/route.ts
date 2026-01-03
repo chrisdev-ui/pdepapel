@@ -58,7 +58,7 @@ export async function POST(
 
     if (subtotal && subtotal < Number(coupon.minOrderValue ?? 0)) {
       throw ErrorFactory.Conflict(
-        `El pedido debe ser mayor a ${currencyFormatter.format(coupon.minOrderValue ?? 0)} para usar este cupón`,
+        `El pedido debe ser mayor a ${currencyFormatter(coupon.minOrderValue ?? 0)} para usar este cupón`,
       );
     }
 

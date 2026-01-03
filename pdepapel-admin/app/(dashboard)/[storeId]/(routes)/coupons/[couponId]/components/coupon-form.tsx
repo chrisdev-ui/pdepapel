@@ -2,6 +2,7 @@
 
 import { AlertModal } from "@/components/modals/alert-modal";
 import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import {
   Form,
@@ -31,14 +32,7 @@ import { datePresets } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Coupon, DiscountType } from "@prisma/client";
 import axios from "axios";
-import {
-  ArrowLeft,
-  DollarSign,
-  Eraser,
-  Loader2,
-  Percent,
-  Trash,
-} from "lucide-react";
+import { ArrowLeft, Eraser, Loader2, Percent, Trash } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -292,24 +286,25 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData }) => {
                 <FormItem>
                   <FormLabel isRequired>Monto del descuento</FormLabel>
                   <FormControl>
-                    <div className="relative">
-                      {form.watch("type") === DiscountType.PERCENTAGE ? (
+                    {form.watch("type") === DiscountType.PERCENTAGE ? (
+                      <div className="relative">
                         <Percent className="absolute left-3 top-3 h-4 w-4" />
-                      ) : (
-                        <DollarSign className="absolute left-3 top-3 h-4 w-4" />
-                      )}
-                      <Input
-                        type="number"
+                        <Input
+                          type="number"
+                          disabled={loading}
+                          className="pl-8"
+                          placeholder="10"
+                          {...field}
+                        />
+                      </div>
+                    ) : (
+                      <CurrencyInput
+                        placeholder="$ 10.000"
                         disabled={loading}
-                        className="pl-8"
-                        placeholder={
-                          form.watch("type") === DiscountType.PERCENTAGE
-                            ? "10"
-                            : "10000"
-                        }
-                        {...field}
+                        value={field.value}
+                        onChange={field.onChange}
                       />
-                    </div>
+                    )}
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -359,16 +354,12 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData }) => {
                 <FormItem>
                   <FormLabel>Monto mínimo de compra</FormLabel>
                   <FormControl>
-                    <div className="relative">
-                      <DollarSign className="absolute left-3 top-3 h-4 w-4" />
-                      <Input
-                        type="number"
-                        disabled={loading}
-                        className="pl-8"
-                        placeholder="50000"
-                        {...field}
-                      />
-                    </div>
+                    <CurrencyInput
+                      placeholder="$ 50.000"
+                      disabled={loading}
+                      value={field.value}
+                      onChange={field.onChange}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

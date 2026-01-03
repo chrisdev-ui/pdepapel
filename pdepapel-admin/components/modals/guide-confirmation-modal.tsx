@@ -60,7 +60,7 @@ export function GuideConfirmationModal({
                 </p>
                 <p>
                   <strong>Costo:</strong>{" "}
-                  {currencyFormatter.format(selectedQuote?.totalCost || 0)}
+                  {currencyFormatter(selectedQuote?.totalCost || 0)}
                 </p>
                 <p>
                   <strong>Entrega en:</strong> {selectedQuote?.deliveryDays}{" "}

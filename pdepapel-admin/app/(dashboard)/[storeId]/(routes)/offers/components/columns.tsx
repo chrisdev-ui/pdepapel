@@ -39,7 +39,7 @@ export const columns: ColumnDef<OfferColumn>[] = [
       <div>
         {row.original.type === DiscountType.PERCENTAGE
           ? `${row.original.amount}%`
-          : currencyFormatter.format(row.original.amount)}
+          : currencyFormatter(row.original.amount)}
       </div>
     ),
   },

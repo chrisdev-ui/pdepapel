@@ -75,7 +75,7 @@ export async function POST(
     } = await req.json();
 
     console.log(
-      `📥 Checkout request received - Store: ${params.storeId}, Payment: ${payment.method}, Items: ${orderItems.length}, Total: ${currencyFormatter.format(total)}`,
+      `📥 Checkout request received - Store: ${params.storeId}, Payment: ${payment.method}, Items: ${orderItems.length}, Total: ${currencyFormatter(total)}`,
     );
 
     if (!fullName)
@@ -196,7 +196,7 @@ export async function POST(
         );
       } else {
         console.log(
-          `✅ Using cached quote for rate ID ${rateId}, carrier: ${selectedQuote.carrier}, cost: ${currencyFormatter.format(selectedQuote.totalCost)}`,
+          `✅ Using cached quote for rate ID ${rateId}, carrier: ${selectedQuote.carrier}, cost: ${currencyFormatter(selectedQuote.totalCost)}`,
         );
       }
     } else {
@@ -221,8 +221,8 @@ export async function POST(
 
     if (costDifference > TOLERANCE) {
       console.warn(
-        `⚠️ Shipping cost discrepancy. Expected: ${currencyFormatter.format(selectedQuote.totalCost)}, ` +
-          `Received: ${currencyFormatter.format(shipping.cost)}`,
+        `⚠️ Shipping cost discrepancy. Expected: ${currencyFormatter(selectedQuote.totalCost)}, ` +
+          `Received: ${currencyFormatter(shipping.cost)}`,
       );
       // Don't throw error - just log for monitoring
     }
@@ -300,7 +300,7 @@ export async function POST(
 
       if (subtotal < Number(coupon.minOrderValue ?? 0)) {
         throw ErrorFactory.Conflict(
-          `El pedido debe ser mayor a ${currencyFormatter.format(coupon.minOrderValue ?? 0)} para usar este cupón`,
+          `El pedido debe ser mayor a ${currencyFormatter(coupon.minOrderValue ?? 0)} para usar este cupón`,
         );
       }
     }
@@ -424,7 +424,7 @@ export async function POST(
     });
 
     console.log(
-      `✅ Order created successfully - ID: ${order.id}, Number: ${order.orderNumber}, Total: ${currencyFormatter.format(order.total)}, Items: ${order.orderItems.length}`,
+      `✅ Order created successfully - ID: ${order.id}, Number: ${order.orderNumber}, Total: ${currencyFormatter(order.total)}, Items: ${order.orderItems.length}`,
     );
 
     // Generate payment based on method
@@ -435,7 +435,7 @@ export async function POST(
       if (payment.method === PaymentMethod.PayU) {
         const payUData = generatePayUPayment(order);
         console.log(
-          `✅ PayU payment data generated - Reference: ${payUData.referenceCode}, Amount: ${currencyFormatter.format(payUData.amount)}`,
+          `✅ PayU payment data generated - Reference: ${payUData.referenceCode}, Amount: ${currencyFormatter(payUData.amount)}`,
         );
         return NextResponse.json({ ...payUData }, { headers: corsHeaders });
       }

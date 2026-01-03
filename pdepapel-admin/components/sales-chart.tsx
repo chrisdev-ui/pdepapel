@@ -50,18 +50,18 @@ export const SalesChart: React.FC<SalesChartProps> = ({ data }) => {
         {/* Revenue Section */}
         <div className="space-y-1">
           <p className="text-sm text-gray-600">
-            Ingresos Brutos: {currencyFormatter.format(dataPoint.grossRevenue)}
+            Ingresos Brutos: {currencyFormatter(dataPoint.grossRevenue)}
           </p>
           <div className="pl-2 text-sm">
             <p className="text-red-600">
-              Descuentos: -{currencyFormatter.format(dataPoint.discounts)}
+              Descuentos: -{currencyFormatter(dataPoint.discounts)}
             </p>
             <p className="text-orange-600">
-              Cupones: -{currencyFormatter.format(dataPoint.couponDiscounts)}
+              Cupones: -{currencyFormatter(dataPoint.couponDiscounts)}
             </p>
           </div>
           <p className="font-semibold text-[#a5c3ff]">
-            Ingresos Netos: {currencyFormatter.format(dataPoint.revenue)}
+            Ingresos Netos: {currencyFormatter(dataPoint.revenue)}
           </p>
         </div>
 
@@ -75,7 +75,7 @@ export const SalesChart: React.FC<SalesChartProps> = ({ data }) => {
           </p>
           <p className="text-sm text-gray-600">
             Valor Promedio por Orden:{" "}
-            {currencyFormatter.format(dataPoint.averageOrderValue)}
+            {currencyFormatter(dataPoint.averageOrderValue)}
           </p>
         </div>
       </div>

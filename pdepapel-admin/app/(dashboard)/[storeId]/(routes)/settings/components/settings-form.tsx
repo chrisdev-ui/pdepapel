@@ -20,7 +20,14 @@ import {
 import { useForm } from "react-hook-form";
 import z from "zod";
 
+import { RichTextEditor } from "@/components/editor/rich-text-editor";
 import { AlertModal } from "@/components/modals/alert-modal";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { ApiAlert } from "@/components/ui/api-alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,8 +42,8 @@ import { Heading } from "@/components/ui/heading";
 import { Icons } from "@/components/ui/icons";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Separator } from "@/components/ui/separator";
-import { Textarea } from "@/components/ui/textarea";
 import { useFormPersist } from "@/hooks/use-form-persist";
 import { useOrigin } from "@/hooks/use-origin";
 import { useToast } from "@/hooks/use-toast";
@@ -84,6 +91,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
   const [open, setOpen] = useState(false);
   const origin = useOrigin();
   const [loading, setLoading] = useState(false);
+  const [migrating, setMigrating] = useState(false);
   const { toast } = useToast();
 
   const defaultValues = useMemo(
@@ -293,10 +301,12 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
                         Teléfono
                       </FormLabel>
                       <FormControl>
-                        <Input
+                        <PhoneInput
                           disabled={loading}
-                          placeholder="Teléfono de contacto"
-                          {...field}
+                          placeholder=""
+                          value={field.value}
+                          onChange={field.onChange}
+                          defaultCountry="CO"
                         />
                       </FormControl>
                       <FormMessage />
@@ -465,58 +475,138 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
                 title="Políticas de la tienda"
                 description="Información para el catálogo"
               />
-              <div className="grid grid-cols-1 gap-4">
-                <FormField
-                  control={form.control}
-                  name="policies.shipping"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Política de envíos</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          disabled={loading}
-                          placeholder="Describe tu política de envíos"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+              <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="shipping">
+                  <AccordionTrigger>Política de envíos</AccordionTrigger>
+                  <AccordionContent>
+                    <FormField
+                      control={form.control}
+                      name="policies.shipping"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <RichTextEditor
+                              value={field.value}
+                              onChange={field.onChange}
+                              placeholder="Describe tu política de envíos"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </AccordionContent>
+                </AccordionItem>
+                <AccordionItem value="returns">
+                  <AccordionTrigger>Política de devoluciones</AccordionTrigger>
+                  <AccordionContent>
+                    <FormField
+                      control={form.control}
+                      name="policies.returns"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <RichTextEditor
+                              value={field.value}
+                              onChange={field.onChange}
+                              placeholder="Describe tu política de devoluciones"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </AccordionContent>
+                </AccordionItem>
+                <AccordionItem value="payment">
+                  <AccordionTrigger>Métodos de pago</AccordionTrigger>
+                  <AccordionContent>
+                    <FormField
+                      control={form.control}
+                      name="policies.payment"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <RichTextEditor
+                              value={field.value}
+                              onChange={field.onChange}
+                              placeholder="Describe los métodos de pago aceptados"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <Heading
+              title="Migración de datos"
+              description="Herramientas para migrar datos al nuevo sistema"
+            />
+            <div className="rounded-md border border-blue-200 bg-blue-50 p-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-blue-800">
+                    Activar Historial de Inventario
+                  </p>
+                  <p className="text-sm text-blue-600">
+                    Guarda tu inventario actual como punto de partida para
+                    comenzar a registrar todos los movimientos de tus productos.
+                    <br />
+                    <span className="font-bold">
+                      IMPORTANTE: Ejecutar solo una vez.
+                    </span>
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={loading || migrating}
+                  className="min-w-[140px] border-blue-600 text-blue-800 hover:bg-blue-100"
+                  onClick={async () => {
+                    if (
+                      !confirm(
+                        "¿Estás seguro? Esta acción debe realizarse solo una vez para inicializar el historial.",
+                      )
+                    ) {
+                      return;
+                    }
+                    try {
+                      setMigrating(true);
+                      setLoading(true); // Helper to disable other actions too
+                      const response = await axios.post(
+                        `/api/${params.storeId}/migration/inventory`,
+                      );
+                      toast({
+                        title: "Migración completada",
+                        description: `Se procesaron ${response.data.migrated} productos.`,
+                        variant: "success",
+                      });
+                    } catch (error) {
+                      toast({
+                        description: getErrorMessage(error),
+                        variant: "destructive",
+                      });
+                    } finally {
+                      setLoading(false);
+                      setMigrating(false);
+                    }
+                  }}
+                >
+                  {migrating ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Migrando...
+                    </>
+                  ) : (
+                    "Ejecutar Migración"
                   )}
-                />
-                <FormField
-                  control={form.control}
-                  name="policies.returns"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Política de devoluciones</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          disabled={loading}
-                          placeholder="Describe tu política de devoluciones"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="policies.payment"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Métodos de pago</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          disabled={loading}
-                          placeholder="Describe los métodos de pago aceptados"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                </Button>
               </div>
             </div>
           </div>

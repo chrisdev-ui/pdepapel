@@ -1,5 +1,6 @@
 import { fakerES_MX as faker, simpleFaker } from "@faker-js/faker";
 import { DiscountType, PrismaClient } from "@prisma/client";
+import { currencyFormatter } from "../../lib/utils";
 
 const NUMBER_OF_COUPONS = 25;
 
@@ -183,10 +184,10 @@ export async function seedCoupons(storeId: string, prismadb: PrismaClient) {
     const discountText =
       coupon.type === DiscountType.PERCENTAGE
         ? `${coupon.amount}%`
-        : `$${coupon.amount.toLocaleString()} COP`;
+        : `${currencyFormatter(coupon.amount)}`;
     const minOrderText =
       coupon.minOrderValue > 0
-        ? ` (min: $${coupon.minOrderValue.toLocaleString()})`
+        ? ` (min: ${currencyFormatter(coupon.minOrderValue)})`
         : "";
     console.log(
       `  • ${coupon.code}: ${discountText} off${minOrderText} - ${coupon.isActive ? "Active" : "Inactive"}`,

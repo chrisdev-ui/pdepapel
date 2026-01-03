@@ -488,15 +488,15 @@ const ProductsPage = ({
                   },
                 ]}
               >
-                {currencyFormatter.format(product.originalPrice)}
+                {currencyFormatter(product.originalPrice)}
               </Text>
               <Text style={[styles.productDetails, { fontWeight: 800 }]}>
-                {currencyFormatter.format(product.price)}
+                {currencyFormatter(product.price)}
               </Text>
             </View>
           ) : (
             <Text style={[styles.productDetails, { fontWeight: 800 }]}>
-              Precio: {currencyFormatter.format(product.price)}
+              Precio: {currencyFormatter(product.price)}
             </Text>
           )}
           <Text style={styles.productDetails}>Tamaño: {product.size.name}</Text>

@@ -63,7 +63,19 @@ async function main() {
   let skippedCount = 0;
   let errors: any[] = [];
 
-  for (const product of products) {
+  const spinnerChars = ["|", "/", "-", "\\"];
+  let spinnerIndex = 0;
+
+  for (let i = 0; i < products.length; i++) {
+    const product = products[i];
+
+    // Update spinner
+    const spinner = spinnerChars[spinnerIndex++ % spinnerChars.length];
+    const progress = `[${i + 1}/${products.length}]`;
+    process.stdout.write(
+      `\r${spinner} ${progress} Processing: ${product.name.substring(0, 30)}${product.name.length > 30 ? "..." : ""}          `,
+    );
+
     try {
       // Check if already migrated
       const existingMigration = await prisma.inventoryMovement.findFirst({
@@ -95,11 +107,11 @@ async function main() {
       });
 
       migratedCount++;
-      if (migratedCount % 10 === 0) {
-        process.stdout.write(".");
-      }
+      // No dot printing anymore
     } catch (error: any) {
-      console.error(`\nFailed to migrate ${product.name}:`, error.message);
+      process.stdout.write(
+        `\n❌ Failed to migrate ${product.name}: ${error.message}\n`,
+      );
       errors.push({ id: product.id, name: product.name, error: error.message });
     }
   }

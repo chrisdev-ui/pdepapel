@@ -7,7 +7,11 @@ import {
 } from "@prisma/client";
 import { EmailTemplate } from "@/components/email-template";
 import { resend } from "@/lib/resend";
-import { getReadablePaymentMethod, getReadableStatus } from "@/lib/utils";
+import {
+  currencyFormatter,
+  getReadablePaymentMethod,
+  getReadableStatus,
+} from "@/lib/utils";
 import { env } from "@/lib/env.mjs";
 
 function getOrderSummary(order: any) {
@@ -94,12 +98,7 @@ export const sendOrderEmail = async (
           city: order.city || undefined,
           trackingInfo: order.shipping?.trackingCode ?? undefined,
           email: order.email || undefined,
-          total: order.total
-            ? new Intl.NumberFormat("es-CO", {
-                style: "currency",
-                currency: "COP",
-              }).format(order.total)
-            : undefined,
+          total: order.total ? currencyFormatter(order.total) : undefined,
           address: order.address,
           phone: order.phone,
           orderSummary,
@@ -211,12 +210,7 @@ export const sendShippingEmail = async (
         paymentMethod: getReadablePaymentMethod(order.payment),
         trackingInfo: order.shipping?.trackingCode ?? undefined,
         email: order.email || undefined,
-        total: order.total
-          ? new Intl.NumberFormat("es-CO", {
-              style: "currency",
-              currency: "COP",
-            }).format(order.total)
-          : undefined,
+        total: order.total ? currencyFormatter(order.total) : undefined,
         address: order.address,
         city: order.city || undefined,
         phone: order.phone,

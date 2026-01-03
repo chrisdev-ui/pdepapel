@@ -44,7 +44,7 @@ export default async function InventoryPage({
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {currencyFormatter.format(summary.stockValue)}
+                {currencyFormatter(summary.stockValue)}
               </div>
               <p className="text-xs text-muted-foreground">
                 Base: Precio de Costo
@@ -61,7 +61,7 @@ export default async function InventoryPage({
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {currencyFormatter.format(summary.retailValue)}
+                {currencyFormatter(summary.retailValue)}
               </div>
               <p className="text-xs text-muted-foreground">
                 Mayor potencial de ingreso
@@ -161,7 +161,7 @@ export default async function InventoryPage({
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {currencyFormatter.format(summary.realizedRevenue)}
+                {currencyFormatter(summary.realizedRevenue)}
               </div>
               <p className="text-xs text-muted-foreground">
                 Ingresos por ventas (Histórico)
@@ -177,7 +177,7 @@ export default async function InventoryPage({
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {currencyFormatter.format(summary.realizedCOGS)}
+                {currencyFormatter(summary.realizedCOGS)}
               </div>
               <p className="text-xs text-muted-foreground">
                 Costo de mercancía vendida
@@ -193,7 +193,7 @@ export default async function InventoryPage({
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {currencyFormatter.format(summary.grossMargin)}
+                {currencyFormatter(summary.grossMargin)}
               </div>
               <p className="text-xs text-muted-foreground">
                 Beneficio bruto total

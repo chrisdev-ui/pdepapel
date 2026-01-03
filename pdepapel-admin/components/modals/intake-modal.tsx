@@ -9,6 +9,7 @@ import { useForm } from "react-hook-form";
 import * as z from "zod";
 
 import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import {
   Form,
   FormControl,
@@ -188,11 +189,11 @@ export const IntakeModal: React.FC<IntakeModalProps> = ({
                       Si se deja en 0, se usará el costo actual del producto.
                     </p>
                     <FormControl>
-                      <Input
+                      <CurrencyInput
                         disabled={loading}
                         placeholder="0"
-                        type="number"
-                        {...field}
+                        value={field.value}
+                        onChange={field.onChange}
                       />
                     </FormControl>
                     <FormMessage />

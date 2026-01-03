@@ -101,7 +101,9 @@ export async function getCustomers(storeId: string) {
     // Convert to array and calculate additional metrics
     const customerData = Array.from(customerMap.values()).map((customer) => {
       const averageOrderValue =
-        customer.paidOrders > 0 ? customer.totalSpent / customer.paidOrders : 0;
+        customer.paidOrders > 0
+          ? Math.ceil(customer.totalSpent / customer.paidOrders)
+          : 0;
 
       const totalItems = customer.orders.reduce((sum: number, order: any) => {
         return (

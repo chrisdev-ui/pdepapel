@@ -62,19 +62,19 @@ export const Analytics: React.FC<AnalyticsProps> = async ({
             <div>
               <h3 className="text-lg font-semibold">Ganancias brutas</h3>
               <p className="text-3xl font-bold">
-                {currencyFormatter.format(sales.totalGrossRevenue)}
+                {currencyFormatter(sales.totalGrossRevenue)}
               </p>
             </div>
             <div>
               <h3 className="text-lg font-semibold">Ganancias netas</h3>
               <p className="text-3xl font-bold">
-                {currencyFormatter.format(sales.totalNetRevenue)}
+                {currencyFormatter(sales.totalNetRevenue)}
               </p>
             </div>
             <div>
               <h3 className="text-lg font-semibold">Descuentos totales</h3>
               <p className="text-3xl font-bold">
-                {currencyFormatter.format(
+                {currencyFormatter(
                   sales.totalDiscounts + sales.totalCouponDiscounts,
                 )}
               </p>
@@ -90,7 +90,7 @@ export const Analytics: React.FC<AnalyticsProps> = async ({
             <div>
               <h3 className="text-lg font-semibold">Descuento promedio</h3>
               <p className="text-3xl font-bold">
-                {currencyFormatter.format(sales.averageDiscount)}
+                {currencyFormatter(sales.averageDiscount)}
               </p>
             </div>
             <div>
@@ -98,7 +98,7 @@ export const Analytics: React.FC<AnalyticsProps> = async ({
                 Descuento promedio por cupones
               </h3>
               <p className="text-3xl font-bold">
-                {currencyFormatter.format(sales.averageCouponDiscount)}
+                {currencyFormatter(sales.averageCouponDiscount)}
               </p>
             </div>
             <div>
@@ -106,7 +106,7 @@ export const Analytics: React.FC<AnalyticsProps> = async ({
                 Valor promedio de una órden
               </h3>
               <p className="text-3xl font-bold">
-                {currencyFormatter.format(sales.averageOrderValue)}
+                {currencyFormatter(sales.averageOrderValue)}
               </p>
             </div>
           </div>

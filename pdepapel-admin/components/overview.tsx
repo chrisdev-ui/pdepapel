@@ -65,20 +65,20 @@ export const Overview: React.FC<OverviewProps> = ({ data, year }) => {
       <div className="custom-tooltip rounded-lg border bg-white p-4 shadow-lg">
         <p className="mb-2 font-bold">{label}</p>
         <p className="text-sm text-gray-600">
-          {`Ingresos Brutos: ${currencyFormatter.format(subtotalPayload?.value ?? 0)}`}
+          {`Ingresos Brutos: ${currencyFormatter(subtotalPayload?.value ?? 0)}`}
         </p>
         {discountsPayload?.value && discountsPayload.value > 0 ? (
           <p className="text-sm text-red-600">
-            {`Descuentos: -${currencyFormatter.format(discountsPayload.value)}`}
+            {`Descuentos: -${currencyFormatter(discountsPayload.value)}`}
           </p>
         ) : null}
         {couponDiscountsPayload?.value && couponDiscountsPayload.value > 0 ? (
           <p className="text-sm text-orange-600">
-            {`Cupones: -${currencyFormatter.format(couponDiscountsPayload.value)}`}
+            {`Cupones: -${currencyFormatter(couponDiscountsPayload.value)}`}
           </p>
         ) : null}
         <p className="mt-2 border-t pt-2 text-sm font-semibold text-green-600">
-          {`Total Final: ${currencyFormatter.format(totalPayload?.value ?? 0)}`}
+          {`Total Final: ${currencyFormatter(totalPayload?.value ?? 0)}`}
         </p>
       </div>
     );

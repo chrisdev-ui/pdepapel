@@ -70,7 +70,9 @@ export async function getOrder(orderId: string, storeId: string) {
 
   let existingOrderProducts: ExistingOrderProduct[] = [];
   if (order && order.orderItems.length > 0) {
-    const existingProductIds = order.orderItems.map((item) => item.productId);
+    const existingProductIds = order.orderItems.map(
+      (item: { productId: string }) => item.productId,
+    );
 
     existingOrderProducts = await prismadb.product.findMany({
       where: {
@@ -125,6 +127,8 @@ export async function getOrder(orderId: string, storeId: string) {
   type ProductOption = {
     value: string;
     label: string;
+    name: string; // Clean name without SKU
+    sku: string;
     price: number;
     discountedPrice: number;
     offerLabel?: string;
@@ -132,11 +136,14 @@ export async function getOrder(orderId: string, storeId: string) {
     image: string;
     isAvailable: boolean;
     isArchived: boolean;
+    size?: string;
+    color?: string;
+    design?: string;
   };
 
   const allProductsMap = new Map<string, ProductOption>();
 
-  availableProducts.forEach((product) => {
+  availableProducts.forEach((product: (typeof availableProducts)[0]) => {
     const priceInfo = pricesMap.get(product.id);
     const variantInfo = [
       product.color?.name,
@@ -153,6 +160,8 @@ export async function getOrder(orderId: string, storeId: string) {
     allProductsMap.set(product.id, {
       value: product.id,
       label: `${labelName} - ${product.sku}`,
+      name: product.name,
+      sku: product.sku,
       price: product.price,
       discountedPrice: priceInfo?.price ?? product.price,
       offerLabel: priceInfo?.offerLabel ?? undefined,
@@ -160,10 +169,13 @@ export async function getOrder(orderId: string, storeId: string) {
       image: product.images[0]?.url || "",
       isAvailable: true,
       isArchived: false,
+      size: product.size?.name,
+      color: product.color?.name,
+      design: product.design?.name,
     });
   });
 
-  existingOrderProducts.forEach((product) => {
+  existingOrderProducts.forEach((product: ExistingOrderProduct) => {
     const isAvailable = !product.isArchived && product.stock > 0;
 
     const variantInfo = [
@@ -188,6 +200,8 @@ export async function getOrder(orderId: string, storeId: string) {
     allProductsMap.set(product.id, {
       value: product.id,
       label,
+      name: product.name,
+      sku: product.sku,
       price: product.price,
       discountedPrice: priceInfo?.price ?? product.price,
       offerLabel: priceInfo?.offerLabel ?? undefined,
@@ -195,6 +209,9 @@ export async function getOrder(orderId: string, storeId: string) {
       image: product.images[0]?.url || "",
       isAvailable,
       isArchived: product.isArchived,
+      size: product.size?.name,
+      color: product.color?.name,
+      design: product.design?.name,
     });
   });
 

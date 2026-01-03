@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { DataTableCellCurrency } from "@/components/ui/data-table-cell-currency";
 import { DataTableCellDate } from "@/components/ui/data-table-cell-date";
 import { DataTableCellNumber } from "@/components/ui/data-table-cell-number";
+
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import {
   Tooltip,
@@ -13,7 +14,7 @@ import {
 } from "@/components/ui/tooltip";
 import { WhatsappButton } from "@/components/whatsapp-button";
 import { ColumnDef } from "@tanstack/react-table";
-import { Phone, User } from "lucide-react";
+import { User } from "lucide-react";
 import { CustomerData } from "../server/get-customers";
 import { CellAction } from "./cell-action";
 
@@ -51,10 +52,16 @@ export const columns: ColumnDef<CustomerColumn>[] = [
       <DataTableColumnHeader column={column} title="Teléfono" />
     ),
     cell: ({ row }) => (
-      <div className="flex items-center space-x-2">
-        <Phone className="h-4 w-4 text-muted-foreground" />
-        <span className="font-mono">{row.original.phone}</span>
-      </div>
+      <WhatsappButton
+        customer={{
+          fullName: row.original.fullName,
+          phone: row.original.phone,
+          totalOrders: row.original.totalOrders,
+          totalSpent: row.original.totalSpent,
+          recentOrders: row.original.recentOrders,
+        }}
+        withText
+      />
     ),
   },
   {
@@ -196,23 +203,7 @@ export const columns: ColumnDef<CustomerColumn>[] = [
     ),
     cell: ({ row }) => <DataTableCellDate date={row.original.lastOrderDate!} />,
   },
-  {
-    id: "whatsapp",
-    header: "WhatsApp",
-    cell: ({ row }) => (
-      <WhatsappButton
-        customer={{
-          fullName: row.original.fullName,
-          phone: row.original.phone,
-          totalOrders: row.original.totalOrders,
-          totalSpent: row.original.totalSpent,
-          recentOrders: row.original.recentOrders,
-        }}
-        compact
-      />
-    ),
-    enableSorting: false,
-  },
+
   {
     id: "actions",
     cell: ({ row }) => <CellAction data={row.original} />,

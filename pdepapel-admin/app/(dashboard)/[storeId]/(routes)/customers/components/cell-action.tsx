@@ -71,7 +71,9 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
         <DropdownMenuItem
           className="cursor-pointer"
           onClick={() => {
-            const whatsappUrl = `https://wa.me/${data.phone.replace(/\D/g, "")}`;
+            const cleaned = data.phone.replace(/\D/g, "");
+            const phone = cleaned.startsWith("57") ? cleaned : `57${cleaned}`;
+            const whatsappUrl = `https://wa.me/${phone}`;
             window.open(whatsappUrl, "_blank");
           }}
         >

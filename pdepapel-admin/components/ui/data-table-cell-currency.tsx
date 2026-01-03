@@ -12,7 +12,7 @@ export function DataTableCellCurrency({
 }: DataTableCellCurrencyProps) {
   return (
     <div className={className} {...props}>
-      {currencyFormatter.format(value)}
+      {currencyFormatter(value)}
     </div>
   );
 }

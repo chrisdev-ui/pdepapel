@@ -126,7 +126,7 @@ export const Inventory: React.FC<InventoryProps> = async ({ params }) => {
                 </h3>
               </div>
               <p className="text-3xl font-bold">
-                {currencyFormatter.format(totalCost)}
+                {currencyFormatter(totalCost)}
               </p>
             </div>
             <div>
@@ -135,7 +135,7 @@ export const Inventory: React.FC<InventoryProps> = async ({ params }) => {
                 <h3 className="text-lg font-semibold">Ingresos potenciales</h3>
               </div>
               <p className="text-3xl font-bold">
-                {currencyFormatter.format(potentialRevenue)}
+                {currencyFormatter(potentialRevenue)}
               </p>
             </div>
             <div>
@@ -144,7 +144,7 @@ export const Inventory: React.FC<InventoryProps> = async ({ params }) => {
                 <h3 className="text-lg font-semibold">Ganancia potencial</h3>
               </div>
               <p className="text-3xl font-bold">
-                {currencyFormatter.format(potentialProfit)}
+                {currencyFormatter(potentialProfit)}
               </p>
             </div>
           </div>

@@ -8,9 +8,10 @@ import { RefreshButton } from "@/components/ui/refresh-button";
 import { Separator } from "@/components/ui/separator";
 import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
-import { Download } from "lucide-react";
-import { useParams } from "next/navigation";
+import { Download, Edit, RefreshCw } from "lucide-react"; // Added imports
+import { useParams, useRouter } from "next/navigation";
 import { useId, useState } from "react";
+import { BulkManualUpdateModal } from "./bulk-manual-update-modal"; // New Component
 import { ShipmentColumn, columns } from "./columns";
 import { ShipmentFilters } from "./shipment-filters";
 
@@ -21,8 +22,12 @@ interface ShipmentsClientProps {
 const ShipmentsClient: React.FC<ShipmentsClientProps> = ({ data }) => {
   const id = useId();
   const params = useParams();
+  const router = useRouter();
   const { toast } = useToast();
+
   const [exporting, setExporting] = useState(false);
+  const [syncing, setSyncing] = useState(false); // Sync state
+  const [openManualModal, setOpenManualModal] = useState(false); // Modal state
 
   const handleExport = async () => {
     try {
@@ -58,14 +63,66 @@ const ShipmentsClient: React.FC<ShipmentsClientProps> = ({ data }) => {
     }
   };
 
+  const onSync = async () => {
+    try {
+      setSyncing(true);
+      const response = await fetch(
+        `/api/${params.storeId}/${Models.Shipments}/sync`,
+        { method: "POST" },
+      );
+
+      if (!response.ok) throw new Error("Sync failed");
+
+      const result = await response.json();
+
+      toast({
+        title: "Sincronización Completada",
+        description: `Se actualizaron ${result.updated} envíos de EnvioClick.`,
+      });
+
+      router.refresh();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Falló la sincronización con EnvioClick.",
+        variant: "destructive",
+      });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
     <>
+      <BulkManualUpdateModal
+        isOpen={openManualModal}
+        onClose={() => setOpenManualModal(false)}
+      />
       <div className="flex items-center justify-between">
         <Heading
           title={`Envíos (${data.length})`}
           description="Maneja todos los envíos de tu tienda"
         />
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setOpenManualModal(true)}
+          >
+            <Edit className="mr-2 h-4 w-4" />
+            Actualizar Manuales
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onSync}
+            disabled={syncing}
+          >
+            <RefreshCw
+              className={`mr-2 h-4 w-4 ${syncing ? "animate-spin" : ""}`}
+            />
+            Sync EnvioClick
+          </Button>
           <Button
             variant="outline"
             size="sm"

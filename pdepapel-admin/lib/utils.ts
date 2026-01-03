@@ -36,13 +36,18 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export const currencyFormatter = new Intl.NumberFormat("es-CO", {
-  style: "currency",
-  currency: "COP",
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-  useGrouping: true,
-});
+import { formatValue } from "react-currency-input-field";
+import { parsePhoneNumber } from "libphonenumber-js";
+
+export function currencyFormatter(value: number | string | undefined) {
+  return formatValue({
+    value: value?.toString(),
+    intlConfig: {
+      locale: "es-CO",
+      currency: "COP",
+    },
+  });
+}
 
 export const numberFormatter = new Intl.NumberFormat("es-CO", {
   minimumFractionDigits: 0,
@@ -197,19 +202,14 @@ export const capitalizeFirstLetter = (string: string) => {
   return string.charAt(0).toUpperCase() + string.slice(1);
 };
 
-export const formatPhoneNumber = (phone: string) => {
-  //Filter only numbers from the input
-  const cleaned = ("" + phone).replace(/\D/g, "");
-
-  //Check if the input is of correct
-  const match = cleaned.match(/^(57|)?(\d{3})(\d{3})(\d{4})$/);
-
-  if (match) {
-    const intlCode = match[1] ? "+57 " : "";
-    return [intlCode, "(", match[2], ") ", match[3], "-", match[4]].join("");
+export const formatPhoneNumber = (phone: string | null | undefined) => {
+  if (!phone) return null;
+  try {
+    const phoneNumber = parsePhoneNumber(phone);
+    return phoneNumber ? phoneNumber.format("INTERNATIONAL") : phone;
+  } catch (error) {
+    return phone;
   }
-
-  return null;
 };
 
 export async function checkIfStoreOwner(

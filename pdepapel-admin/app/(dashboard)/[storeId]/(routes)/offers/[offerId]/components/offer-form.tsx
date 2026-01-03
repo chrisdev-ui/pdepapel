@@ -3,6 +3,7 @@
 import { AlertModal } from "@/components/modals/alert-modal";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import {
   Form,
@@ -42,7 +43,6 @@ import axios from "axios";
 import {
   ArrowLeft,
   CheckSquare,
-  DollarSign,
   Eraser,
   Loader2,
   Percent,
@@ -362,24 +362,25 @@ export const OfferForm: React.FC<OfferFormProps> = ({
                 <FormItem>
                   <FormLabel isRequired>Monto del descuento</FormLabel>
                   <FormControl>
-                    <div className="relative">
-                      {form.watch("type") === DiscountType.PERCENTAGE ? (
+                    {form.watch("type") === DiscountType.PERCENTAGE ? (
+                      <div className="relative">
                         <Percent className="absolute left-3 top-3 h-4 w-4" />
-                      ) : (
-                        <DollarSign className="absolute left-3 top-3 h-4 w-4" />
-                      )}
-                      <Input
-                        type="number"
+                        <Input
+                          type="number"
+                          disabled={loading}
+                          className="pl-8"
+                          placeholder="10"
+                          {...field}
+                        />
+                      </div>
+                    ) : (
+                      <CurrencyInput
+                        placeholder="$ 10.000"
                         disabled={loading}
-                        className="pl-8"
-                        placeholder={
-                          form.watch("type") === DiscountType.PERCENTAGE
-                            ? "10"
-                            : "10000"
-                        }
-                        {...field}
+                        value={field.value}
+                        onChange={field.onChange}
                       />
-                    </div>
+                    )}
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -741,7 +742,7 @@ export const OfferForm: React.FC<OfferFormProps> = ({
                                   {product.name}
                                 </FormLabel>
                                 <p className="text-xs text-muted-foreground">
-                                  {currencyFormatter.format(product.price)} •{" "}
+                                  {currencyFormatter(product.price)} •{" "}
                                   {product.category.name}
                                   {product.stock <= 5 && (
                                     <span className="ml-2 text-red-500">

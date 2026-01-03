@@ -442,7 +442,7 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
                         Flete base
                       </p>
                       <p className="text-sm font-medium">
-                        {currencyFormatter.format(shipping.flete)}
+                        {currencyFormatter(shipping.flete)}
                       </p>
                     </div>
                   )}
@@ -453,7 +453,7 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
                         Seguro mínimo
                       </p>
                       <p className="text-sm font-medium">
-                        {currencyFormatter.format(
+                        {currencyFormatter(
                           shipping.minimumInsurance,
                         )}
                       </p>
@@ -558,7 +558,7 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground">Costo de envío</p>
               <p className="text-lg font-bold">
-                {currencyFormatter.format(shipping.cost)}
+                {currencyFormatter(shipping.cost)}
               </p>
             </div>
           </>

@@ -27,6 +27,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AsyncProductSelect } from "@/components/ui/async-product-select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import {
   Form,
   FormControl,
@@ -36,7 +37,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Heading } from "@/components/ui/heading";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -545,11 +545,11 @@ export const RestockOrderForm: React.FC<RestockOrderFormProps> = ({
                           <FormControl>
                             <div className="relative">
                               <DollarSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                              <Input
-                                type="number"
+                              <CurrencyInput
                                 disabled={loading || !isDraft}
                                 className="pl-8"
-                                {...field}
+                                value={field.value}
+                                onChange={field.onChange}
                               />
                             </div>
                           </FormControl>
@@ -592,11 +592,11 @@ export const RestockOrderForm: React.FC<RestockOrderFormProps> = ({
                     <FormControl>
                       <div className="relative">
                         <DollarSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          type="number"
+                        <CurrencyInput
                           disabled={loading || !isDraft}
                           className="w-32 pl-8 text-right"
-                          {...field}
+                          value={field.value}
+                          onChange={field.onChange}
                         />
                       </div>
                     </FormControl>
@@ -606,7 +606,7 @@ export const RestockOrderForm: React.FC<RestockOrderFormProps> = ({
             </div>
             <div className="text-lg font-bold">
               Total Estimado:{" "}
-              {currencyFormatter.format(
+              {currencyFormatter(
                 totalAmount + (form.watch("shippingCost") || 0),
               )}
             </div>

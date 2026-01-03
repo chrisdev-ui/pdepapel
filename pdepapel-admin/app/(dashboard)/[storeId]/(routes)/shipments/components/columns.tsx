@@ -1,9 +1,9 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { DataTableCellCurrency } from "@/components/ui/data-table-cell-currency";
 import { DataTableCellDate } from "@/components/ui/data-table-cell-date";
+import { DataTableCellPhone } from "@/components/ui/data-table-cell-phone";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { Models } from "@/constants";
 import { getCarrierInfo } from "@/constants/shipping";
@@ -18,25 +18,6 @@ import { CellAction } from "./cell-action";
 export type ShipmentColumn = Awaited<ReturnType<typeof getShipments>>[number];
 
 export const columns: ColumnDef<ShipmentColumn>[] = [
-  {
-    id: "select",
-    header: ({ table }) => (
-      <Checkbox
-        checked={table.getIsAllPageRowsSelected()}
-        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-        aria-label="Seleccionar todos"
-      />
-    ),
-    cell: ({ row }) => (
-      <Checkbox
-        checked={row.getIsSelected()}
-        onCheckedChange={(value) => row.toggleSelected(!!value)}
-        aria-label="Seleccionar fila"
-      />
-    ),
-    enableSorting: false,
-    enableHiding: false,
-  },
   {
     accessorKey: "trackingCode",
     header: ({ column }) => (
@@ -247,7 +228,10 @@ export const columns: ColumnDef<ShipmentColumn>[] = [
       return (
         <div>
           <div className="font-medium">{order.fullName}</div>
-          <div className="text-sm text-muted-foreground">{order.phone}</div>
+          <DataTableCellPhone
+            phoneNumber={order.phone}
+            className="text-sm text-muted-foreground"
+          />
         </div>
       );
     },

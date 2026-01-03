@@ -8,12 +8,11 @@ import { DataTableCellNumber } from "@/components/ui/data-table-cell-number";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { UsageCount } from "@/components/usage-count";
 import { discountOptions, Models, ModelsColumns } from "@/constants";
-import { DiscountType } from "@prisma/client";
+import { Coupon, DiscountType } from "@prisma/client";
 import { ColumnDef } from "@tanstack/react-table";
-import { getCoupons } from "../server/get-coupons";
 import { CellAction } from "./cell-action";
 
-export type CouponColumn = Awaited<ReturnType<typeof getCoupons>>[number];
+export type CouponColumn = Coupon;
 
 const columnNames = ModelsColumns[Models.Coupons];
 
