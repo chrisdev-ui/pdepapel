@@ -440,6 +440,109 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     };
   }, [form]);
 
+  const watchedColorIds = form.watch("colorIds");
+  const watchedSizeIds = form.watch("sizeIds");
+  const watchedDesignIds = form.watch("designIds");
+  const watchedCategoryId = form.watch("categoryId");
+
+  // AUTO-SYNC VARIANTS HOOK
+  useEffect(() => {
+    // We only trigger if explicit attributes are selected.
+    // Debounce to avoid churn
+    const timer = setTimeout(async () => {
+      if (
+        !watchedCategoryId ||
+        (watchedColorIds.length === 0 &&
+          watchedSizeIds.length === 0 &&
+          watchedDesignIds.length === 0)
+      ) {
+        return;
+      }
+
+      const { generateVariants } = await import("@/lib/variant-generator");
+      const catObj = categories.find((x) => x.id === watchedCategoryId);
+      const sizesObj = sizes.filter((x) => watchedSizeIds.includes(x.id));
+      const colorsObj = colors.filter((x) => watchedColorIds.includes(x.id));
+      const designsObj = designs.filter((x) => watchedDesignIds.includes(x.id));
+
+      if (!catObj) return;
+
+      // 1. Generate Matrix
+      const sList = sizesObj.length > 0 ? sizesObj : [];
+      const cList = colorsObj.length > 0 ? colorsObj : [];
+      const dList = designsObj.length > 0 ? designsObj : [];
+
+      if (sList.length === 0 || cList.length === 0 || dList.length === 0) {
+        return;
+      }
+
+      const result = generateVariants({
+        category: { id: catObj.id, name: catObj.name },
+        sizes: sList.map((x) => ({ id: x.id, name: x.name, value: x.value })),
+        colors: cList.map((x) => ({ id: x.id, name: x.name, value: x.value })),
+        designs: dList.map((x) => ({ id: x.id, name: x.name, value: x.name })),
+      });
+
+      const generatedVariants = result;
+
+      // 2. Diff and Merge
+      const currentVars = form.getValues("variants") || [];
+      const mergedVariants: any[] = [];
+      const usedCurrentIndices = new Set<number>();
+
+      for (const gen of generatedVariants) {
+        // Find match in current (by Attributes)
+        const matchIndex = currentVars.findIndex(
+          (v: any, idx) =>
+            !usedCurrentIndices.has(idx) &&
+            v.size?.id === gen.sizeId &&
+            v.color?.id === gen.colorId &&
+            v.design?.id === gen.designId,
+        );
+
+        if (matchIndex !== -1) {
+          // PRESERVE
+          usedCurrentIndices.add(matchIndex);
+          mergedVariants.push(currentVars[matchIndex]);
+        } else {
+          // ADD NEW
+          mergedVariants.push({
+            sku: gen.sku,
+            name: gen.name,
+            price: form.getValues("price") || 0,
+            acqPrice: form.getValues("acqPrice") || 0,
+            stock: form.getValues("defaultStock") || 0,
+            supplierId: form.getValues("defaultSupplier") || "",
+            isFeatured: false,
+            isArchived: false,
+            size: sizesObj.find((x) => x.id === gen.sizeId) || { name: "?" },
+            color: colorsObj.find((x) => x.id === gen.colorId) || { name: "?" },
+            design: designsObj.find((x) => x.id === gen.designId) || {
+              name: "?",
+            },
+          });
+        }
+      }
+
+      // Update State
+      if (JSON.stringify(mergedVariants) !== JSON.stringify(currentVars)) {
+        form.setValue("variants", mergedVariants, { shouldDirty: true });
+      }
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [
+    watchedColorIds,
+    watchedSizeIds,
+    watchedDesignIds,
+    watchedCategoryId,
+    categories,
+    sizes,
+    colors,
+    designs,
+    form,
+  ]);
+
   // Form Persistence
   const { clearStorage } = useFormPersist({
     form,

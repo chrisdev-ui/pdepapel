@@ -168,6 +168,7 @@ export async function POST(
                 },
               },
             });
+          } else {
             // CREATE NEW PRODUCT
             const newProduct = await tx.product.create({
               data: {
@@ -205,9 +206,8 @@ export async function POST(
 
       // Execute Initial Movements
       if (initialMovements.length > 0) {
-        const { createInventoryMovementBatch } = await import(
-          "@/lib/inventory"
-        );
+        const { createInventoryMovementBatch } =
+          await import("@/lib/inventory");
         await createInventoryMovementBatch(tx, initialMovements);
       }
 
