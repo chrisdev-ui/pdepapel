@@ -117,6 +117,7 @@ import {
 import { ENVIOCLICK_LIMITS, getCarrierInfo } from "@/constants/shipping";
 import { getErrorMessage } from "@/lib/api-errors";
 import { cn, currencyFormatter } from "@/lib/utils";
+import { isValidPhoneNumber } from "react-phone-number-input";
 import { getBoxes } from "../server/get-boxes";
 import { getCoupons } from "../server/get-coupons";
 import { type GetOrderResult, type ProductOption } from "../server/get-order";
@@ -177,11 +178,9 @@ const formSchema = z
         ENVIOCLICK_LIMITS.email.max,
         `El correo no puede exceder ${ENVIOCLICK_LIMITS.email.max} caracteres`,
       ),
-    phone: z
-      .string()
-      .min(10, "El número telefónico debe tener 10 dígitos")
-      .max(10, "El número telefónico debe tener 10 dígitos")
-      .regex(/^\d+$/, "Solo se permiten números"),
+    phone: z.string().refine(isValidPhoneNumber, {
+      message: "Por favor, escribe un número de teléfono válido",
+    }),
     address: z
       .string()
       .min(1, "Debes agregar una dirección")

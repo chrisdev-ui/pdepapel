@@ -51,6 +51,7 @@ import { getErrorMessage } from "@/lib/api-errors";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { isValidPhoneNumber } from "react-phone-number-input";
 
 interface SettingsFormProps {
   initialData: Store & {
@@ -65,7 +66,9 @@ interface SettingsFormProps {
 const formSchema = z.object({
   name: z.string().min(1, "El nombre de la tienda no puede estar vacío"),
   logoUrl: z.string().optional(),
-  phone: z.string().optional(),
+  phone: z.string().refine(isValidPhoneNumber, {
+    message: "Por favor, escribe un número de teléfono válido",
+  }),
   email: z.string().email("El email no es válido").optional().or(z.literal("")),
   address: z.string().optional(),
   instagram: z.string().optional(),

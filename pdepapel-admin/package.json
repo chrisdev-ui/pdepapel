@@ -12,8 +12,8 @@
     "lint": "next lint",
     "postinstall": "prisma generate",
     "format:prettier": "prettier --write \"./**/*.{js,jsx,mjs,cjs,ts,tsx,json}\"",
-    "export:products": "ts-node prisma/utils/products-to-csv.ts",
-    "export:products-merchant": "ts-node prisma/utils/products-to-google-merchant.ts",
+    "export:products": "tsx prisma/utils/products-to-csv.ts",
+    "export:products-merchant": "tsx prisma/utils/products-to-google-merchant.ts",
     "update:orders": "ts-node prisma/scripts/update-orders-totals.ts",
     "cleanup:orphaned-shipments": "ts-node scripts/cleanup-orphaned-shipments.ts",
     "seed:boxes": "ts-node prisma/seed/seed-boxes.ts"
@@ -98,6 +98,7 @@
     "@types/node": "^20",
     "@types/react": "^18.2.48",
     "@types/react-dom": "^18.2.18",
+    "@types/uuid": "^10.0.0",
     "autoprefixer": "^10",
     "eslint": "^8",
     "eslint-config-next": "^14.1.0",
@@ -106,6 +107,9 @@
     "prettier-plugin-tailwindcss": "^0.5.11",
     "prisma": "^6.19.0",
     "tailwindcss": "^3",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.7.3"
   }
 }
