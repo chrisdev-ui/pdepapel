@@ -134,16 +134,14 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
                         )}
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <Currency
-                          className="text-lg"
-                          value={item.discountedPrice ?? item.price}
-                        />
-                        {item.discountedPrice &&
-                          item.discountedPrice < Number(item.price) && (
-                            <span className="animate-pulse rounded bg-pink-froly px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                              Oferta
-                            </span>
-                          )}
+                        <Currency className="text-lg" value={item.price} />
+                        {(item.hasDiscount ||
+                          (item.originalPrice &&
+                            item.originalPrice > Number(item.price))) && (
+                          <span className="animate-pulse rounded bg-pink-froly px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                            Oferta
+                          </span>
+                        )}
                       </div>
                     </div>
                     <button

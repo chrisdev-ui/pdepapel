@@ -134,16 +134,19 @@ export const calculateTotals = (
   shippingCost: number = 0,
 ) => {
   // Calculate subtotal using discounted prices when available
+  // Calculate subtotal using effective price
   const subtotal = orderItems.reduce((total, item) => {
-    const itemPrice = item.discountedPrice ?? Number(item.price);
-    return total + itemPrice * Number(item.quantity ?? 1);
+    return total + Number(item.price) * Number(item.quantity ?? 1);
   }, 0);
 
   // Calculate total product-level savings (from offers)
   const productSavings = orderItems.reduce((total, item) => {
-    if (item.discountedPrice && item.discountedPrice < Number(item.price)) {
+    if (
+      item.hasDiscount ||
+      (item.originalPrice && item.originalPrice > Number(item.price))
+    ) {
       const savings =
-        (Number(item.price) - item.discountedPrice) *
+        (Number(item.originalPrice) - Number(item.price)) *
         Number(item.quantity ?? 1);
       return total + savings;
     }

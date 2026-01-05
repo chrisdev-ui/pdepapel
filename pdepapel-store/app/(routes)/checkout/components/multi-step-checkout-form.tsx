@@ -632,16 +632,14 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        {item.discountedPrice &&
-                        item.discountedPrice < Number(item.price) ? (
+                        {item.hasDiscount ||
+                        (item.originalPrice &&
+                          item.originalPrice > Number(item.price)) ? (
                           <>
-                            <Currency
-                              className="text-lg"
-                              value={item.discountedPrice}
-                            />
+                            <Currency className="text-lg" value={item.price} />
                             <Currency
                               className="text-sm text-gray-500 line-through"
-                              value={item.price}
+                              value={item.originalPrice}
                             />
                           </>
                         ) : (

@@ -170,12 +170,13 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
       <h1 className="font-serif text-3xl font-bold">{data?.name}</h1>
       <div className="mt-3 flex items-end justify-between">
         <div className="flex flex-col gap-1 text-2xl">
-          {data.discountedPrice && data.discountedPrice < Number(data.price) ? (
+          {data.hasDiscount ||
+          (data.originalPrice && data.originalPrice > Number(data.price)) ? (
             <>
               <div className="flex items-center gap-3">
-                <Currency value={data.discountedPrice} />
+                <Currency value={data.price} />
                 <Currency
-                  value={data.price}
+                  value={data.originalPrice}
                   className="text-lg text-gray-500 line-through"
                 />
               </div>
@@ -186,11 +187,11 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
                   currency: "COP",
                   minimumFractionDigits: 0,
                   maximumFractionDigits: 0,
-                }).format(Number(data.price) - data.discountedPrice)}{" "}
+                }).format(Number(data.originalPrice) - Number(data.price))}{" "}
                 (
                 {Math.round(
-                  ((Number(data.price) - data.discountedPrice) /
-                    Number(data.price)) *
+                  ((Number(data.originalPrice) - Number(data.price)) /
+                    Number(data.originalPrice)) *
                     100,
                 )}
                 %)

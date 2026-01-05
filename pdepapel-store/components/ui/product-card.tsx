@@ -187,13 +187,14 @@ const ProductCard: React.FC<ProductCardProps> = ({
               <Currency value={product.minPrice ?? product.price} />
             </div>
           )
-        ) : product.discountedPrice &&
-          product.discountedPrice < Number(product.price) ? (
+        ) : product.hasDiscount ||
+          (product.originalPrice &&
+            product.originalPrice > Number(product.price)) ? (
           <>
             <div className="flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
-              <Currency value={product.discountedPrice} className="text-2xl" />
+              <Currency value={product.price} className="text-2xl" />
               <Currency
-                value={product.price}
+                value={product.originalPrice}
                 className="text-sm text-gray-500 line-through"
               />
             </div>
@@ -204,11 +205,13 @@ const ProductCard: React.FC<ProductCardProps> = ({
                 currency: "COP",
                 minimumFractionDigits: 0,
                 maximumFractionDigits: 0,
-              }).format(Number(product.price) - product.discountedPrice)}{" "}
+              }).format(
+                Number(product.originalPrice) - Number(product.price),
+              )}{" "}
               (
               {Math.round(
-                ((Number(product.price) - product.discountedPrice) /
-                  Number(product.price)) *
+                ((Number(product.originalPrice) - Number(product.price)) /
+                  Number(product.originalPrice)) *
                   100,
               )}
               %)

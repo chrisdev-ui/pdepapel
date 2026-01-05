@@ -18,7 +18,8 @@ export type WishlistColumn = {
   imageUrl: string;
   name: string;
   price: string | number;
-  discountedPrice?: number;
+  originalPrice?: number;
+  hasDiscount?: boolean;
   offerLabel?: string | null;
   stock: string | number;
   createdAt: Date;
@@ -100,17 +101,15 @@ export const columns: ColumnDef<WishlistColumn>[] = [
     ),
     cell: ({ row }) => (
       <div className="flex flex-col gap-1">
-        {row.original.discountedPrice &&
-        row.original.discountedPrice < Number(row.original.price) ? (
+        {row.original.hasDiscount ||
+        (row.original.originalPrice &&
+          row.original.originalPrice > Number(row.original.price)) ? (
           <>
             <div className="flex items-center gap-2">
-              <Currency
-                className="text-lg"
-                value={row.original.discountedPrice}
-              />
+              <Currency className="text-lg" value={row.original.price} />
               <Currency
                 className="text-sm text-gray-500 line-through"
-                value={row.original.price}
+                value={row.original.originalPrice}
               />
             </div>
             <span className="text-xs text-green-600">
@@ -121,7 +120,7 @@ export const columns: ColumnDef<WishlistColumn>[] = [
                 minimumFractionDigits: 0,
                 maximumFractionDigits: 0,
               }).format(
-                Number(row.original.price) - row.original.discountedPrice,
+                Number(row.original.originalPrice) - Number(row.original.price),
               )}
             </span>
             {row.original.offerLabel && (

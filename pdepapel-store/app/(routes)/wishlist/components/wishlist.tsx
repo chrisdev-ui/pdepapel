@@ -31,7 +31,9 @@ export function Wishlist() {
     imageUrl: item.images[0].url,
     name: item.name,
     price: item.price,
-    discountedPrice: item.discountedPrice,
+
+    originalPrice: item.originalPrice,
+    hasDiscount: item.hasDiscount,
     offerLabel: item.offerLabel,
     stock: item.stock,
     createdAt: item.addedOn,

@@ -47,8 +47,11 @@ export async function GET(
     return NextResponse.json(
       {
         ...product,
-        discountedPrice: productWithDiscount.price,
+        price: productWithDiscount.price, // EFFECTIVE PRICE
+        originalPrice: product.price, // BASE PRICE
+        discountedPrice: productWithDiscount.price, // Alias
         offerLabel: productWithDiscount.offerLabel,
+        hasDiscount: productWithDiscount.discount > 0,
       },
       {
         headers: CACHE_HEADERS.DYNAMIC,

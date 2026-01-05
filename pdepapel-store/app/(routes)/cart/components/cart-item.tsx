@@ -72,13 +72,13 @@ export const CartItem: React.FC<CartItemProps> = ({ item }) => {
               initialValue={item?.quantity ?? 1}
               onValueChange={onUpdateQuantity}
             />
-            {item.discountedPrice &&
-            item.discountedPrice < Number(item.price) ? (
+            {item.hasDiscount ||
+            (item.originalPrice && item.originalPrice > Number(item.price)) ? (
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2">
-                  <Currency value={item.discountedPrice} />
+                  <Currency value={item.price} />
                   <Currency
-                    value={item.price}
+                    value={item.originalPrice}
                     className="text-sm text-gray-500 line-through"
                   />
                 </div>
@@ -90,7 +90,7 @@ export const CartItem: React.FC<CartItemProps> = ({ item }) => {
                     minimumFractionDigits: 0,
                     maximumFractionDigits: 0,
                   }).format(
-                    (Number(item.price) - item.discountedPrice) *
+                    (Number(item.originalPrice) - Number(item.price)) *
                       Number(item.quantity ?? 1),
                   )}
                 </span>
