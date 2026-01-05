@@ -107,6 +107,7 @@ export const IntakeModal: React.FC<IntakeModalProps> = ({
         productId,
         variantId,
         ...values,
+        type: values.type === "ADJUSTMENT" ? "MANUAL_ADJUSTMENT" : values.type,
         quantity: signedQuantity,
       };
 
