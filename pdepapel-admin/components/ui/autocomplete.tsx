@@ -148,7 +148,7 @@ export const AutoComplete = ({
                     return (
                       <CommandItem
                         key={option.value}
-                        value={option.label}
+                        value={option.label.replace(/"/g, "")}
                         onMouseDown={(event) => {
                           event.preventDefault();
                           event.stopPropagation();

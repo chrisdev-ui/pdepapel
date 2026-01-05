@@ -36,6 +36,7 @@ const formSchema = z.object({
   type: z.enum(
     MANUAL_ADJUSTMENT_OPTIONS.map((opt) => opt.value) as [string, ...string[]],
   ),
+  action: z.enum(["add", "subtract"]),
   quantity: z.coerce.number().min(1, "Cantidad debe ser al menos 1"),
   reason: z.string().min(3, "Razón es requerida (min 3 caracteres)"),
   description: z.string().optional(),
@@ -64,6 +65,7 @@ export const AdjustInventoryModal: React.FC<AdjustInventoryModalProps> = ({
     defaultValues: {
       productId: "",
       type: "MANUAL_ADJUSTMENT",
+      action: "add",
       quantity: 1,
       reason: "",
       description: "",
@@ -79,7 +81,16 @@ export const AdjustInventoryModal: React.FC<AdjustInventoryModalProps> = ({
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       setLoading(true);
-      await axios.post(`/api/${params.storeId}/inventory`, values);
+      // Determine sign based on action
+      const signedQuantity =
+        values.action === "subtract" ? -values.quantity : values.quantity;
+
+      const payload = {
+        ...values,
+        quantity: signedQuantity,
+      };
+
+      await axios.post(`/api/${params.storeId}/inventory`, payload);
       toast({
         title: "Inventario ajustado correctamente.",
         variant: "success",
@@ -130,7 +141,25 @@ export const AdjustInventoryModal: React.FC<AdjustInventoryModalProps> = ({
                   <FormLabel isRequired>Tipo de Ajuste</FormLabel>
                   <Select
                     disabled={loading}
-                    onValueChange={field.onChange}
+                    onValueChange={(val) => {
+                      field.onChange(val);
+                      // Force action based on type
+                      if (
+                        ["DAMAGE", "LOST", "STORE_USE", "PROMOTION"].includes(
+                          val,
+                        )
+                      ) {
+                        form.setValue("action", "subtract");
+                      } else if (
+                        ["PURCHASE", "RETURN", "INITIAL_INTAKE"].includes(val)
+                      ) {
+                        form.setValue("action", "add");
+                      } else {
+                        // For MANUAL_ADJUSTMENT, reset to default or keep current?
+                        // Resetting to add is safe default
+                        form.setValue("action", "add");
+                      }
+                    }}
                     value={field.value}
                     defaultValue={field.value}
                   >
@@ -152,25 +181,75 @@ export const AdjustInventoryModal: React.FC<AdjustInventoryModalProps> = ({
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="quantity"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>Cantidad</FormLabel>
-                  <FormControl>
-                    <StockQuantityInput
+            {form.watch("type") === "MANUAL_ADJUSTMENT" && (
+              <FormField
+                control={form.control}
+                name="action"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel isRequired>Acción</FormLabel>
+                    <Select
                       disabled={loading}
+                      onValueChange={field.onChange}
                       value={field.value}
-                      onChange={field.onChange}
-                      min={1}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                      defaultValue={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue defaultValue={field.value} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="add">Agregar (+)</SelectItem>
+                        <SelectItem value="subtract">
+                          Restar / Quitar (-)
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+            {/* If not manual, show a read-only indicator of the action */}
+            {form.watch("type") !== "MANUAL_ADJUSTMENT" && (
+              <FormItem>
+                <FormLabel>Acción Implicita</FormLabel>
+                <div className="flex h-10 items-center rounded-md border border-input bg-muted px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
+                  {["DAMAGE", "LOST", "STORE_USE", "PROMOTION"].includes(
+                    form.watch("type"),
+                  ) ? (
+                    <span className="flex items-center font-semibold text-destructive">
+                      Restar Stock (-)
+                    </span>
+                  ) : (
+                    <span className="flex items-center font-semibold text-green-600">
+                      Sumar Stock (+)
+                    </span>
+                  )}
+                </div>
+              </FormItem>
+            )}
           </div>
+
+          <FormField
+            control={form.control}
+            name="quantity"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel isRequired>Cantidad</FormLabel>
+                <FormControl>
+                  <StockQuantityInput
+                    disabled={loading}
+                    value={field.value}
+                    onChange={field.onChange}
+                    min={1}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
           <FormField
             control={form.control}

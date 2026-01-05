@@ -75,6 +75,7 @@ export async function POST(
     }
 
     // MANUAL_ADJUSTMENT trusts the sign sent by user (can be + or -)
+    // This allows full flexibility for manual corrections.
 
     // Use helper to create movement
     const movement = await createInventoryMovement(prismadb, {

@@ -32,6 +32,7 @@ import { Supplier } from "@prisma/client";
 
 const formSchema = z.object({
   type: z.enum(["PURCHASE", "ADJUSTMENT"]),
+  action: z.enum(["add", "subtract"]),
   quantity: z.coerce.number().min(1, "La cantidad debe ser mayor a 0"),
   cost: z.coerce.number().min(0, "El costo no puede ser negativo").optional(),
   reason: z.string().min(1, "La razón es requerida"),
@@ -69,6 +70,7 @@ export const IntakeModal: React.FC<IntakeModalProps> = ({
     resolver: zodResolver(formSchema),
     defaultValues: {
       type: "PURCHASE",
+      action: "add",
       quantity: 1,
       cost: defaultCost,
       reason: "Initial Intake",
@@ -82,6 +84,7 @@ export const IntakeModal: React.FC<IntakeModalProps> = ({
     if (isOpen) {
       form.reset({
         type: "PURCHASE",
+        action: "add",
         quantity: 1,
         cost: defaultCost,
         reason: "Initial Intake",
@@ -96,20 +99,27 @@ export const IntakeModal: React.FC<IntakeModalProps> = ({
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       setLoading(true);
-      await axios.post(`/api/${params.storeId}/inventory`, {
+      // Determine sign based on action
+      const signedQuantity =
+        values.action === "subtract" ? -values.quantity : values.quantity;
+
+      const payload = {
         productId,
         variantId,
         ...values,
-      });
+        quantity: signedQuantity,
+      };
+
+      await axios.post(`/api/${params.storeId}/inventory`, payload);
       toast({
-        title: "Stock agregado correctamente",
+        title: "Stock actualizado correctamente",
       });
       onClose();
       router.refresh();
     } catch (error) {
       toast({
         variant: "destructive",
-        title: "Error al agregar stock",
+        title: "Error al actualizar stock",
       });
       console.error(error);
     } finally {
@@ -119,8 +129,8 @@ export const IntakeModal: React.FC<IntakeModalProps> = ({
 
   return (
     <Modal
-      title={`Agregar Stock: ${productName}`}
-      description="Registrar entrada de mercancía o ajuste de inventario."
+      title={`Gestionar Stock: ${productName}`}
+      description="Registrar entrada de mercancía, salidas o ajustes de inventario."
       isOpen={isOpen}
       onClose={onClose}
     >
@@ -136,7 +146,13 @@ export const IntakeModal: React.FC<IntakeModalProps> = ({
                     <FormLabel>Tipo de Movimiento</FormLabel>
                     <Select
                       disabled={loading}
-                      onValueChange={field.onChange}
+                      onValueChange={(val) => {
+                        field.onChange(val);
+                        // Auto-select action based on type for better UX
+                        if (val === "PURCHASE") {
+                          form.setValue("action", "add");
+                        }
+                      }}
                       value={field.value}
                       defaultValue={field.value}
                     >
@@ -158,6 +174,45 @@ export const IntakeModal: React.FC<IntakeModalProps> = ({
                   </FormItem>
                 )}
               />
+
+              {form.watch("type") === "ADJUSTMENT" ? (
+                <FormField
+                  control={form.control}
+                  name="action"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Acción</FormLabel>
+                      <Select
+                        disabled={loading}
+                        onValueChange={field.onChange}
+                        value={field.value}
+                        defaultValue={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue defaultValue={field.value} />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="add">Agregar (+)</SelectItem>
+                          <SelectItem value="subtract">
+                            Restar / Quitar (-)
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              ) : (
+                <FormItem>
+                  <FormLabel>Acción Implicita</FormLabel>
+                  <div className="flex h-10 items-center rounded-md border border-input bg-muted px-3 py-2 text-sm font-semibold text-green-600 ring-offset-background disabled:cursor-not-allowed disabled:opacity-50">
+                    Sumar Stock (+)
+                  </div>
+                </FormItem>
+              )}
+
               <FormField
                 control={form.control}
                 name="quantity"

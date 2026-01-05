@@ -867,8 +867,37 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           <div className="flex w-full flex-wrap items-start gap-2">
             {productsSelected.length > 0 &&
               productsSelected.map((product, index) => (
-                <Alert key={product.value} className="max-w-xs">
-                  <div className="flex items-start gap-2">
+                <Alert key={product.value} className="relative max-w-xs">
+                  <div className="absolute right-1 top-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                      onClick={() => {
+                        const newSelected = productsSelected.filter(
+                          (p) => p.value !== product.value,
+                        );
+                        setProductsSelected(newSelected);
+
+                        // Update form value
+                        const orderItems = newSelected.map((option) => ({
+                          productId: option.value,
+                          quantity: quantities[option.value] || 1,
+                        }));
+                        form.setValue(
+                          "orderItems",
+                          orderItems as [
+                            { productId: string; quantity: number },
+                            ...{ productId: string; quantity: number }[],
+                          ],
+                        );
+                      }}
+                    >
+                      <Trash className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <div className="flex items-start gap-2 pr-6">
                     {product.image && (
                       <Image
                         src={product.image}
