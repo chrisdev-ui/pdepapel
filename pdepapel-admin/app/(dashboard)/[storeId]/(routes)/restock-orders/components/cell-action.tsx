@@ -46,7 +46,28 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
     }
   };
 
-  const isEditable = data.status === RestockOrderStatus.DRAFT;
+  const onCancel = async () => {
+    try {
+      setLoading(true);
+      await axios.patch(`/api/${params.storeId}/restock-orders/${data.id}`, {
+        status: RestockOrderStatus.CANCELLED,
+      });
+      router.refresh();
+      toast({ title: "Pedido cancelado.", variant: "success" });
+    } catch (error) {
+      toast({ title: "Error al cancelar.", variant: "destructive" });
+    } finally {
+      setLoading(false);
+      setOpen(false);
+    }
+  };
+
+  const isDraft = data.status === RestockOrderStatus.DRAFT;
+  const isCancelled = data.status === RestockOrderStatus.CANCELLED;
+  const isActive =
+    data.status === RestockOrderStatus.ORDERED ||
+    data.status === RestockOrderStatus.PARTIALLY_RECEIVED;
+  const canDelete = isDraft || isCancelled;
 
   return (
     <>
@@ -75,9 +96,15 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
             }
           >
             <Edit className="mr-2 h-4 w-4" />
-            {isEditable ? "Editar" : "Ver detalles"}
+            {isDraft ? "Editar" : "Ver detalles"}
           </DropdownMenuItem>
-          {isEditable && (
+          {isActive && (
+            <DropdownMenuItem onClick={onCancel}>
+              <Trash className="mr-2 h-4 w-4" />
+              Cancelar Pedido
+            </DropdownMenuItem>
+          )}
+          {canDelete && (
             <DropdownMenuItem onClick={() => setOpen(true)}>
               <Trash className="mr-2 h-4 w-4" />
               Eliminar

@@ -51,16 +51,17 @@ export async function POST(
         storeId: params.storeId,
         supplierId,
         orderNumber,
-        status: "DRAFT",
+        status: body.status || "DRAFT",
         totalAmount,
         shippingCost: body.shippingCost || 0,
         notes,
         items: {
-          create: items.map((item: any) => ({
+          create: items.map((item: any, idx: number) => ({
             productId: item.productId,
             quantity: item.quantity,
             cost: item.cost,
             subtotal: item.quantity * item.cost,
+            index: idx,
           })),
         },
       },
@@ -95,6 +96,9 @@ export async function GET(
         items: {
           include: {
             product: true,
+          },
+          orderBy: {
+            index: "asc",
           },
         },
       },

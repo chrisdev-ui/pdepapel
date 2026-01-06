@@ -37,6 +37,9 @@ export async function GET(
           include: {
             product: true,
           },
+          orderBy: {
+            index: "asc",
+          },
         },
       },
     });
@@ -113,11 +116,12 @@ export async function PATCH(
 
       itemsUpdateOp = {
         deleteMany: {},
-        create: items.map((item: any) => ({
+        create: items.map((item: any, idx: number) => ({
           productId: item.productId,
           quantity: item.quantity,
           cost: item.cost,
           subtotal: item.quantity * item.cost,
+          index: idx,
         })),
       };
 

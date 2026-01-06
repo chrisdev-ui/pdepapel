@@ -27,7 +27,7 @@ export async function POST(
     const { userId } = auth();
     const body = await req.json();
 
-    // Payload: { receivedItems: { productId, quantityReceived, cost? }[] }
+    // Payload: { receivedItems: { restockOrderItemId, quantityReceived, cost? }[] }
     const { receivedItems } = body;
 
     if (!userId) throw ErrorFactory.Unauthenticated();
@@ -59,24 +59,20 @@ export async function POST(
     const itemUpdates: any[] = []; // Promises to update RestockOrderItems
 
     // Create a map for quick lookup of existing order items
-    const orderItemsMap = new Map(order.items.map((i) => [i.productId, i]));
+    // Keyed by ITEM ID, not Product ID, to handle duplicates correctly.
+    const orderItemsMap = new Map(order.items.map((i) => [i.id, i]));
 
     for (const receivedItem of receivedItems) {
-      const { productId, quantityReceived, cost } = receivedItem;
+      const { restockOrderItemId, quantityReceived, cost } = receivedItem;
 
-      const orderItem = orderItemsMap.get(productId);
+      const orderItem = orderItemsMap.get(restockOrderItemId);
       if (!orderItem) {
-        // Skip items not in original order? OR Allow receiving unexpected items?
-        // Strict mode: Only allow items in order.
         continue;
       }
 
       if (quantityReceived <= 0) continue;
 
       // Calculate Landed Cost Factor based on Total Order Value
-      // Factor = 1 + (Shipping / TotalValue)
-      // LandedCost = UnitCost * Factor
-      // This distributes shipping proportionally to value across all items.
       const totalOrderValue = order.totalAmount || 1; // Prevent div/0
       const shippingCost = order.shippingCost || 0;
       const landedFactor = 1 + shippingCost / totalOrderValue;
@@ -87,25 +83,14 @@ export async function POST(
       // 1. Prepare Inventory Movement
       inventoryMovements.push({
         storeId: params.storeId,
-        productId: productId,
-        type: "RESTOCK_RECEIVED", // Matches schema Enum
-        quantity: quantityReceived, // Positive for addition
+        productId: orderItem.productId, // Use product ID from the item record
+        type: "RESTOCK_RECEIVED",
+        quantity: quantityReceived,
         reason: `Recepcion Orden de Compra #${order.orderNumber}`,
         referenceId: order.id,
-        cost: landedUnitCost, // Store the FULL landed cost
+        cost: landedUnitCost,
         createdBy: `USER_${userId}`,
       });
-
-      // 2. Prepare Order Item Update
-      // We must increment the existing quantityReceived
-      itemUpdates.push(
-        prismadb.restockOrderItem.update({
-          where: { id: orderItem.id },
-          data: {
-            quantityReceived: { increment: quantityReceived },
-          },
-        }),
-      );
     }
 
     if (inventoryMovements.length === 0) {
@@ -113,18 +98,15 @@ export async function POST(
     }
 
     // Execute Transaction for Atomicity
-    // Checks: Data integrity > Partial success here. If we fail to update stock, we shouldn't mark as received.
     await prismadb.$transaction(async (tx) => {
       // Step 1: Update all RestockOrderItems
-      // We iterate and update using the transaction client `tx`
       for (const receivedItem of receivedItems) {
-        const { productId, quantityReceived } = receivedItem;
-        // Find the item ID again or use lookup?
-        // We have the product ID. We need the specific item ID.
-        const orderItem = orderItemsMap.get(productId);
+        const { restockOrderItemId, quantityReceived } = receivedItem;
+        const orderItem = orderItemsMap.get(restockOrderItemId);
+
         if (orderItem && quantityReceived > 0) {
           await tx.restockOrderItem.update({
-            where: { id: orderItem.id },
+            where: { id: restockOrderItemId },
             data: {
               quantityReceived: { increment: quantityReceived },
             },

@@ -694,6 +694,7 @@ model RestockOrderItem {
   id             String       @id @default(uuid())
   restockOrderId String
   productId      String
+  index          Int          @default(0)
   quantity       Int          // Ordered quantity
   quantityReceived Int        @default(0) // Track received amount
   cost           Float        // Unit cost agreed

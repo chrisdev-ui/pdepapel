@@ -53,11 +53,11 @@ export const ReceiveItemsModal: React.FC<ReceiveItemsModalProps> = ({
     }
   }, [isOpen]);
 
-  const onQuantityChange = (productId: string, value: string) => {
+  const onQuantityChange = (id: string, value: string) => {
     const qty = parseInt(value) || 0;
     setReceiveQuantities((prev) => ({
       ...prev,
-      [productId]: qty,
+      [id]: qty,
     }));
   };
 
@@ -67,8 +67,8 @@ export const ReceiveItemsModal: React.FC<ReceiveItemsModalProps> = ({
 
       const payload = Object.entries(receiveQuantities)
         .filter(([_, qty]) => qty > 0)
-        .map(([productId, qty]) => ({
-          productId,
+        .map(([id, qty]) => ({
+          restockOrderItemId: id,
           quantityReceived: qty,
         }));
 
@@ -126,7 +126,7 @@ export const ReceiveItemsModal: React.FC<ReceiveItemsModalProps> = ({
                   item.quantity - item.quantityReceived,
                 );
                 return (
-                  <TableRow key={item.productId}>
+                  <TableRow key={item.id}>
                     <TableCell>
                       <div className="font-medium">{item.product.name}</div>
                       <div className="text-xs text-muted-foreground">
@@ -146,17 +146,15 @@ export const ReceiveItemsModal: React.FC<ReceiveItemsModalProps> = ({
                           // Removed max constraint to allow over-receiving
                           size="sm"
                           disabled={loading}
-                          value={receiveQuantities[item.productId] || 0}
+                          value={receiveQuantities[item.id] || 0}
                           onChange={(val) =>
-                            onQuantityChange(item.productId, val.toString())
+                            onQuantityChange(item.id, val.toString())
                           }
                         />
-                        {(receiveQuantities[item.productId] || 0) >
-                          remaining && (
+                        {(receiveQuantities[item.id] || 0) > remaining && (
                           <span className="flex items-center gap-1 text-[10px] font-medium text-amber-600">
                             <AlertTriangle className="h-3 w-3" />+
-                            {(receiveQuantities[item.productId] || 0) -
-                              remaining}{" "}
+                            {(receiveQuantities[item.id] || 0) - remaining}{" "}
                             extra
                           </span>
                         )}

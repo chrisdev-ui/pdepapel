@@ -638,11 +638,12 @@ export const RestockOrderForm: React.FC<RestockOrderFormProps> = ({
             )}
 
             {/* If we allow updating notes for active orders, show Save button */}
-            {isActive && (
-              <Button disabled={loading} type="submit">
-                Guardar Cambios (Notas)
-              </Button>
-            )}
+            {isActive &&
+              initialData?.status !== RestockOrderStatus.COMPLETED && (
+                <Button disabled={loading} type="submit">
+                  Guardar Cambios (Notas)
+                </Button>
+              )}
           </div>
         </form>
       </Form>
