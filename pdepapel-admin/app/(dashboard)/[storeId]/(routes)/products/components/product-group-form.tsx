@@ -1789,9 +1789,24 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setMatrixOpen(true)}
+                onClick={() => {
+                  const cat = form.getValues("categoryId");
+                  if (!cat) {
+                    form.trigger("categoryId");
+                    toast({
+                      title: "Falta Categoría",
+                      description:
+                        "Debes seleccionar una categoría antes de configurar variantes.",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  setMatrixOpen(true);
+                }}
                 disabled={
-                  !selectedColorIds?.length || !selectedDesignIds?.length
+                  loading ||
+                  !selectedColorIds?.length ||
+                  !selectedDesignIds?.length
                 }
               >
                 <Settings2 className="mr-2 h-4 w-4" />
