@@ -48,11 +48,19 @@ import {
 import { useFormPersist } from "@/hooks/use-form-persist";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import { Category, Color, Design, Size, Supplier } from "@prisma/client";
+import {
+  Category,
+  Color,
+  Design,
+  Image as PrismaImage,
+  Product,
+  ProductGroup,
+  Size,
+  Supplier,
+} from "@prisma/client";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getProduct } from "../[productId]/server/get-product";
 import { VariantGrid } from "./variant-grid";
 import { VariantMatrix } from "./variant-matrix";
 
@@ -84,9 +92,21 @@ const formSchema = z.object({
         id: z.string().optional(),
         sku: z.string().optional(),
         name: z.string().optional(),
-        size: z.any().optional(), // Object
-        color: z.any().optional(),
-        design: z.any().optional(),
+        size: z
+          .object({
+            id: z.string(),
+            name: z.string(),
+            value: z.string().optional(),
+          })
+          .optional(),
+        color: z
+          .object({
+            id: z.string(),
+            name: z.string(),
+            value: z.string().optional(),
+          })
+          .optional(),
+        design: z.object({ id: z.string(), name: z.string() }).optional(),
         price: z.coerce.number().optional(),
         acqPrice: z.coerce.number().optional(),
         stock: z.coerce.number().optional(),
@@ -112,7 +132,34 @@ const formSchema = z.object({
 
 export type ProductGroupFormValues = z.infer<typeof formSchema>;
 
-type Categories = Awaited<ReturnType<typeof getProduct>>["categories"][number];
+// Shared Variant Interface to use across logic
+export interface FormVariant {
+  id?: string;
+  sku?: string;
+  name?: string;
+  size?: { id: string; name: string; value?: string };
+  color?: { id: string; name: string; value?: string };
+  design?: { id: string; name: string; value?: string }; // Added value optional to match generic usage
+  price?: number;
+  acqPrice?: number;
+  stock?: number;
+  supplierId?: string;
+  isFeatured?: boolean;
+  isArchived?: boolean;
+  description?: string;
+  images?: string[];
+}
+
+export type ProductGroupWithIncludes = ProductGroup & {
+  images: PrismaImage[];
+  products: (Product & {
+    images: PrismaImage[];
+    size: Size | null;
+    color: Color | null;
+    design: Design | null;
+  })[];
+  imageMapping?: { url: string; scope: string }[];
+};
 
 interface ProductGroupFormProps {
   categories: Category[];
@@ -120,7 +167,7 @@ interface ProductGroupFormProps {
   colors: Color[];
   designs: Design[];
   suppliers: Supplier[];
-  initialData?: any; // Allow passing the raw included data
+  initialData?: ProductGroupWithIncludes | null;
 }
 
 export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
@@ -157,8 +204,11 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   const pendingText = isEdit ? "Guardando..." : "Creando...";
 
   const reconstructMapping = (
-    imagesOverride?: any[],
-    productsOverride?: any[],
+    imagesOverride?: { url: string }[],
+    productsOverride?: (
+      | FormVariant
+      | ProductGroupWithIncludes["products"][number]
+    )[],
   ) => {
     // If we have overrides, we don't need initialData checks
     if (
@@ -168,15 +218,55 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     )
       return [];
 
-    const products = productsOverride || (initialData?.products as any[]) || [];
+    const products =
+      productsOverride ||
+      (initialData?.products as ProductGroupWithIncludes["products"][number][]) ||
+      [];
     const groupImages =
       imagesOverride || (initialData?.images as { url: string }[]) || [];
     const mapping: { url: string; scope: string }[] = [];
 
+    // Valid item types for mapping
+    type MappingItem =
+      | FormVariant
+      | ProductGroupWithIncludes["products"][number];
+
+    // Helper to get ID regardless of shape
+    const getId = (item: MappingItem, key: "color" | "size" | "design") => {
+      // Check for nested object (FormVariant) first if it exists
+      if (key === "color" && item.color && typeof item.color === "object")
+        return item.color.id;
+      if (key === "size" && item.size && typeof item.size === "object")
+        return item.size.id;
+      if (key === "design" && item.design && typeof item.design === "object")
+        return item.design.id;
+
+      // Fallback to flat properties if they exist (Prisma Product)
+      // We need to cast as 'any' safely or use 'in' check to access flat props if they aren't on FormVariant
+      const flatKey = `${key}Id` as keyof MappingItem;
+      if (flatKey in item) {
+        return (item as Record<string, any>)[flatKey];
+      }
+      return undefined;
+    };
+
+    const getImages = (item: MappingItem): string[] => {
+      if (!item.images) return [];
+      if (Array.isArray(item.images)) {
+        if (item.images.length === 0) return [];
+        // Check first item
+        const first = item.images[0];
+        if (typeof first === "string") return item.images as string[];
+        // Otherwise it's PrismaImage[]
+        return (item.images as { url: string }[]).map((img) => img.url);
+      }
+      return [];
+    };
+
     groupImages.forEach((img) => {
       // Find all variants that have this image
       const variantsWithImage = products.filter((p) =>
-        p.images.some((pi: any) => pi.url === img.url),
+        getImages(p).some((url: string) => url === img.url),
       );
 
       if (variantsWithImage.length === 0) {
@@ -194,20 +284,22 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       let foundScope = false;
       const validCombos = new Set<string>();
       products.forEach((p) => {
-        if (p.colorId && p.designId) {
-          validCombos.add(`${p.colorId}|${p.designId}`);
+        const cId = getId(p, "color");
+        const dId = getId(p, "design");
+        if (cId && dId) {
+          validCombos.add(`${cId}|${dId}`);
         }
       });
 
       for (const combo of Array.from(validCombos)) {
         const [cId, dId] = combo.split("|");
         const variantsOfCombo = products.filter(
-          (p) => p.colorId === cId && p.designId === dId,
+          (p) => getId(p, "color") === cId && getId(p, "design") === dId,
         );
         const isExactMatch =
           variantsWithImage.length === variantsOfCombo.length &&
           variantsWithImage.every(
-            (p) => p.colorId === cId && p.designId === dId,
+            (p) => getId(p, "color") === cId && getId(p, "design") === dId,
           );
 
         if (isExactMatch) {
@@ -220,21 +312,22 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
 
       // 3. Check Colors
       const distinctColorIds = new Set(
-        products.map((p) => p.colorId).filter(Boolean),
+        products.map((p) => getId(p, "color")).filter(Boolean),
       );
 
       for (const colorId of Array.from(distinctColorIds)) {
         // Variants with this color
-        const variantsOfColor = products.filter((p) => p.colorId === colorId);
+        const variantsOfColor = products.filter(
+          (p) => getId(p, "color") === colorId,
+        );
         // Do they all have the image?
         const allHaveIt = variantsOfColor.every((p) =>
-          p.images.some((pi: any) => pi.url === img.url),
+          getImages(p).some((url: string) => url === img.url),
         );
         // And is the number of variants with image equal to variants of this color?
-        // (Meaning no other variants have it? simpler: check if variantsWithImage are exactly variantsOfColor)
         const isExactMatch =
           variantsWithImage.length === variantsOfColor.length &&
-          variantsWithImage.every((p) => p.colorId === colorId);
+          variantsWithImage.every((p) => getId(p, "color") === colorId);
 
         if (allHaveIt && isExactMatch) {
           mapping.push({ url: img.url, scope: colorId });
@@ -246,15 +339,15 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
 
       // 4. Check Designs
       const distinctDesignIds = new Set(
-        products.map((p) => p.designId).filter(Boolean),
+        products.map((p) => getId(p, "design")).filter(Boolean),
       );
       for (const designId of Array.from(distinctDesignIds)) {
         const variantsOfDesign = products.filter(
-          (p) => p.designId === designId,
+          (p) => getId(p, "design") === designId,
         );
         const isExactMatch =
           variantsWithImage.length === variantsOfDesign.length &&
-          variantsWithImage.every((p) => p.designId === designId);
+          variantsWithImage.every((p) => getId(p, "design") === designId);
 
         if (isExactMatch) {
           mapping.push({ url: img.url, scope: designId });
@@ -263,9 +356,6 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
         }
       }
       if (foundScope) return;
-
-      // 4. Check Combos (Strict)
-      // Moved to Step 2
 
       // Fallback
       mapping.push({ url: img.url, scope: "all" });
@@ -278,11 +368,13 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     if (!initialData) return [];
     const groupImages = initialData.images || [];
     const variantImages =
-      initialData.products?.flatMap((p: any) => p.images || []) || [];
+      initialData.products?.flatMap((p) => p.images || []) || [];
 
-    const map = new Map();
-    groupImages.forEach((img: any) => map.set(img.url, img));
-    variantImages.forEach((img: any) => {
+    const map = new Map<string, { url: string; isMain: boolean }>();
+    groupImages.forEach((img) =>
+      map.set(img.url, { url: img.url, isMain: false }),
+    );
+    variantImages.forEach((img) => {
       if (!map.has(img.url)) {
         map.set(img.url, { url: img.url, isMain: false });
       }
@@ -290,28 +382,26 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     return Array.from(map.values());
   };
 
-  const defaultValues = isEdit
+  const defaultValues: ProductGroupFormValues = initialData
     ? {
         name: initialData.name,
-        description: initialData.description,
+        description: initialData.description || "",
         images: getAllImages(),
         categoryId: initialData.products?.[0]?.categoryId || "",
         sizeIds: Array.from(
-          new Set(initialData.products?.map((p: any) => p.sizeId) || []),
-        ) as string[],
+          new Set(initialData.products?.map((p) => p.sizeId) || []),
+        ),
         colorIds: Array.from(
-          new Set(initialData.products?.map((p: any) => p.colorId) || []),
-        ) as string[],
+          new Set(initialData.products?.map((p) => p.colorId) || []),
+        ).filter(Boolean) as string[],
         designIds: Array.from(
-          new Set(initialData.products?.map((p: any) => p.designId) || []),
-        ) as string[],
-        // Mapping old fields to new fields?
-        // Note: Product Groups previously didn't store these calc fields, so we default them.
-        // We take price/acqPrice from the first product as a heuristic.
+          new Set(initialData.products?.map((p) => p.designId) || []),
+        ).filter(Boolean) as string[],
+        // Mapping old fields to new fields
         acqPrice: initialData.products?.[0]?.acqPrice || 0,
-        percentageIncrease: INITIAL_PERCENTAGE_INCREASE, // Default since we didn't store it
-        transportationCost: INITIAL_TRANSPORTATION_COST, // Default
-        miscCost: INITIAL_MISC_COST, // Default
+        percentageIncrease: INITIAL_PERCENTAGE_INCREASE,
+        transportationCost: INITIAL_TRANSPORTATION_COST,
+        miscCost: INITIAL_MISC_COST,
         price: initialData.products?.[0]?.price || 0,
         defaultStock: initialData.products?.[0]?.stock || 0,
         defaultSupplier: initialData.products?.[0]?.supplierId || "",
@@ -321,19 +411,27 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
         isFeatured: initialData.products?.[0]?.isFeatured || false,
         isArchived: initialData.products?.[0]?.isArchived || false,
         variants:
-          initialData.products?.map((p: any) => ({
+          initialData.products?.map((p) => ({
             id: p.id,
             sku: p.sku,
             name: p.name,
-            size: p.size,
-            color: p.color,
-            design: p.design,
+            size: p.size
+              ? { id: p.size.id, name: p.size.name, value: p.size.value }
+              : undefined,
+            color: p.color
+              ? { id: p.color.id, name: p.color.name, value: p.color.value }
+              : undefined,
+            design: p.design
+              ? { id: p.design.id, name: p.design.name }
+              : undefined,
             price: p.price,
-            acqPrice: p.acqPrice,
+            acqPrice: p.acqPrice || 0,
             stock: p.stock,
-            supplierId: p.supplierId,
+            supplierId: p.supplierId || "",
             isFeatured: p.isFeatured,
             isArchived: p.isArchived,
+            images: p.images.map((img) => img.url),
+            description: p.description || "",
           })) || [],
       }
     : {
@@ -363,12 +461,11 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   });
 
   // Explicitly register imageMapping since it's a virtual field
-  // This ensures getValues() returns it correctly in useFormPersist
   useEffect(() => {
     form.register("imageMapping");
   }, [form]);
 
-  // Price Calculation Logic (Ported from ProductForm)
+  // Price Calculation Logic
   const calculatePrice = (values: Partial<ProductGroupFormValues>) => {
     const acqPrice = Number(values.acqPrice) || 0;
     const percentageIncrease = Number(values.percentageIncrease) || 0;
@@ -416,22 +513,20 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
             form.setValue("price", newPrice);
 
             // Sync variants - REACTIVE UPDATE
-            // User requested that inheriting properties should update all variants, ignoring saved state.
             const currentVariants = form.getValues("variants") || [];
             const updatedVariants = currentVariants.map((v) => ({
               ...v,
               price: newPrice,
               acqPrice: values.acqPrice ?? 0,
-              supplierId: values.defaultSupplier || v.supplierId, // Enforce supplier if global is set, otherwise keep variant's
-              stock: values.defaultStock || 0, // Enforce stock if global is set, otherwise 0
+              supplierId: values.defaultSupplier || v.supplierId,
+              stock: values.defaultStock || 0,
             }));
 
-            // Only update if there are variants to avoid unnecessary renders/overhead
             if (updatedVariants.length > 0) {
               form.setValue("variants", updatedVariants);
             }
           }
-        }, 500); // 500ms debounce to prevent lag on typing
+        }, 500);
       }
     });
     return () => {
@@ -448,7 +543,6 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   // AUTO-SYNC VARIANTS HOOK
   useEffect(() => {
     // We only trigger if explicit attributes are selected.
-    // Debounce to avoid churn
     const timer = setTimeout(async () => {
       if (
         !watchedCategoryId ||
@@ -478,7 +572,11 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
 
       const result = generateVariants({
         category: { id: catObj.id, name: catObj.name },
-        sizes: sList.map((x) => ({ id: x.id, name: x.name, value: x.value })),
+        sizes: sList.map((x) => ({
+          id: x.id,
+          name: x.name,
+          value: x.value ?? "",
+        })),
         colors: cList.map((x) => ({ id: x.id, name: x.name, value: x.value })),
         designs: dList.map((x) => ({ id: x.id, name: x.name, value: x.name })),
       });
@@ -487,13 +585,13 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
 
       // 2. Diff and Merge
       const currentVars = form.getValues("variants") || [];
-      const mergedVariants: any[] = [];
+      const mergedVariants: FormVariant[] = [];
       const usedCurrentIndices = new Set<number>();
 
       for (const gen of generatedVariants) {
-        // Find match in current (by Attributes)
-        const matchIndex = currentVars.findIndex(
-          (v: any, idx) =>
+        // 1. Find EXACT match in current (by Attributes)
+        let matchIndex = currentVars.findIndex(
+          (v, idx) =>
             !usedCurrentIndices.has(idx) &&
             v.size?.id === gen.sizeId &&
             v.color?.id === gen.colorId &&
@@ -501,26 +599,90 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
         );
 
         if (matchIndex !== -1) {
-          // PRESERVE
+          // PRESERVE EXACT
           usedCurrentIndices.add(matchIndex);
           mergedVariants.push(currentVars[matchIndex]);
         } else {
-          // ADD NEW
-          mergedVariants.push({
-            sku: gen.sku,
-            name: gen.name,
-            price: form.getValues("price") || 0,
-            acqPrice: form.getValues("acqPrice") || 0,
-            stock: form.getValues("defaultStock") || 0,
-            supplierId: form.getValues("defaultSupplier") || "",
-            isFeatured: false,
-            isArchived: false,
-            size: sizesObj.find((x) => x.id === gen.sizeId) || { name: "?" },
-            color: colorsObj.find((x) => x.id === gen.colorId) || { name: "?" },
-            design: designsObj.find((x) => x.id === gen.designId) || {
-              name: "?",
-            },
+          // 2. Fallback: Find SOFT match (Adoption)
+          matchIndex = currentVars.findIndex((v, idx) => {
+            if (usedCurrentIndices.has(idx)) return false;
+
+            // Check attributes: If v has it, it must match. If v doesn't have it, we consider it a match (allow adoption).
+            const sizeMatch = !v.size?.id || v.size.id === gen.sizeId;
+            const colorMatch = !v.color?.id || v.color.id === gen.colorId;
+            const designMatch = !v.design?.id || v.design.id === gen.designId;
+
+            // We require at least one attribute to be present and matching to avoid adopting completely blank/random items
+            return sizeMatch && colorMatch && designMatch;
           });
+
+          if (matchIndex !== -1) {
+            // ADOPT & UPDATE
+            usedCurrentIndices.add(matchIndex);
+            const existing = currentVars[matchIndex];
+            mergedVariants.push({
+              ...existing,
+              // Update missing attributes so they stick to this slot
+              size: existing.size?.id
+                ? existing.size
+                : sizesObj.find((x) => x.id === gen.sizeId)?.id
+                  ? {
+                      id: sizesObj.find((x) => x.id === gen.sizeId)!.id,
+                      name: sizesObj.find((x) => x.id === gen.sizeId)!.name,
+                      value: sizesObj.find((x) => x.id === gen.sizeId)!.value,
+                    }
+                  : { id: "unknown", name: "?" },
+              color: existing.color?.id
+                ? existing.color
+                : colorsObj.find((x) => x.id === gen.colorId)?.id
+                  ? {
+                      id: colorsObj.find((x) => x.id === gen.colorId)!.id,
+                      name: colorsObj.find((x) => x.id === gen.colorId)!.name,
+                      value: colorsObj.find((x) => x.id === gen.colorId)!.value,
+                    }
+                  : { id: "unknown", name: "?" },
+              design: existing.design?.id
+                ? existing.design
+                : designsObj.find((x) => x.id === gen.designId)?.id
+                  ? {
+                      id: designsObj.find((x) => x.id === gen.designId)!.id,
+                      name: designsObj.find((x) => x.id === gen.designId)!.name,
+                    }
+                  : { id: "unknown", name: "?" },
+            });
+          } else {
+            // 3. ADD NEW
+            mergedVariants.push({
+              sku: gen.sku,
+              name: gen.name,
+              price: form.getValues("price") || 0,
+              acqPrice: form.getValues("acqPrice") || 0,
+              stock: form.getValues("defaultStock") || 0,
+              supplierId: form.getValues("defaultSupplier") || "",
+              isFeatured: false,
+              isArchived: false,
+              size: sizesObj.find((x) => x.id === gen.sizeId)
+                ? {
+                    id: sizesObj.find((x) => x.id === gen.sizeId)!.id,
+                    name: sizesObj.find((x) => x.id === gen.sizeId)!.name,
+                    value: sizesObj.find((x) => x.id === gen.sizeId)!.value,
+                  }
+                : { id: "unknown", name: "?" },
+              color: colorsObj.find((x) => x.id === gen.colorId)
+                ? {
+                    id: colorsObj.find((x) => x.id === gen.colorId)!.id,
+                    name: colorsObj.find((x) => x.id === gen.colorId)!.name,
+                    value: colorsObj.find((x) => x.id === gen.colorId)!.value,
+                  }
+                : { id: "unknown", name: "?" },
+              design: designsObj.find((x) => x.id === gen.designId)
+                ? {
+                    id: designsObj.find((x) => x.id === gen.designId)!.id,
+                    name: designsObj.find((x) => x.id === gen.designId)!.name,
+                  }
+                : { id: "unknown", name: "?" },
+            });
+          }
         }
       }
 
@@ -555,12 +717,10 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     const currentVariants = form.getValues("variants") || [];
 
     const currentUrls = new Set<string>();
-    currentGroupImages.forEach(
-      (img: any) => img.url && currentUrls.add(img.url),
-    );
-    currentVariants.forEach((v: any) => {
+    currentGroupImages.forEach((img) => img.url && currentUrls.add(img.url));
+    currentVariants.forEach((v) => {
       if (v.images && Array.isArray(v.images)) {
-        v.images.forEach((url: string) => url && currentUrls.add(url));
+        v.images.forEach((url) => url && currentUrls.add(url));
       }
     });
 
@@ -568,13 +728,13 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     if (initialData) {
       if (initialData.images && Array.isArray(initialData.images)) {
         initialData.images.forEach(
-          (img: any) => img.url && initialUrls.add(img.url),
+          (img) => img.url && initialUrls.add(img.url),
         );
       }
       if (initialData.products && Array.isArray(initialData.products)) {
-        initialData.products.forEach((p: any) => {
+        initialData.products.forEach((p) => {
           if (p.images && Array.isArray(p.images)) {
-            p.images.forEach((img: any) => img.url && initialUrls.add(img.url));
+            p.images.forEach((img) => img.url && initialUrls.add(img.url));
           }
         });
       }
@@ -604,7 +764,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       // Merge scopes from form data directly (already synced)
       const mapping = data.imageMapping || [];
 
-      if (isEdit) {
+      if (initialData) {
         await axios.patch(
           `/api/${params.storeId}/product-groups/${initialData.id}`,
           {
@@ -638,6 +798,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
 
   const onDelete = async (strict: boolean) => {
     try {
+      if (!initialData) return;
       setLoading(true);
       await axios.delete(
         `/api/${params.storeId}/product-groups/${initialData.id}?deleteVariants=${strict}`,
@@ -710,7 +871,14 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     const sizesObj = sizes.filter((x) => selectedSizeIds.includes(x.id));
 
     // We iterate combinations to ensure strict adherence
-    let allGenerated: any[] = [];
+    type GenVariant = {
+      sizeId: string;
+      colorId: string;
+      designId: string;
+      sku: string;
+      name: string;
+    };
+    let allGenerated: GenVariant[] = [];
 
     if (!catObj) return;
 
@@ -728,7 +896,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
         sizes: sizesObj.map((x) => ({
           id: x.id,
           name: x.name,
-          value: x.value,
+          value: x.value ?? "",
         })),
         colors: [
           {
@@ -749,63 +917,137 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     }
 
     // Merge with existing
-    const mergedVariants = allGenerated.map((gen: any) => {
-      const existing = form
-        .getValues("variants")
-        ?.find(
-          (v: any) =>
-            v.size?.id === gen.sizeId &&
-            v.color?.id === gen.colorId &&
-            v.design?.id === gen.designId,
-        );
+    const currentVars = form.getValues("variants") || [];
+    const usedIndices = new Set<number>();
+    const finalVariants: FormVariant[] = [];
 
-      if (existing) {
-        return existing;
+    for (const gen of allGenerated) {
+      // 1. Exact Match
+      let matchIndex = currentVars.findIndex(
+        (v, idx) =>
+          !usedIndices.has(idx) &&
+          v.size?.id === gen.sizeId &&
+          v.color?.id === gen.colorId &&
+          v.design?.id === gen.designId,
+      );
+
+      // 2. Soft Match (Adoption)
+      if (matchIndex === -1) {
+        matchIndex = currentVars.findIndex((v, idx) => {
+          if (usedIndices.has(idx)) return false;
+          const sizeMatch = !v.size?.id || v.size.id === gen.sizeId;
+          const colorMatch = !v.color?.id || v.color.id === gen.colorId;
+          const designMatch = !v.design?.id || v.design.id === gen.designId;
+          return sizeMatch && colorMatch && designMatch;
+        });
       }
 
-      return {
-        sku: gen.sku,
-        name: gen.name,
-        price: currentPrice || 0,
-        acqPrice: currentAcqPrice || 0,
-        stock: defaultStock || 0,
-        supplierId: defaultSupplier || "",
-        isFeatured: false,
-        isArchived: false,
-        size: sizesObj.find((x) => x.id === gen.sizeId) || { name: "?" },
-        color: colors.find((x) => x.id === gen.colorId) || { name: "?" },
-        design: designs.find((x) => x.id === gen.designId) || { name: "?" },
-      };
+      if (matchIndex !== -1) {
+        usedIndices.add(matchIndex);
+        const existing = currentVars[matchIndex];
+        finalVariants.push({
+          ...existing,
+          // Update attributes
+          size: existing.size?.id
+            ? existing.size
+            : sizesObj.find((x) => x.id === gen.sizeId)
+              ? {
+                  id: sizesObj.find((x) => x.id === gen.sizeId)!.id,
+                  name: sizesObj.find((x) => x.id === gen.sizeId)!.name,
+                  value: sizesObj.find((x) => x.id === gen.sizeId)!.value,
+                }
+              : { id: "unknown", name: "?" },
+          color: existing.color?.id
+            ? existing.color
+            : colors.find((x) => x.id === gen.colorId)
+              ? {
+                  id: colors.find((x) => x.id === gen.colorId)!.id,
+                  name: colors.find((x) => x.id === gen.colorId)!.name,
+                  value: colors.find((x) => x.id === gen.colorId)!.value,
+                }
+              : { id: "unknown", name: "?" },
+          design: existing.design?.id
+            ? existing.design
+            : designs.find((x) => x.id === gen.designId)
+              ? {
+                  id: designs.find((x) => x.id === gen.designId)!.id,
+                  name: designs.find((x) => x.id === gen.designId)!.name,
+                }
+              : { id: "unknown", name: "?" },
+        });
+      } else {
+        // Create New
+        finalVariants.push({
+          sku: gen.sku,
+          name: gen.name,
+          price: currentPrice || 0,
+          acqPrice: currentAcqPrice || 0,
+          stock: defaultStock || 0,
+          supplierId: defaultSupplier || "",
+          isFeatured: false,
+          isArchived: false,
+          size: sizesObj.find((x) => x.id === gen.sizeId)
+            ? {
+                id: sizesObj.find((x) => x.id === gen.sizeId)!.id,
+                name: sizesObj.find((x) => x.id === gen.sizeId)!.name,
+                value: sizesObj.find((x) => x.id === gen.sizeId)!.value,
+              }
+            : { id: "unknown", name: "?" },
+          color: colors.find((x) => x.id === gen.colorId)
+            ? {
+                id: colors.find((x) => x.id === gen.colorId)!.id,
+                name: colors.find((x) => x.id === gen.colorId)!.name,
+                value: colors.find((x) => x.id === gen.colorId)!.value,
+              }
+            : { id: "unknown", name: "?" },
+          design: designs.find((x) => x.id === gen.designId)
+            ? {
+                id: designs.find((x) => x.id === gen.designId)!.id,
+                name: designs.find((x) => x.id === gen.designId)!.name,
+              }
+            : { id: "unknown", name: "?" },
+        });
+      }
+    }
+
+    // Add remaining existing variants
+    currentVars.forEach((v, idx) => {
+      if (!usedIndices.has(idx)) {
+        finalVariants.push(v);
+      }
     });
 
-    const uniqueVariants = [
-      ...(currentVariants || []),
-      ...mergedVariants.filter((n) => {
-        // De-dupe based on SKU or attributes
-        const duplicate = currentVariants?.some(
-          (e) =>
-            (n.sku && e.sku === n.sku) ||
-            (e.size?.id === n.size?.id &&
-              e.color?.id === n.color?.id &&
-              e.design?.id === n.design?.id),
-        );
-        return !duplicate;
-      }),
-    ];
-
-    form.setValue("variants", uniqueVariants, {
+    form.setValue("variants", finalVariants, {
       shouldDirty: true,
       shouldTouch: true,
       shouldValidate: true,
     });
     toast({
-      description: `Se han generado ${mergedVariants.length} variantes.`,
+      description: `Se han generado ${allGenerated.length} variantes.`,
       variant: "success",
     });
   };
 
+  interface ImportedProduct {
+    id: string;
+    name: string;
+    category: { id: string; name: string };
+    size?: { id: string; name: string; value: string };
+    color?: { id: string; name: string; value: string };
+    design?: { id: string; name: string };
+    images: { url: string }[];
+    price: number;
+    // Optional fields (might not be typed in Modal but present in API response)
+    acqPrice?: number;
+    stock?: number;
+    supplierId?: string;
+    isFeatured?: boolean;
+    isArchived?: boolean;
+    sku?: string;
+  }
+
   // Handle Import from Standalone Products
-  const handleImport = (products: any[]) => {
+  const handleImport = (products: ImportedProduct[]) => {
     if (!products.length) return;
 
     // 1. Determine Category (Verify consistency)
@@ -846,12 +1088,12 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
 
     // 3. Smart Image Aggregation
     const existingImages = form.getValues("images") || [];
-    const existingUrls = new Set(existingImages.map((img: any) => img.url));
-    const newImages: any[] = [];
+    const existingUrls = new Set(existingImages.map((img) => img.url));
+    const newImages: { url: string; isMain: boolean }[] = [];
 
     products.forEach((p) => {
       if (p.images && p.images.length > 0) {
-        p.images.forEach((img: any) => {
+        p.images.forEach((img) => {
           if (!existingUrls.has(img.url)) {
             existingUrls.add(img.url);
             newImages.push({ url: img.url, isMain: false });
@@ -868,7 +1110,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     }
 
     // 4. Map to Variants
-    const newVariants = products.map((p) => ({
+    const newVariants: FormVariant[] = products.map((p) => ({
       id: p.id, // KEEP ID so backend knows to update/adopt
       sku: p.sku || "",
       name: p.name,
@@ -881,16 +1123,14 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       size: p.size,
       color: p.color,
       design: p.design,
-      images: p.images?.map((i: any) => i.url) || [],
+      images: p.images?.map((i) => i.url) || [],
     }));
 
     // Merge variants avoiding ID duplication
     const currentVars = form.getValues("variants") || [];
-    const currentIds = new Set(
-      currentVars.map((v: any) => v.id).filter(Boolean),
-    );
+    const currentIds = new Set(currentVars.map((v) => v.id).filter(Boolean));
 
-    const toAdd = newVariants.filter((v) => !currentIds.has(v.id));
+    const toAdd = newVariants.filter((v) => !v.id || !currentIds.has(v.id));
 
     if (toAdd.length > 0) {
       const finalVariants = [...currentVars, ...toAdd];
@@ -1342,7 +1582,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                         if (val && current) {
                           form.setValue(
                             "variants",
-                            current.map((v: any) => ({
+                            current.map((v) => ({
                               ...v,
                               supplierId: val,
                             })),
@@ -1431,9 +1671,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                   <FormLabel isRequired>Categoría</FormLabel>
                   <Select
                     key={field.value}
-                    disabled={
-                      loading || currentVariants?.some((v: any) => v.id)
-                    }
+                    disabled={loading || currentVariants?.some((v) => v.id)}
                     onValueChange={field.onChange}
                     value={field.value}
                     defaultValue={field.value}
@@ -1452,7 +1690,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                         ))}
                     </SelectContent>
                   </Select>
-                  {currentVariants?.some((v: any) => v.id) && (
+                  {currentVariants?.some((v) => v.id) && (
                     <FormDescription className="text-yellow-600">
                       La categoría está bloqueada porque hay productos
                       existentes vinculados. Para cambiarla, primero desvincula

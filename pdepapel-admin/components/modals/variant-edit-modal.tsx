@@ -332,8 +332,8 @@ export const VariantEditModal: React.FC<VariantEditModalProps> = ({
                             className="object-cover"
                           />
                           {field.value?.includes(image.url) && (
-                            <div className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                              <Check className="h-3 w-3" />
+                            <div className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-green-500 text-white shadow-sm ring-2 ring-white">
+                              <Check className="h-4 w-4" strokeWidth={3} />
                             </div>
                           )}
                         </div>
