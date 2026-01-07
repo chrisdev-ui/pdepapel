@@ -67,16 +67,26 @@ export async function GET(
     });
 
     // 2. Fetch all assets from Cloudinary
-    // Note: Free tier has rate limits. For production with many images, pagination (next_cursor) is needed.
-    // We'll fetch up to 500 (default max) for now.
-    // Optionally filter by folder if you organize by storeId.
-    const cloudinaryResult = await cloudinary.v2.api.resources({
-      type: "upload",
-      prefix: "", // Add store specific prefix if applicable, e.g. `stores/${params.storeId}`
-      max_results: 500,
-    });
+    // We use a loop with next_cursor to fetch ALL resources, not just the first 500.
+    let allResources: any[] = [];
+    let nextCursor = null;
 
-    const resources = cloudinaryResult.resources as {
+    do {
+      const cloudinaryResult: any = await cloudinary.v2.api.resources({
+        type: "upload",
+        prefix: "",
+        max_results: 500,
+        next_cursor: nextCursor,
+      });
+
+      if (cloudinaryResult.resources) {
+        allResources = [...allResources, ...cloudinaryResult.resources];
+      }
+
+      nextCursor = cloudinaryResult.next_cursor;
+    } while (nextCursor);
+
+    const resources = allResources as {
       public_id: string;
       secure_url: string;
       created_at: string;
