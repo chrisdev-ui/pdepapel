@@ -4,8 +4,8 @@ import axios from "axios";
 import { Loader2, Trash } from "lucide-react";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { toast } from "react-hot-toast";
+import { useState } from "react";
+import useSWR from "swr";
 
 import { AlertModal } from "@/components/modals/alert-modal";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Heading } from "@/components/ui/heading";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
 interface OrphanImage {
@@ -23,50 +24,61 @@ interface OrphanImage {
   bytes: number;
 }
 
+interface CloudinaryResponse {
+  orphans: OrphanImage[];
+  stats: {
+    count: number;
+    totalSize: number;
+    scannedCount: number;
+  };
+}
+
+const fetcher = (url: string) => axios.get(url).then((res) => res.data);
+
 export const CloudinaryClient = () => {
   const params = useParams();
   const router = useRouter();
+  const { toast } = useToast();
 
-  const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<OrphanImage[]>([]);
-  const [stats, setStats] = useState({
-    count: 0,
-    totalSize: 0,
-    scannedCount: 0,
-  });
+  // Loading state for delete action only
+  const [deleting, setDeleting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [open, setOpen] = useState(false);
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const res = await axios.get(`/api/${params.storeId}/cleanup-images`);
-      setData(res.data.orphans);
-      setStats(res.data.stats);
-      setSelectedIds(new Set()); // Reset selection
-    } catch (error) {
-      toast.error("Error cargando imágenes");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const {
+    data: response,
+    error,
+    isLoading,
+    mutate,
+  } = useSWR<CloudinaryResponse>(
+    `/api/${params.storeId}/cleanup-images`,
+    fetcher,
+  );
 
-  useEffect(() => {
-    fetchData();
-  }, [params.storeId]);
+  const data = response?.orphans || [];
+  const stats = response?.stats || { count: 0, totalSize: 0, scannedCount: 0 };
 
   const onDelete = async () => {
     try {
-      setLoading(true);
+      setDeleting(true);
       await axios.delete(`/api/${params.storeId}/cleanup-images`, {
         data: { publicIds: Array.from(selectedIds) },
       });
-      toast.success("Imágenes eliminadas");
-      fetchData(); // Refresh list
+      toast({
+        title: "Éxito",
+        description: "Imágenes eliminadas correctamente",
+        variant: "success",
+      });
+      setSelectedIds(new Set());
+      mutate(); // Refresh data
     } catch (error) {
-      toast.error("Error eliminando imágenes");
+      toast({
+        title: "Error",
+        description: "Error eliminando imágenes",
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false);
+      setDeleting(false);
       setOpen(false);
     }
   };
@@ -97,13 +109,21 @@ export const CloudinaryClient = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   };
 
+  if (error) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="text-destructive">Error al cargar las imágenes.</p>
+      </div>
+    );
+  }
+
   return (
     <>
       <AlertModal
         isOpen={open}
         onClose={() => setOpen(false)}
         onConfirm={onDelete}
-        loading={loading}
+        loading={deleting}
       />
       <div className="flex items-center justify-between">
         <Heading
@@ -112,7 +132,7 @@ export const CloudinaryClient = () => {
         />
         {selectedIds.size > 0 && (
           <Button
-            disabled={loading}
+            disabled={deleting}
             variant="destructive"
             size="sm"
             onClick={() => setOpen(true)}
@@ -152,11 +172,12 @@ export const CloudinaryClient = () => {
           checked={data.length > 0 && selectedIds.size === data.length}
           onCheckedChange={toggleAll}
           aria-label="Select all"
+          disabled={isLoading}
         />
         <span className="text-sm text-muted-foreground">Seleccionar todo</span>
       </div>
 
-      {loading && data.length === 0 ? (
+      {isLoading ? (
         <div className="flex w-full items-center justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin" />
         </div>
