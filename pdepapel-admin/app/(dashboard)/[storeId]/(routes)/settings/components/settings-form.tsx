@@ -548,6 +548,37 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
 
           <div className="space-y-4">
             <Heading
+              title="Almacenamiento"
+              description="Gestión de archivos y espacio"
+            />
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-slate-800">
+                    Limpieza de Imágenes
+                  </p>
+                  <p className="text-sm text-slate-600">
+                    Escanea y elimina imágenes antiguas o sin uso para liberar
+                    espacio en Cloudinary.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="min-w-[140px] border-slate-600 text-slate-800 hover:bg-slate-100"
+                  onClick={() =>
+                    router.push(`/${params.storeId}/settings/cloudinary`)
+                  }
+                >
+                  <Eraser className="mr-2 h-4 w-4" />
+                  Gestionar
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <Heading
               title="Migración de datos"
               description="Herramientas para migrar datos al nuevo sistema"
             />

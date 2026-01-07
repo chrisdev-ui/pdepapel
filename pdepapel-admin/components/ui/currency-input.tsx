@@ -5,8 +5,10 @@ import CurrencyInputField, {
 
 import { cn } from "@/lib/utils";
 
-export interface CustomCurrencyInputProps
-  extends Omit<CurrencyInputProps, "onChange" | "value"> {
+export interface CustomCurrencyInputProps extends Omit<
+  CurrencyInputProps,
+  "onChange" | "value"
+> {
   value?: number;
   onChange?: (value: number | undefined) => void;
 }
@@ -32,7 +34,6 @@ const CurrencyInput = React.forwardRef<
       intlConfig={{ locale: "es-CO", currency: "COP" }}
       decimalScale={0} // No decimals for Colombian pesos
       allowNegativeValue={false}
-      step={100} // Step by 100 pesos
       {...props}
     />
   );
