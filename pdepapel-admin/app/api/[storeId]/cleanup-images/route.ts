@@ -20,38 +20,54 @@ export async function GET(
     }
 
     // 1. Fetch ALL active image URLs from database
-    const [store, billboards, mainBanner, banners, productImages, shippings] =
-      await Promise.all([
-        prismadb.store.findUnique({
-          where: { id: params.storeId },
-          select: { logoUrl: true },
-        }),
-        prismadb.billboard.findMany({
-          where: { storeId: params.storeId },
-          select: { imageUrl: true },
-        }),
-        prismadb.mainBanner.findUnique({
-          where: { storeId: params.storeId },
-          select: { imageUrl: true },
-        }),
-        prismadb.banner.findMany({
-          where: { storeId: params.storeId },
-          select: { imageUrl: true },
-        }),
-        prismadb.image.findMany({
-          where: {
-            OR: [
-              { product: { storeId: params.storeId } },
-              { productGroup: { storeId: params.storeId } },
-            ],
-          },
-          select: { url: true },
-        }),
-        prismadb.shipping.findMany({
-          where: { storeId: params.storeId },
-          select: { guideUrl: true, trackingUrl: true },
-        }),
-      ]);
+    const [
+      store,
+      billboards,
+      mainBanner,
+      banners,
+      productImages,
+      shippings,
+      products,
+      productGroups,
+    ] = await Promise.all([
+      prismadb.store.findUnique({
+        where: { id: params.storeId },
+        select: { logoUrl: true, policies: true },
+      }),
+      prismadb.billboard.findMany({
+        where: { storeId: params.storeId },
+        select: { imageUrl: true },
+      }),
+      prismadb.mainBanner.findUnique({
+        where: { storeId: params.storeId },
+        select: { imageUrl: true },
+      }),
+      prismadb.banner.findMany({
+        where: { storeId: params.storeId },
+        select: { imageUrl: true },
+      }),
+      prismadb.image.findMany({
+        where: {
+          OR: [
+            { product: { storeId: params.storeId } },
+            { productGroup: { storeId: params.storeId } },
+          ],
+        },
+        select: { url: true },
+      }),
+      prismadb.shipping.findMany({
+        where: { storeId: params.storeId },
+        select: { guideUrl: true, trackingUrl: true },
+      }),
+      prismadb.product.findMany({
+        where: { storeId: params.storeId },
+        select: { description: true },
+      }),
+      prismadb.productGroup.findMany({
+        where: { storeId: params.storeId },
+        select: { description: true },
+      }),
+    ]);
 
     // Consolidate active URLs into a Set for fast lookup
     const activeUrls = new Set<string>();
@@ -65,6 +81,26 @@ export async function GET(
       if (s.guideUrl) activeUrls.add(s.guideUrl);
       if (s.trackingUrl) activeUrls.add(s.trackingUrl);
     });
+
+    // Deep Scan: Extract URLs from Rich Text & Policies
+    const urlRegex = /https?:\/\/res\.cloudinary\.com\/[^\s"')]+/g;
+
+    const scanText = (text: string | null | undefined) => {
+      if (!text) return;
+      const matches = text.match(urlRegex);
+      if (matches) {
+        matches.forEach((url) => activeUrls.add(url));
+      }
+    };
+
+    // Scan Products & Groups
+    products.forEach((p) => scanText(p.description));
+    productGroups.forEach((pg) => scanText(pg.description));
+
+    // Scan Store Policies (JSON)
+    if (store?.policies) {
+      scanText(JSON.stringify(store.policies));
+    }
 
     // 2. Fetch all assets from Cloudinary
     // We use a loop with next_cursor to fetch ALL resources, not just the first 500.
