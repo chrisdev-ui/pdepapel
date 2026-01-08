@@ -1112,13 +1112,15 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     }
 
     // 4. Map to Variants
+    // IMPORTANT: When importing standalone products, preserve their actual stock values.
+    // Do NOT override with defaultStock - the imported products already have real inventory.
     const newVariants: FormVariant[] = products.map((p) => ({
       id: p.id, // KEEP ID so backend knows to update/adopt
       sku: p.sku || "",
       name: p.name,
       price: form.getValues("price") || p.price,
       acqPrice: form.getValues("acqPrice") || p.acqPrice || 0,
-      stock: form.getValues("defaultStock") || p.stock,
+      stock: p.stock ?? 0, // Preserve actual product stock, don't override with defaultStock
       supplierId: form.getValues("defaultSupplier") || p.supplierId,
       isFeatured: p.isFeatured || false,
       isArchived: p.isArchived || false,
