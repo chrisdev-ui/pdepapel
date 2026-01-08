@@ -67,9 +67,9 @@ export async function POST(
           images: {
             createMany: {
               data: [
-                ...images.map((image: { url: string }) => ({
+                ...images.map((image: { url: string; isMain?: boolean }) => ({
                   url: image.url,
-                  isMain: true,
+                  isMain: image.isMain ?? false,
                 })),
               ],
             },
