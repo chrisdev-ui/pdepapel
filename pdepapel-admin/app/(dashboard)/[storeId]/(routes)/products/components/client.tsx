@@ -1,6 +1,7 @@
 "use client";
 
 import { ProductCatalog } from "@/components/catalog/product-catalog";
+import { ProductBatchImportModal } from "@/components/modals/product-batch-import-modal";
 import { ApiList } from "@/components/ui/api-list";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
@@ -11,24 +12,27 @@ import { Separator } from "@/components/ui/separator";
 import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
+import { Supplier } from "@prisma/client";
 import { PDFDownloadLink } from "@react-pdf/renderer";
 import { format } from "date-fns";
-import { Edit, FileDown, Plus } from "lucide-react";
+import { Edit, FileDown, FileUp, Plus } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import React, { useCallback, useState } from "react";
 import { ProductColumn, columns } from "./columns";
 
 interface ProductClientProps {
   data: ProductColumn[];
+  suppliers: Supplier[];
 }
 
-const ProductClient: React.FC<ProductClientProps> = ({ data }) => {
+const ProductClient: React.FC<ProductClientProps> = ({ data, suppliers }) => {
   const router = useRouter();
   const params = useParams();
   const { toast } = useToast();
   const [catalogData, setCatalogData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
+  const [isImportOpen, setIsImportOpen] = useState(false);
 
   const fetchCatalogData = useCallback(async () => {
     try {
@@ -106,6 +110,10 @@ const ProductClient: React.FC<ProductClientProps> = ({ data }) => {
             </div>
           )}
           <RefreshButton />
+          <Button variant="outline" onClick={() => setIsImportOpen(true)}>
+            <FileUp className="mr-2 h-4 w-4" />
+            Importar CSV
+          </Button>
           <Button
             variant="outline"
             onClick={handleCatalogButton}
@@ -181,6 +189,11 @@ const ProductClient: React.FC<ProductClientProps> = ({ data }) => {
       <Heading title="API" description="API calls para los productos" />
       <Separator />
       <ApiList entityName={Models.Products} entityIdName="productId" />
+      <ProductBatchImportModal
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        suppliers={suppliers}
+      />
     </>
   );
 };

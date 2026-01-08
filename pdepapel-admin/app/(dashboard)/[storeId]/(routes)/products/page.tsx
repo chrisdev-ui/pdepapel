@@ -1,3 +1,4 @@
+import prismadb from "@/lib/prismadb";
 import type { Metadata } from "next";
 import dynamic from "next/dynamic";
 import { getProducts } from "./server/get-products";
@@ -20,12 +21,18 @@ export default async function ProductsPage({
     storeId: string;
   };
 }) {
-  const products = await getProducts(params.storeId);
+  const [products, suppliers] = await Promise.all([
+    getProducts(params.storeId),
+    prismadb.supplier.findMany({
+      where: { storeId: params.storeId },
+      orderBy: { name: "asc" },
+    }),
+  ]);
 
   return (
     <div className="flex-col">
       <div className="flex-1 space-y-4 p-8 pt-6">
-        <ProductClient data={products} />
+        <ProductClient data={products} suppliers={suppliers} />
       </div>
     </div>
   );
