@@ -295,7 +295,7 @@ export interface CheckoutOrder {
   total: number;
   orderItems: {
     productId: string;
-    quantity: number | undefined;
+    quantity: number;
   }[];
   payment: {
     method: PaymentMethod;

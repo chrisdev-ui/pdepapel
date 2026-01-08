@@ -448,7 +448,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   const onSubmit = (data: CheckoutFormValue): void => {
     const orderItems = cart.items.map((item) => ({
       productId: item.id,
-      quantity: item.quantity,
+      quantity: item.quantity ?? 1,
     }));
     const {
       firstName,

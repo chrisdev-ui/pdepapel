@@ -277,11 +277,18 @@ export async function PATCH(
         shippingCost: shipping?.cost || 0,
       });
 
-      // Validate calculated totals
-      if (
-        Math.abs(totals.total - total) > 0.01 ||
-        Math.abs(totals.subtotal - subtotal) > 0.01
-      ) {
+      // Use tolerance of 1 COP (appropriate for Colombian Peso which has no decimal places)
+      const PRICE_TOLERANCE = 1;
+      const totalDiff = Math.abs(totals.total - total);
+      const subtotalDiff = Math.abs(totals.subtotal - subtotal);
+
+      if (totalDiff > PRICE_TOLERANCE || subtotalDiff > PRICE_TOLERANCE) {
+        console.error("[ORDER_PATCH] Price mismatch detected:", {
+          sent: { subtotal, total, shippingCost: shipping?.cost || 0 },
+          calculated: totals,
+          differences: { subtotalDiff, totalDiff },
+        });
+
         throw ErrorFactory.InvalidRequest(
           "Los montos calculados no coinciden con los enviados",
         );
