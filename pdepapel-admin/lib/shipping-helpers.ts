@@ -11,15 +11,15 @@ import { ErrorFactory } from "./api-errors";
 import { envioClickClient } from "./envioclick";
 import { ShippingStatus } from "@prisma/client";
 import { getColombiaDate } from "./date-utils";
-import { parsePhoneNumber } from "react-phone-number-input";
+import { parsePhoneNumberFromString } from "libphonenumber-js/mobile";
 
 /**
  * Extracts national phone number (10 digits) from E.164 format for EnvioClick API
- * Uses react-phone-number-input's parsePhoneNumber utility
+ * Uses libphonenumber-js (server-safe) for parsing
  */
 export function phoneToNational(phone: string): string {
   try {
-    const parsed = parsePhoneNumber(phone);
+    const parsed = parsePhoneNumberFromString(phone);
     if (parsed?.nationalNumber) {
       return parsed.nationalNumber;
     }

@@ -21,7 +21,6 @@ import {
   PaymentMethod,
   ShippingStatus,
 } from "@prisma/client";
-import { TIMEOUT } from "dns";
 import { NextResponse } from "next/server";
 
 const corsHeaders = {
