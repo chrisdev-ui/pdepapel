@@ -109,7 +109,7 @@ export async function POST(
         price,
         acqPrice,
         description,
-        stock: 0, // Stock managed via Inventory System
+        stock: 0, // Stock is initialized to 0 and set via INITIAL_INTAKE movement below
         isArchived,
         isFeatured,
         categoryId,
@@ -132,6 +132,20 @@ export async function POST(
         storeId: params.storeId,
       },
     });
+
+    // Create INITIAL_INTAKE movement if stock was provided
+    if (stock && stock > 0) {
+      const { createInventoryMovement } = await import("@/lib/inventory");
+      await createInventoryMovement(prismadb, {
+        productId: product.id,
+        storeId: params.storeId,
+        type: "INITIAL_INTAKE",
+        quantity: stock,
+        reason: "Inventario inicial al crear producto",
+        cost: acqPrice || undefined,
+        createdBy: `USER_${userId}`,
+      });
+    }
 
     // Invalidate all product cache entries for this store
     try {

@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Eraser,
+  Info,
   Loader2,
   PackageCheckIcon,
   Percent,
@@ -40,6 +41,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   INITIAL_MISC_COST,
   INITIAL_PERCENTAGE_INCREASE,
@@ -676,37 +684,67 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               name="stock"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel isRequired>Cantidad</FormLabel>
-                  <div className="flex items-center justify-between rounded-md border bg-muted/50 px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <div className="rounded-full bg-primary/10 p-1">
-                        <PackageCheckIcon className="h-4 w-4 text-primary" />
+                  <FormLabel isRequired className="flex items-center gap-2">
+                    Cantidad
+                    {!initialData && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Info className="h-4 w-4 cursor-pointer text-muted-foreground transition-colors hover:text-foreground" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="max-w-[200px] text-xs">
+                              Esta cantidad generará un nuevo movimiento en el
+                              inventario para este producto una vez creado.
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </FormLabel>
+                  {initialData ? (
+                    // EDIT MODE: Show read-only display with IntakeModal button
+                    <>
+                      <div className="flex items-center justify-between rounded-md border bg-muted/50 px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <div className="rounded-full bg-primary/10 p-1">
+                            <PackageCheckIcon className="h-4 w-4 text-primary" />
+                          </div>
+                          <span className="text-sm font-semibold">
+                            {field.value ?? 0}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="mr-1 rounded border bg-background px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                            Inventario
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => setIntakeOpen(true)}
+                            title="Agregar Stock"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
-                      <span className="text-sm font-semibold">
-                        {field.value ?? 0}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="mr-1 rounded border bg-background px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                        Inventario
-                      </span>
-                      {initialData && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => setIntakeOpen(true)}
-                          title="Agregar Stock"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                  <FormControl>
-                    <Input type="hidden" {...field} />
-                  </FormControl>
+                      <FormControl>
+                        <Input type="hidden" {...field} />
+                      </FormControl>
+                    </>
+                  ) : (
+                    // CREATE MODE: Show editable stock input
+                    <FormControl>
+                      <StockQuantityInput
+                        disabled={loading}
+                        value={field.value}
+                        onChange={field.onChange}
+                        min={0}
+                      />
+                    </FormControl>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
@@ -912,7 +950,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             />
 
             {collisionError && (
-              <div className="bg-destructive/15 col-span-3 rounded-md p-4 text-sm text-destructive">
+              <div className="col-span-3 rounded-md bg-destructive/15 p-4 text-sm text-destructive">
                 <div className="flex items-center font-medium">
                   <span className="mr-2">⚠️</span>
                   Conflicto de Variantes Detectado

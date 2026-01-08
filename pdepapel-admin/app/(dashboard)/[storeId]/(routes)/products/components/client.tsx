@@ -105,6 +105,7 @@ const ProductClient: React.FC<ProductClientProps> = ({ data, suppliers }) => {
                 defaultValue={selectedGroups}
                 placeholder="Filtrar por grupos"
                 variant="inverted"
+                className="h-10"
                 maxCount={2}
               />
             </div>

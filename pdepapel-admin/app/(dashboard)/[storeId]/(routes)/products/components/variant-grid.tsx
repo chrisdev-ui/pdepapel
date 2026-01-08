@@ -16,6 +16,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import Image from "next/image";
 import { useState } from "react";
 import { UseFormReturn } from "react-hook-form";
@@ -23,8 +29,9 @@ import { UseFormReturn } from "react-hook-form";
 import { VariantEditModal } from "@/components/modals/variant-edit-modal";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import { currencyFormatter } from "@/lib/utils";
-import { Archive, Pencil, Star, Trash } from "lucide-react";
+import { Archive, Info, Package, Pencil, Star, Trash } from "lucide-react";
 import { ProductGroupFormValues } from "./product-group-form";
 
 interface VariantGridProps {
@@ -33,6 +40,8 @@ interface VariantGridProps {
   images: { url: string }[];
   imageScopes: Record<string, string>;
   suppliers: Supplier[];
+  isEditMode?: boolean; // True when editing existing group
+  onBatchIntake?: (variantIds: string[]) => void; // Callback for batch intake
 }
 
 export const VariantGrid: React.FC<VariantGridProps> = ({
@@ -41,6 +50,8 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
   images,
   imageScopes,
   suppliers,
+  isEditMode = false,
+  onBatchIntake,
 }) => {
   const { watch, setValue } = form;
   const formVariants = watch("variants");
@@ -113,6 +124,24 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
     setSelectedIndices(new Set());
   };
 
+  // Handler for inline stock editing
+  const onStockChange = (index: number, newStock: number) => {
+    if (!formVariants) return;
+    const updatedVariant = { ...formVariants[index], stock: newStock };
+    setValue(`variants.${index}`, updatedVariant, {
+      shouldDirty: true,
+    });
+  };
+
+  // Handler for batch intake button
+  const handleBatchIntake = () => {
+    if (!onBatchIntake || !formVariants) return;
+    const selectedVariantIds = Array.from(selectedIndices)
+      .map((idx) => formVariants[idx]?.id)
+      .filter((id): id is string => !!id);
+    onBatchIntake(selectedVariantIds);
+  };
+
   const onSaveVariant = (data: any) => {
     if (editingIndex !== null) {
       // Update the specific variant in the form array
@@ -179,6 +208,21 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
           />
           {selectedIndices.size > 0 && (
             <div className="ml-auto flex items-center gap-2">
+              {/* Batch Intake Button - only show in edit mode for existing variants */}
+              {isEditMode && onBatchIntake && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handleBatchIntake}
+                  type="button"
+                  disabled={Array.from(selectedIndices).every(
+                    (idx) => !formVariants?.[idx]?.id,
+                  )}
+                >
+                  <Package className="mr-2 h-4 w-4" />
+                  Ingresar Stock ({selectedIndices.size})
+                </Button>
+              )}
               <Button
                 variant="destructive"
                 size="sm"
@@ -220,7 +264,26 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
                 <TableHead className="w-[100px]">Costo</TableHead>
                 <TableHead className="w-[120px]">Proveedor</TableHead>
                 <TableHead className="w-[100px]">Precio</TableHead>
-                <TableHead className="w-[100px]">Stock</TableHead>
+                <TableHead className="w-[100px]">
+                  <div className="flex items-center gap-1">
+                    Stock
+                    {!isEditMode && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Info className="h-3 w-3 cursor-pointer text-muted-foreground transition-colors hover:text-foreground" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="max-w-[200px] text-xs">
+                              Esta cantidad generará mov. de inventario
+                              individuales al crear el grupo.
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </div>
+                </TableHead>
                 <TableHead className="w-[80px]">Destacado</TableHead>
                 <TableHead className="w-[80px]">Archivado</TableHead>
                 <TableHead className="w-[80px] text-right">Acciones</TableHead>
@@ -344,8 +407,20 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
                     <TableCell className="text-xs">
                       {currencyFormatter(variant.price || 0)}
                     </TableCell>
-                    <TableCell className="text-xs">
-                      {variant.stock || 0}
+                    <TableCell>
+                      {isEditMode ? (
+                        <div className="flex items-center justify-center font-medium">
+                          {variant.stock || 0}
+                        </div>
+                      ) : (
+                        <StockQuantityInput
+                          value={variant.stock || 0}
+                          onChange={(val) => onStockChange(index, val)}
+                          disabled={loading}
+                          size="sm"
+                          min={0}
+                        />
+                      )}
                     </TableCell>
                     <TableCell>
                       {variant.isFeatured ? (

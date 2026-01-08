@@ -14,6 +14,10 @@ import { useForm } from "react-hook-form";
 import z from "zod";
 
 import { RichTextEditor } from "@/components/editor/rich-text-editor";
+import {
+  BatchIntakeModal,
+  BatchIntakeVariant,
+} from "@/components/modals/batch-intake-modal";
 import { ProductImportModal } from "@/components/modals/product-import-modal";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -188,6 +192,10 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   const [open, setOpen] = useState(false);
   const [matrixOpen, setMatrixOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [batchIntakeOpen, setBatchIntakeOpen] = useState(false);
+  const [batchIntakeVariants, setBatchIntakeVariants] = useState<
+    BatchIntakeVariant[]
+  >([]);
 
   // Determine if we are in "Edit" mode
   const isEdit = !!initialData;
@@ -1845,6 +1853,38 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
               (acc, curr) => ({ ...acc, [curr.url]: curr.scope }),
               {},
             )}
+            suppliers={suppliers}
+            isEditMode={isEdit}
+            onBatchIntake={(variantIds) => {
+              const variants = form.getValues("variants") || [];
+              const selected: BatchIntakeVariant[] = variantIds
+                .map((id) => {
+                  const v = variants.find((v) => v.id === id);
+                  if (!v) return null;
+                  return {
+                    id: v.id!,
+                    name: v.name || "Variante",
+                    currentStock: v.stock || 0,
+                  };
+                })
+                .filter((v): v is BatchIntakeVariant => v !== null);
+              if (selected.length > 0) {
+                setBatchIntakeVariants(selected);
+                setBatchIntakeOpen(true);
+              }
+            }}
+          />
+
+          {/* Batch Intake Modal for product group update mode */}
+          <BatchIntakeModal
+            isOpen={batchIntakeOpen}
+            onClose={() => {
+              setBatchIntakeOpen(false);
+              setBatchIntakeVariants([]);
+            }}
+            variants={batchIntakeVariants}
+            defaultCost={form.getValues("acqPrice") || 0}
+            defaultSupplierId={form.getValues("defaultSupplier") || ""}
             suppliers={suppliers}
           />
 
