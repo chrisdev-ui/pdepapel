@@ -128,10 +128,14 @@ export async function POST(
           }
 
           // Resolve or Create Size
+          // Size has unique constraint on (storeId, value), so we search by value OR name
           let size = await tx.size.findFirst({
             where: {
               storeId: params.storeId,
-              name: { equals: product.sizeName },
+              OR: [
+                { value: { equals: product.sizeName } },
+                { name: { equals: product.sizeName } },
+              ],
             },
           });
           if (!size) {
