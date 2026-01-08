@@ -1,5 +1,4 @@
 import { BATCH_SIZE } from "@/constants";
-import { cleanPhoneNumber } from "@/constants/shipping";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { getColombiaDate } from "@/lib/date-utils";
 import { sendOrderEmail } from "@/lib/email";
@@ -368,7 +367,7 @@ export async function POST(
         guestId: !authenticatedUserId ? guestId : null,
         orderNumber,
         fullName,
-        phone: cleanPhoneNumber(phone),
+        phone,
         status: status || OrderStatus.PENDING,
         address,
         email,

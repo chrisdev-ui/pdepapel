@@ -371,11 +371,13 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       initialData.products?.flatMap((p) => p.images || []) || [];
 
     const map = new Map<string, { url: string; isMain: boolean }>();
+    // Group images have isMain flag - preserve it
     groupImages.forEach((img) =>
-      map.set(img.url, { url: img.url, isMain: false }),
+      map.set(img.url, { url: img.url, isMain: img.isMain ?? false }),
     );
     variantImages.forEach((img) => {
       if (!map.has(img.url)) {
+        // Variant-only images are not main by default
         map.set(img.url, { url: img.url, isMain: false });
       }
     });

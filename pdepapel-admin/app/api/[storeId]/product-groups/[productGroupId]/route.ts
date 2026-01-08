@@ -103,9 +103,9 @@ export async function PATCH(
           deleteMany: {},
           createMany: {
             data: [
-              ...images.map((image: { url: string }) => ({
+              ...images.map((image: { url: string; isMain?: boolean }) => ({
                 url: image.url,
-                isMain: true,
+                isMain: image.isMain ?? false,
               })),
             ],
           },
@@ -253,9 +253,8 @@ export async function PATCH(
 
       // Execute Initial Movements
       if (initialMovements.length > 0) {
-        const { createInventoryMovementBatch } = await import(
-          "@/lib/inventory"
-        );
+        const { createInventoryMovementBatch } =
+          await import("@/lib/inventory");
         await createInventoryMovementBatch(tx, initialMovements);
       }
 

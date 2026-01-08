@@ -1,5 +1,4 @@
 import {
-  cleanPhoneNumber,
   ENVIOCLICK_DEFAULTS,
   getPickupDate,
   prepareShipmentDescription,
@@ -12,6 +11,28 @@ import { ErrorFactory } from "./api-errors";
 import { envioClickClient } from "./envioclick";
 import { ShippingStatus } from "@prisma/client";
 import { getColombiaDate } from "./date-utils";
+import { parsePhoneNumber } from "react-phone-number-input";
+
+/**
+ * Extracts national phone number (10 digits) from E.164 format for EnvioClick API
+ * Uses react-phone-number-input's parsePhoneNumber utility
+ */
+export function phoneToNational(phone: string): string {
+  try {
+    const parsed = parsePhoneNumber(phone);
+    if (parsed?.nationalNumber) {
+      return parsed.nationalNumber;
+    }
+  } catch {
+    // Fallback if parsing fails
+  }
+  // Fallback: extract digits manually
+  const digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("57") && digits.length === 12) {
+    return digits.substring(2);
+  }
+  return digits.substring(0, 10);
+}
 
 export async function createGuideForOrder(
   orderId: string,
@@ -153,7 +174,7 @@ export async function createGuideForOrder(
         firstName: storeName.firstName,
         lastName: storeName.lastName,
         email: truncateField(STORE_SHIPPING_INFO.email, "email"),
-        phone: cleanPhoneNumber(STORE_SHIPPING_INFO.phone),
+        phone: phoneToNational(STORE_SHIPPING_INFO.phone),
         address: truncateField(STORE_SHIPPING_INFO.address, "address"),
         suburb: truncateField(STORE_SHIPPING_INFO.suburb || "NA", "suburb"),
         crossStreet: truncateField(
@@ -171,7 +192,7 @@ export async function createGuideForOrder(
         firstName: customerName.firstName,
         lastName: customerName.lastName,
         email: truncateField(order.email || "", "email"),
-        phone: cleanPhoneNumber(order.phone),
+        phone: phoneToNational(order.phone),
         address: truncateField(order.address, "address"),
         suburb: truncateField(order.neighborhood || "NA", "suburb"),
         crossStreet: truncateField(order.address2 || "NA", "crossStreet"),

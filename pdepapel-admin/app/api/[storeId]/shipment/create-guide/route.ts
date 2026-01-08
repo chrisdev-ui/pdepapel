@@ -5,7 +5,6 @@ import { OrderStatus, ShippingStatus } from "@prisma/client";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
 import {
-  cleanPhoneNumber,
   ENVIOCLICK_DEFAULTS,
   getPickupDate,
   splitFullName,
@@ -19,6 +18,7 @@ import { envioClickClient } from "@/lib/envioclick";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { env } from "@/lib/env.mjs";
 import { getColombiaDate } from "@/lib/date-utils";
+import { phoneToNational } from "@/lib/shipping-helpers";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -179,7 +179,7 @@ export async function POST(
         firstName: storeName.firstName,
         lastName: storeName.lastName,
         email: STORE_SHIPPING_INFO.email,
-        phone: cleanPhoneNumber(STORE_SHIPPING_INFO.phone),
+        phone: phoneToNational(STORE_SHIPPING_INFO.phone),
         address: STORE_SHIPPING_INFO.address,
         suburb: STORE_SHIPPING_INFO.suburb || "NA",
         crossStreet: STORE_SHIPPING_INFO.crossStreet || "NA",
@@ -191,7 +191,7 @@ export async function POST(
         firstName: customerName.firstName,
         lastName: customerName.lastName,
         email: order.email || "",
-        phone: cleanPhoneNumber(order.phone),
+        phone: phoneToNational(order.phone),
         address: order.address,
         suburb: order.neighborhood || "NA",
         crossStreet: order.address2 || "NA",

@@ -374,22 +374,6 @@ export function splitFullName(fullName: string): {
 }
 
 /**
- * Valida y limpia número de teléfono colombiano
- */
-export function cleanPhoneNumber(phone: string): string {
-  // Remover caracteres no numéricos
-  const cleaned = phone.replace(/\D/g, "");
-
-  // Si tiene código de país, removerlo
-  if (cleaned.startsWith("57") && cleaned.length === 12) {
-    return cleaned.substring(2);
-  }
-
-  // Tomar solo los primeros 10 dígitos
-  return cleaned.substring(0, 10);
-}
-
-/**
  * Prepara la descripción del pedido para EnvioClick
  */
 export function prepareShipmentDescription(description: string): string {
