@@ -580,6 +580,13 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
         return;
       }
 
+      // POSITIVE LOGIC CHANGE:
+      // If we have BOTH Colors and Designs, we REQUIRE the user to use the Matrix.
+      // We do NOT auto-generate here to avoid pollution.
+      if (cList.length > 0 && dList.length > 0) {
+        return;
+      }
+
       const result = generateVariants({
         category: { id: catObj.id, name: catObj.name },
         sizes: sList.map((x) => ({
@@ -926,67 +933,29 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       allGenerated = [...allGenerated, ...result];
     }
 
-    // Merge with existing
+    // STRICT POSITIVE LOGIC:
+    // We only keep variants that are in 'allGenerated'.
+    // Anything else is implicitly deleted (unless we want to preserve partial matches, but the user asked for strictness).
+
     const currentVars = form.getValues("variants") || [];
     const usedIndices = new Set<number>();
     const finalVariants: FormVariant[] = [];
 
     for (const gen of allGenerated) {
-      // 1. Exact Match
-      let matchIndex = currentVars.findIndex(
-        (v, idx) =>
-          !usedIndices.has(idx) &&
+      // 1. Exact Match Check
+      const matchIndex = currentVars.findIndex(
+        (v) =>
           v.size?.id === gen.sizeId &&
           v.color?.id === gen.colorId &&
           v.design?.id === gen.designId,
       );
 
-      // 2. Soft Match (Adoption)
-      if (matchIndex === -1) {
-        matchIndex = currentVars.findIndex((v, idx) => {
-          if (usedIndices.has(idx)) return false;
-          const sizeMatch = !v.size?.id || v.size.id === gen.sizeId;
-          const colorMatch = !v.color?.id || v.color.id === gen.colorId;
-          const designMatch = !v.design?.id || v.design.id === gen.designId;
-          return sizeMatch && colorMatch && designMatch;
-        });
-      }
-
       if (matchIndex !== -1) {
+        // KEEP EXISTING (Update metadata if needed, but keep ID and Stock)
         usedIndices.add(matchIndex);
-        const existing = currentVars[matchIndex];
-        finalVariants.push({
-          ...existing,
-          // Update attributes
-          size: existing.size?.id
-            ? existing.size
-            : sizesObj.find((x) => x.id === gen.sizeId)
-              ? {
-                  id: sizesObj.find((x) => x.id === gen.sizeId)!.id,
-                  name: sizesObj.find((x) => x.id === gen.sizeId)!.name,
-                  value: sizesObj.find((x) => x.id === gen.sizeId)!.value,
-                }
-              : { id: "unknown", name: "?" },
-          color: existing.color?.id
-            ? existing.color
-            : colors.find((x) => x.id === gen.colorId)
-              ? {
-                  id: colors.find((x) => x.id === gen.colorId)!.id,
-                  name: colors.find((x) => x.id === gen.colorId)!.name,
-                  value: colors.find((x) => x.id === gen.colorId)!.value,
-                }
-              : { id: "unknown", name: "?" },
-          design: existing.design?.id
-            ? existing.design
-            : designs.find((x) => x.id === gen.designId)
-              ? {
-                  id: designs.find((x) => x.id === gen.designId)!.id,
-                  name: designs.find((x) => x.id === gen.designId)!.name,
-                }
-              : { id: "unknown", name: "?" },
-        });
+        finalVariants.push(currentVars[matchIndex]);
       } else {
-        // Create New
+        // CREATE NEW
         finalVariants.push({
           sku: gen.sku,
           name: gen.name,
@@ -1020,12 +989,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       }
     }
 
-    // Add remaining existing variants
-    currentVars.forEach((v, idx) => {
-      if (!usedIndices.has(idx)) {
-        finalVariants.push(v);
-      }
-    });
+    // We do NOT add back remaining `currentVars`. This enforces the "Selected Only" rule.
 
     form.setValue("variants", finalVariants, {
       shouldDirty: true,
