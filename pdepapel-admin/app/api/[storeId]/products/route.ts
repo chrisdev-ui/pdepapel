@@ -382,7 +382,6 @@ export async function GET(
         storeId: params.storeId,
         OR: [
           { name: { contains: search } },
-          { description: { contains: search } },
           // Or matches children
           { products: { some: productFilters } },
         ],
@@ -411,14 +410,10 @@ export async function GET(
       if (search) {
         baseGroupWhere.OR = [
           { name: { contains: search } },
-          { description: { contains: search } },
           {
             products: {
               some: {
-                OR: [
-                  { name: { contains: search } },
-                  { description: { contains: search } },
-                ],
+                OR: [{ name: { contains: search } }],
               },
             },
           },
@@ -433,10 +428,7 @@ export async function GET(
       const standaloneWhere = {
         ...productFilters,
         productGroupId: null,
-        OR: [
-          { name: { contains: search } },
-          { description: { contains: search } },
-        ],
+        OR: [{ name: { contains: search } }],
       };
       const standaloneCount = await prismadb.product.count({
         where: standaloneWhere,
@@ -676,12 +668,7 @@ export async function GET(
         colorId: colorId.length > 0 ? { in: colorId } : undefined,
         sizeId: sizeId.length > 0 ? { in: sizeId } : undefined,
         designId: designId.length > 0 ? { in: designId } : undefined,
-        OR: search
-          ? [
-              { name: { contains: search } },
-              { description: { contains: search } },
-            ]
-          : undefined,
+        OR: search ? [{ name: { contains: search } }] : undefined,
         isFeatured: isFeatured !== null ? isFeatured === "true" : undefined,
         isArchived: false,
         price: priceFilter,
@@ -831,9 +818,7 @@ export async function GET(
         designId: designId.length > 0 ? { in: designId } : undefined,
         OR: [
           { name: search ? { search } : undefined },
-          { description: search ? { search } : undefined },
           { name: { contains: search } },
-          { description: { contains: search } },
         ],
         isFeatured: isFeatured !== null ? isFeatured === "true" : undefined,
         isArchived: false,

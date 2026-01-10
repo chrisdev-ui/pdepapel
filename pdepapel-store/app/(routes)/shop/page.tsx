@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import { Suspense } from "react";
 
 import { getCategories } from "@/actions/get-categories";
 import { getColors } from "@/actions/get-colors";
@@ -12,6 +13,8 @@ import { ShopContent } from "@/components/shop-content";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { Container } from "@/components/ui/container";
 import { BASE_URL, LIMIT_SHOP_ITEMS } from "@/constants";
+
+import { ShopContentSkeleton } from "./components/skeletons";
 
 export const revalidate = 60;
 
@@ -136,7 +139,11 @@ interface ShopPageProps {
   };
 }
 
-export default async function ShopPage({ searchParams }: ShopPageProps) {
+async function ShopContentWrapper({
+  searchParams,
+}: {
+  searchParams: ShopPageProps["searchParams"];
+}) {
   const { products, totalPages, facets } = await getProducts({
     typeId: searchParams.typeId,
     categoryId: searchParams.categoryId,
@@ -193,19 +200,29 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
 
   return (
     <>
+      <Breadcrumb items={breadcrumbItems} className="mt-6" />
+      <ShopContent
+        initialProducts={products}
+        initialTotalPages={totalPages}
+        initialFacets={facets}
+        types={types}
+        categories={categories}
+        sizes={sizes}
+        colors={colors}
+        designs={designs}
+      />
+    </>
+  );
+}
+
+export default async function ShopPage({ searchParams }: ShopPageProps) {
+  return (
+    <>
       <Features />
       <Container className="flex flex-col gap-y-8">
-        <Breadcrumb items={breadcrumbItems} className="mt-6" />
-        <ShopContent
-          initialProducts={products}
-          initialTotalPages={totalPages}
-          initialFacets={facets}
-          types={types}
-          categories={categories}
-          sizes={sizes}
-          colors={colors}
-          designs={designs}
-        />
+        <Suspense fallback={<ShopContentSkeleton />}>
+          <ShopContentWrapper searchParams={searchParams} />
+        </Suspense>
       </Container>
       <Newsletter />
     </>

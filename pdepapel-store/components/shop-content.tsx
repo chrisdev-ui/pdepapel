@@ -175,14 +175,22 @@ export const ShopContent: React.FC<ShopContentProps> = ({
         />
         <ShopSearchBar className="md:hidden" />
         {/* We need to handle the pagination inside Products or lift it here. Products component takes totalPages. */}
-        {isLoading ? (
-          <ProductListSkeleton />
-        ) : (
-          <Products
-            products={data?.products ?? []}
-            totalPages={data?.totalPages ?? 0}
-          />
-        )}
+        <div className="relative min-h-[400px]">
+          {isLoading ? (
+            <ProductListSkeleton />
+          ) : (
+            <div
+              className={`transition-opacity duration-300 ease-in-out ${
+                isFetching ? "pointer-events-none opacity-50" : "opacity-100"
+              }`}
+            >
+              <Products
+                products={data?.products ?? []}
+                totalPages={data?.totalPages ?? 0}
+              />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
