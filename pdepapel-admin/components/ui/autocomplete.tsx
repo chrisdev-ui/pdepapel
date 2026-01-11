@@ -3,7 +3,14 @@
 import { Command as CommandPrimitive } from "cmdk";
 import { Archive, Check, Package, Percent } from "lucide-react";
 import Image from "next/image";
-import { useCallback, useRef, useState, type KeyboardEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 
 import {
   CommandGroup,
@@ -48,10 +55,42 @@ export const AutoComplete = ({
   multiSelect = false,
 }: AutoCompleteProps) => {
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const [isOpen, setOpen] = useState(false);
   const [selectedValues, setSelectedValues] = useState<Option[]>(values);
   const [inputValue, setInputValue] = useState<string>("");
+
+  // Reset scroll position when search text changes
+  useEffect(() => {
+    if (listRef.current) {
+      listRef.current.scrollTop = 0;
+    }
+  }, [inputValue]);
+
+  // Sync selectedValues when external values prop changes
+  useEffect(() => {
+    setSelectedValues(values);
+  }, [values]);
+
+  // Filter and sort options: matching items first, then non-matching
+  const filteredOptions = useMemo(() => {
+    if (!inputValue.trim()) return options;
+
+    const searchTerm = inputValue.toLowerCase().trim();
+    const matching: Option[] = [];
+    const nonMatching: Option[] = [];
+
+    options.forEach((option) => {
+      if (option.label.toLowerCase().includes(searchTerm)) {
+        matching.push(option);
+      } else {
+        nonMatching.push(option);
+      }
+    });
+
+    return [...matching, ...nonMatching];
+  }, [options, inputValue]);
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
@@ -116,7 +155,7 @@ export const AutoComplete = ({
   );
 
   return (
-    <CommandPrimitive onKeyDown={handleKeyDown}>
+    <CommandPrimitive onKeyDown={handleKeyDown} shouldFilter={false}>
       <div>
         <CommandInput
           ref={inputRef}
@@ -131,7 +170,10 @@ export const AutoComplete = ({
       <div className="relative mt-1">
         {isOpen && (
           <div className="absolute top-0 z-10 w-full rounded-xl bg-stone-50 outline-none animate-in fade-in-0 zoom-in-95">
-            <CommandList className="rounded-lg ring-1 ring-slate-200">
+            <CommandList
+              ref={listRef}
+              className="rounded-lg ring-1 ring-slate-200"
+            >
               {isLoading ? (
                 <CommandPrimitive.Loading>
                   <div className="p-1">
@@ -139,9 +181,9 @@ export const AutoComplete = ({
                   </div>
                 </CommandPrimitive.Loading>
               ) : null}
-              {options.length > 0 && !isLoading && (
+              {filteredOptions.length > 0 && !isLoading && (
                 <CommandGroup>
-                  {options.map((option) => {
+                  {filteredOptions.map((option) => {
                     const isSelected = multiSelect
                       ? selectedValues.some((val) => val.value === option.value)
                       : selectedValues[0]?.value === option.value;
