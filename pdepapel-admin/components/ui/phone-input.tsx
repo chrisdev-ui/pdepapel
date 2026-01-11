@@ -42,6 +42,7 @@ const PhoneInput: React.ForwardRefExoticComponent<PhoneInputProps> =
           countrySelectComponent={CountrySelect}
           inputComponent={InputComponent}
           smartCaret={false}
+          international={false}
           defaultCountry={defaultCountry}
           /**
            * Handles the onChange event.
@@ -102,7 +103,7 @@ const CountrySelect = ({
           />
           <ChevronsUpDown
             className={cn(
-              "size-4 -mr-2 opacity-50",
+              "-mr-2 size-4 opacity-50",
               disabled ? "hidden" : "opacity-100",
             )}
           />
@@ -152,7 +153,7 @@ const CountrySelectOption = ({
       <span className="flex-1 text-sm">{countryName}</span>
       <span className="text-sm text-foreground/50">{`+${RPNInput.getCountryCallingCode(country)}`}</span>
       <CheckIcon
-        className={`size-4 ml-auto ${country === selectedCountry ? "opacity-100" : "opacity-0"}`}
+        className={`ml-auto size-4 ${country === selectedCountry ? "opacity-100" : "opacity-0"}`}
       />
     </CommandItem>
   );
@@ -162,7 +163,7 @@ const FlagComponent = ({ country, countryName }: RPNInput.FlagProps) => {
   const Flag = flags[country];
 
   return (
-    <span className="[&_svg]:size-full flex h-4 w-6 overflow-hidden rounded-sm">
+    <span className="flex h-4 w-6 overflow-hidden rounded-sm [&_svg]:size-full">
       {Flag ? (
         <Flag title={countryName} />
       ) : (
