@@ -579,7 +579,11 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     }
   };
 
-  const submitOrder = async (data: OrderFormValues, forceRedirect = true) => {
+  const submitOrder = async (
+    data: OrderFormValues,
+    forceRedirect = true,
+    skipAutoGuide = false,
+  ) => {
     const updatedOrderItems = data.orderItems.map(
       (item: { productId: string; quantity: number }) => ({
         ...item,
@@ -595,7 +599,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
       discountType: data.discount?.type,
       discountAmount: data.discount?.amount,
       discountReason: data.discount?.reason,
-      // Ensure shipping.boxId is included in the payload if you added it to schema or pass explicitly
+      skipAutoGuide,
     };
 
     let response;
@@ -645,13 +649,40 @@ export const OrderForm: React.FC<OrderFormProps> = ({
       setLoading(true);
       const data = form.getValues();
 
-      await submitOrder(data, false);
+      await submitOrder(data, false, false); // Create guide (skipAutoGuide = false)
 
       setShowGuideConfirmation(false);
 
       toast({
         title: "Orden guardada y guía creada",
         description: "La guía de envío se creará automáticamente",
+      });
+
+      router.push(`/${params.storeId}/${Models.Orders}`);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
+      setLoading(false);
+    }
+  };
+
+  const saveWithoutGuide = async () => {
+    try {
+      setLoading(true);
+      const data = form.getValues();
+
+      await submitOrder(data, false, true); // Skip guide (skipAutoGuide = true)
+
+      setShowGuideConfirmation(false);
+
+      toast({
+        title: "Orden guardada",
+        description:
+          "La orden fue guardada. Puedes crear la guía manualmente desde el detalle.",
+        variant: "success",
       });
 
       router.push(`/${params.storeId}/${Models.Orders}`);
@@ -816,6 +847,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         isOpen={showGuideConfirmation}
         onClose={() => setShowGuideConfirmation(false)}
         onConfirm={confirmAndCreateGuide}
+        onSaveWithoutGuide={saveWithoutGuide}
         loading={loading}
         selectedQuote={
           shippingQuotes.find((q) => q.idRate === selectedRateId) || {

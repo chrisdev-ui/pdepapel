@@ -108,6 +108,7 @@ export async function PATCH(
       address2,
       addressReference,
       company,
+      skipAutoGuide,
     } = body;
 
     // Validate order items count
@@ -486,7 +487,8 @@ export async function PATCH(
         isNowPaid &&
         updated.shipping &&
         !updated.shipping?.envioClickIdOrder &&
-        updated.shipping.envioClickIdRate
+        updated.shipping.envioClickIdRate &&
+        !skipAutoGuide
       ) {
         try {
           console.log(
@@ -506,9 +508,15 @@ export async function PATCH(
           updated.shipping &&
           !updated.shipping?.envioClickIdOrder
         ) {
-          console.log(
-            "[ORDER_UPDATE] Skipping automatic guide creation - no shipping rate available",
-          );
+          if (skipAutoGuide) {
+            console.log(
+              "[ORDER_UPDATE] Skipping automatic guide creation - admin chose to skip",
+            );
+          } else {
+            console.log(
+              "[ORDER_UPDATE] Skipping automatic guide creation - no shipping rate available",
+            );
+          }
         }
       }
 

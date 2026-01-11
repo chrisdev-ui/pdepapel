@@ -2,13 +2,14 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { currencyFormatter } from "@/lib/utils";
-import { Loader2 } from "lucide-react";
+import { FileText, Loader2, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface GuideConfirmationModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void;
+  onSaveWithoutGuide: () => void;
   loading: boolean;
   selectedQuote?: ShippingQuote;
 }
@@ -28,6 +29,7 @@ export function GuideConfirmationModal({
   isOpen,
   onClose,
   onConfirm,
+  onSaveWithoutGuide,
   loading,
   selectedQuote,
 }: GuideConfirmationModalProps): JSX.Element | null {
@@ -40,9 +42,8 @@ export function GuideConfirmationModal({
   }
   return (
     <Modal
-      title="Confirmar creación de guía"
-      description="Esta orden será marcada como PAGADA y se creará automáticamente una guía de envío con EnvioClick.
-        ¿Deseas continuar?"
+      title="¿Crear guía de envío automáticamente?"
+      description="La orden será marcada como PAGADA. Puedes crear la guía ahora o más tarde desde el detalle de la orden."
       isOpen={isOpen}
       onClose={onClose}
     >
@@ -71,13 +72,23 @@ export function GuideConfirmationModal({
           </AlertDescription>
         </Alert>
       </div>
-      <div className="flex w-full items-center justify-end space-x-2 pt-6">
+      <div className="flex w-full flex-col gap-2 pt-6 sm:flex-row sm:items-center sm:justify-end">
         <Button disabled={loading} variant="outline" onClick={onClose}>
           Cancelar
         </Button>
-        <Button disabled={loading} variant="destructive" onClick={onConfirm}>
+        <Button
+          disabled={loading}
+          variant="secondary"
+          onClick={onSaveWithoutGuide}
+        >
           {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Continuar
+          <Save className="mr-2 h-4 w-4" />
+          Guardar sin Guía
+        </Button>
+        <Button disabled={loading} variant="default" onClick={onConfirm}>
+          {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <FileText className="mr-2 h-4 w-4" />
+          Crear Guía
         </Button>
       </div>
     </Modal>
