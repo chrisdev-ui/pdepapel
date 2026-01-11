@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
 import { envioClickClient } from "@/lib/envioclick";
-import { ShippingStatus } from "@prisma/client";
+import { Prisma, ShippingStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { getColombiaDate } from "@/lib/date-utils";
@@ -46,10 +46,23 @@ export async function POST(
     await prismadb.shipping.update({
       where: { id: shipping.id, storeId: params.storeId },
       data: {
-        status: ShippingStatus.Returned,
+        status: ShippingStatus.Preparing,
+        envioClickIdOrder: null,
+        trackingCode: null,
+        guideUrl: null,
+        guidePdfBase64: null,
+        externalOrderId: null,
+        requestPickup: false,
+        pickupDate: null,
+        originData: Prisma.DbNull,
+        destinationData: Prisma.DbNull,
+        trackingUrl: null,
+        deliveryDays: null,
+        estimatedDeliveryDate: null,
+        actualDeliveryDate: null,
         notes: shipping.notes
-          ? `${shipping.notes}\nCancelada: ${cancelTime}`
-          : `Cancelada: ${cancelTime}`,
+          ? `${shipping.notes}\nGuía cancelada: ${cancelTime}`
+          : `Guía cancelada: ${cancelTime}`,
       },
     });
 
