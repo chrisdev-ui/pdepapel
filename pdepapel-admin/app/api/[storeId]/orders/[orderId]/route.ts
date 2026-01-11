@@ -408,63 +408,68 @@ export async function PATCH(
               },
             },
           },
-          // Only upsert shipping if there's a valid provider (not NONE)
-          ...(shipping && shippingProvider && shippingProvider !== "NONE"
+          // Upsert shipping for all providers including NONE (store pickup)
+          ...(shipping && shippingProvider
             ? {
                 shipping: {
                   upsert: {
                     create: {
                       status: shipping.status || ShippingStatus.Preparing,
                       provider: shippingProvider,
-                      envioClickIdRate: envioClickIdRate || null,
-                      carrierId: shipping.carrierId,
-                      carrierName: shipping.carrierName,
-                      courier: shipping.courier,
-                      productId: shipping.productId,
-                      productName: shipping.productName,
-                      flete: shipping.flete,
-                      minimumInsurance: shipping.minimumInsurance,
-                      deliveryDays: shipping.deliveryDays,
-                      isCOD: shipping.isCOD,
+                      // Only set carrier-specific fields for non-NONE providers
+                      ...(shippingProvider !== "NONE" && {
+                        envioClickIdRate: envioClickIdRate || null,
+                        carrierId: shipping.carrierId,
+                        carrierName: shipping.carrierName,
+                        courier: shipping.courier,
+                        productId: shipping.productId,
+                        productName: shipping.productName,
+                        flete: shipping.flete,
+                        minimumInsurance: shipping.minimumInsurance,
+                        deliveryDays: shipping.deliveryDays,
+                        isCOD: shipping.isCOD,
+                        trackingCode: shipping.trackingCode,
+                        trackingUrl: shipping.trackingUrl,
+                        guideUrl: shipping.guideUrl,
+                        estimatedDeliveryDate: shipping.estimatedDeliveryDate,
+                        box: shipping.boxId
+                          ? { connect: { id: shipping.boxId } }
+                          : undefined,
+                      }),
                       cost: shipping.cost,
-                      trackingCode: shipping.trackingCode,
-                      trackingUrl: shipping.trackingUrl,
-                      guideUrl: shipping.guideUrl,
-                      estimatedDeliveryDate: shipping.estimatedDeliveryDate,
                       notes: shipping.notes,
-                      box: shipping.boxId
-                        ? { connect: { id: shipping.boxId } }
-                        : undefined,
                       store: { connect: { id: params.storeId } },
                     },
                     update: {
-                      // Don't update status on existing shipments - preserve current status
                       ...(shippingProvider && { provider: shippingProvider }),
                       ...(shipping.status && { status: shipping.status }),
-                      ...(envioClickIdRate !== undefined && {
-                        envioClickIdRate: envioClickIdRate || null,
+                      // Only update carrier-specific fields for non-NONE providers
+                      ...(shippingProvider !== "NONE" && {
+                        ...(envioClickIdRate !== undefined && {
+                          envioClickIdRate: envioClickIdRate || null,
+                        }),
+                        carrierId: shipping.carrierId,
+                        carrierName: shipping.carrierName,
+                        courier: shipping.courier,
+                        productId: shipping.productId,
+                        productName: shipping.productName,
+                        flete: shipping.flete,
+                        minimumInsurance: shipping.minimumInsurance,
+                        deliveryDays: shipping.deliveryDays,
+                        isCOD: shipping.isCOD,
+                        trackingCode: shipping.trackingCode,
+                        trackingUrl: shipping.trackingUrl,
+                        guideUrl: shipping.guideUrl,
+                        estimatedDeliveryDate: shipping.estimatedDeliveryDate,
+                        box:
+                          shipping.boxId === null
+                            ? { disconnect: true }
+                            : shipping.boxId
+                              ? { connect: { id: shipping.boxId } }
+                              : undefined,
                       }),
-                      carrierId: shipping.carrierId,
-                      carrierName: shipping.carrierName,
-                      courier: shipping.courier,
-                      productId: shipping.productId,
-                      productName: shipping.productName,
-                      flete: shipping.flete,
-                      minimumInsurance: shipping.minimumInsurance,
-                      deliveryDays: shipping.deliveryDays,
-                      isCOD: shipping.isCOD,
                       cost: shipping.cost,
-                      trackingCode: shipping.trackingCode,
-                      trackingUrl: shipping.trackingUrl,
-                      guideUrl: shipping.guideUrl,
-                      estimatedDeliveryDate: shipping.estimatedDeliveryDate,
                       notes: shipping.notes,
-                      box:
-                        shipping.boxId === null
-                          ? { disconnect: true }
-                          : shipping.boxId
-                            ? { connect: { id: shipping.boxId } }
-                            : undefined,
                     },
                   },
                 },

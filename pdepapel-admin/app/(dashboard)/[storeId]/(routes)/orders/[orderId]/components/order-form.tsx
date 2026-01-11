@@ -1900,6 +1900,96 @@ export const OrderForm: React.FC<OrderFormProps> = ({
               )}
             />
 
+            {/* Store Pickup Status Section */}
+            {form.watch("shippingProvider") === ShippingProvider.NONE && (
+              <div className="space-y-4 rounded-lg bg-muted/50 p-4">
+                <Alert>
+                  <Store className="h-4 w-4" />
+                  <AlertDescription>
+                    El cliente recogerá el pedido en tienda. Actualiza el estado
+                    para informar al cliente sobre el progreso de su orden.
+                  </AlertDescription>
+                </Alert>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="shipping.status"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Estado del Pedido</FormLabel>
+                        <Select
+                          disabled={loading}
+                          onValueChange={field.onChange}
+                          value={field.value}
+                          defaultValue={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecciona un estado" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {Object.entries(shippingOptions).map(
+                              ([key, label]) => (
+                                <SelectItem key={key} value={key}>
+                                  {label}
+                                </SelectItem>
+                              ),
+                            )}
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          Estado actual del pedido para recogida
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="shipping.cost"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Costo Adicional</FormLabel>
+                        <FormControl>
+                          <CurrencyInput
+                            placeholder="$ 0"
+                            disabled={loading}
+                            value={field.value}
+                            onChange={field.onChange}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Costo adicional si aplica
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="shipping.notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Notas para el cliente</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          disabled={loading}
+                          placeholder="Ej: Su pedido estará listo para recoger mañana después de las 2pm"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
+
             {/* EnvioClick Quotation Section */}
             {form.watch("shippingProvider") === ShippingProvider.ENVIOCLICK && (
               <div className="space-y-4">
