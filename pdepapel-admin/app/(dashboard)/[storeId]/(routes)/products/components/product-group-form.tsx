@@ -1086,17 +1086,41 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       });
     }
 
-    // 4. Map to Variants
+    // 4. Inherit group-level values from imported products
+    // When importing products, we set the group's price/acqPrice/supplier from the first product
+    // if these values are not already set in the form
+    const firstProduct = products[0];
+    const currentPrice = form.getValues("price");
+    const currentAcqPrice = form.getValues("acqPrice");
+    const currentSupplier = form.getValues("defaultSupplier");
+
+    // Set group-level values from first imported product if not already set
+    if (!currentPrice || currentPrice === 0) {
+      form.setValue("price", firstProduct.price);
+    }
+    if (!currentAcqPrice || currentAcqPrice === 0) {
+      form.setValue("acqPrice", firstProduct.acqPrice || 0);
+    }
+    if (!currentSupplier && firstProduct.supplierId) {
+      form.setValue("defaultSupplier", firstProduct.supplierId);
+    }
+
+    // Get the effective group values (either existing or newly set from first product)
+    const effectivePrice = form.getValues("price");
+    const effectiveAcqPrice = form.getValues("acqPrice");
+    const effectiveSupplier = form.getValues("defaultSupplier");
+
+    // 5. Map to Variants
     // IMPORTANT: When importing standalone products, preserve their actual stock values.
-    // Do NOT override with defaultStock - the imported products already have real inventory.
+    // Each variant keeps its own stock - do NOT reset to 0 or use defaultStock.
     const newVariants: FormVariant[] = products.map((p) => ({
       id: p.id, // KEEP ID so backend knows to update/adopt
       sku: p.sku || "",
       name: p.name,
-      price: form.getValues("price") || p.price,
-      acqPrice: form.getValues("acqPrice") || p.acqPrice || 0,
-      stock: p.stock ?? 0, // Preserve actual product stock, don't override with defaultStock
-      supplierId: form.getValues("defaultSupplier") || p.supplierId,
+      price: effectivePrice || p.price, // Use group price (now set from first product)
+      acqPrice: effectiveAcqPrice || p.acqPrice || 0, // Use group acqPrice
+      stock: p.stock ?? 0, // ALWAYS preserve each product's actual stock
+      supplierId: effectiveSupplier || p.supplierId,
       isFeatured: p.isFeatured || false,
       isArchived: p.isArchived || false,
       size: p.size,

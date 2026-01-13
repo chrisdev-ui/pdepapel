@@ -37,6 +37,13 @@ interface Product {
   images: { url: string }[];
   price: number;
   productGroupId?: string | null;
+  // Additional fields returned by API for import functionality
+  sku?: string;
+  acqPrice?: number;
+  stock?: number;
+  supplierId?: string;
+  isFeatured?: boolean;
+  isArchived?: boolean;
 }
 
 interface ProductImportModalProps {
