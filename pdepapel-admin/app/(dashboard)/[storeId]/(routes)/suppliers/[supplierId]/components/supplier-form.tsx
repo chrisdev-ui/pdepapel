@@ -1,6 +1,7 @@
 "use client";
 
 import { useFormPersist } from "@/hooks/use-form-persist";
+import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Supplier } from "@prisma/client";
 import { ArrowLeft, Eraser, Loader2, Trash } from "lucide-react";
@@ -75,6 +76,8 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData }) => {
     form,
     key: `supplier-form-${params.storeId}-${initialData?.id ?? "new"}`,
   });
+
+  useFormValidationToast({ form });
 
   const onClear = () => {
     form.reset(defaultValues);

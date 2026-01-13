@@ -1,6 +1,7 @@
 "use client";
 
 import { useFormPersist } from "@/hooks/use-form-persist";
+import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Design } from "@prisma/client";
 import { ArrowLeft, Eraser, Loader2, Trash } from "lucide-react";
@@ -73,6 +74,8 @@ export const DesignForm: React.FC<DesignFormProps> = ({ initialData }) => {
     form,
     key: `design-form-${params.storeId}-${initialData?.id ?? "new"}`,
   });
+
+  useFormValidationToast({ form });
 
   const onClear = () => {
     form.reset(defaultValues);

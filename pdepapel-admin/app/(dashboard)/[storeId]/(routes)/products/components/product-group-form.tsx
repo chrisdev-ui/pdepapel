@@ -50,6 +50,7 @@ import {
   INITIAL_TRANSPORTATION_COST,
 } from "@/constants";
 import { useFormPersist } from "@/hooks/use-form-persist";
+import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import {
@@ -727,6 +728,8 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     form,
     key: `product-group-form-${params.storeId}-${initialData?.id ?? "new"}`,
   });
+
+  useFormValidationToast({ form });
 
   const onClear = async () => {
     // Diff Logic to clean up orphan images

@@ -55,6 +55,7 @@ import {
   Models,
 } from "@/constants";
 import { useFormPersist } from "@/hooks/use-form-persist";
+import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import { Color, Design, Size, Supplier } from "@prisma/client";
@@ -210,6 +211,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     form,
     key: `product-form-${params.storeId}-${initialData?.id ?? "new"}`,
   });
+
+  useFormValidationToast({ form });
 
   const onClear = async () => {
     const currentImages = form.getValues("images") || [];

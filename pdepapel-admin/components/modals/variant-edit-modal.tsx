@@ -62,6 +62,7 @@ interface VariantEditModalProps {
 }
 
 import { IntakeModal } from "@/components/modals/intake-modal";
+import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 
 export const VariantEditModal: React.FC<VariantEditModalProps> = ({
   isOpen,
@@ -85,6 +86,8 @@ export const VariantEditModal: React.FC<VariantEditModalProps> = ({
       images: [],
     },
   });
+
+  useFormValidationToast({ form });
 
   useEffect(() => {
     if (initialData) {

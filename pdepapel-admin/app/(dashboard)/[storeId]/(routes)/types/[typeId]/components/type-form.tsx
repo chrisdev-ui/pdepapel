@@ -1,6 +1,7 @@
 "use client";
 
 import { useFormPersist } from "@/hooks/use-form-persist";
+import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, Eraser, Loader2, Trash } from "lucide-react";
 import { useForm } from "react-hook-form";
@@ -73,6 +74,8 @@ export const TypeForm: React.FC<TypeFormProps> = ({ initialData }) => {
     form,
     key: `type-form-${params.storeId}-${initialData?.id ?? "new"}`,
   });
+
+  useFormValidationToast({ form });
 
   const onClear = () => {
     form.reset(defaultValues);

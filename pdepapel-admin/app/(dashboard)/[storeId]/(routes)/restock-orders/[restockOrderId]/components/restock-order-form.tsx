@@ -48,6 +48,7 @@ import { Separator } from "@/components/ui/separator";
 import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import { Textarea } from "@/components/ui/textarea";
 import { useFormPersist } from "@/hooks/use-form-persist";
+import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useToast } from "@/hooks/use-toast";
 import { cn, currencyFormatter } from "@/lib/utils";
 import { ReceiveItemsModal } from "./receive-items-modal";
@@ -149,6 +150,8 @@ export const RestockOrderForm: React.FC<RestockOrderFormProps> = ({
     key: `restock-order-form-${params.storeId}-${params.restockOrderId ?? "new"}`,
     exclude: ["status"], // Don't persist status changes via draft if meaningful
   });
+
+  useFormValidationToast({ form });
 
   const { fields, append, remove } = useFieldArray({
     control: form.control,

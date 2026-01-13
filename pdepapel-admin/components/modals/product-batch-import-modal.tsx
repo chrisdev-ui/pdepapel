@@ -30,6 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -126,6 +127,8 @@ export const ProductBatchImportModal: React.FC<
       shippingCost: 0,
     },
   });
+
+  useFormValidationToast({ form });
 
   const createRestockOrder = form.watch("createRestockOrder");
 

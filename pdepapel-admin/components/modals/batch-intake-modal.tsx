@@ -1,5 +1,6 @@
 "use client";
 
+import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import axios from "axios";
@@ -80,6 +81,8 @@ export const BatchIntakeModal: React.FC<BatchIntakeModalProps> = ({
       supplierId: defaultSupplierId,
     },
   });
+
+  useFormValidationToast({ form });
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {

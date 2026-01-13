@@ -26,6 +26,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Models, discountOptions } from "@/constants";
 import { useFormPersist } from "@/hooks/use-form-persist";
+import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import { datePresets } from "@/lib/utils";
@@ -126,6 +127,8 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData }) => {
     form,
     key: `coupon-form-${params.storeId}-${initialData?.id ?? "new"}`,
   });
+
+  useFormValidationToast({ form });
 
   const onClear = () => {
     form.reset(defaultValues);

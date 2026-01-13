@@ -35,6 +35,7 @@ import {
   parseSizeValue,
 } from "@/constants/sizes";
 import { useFormPersist } from "@/hooks/use-form-persist";
+import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import axios from "axios";
@@ -111,6 +112,8 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData }) => {
     form,
     key: `size-form-${params.storeId}-${initialData?.id ?? "new"}`,
   });
+
+  useFormValidationToast({ form });
 
   const onClear = () => {
     form.reset(defaultValues);

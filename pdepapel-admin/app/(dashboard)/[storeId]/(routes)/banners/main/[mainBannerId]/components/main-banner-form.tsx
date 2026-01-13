@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Models } from "@/constants";
 import { useFormPersist } from "@/hooks/use-form-persist";
+import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import { MainBanner } from "@prisma/client";
@@ -96,6 +97,8 @@ const MainBannerForm: React.FC<MainBannerFormProps> = ({ initialData }) => {
     form,
     key: `main-banner-form-${params.storeId}-${initialData?.id ?? "new"}`,
   });
+
+  useFormValidationToast({ form });
 
   const onClear = async () => {
     const currentImage = form.getValues("imageUrl");

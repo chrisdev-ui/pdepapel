@@ -1,6 +1,7 @@
 "use client";
 
 import { useFormPersist } from "@/hooks/use-form-persist";
+import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   DiscountType,
@@ -482,6 +483,8 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     form,
     key: `order-form-${params.storeId}-${initialData?.id ?? "new"}`,
   });
+
+  useFormValidationToast({ form });
 
   const onClear = () => {
     form.reset(defaultValues);

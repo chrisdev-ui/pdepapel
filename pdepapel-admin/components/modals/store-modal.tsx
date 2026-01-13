@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
+import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import axios from "axios";
@@ -37,6 +38,8 @@ export function StoreModal() {
       name: "",
     },
   });
+
+  useFormValidationToast({ form });
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {

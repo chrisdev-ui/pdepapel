@@ -1,6 +1,7 @@
 "use client";
 
 import { useFormPersist } from "@/hooks/use-form-persist";
+import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, Eraser, Loader2, Trash } from "lucide-react";
 import { useForm } from "react-hook-form";
@@ -83,6 +84,8 @@ export const PostForm: React.FC<PostFormProps> = ({ initialData }) => {
     form,
     key: `post-form-${params.storeId}-${initialData?.id ?? "new"}`,
   });
+
+  useFormValidationToast({ form });
 
   const onClear = () => {
     form.reset(defaultValues);

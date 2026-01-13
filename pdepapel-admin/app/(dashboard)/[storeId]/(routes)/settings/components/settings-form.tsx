@@ -45,6 +45,7 @@ import { Input } from "@/components/ui/input";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { Separator } from "@/components/ui/separator";
 import { useFormPersist } from "@/hooks/use-form-persist";
+import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useOrigin } from "@/hooks/use-origin";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
@@ -131,6 +132,8 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
     form,
     key: `settings-form-${params.storeId}`,
   });
+
+  useFormValidationToast({ form });
 
   const onClear = async () => {
     const currentLogo = form.getValues("logoUrl");

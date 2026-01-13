@@ -1,5 +1,6 @@
 "use client";
 
+import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import axios from "axios";
@@ -71,6 +72,8 @@ export const AdjustInventoryModal: React.FC<AdjustInventoryModalProps> = ({
       description: "",
     },
   });
+
+  useFormValidationToast({ form });
 
   useEffect(() => {
     if (isOpen) {
