@@ -215,3 +215,116 @@
     }
   }
 }
+
+/* Print Styles for Order Page */
+@media print {
+  /* Reset body padding for print */
+  body {
+    padding-top: 0 !important;
+    background: white !important;
+  }
+
+  /* Hide navigation, footer, floating elements */
+  nav,
+  header,
+  footer,
+  .floating-whatsapp,
+  ._floatingWhatsApp_181xn_1,
+  [class*="floating"],
+  [class*="Floating"] {
+    display: none !important;
+  }
+
+  /* Hide print button and other interactive elements */
+  button,
+  .print\\:hidden {
+    display: none !important;
+  }
+
+  /* Show print-only elements */
+  .print\\:block {
+    display: block !important;
+  }
+
+  /* Remove gradients and use solid backgrounds for print */
+  .bg-gradient-to-br,
+  .bg-gradient-to-r {
+    background: white !important;
+  }
+
+  /* Make gradient header sections have solid colors for print */
+  [class*="from-pink-500"],
+  [class*="from-indigo-500"],
+  [class*="from-purple-500"],
+  [class*="from-emerald-500"] {
+    background: #f3f4f6 !important;
+    color: #1f2937 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Ensure text is visible in header sections */
+  [class*="from-pink-500"] *,
+  [class*="from-indigo-500"] *,
+  [class*="from-purple-500"] *,
+  [class*="from-emerald-500"] * {
+    color: #1f2937 !important;
+  }
+
+  /* Keep shadows minimal for print */
+  .shadow-lg,
+  .shadow-xl,
+  .shadow-2xl {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+  }
+
+  /* Ensure full width for print */
+  .container {
+    max-width: 100% !important;
+    padding: 1rem !important;
+  }
+
+  /* Single column layout for print */
+  .lg\\:grid-cols-3 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .lg\\:col-span-2 {
+    grid-column: span 1 !important;
+  }
+
+  /* Remove sticky positioning */
+  .sticky {
+    position: relative !important;
+    top: auto !important;
+  }
+
+  /* Ensure page breaks work well */
+  .rounded-2xl {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Remove backdrop and blur effects */
+  .backdrop-blur,
+  .backdrop-blur-xl {
+    backdrop-filter: none !important;
+  }
+
+  /* Ensure images print */
+  img {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Hide tracking events scrollable section - limit height */
+  .max-h-72 {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* Add print header */
+  .print\\:block {
+    display: block !important;
+  }
+}

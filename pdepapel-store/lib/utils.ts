@@ -46,20 +46,6 @@ export function generateGuestId() {
   return `guest_${uuidv4()}`;
 }
 
-export function formatPhoneNumber(phoneNumber: string): string {
-  const digits = phoneNumber.replace(/\D/g, "");
-
-  if (digits.length === 12) {
-    return digits.replace(/(\d{2})(\d{3})(\d{3})(\d{4})/, "(+$1) $2 $3 $4");
-  }
-
-  if (digits.length === 10) {
-    return digits.replace(/(\d{3})(\d{3})(\d{4})/, "$1 $2 $3");
-  }
-
-  return phoneNumber;
-}
-
 export async function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
