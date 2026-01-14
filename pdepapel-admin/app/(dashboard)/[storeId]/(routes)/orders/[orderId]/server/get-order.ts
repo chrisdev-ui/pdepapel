@@ -145,21 +145,10 @@ export async function getOrder(orderId: string, storeId: string) {
 
   availableProducts.forEach((product: (typeof availableProducts)[0]) => {
     const priceInfo = pricesMap.get(product.id);
-    const variantInfo = [
-      product.color?.name,
-      product.size?.name,
-      product.design?.name !== "Estándar" ? product.design?.name : null,
-    ]
-      .filter(Boolean)
-      .join(" / ");
-
-    const labelName = variantInfo
-      ? `${product.name} [${variantInfo}]`
-      : product.name;
 
     allProductsMap.set(product.id, {
       value: product.id,
-      label: `${labelName} - ${product.sku}`,
+      label: product.name,
       name: product.name,
       sku: product.sku,
       price: product.price,
@@ -178,28 +167,10 @@ export async function getOrder(orderId: string, storeId: string) {
   existingOrderProducts.forEach((product: ExistingOrderProduct) => {
     const isAvailable = !product.isArchived && product.stock > 0;
 
-    const variantInfo = [
-      product.color?.name,
-      product.size?.name,
-      product.design?.name !== "Estándar" ? product.design?.name : null,
-    ]
-      .filter(Boolean)
-      .join(" / ");
-
-    const baseName = variantInfo
-      ? `${product.name} [${variantInfo}]`
-      : product.name;
-
-    const label = product.isArchived
-      ? `${baseName} (Archivado) - ${product.sku}`
-      : product.stock === 0
-        ? `${baseName} (Sin stock) - ${product.sku}`
-        : `${baseName} - ${product.sku}`;
-
     const priceInfo = pricesMap.get(product.id);
     allProductsMap.set(product.id, {
       value: product.id,
-      label,
+      label: product.name,
       name: product.name,
       sku: product.sku,
       price: product.price,

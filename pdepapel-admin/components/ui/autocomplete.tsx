@@ -223,7 +223,23 @@ export const AutoComplete = ({
                             >
                               {option.label}
                             </span>
-                            <div className="flex items-center gap-1">
+                            {(option.size ||
+                              option.color ||
+                              (option.design &&
+                                option.design !== "Estándar")) && (
+                              <span className="text-xs text-muted-foreground">
+                                {[
+                                  option.size && `Talla: ${option.size}`,
+                                  option.color && `Color: ${option.color}`,
+                                  option.design &&
+                                    option.design !== "Estándar" &&
+                                    `Diseño: ${option.design}`,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </span>
+                            )}
+                            <div className="flex flex-wrap items-center gap-1">
                               {option.isArchived && (
                                 <Badge
                                   variant="secondary"
