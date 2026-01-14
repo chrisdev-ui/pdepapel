@@ -88,6 +88,11 @@ export function useFormPersist<T extends FieldValues>({
   }, [form, key, setFormData]);
 
   const clearStorage = () => {
+    // Cancel any pending debounced saves to prevent race condition
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
     clearFormData(key);
   };
 
