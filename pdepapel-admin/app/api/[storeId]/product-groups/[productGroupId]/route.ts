@@ -95,6 +95,7 @@ export async function PATCH(
 
     const updatedGroup = await prismadb.$transaction(async (tx) => {
       const initialMovements: any[] = [];
+      const stockAdjustments: any[] = [];
       // 1. Update Group Details
       const groupData: any = {
         name,
@@ -122,6 +123,11 @@ export async function PATCH(
         where: { productGroupId: params.productGroupId },
         include: { orderItems: true },
       });
+
+      // Create a map of current stock values to detect changes
+      const existingStockMap = new Map(
+        existingProducts.map((p) => [p.id, p.stock]),
+      );
 
       // 3. Identify Variants to Update, Create, and Delete
       const payloadIds = new Set(
@@ -227,6 +233,24 @@ export async function PATCH(
               where: { id: variant.id },
               data: dataToUpsert,
             });
+
+            // Detect stock change and create adjustment movement
+            const currentStock = existingStockMap.get(variant.id) || 0;
+            const newStock = finalStock;
+
+            if (newStock !== currentStock) {
+              const difference = newStock - currentStock;
+              stockAdjustments.push({
+                storeId: params.storeId,
+                productId: variant.id,
+                type: "MANUAL_ADJUSTMENT",
+                quantity: difference,
+                cost: finalAcqPrice,
+                price: finalPrice,
+                createdBy: userId,
+                reason: `Ajuste de stock vía formulario de Grupo de Productos (${difference > 0 ? "+" : ""}${difference})`,
+              });
+            }
           } else {
             // CREATE New
             const newProduct = await tx.product.create({
@@ -251,11 +275,19 @@ export async function PATCH(
         }),
       );
 
-      // Execute Initial Movements
+      // Execute Initial Movements for new variants
       if (initialMovements.length > 0) {
         const { createInventoryMovementBatch } =
           await import("@/lib/inventory");
         await createInventoryMovementBatch(tx, initialMovements);
+      }
+
+      // Execute Stock Adjustments for existing variants
+      if (stockAdjustments.length > 0) {
+        const { createInventoryMovementBatch } =
+          await import("@/lib/inventory");
+        // Skip validation since adjustments can be positive or negative
+        await createInventoryMovementBatch(tx, stockAdjustments, false);
       }
 
       return group;

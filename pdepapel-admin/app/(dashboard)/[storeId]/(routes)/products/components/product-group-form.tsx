@@ -524,13 +524,18 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
             form.setValue("price", newPrice);
 
             // Sync variants - REACTIVE UPDATE
+            // IMPORTANT: We update price and acqPrice for consistency, but we do NOT
+            // override stock. Stock should be managed per-variant and not reset when
+            // pricing fields change. Imported products keep their original stock.
             const currentVariants = form.getValues("variants") || [];
             const updatedVariants = currentVariants.map((v) => ({
               ...v,
               price: newPrice,
               acqPrice: values.acqPrice ?? 0,
               supplierId: values.defaultSupplier || v.supplierId,
-              stock: values.defaultStock || 0,
+              // PRESERVE stock - don't override with defaultStock during sync
+              // The stock value should only be set when variant is first created
+              stock: v.stock,
             }));
 
             if (updatedVariants.length > 0) {
@@ -605,6 +610,17 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       const currentVars = form.getValues("variants") || [];
       const mergedVariants: FormVariant[] = [];
       const usedCurrentIndices = new Set<number>();
+
+      // CRITICAL: First, preserve all imported variants (those with existing IDs)
+      // These are products that were imported from standalone products and should
+      // maintain their original stock, price, and other values.
+      currentVars.forEach((v, idx) => {
+        if (v.id) {
+          // This is an imported/existing product - preserve it completely
+          usedCurrentIndices.add(idx);
+          mergedVariants.push(v);
+        }
+      });
 
       for (const gen of generatedVariants) {
         // 1. Find EXACT match in current (by Attributes)
@@ -1090,6 +1106,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     // When importing products, we set the group's price/acqPrice/supplier from the first product
     // if these values are not already set in the form
     const firstProduct = products[0];
+
     const currentPrice = form.getValues("price");
     const currentAcqPrice = form.getValues("acqPrice");
     const currentSupplier = form.getValues("defaultSupplier");

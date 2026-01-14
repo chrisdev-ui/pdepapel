@@ -150,11 +150,16 @@ export async function POST(
 
           if (variant.id) {
             // ADOPT EXISTING PRODUCT
-            // Verify it belongs to the store to allow updating (implicit by storeId in where clause)
+            // CRITICAL: Do NOT update stock for adopted products - they already have inventory.
+            // We only update the productGroupId, category, pricing, and metadata.
+            // Stock should remain unchanged to preserve inventory integrity.
+            const { stock: _excludedStock, ...productDataWithoutStock } =
+              productData;
+
             await tx.product.update({
               where: { id: variant.id, storeId: params.storeId },
               data: {
-                ...productData,
+                ...productDataWithoutStock,
                 images: {
                   deleteMany: {},
                   createMany: {
