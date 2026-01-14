@@ -25,6 +25,73 @@ import { generateSemanticSKU } from "@/lib/variant-generator";
 import { getActiveOffers, getProductsPrices } from "@/lib/discount-engine";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
+import { Redis } from "@upstash/redis";
+
+// Initialize Redis client (lazy - only when needed)
+let redis: Redis | null = null;
+function getRedis(): Redis {
+  if (!redis) {
+    redis = Redis.fromEnv();
+  }
+  return redis;
+}
+
+/**
+ * Invalidate cache using SCAN instead of KEYS (Redis best practice).
+ * SCAN is non-blocking and works better at scale.
+ */
+async function invalidateProductCache(storeId: string): Promise<void> {
+  try {
+    const redisClient = getRedis();
+    const pattern = `store:${storeId}:products:*`;
+    let cursor = 0;
+
+    do {
+      const result = await redisClient.scan(cursor, {
+        match: pattern,
+        count: 100,
+      });
+      cursor = Number(result[0]);
+      const keys = result[1];
+
+      if (keys.length > 0) {
+        await redisClient.del(...keys);
+      }
+    } while (cursor !== 0);
+  } catch (error) {
+    console.error("Redis cache invalidation error:", error);
+  }
+}
+
+/**
+ * Unified product type for storefront responses.
+ * Used for both product groups and standalone products.
+ */
+interface UnifiedProduct {
+  id: string;
+  name: string;
+  description?: string | null;
+  price: number;
+  originalPrice: number;
+  categoryId: string;
+  productGroupId: string | null;
+  isGroup: boolean;
+  variantCount?: number;
+  minPrice?: number;
+  maxPrice?: number;
+  offerLabel?: string | null;
+  hasDiscount?: boolean;
+  discountedPrice?: number;
+  sku: string;
+  createdAt: Date;
+  images?: Image[];
+  category?: Category;
+  design?: Design;
+  color?: Color;
+  size?: Size;
+  reviews?: { rating: number }[];
+  supplier?: Supplier | null;
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -148,20 +215,7 @@ export async function POST(
     }
 
     // Invalidate all product cache entries for this store
-    try {
-      const { Redis } = await import("@upstash/redis");
-      const redis = Redis.fromEnv();
-      const pattern = `store:${params.storeId}:products:*`;
-
-      // Get all matching keys
-      const keys = await redis.keys(pattern);
-      if (keys.length > 0) {
-        // Delete all matching keys
-        await redis.del(...keys);
-      }
-    } catch (error) {
-      console.error("Redis cache invalidation error:", error);
-    }
+    await invalidateProductCache(params.storeId);
 
     return NextResponse.json(product, {
       headers: {
@@ -358,7 +412,7 @@ export async function GET(
     // ---------------------------------------------------------
     if (groupBy === "parents") {
       // Filter for Products (used to filter Groups via relation)
-      const productFilters = {
+      const productFilters: Prisma.ProductWhereInput = {
         storeId: params.storeId,
         categoryId:
           categoryId.length > 0
@@ -376,78 +430,50 @@ export async function GET(
         },
       };
 
-      // 1. Count Groups that have at least one matching product
-      // OR search matches Group Name/Desc
-      const groupWhere = {
+      // Build where clause for Groups
+      const baseGroupWhere: Prisma.ProductGroupWhereInput = {
         storeId: params.storeId,
-        OR: [
-          { name: { contains: search } },
-          // Or matches children
-          { products: { some: productFilters } },
-        ],
-        products: { some: {} }, // Ensure it has at least one product? Optional.
-      };
-
-      // Refined Group Where: if search is present, it might match group fields.
-      // If filters are present, they must match children.
-      // The OR logic above is simplistic.
-      // More strict:
-      // (Name matches OR Desc matches OR Products match search) AND (Products match filters)
-
-      const baseGroupWhere: any = {
-        storeId: params.storeId,
-        products: { some: productFilters }, // Filters must match children
-        ...(isOnSale && onSaleFilter?.OR?.[2] // If looking for Group offers specifically
+        products: { some: productFilters },
+        ...(isOnSale && onSaleFilter?.OR?.[2]
           ? {
               OR: [
-                { products: { some: productFilters } }, // Match via children (inherited category/product offers)
-                { id: onSaleFilter.OR[2].productGroupId }, // Match via direct Group Offer
+                { products: { some: productFilters } },
+                {
+                  id: (
+                    onSaleFilter.OR[2] as { productGroupId: { in: string[] } }
+                  ).productGroupId,
+                },
+              ],
+            }
+          : {}),
+        ...(search
+          ? {
+              OR: [
+                { name: { contains: search } },
+                {
+                  products: {
+                    some: {
+                      OR: [{ name: { contains: search } }],
+                    },
+                  },
+                },
               ],
             }
           : {}),
       };
 
-      if (search) {
-        baseGroupWhere.OR = [
-          { name: { contains: search } },
-          {
-            products: {
-              some: {
-                OR: [{ name: { contains: search } }],
-              },
-            },
-          },
-        ];
-      }
-
-      const groupCount = await prismadb.productGroup.count({
-        where: baseGroupWhere,
-      });
-
-      // 2. Count Standalone Products (productGroupId = null)
-      const standaloneWhere = {
+      // Standalone products (productGroupId = null)
+      const standaloneWhere: Prisma.ProductWhereInput = {
         ...productFilters,
         productGroupId: null,
-        OR: [{ name: { contains: search } }],
+        ...(search ? { OR: [{ name: { contains: search } }] } : {}),
       };
-      const standaloneCount = await prismadb.product.count({
-        where: standaloneWhere,
-      });
 
-      const totalItems = groupCount + standaloneCount;
-      const totalPages = Math.ceil(totalItems / itemsPerPage);
-
-      // Pagination Logic
-      let fetchedGroups: any[] = [];
-      let fetchedProducts: any[] = [];
-      const offset = (page - 1) * itemsPerPage;
-
-      // Fetch Groups if we are in the group slice
-      if (offset < groupCount) {
-        fetchedGroups = await prismadb.productGroup.findMany({
+      // Fetch ALL groups and products (no pagination at DB level)
+      // This is intentional for correct sorting - works well for <500 items
+      const [allGroups, allStandaloneProducts] = await Promise.all([
+        prismadb.productGroup.findMany({
           where: baseGroupWhere,
-          take: itemsPerPage,
-          skip: offset,
           include: {
             images: true,
             products: {
@@ -462,25 +488,13 @@ export async function GET(
                     rating: true,
                   },
                 },
-              }, // Need min price & ID & Category & Reviews for aggregation
+              },
             },
           },
-          orderBy: { createdAt: "desc" }, // Default sort
-        });
-      }
-
-      // Fetch Standalone if we need to fill the page or are past groups
-      const itemsNeeded = itemsPerPage - fetchedGroups.length;
-      if (itemsNeeded > 0 && offset + itemsPerPage > groupCount) {
-        // Calculate standalone skip
-        // If we skipped all groups (offset >= groupCount), skip = offset - groupCount
-        // If we partially fetched groups (offset < groupCount), then skip = 0 (start from beginning of standalones)
-        const standaloneSkip = Math.max(0, offset - groupCount);
-
-        fetchedProducts = await prismadb.product.findMany({
+          orderBy: { createdAt: "desc" },
+        }),
+        prismadb.product.findMany({
           where: standaloneWhere,
-          take: itemsNeeded,
-          skip: standaloneSkip,
           include: {
             images: true,
             category: true,
@@ -488,87 +502,124 @@ export async function GET(
             size: true,
             design: true,
           },
-          orderBy: SORT_OPTIONS[sortOption as SortOption] || {
-            createdAt: "desc",
-          },
-        });
-      }
-
-      // Merge and Transform
-      // We map Groups to look like Products for consistent frontend typing
-      const merged = [
-        ...fetchedGroups.map((g) => {
-          const prices = g.products.map((p: any) => p.price);
-          const minP = prices.length ? Math.min(...prices) : 0;
-          const maxP = prices.length ? Math.max(...prices) : 0;
-          return {
-            id: g.products[0]?.id || g.id, // Use first variant ID for linking, fallback to group ID
-            productGroupId: g.id, // Keep real group ID reference
-            name: g.name,
-            description: g.description,
-            images: g.images,
-            price: minP, // Use min price for display
-            originalPrice: minP,
-            isGroup: true,
-            minPrice: minP,
-            maxPrice: maxP,
-            variantCount: g.products.length,
-            category: g.products[0]?.category,
-            categoryId: g.products[0]?.categoryId || "",
-            reviews: g.products.flatMap((p: any) => p.reviews),
-            sku: "GROUP",
-          };
+          orderBy: { createdAt: "desc" },
         }),
-        ...fetchedProducts.map((p) => ({
-          ...p,
-          isGroup: false,
+      ]);
+
+      // Transform groups to unified format
+      const transformedGroups: UnifiedProduct[] = allGroups.map((g) => {
+        const prices = g.products.map((p) => Number(p.price));
+        const minP = prices.length ? Math.min(...prices) : 0;
+        const maxP = prices.length ? Math.max(...prices) : 0;
+        return {
+          id: g.products[0]?.id || g.id,
+          productGroupId: g.id,
+          name: g.name,
+          description: g.description,
+          images: g.images,
+          price: minP,
+          originalPrice: minP,
+          isGroup: true,
+          minPrice: minP,
+          maxPrice: maxP,
+          variantCount: g.products.length,
+          category: g.products[0]?.category,
+          categoryId: g.products[0]?.categoryId || "",
+          reviews: g.products.flatMap((p) => p.reviews),
+          sku: "GROUP",
+          createdAt: g.createdAt,
+        };
+      });
+
+      // Transform standalone products to unified format
+      const transformedProducts: UnifiedProduct[] = allStandaloneProducts.map(
+        (p) => ({
+          id: p.id,
+          productGroupId: null,
+          name: p.name,
+          description: p.description,
+          images: p.images,
+          price: Number(p.price),
           originalPrice: Number(p.price),
-          discountedPrice: Number(p.price), // Calculate below
-        })),
-      ];
+          isGroup: false,
+          category: p.category,
+          categoryId: p.categoryId,
+          color: p.color,
+          size: p.size,
+          design: p.design,
+          sku: p.sku,
+          createdAt: p.createdAt,
+        }),
+      );
+
+      // Merge and sort by createdAt descending (newest first)
+      const merged = [...transformedGroups, ...transformedProducts].sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
+
+      // Apply pagination on the merged list
+      const totalItems = merged.length;
+      const totalPages = Math.ceil(totalItems / itemsPerPage);
+      const offset = (page - 1) * itemsPerPage;
+      const paginatedItems = merged.slice(offset, offset + itemsPerPage);
 
       // ---------------------------------------------------------
       // CALCULATE DISCOUNTS (Batched)
       // ---------------------------------------------------------
-      // 1. Collect all "Variant" products from Groups + Standalone products
-      const allVariantProducts: any[] = [];
-      fetchedGroups.forEach((g) => {
+      // Collect all variant products for discount calculation
+      const allVariantProducts: Array<{
+        id: string;
+        categoryId: string;
+        price: number;
+        productGroupId: string | null;
+      }> = [];
+
+      allGroups.forEach((g) => {
         allVariantProducts.push(
-          ...g.products.map((p: any) => ({
-            ...p,
-            productGroupId: g.id, // Ensure correlation
+          ...g.products.map((p) => ({
+            id: p.id,
+            categoryId: p.categoryId,
+            price: Number(p.price),
+            productGroupId: g.id,
           })),
         );
       });
-      allVariantProducts.push(...fetchedProducts);
 
-      // 2. Batch Calculate
-      const { getProductsPrices } = await import("@/lib/discount-engine");
+      allStandaloneProducts.forEach((p) => {
+        allVariantProducts.push({
+          id: p.id,
+          categoryId: p.categoryId,
+          price: Number(p.price),
+          productGroupId: null,
+        });
+      });
+
+      // Batch calculate prices
       const allPricesMap = await getProductsPrices(
         allVariantProducts,
         params.storeId,
       );
 
-      // 3. Re-map merged results with calculated prices
-      const finalResponse = merged.map((item) => {
+      // Apply discounts to paginated items
+      const finalResponse = paginatedItems.map((item) => {
         if (item.isGroup) {
-          // For groups, find its variants in the map and recalculate min/max
+          // Find variants for this group
           const groupVariants = allVariantProducts.filter(
             (p) => p.productGroupId === item.productGroupId,
           );
+
           if (groupVariants.length > 0) {
             const variantPrices = groupVariants.map((v) => {
               const pricing = allPricesMap.get(v.id);
-              return pricing?.price ?? Number(v.price);
+              return pricing?.price ?? v.price;
             });
 
-            // Check if any variant has a discount
             const hasDiscount = groupVariants.some((v) => {
               const pricing = allPricesMap.get(v.id);
               return pricing && pricing.discount > 0;
             });
 
-            // Get offer label from the first variant that has one (simplified)
             const offerLabel =
               groupVariants
                 .map((v) => allPricesMap.get(v.id)?.offerLabel)
@@ -576,30 +627,28 @@ export async function GET(
 
             const minP = Math.min(...variantPrices);
             const maxP = Math.max(...variantPrices);
-
-            // Calculate base prices to determine originalPrice
-            const variantBasePrices = groupVariants.map((v) => Number(v.price));
+            const variantBasePrices = groupVariants.map((v) => v.price);
             const minBaseP = Math.min(...variantBasePrices);
 
             return {
               ...item,
-              price: minP, // Display discounted min
-              originalPrice: minBaseP, // Comparison base
+              price: minP,
+              originalPrice: minBaseP,
               minPrice: minP,
               maxPrice: maxP,
               offerLabel: hasDiscount ? offerLabel : null,
-              hasDiscount, // Flag for UI
+              hasDiscount,
             };
           }
           return item;
         } else {
-          // Standalone
+          // Standalone product
           const pricing = allPricesMap.get(item.id);
-          const effectivePrice = pricing?.price ?? Number(item.price);
+          const effectivePrice = pricing?.price ?? item.price;
           return {
             ...item,
-            price: effectivePrice, // Always effective
-            originalPrice: Number(item.price), // Always base
+            price: effectivePrice,
+            originalPrice: item.originalPrice,
             discountedPrice: effectivePrice,
             offerLabel: pricing?.offerLabel ?? null,
             hasDiscount: pricing ? pricing.discount > 0 : false,
@@ -611,8 +660,16 @@ export async function GET(
         products: finalResponse,
         totalItems,
         totalPages,
-        facets: undefined, // Facet calc omitted for speed in this mode or need complex agg
+        facets: undefined,
       };
+
+      // Cache the response
+      try {
+        const redisClient = getRedis();
+        await redisClient.set(cacheKey, response, { ex: 5 * 60 }); // 5 minutes
+      } catch (error) {
+        console.error("Redis set error:", error);
+      }
 
       return NextResponse.json(response, {
         headers: {
@@ -1061,20 +1118,7 @@ export async function DELETE(
     });
 
     // Invalidate all product cache entries for this store
-    try {
-      const { Redis } = await import("@upstash/redis");
-      const redis = Redis.fromEnv();
-      const pattern = `store:${params.storeId}:products:*`;
-
-      // Get all matching keys
-      const keys = await redis.keys(pattern);
-      if (keys.length > 0) {
-        // Delete all matching keys
-        await redis.del(...keys);
-      }
-    } catch (error) {
-      console.error("Redis cache invalidation error:", error);
-    }
+    await invalidateProductCache(params.storeId);
 
     return NextResponse.json(
       "Los productos han sido eliminados correctamente",
@@ -1165,20 +1209,7 @@ export async function PATCH(
     });
 
     // Invalidate all product cache entries for this store
-    try {
-      const { Redis } = await import("@upstash/redis");
-      const redis = Redis.fromEnv();
-      const pattern = `store:${params.storeId}:products:*`;
-
-      // Get all matching keys
-      const keys = await redis.keys(pattern);
-      if (keys.length > 0) {
-        // Delete all matching keys
-        await redis.del(...keys);
-      }
-    } catch (error) {
-      console.error("Redis cache invalidation error:", error);
-    }
+    await invalidateProductCache(params.storeId);
 
     return NextResponse.json(result, {
       headers: {

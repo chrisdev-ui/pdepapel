@@ -122,10 +122,8 @@ interface MultiSelectGroup {
  * Props for MultiSelect component
  */
 interface MultiSelectProps
-  extends Omit<
-      React.ButtonHTMLAttributes<HTMLButtonElement>,
-      "animationConfig"
-    >,
+  extends
+    Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "animationConfig">,
     VariantProps<typeof multiSelectVariants> {
   /**
    * An array of option objects or groups to be displayed in the multi-select component.
@@ -822,7 +820,7 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
                 getAllOptions().length
               } opciones seleccionadas. ${placeholder}`}
               className={cn(
-                "min-h-10 flex h-auto items-center justify-between rounded-md border bg-inherit p-1 hover:bg-inherit [&_svg]:pointer-events-auto",
+                "flex h-auto min-h-10 items-center justify-between rounded-md border bg-inherit p-1 hover:bg-inherit [&_svg]:pointer-events-auto",
                 autoSize ? "w-auto" : "w-full",
                 responsiveSettings.compactMode && "min-h-8 text-sm",
                 screenSize === "mobile" && "min-h-12 text-base",
@@ -1076,6 +1074,7 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
                   <CommandGroup>
                     <CommandItem
                       key="all"
+                      value="__select_all__"
                       onSelect={toggleAll}
                       role="option"
                       aria-selected={
@@ -1120,6 +1119,7 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
                         return (
                           <CommandItem
                             key={option.value}
+                            value={option.value}
                             onSelect={() => toggleOption(option.value)}
                             role="option"
                             aria-selected={isSelected}
@@ -1166,6 +1166,7 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
                       return (
                         <CommandItem
                           key={option.value}
+                          value={option.value}
                           onSelect={() => toggleOption(option.value)}
                           role="option"
                           aria-selected={isSelected}
@@ -1208,6 +1209,7 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
                     {selectedValues.length > 0 && (
                       <>
                         <CommandItem
+                          value="__clear__"
                           onSelect={handleClear}
                           className="flex-1 cursor-pointer justify-center"
                         >
@@ -1220,6 +1222,7 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
                       </>
                     )}
                     <CommandItem
+                      value="__close__"
                       onSelect={() => setIsPopoverOpen(false)}
                       className="max-w-full flex-1 cursor-pointer justify-center"
                     >

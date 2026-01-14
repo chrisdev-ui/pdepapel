@@ -55,6 +55,19 @@ export const columns: ColumnDef<ProductColumn>[] = [
     ),
   },
   {
+    id: "productGroupId",
+    accessorFn: (row) => row.productGroup?.id ?? "",
+    header: () => null,
+    cell: () => null,
+    filterFn: (row, id, filterValue: string[]) => {
+      if (!filterValue || filterValue.length === 0) return true;
+      const groupId = row.getValue(id) as string;
+      return filterValue.includes(groupId);
+    },
+    enableHiding: false,
+    enableSorting: false,
+  },
+  {
     accessorKey: "price",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Precio" />

@@ -6,7 +6,6 @@ import { ApiList } from "@/components/ui/api-list";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Heading } from "@/components/ui/heading";
-import { MultiSelect } from "@/components/ui/multi-select";
 import { RefreshButton } from "@/components/ui/refresh-button";
 import { Separator } from "@/components/ui/separator";
 import { Models } from "@/constants";
@@ -15,7 +14,7 @@ import { getErrorMessage } from "@/lib/api-errors";
 import { Supplier } from "@prisma/client";
 import { PDFDownloadLink } from "@react-pdf/renderer";
 import { format } from "date-fns";
-import { Edit, FileDown, FileUp, Plus } from "lucide-react";
+import { FileDown, FileUp, Plus } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import React, { useCallback, useState } from "react";
 import { ProductColumn, columns } from "./columns";
@@ -31,7 +30,6 @@ const ProductClient: React.FC<ProductClientProps> = ({ data, suppliers }) => {
   const { toast } = useToast();
   const [catalogData, setCatalogData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [isImportOpen, setIsImportOpen] = useState(false);
 
   const fetchCatalogData = useCallback(async () => {
@@ -62,7 +60,8 @@ const ProductClient: React.FC<ProductClientProps> = ({ data, suppliers }) => {
     await fetchCatalogData();
   };
 
-  const distinctGroups = React.useMemo(() => {
+  // Build group filter options for DataTable
+  const groupFilterOptions = React.useMemo(() => {
     const groups = data
       .map((item) => item.productGroup)
       .filter((g): g is { id: string; name: string } => !!g);
@@ -70,46 +69,20 @@ const ProductClient: React.FC<ProductClientProps> = ({ data, suppliers }) => {
     // Deduplicate
     const unique = new Map();
     groups.forEach((g) => unique.set(g.id, g));
-    return Array.from(unique.values());
-  }, [data]);
-
-  const groupOptions = React.useMemo(() => {
-    return distinctGroups.map((g) => ({
+    return Array.from(unique.values()).map((g) => ({
       label: g.name,
       value: g.id,
     }));
-  }, [distinctGroups]);
-
-  const filteredData = React.useMemo(() => {
-    if (selectedGroups.length === 0) return data;
-    return data.filter((item) =>
-      item.productGroup?.id
-        ? selectedGroups.includes(item.productGroup.id)
-        : false,
-    );
-  }, [data, selectedGroups]);
+  }, [data]);
 
   return (
     <>
       <div className="flex items-center justify-between">
         <Heading
-          title={`Productos (${filteredData.length})`}
+          title={`Productos (${data.length})`}
           description="Maneja los productos para tu tienda"
         />
         <div className="flex items-center gap-x-2">
-          {distinctGroups.length > 0 && (
-            <div className="w-[300px]">
-              <MultiSelect
-                options={groupOptions}
-                onValueChange={setSelectedGroups}
-                defaultValue={selectedGroups}
-                placeholder="Filtrar por grupos"
-                variant="inverted"
-                className="h-10"
-                maxCount={2}
-              />
-            </div>
-          )}
           <RefreshButton />
           <Button variant="outline" onClick={() => setIsImportOpen(true)}>
             <FileUp className="mr-2 h-4 w-4" />
@@ -157,19 +130,6 @@ const ProductClient: React.FC<ProductClientProps> = ({ data, suppliers }) => {
             <Plus className="mr-2 h-4 w-4" />
             Crear grupo
           </Button>
-          {selectedGroups.length === 1 && (
-            <Button
-              onClick={() =>
-                router.push(
-                  `/${params.storeId}/${Models.Products}/group/${selectedGroups[0]}`,
-                )
-              }
-              variant="secondary"
-            >
-              <Edit className="mr-2 h-4 w-4" />
-              Editar grupo
-            </Button>
-          )}
           <Button
             onClick={() =>
               router.push(`/${params.storeId}/${Models.Products}/new`)
@@ -185,7 +145,18 @@ const ProductClient: React.FC<ProductClientProps> = ({ data, suppliers }) => {
         tableKey={Models.Products}
         searchKey="name"
         columns={columns}
-        data={filteredData}
+        data={data}
+        filters={
+          groupFilterOptions.length > 0
+            ? [
+                {
+                  columnKey: "productGroupId",
+                  title: "Grupo",
+                  options: groupFilterOptions,
+                },
+              ]
+            : undefined
+        }
       />
       <Heading title="API" description="API calls para los productos" />
       <Separator />
