@@ -746,7 +746,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                           <div className="flex items-center gap-2 rounded-lg border bg-white p-3">
                             <Phone className="h-5 w-5 text-pink-600" />
                             <span className="font-serif font-bold">
-                              {formatPhoneNumber(order.phone)}
+                              {formatPhoneNumber(order.phone) || order.phone}
                             </span>
                           </div>
                         )}
