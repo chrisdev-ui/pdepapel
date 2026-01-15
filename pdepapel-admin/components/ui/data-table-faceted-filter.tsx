@@ -91,7 +91,7 @@ export function DataTableFacetedFilter<TData, TValue>({
                 return (
                   <CommandItem
                     key={option.value}
-                    value={option.value}
+                    value={`${option.label.replace(/["\\]/g, "")} ${option.value}`}
                     onSelect={() => {
                       if (isSelected) {
                         selectedValues.delete(option.value);
