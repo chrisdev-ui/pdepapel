@@ -47,6 +47,7 @@ interface DataTableProps<TData, TValue> {
       icon?: React.ComponentType<{ className?: string }>;
     }[];
   }[];
+  onColumnFiltersChange?: (filters: ColumnFiltersState) => void;
 }
 
 export function DataTable<TData, TValue>({
@@ -55,6 +56,7 @@ export function DataTable<TData, TValue>({
   searchKey,
   tableKey,
   filters,
+  onColumnFiltersChange: onColumnFiltersChangeProp,
 }: DataTableProps<TData, TValue>) {
   const { tables, updateTableState } = useTableStore();
   const tableState = tables[tableKey] || {
@@ -133,6 +135,8 @@ export function DataTable<TData, TValue>({
       columnFilters,
       columnVisibility,
     });
+    // Notify parent of filter changes
+    onColumnFiltersChangeProp?.(columnFilters);
   }, [
     tableKey,
     pageIndex,
@@ -141,6 +145,7 @@ export function DataTable<TData, TValue>({
     columnFilters,
     columnVisibility,
     updateTableState,
+    onColumnFiltersChangeProp,
   ]);
 
   return (

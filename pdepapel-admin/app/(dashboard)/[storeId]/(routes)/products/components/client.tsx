@@ -13,8 +13,9 @@ import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import { Supplier } from "@prisma/client";
 import { PDFDownloadLink } from "@react-pdf/renderer";
+import { ColumnFiltersState } from "@tanstack/react-table";
 import { format } from "date-fns";
-import { FileDown, FileUp, Plus } from "lucide-react";
+import { Edit, FileDown, FileUp, Plus } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import React, { useCallback, useState } from "react";
 import { ProductColumn, columns } from "./columns";
@@ -31,6 +32,7 @@ const ProductClient: React.FC<ProductClientProps> = ({ data, suppliers }) => {
   const [catalogData, setCatalogData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
 
   const fetchCatalogData = useCallback(async () => {
     try {
@@ -74,6 +76,16 @@ const ProductClient: React.FC<ProductClientProps> = ({ data, suppliers }) => {
       value: g.id,
     }));
   }, [data]);
+
+  // Track selected groups from DataTable filter changes
+  const handleFiltersChange = useCallback((filters: ColumnFiltersState) => {
+    const groupFilter = filters.find((f) => f.id === "productGroupId");
+    if (groupFilter && Array.isArray(groupFilter.value)) {
+      setSelectedGroups(groupFilter.value as string[]);
+    } else {
+      setSelectedGroups([]);
+    }
+  }, []);
 
   return (
     <>
@@ -130,6 +142,19 @@ const ProductClient: React.FC<ProductClientProps> = ({ data, suppliers }) => {
             <Plus className="mr-2 h-4 w-4" />
             Crear grupo
           </Button>
+          {selectedGroups.length === 1 && (
+            <Button
+              onClick={() =>
+                router.push(
+                  `/${params.storeId}/${Models.Products}/group/${selectedGroups[0]}`,
+                )
+              }
+              variant="secondary"
+            >
+              <Edit className="mr-2 h-4 w-4" />
+              Editar grupo
+            </Button>
+          )}
           <Button
             onClick={() =>
               router.push(`/${params.storeId}/${Models.Products}/new`)
@@ -157,6 +182,7 @@ const ProductClient: React.FC<ProductClientProps> = ({ data, suppliers }) => {
               ]
             : undefined
         }
+        onColumnFiltersChange={handleFiltersChange}
       />
       <Heading title="API" description="API calls para los productos" />
       <Separator />
