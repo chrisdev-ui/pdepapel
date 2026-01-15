@@ -39,6 +39,23 @@ export function DataTableFacetedFilter<TData, TValue>({
   const facets = column?.getFacetedUniqueValues();
   const selectedValues = new Set(column?.getFilterValue() as string[]);
 
+  React.useEffect(() => {
+    const currentFilterValues = (column?.getFilterValue() as string[]) || [];
+    if (currentFilterValues.length === 0) return;
+
+    const validValues = new Set(options.map((o) => o.value));
+    const newFilterValues = currentFilterValues.filter((v) =>
+      validValues.has(v),
+    );
+
+    // Only update if the length changed (meaning we found invalid values)
+    if (newFilterValues.length !== currentFilterValues.length) {
+      column?.setFilterValue(
+        newFilterValues.length ? newFilterValues : undefined,
+      );
+    }
+  }, [options, column]);
+
   return (
     <Popover>
       <PopoverTrigger asChild>
