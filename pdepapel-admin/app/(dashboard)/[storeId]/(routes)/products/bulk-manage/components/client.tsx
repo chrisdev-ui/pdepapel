@@ -2,8 +2,21 @@
 
 import { AlertModal } from "@/components/modals/alert-modal";
 import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { DataTable } from "@/components/ui/data-table";
 import { Heading } from "@/components/ui/heading";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -14,9 +27,10 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 import { Category, Color, Design, Size } from "@prisma/client";
 import axios from "axios";
-import { Loader2 } from "lucide-react";
+import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { ProductColumn, columns } from "./columns";
@@ -161,47 +175,144 @@ export const BulkProductClient: React.FC<BulkProductClientProps> = ({
           <label className="mb-2 block text-sm font-medium">
             2. Nuevo Valor
           </label>
-          <Select
-            value={selectedValue}
-            onValueChange={setSelectedValue}
-            disabled={!selectedField}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Selecciona el valor" />
-            </SelectTrigger>
-            <SelectContent className="max-h-[300px]">
-              {selectedField === "categoryId" &&
-                categories.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {item.name}
-                  </SelectItem>
-                ))}
-              {selectedField === "colorId" &&
-                colors.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="h-4 w-4 rounded-full border"
-                        style={{ backgroundColor: item.value }}
-                      />
-                      {item.value}
-                    </div>
-                  </SelectItem>
-                ))}
-              {selectedField === "sizeId" &&
-                sizes.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {item.name}
-                  </SelectItem>
-                ))}
-              {selectedField === "designId" &&
-                designs.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {item.name}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                className={cn(
+                  "w-full justify-between",
+                  !selectedValue && "text-muted-foreground",
+                )}
+                disabled={!selectedField}
+              >
+                {selectedValue
+                  ? (() => {
+                      if (selectedField === "categoryId")
+                        return categories.find((i) => i.id === selectedValue)
+                          ?.name;
+                      if (selectedField === "sizeId")
+                        return sizes.find((i) => i.id === selectedValue)?.name;
+                      if (selectedField === "designId")
+                        return designs.find((i) => i.id === selectedValue)
+                          ?.name;
+                      if (selectedField === "colorId") {
+                        const color = colors.find(
+                          (i) => i.id === selectedValue,
+                        );
+                        return color ? (
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="h-4 w-4 rounded-full border"
+                              style={{ backgroundColor: color.value }}
+                            />
+                            {color.value}
+                          </div>
+                        ) : (
+                          selectedValue
+                        );
+                      }
+                      return selectedValue;
+                    })()
+                  : "Selecciona el valor"}
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              className="w-[--radix-popover-trigger-width] p-0"
+              align="start"
+            >
+              <Command>
+                <CommandInput placeholder="Buscar..." />
+                <CommandList>
+                  <CommandEmpty>No se encontraron resultados.</CommandEmpty>
+                  <CommandGroup>
+                    {selectedField === "categoryId" &&
+                      categories.map((item) => (
+                        <CommandItem
+                          key={item.id}
+                          value={item.id + item.name}
+                          onSelect={() => {
+                            setSelectedValue(item.id);
+                            // Close popover logic if we had separate state, currently just uncontrolled or parent
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              selectedValue === item.id
+                                ? "opacity-100"
+                                : "opacity-0",
+                            )}
+                          />
+                          {item.name}
+                        </CommandItem>
+                      ))}
+                    {selectedField === "sizeId" &&
+                      sizes.map((item) => (
+                        <CommandItem
+                          key={item.id}
+                          value={item.id + item.name}
+                          onSelect={() => setSelectedValue(item.id)}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              selectedValue === item.id
+                                ? "opacity-100"
+                                : "opacity-0",
+                            )}
+                          />
+                          {item.name}
+                        </CommandItem>
+                      ))}
+                    {selectedField === "designId" &&
+                      designs.map((item) => (
+                        <CommandItem
+                          key={item.id}
+                          value={item.id + item.name}
+                          onSelect={() => setSelectedValue(item.id)}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              selectedValue === item.id
+                                ? "opacity-100"
+                                : "opacity-0",
+                            )}
+                          />
+                          {item.name}
+                        </CommandItem>
+                      ))}
+                    {selectedField === "colorId" &&
+                      colors.map((item) => (
+                        <CommandItem
+                          key={item.id}
+                          value={item.id + item.value}
+                          onSelect={() => setSelectedValue(item.id)}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              selectedValue === item.id
+                                ? "opacity-100"
+                                : "opacity-0",
+                            )}
+                          />
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="h-4 w-4 rounded-full border"
+                              style={{ backgroundColor: item.value }}
+                            />
+                            {item.value}
+                          </div>
+                        </CommandItem>
+                      ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
         </div>
 
         <div className="w-full md:w-auto">
