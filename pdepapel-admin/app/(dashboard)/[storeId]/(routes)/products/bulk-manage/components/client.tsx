@@ -125,7 +125,7 @@ export const BulkProductClient: React.FC<BulkProductClientProps> = ({
         onConfirm={onConfirm}
         loading={loading}
       />
-      <div className="flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between">
         <Heading
           title={`Gestor de Catálogo Masivo (${data.length})`}
           description="Actualiza categorías, colores, tamaños y diseños masivamente."
