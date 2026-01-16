@@ -16,6 +16,8 @@ import { CreditCard, Package } from "lucide-react";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 
+export const maxDuration = 60;
+
 export const metadata: Metadata = {
   title: "Panel de Control | PdePapel Admin",
   description: "Resumen de tu tienda",

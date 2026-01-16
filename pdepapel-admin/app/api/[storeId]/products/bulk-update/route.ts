@@ -11,6 +11,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
+export const maxDuration = 60;
+
 export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
 }

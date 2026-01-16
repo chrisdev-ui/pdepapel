@@ -2,6 +2,8 @@ import prismadb from "@/lib/prismadb";
 import { getProducts } from "../server/get-products";
 import { BulkProductClient } from "./components/client";
 
+export const maxDuration = 60;
+
 export default async function BulkProductsPage({
   params,
 }: {

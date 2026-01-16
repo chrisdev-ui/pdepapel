@@ -8,6 +8,7 @@ const ProductClient = dynamic(() => import("./components/client"), {
 });
 
 export const revalidate = 0;
+export const maxDuration = 60;
 
 export const metadata: Metadata = {
   title: "Productos | PdePapel Admin",
