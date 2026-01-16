@@ -351,6 +351,9 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
     const [isPopoverOpen, setIsPopoverOpen] = React.useState(false);
     const [isAnimating, setIsAnimating] = React.useState(false);
     const [searchValue, setSearchValue] = React.useState("");
+    const [popoverWidth, setPopoverWidth] = React.useState<number | "auto">(
+      "auto",
+    );
 
     const [politeMessage, setPoliteMessage] = React.useState("");
     const [assertiveMessage, setAssertiveMessage] = React.useState("");
@@ -742,6 +745,9 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
 
       if (isPopoverOpen !== prevIsOpen.current) {
         if (isPopoverOpen) {
+          if (buttonRef.current) {
+            setPopoverWidth(buttonRef.current.offsetWidth);
+          }
           announce(
             `Dropdown opened. ${totalOptions} options available. Use arrow keys to navigate.`,
           );
@@ -1040,11 +1046,12 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
               maxWidth: `min(${widthConstraints.maxWidth}, 85vw)`,
               maxHeight: screenSize === "mobile" ? "70vh" : "60vh",
               touchAction: "manipulation",
+              width: popoverWidth === "auto" ? "auto" : `${popoverWidth}px`,
             }}
             align="start"
             onEscapeKeyDown={() => setIsPopoverOpen(false)}
           >
-            <Command>
+            <Command shouldFilter={false}>
               {searchable && (
                 <CommandInput
                   placeholder="Buscar opciones..."

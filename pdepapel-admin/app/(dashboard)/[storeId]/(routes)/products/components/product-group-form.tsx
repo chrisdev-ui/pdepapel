@@ -959,8 +959,14 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     const currentVars = form.getValues("variants") || [];
     const usedIndices = new Set<number>();
     const finalVariants: FormVariant[] = [];
+    const processedKeys = new Set<string>();
 
     for (const gen of allGenerated) {
+      // Generate key to prevent duplicates within the generation batch
+      const genKey = `${gen.sizeId}|${gen.colorId}|${gen.designId}`;
+      if (processedKeys.has(genKey)) continue;
+      processedKeys.add(genKey);
+
       // 1. Exact Match Check
       const matchIndex = currentVars.findIndex(
         (v) =>
@@ -1146,11 +1152,35 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       images: p.images?.map((i) => i.url) || [],
     }));
 
-    // Merge variants avoiding ID duplication
+    // Merge variants avoiding ID duplication AND Attribute Duplication
     const currentVars = form.getValues("variants") || [];
     const currentIds = new Set(currentVars.map((v) => v.id).filter(Boolean));
 
-    const toAdd = newVariants.filter((v) => !v.id || !currentIds.has(v.id));
+    // Helper to generate a unique key for attributes
+    const getVariantKey = (v: Partial<FormVariant>) => {
+      const s = v.size?.id || "nosize";
+      const c = v.color?.id || "nocolor";
+      const d = v.design?.id || "nodesign";
+      return `${s}|${c}|${d}`;
+    };
+
+    const currentAttributeKeys = new Set(currentVars.map(getVariantKey));
+    const newBatchKeys = new Set<string>();
+
+    const toAdd = newVariants.filter((v) => {
+      // 1. Check ID (if it exists, it must not be in currentIds)
+      if (v.id && currentIds.has(v.id)) return false;
+
+      // 2. Check Attributes (must not match existing combination)
+      const key = getVariantKey(v);
+      if (currentAttributeKeys.has(key)) return false;
+
+      // 3. Self-Dedupe (must not be already added in this batch)
+      if (newBatchKeys.has(key)) return false;
+
+      newBatchKeys.add(key);
+      return true;
+    });
 
     if (toAdd.length > 0) {
       const finalVariants = [...currentVars, ...toAdd];
@@ -1737,6 +1767,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                       placeholder="Selecciona tamaños..."
                       variant="secondary"
                       responsive
+                      className="h-10"
                     />
                   </FormControl>
                   <FormDescription>
@@ -1762,6 +1793,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                       placeholder="Selecciona colores..."
                       variant="secondary"
                       responsive
+                      className="h-10"
                     />
                   </FormControl>
                   <FormDescription>
@@ -1787,6 +1819,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                       placeholder="Selecciona diseños..."
                       variant="secondary"
                       responsive
+                      className="h-10"
                     />
                   </FormControl>
                   <FormDescription>
