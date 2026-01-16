@@ -133,7 +133,7 @@ export const BulkProductClient: React.FC<BulkProductClientProps> = ({
       </div>
       <Separator />
 
-      <div className="mt-8 flex flex-col items-end gap-4 rounded-md border bg-gray-50 p-4 py-4 md:flex-row">
+      <div className="my-10 flex flex-col items-end gap-4 rounded-md border bg-gray-50 p-4 py-4 md:flex-row">
         <div className="w-full md:w-1/4">
           <label className="mb-2 block text-sm font-medium">
             1. Campo a actualizar
