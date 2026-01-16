@@ -1896,6 +1896,9 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
             )}
             suppliers={suppliers}
             isEditMode={isEdit}
+            sizes={sizes}
+            colors={colors}
+            designs={designs}
             onBatchIntake={(variantIds) => {
               const variants = form.getValues("variants") || [];
               const selected: BatchIntakeVariant[] = variantIds

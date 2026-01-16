@@ -59,6 +59,9 @@ interface VariantEditModalProps {
   initialData: VariantFormValues | null;
   suppliers: Supplier[];
   groupImages: { url: string }[];
+  sizes: { id: string; name: string; value: string }[];
+  colors: { id: string; name: string; value: string }[];
+  designs: { id: string; name: string }[];
 }
 
 import { IntakeModal } from "@/components/modals/intake-modal";
@@ -71,6 +74,9 @@ export const VariantEditModal: React.FC<VariantEditModalProps> = ({
   initialData,
   suppliers,
   groupImages,
+  sizes,
+  colors,
+  designs,
 }) => {
   const [loading, setLoading] = useState(false);
   const [intakeOpen, setIntakeOpen] = useState(false);
@@ -164,6 +170,104 @@ export const VariantEditModal: React.FC<VariantEditModalProps> = ({
                           {...field}
                         />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <FormField
+                  control={form.control}
+                  name="size"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tamaño</FormLabel>
+                      <Select
+                        disabled={loading}
+                        onValueChange={(val) => {
+                          const selected = sizes.find((s) => s.id === val);
+                          if (selected) field.onChange(selected);
+                        }}
+                        value={field.value?.id}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Tamaño" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {sizes.map((item) => (
+                            <SelectItem key={item.id} value={item.id}>
+                              {item.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="color"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Color</FormLabel>
+                      <Select
+                        disabled={loading}
+                        onValueChange={(val) => {
+                          const selected = colors.find((s) => s.id === val);
+                          if (selected) field.onChange(selected);
+                        }}
+                        value={field.value?.id}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Color" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {colors.map((item) => (
+                            <SelectItem key={item.id} value={item.id}>
+                              {item.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="design"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Diseño</FormLabel>
+                      <Select
+                        disabled={loading}
+                        onValueChange={(val) => {
+                          const selected = designs.find((s) => s.id === val);
+                          if (selected) field.onChange(selected);
+                        }}
+                        value={field.value?.id}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Diseño" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {designs.map((item) => (
+                            <SelectItem key={item.id} value={item.id}>
+                              {item.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}

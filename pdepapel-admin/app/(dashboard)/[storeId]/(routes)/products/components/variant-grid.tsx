@@ -42,6 +42,9 @@ interface VariantGridProps {
   suppliers: Supplier[];
   isEditMode?: boolean; // True when editing existing group
   onBatchIntake?: (variantIds: string[]) => void; // Callback for batch intake
+  sizes: { id: string; name: string; value: string }[];
+  colors: { id: string; name: string; value: string }[];
+  designs: { id: string; name: string }[];
 }
 
 export const VariantGrid: React.FC<VariantGridProps> = ({
@@ -52,6 +55,9 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
   suppliers,
   isEditMode = false,
   onBatchIntake,
+  sizes,
+  colors,
+  designs,
 }) => {
   const { watch, setValue } = form;
   const formVariants = watch("variants");
@@ -193,6 +199,9 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
         }
         suppliers={suppliers}
         groupImages={images}
+        sizes={sizes}
+        colors={colors}
+        designs={designs}
       />
       <div className="space-y-4 rounded-md border p-4">
         <h3 className="text-lg font-medium">Editor de Variantes</h3>
