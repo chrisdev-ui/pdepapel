@@ -445,7 +445,7 @@ export const OfferForm: React.FC<OfferFormProps> = ({
                   <div className="mb-4 space-y-3">
                     <div className="flex items-center justify-between">
                       <FormLabel isRequired className="text-base">
-                        Categorías
+                        Sub-Categorías
                       </FormLabel>
                       <button
                         type="button"
@@ -484,10 +484,10 @@ export const OfferForm: React.FC<OfferFormProps> = ({
                     </div>
                     <FormDescription>
                       Aplica el descuento a todos los productos de estas
-                      categorías.
+                      sub-categorías.
                     </FormDescription>
                     <Input
-                      placeholder="Buscar categorías..."
+                      placeholder="Buscar sub-categorías..."
                       value={categorySearch}
                       onChange={(e) => setCategorySearch(e.target.value)}
                     />
@@ -529,7 +529,7 @@ export const OfferForm: React.FC<OfferFormProps> = ({
                                   {category.name}
                                 </FormLabel>
                                 <p className="text-xs text-muted-foreground">
-                                  Tipo: {category.type.name}
+                                  Categoría: {category.type.name}
                                 </p>
                               </div>
                             </FormItem>

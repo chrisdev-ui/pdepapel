@@ -35,13 +35,13 @@ const MobileFilters: React.FC<MobileFiltersProps> = ({
         <div className="p-4">
           <Filter
             valueKey="typeId"
-            name="Tipos"
+            name="Categorías"
             data={types}
             emptyMessage="No hay tipos disponibles"
           />
           <Filter
             valueKey="categoryId"
-            name="Categorías"
+            name="Sub-Categorías"
             emptyMessage="No hay categorías disponibles"
             data={categories}
           />

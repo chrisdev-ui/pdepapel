@@ -20,7 +20,10 @@ export const columns: ColumnDef<TypeColumn>[] = [
     id: "categories",
     accessorKey: "_count.categories",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Categorías con este tipo" />
+      <DataTableColumnHeader
+        column={column}
+        title="Sub-Categorías con esta categoría"
+      />
     ),
     cell: ({ row }) => (
       <DataTableCellNumber value={row.original._count.categories} />

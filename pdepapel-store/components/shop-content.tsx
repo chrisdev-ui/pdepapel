@@ -128,13 +128,13 @@ export const ShopContent: React.FC<ShopContentProps> = ({
       <div className="hidden lg:block">
         <Filter
           valueKey="typeId"
-          name="Tipos"
+          name="Categorías"
           data={types} // Types might not have facets in the spec provided, leaving as is or assuming no counts requested for Types yet.
           emptyMessage="No hay tipos disponibles"
         />
         <Filter
           valueKey="categoryId"
-          name="Categorías"
+          name="Sub-Categorías"
           emptyMessage="No hay categorías disponibles"
           data={categoriesWithCounts}
         />

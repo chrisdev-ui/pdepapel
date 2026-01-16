@@ -6,25 +6,38 @@ import {
   useQueryStates,
 } from "nuqs";
 
+const filterParsers = {
+  typeId: parseAsArrayOf(parseAsString).withDefault([]),
+  categoryId: parseAsArrayOf(parseAsString).withDefault([]),
+  colorId: parseAsArrayOf(parseAsString).withDefault([]),
+  sizeId: parseAsArrayOf(parseAsString).withDefault([]),
+  designId: parseAsArrayOf(parseAsString).withDefault([]),
+  minPrice: parseAsInteger,
+  maxPrice: parseAsInteger,
+  sortOption: parseAsString.withDefault(""),
+  page: parseAsInteger.withDefault(1),
+  search: parseAsString.withDefault(""),
+  isOnSale: parseAsBoolean.withDefault(false),
+};
+
+export interface ProductFilters {
+  typeId: string[];
+  categoryId: string[];
+  colorId: string[];
+  sizeId: string[];
+  designId: string[];
+  minPrice: number | null;
+  maxPrice: number | null;
+  sortOption: string | null;
+  page: number;
+  search: string | null;
+  isOnSale: boolean;
+}
+
 export function useProductFilters() {
-  const [filters, setFilters] = useQueryStates(
-    {
-      typeId: parseAsArrayOf(parseAsString).withDefault([]),
-      categoryId: parseAsArrayOf(parseAsString).withDefault([]),
-      colorId: parseAsArrayOf(parseAsString).withDefault([]),
-      sizeId: parseAsArrayOf(parseAsString).withDefault([]),
-      designId: parseAsArrayOf(parseAsString).withDefault([]),
-      minPrice: parseAsInteger,
-      maxPrice: parseAsInteger,
-      sortOption: parseAsString.withDefault(""),
-      page: parseAsInteger.withDefault(1),
-      search: parseAsString.withDefault(""),
-      isOnSale: parseAsBoolean.withDefault(false),
-    },
-    {
-      shallow: true,
-    },
-  );
+  const [filters, setFilters] = useQueryStates(filterParsers, {
+    shallow: true,
+  });
 
   const setFilter = (key: keyof typeof filters, value: any) => {
     setFilters((prev) => ({

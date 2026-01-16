@@ -41,7 +41,7 @@ export const columns: ColumnDef<LowStockColumn>[] = [
     id: "category",
     accessorKey: "category.name",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Categoría" />
+      <DataTableColumnHeader column={column} title="Sub-Categoría" />
     ),
   },
   {

@@ -32,7 +32,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const onCopy = (id: string) => {
     navigator.clipboard.writeText(id);
     toast({
-      description: "ID de la categoría copiado al portapapeles",
+      description: "ID de la sub-categoría copiado al portapapeles",
       variant: "success",
     });
   };
@@ -45,7 +45,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
       );
       router.refresh();
       toast({
-        description: "Categoría eliminada",
+        description: "Sub-categoría eliminada",
         variant: "success",
       });
     } catch (error) {

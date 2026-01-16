@@ -76,7 +76,7 @@ const formSchema = z.object({
     .object({ url: z.string(), isMain: z.boolean().optional() })
     .array()
     .min(1, "Se requiere al menos una imagen"),
-  categoryId: z.string().min(1, "La categoría es requerida"),
+  categoryId: z.string().min(1, "La sub-categoría es requerida"),
   sizeIds: z.array(z.string()).min(1, "Se requiere al menos un tamaño"),
   colorIds: z.array(z.string()).min(1, "Se requiere al menos un color"),
   designIds: z.array(z.string()).min(1, "Se requiere al menos un diseño"),

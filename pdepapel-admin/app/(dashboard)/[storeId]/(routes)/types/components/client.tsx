@@ -21,14 +21,14 @@ const TypeClient: React.FC<TypeClientProps> = ({ data }) => {
     <>
       <div className="flex items-center justify-between">
         <Heading
-          title={`Tipos (${data.length})`}
-          description="Maneja los tipos de productos para tu tienda"
+          title={`Categorías (${data.length})`}
+          description="Maneja las categorías principales para tu tienda"
         />
         <Button
           onClick={() => router.push(`/${params.storeId}/${Models.Types}/new`)}
         >
           <Plus className="mr-2 h-4 w-4" />
-          Crear tipo
+          Crear categoría
         </Button>
       </div>
       <Separator />
@@ -38,7 +38,7 @@ const TypeClient: React.FC<TypeClientProps> = ({ data }) => {
         columns={columns}
         data={data}
       />
-      <Heading title="API" description="API calls para los tipos" />
+      <Heading title="API" description="API calls para las categorías" />
       <Separator />
       <ApiList entityName={Models.Types} entityIdName="typeId" />
     </>

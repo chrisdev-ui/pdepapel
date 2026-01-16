@@ -29,7 +29,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 const formSchema = z.object({
-  name: z.string().min(1, "El nombre del tipo no puede estar vacío"),
+  name: z.string().min(1, "El nombre de la categoría no puede estar vacío"),
 });
 
 type TypeFormValues = z.infer<typeof formSchema>;
@@ -48,9 +48,11 @@ export const TypeForm: React.FC<TypeFormProps> = ({ initialData }) => {
 
   const { title, description, toastMessage, action, pendingText } = useMemo(
     () => ({
-      title: initialData ? "Editar tipo" : "Crear tipo",
-      description: initialData ? "Editar un tipo" : "Crear un nuevo tipo",
-      toastMessage: initialData ? "Tipo actualizado" : "Tipo creado",
+      title: initialData ? "Editar categoría" : "Crear categoría",
+      description: initialData
+        ? "Editar una categoría"
+        : "Crear una nueva categoría",
+      toastMessage: initialData ? "Categoría actualizada" : "Categoría creada",
       action: initialData ? "Guardar cambios" : "Crear",
       pendingText: initialData ? "Actualizando..." : "Creando...",
     }),
@@ -121,7 +123,7 @@ export const TypeForm: React.FC<TypeFormProps> = ({ initialData }) => {
       router.refresh();
       router.push(`/${params.storeId}/${Models.Types}`);
       toast({
-        description: "Tipo eliminado",
+        description: "Categoría eliminada",
         variant: "success",
       });
     } catch (error) {
@@ -182,7 +184,7 @@ export const TypeForm: React.FC<TypeFormProps> = ({ initialData }) => {
                   <FormControl>
                     <Input
                       disabled={loading}
-                      placeholder="Nombre del tipo"
+                      placeholder="Nombre de la categoría"
                       {...field}
                     />
                   </FormControl>

@@ -1,7 +1,8 @@
 "use client";
 
-import { parseAsInteger, useQueryStates } from "nuqs";
 import { useCallback, useEffect, useRef, useState } from "react";
+
+import { ProductFilters, useProductFilters } from "@/hooks/use-product-filters";
 
 import { useDebounce } from "@/hooks/use-debounce";
 import { cn } from "@/lib/utils";
@@ -17,19 +18,10 @@ const PriceFilter: React.FC<PriceFilterProps> = ({
   max = 1000000,
   step = 10000,
 }) => {
-  const [urlValues, setUrlValues] = useQueryStates(
-    {
-      minPrice: parseAsInteger.withDefault(min),
-      maxPrice: parseAsInteger.withDefault(max),
-    },
-    {
-      shallow: true,
-      history: "replace",
-    },
-  );
+  const { filters, setFilters } = useProductFilters();
 
-  const [minValue, setMinValue] = useState(urlValues.minPrice ?? min);
-  const [maxValue, setMaxValue] = useState(urlValues.maxPrice ?? max);
+  const [minValue, setMinValue] = useState(filters.minPrice ?? min);
+  const [maxValue, setMaxValue] = useState(filters.maxPrice ?? max);
   const [isDragging, setIsDragging] = useState<"min" | "max" | null>(null);
   const sliderRef = useRef<HTMLDivElement>(null);
 
@@ -38,27 +30,29 @@ const PriceFilter: React.FC<PriceFilterProps> = ({
 
   // Sync state when URL changes externally
   useEffect(() => {
-    setMinValue(urlValues.minPrice ?? min);
-    setMaxValue(urlValues.maxPrice ?? max);
-  }, [urlValues.minPrice, urlValues.maxPrice, min, max]);
+    setMinValue(filters.minPrice ?? min);
+    setMaxValue(filters.maxPrice ?? max);
+  }, [filters.minPrice, filters.maxPrice, min, max]);
 
   // Sync URL when debounced values change
   useEffect(() => {
-    const currentMin = urlValues.minPrice ?? min;
-    const currentMax = urlValues.maxPrice ?? max;
+    const currentMin = filters.minPrice ?? min;
+    const currentMax = filters.maxPrice ?? max;
 
     if (debouncedMin !== currentMin || debouncedMax !== currentMax) {
-      setUrlValues({
+      setFilters((prev: ProductFilters) => ({
+        ...prev,
         minPrice: debouncedMin === min ? null : debouncedMin,
         maxPrice: debouncedMax === max ? null : debouncedMax,
-      });
+        page: 1, // Reset page when price changes
+      }));
     }
   }, [
     debouncedMin,
     debouncedMax,
-    urlValues.minPrice,
-    urlValues.maxPrice,
-    setUrlValues,
+    filters.minPrice,
+    filters.maxPrice,
+    setFilters,
     min,
     max,
   ]);

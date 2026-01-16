@@ -113,8 +113,8 @@ export const ShopContentSkeleton: React.FC = () => {
   return (
     <div className="lg:grid lg:grid-cols-5 lg:gap-x-8">
       <div className="hidden lg:block">
-        <FilterSkeleton name="Tipos" items={3} />
         <FilterSkeleton name="Categorías" items={3} />
+        <FilterSkeleton name="Sub-Categorías" items={3} />
         <FilterSkeleton name="Tamaños" items={3} />
         <FilterSkeleton name="Colores" items={3} />
         <FilterSkeleton name="Diseños" items={3} />

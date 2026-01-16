@@ -10,8 +10,8 @@ export const revalidate = 0;
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Categorías | PdePapel Admin",
-  description: "Gestión de categorías",
+  title: "Sub-Categorías | PdePapel Admin",
+  description: "Gestión de sub-categorías",
 };
 
 export default async function CategoriesPage({

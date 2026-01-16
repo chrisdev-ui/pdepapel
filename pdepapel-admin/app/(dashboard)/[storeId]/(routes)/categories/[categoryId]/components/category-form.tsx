@@ -36,7 +36,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 const formSchema = z.object({
-  name: z.string().min(1, "El nombre de la categoria no puede estar vacío"),
+  name: z.string().min(1, "El nombre de la sub-categoría no puede estar vacío"),
   typeId: z.string().min(1),
 });
 
@@ -60,11 +60,13 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
 
   const { title, description, toastMessage, action, pendingText } = useMemo(
     () => ({
-      title: initialData ? "Editar categoría" : "Crear categoría",
+      title: initialData ? "Editar sub-categoría" : "Crear sub-categoría",
       description: initialData
-        ? "Editar una categoría"
-        : "Crear una nueva categoría",
-      toastMessage: initialData ? "Categoría actualizada" : "Categoría creada",
+        ? "Editar una sub-categoría"
+        : "Crear una nueva sub-categoría",
+      toastMessage: initialData
+        ? "Sub-categoría actualizada"
+        : "Sub-categoría creada",
       action: initialData ? "Guardar cambios" : "Crear",
       pendingText: initialData ? "Actualizando..." : "Creando...",
     }),
@@ -137,7 +139,7 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
       router.refresh();
       router.push(`/${params.storeId}/${Models.Categories}`);
       toast({
-        description: "Categoría eliminada",
+        description: "Sub-categoría eliminada",
         variant: "success",
       });
     } catch (error) {
@@ -193,7 +195,7 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
                   <FormControl>
                     <Input
                       disabled={loading}
-                      placeholder="Nombre de la categoría"
+                      placeholder="Nombre de la sub-categoría"
                       {...field}
                     />
                   </FormControl>

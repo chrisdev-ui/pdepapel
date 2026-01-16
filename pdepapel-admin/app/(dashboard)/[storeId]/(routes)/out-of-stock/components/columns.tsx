@@ -42,7 +42,7 @@ export const columns: ColumnDef<OutOfStockColumn>[] = [
     id: "category",
     accessorKey: "category.name",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Categoría" />
+      <DataTableColumnHeader column={column} title="Sub-Categoría" />
     ),
   },
   {

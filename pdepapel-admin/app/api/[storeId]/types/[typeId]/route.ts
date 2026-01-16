@@ -17,7 +17,7 @@ export async function GET(
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.typeId) {
-      throw ErrorFactory.InvalidRequest("El ID del tipo es requerido");
+      throw ErrorFactory.InvalidRequest("El ID de la categoría es requerido");
     }
 
     const type = await prismadb.type.findUnique({
@@ -43,7 +43,7 @@ export async function PATCH(
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.typeId) {
-      throw ErrorFactory.InvalidRequest("El ID del tipo es requerido");
+      throw ErrorFactory.InvalidRequest("El ID de la categoría es requerido");
     }
 
     const body = await req.json();
@@ -52,7 +52,9 @@ export async function PATCH(
     await verifyStoreOwner(userId, params.storeId);
 
     if (!name?.trim()) {
-      throw ErrorFactory.InvalidRequest("El nombre del tipo es requerido");
+      throw ErrorFactory.InvalidRequest(
+        "El nombre de la categoría es requerido",
+      );
     }
 
     const existingType = await prismadb.type.findUnique({
@@ -64,7 +66,7 @@ export async function PATCH(
 
     if (!existingType) {
       throw ErrorFactory.NotFound(
-        "Tipo no encontrado o no pertenece a esta tienda",
+        "Categoría no encontrada o no pertenece a esta tienda",
       );
     }
 
@@ -79,7 +81,7 @@ export async function PATCH(
     });
 
     if (duplicateType) {
-      throw ErrorFactory.Conflict("Ya existe un tipo con este nombre");
+      throw ErrorFactory.Conflict("Ya existe una categoría con este nombre");
     }
 
     const updatedType = await prismadb.type.update({
@@ -110,7 +112,7 @@ export async function DELETE(
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.typeId) {
-      throw ErrorFactory.InvalidRequest("El ID del tipo es requerido");
+      throw ErrorFactory.InvalidRequest("El ID de la categoría es requerido");
     }
 
     await verifyStoreOwner(userId, params.storeId);
@@ -137,7 +139,7 @@ export async function DELETE(
 
       if (!type) {
         throw ErrorFactory.NotFound(
-          "Tipo no encontrado o no pertenece a esta tienda",
+          "Categoría no encontrada o no pertenece a esta tienda",
         );
       }
 
@@ -147,7 +149,7 @@ export async function DELETE(
 
       if (categoriesWithProducts.length > 0) {
         throw ErrorFactory.Conflict(
-          "No se puede eliminar un tipo que tiene productos asociados a sus categorías",
+          "No se puede eliminar una categoría que tiene sub-categorías con productos asociados",
           {
             ...parseErrorDetails(
               "categoriesWithProducts",
@@ -174,7 +176,7 @@ export async function DELETE(
       });
     });
 
-    return NextResponse.json("Tipo eliminado correctamente", {
+    return NextResponse.json("Categoría eliminada correctamente", {
       headers: CACHE_HEADERS.NO_CACHE,
     });
   } catch (error) {

@@ -60,18 +60,18 @@ export async function GET(
       SELECT id,
       (
         CASE
-          WHEN name ILIKE ${search} THEN 100
-          WHEN name ILIKE ${`${search}%`} THEN 50
-          WHEN name ILIKE ${`%${search}%`} THEN 20
-          WHEN description ILIKE ${`%${search}%`} THEN 5
+          WHEN name LIKE ${search} THEN 100
+          WHEN name LIKE ${`${search}%`} THEN 50
+          WHEN name LIKE ${`%${search}%`} THEN 20
+          WHEN description LIKE ${`%${search}%`} THEN 5
           ELSE 0
         END
       ) as relevance
-      FROM "Product"
-      WHERE "storeId" = ${params.storeId}
-        AND "isArchived" = false
-        AND (name ILIKE ${`%${search}%`} OR description ILIKE ${`%${search}%`})
-      ORDER BY relevance DESC, "createdAt" DESC
+      FROM Product
+      WHERE storeId = ${params.storeId}
+        AND isArchived = 0
+        AND (name LIKE ${`%${search}%`} OR description LIKE ${`%${search}%`})
+      ORDER BY relevance DESC, createdAt DESC
       LIMIT ${limit * 5}
       OFFSET ${skip}
     `;

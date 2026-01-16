@@ -10,8 +10,8 @@ export const revalidate = 0;
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Tipos | PdePapel Admin",
-  description: "Gestión de tipos de categorías",
+  title: "Categorías | PdePapel Admin",
+  description: "Gestión de categorías principales",
 };
 
 export default async function TypesPage({

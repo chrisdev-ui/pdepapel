@@ -13,7 +13,7 @@ export async function GET(
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.categoryId)
-      throw ErrorFactory.InvalidRequest("Se requiere un ID de categoría");
+      throw ErrorFactory.InvalidRequest("Se requiere un ID de sub-categoría");
 
     const category = await prismadb.category.findUnique({
       where: { id: params.categoryId, storeId: params.storeId },
@@ -41,7 +41,7 @@ export async function PATCH(
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.categoryId)
-      throw ErrorFactory.InvalidRequest("Se requiere un ID de categoría");
+      throw ErrorFactory.InvalidRequest("Se requiere un ID de sub-categoría");
 
     await verifyStoreOwner(userId, params.storeId);
 
@@ -49,11 +49,13 @@ export async function PATCH(
     const { name, typeId } = body;
 
     if (!name)
-      throw ErrorFactory.InvalidRequest("Se requiere un nombre de categoría");
+      throw ErrorFactory.InvalidRequest(
+        "Se requiere un nombre de sub-categoría",
+      );
 
     if (!typeId)
       throw ErrorFactory.InvalidRequest(
-        "Se requiere un tipo para la categoría",
+        "Se requiere un tipo para la sub-categoría",
       );
 
     const updatedCategory = await prismadb.$transaction(async (tx) => {
@@ -63,7 +65,7 @@ export async function PATCH(
 
       if (!category)
         throw ErrorFactory.NotFound(
-          `La categoría ${params.categoryId} no existe en esta tienda`,
+          `La sub-categoría ${params.categoryId} no existe en esta tienda`,
         );
 
       const type = await tx.type.findUnique({
@@ -106,7 +108,7 @@ export async function DELETE(
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.categoryId)
-      throw ErrorFactory.InvalidRequest("Se requiere un ID de categoría");
+      throw ErrorFactory.InvalidRequest("Se requiere un ID de sub-categoría");
 
     await verifyStoreOwner(userId, params.storeId);
 
@@ -117,7 +119,7 @@ export async function DELETE(
 
       if (!category)
         throw ErrorFactory.NotFound(
-          `La categoría ${params.categoryId} no existe en esta tienda`,
+          `La sub-categoría ${params.categoryId} no existe en esta tienda`,
         );
 
       const products = await tx.product.count({
@@ -129,7 +131,7 @@ export async function DELETE(
 
       if (products > 0)
         throw ErrorFactory.Conflict(
-          `No se puede eliminar la categoría ${category.name} porque tiene ${products} productos asociados. Elimina o reasigna los productos asociados primero`,
+          `No se puede eliminar la sub-categoría ${category.name} porque tiene ${products} productos asociados. Elimina o reasigna los productos asociados primero`,
           {
             category: category.name,
             products,
@@ -141,7 +143,7 @@ export async function DELETE(
       });
     });
 
-    return NextResponse.json("Categoría eliminada correctamente", {
+    return NextResponse.json("Sub-categoría eliminada correctamente", {
       headers: CACHE_HEADERS.NO_CACHE,
     });
   } catch (error) {

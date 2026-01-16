@@ -32,7 +32,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const onCopy = (id: string) => {
     navigator.clipboard.writeText(id);
     toast({
-      description: "ID del tipo copiado al portapapeles",
+      description: "ID de la categoría copiado al portapapeles",
       variant: "success",
     });
   };
@@ -43,7 +43,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
       await axios.delete(`/api/${params.storeId}/${Models.Types}/${data.id}`);
       router.refresh();
       toast({
-        description: "Tipo eliminado",
+        description: "Categoría eliminada",
         variant: "success",
       });
     } catch (error) {

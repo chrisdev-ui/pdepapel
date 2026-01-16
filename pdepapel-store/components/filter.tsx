@@ -1,8 +1,9 @@
 "use client";
 
 import { ChevronsDown, ChevronsUp, Search, X } from "lucide-react";
-import { parseAsArrayOf, parseAsString, useQueryState } from "nuqs";
 import { useMemo, useState } from "react";
+
+import { ProductFilters, useProductFilters } from "@/hooks/use-product-filters";
 
 import {
   Accordion,
@@ -30,30 +31,19 @@ const Filter: React.FC<FilterProps> = ({
   data,
   emptyMessage,
 }) => {
-  const [selectedValues, setSelectedValues] = useQueryState(
-    valueKey,
-    parseAsArrayOf(parseAsString)
-      .withDefault([])
-      .withOptions({ shallow: true }),
-  );
+  const { filters, toggleFilter, setFilter } = useProductFilters();
 
   const parsedSelectedValues = useMemo(() => {
-    return Array.isArray(selectedValues) ? selectedValues : [];
-  }, [selectedValues]);
+    const values = filters[valueKey as keyof ProductFilters];
+    return Array.isArray(values) ? values : [];
+  }, [filters, valueKey]);
 
   const sortedData = useMemo(() => {
     return [...data].sort((a, b) => a.name.localeCompare(b.name));
   }, [data]);
 
-  const toggleFilter = (id: string) => {
-    const current = new Set(parsedSelectedValues);
-    if (current.has(id)) {
-      current.delete(id);
-    } else {
-      current.add(id);
-    }
-    const newValue = Array.from(current);
-    setSelectedValues(newValue.length > 0 ? newValue : null);
+  const handleToggleFilter = (id: string) => {
+    toggleFilter(valueKey as keyof ProductFilters, id);
   };
 
   const [showAll, setShowAll] = useState(false);
@@ -108,7 +98,9 @@ const Filter: React.FC<FilterProps> = ({
                   variant="ghost"
                   size="sm"
                   className="h-auto w-fit self-end px-2 py-1 text-xs text-muted-foreground hover:text-red-500"
-                  onClick={() => setSelectedValues(null)}
+                  onClick={() =>
+                    setFilter(valueKey as keyof ProductFilters, null)
+                  }
                 >
                   Limpiar filtros
                   <X className="ml-1 h-3 w-3" />
@@ -127,7 +119,7 @@ const Filter: React.FC<FilterProps> = ({
                   <Checkbox
                     id={`${valueKey}-${filter.id}`}
                     checked={parsedSelectedValues.includes(filter.id)}
-                    onCheckedChange={() => toggleFilter(filter.id)}
+                    onCheckedChange={() => handleToggleFilter(filter.id)}
                   />
                   <div className="flex items-center gap-x-2">
                     {valueKey === "colorId" && filter.value && (

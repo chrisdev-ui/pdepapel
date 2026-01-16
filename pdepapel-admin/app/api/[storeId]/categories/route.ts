@@ -25,11 +25,13 @@ export async function POST(
     const { name, typeId } = body;
 
     if (!name)
-      throw ErrorFactory.InvalidRequest("Se requiere un nombre de categoría");
+      throw ErrorFactory.InvalidRequest(
+        "Se requiere un nombre de sub-categoría",
+      );
 
     if (!typeId)
       throw ErrorFactory.InvalidRequest(
-        "Se requiere un tipo para la categoría",
+        "Se requiere un tipo para la sub-categoría",
       );
 
     const category = await prismadb.category.create({
@@ -87,7 +89,7 @@ export async function DELETE(
 
     if (!ids || !Array.isArray(ids) || ids.length === 0)
       throw ErrorFactory.InvalidRequest(
-        "Se requieren IDs de categorías en formato de arreglo",
+        "Se requieren IDs de sub-categorías en formato de arreglo",
       );
 
     await prismadb.$transaction(async (tx) => {
@@ -102,7 +104,7 @@ export async function DELETE(
 
       if (categories.length !== ids.length)
         throw ErrorFactory.NotFound(
-          "Algunas categorías no se han encontrado en esta tienda",
+          "Algunas sub-categorías no se han encontrado en esta tienda",
         );
 
       const categoriesWithProducts = await tx.category.findMany({
@@ -123,7 +125,7 @@ export async function DELETE(
 
       if (categoriesWithProducts.length > 0) {
         throw ErrorFactory.Conflict(
-          "No se pueden eliminar categorías con productos asociados. Elimina o reasigna los productos asociados primero",
+          "No se pueden eliminar sub-categorías con productos asociados. Elimina o reasigna los productos asociados primero",
           {
             ...parseErrorDetails(
               "categoriesWithProducts",
@@ -143,7 +145,7 @@ export async function DELETE(
       });
     });
 
-    return NextResponse.json("Categorías eliminadas correctamente", {
+    return NextResponse.json("Sub-categorías eliminadas correctamente", {
       headers: CACHE_HEADERS.NO_CACHE,
     });
   } catch (error) {

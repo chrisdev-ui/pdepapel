@@ -302,8 +302,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
         if (groupCategory && groupCategory !== currentCategory) {
           form.setValue("categoryId", groupCategory);
           toast({
-            title: "Categoría Actualizada",
-            description: `La categoría se ha ajustado a "${categories.find((c) => c.id === groupCategory)?.name}" para coincidir con el grupo.`,
+            title: "Sub-Categoría Actualizada",
+            description: `La sub-categoría se ha ajustado a "${categories.find((c) => c.id === groupCategory)?.name}" para coincidir con el grupo.`,
           });
         }
       }
@@ -769,7 +769,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               name="categoryId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel isRequired>Categoría</FormLabel>
+                  <FormLabel isRequired>Sub-Categoría</FormLabel>
                   <Select
                     key={field.value}
                     disabled={
@@ -781,7 +781,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecciona una categoría" />
+                        <SelectValue placeholder="Selecciona una sub-categoría" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>

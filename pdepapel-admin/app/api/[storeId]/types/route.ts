@@ -21,7 +21,9 @@ export async function POST(
     await verifyStoreOwner(userId, params.storeId);
 
     if (!name?.trim()) {
-      throw ErrorFactory.InvalidRequest("El nombre del tipo es requerido");
+      throw ErrorFactory.InvalidRequest(
+        "El nombre de la categoría es requerido",
+      );
     }
 
     const existingType = await prismadb.type.findFirst({
@@ -32,7 +34,7 @@ export async function POST(
     });
 
     if (existingType) {
-      throw ErrorFactory.Conflict("Ya existe un tipo con este nombre");
+      throw ErrorFactory.Conflict("Ya existe una categoría con este nombre");
     }
 
     const type = await prismadb.type.create({
@@ -91,7 +93,7 @@ export async function DELETE(
 
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       throw ErrorFactory.InvalidRequest(
-        "Los IDs de los tipos son requeridos y deben ser un arreglo",
+        "Los IDs de las categorías son requeridos y deben ser un arreglo",
       );
     }
 
@@ -121,7 +123,7 @@ export async function DELETE(
 
       if (types.length !== ids.length) {
         throw ErrorFactory.InvalidRequest(
-          "Algunos tipos no existen o no pertenecen a esta tienda",
+          "Algunas categorías no existen o no pertenecen a esta tienda",
         );
       }
 
@@ -131,7 +133,7 @@ export async function DELETE(
 
       if (typesWithProducts.length > 0) {
         throw ErrorFactory.Conflict(
-          "No se pueden eliminar tipos que tienen productos asociados a sus categorías",
+          "No se pueden eliminar categorías que tienen sub-categorías con productos asociados",
           {
             types: typesWithProducts.map((type) => ({
               id: type.id,
@@ -166,7 +168,7 @@ export async function DELETE(
       });
     });
 
-    return NextResponse.json("Tipos eliminados correctamente", {
+    return NextResponse.json("Categorías eliminadas correctamente", {
       headers: CACHE_HEADERS.NO_CACHE,
     });
   } catch (error: any) {

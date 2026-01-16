@@ -21,8 +21,8 @@ const CategoryClient: React.FC<CategoryClientProps> = ({ data }) => {
     <>
       <div className="flex items-center justify-between">
         <Heading
-          title={`Categorías (${data.length})`}
-          description="Maneja las categorías para tu tienda"
+          title={`Sub-Categorías (${data.length})`}
+          description="Maneja las sub-categorías para tu tienda"
         />
         <Button
           onClick={() =>
@@ -30,7 +30,7 @@ const CategoryClient: React.FC<CategoryClientProps> = ({ data }) => {
           }
         >
           <Plus className="mr-2 h-4 w-4" />
-          Crear categoría
+          Crear sub-categoría
         </Button>
       </div>
       <Separator />
@@ -40,7 +40,7 @@ const CategoryClient: React.FC<CategoryClientProps> = ({ data }) => {
         columns={columns}
         data={data}
       />
-      <Heading title="API" description="API calls para las categorías" />
+      <Heading title="API" description="API calls para las sub-categorías" />
       <Separator />
       <ApiList entityName={Models.Categories} entityIdName="categoryId" />
     </>
