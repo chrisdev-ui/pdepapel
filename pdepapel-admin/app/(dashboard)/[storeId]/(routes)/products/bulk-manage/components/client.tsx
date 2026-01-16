@@ -133,7 +133,7 @@ export const BulkProductClient: React.FC<BulkProductClientProps> = ({
       </div>
       <Separator />
 
-      <div className="flex flex-col items-end gap-4 rounded-md border bg-gray-50 p-4 py-4 md:flex-row">
+      <div className="mt-8 flex flex-col items-end gap-4 rounded-md border bg-gray-50 p-4 py-4 md:flex-row">
         <div className="w-full md:w-1/4">
           <label className="mb-2 block text-sm font-medium">
             1. Campo a actualizar
@@ -223,11 +223,36 @@ export const BulkProductClient: React.FC<BulkProductClientProps> = ({
         searchKey="name"
         columns={columns}
         data={data}
-        // We need to pass selection state props if DataTable supports them
-        // Assuming standard DataTable doesn't exposes these well, we rely on the component being reusable.
-        // If the reusable DataTable doesn't support controlled selection, we might need to modify it or wrapp it.
-        // Let's modify standard DataTable for this feature or use a specific one?
-        // For now, I will pass these props dynamically assuming I will patch DataTable next.
+        filters={[
+          {
+            columnKey: "category",
+            title: "Sub-Categoría",
+            options: categories.map((c) => ({ label: c.name, value: c.name })),
+          },
+          {
+            columnKey: "size",
+            title: "Tamaño",
+            options: sizes.map((s) => ({ label: s.name, value: s.name })),
+          },
+          {
+            columnKey: "color",
+            title: "Color",
+            options: colors.map((c) => ({ label: c.value, value: c.value })),
+          },
+          {
+            columnKey: "design",
+            title: "Diseño",
+            options: designs.map((d) => ({ label: d.name, value: d.name })),
+          },
+          {
+            columnKey: "type",
+            title: "Tipo",
+            options: [
+              { label: "Variante de Grupo", value: "group" },
+              { label: "Producto Individual", value: "single" },
+            ],
+          },
+        ]}
         // @ts-ignore
         rowSelection={rowSelection}
         // @ts-ignore

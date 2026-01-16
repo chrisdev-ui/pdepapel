@@ -1,10 +1,15 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { DataTableCellColor } from "@/components/ui/data-table-cell-color";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
 import { ColumnDef } from "@tanstack/react-table";
+import Image from "next/image";
 import { getProducts } from "../../server/get-products";
 
 // Reusing the type from the regular products page for consistency
@@ -12,26 +17,49 @@ export type ProductColumn = Awaited<ReturnType<typeof getProducts>>[number];
 
 export const columns: ColumnDef<ProductColumn>[] = [
   {
-    id: "select",
-    header: ({ table }) => (
-      <Checkbox
-        checked={
-          table.getIsAllPageRowsSelected() ||
-          (table.getIsSomePageRowsSelected() && "indeterminate")
-        }
-        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-        aria-label="Select all"
-      />
-    ),
-    cell: ({ row }) => (
-      <Checkbox
-        checked={row.getIsSelected()}
-        onCheckedChange={(value) => row.toggleSelected(!!value)}
-        aria-label="Select row"
-      />
-    ),
-    enableSorting: false,
-    enableHiding: false,
+    accessorKey: "images",
+    header: "Imagen",
+    cell: ({ row }) => {
+      const images = row.original.images || [];
+      const mainImage = images[0]?.url;
+
+      return (
+        <HoverCard>
+          <HoverCardTrigger asChild>
+            <div className="relative h-10 w-10 cursor-pointer">
+              {mainImage ? (
+                <Image
+                  fill
+                  src={mainImage}
+                  alt="Product Image"
+                  className="rounded-md object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center rounded-md bg-gray-100 text-xs text-gray-400">
+                  N/A
+                </div>
+              )}
+            </div>
+          </HoverCardTrigger>
+          {images.length > 0 && (
+            <HoverCardContent className="w-80">
+              <div className="grid grid-cols-3 gap-2">
+                {images.map((img, index) => (
+                  <div key={index} className="relative h-20 w-full">
+                    <Image
+                      fill
+                      src={img.url}
+                      alt={`Product Image ${index + 1}`}
+                      className="rounded-md bg-gray-100 object-cover"
+                    />
+                  </div>
+                ))}
+              </div>
+            </HoverCardContent>
+          )}
+        </HoverCard>
+      );
+    },
   },
   {
     accessorKey: "name",
@@ -41,11 +69,11 @@ export const columns: ColumnDef<ProductColumn>[] = [
   },
   {
     id: "type",
+    accessorFn: (row) => (row.productGroupId ? "group" : "single"),
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Tipo de Fila" />
     ),
     cell: ({ row }) => {
-      const isGroup = !!row.original.productGroupId;
       // In getProducts, we fetch productGroup relation.
       // If row has a productGroup, it's a variant OF a group.
       // BUT WAIT: The specialized get-products return flat list.
@@ -58,6 +86,9 @@ export const columns: ColumnDef<ProductColumn>[] = [
       ) : (
         <Badge variant="outline">Producto Individual</Badge>
       );
+    },
+    filterFn: (row, id, value) => {
+      return value.includes(row.getValue(id));
     },
   },
   {
