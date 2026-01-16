@@ -208,7 +208,7 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
               name="typeId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel isRequired>Tipo</FormLabel>
+                  <FormLabel isRequired>Categoría</FormLabel>
                   <Select
                     key={field.value}
                     disabled={loading}
@@ -218,7 +218,7 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecciona un tipo" />
+                        <SelectValue placeholder="Selecciona una categoría" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
