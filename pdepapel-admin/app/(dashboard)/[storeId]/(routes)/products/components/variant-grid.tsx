@@ -425,7 +425,7 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
                         <StockQuantityInput
                           value={variant.stock || 0}
                           onChange={(val) => onStockChange(index, val)}
-                          disabled={loading}
+                          disabled={loading || !!variant.id}
                           size="sm"
                           min={0}
                         />

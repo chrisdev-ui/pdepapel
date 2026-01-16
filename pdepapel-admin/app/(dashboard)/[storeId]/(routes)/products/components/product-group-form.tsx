@@ -611,112 +611,122 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       const mergedVariants: FormVariant[] = [];
       const usedCurrentIndices = new Set<number>();
 
-      // CRITICAL: First, preserve all imported variants (those with existing IDs)
-      // These are products that were imported from standalone products and should
-      // maintain their original stock, price, and other values.
+      // A. PRESENCE CHECK: keep all variants that have an ID (imported/existing)
       currentVars.forEach((v, idx) => {
         if (v.id) {
-          // This is an imported/existing product - preserve it completely
-          usedCurrentIndices.add(idx);
           mergedVariants.push(v);
+          usedCurrentIndices.add(idx);
         }
       });
 
+      // B. GENERATION CHECK: for each generated combination...
       for (const gen of generatedVariants) {
-        // 1. Find EXACT match in current (by Attributes)
-        let matchIndex = currentVars.findIndex(
-          (v, idx) =>
-            !usedCurrentIndices.has(idx) &&
+        // 1. Check if this combination is ALREADY satisfied by an existing (imported) variant
+        //    (one we just added to mergedVariants)
+        const isSatisfiedByImport = mergedVariants.some(
+          (v) =>
+            v.id && // Must be an actual saved variant
             v.size?.id === gen.sizeId &&
             v.color?.id === gen.colorId &&
             v.design?.id === gen.designId,
         );
 
+        if (isSatisfiedByImport) {
+          // Skip - we already have this product from import
+          continue;
+        }
+
+        // 2. Check overlap with "New/Unsaved" variants in currentVars (Update/Adoption)
+        //    We look for a manual entry that hasn't been "claimed" by an ID check above
+        let matchIndex = currentVars.findIndex(
+          (v, idx) =>
+            !usedCurrentIndices.has(idx) && // Not already used
+            !v.id && // Must be new/unsaved (saved ones are handled in step A)
+            (v.size?.id === gen.sizeId || !v.size?.id) &&
+            (v.color?.id === gen.colorId || !v.color?.id) &&
+            (v.design?.id === gen.designId || !v.design?.id),
+        );
+
+        // Refine match: prefer exact attribute match if possible
+        const exactMatchIndex = currentVars.findIndex(
+          (v, idx) =>
+            !usedCurrentIndices.has(idx) &&
+            !v.id &&
+            v.size?.id === gen.sizeId &&
+            v.color?.id === gen.colorId &&
+            v.design?.id === gen.designId,
+        );
+
+        if (exactMatchIndex !== -1) matchIndex = exactMatchIndex;
+
         if (matchIndex !== -1) {
-          // PRESERVE EXACT
+          // ADOPT / UPDATE existing manual entry
           usedCurrentIndices.add(matchIndex);
-          mergedVariants.push(currentVars[matchIndex]);
-        } else {
-          // 2. Fallback: Find SOFT match (Adoption)
-          matchIndex = currentVars.findIndex((v, idx) => {
-            if (usedCurrentIndices.has(idx)) return false;
-
-            // Check attributes: If v has it, it must match. If v doesn't have it, we consider it a match (allow adoption).
-            const sizeMatch = !v.size?.id || v.size.id === gen.sizeId;
-            const colorMatch = !v.color?.id || v.color.id === gen.colorId;
-            const designMatch = !v.design?.id || v.design.id === gen.designId;
-
-            // We require at least one attribute to be present and matching to avoid adopting completely blank/random items
-            return sizeMatch && colorMatch && designMatch;
-          });
-
-          if (matchIndex !== -1) {
-            // ADOPT & UPDATE
-            usedCurrentIndices.add(matchIndex);
-            const existing = currentVars[matchIndex];
-            mergedVariants.push({
-              ...existing,
-              // Update missing attributes so they stick to this slot
-              size: existing.size?.id
+          const existing = currentVars[matchIndex];
+          mergedVariants.push({
+            ...existing,
+            size:
+              existing.size?.id && existing.size.id !== "unknown"
                 ? existing.size
-                : sizesObj.find((x) => x.id === gen.sizeId)?.id
+                : sizesObj.find((x) => x.id === gen.sizeId)
                   ? {
                       id: sizesObj.find((x) => x.id === gen.sizeId)!.id,
                       name: sizesObj.find((x) => x.id === gen.sizeId)!.name,
                       value: sizesObj.find((x) => x.id === gen.sizeId)!.value,
                     }
                   : { id: "unknown", name: "?" },
-              color: existing.color?.id
+            color:
+              existing.color?.id && existing.color.id !== "unknown"
                 ? existing.color
-                : colorsObj.find((x) => x.id === gen.colorId)?.id
+                : colorsObj.find((x) => x.id === gen.colorId)
                   ? {
                       id: colorsObj.find((x) => x.id === gen.colorId)!.id,
                       name: colorsObj.find((x) => x.id === gen.colorId)!.name,
                       value: colorsObj.find((x) => x.id === gen.colorId)!.value,
                     }
                   : { id: "unknown", name: "?" },
-              design: existing.design?.id
+            design:
+              existing.design?.id && existing.design.id !== "unknown"
                 ? existing.design
-                : designsObj.find((x) => x.id === gen.designId)?.id
+                : designsObj.find((x) => x.id === gen.designId)
                   ? {
                       id: designsObj.find((x) => x.id === gen.designId)!.id,
                       name: designsObj.find((x) => x.id === gen.designId)!.name,
                     }
                   : { id: "unknown", name: "?" },
-            });
-          } else {
-            // 3. ADD NEW
-            mergedVariants.push({
-              sku: gen.sku,
-              name: gen.name,
-              price: form.getValues("price") || 0,
-              acqPrice: form.getValues("acqPrice") || 0,
-              stock: form.getValues("defaultStock") || 0,
-              supplierId: form.getValues("defaultSupplier") || "",
-              isFeatured: false,
-              isArchived: false,
-              size: sizesObj.find((x) => x.id === gen.sizeId)
-                ? {
-                    id: sizesObj.find((x) => x.id === gen.sizeId)!.id,
-                    name: sizesObj.find((x) => x.id === gen.sizeId)!.name,
-                    value: sizesObj.find((x) => x.id === gen.sizeId)!.value,
-                  }
-                : { id: "unknown", name: "?" },
-              color: colorsObj.find((x) => x.id === gen.colorId)
-                ? {
-                    id: colorsObj.find((x) => x.id === gen.colorId)!.id,
-                    name: colorsObj.find((x) => x.id === gen.colorId)!.name,
-                    value: colorsObj.find((x) => x.id === gen.colorId)!.value,
-                  }
-                : { id: "unknown", name: "?" },
-              design: designsObj.find((x) => x.id === gen.designId)
-                ? {
-                    id: designsObj.find((x) => x.id === gen.designId)!.id,
-                    name: designsObj.find((x) => x.id === gen.designId)!.name,
-                  }
-                : { id: "unknown", name: "?" },
-            });
-          }
+          });
+        } else {
+          // 3. CREATE NEW
+          mergedVariants.push({
+            sku: gen.sku,
+            name: gen.name,
+            price: form.getValues("price") || 0,
+            acqPrice: form.getValues("acqPrice") || 0,
+            stock: form.getValues("defaultStock") || 0,
+            supplierId: form.getValues("defaultSupplier") || "",
+            isFeatured: false,
+            isArchived: false,
+            size: sizesObj.find((x) => x.id === gen.sizeId)
+              ? {
+                  id: sizesObj.find((x) => x.id === gen.sizeId)!.id,
+                  name: sizesObj.find((x) => x.id === gen.sizeId)!.name,
+                  value: sizesObj.find((x) => x.id === gen.sizeId)!.value,
+                }
+              : { id: "unknown", name: "?" },
+            color: colorsObj.find((x) => x.id === gen.colorId)
+              ? {
+                  id: colorsObj.find((x) => x.id === gen.colorId)!.id,
+                  name: colorsObj.find((x) => x.id === gen.colorId)!.name,
+                  value: colorsObj.find((x) => x.id === gen.colorId)!.value,
+                }
+              : { id: "unknown", name: "?" },
+            design: designsObj.find((x) => x.id === gen.designId)
+              ? {
+                  id: designsObj.find((x) => x.id === gen.designId)!.id,
+                  name: designsObj.find((x) => x.id === gen.designId)!.name,
+                }
+              : { id: "unknown", name: "?" },
+          });
         }
       }
 
