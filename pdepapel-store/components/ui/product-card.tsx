@@ -79,6 +79,42 @@ const ProductCard: React.FC<ProductCardProps> = ({
   const isCartProduct =
     isMounted && cart.items.some((item) => item.id === product.id);
 
+  /**
+   * Smart Badge Priority Hierarchy:
+   * 1. Out of Stock (Critical) - User cannot purchase
+   * 2. Offer (Promotion) - High incentive to purchase
+   * 3. Group (Information) - Indicates product has variants
+   * 4. New (Marketing) - "New" arrival
+   */
+  const renderBadge = () => {
+    // 1. Out of Stock
+    if (product.stock === 0) {
+      return (
+        <ProductCardBadge
+          text="¡Agotado!"
+          spanClasses="border-white bg-red-500 text-white outline-white"
+        />
+      );
+    }
+
+    // 2. Offer
+    if (product.offerLabel) {
+      return <OfferBadge text={product.offerLabel} />;
+    }
+
+    // 3. Group
+    if (product.isGroup) {
+      return <GroupBadge optionsCount={product.variantCount ?? 0} />;
+    }
+
+    // 4. New
+    if (isNew) {
+      return <ProductCardBadge text="¡Nuevo!" />;
+    }
+
+    return null;
+  };
+
   return (
     <div
       onClick={handleClick}
@@ -221,19 +257,8 @@ const ProductCard: React.FC<ProductCardProps> = ({
           <Currency value={product.price} />
         )}
       </div>
-      {/* Smart Badge Priority: Out of Stock > Offer > Group > New */}
-      {product.stock === 0 ? (
-        <ProductCardBadge
-          text="¡Agotado!"
-          spanClasses="border-white bg-red-500 text-white outline-white"
-        />
-      ) : product.offerLabel ? (
-        <OfferBadge text={product.offerLabel} />
-      ) : product.isGroup ? (
-        <GroupBadge optionsCount={product.variantCount ?? 0} />
-      ) : isNew ? (
-        <ProductCardBadge text="¡Nuevo!" />
-      ) : null}
+      {/* Smart Badge Priority Logic */}
+      {renderBadge()}
     </div>
   );
 };

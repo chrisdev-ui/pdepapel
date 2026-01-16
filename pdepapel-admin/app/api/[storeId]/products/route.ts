@@ -91,6 +91,7 @@ interface UnifiedProduct {
   size?: Size;
   reviews?: { rating: number }[];
   supplier?: Supplier | null;
+  stock: number;
 }
 
 const corsHeaders = {
@@ -528,6 +529,7 @@ export async function GET(
           reviews: g.products.flatMap((p) => p.reviews),
           sku: "GROUP",
           createdAt: g.createdAt,
+          stock: g.products.reduce((acc, p) => acc + p.stock, 0),
         };
       });
 
@@ -549,6 +551,7 @@ export async function GET(
           design: p.design,
           sku: p.sku,
           createdAt: p.createdAt,
+          stock: p.stock,
         }),
       );
 

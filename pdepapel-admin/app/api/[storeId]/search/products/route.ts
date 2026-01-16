@@ -46,38 +46,45 @@ export async function GET(
       console.error("Redis get error:", error);
     }
 
-    const products = await prismadb.product.findMany({
+    // ---------------------------------------------------------
+    // HYBRID SEARCH: Raw SQL for Ranking + Prisma for Data
+    // ---------------------------------------------------------
+
+    // 1. Get Ranked IDs using Raw SQL
+    // We prioritize:
+    // - Exact Name Match (Score 100)
+    // - Name Starts With Query (Score 50)
+    // - Name Contains Query (Score 20)
+    // - Description Contains Query (Score 5)
+    const rawIds = await prismadb.$queryRaw<{ id: string }[]>`
+      SELECT id,
+      (
+        CASE
+          WHEN name ILIKE ${search} THEN 100
+          WHEN name ILIKE ${`${search}%`} THEN 50
+          WHEN name ILIKE ${`%${search}%`} THEN 20
+          WHEN description ILIKE ${`%${search}%`} THEN 5
+          ELSE 0
+        END
+      ) as relevance
+      FROM "Product"
+      WHERE "storeId" = ${params.storeId}
+        AND "isArchived" = false
+        AND (name ILIKE ${`%${search}%`} OR description ILIKE ${`%${search}%`})
+      ORDER BY relevance DESC, "createdAt" DESC
+      LIMIT ${limit * 5}
+      OFFSET ${skip}
+    `;
+
+    const productIds = rawIds.map((p) => p.id);
+
+    // 2. Fetch Full Data for these IDs using Prisma
+    // Note: findMany does NOT respect the order of "in" array, so we must resort later
+    const unsortedProducts = await prismadb.product.findMany({
       where: {
-        storeId: params.storeId,
-        isArchived: false,
-        OR: [
-          {
-            name: search !== "" ? { search } : undefined, // Fulltext if supported
-          },
-          {
-            description: search !== "" ? { search } : undefined,
-          },
-          {
-            name: {
-              contains: search,
-            },
-          },
-          {
-            description: {
-              contains: search,
-            },
-          },
-        ],
+        id: { in: productIds },
+        storeId: params.storeId, // Redundant but safe
       },
-      orderBy: {
-        _relevance: {
-          fields: ["name"],
-          search,
-          sort: "asc",
-        },
-      },
-      take: limit * 5, // Fetch more to allow for grouping deduplication
-      skip,
       include: {
         images: {
           orderBy: { isMain: "desc" },
@@ -89,10 +96,21 @@ export async function GET(
               orderBy: { isMain: "desc" },
               take: 1,
             },
+            products: {
+              select: {
+                stock: true,
+              },
+            },
           },
         },
       },
     });
+
+    // 3. Sort products to match the Raw SQL order
+    const products = productIds
+      .map((id) => unsortedProducts.find((p) => p.id === id))
+      .filter((p): p is NonNullable<typeof p> => p !== undefined);
+
     const { getProductsPrices } = await import("@/lib/discount-engine");
     const pricesMap = await getProductsPrices(products, params.storeId);
 
@@ -116,6 +134,10 @@ export async function GET(
             price: effectivePrice, // Representative price
             image: groupImage,
             isGroup: true,
+            stock: product.productGroup.products.reduce(
+              (acc, p) => acc + p.stock,
+              0,
+            ),
           });
         }
       } else {
@@ -130,6 +152,7 @@ export async function GET(
             price: effectivePrice,
             image: product.images[0],
             isGroup: false,
+            stock: product.stock,
           });
         }
       }
