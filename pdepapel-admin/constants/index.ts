@@ -158,6 +158,7 @@ export enum Models {
   Boxes = "boxes",
   RestockOrders = "restock-orders",
   InventoryMovements = "inventory-movements",
+  BulkProducts = "bulk-products",
 }
 
 export const ModelLabels: Record<Models, string> = {
@@ -185,6 +186,7 @@ export const ModelLabels: Record<Models, string> = {
   [Models.Shipments]: "Envíos",
   [Models.Offers]: "Ofertas",
   [Models.Boxes]: "Cajas",
+  [Models.BulkProducts]: "Gestor Masivo",
 };
 
 export const ModelsColumns: Record<Models, { [key: string]: string }> = {
@@ -364,6 +366,14 @@ export const ModelsColumns: Record<Models, { [key: string]: string }> = {
     quantity: "Cantidad",
     reason: "Razón",
     createdAt: "Fecha",
+  },
+  [Models.BulkProducts]: {
+    name: "Nombre",
+    category: "Sub-Categoría",
+    color: "Color",
+    size: "Tamaño",
+    design: "Diseño",
+    type: "Tipo de Fila",
   },
 };
 

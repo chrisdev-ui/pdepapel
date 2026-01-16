@@ -3,6 +3,8 @@
 import {
   ColumnDef,
   ColumnFiltersState,
+  OnChangeFn,
+  RowSelectionState,
   SortingState,
   VisibilityState,
   flexRender,
@@ -48,6 +50,9 @@ interface DataTableProps<TData, TValue> {
     }[];
   }[];
   onColumnFiltersChange?: (filters: ColumnFiltersState) => void;
+  // New opt-in controlled selection props
+  rowSelection?: Record<string, boolean>;
+  onRowSelectionChange?: (selection: Record<string, boolean>) => void;
 }
 
 export function DataTable<TData, TValue>({
@@ -57,6 +62,8 @@ export function DataTable<TData, TValue>({
   tableKey,
   filters,
   onColumnFiltersChange: onColumnFiltersChangeProp,
+  rowSelection: controlledRowSelection,
+  onRowSelectionChange: controlledOnRowSelectionChange,
 }: DataTableProps<TData, TValue>) {
   const { tables, updateTableState } = useTableStore();
   const tableState = tables[tableKey] || {
@@ -70,7 +77,7 @@ export function DataTable<TData, TValue>({
     tableState.columnFilters,
   );
   const [sorting, setSorting] = useState<SortingState>(tableState.sorting);
-  const [rowSelection, setRowSelection] = useState({});
+  const [internalRowSelection, setInternalRowSelection] = useState({});
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
     tableState.columnVisibility,
   );
@@ -78,6 +85,24 @@ export function DataTable<TData, TValue>({
     pageIndex: number;
     pageSize: number;
   }>(tableState.pagination);
+
+  const rowSelection = controlledRowSelection ?? internalRowSelection;
+
+  const setRowSelection: OnChangeFn<RowSelectionState> = (updaterOrValue) => {
+    let newSelection;
+    if (typeof updaterOrValue === "function") {
+      // @ts-ignore - The types form TanStack are a bit tricky to satisfy directly with our wrapper approach without generics, casting simplified
+      newSelection = updaterOrValue(rowSelection);
+    } else {
+      newSelection = updaterOrValue;
+    }
+
+    if (controlledOnRowSelectionChange) {
+      controlledOnRowSelectionChange(newSelection);
+    } else {
+      setInternalRowSelection(newSelection);
+    }
+  };
 
   const table = useReactTable({
     data,
@@ -134,6 +159,7 @@ export function DataTable<TData, TValue>({
       sorting,
       columnFilters,
       columnVisibility,
+      // We don't persist rowSelection in global store usually, as it's ephemeral
     });
     // Notify parent of filter changes
     onColumnFiltersChangeProp?.(columnFilters);

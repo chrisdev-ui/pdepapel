@@ -24,6 +24,7 @@ import {
   Image as ImageIcon,
   Layout,
   LayoutDashboard,
+  ListChecks,
   Menu,
   MessageSquare,
   Package,
@@ -66,6 +67,14 @@ export function MainNav({
       active: pathname === `/${params.storeId}/${Models.Products}`,
       group: "catalog",
       icon: ShoppingBag,
+    },
+    // Bulk Manager
+    {
+      href: `/${params.storeId}/products/bulk-manage`,
+      label: ModelLabels[Models.BulkProducts],
+      active: pathname === `/${params.storeId}/products/bulk-manage`,
+      group: "catalog",
+      icon: ListChecks,
     },
     {
       href: `/${params.storeId}/${Models.Categories}`,
