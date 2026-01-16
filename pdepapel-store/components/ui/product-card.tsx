@@ -178,10 +178,9 @@ const ProductCard: React.FC<ProductCardProps> = ({
         {product.minPrice &&
         product.maxPrice &&
         product.minPrice !== product.maxPrice ? (
-          <div className="flex items-center gap-1">
+          <div className="flex flex-col items-start">
+            <span className="text-xs text-gray-500">Desde</span>
             <Currency value={product.minPrice} />
-            <span className="text-gray-500">-</span>
-            <Currency value={product.maxPrice} />
           </div>
         ) : product.isGroup ? (
           product.minPrice &&
