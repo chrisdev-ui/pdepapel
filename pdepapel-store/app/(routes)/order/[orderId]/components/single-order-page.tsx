@@ -4,14 +4,18 @@ import { useAuth } from "@clerk/nextjs";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
+  AlertTriangle,
   ArrowRight,
+  Bike,
   Calendar,
   CheckCircle2,
+  ClipboardCheck,
   Clock,
   CreditCard,
   ExternalLink,
   Hourglass,
   Info,
+  LucideIcon,
   MapPin,
   Package,
   Phone,
@@ -22,6 +26,7 @@ import {
   ShieldCheck,
   ShieldClose,
   Truck,
+  Undo2,
   X,
 } from "lucide-react";
 import Image from "next/image";
@@ -112,6 +117,19 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
 const normalizeText = (text: string): string => {
   if (!text) return "";
   return text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
+};
+
+const SHIPPING_ICONS: Record<ShippingStatus, LucideIcon> = {
+  [ShippingStatus.Preparing]: Package,
+  [ShippingStatus.Shipped]: Truck,
+  [ShippingStatus.PickedUp]: ClipboardCheck,
+  [ShippingStatus.InTransit]: MapPin,
+  [ShippingStatus.OutForDelivery]: Bike,
+  [ShippingStatus.Delivered]: CheckCircle2,
+  [ShippingStatus.Returned]: Undo2,
+  [ShippingStatus.Cancelled]: X,
+  [ShippingStatus.Exception]: AlertTriangle,
+  [ShippingStatus.FailedDelivery]: ShieldClose,
 };
 
 const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
@@ -545,47 +563,87 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                           )}
                         </div>
 
-                        {/* Shipping Progress Timeline */}
+                        {/* Shipping Progress Timeline - UPDATED */}
                         <div className="rounded-xl bg-gradient-to-br from-purple-50/50 to-pink-50/50 p-6">
                           <h3 className="mb-6 font-serif text-lg font-bold">
                             Progreso del Envío
                           </h3>
                           <div className="space-y-0">
-                            {shippingStatus.map((step, index) => (
-                              <div
-                                key={index}
-                                className="flex gap-4 pb-8 last:pb-0"
-                              >
-                                <div className="relative flex flex-col items-center">
-                                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-green-400 to-emerald-500 shadow-lg">
-                                    <CheckCircle2 className="h-5 w-5 text-white" />
+                            {steps.map((step, index) => {
+                              const currentIndex = Object.values(
+                                ShippingStatus,
+                              ).indexOf(
+                                (order?.shipping?.status as ShippingStatus) ??
+                                  ShippingStatus.Preparing,
+                              );
+                              const isCompleted = index < currentIndex;
+                              const isCurrent = index === currentIndex;
+
+                              const Icon =
+                                SHIPPING_ICONS[step.status] || Package;
+
+                              return (
+                                <div key={index} className="flex gap-4 pb-0">
+                                  <div className="relative flex flex-col items-center">
+                                    <div
+                                      className={cn(
+                                        "flex h-10 w-10 items-center justify-center rounded-full shadow-lg transition-all duration-500",
+                                        isCompleted || isCurrent
+                                          ? "bg-gradient-to-br from-green-400 to-emerald-500 text-white"
+                                          : "bg-white text-gray-300",
+                                        isCurrent &&
+                                          "scale-110 animate-pulse ring-4 ring-primary/20",
+                                      )}
+                                    >
+                                      <Icon className="h-5 w-5" />
+                                    </div>
+                                    {index < steps.length - 1 && (
+                                      <div
+                                        className={cn(
+                                          "h-12 w-0.5 transition-all duration-500",
+                                          index < currentIndex
+                                            ? "bg-primary"
+                                            : "bg-muted",
+                                        )}
+                                      />
+                                    )}
                                   </div>
-                                  {index < shippingStatus.length - 1 && (
-                                    <div className="my-2 h-full w-1 flex-1 rounded-full bg-gradient-to-b from-green-400 to-emerald-500" />
-                                  )}
+                                  <div className="flex-1 pb-8 pt-1">
+                                    <p
+                                      className={cn(
+                                        "text-lg font-bold leading-tight transition-colors duration-300",
+                                        isCompleted || isCurrent
+                                          ? "text-foreground"
+                                          : "text-muted-foreground",
+                                      )}
+                                    >
+                                      {step.value}
+                                    </p>
+                                    {(isCompleted || isCurrent) && (
+                                      <p className="mt-1 text-sm text-muted-foreground duration-500 animate-in fade-in slide-in-from-left-4">
+                                        {index === 0
+                                          ? format(
+                                              new Date(order.createdAt),
+                                              "EEEE d 'de' MMMM, yyyy",
+                                              { locale: es },
+                                            )
+                                          : order.shipping?.createdAt
+                                          ? format(
+                                              new Date(
+                                                order.shipping.createdAt,
+                                              ),
+                                              "EEEE d 'de' MMMM, yyyy",
+                                              { locale: es },
+                                            )
+                                          : isCurrent
+                                          ? "En proceso..."
+                                          : "Completado"}
+                                      </p>
+                                    )}
+                                  </div>
                                 </div>
-                                <div className="flex-1 pt-1">
-                                  <p className="text-lg font-bold leading-tight">
-                                    {step.value}
-                                  </p>
-                                  <p className="mt-1 text-sm text-muted-foreground">
-                                    {index === 0
-                                      ? format(
-                                          new Date(order.createdAt),
-                                          "EEEE d 'de' MMMM, yyyy",
-                                          { locale: es },
-                                        )
-                                      : order.shipping?.createdAt
-                                      ? format(
-                                          new Date(order.shipping.createdAt),
-                                          "EEEE d 'de' MMMM, yyyy",
-                                          { locale: es },
-                                        )
-                                      : "Fecha pendiente"}
-                                  </p>
-                                </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
 

@@ -52,7 +52,7 @@ export enum Social {
   Youtube = "Youtube",
 }
 
-export const steps: { status: string; value: string }[] = [
+export const steps: { status: ShippingStatus; value: string }[] = [
   {
     status: ShippingStatus.Preparing,
     value: "Orden en preparación",

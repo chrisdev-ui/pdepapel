@@ -383,7 +383,7 @@ model MainBanner {
   highlight    String?  @default("")
   label2       String?  @default("")
   imageUrl     String
-  callToAction String
+  callToAction String   @db.Text
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   store        Store    @relation("StoreToMainBanner", fields: [storeId], references: [id])
@@ -395,7 +395,7 @@ model Banner {
   id           String   @id @default(uuid())
   storeId      String
   imageUrl     String
-  callToAction String
+  callToAction String   @db.Text
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   store        Store    @relation("StoreToBanner", fields: [storeId], references: [id])
