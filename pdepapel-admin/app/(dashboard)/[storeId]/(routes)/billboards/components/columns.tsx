@@ -2,9 +2,9 @@
 
 import { DataTableCellDate } from "@/components/ui/data-table-cell-date";
 import { DataTableCellImage } from "@/components/ui/data-table-cell-image";
+import { DataTableCellUrl } from "@/components/ui/data-table-cell-url";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { ColumnDef } from "@tanstack/react-table";
-import { ExternalLink } from "lucide-react";
 import { getBillboards } from "../server/get-billboards";
 import { CellAction } from "./cell-action";
 
@@ -43,12 +43,7 @@ export const columns: ColumnDef<BillboardColumn>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Link de redirección" />
     ),
-    cell: ({ row }) => (
-      <div className="flex items-center gap-x-2">
-        <ExternalLink className="h-4 w-4" />
-        {row.original.redirectUrl ?? "Sin link de redirección"}
-      </div>
-    ),
+    cell: ({ row }) => <DataTableCellUrl url={row.original.redirectUrl} />,
   },
   {
     accessorKey: "createdAt",

@@ -2,6 +2,7 @@
 
 import { DataTableCellDate } from "@/components/ui/data-table-cell-date";
 import { DataTableCellImage } from "@/components/ui/data-table-cell-image";
+import { DataTableCellUrl } from "@/components/ui/data-table-cell-url";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { Models } from "@/constants";
 import { ColumnDef } from "@tanstack/react-table";
@@ -35,6 +36,7 @@ export const bannerColumns: ColumnDef<BannerColumn>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="URL de redirección" />
     ),
+    cell: ({ row }) => <DataTableCellUrl url={row.original.callToAction} />,
   },
   {
     accessorKey: "createdAt",
@@ -95,6 +97,7 @@ export const mainBannerColumns: ColumnDef<MainBannerColumn>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="URL de redirección" />
     ),
+    cell: ({ row }) => <DataTableCellUrl url={row.original.callToAction} />,
   },
   {
     accessorKey: "createdAt",
