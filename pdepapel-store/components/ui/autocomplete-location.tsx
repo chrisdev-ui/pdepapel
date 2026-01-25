@@ -30,6 +30,7 @@ interface AutocompleteLocationProps {
   isLoading?: boolean;
   onSearch?: (value: string) => void;
   emptyMessage?: string;
+  defaultDisplayValue?: string;
 }
 
 function normalizeText(text: string): string {
@@ -49,6 +50,7 @@ export const AutocompleteLocation: React.FC<AutocompleteLocationProps> = ({
   placeholder = "Seleccionar ciudad...",
   isLoading = false,
   emptyMessage = "No se encontraron ciudades.",
+  defaultDisplayValue,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -57,7 +59,9 @@ export const AutocompleteLocation: React.FC<AutocompleteLocationProps> = ({
     () => options?.find((location) => location.value === value),
   );
 
-  const [inputValue, setInputValue] = useState<string>(selected?.label || "");
+  const [inputValue, setInputValue] = useState<string>(
+    selected?.label || defaultDisplayValue || "",
+  );
 
   const deferredInputValue = useDeferredValue(inputValue);
 

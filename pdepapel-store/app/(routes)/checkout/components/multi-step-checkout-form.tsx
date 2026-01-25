@@ -26,8 +26,10 @@ import {
   Coupon,
   Order,
   PayUFormState,
+  Product,
   WompiResponse,
 } from "@/types";
+import { UnifiedOrder } from "@/types/unified-order";
 import { useAuth } from "@clerk/nextjs";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft } from "lucide-react";
@@ -149,6 +151,7 @@ import { Season } from "@/types";
 interface CheckoutFormProps {
   currentUser?: CheckoutFormUser | null;
   season?: Season;
+  customOrder?: UnifiedOrder | null;
 }
 
 export interface CouponState {
@@ -186,6 +189,7 @@ const FORM_STEPS = [
 export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   currentUser,
   season = Season.Default,
+  customOrder,
 }) => {
   const { userId } = useAuth();
   const router = useRouter();
@@ -229,6 +233,40 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     resolver: zodResolver(formSchema),
     defaultValues: async () => {
       const storedFormData = useCheckoutStore.getState().formData;
+      if (customOrder) {
+        return {
+          firstName: customOrder.customerName
+            ? customOrder.customerName.split(" ")[0]
+            : "",
+          lastName: customOrder.customerName
+            ? customOrder.customerName.split(" ").slice(1).join(" ")
+            : "",
+          telephone: customOrder.customerPhone ?? "",
+          email: customOrder.email ?? "",
+          documentId: "", // Not usually in quotation but can be if added
+          address1: customOrder.address ?? "",
+          address2: customOrder.address2 ?? "",
+          neighborhood: customOrder.neighborhood ?? "",
+          addressReference: customOrder.addressReference ?? "",
+          company: customOrder.company ?? "",
+          city: customOrder.city ?? "",
+          department: customOrder.department ?? "",
+          daneCode: customOrder.daneCode ?? "",
+          couponCode: "",
+          paymentMethod: PaymentMethod.BankTransfer,
+          shippingProvider: "ENVIOCLICK",
+          envioClickIdRate: customOrder.shipping?.envioClickIdRate ?? 0,
+          shipping: customOrder.shipping
+            ? {
+                carrieName: customOrder.shipping.carrierName,
+                cost: customOrder.shipping.cost,
+                status: customOrder.shipping.status,
+                // Add other potential mappings if schema expects them
+              }
+            : {},
+        };
+      }
+
       return {
         firstName: storedFormData.firstName ?? currentUser?.firstName ?? "",
         lastName: storedFormData.lastName ?? currentUser?.lastName ?? "",
@@ -267,6 +305,34 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   const watchedFormData = form.watch();
   const debouncedFormData = useDebounce(watchedFormData, 500);
 
+  // If customOrder is present, we override the items list
+  const activeItems = useMemo(() => {
+    if (customOrder) {
+      return customOrder.items.map(
+        (item) =>
+          ({
+            id: item.productId || item.id, // Use productId if available or fallback to item id
+            name: item.name,
+            price: item.unitPrice.toString(),
+            originalPrice: 0,
+            images: [{ url: item.imageUrl || "", isMain: true }],
+            quantity: item.quantity,
+            // Mock required Product fields
+            category: { name: "", id: "", typeId: "" },
+            description: item.description || "",
+            stock: 999,
+            isFeatured: false,
+            size: { name: "", value: "", id: "" },
+            color: { name: "", value: "", id: "" },
+            design: { name: "", id: "" },
+            reviews: [],
+            sku: "CUSTOM",
+          }) as unknown as Product,
+      );
+    }
+    return cart.items;
+  }, [customOrder, cart.items]);
+
   useEffect(() => {
     setStoredFormData(debouncedFormData as Partial<CheckoutFormValue>);
   }, [debouncedFormData, setStoredFormData]);
@@ -284,8 +350,8 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   const shippingCost = form.watch("shipping.cost");
 
   const { total, subtotal, couponDiscount, productSavings } = useMemo(
-    () => calculateTotals(cart.items, couponState.coupon, shippingCost),
-    [cart.items, couponState.coupon, shippingCost],
+    () => calculateTotals(activeItems, couponState.coupon, shippingCost),
+    [activeItems, couponState.coupon, shippingCost],
   );
 
   const validateStep = async (step: number) => {
@@ -437,13 +503,13 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     return null;
   }
 
-  const totalQuantity = cart.items.reduce(
+  const totalQuantity = activeItems.reduce(
     (total, item) => total + Number(item.quantity ?? 1),
     0,
   );
 
   const onSubmit = (data: CheckoutFormValue): void => {
-    const orderItems = cart.items.map((item) => ({
+    const orderItems = activeItems.map((item) => ({
       productId: item.id,
       quantity: item.quantity ?? 1,
     }));
@@ -497,6 +563,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       couponCode: couponState.coupon?.code ?? null,
       subtotal,
       total,
+      customOrderToken: customOrder?.token, // Include token for conversion
     };
 
     mutate(formattedData);
@@ -504,7 +571,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
 
   return (
     <>
-      {cart.items.length === 0 && (
+      {activeItems.length === 0 && (
         <div className="my-12">
           <NoResults
             message={`No hay productos en el carrito ${KAWAII_FACE_SAD}`}
@@ -517,7 +584,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
           </Link>
         </div>
       )}
-      {cart.items.length > 0 && (
+      {activeItems.length > 0 && (
         <div className="mt-4 space-y-8 lg:mt-12 lg:grid lg:grid-cols-12 lg:items-start lg:gap-6 lg:space-y-0">
           <div className="rounded-md border p-5 lg:col-span-8">
             <MultiStepForm
@@ -540,7 +607,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                       <ShippingInfoStep
                         form={form}
                         isLoading={isPendingSubmit}
-                        cartItems={cart.items.map((item) => ({
+                        cartItems={activeItems.map((item) => ({
                           id: item.id,
                           quantity: item.quantity || 1,
                         }))}
@@ -585,13 +652,15 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
               <h2 className="font-serif text-lg font-bold">
                 ({totalQuantity}) Productos
               </h2>
-              <Link href="/cart" className="text-sm underline">
-                Editar
-              </Link>
+              {!customOrder && (
+                <Link href="/cart" className="text-sm underline">
+                  Editar
+                </Link>
+              )}
             </div>
             <Separator className="mt-6" />
             <div className="mt-6 flex w-full flex-col gap-4">
-              {cart.items.map((item) => (
+              {activeItems.map((item) => (
                 <div
                   key={item.id}
                   className="grid grid-cols-[80px_1fr] gap-2.5"
@@ -705,7 +774,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         <PayUForm
           formRef={payUFormRef}
           referenceCode={payUformData.referenceCode}
-          products={cart.items.map((product) => ({
+          products={activeItems.map((product) => ({
             name: product.name,
             quantity: product.quantity || 1,
           }))}

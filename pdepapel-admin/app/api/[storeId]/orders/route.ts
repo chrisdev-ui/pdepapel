@@ -30,8 +30,10 @@ import {
   PaymentMethod,
   ShippingProvider,
   ShippingStatus,
+  OrderType,
 } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
 
 type OrderData = {
   storeId: string;
@@ -57,6 +59,14 @@ type OrderData = {
   couponId?: string | null;
   couponDiscount?: number;
   total: number;
+  // Unified Order Fields
+  type?: OrderType;
+  token?: string | null;
+  expiresAt?: Date | null;
+  adminNotes?: string | null;
+  internalNotes?: string | null;
+  createdBy?: string | null;
+  // Relations
   orderItems: { create: any };
   status?: any;
   payment?: { create: any };
@@ -112,19 +122,41 @@ export async function POST(
       total,
       discount,
       couponCode,
+      // New Unified Order Fields
+      type,
+      daysValid, // For calculating expiresAt
+      adminNotes,
+      internalNotes,
+      createdBy, // Optional admin user ID
     } = body;
 
-    if (
-      !fullName ||
-      !phone ||
-      !email ||
-      !address ||
-      !orderItems ||
-      orderItems.length === 0
-    ) {
+    if (!orderItems || orderItems.length === 0) {
       throw ErrorFactory.InvalidRequest(
-        "Faltan campos obligatorios (nombre, teléfono, email, dirección, productos)",
+        "La orden debe tener al menos un producto",
       );
+    }
+
+    // Strict validation for Active Orders (CREATED, PENDING, PAID, SENT)
+    const isActiveOrder = [
+      OrderStatus.CREATED,
+      OrderStatus.PENDING,
+      OrderStatus.PAID,
+      OrderStatus.SENT,
+    ].includes(status);
+
+    if (isActiveOrder) {
+      if (!fullName || !phone || !email || !address) {
+        throw ErrorFactory.InvalidRequest(
+          "Faltan campos obligatorios para órdenes activas (nombre, teléfono, email, dirección)",
+        );
+      }
+    } else {
+      // For Drafts/Quotes, minimally require a name reference
+      if (!fullName) {
+        throw ErrorFactory.InvalidRequest(
+          "Se requiere al menos un nombre para la orden/cotización",
+        );
+      }
     }
 
     if (orderItems.length > 1000) {
@@ -261,9 +293,25 @@ export async function POST(
     }
 
     const order = await prismadb.$transaction(async (tx) => {
-      // Batch process products for better performance
+      // STRICT VALIDATION: Check if we are creating an active order
+      if (
+        !status ||
+        [OrderStatus.PENDING, OrderStatus.PAID, OrderStatus.ACCEPTED].includes(
+          status,
+        )
+      ) {
+        const hasManualItems = orderItems.some((item: any) => !item.productId);
+        if (hasManualItems) {
+          throw ErrorFactory.InvalidRequest(
+            "No se puede crear una orden activa con items manuales. Por favor vincule todos los items a productos existentes.",
+          );
+        }
+      }
+
+      // Batch process ONLY products that have an ID
+      const itemsWithProduct = orderItems.filter((item: any) => item.productId);
       const products = await processOrderItemsInBatches(
-        orderItems,
+        itemsWithProduct,
         params.storeId,
         BATCH_SIZE,
       );
@@ -278,23 +326,53 @@ export async function POST(
       );
 
       const itemsWithPrices = orderItems.map(
-        (item: { productId: string; quantity?: number }) => {
-          const product = productMap.get(item.productId);
-          if (!product) {
-            throw ErrorFactory.NotFound(
-              `Producto ${item.productId} no encontrado`,
-            );
+        (item: {
+          productId: string | null;
+          quantity?: number;
+          name?: string;
+          price?: number;
+          sku?: string;
+          imageUrl?: string;
+        }) => {
+          if (item.productId) {
+            const product = productMap.get(item.productId);
+            if (!product) {
+              // Only throw if product is expected but not found
+              throw ErrorFactory.NotFound(
+                `Producto ${item.productId} no encontrado`,
+              );
+            }
+
+            const pricing = discountedPricesMap.get(item.productId);
+            const finalPrice = pricing ? pricing.price : product.price;
+
+            return {
+              product: { price: finalPrice },
+              quantity: item.quantity ?? 1,
+              productId: item.productId,
+              // Snapshot fields
+              name: product.name,
+              sku: product.sku,
+              imageUrl: product.images?.[0]?.url || "",
+              isCustom: false,
+            };
+          } else {
+            // Manual Item - Validate existence of required fields for manual items
+            if (!item.name || item.price === undefined) {
+              throw ErrorFactory.InvalidRequest(
+                "Items manuales requieren nombre y precio.",
+              );
+            }
+            return {
+              product: { price: item.price },
+              quantity: item.quantity ?? 1,
+              productId: null,
+              name: item.name,
+              sku: item.sku || "MANUAL",
+              imageUrl: item.imageUrl || "",
+              isCustom: true,
+            };
           }
-
-          const pricing = discountedPricesMap.get(item.productId);
-          // Use the discounted price if available, otherwise fallback to base price
-          // Note: getProductsPrices always returns a valid object even if no discount
-          const finalPrice = pricing ? pricing.price : product.price;
-
-          return {
-            product: { price: finalPrice },
-            quantity: item.quantity ?? 1, // Default to 1 like frontend does
-          };
         },
       );
 
@@ -361,6 +439,21 @@ export async function POST(
         await validateStockAvailability(tx, stockValidationUpdates);
       }
 
+      // Generate Token & Expiration for Custom/Quote orders
+      let token: string | null = null;
+      let expiresAt: Date | null = null;
+
+      if (type === OrderType.QUOTATION || type === OrderType.CUSTOM) {
+        token = crypto.randomBytes(32).toString("hex");
+        if (daysValid) {
+          expiresAt = new Date();
+          expiresAt.setDate(expiresAt.getDate() + daysValid);
+        } else if (type === OrderType.QUOTATION) {
+          expiresAt = new Date();
+          expiresAt.setDate(expiresAt.getDate() + 7);
+        }
+      }
+
       const orderData: OrderData = {
         storeId: params.storeId,
         userId: authenticatedUserId,
@@ -368,7 +461,11 @@ export async function POST(
         orderNumber,
         fullName,
         phone,
-        status: status || OrderStatus.PENDING,
+        status:
+          status ||
+          (type === OrderType.QUOTATION
+            ? OrderStatus.DRAFT
+            : OrderStatus.PENDING),
         address,
         email,
         documentId,
@@ -386,13 +483,23 @@ export async function POST(
         couponId: coupon?.id,
         couponDiscount: totals.couponDiscount,
         total: totals.total,
+        // Unified Logic
+        type: type || OrderType.STANDARD,
+        token,
+        expiresAt,
+        adminNotes,
+        internalNotes,
+        createdBy: createdBy || authenticatedUserId,
         orderItems: {
-          create: orderItems.map(
-            (product: { productId: string; quantity: number }) => ({
-              product: { connect: { id: product.productId } },
-              quantity: product.quantity ?? 1,
-            }),
-          ),
+          create: itemsWithPrices.map((item: any) => ({
+            quantity: item.quantity,
+            name: item.name,
+            sku: item.sku,
+            price: item.product.price,
+            imageUrl: item.imageUrl,
+            isCustom: item.isCustom,
+            productId: item.productId || null,
+          })),
         },
       };
 
@@ -426,17 +533,19 @@ export async function POST(
 
       // Batch update stock if order is paid
       if (status === OrderStatus.PAID) {
-        const stockMovements = createdOrder.orderItems.map((item) => ({
-          productId: item.productId,
-          storeId: params.storeId,
-          type: "ORDER_PLACED" as const,
-          quantity: -item.quantity, // Negative for removal (Sale)
-          reason: `Orden #${createdOrder.orderNumber}`,
-          referenceId: createdOrder.id,
-          cost: Number(item.product.acqPrice) || 0,
-          price: Number(item.product.price),
-          createdBy: authenticatedUserId || "SYSTEM",
-        }));
+        const stockMovements = createdOrder.orderItems
+          .filter((item) => item.productId && item.product)
+          .map((item) => ({
+            productId: item.productId as string,
+            storeId: params.storeId,
+            type: "ORDER_PLACED" as const,
+            quantity: -item.quantity, // Negative for removal (Sale)
+            reason: `Orden #${createdOrder.orderNumber}`,
+            referenceId: createdOrder.id,
+            cost: Number(item.product!.acqPrice) || 0,
+            price: Number(item.product!.price),
+            createdBy: authenticatedUserId || "SYSTEM",
+          }));
 
         const stockResult = await createInventoryMovementBatchResilient(
           tx,
@@ -651,17 +760,19 @@ export async function DELETE(
 
         for (const order of paidOrders) {
           for (const item of order.orderItems) {
-            stockMovements.push({
-              productId: item.productId,
-              storeId: params.storeId,
-              type: "ORDER_CANCELLED" as const,
-              quantity: item.quantity, // Positive for addition (Refund/Cancel)
-              reason: `Orden Eliminada #${order.orderNumber}`,
-              referenceId: order.id,
-              cost: Number(item.product.acqPrice) || 0,
-              price: Number(item.product.price),
-              createdBy: userId || "SYSTEM",
-            });
+            if (item.productId && item.product) {
+              stockMovements.push({
+                productId: item.productId,
+                storeId: params.storeId,
+                type: "ORDER_CANCELLED" as const,
+                quantity: item.quantity, // Positive for addition (Refund/Cancel)
+                reason: `Orden Eliminada #${order.orderNumber}`,
+                referenceId: order.id,
+                cost: Number(item.product.acqPrice) || 0,
+                price: Number(item.product.price),
+                createdBy: userId || "SYSTEM",
+              });
+            }
           }
         }
 
@@ -786,10 +897,12 @@ export async function PATCH(
           }[] = [];
           ordersBecomingPaid.forEach((order) => {
             order.orderItems.forEach((item) => {
-              stockValidationUpdates.push({
-                productId: item.productId,
-                quantity: item.quantity,
-              });
+              if (item.productId) {
+                stockValidationUpdates.push({
+                  productId: item.productId,
+                  quantity: item.quantity,
+                });
+              }
             });
           });
 
@@ -810,32 +923,36 @@ export async function PATCH(
           if (willBePaid && !wasPaid) {
             // Will be paid - decrement stock (Sale)
             order.orderItems.forEach((item) => {
-              stockUpdates.push({
-                productId: item.productId,
-                storeId: params.storeId,
-                type: "ORDER_PLACED" as const,
-                quantity: -item.quantity, // Negative for removal
-                reason: `Orden #${order.orderNumber}`,
-                referenceId: order.id,
-                cost: Number(item.product.acqPrice) || 0,
-                price: Number(item.product.price),
-                createdBy: userId || "SYSTEM",
-              });
+              if (item.productId && item.product) {
+                stockUpdates.push({
+                  productId: item.productId,
+                  storeId: params.storeId,
+                  type: "ORDER_PLACED" as const,
+                  quantity: -item.quantity, // Negative for removal
+                  reason: `Orden #${order.orderNumber}`,
+                  referenceId: order.id,
+                  cost: Number(item.product.acqPrice) || 0,
+                  price: Number(item.product.price),
+                  createdBy: userId || "SYSTEM",
+                });
+              }
             });
           } else if (!willBePaid && wasPaid) {
             // Was paid, now unpaid - increment stock (Restock/Cancel)
             order.orderItems.forEach((item) => {
-              stockUpdates.push({
-                productId: item.productId,
-                storeId: params.storeId,
-                type: "ORDER_CANCELLED" as const,
-                quantity: item.quantity, // Positive for addition
-                reason: `Orden marcada como pendiente/cancelada #${order.orderNumber}`,
-                referenceId: order.id,
-                cost: Number(item.product.acqPrice) || 0,
-                price: Number(item.product.price),
-                createdBy: userId || "SYSTEM",
-              });
+              if (item.productId && item.product) {
+                stockUpdates.push({
+                  productId: item.productId,
+                  storeId: params.storeId,
+                  type: "ORDER_CANCELLED" as const,
+                  quantity: item.quantity, // Positive for addition
+                  reason: `Orden marcada como pendiente/cancelada #${order.orderNumber}`,
+                  referenceId: order.id,
+                  cost: Number(item.product.acqPrice) || 0,
+                  price: Number(item.product.price),
+                  createdBy: userId || "SYSTEM",
+                });
+              }
             });
           }
         }

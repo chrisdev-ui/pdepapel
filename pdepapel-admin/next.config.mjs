@@ -17,6 +17,11 @@ const nextConfig = {
         hostname: "loremflickr.com",
         port: "",
       },
+      {
+        protocol: "https",
+        hostname: "www.envioclick.com",
+        port: "",
+      },
     ],
   },
 };

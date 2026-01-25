@@ -5,7 +5,9 @@ import {
   CACHE_HEADERS,
   getPublicIdFromCloudinaryUrl,
   verifyStoreOwner,
+  generateRandomSKU,
 } from "@/lib/utils";
+import { generateSemanticSKU } from "@/lib/variant-generator";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
@@ -128,6 +130,26 @@ export async function PATCH(
         `El Producto ${params.productId} no existe en esta tienda`,
       );
 
+    // SKU Regeneration for Manual Items
+    let newSku: string | undefined = undefined;
+    if (productToUpdate.sku.startsWith("MAN-")) {
+      const [category, design, color, size] = await Promise.all([
+        prismadb.category.findUnique({ where: { id: categoryId } }),
+        prismadb.design.findUnique({ where: { id: designId } }),
+        prismadb.color.findUnique({ where: { id: colorId } }),
+        prismadb.size.findUnique({ where: { id: sizeId } }),
+      ]);
+
+      if (category && design && color && size) {
+        newSku = generateSemanticSKU(
+          category.name,
+          design.name,
+          color.name,
+          size.value || size.name,
+        );
+      }
+    }
+
     const currentImageUrls = productToUpdate.images.map((image) => image.url);
     const newImageUrls = images.map((image: { url: string }) => image.url);
     const imagesToDelete = currentImageUrls.filter(
@@ -161,6 +183,7 @@ export async function PATCH(
         where: { id: params.productId },
         data: {
           name,
+          ...(newSku && { sku: newSku }),
           price,
           acqPrice,
           categoryId,

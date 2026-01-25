@@ -4,6 +4,7 @@ import { Check, MapPin } from "lucide-react";
 import {
   useCallback,
   useDeferredValue,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -59,6 +60,17 @@ export const LocationCombobox: React.FC<LocationComboboxProps> = ({
     options.find((location) => location.value === value),
   );
   const [inputValue, setInputValue] = useState<string>(selected?.label || "");
+
+  useEffect(() => {
+    // Prevent overriding user input if the value hasn't effectively changed
+    if (value === selected?.value) {
+      return;
+    }
+
+    const matchingOption = options.find((location) => location.value === value);
+    setSelected(matchingOption);
+    setInputValue(matchingOption?.label || "");
+  }, [value, options, selected]);
 
   // Defer the input value to prevent blocking the UI
   const deferredInputValue = useDeferredValue(inputValue);

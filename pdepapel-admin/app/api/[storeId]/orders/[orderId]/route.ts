@@ -20,8 +20,10 @@ import {
   OrderStatus,
   PaymentMethod,
   ShippingStatus,
+  OrderType,
 } from "@prisma/client";
 import { NextResponse } from "next/server";
+import crypto from "crypto";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -45,6 +47,7 @@ export async function GET(
       where: { id: params.orderId },
       include: {
         orderItems: {
+          orderBy: { createdAt: "asc" },
           include: {
             product: {
               include: {
@@ -109,6 +112,11 @@ export async function PATCH(
       addressReference,
       company,
       skipAutoGuide,
+      // Unified Order Fields
+      type,
+      adminNotes,
+      internalNotes,
+      expiresAt,
     } = body;
 
     // Validate order items count
@@ -142,14 +150,16 @@ export async function PATCH(
           productId: item.productId,
           quantity: item.quantity,
         }))
-        .sort((a, b) => a.productId.localeCompare(b.productId));
+        .sort((a, b) => (a.productId || "").localeCompare(b.productId || ""));
 
       const newItems = orderItems
         .map((item: any) => ({
           productId: item.productId,
           quantity: item.quantity || 1,
         }))
-        .sort((a: any, b: any) => a.productId.localeCompare(b.productId));
+        .sort((a: any, b: any) =>
+          (a.productId || "").localeCompare(b.productId || ""),
+        );
 
       const itemsMatch =
         JSON.stringify(originalItems) === JSON.stringify(newItems);
@@ -218,14 +228,56 @@ export async function PATCH(
       }
     }
 
+    // Generate Token & Expiration for Custom/Quote orders if missing
+    let tokenUpdate = {};
+    if (
+      (type === OrderType.QUOTATION ||
+        (!type && order.type === OrderType.QUOTATION)) &&
+      !order.token
+    ) {
+      const token = crypto.randomBytes(32).toString("hex");
+      const expires = new Date();
+      expires.setDate(expires.getDate() + 7); // Default 7 days
+
+      tokenUpdate = {
+        token,
+        expiresAt: order.expiresAt || expires,
+      };
+    }
+
     // Store original status before update
     const originalStatus = order.status;
     const originalShippingStatus = order.shipping?.status;
 
+    // Validate Required Fields for Active Orders
+    const targetStatus = status || order.status;
+    const isActiveStatus = [
+      OrderStatus.CREATED,
+      OrderStatus.PENDING,
+      OrderStatus.PAID,
+      OrderStatus.SENT,
+    ].includes(targetStatus);
+
+    const targetType = type || order.type;
+    const isStandardType = targetType === OrderType.STANDARD;
+
+    if (isActiveStatus || isStandardType) {
+      const finalName = fullName || order.fullName;
+      const finalPhone = phone || order.phone;
+      const finalEmail = email || order.email;
+      const finalAddress = address || order.address;
+
+      if (!finalName || !finalPhone || !finalEmail || !finalAddress) {
+        throw ErrorFactory.InvalidRequest(
+          "La orden debe tener nombre, teléfono, email y dirección para ser activada.",
+        );
+      }
+    }
+
     const updatedOrder = await prismadb.$transaction(async (tx) => {
       // Batch process products for better performance
       const products = await processOrderItemsInBatches(
-        orderItems,
+        orderItems.filter((i: any) => i.productId),
         params.storeId,
         BATCH_SIZE,
       );
@@ -233,11 +285,47 @@ export async function PATCH(
       // Create a map for O(1) lookups
       const productMap = new Map(products.map((p) => [p.id, p]));
 
-      // Validate all products exist
+      // Validate products existence based on status
+      const isDraftOrQuote = [
+        OrderStatus.DRAFT,
+        OrderStatus.QUOTATION,
+        OrderStatus.SENT,
+        OrderStatus.VIEWED,
+      ].includes(status || order.status);
+
       for (const item of orderItems) {
-        if (!productMap.has(item.productId)) {
-          throw ErrorFactory.NotFound(
-            `Producto ${item.productId} no encontrado`,
+        if (item.productId) {
+          if (!productMap.has(item.productId)) {
+            throw ErrorFactory.NotFound(
+              `Producto ${item.productId} no encontrado`,
+            );
+          }
+        } else {
+          // Manual item validation
+          if (!isDraftOrQuote) {
+            throw ErrorFactory.InvalidRequest(
+              "No se pueden agregar items manuales a una orden activa (PENDING, PAID, ACCEPTED).",
+            );
+          }
+          if (!item.name || item.price === undefined) {
+            throw ErrorFactory.InvalidRequest(
+              "Los items manuales requieren nombre y precio.",
+            );
+          }
+        }
+      }
+
+      // STRICT VALIDATION: Check if we are transitioning to an active state
+      if (
+        status &&
+        [OrderStatus.PENDING, OrderStatus.PAID, OrderStatus.ACCEPTED].includes(
+          status,
+        )
+      ) {
+        const hasManualItems = orderItems.some((item: any) => !item.productId);
+        if (hasManualItems) {
+          throw ErrorFactory.InvalidRequest(
+            "No se puede activar la orden con items manuales. Por favor vincule todos los items a productos existentes.",
           );
         }
       }
@@ -247,14 +335,32 @@ export async function PATCH(
       const pricesMap = await getProductsPrices(products, params.storeId);
 
       const itemsWithPrices = orderItems.map((item: any) => {
-        const product = productMap.get(item.productId);
-        const priceInfo = pricesMap.get(item.productId);
-        // Use discounted price if available, otherwise use original price
-        const effectivePrice = priceInfo?.price ?? product!.price;
-        return {
-          product: { price: effectivePrice },
-          quantity: item.quantity || 1,
-        };
+        if (item.productId) {
+          const product = productMap.get(item.productId);
+          const priceInfo = pricesMap.get(item.productId);
+          const effectivePrice = priceInfo?.price ?? product!.price;
+          return {
+            product: { price: effectivePrice },
+            quantity: item.quantity || 1,
+            // Snapshot fields from product
+            name: product!.name,
+            sku: product!.sku,
+            imageUrl: product!.images[0]?.url || "",
+            isCustom: false,
+            // CRITICAL: Preserve productId to maintain link to real product. Do not remove.
+            productId: item.productId,
+          };
+        } else {
+          // Manual Item
+          return {
+            product: { price: item.price },
+            quantity: item.quantity || 1,
+            name: item.name,
+            sku: item.sku || "MANUAL",
+            imageUrl: item.imageUrl || "",
+            isCustom: true,
+          };
+        }
       });
 
       // Calculate totals (including shipping cost)
@@ -295,16 +401,20 @@ export async function PATCH(
 
       // CRITICAL FIX: Validate stock for PAID orders when changing items
       if (order.status === OrderStatus.PAID) {
-        const newStockRequirements = orderItems.map((item: any) => ({
-          productId: item.productId,
-          quantity: item.quantity || 1,
-        }));
+        const newStockRequirements = orderItems
+          .filter((item: any) => item.productId) // Exclude manual items
+          .map((item: any) => ({
+            productId: item.productId as string,
+            quantity: item.quantity || 1,
+          }));
 
         // Get current order items to calculate the difference
-        const currentStockUsage = order.orderItems.map((item) => ({
-          productId: item.productId,
-          quantity: item.quantity,
-        }));
+        const currentStockUsage = order.orderItems
+          .filter((item) => item.productId) // Exclude manual items
+          .map((item) => ({
+            productId: item.productId as string,
+            quantity: item.quantity,
+          }));
 
         // Calculate net stock change (what we need - what we already have)
         const stockChanges: { [productId: string]: number } = {};
@@ -352,15 +462,21 @@ export async function PATCH(
 
       // Batch create new order items
       const createOperations = [];
-      for (let i = 0; i < orderItems.length; i += BATCH_SIZE) {
-        const batch = orderItems.slice(i, i + BATCH_SIZE);
+      for (let i = 0; i < itemsWithPrices.length; i += BATCH_SIZE) {
+        const batch = itemsWithPrices.slice(i, i + BATCH_SIZE);
         createOperations.push(
           ...batch.map((item: any) =>
             tx.orderItem.create({
               data: {
                 orderId: order.id,
-                productId: item.productId,
-                quantity: item.quantity || 1,
+                quantity: item.quantity,
+                // Snapshot fields
+                name: item.name,
+                sku: item.sku,
+                price: item.product.price,
+                imageUrl: item.imageUrl,
+                isCustom: item.isCustom,
+                productId: item.productId || null,
               },
             }),
           ),
@@ -393,6 +509,11 @@ export async function PATCH(
           couponDiscount: order.coupon ? totals.couponDiscount : 0,
           total: totals.total,
           ...(status && { status }),
+          ...(type && { type }),
+          adminNotes,
+          internalNotes,
+          expiresAt,
+          ...tokenUpdate,
           payment: payment && {
             upsert: {
               create: {
@@ -527,15 +648,17 @@ export async function PATCH(
 
       if (isNowPaid && !wasPaid) {
         // Prepare stock updates for decrementing (Sales)
-        const stockMovements = updated.orderItems.map((item) => ({
-          productId: item.productId,
-          storeId: params.storeId,
-          type: "ORDER_PLACED" as const,
-          quantity: -item.quantity, // Negative for removal
-          reason: `Orden Actualizada #${updated.orderNumber}`,
-          referenceId: updated.id,
-          createdBy: userId || "SYSTEM",
-        }));
+        const stockMovements = updated.orderItems
+          .filter((item) => item.productId) // Exclude manual items
+          .map((item) => ({
+            productId: item.productId as string,
+            storeId: params.storeId,
+            type: "ORDER_PLACED" as const,
+            quantity: -item.quantity, // Negative for removal
+            reason: `Orden Actualizada #${updated.orderNumber}`,
+            referenceId: updated.id,
+            createdBy: userId || "SYSTEM",
+          }));
 
         const stockResult = await createInventoryMovementBatchResilient(
           tx,
@@ -565,15 +688,18 @@ export async function PATCH(
         }
       } else if (!isNowPaid && wasPaid) {
         // Restock products (Restock/Cancel)
-        const stockMovements = updated.orderItems.map((item) => ({
-          productId: item.productId,
-          storeId: params.storeId,
-          type: "ORDER_CANCELLED" as const,
-          quantity: item.quantity, // Positive for addition
-          reason: `Orden marcada como pendiente/cancelada #${updated.orderNumber}`,
-          referenceId: updated.id,
-          createdBy: userId || "SYSTEM",
-        }));
+        // Restock products (Restock/Cancel)
+        const stockMovements = updated.orderItems
+          .filter((item) => item.productId) // Exclude manual items
+          .map((item) => ({
+            productId: item.productId as string,
+            storeId: params.storeId,
+            type: "ORDER_CANCELLED" as const,
+            quantity: item.quantity, // Positive for addition
+            reason: `Orden marcada como pendiente/cancelada #${updated.orderNumber}`,
+            referenceId: updated.id,
+            createdBy: userId || "SYSTEM",
+          }));
 
         await createInventoryMovementBatch(tx, stockMovements, false);
 
@@ -685,15 +811,17 @@ export async function DELETE(
 
       // Restock products if order was paid
       if (order.status === OrderStatus.PAID) {
-        const stockMovements = order.orderItems.map((item) => ({
-          productId: item.productId,
-          storeId: params.storeId,
-          type: "ORDER_CANCELLED" as const, // Effectively a return/refund
-          quantity: item.quantity, // Positive for addition
-          reason: `Orden Eliminada #${order.orderNumber}`,
-          referenceId: order.id,
-          createdBy: userId || "SYSTEM",
-        }));
+        const stockMovements = order.orderItems
+          .filter((item) => item.productId) // Exclude manual items
+          .map((item) => ({
+            productId: item.productId as string,
+            storeId: params.storeId,
+            type: "ORDER_CANCELLED" as const, // Effectively a return/refund
+            quantity: item.quantity, // Positive for addition
+            reason: `Orden Eliminada #${order.orderNumber}`,
+            referenceId: order.id,
+            createdBy: userId || "SYSTEM",
+          }));
 
         const stockResult = await createInventoryMovementBatchResilient(
           tx,

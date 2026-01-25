@@ -121,15 +121,21 @@ const ProductCard: React.FC<ProductCardProps> = ({
       className="group relative flex cursor-pointer flex-col justify-between space-y-4 rounded-xl border border-solid border-blue-baby px-3 py-2.5 shadow-card [transition:0.2s_ease] hover:shadow-card-hover"
     >
       <div className="relative block aspect-square overflow-hidden rounded-xl bg-gray-100">
-        <CldImage
-          src={mainImage.url}
-          alt={product.name ?? "Imagen principal del producto"}
-          fill
-          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-          priority={priority}
-          className="object-cover"
-          format="auto"
-        />
+        {mainImage?.url ? (
+          <CldImage
+            src={mainImage.url}
+            alt={product.name ?? "Imagen principal del producto"}
+            fill
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            priority={priority}
+            className="object-cover"
+            format="auto"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-gray-100 text-gray-400">
+            <span className="text-sm">Sin imagen</span>
+          </div>
+        )}
         <div className="absolute bottom-5 w-full px-6 opacity-0 transition group-hover:opacity-100">
           <div className="flex justify-center gap-x-6">
             <IconButton

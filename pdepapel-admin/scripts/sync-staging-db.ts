@@ -444,7 +444,11 @@ async function main() {
     where: { order: { storeId: prodStore.id } },
   });
   for (const item of orderItems) {
-    if (map.order.has(item.orderId) && map.product.has(item.productId)) {
+    if (
+      map.order.has(item.orderId) &&
+      item.productId &&
+      map.product.has(item.productId)
+    ) {
       await prismaStaging.orderItem.create({
         data: {
           id: undefined,

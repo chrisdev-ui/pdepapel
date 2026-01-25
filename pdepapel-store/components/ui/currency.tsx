@@ -1,14 +1,6 @@
 "use client";
-import { cn } from "@/lib/utils";
+import { cn, currencyFormatter } from "@/lib/utils";
 import { useEffect, useState } from "react";
-
-const formatter = new Intl.NumberFormat("es-CO", {
-  style: "currency",
-  currency: "COP",
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-  useGrouping: true,
-});
 
 interface CurrencyProps {
   value?: number | string;
@@ -33,7 +25,7 @@ export const Currency: React.FC<CurrencyProps> = ({
   return (
     <div className={cn("font-serif text-2xl", className)}>
       {isNegative ? "-" : ""}
-      {formatter.format(Number(value))}
+      {currencyFormatter.format(Number(value))}
     </div>
   );
 };

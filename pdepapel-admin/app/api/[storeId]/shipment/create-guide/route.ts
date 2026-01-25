@@ -96,11 +96,15 @@ export async function POST(
       `${STORE_SHIPPING_INFO.firstName} ${STORE_SHIPPING_INFO.lastName}`,
     );
 
-    const items = order.orderItems.map((oi) => ({
-      productId: oi.productId,
+    const validItems = order.orderItems.filter(
+      (oi) => oi.productId && oi.product,
+    );
+
+    const items = validItems.map((oi) => ({
+      productId: oi.productId!,
       quantity: oi.quantity,
     }));
-    const products = order.orderItems.map((oi) => oi.product);
+    const products = validItems.map((oi) => oi.product!);
 
     // Fetch boxes to ensure we have the latest config
     const dbBoxes = await prismadb.box.findMany({

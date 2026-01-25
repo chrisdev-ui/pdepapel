@@ -48,9 +48,15 @@ export const SORT_OPTIONS: Record<
 export const START_YEAR = 2023;
 
 export const statusOptions = {
+  [OrderStatus.DRAFT]: "Borrador",
+  [OrderStatus.QUOTATION]: "Cotización",
+  [OrderStatus.VIEWED]: "Visto",
+  [OrderStatus.ACCEPTED]: "Aceptada",
+  [OrderStatus.REJECTED]: "Rechazada",
   [OrderStatus.CREATED]: "Creada",
   [OrderStatus.PENDING]: "Pendiente",
   [OrderStatus.PAID]: "Pagada",
+  [OrderStatus.SENT]: "Enviada",
   [OrderStatus.CANCELLED]: "Cancelada",
 };
 
@@ -59,6 +65,7 @@ export const paymentOptions = {
   [PaymentMethod.COD]: "Contra entrega",
   [PaymentMethod.PayU]: "PayU",
   [PaymentMethod.Wompi]: "Wompi",
+  [PaymentMethod.CASH]: "Efectivo",
 };
 
 export const discountOptions: Record<DiscountType, string> = {
@@ -110,6 +117,7 @@ export const paymentMethodsByOption: {
   [PaymentMethod.PayU]: null,
   [PaymentMethod.BankTransfer]: null,
   [PaymentMethod.COD]: null,
+  [PaymentMethod.CASH]: null,
 };
 
 export const INITIAL_PERCENTAGE_INCREASE = 100;
@@ -131,6 +139,7 @@ export const paymentNames = {
   [PaymentMethod.COD]: "Pago Contra Entrega",
   [PaymentMethod.PayU]: "Pago con PayU",
   [PaymentMethod.Wompi]: "Pago con Wompi",
+  [PaymentMethod.CASH]: "Pago en Efectivo",
 };
 
 export enum Models {
@@ -159,6 +168,8 @@ export enum Models {
   RestockOrders = "restock-orders",
   InventoryMovements = "inventory-movements",
   BulkProducts = "bulk-products",
+  Quotations = "quotations",
+  CustomOrders = "custom-orders",
 }
 
 export const ModelLabels: Record<Models, string> = {
@@ -187,6 +198,8 @@ export const ModelLabels: Record<Models, string> = {
   [Models.Offers]: "Ofertas",
   [Models.Boxes]: "Cajas",
   [Models.BulkProducts]: "Gestor Masivo",
+  [Models.Quotations]: "Cotizaciones",
+  [Models.CustomOrders]: "Personalizadas",
 };
 
 export const ModelsColumns: Record<Models, { [key: string]: string }> = {
@@ -374,6 +387,22 @@ export const ModelsColumns: Record<Models, { [key: string]: string }> = {
     size: "Tamaño",
     design: "Diseño",
     type: "Tipo de Fila",
+  },
+  [Models.Quotations]: {
+    name: "Nombre",
+    type: "Tipo",
+    isTemplate: "Es Plantilla",
+    isActive: "Activa",
+    itemCount: "Ítems",
+    createdAt: "Fecha",
+  },
+  [Models.CustomOrders]: {
+    orderNumber: "# Orden",
+    customerName: "Cliente",
+    customerPhone: "Teléfono",
+    status: "Estado",
+    totalPrice: "Total",
+    createdAt: "Fecha",
   },
 };
 

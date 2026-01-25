@@ -126,6 +126,13 @@ export const ShippingInfoStep = ({
                   <AutocompleteLocation
                     options={locations || []}
                     value={field.value || ""}
+                    defaultDisplayValue={
+                      form.getValues("city") && form.getValues("department")
+                        ? `${form.getValues("city")} - ${form.getValues(
+                            "department",
+                          )}`
+                        : undefined
+                    }
                     onSearch={setSearchQuery}
                     onChange={async (value, location) => {
                       field.onChange(value);

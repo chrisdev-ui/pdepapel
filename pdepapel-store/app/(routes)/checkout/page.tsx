@@ -18,8 +18,24 @@ export const metadata: Metadata = {
 };
 
 import { getCurrentSeason } from "@/lib/date-utils";
+import { normalizeOrder } from "@/lib/normalization";
+import { UnifiedOrder } from "@/types/unified-order";
 
-export default async function CheckoutPage() {
+const getCustomOrder = async (token: string): Promise<UnifiedOrder | null> => {
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL}/public/custom-orders/${token}`,
+    { cache: "no-store" }, // Ensure we always get the latest status
+  );
+  if (!res.ok) return null;
+  const data = await res.json();
+  return normalizeOrder(data);
+};
+
+export default async function CheckoutPage({
+  searchParams,
+}: {
+  searchParams: { customOrderToken?: string };
+}) {
   const user = await currentUser();
   const formattedUser = {
     firstName: user?.firstName,
@@ -29,12 +45,21 @@ export default async function CheckoutPage() {
   };
   const currentSeason = getCurrentSeason();
 
+  const customOrderToken = searchParams.customOrderToken;
+  let customOrder: UnifiedOrder | null = null;
+
+  if (customOrderToken) {
+    customOrder = await getCustomOrder(customOrderToken);
+  }
+
   return (
     <>
       <Container>
         <div className="flex w-full flex-col items-center justify-between sm:flex-row">
           <h1 className="flex items-center justify-start font-serif text-3xl font-bold">
-            Ya casi completas tu orden...
+            {customOrder
+              ? "Finalizar Cotización"
+              : "Ya casi completas tu orden..."}
             <CheckCircle className="h-8 w-8 text-green-500 sm:ml-2" />
           </h1>
           <SignedOut>
@@ -56,6 +81,7 @@ export default async function CheckoutPage() {
         <MultiStepCheckoutForm
           currentUser={formattedUser}
           season={currentSeason}
+          customOrder={customOrder}
         />
       </Container>
     </>

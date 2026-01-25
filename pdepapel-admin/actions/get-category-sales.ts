@@ -50,6 +50,8 @@ export async function getCategorySales(storeId: string, year: number) {
       const totalDiscount = order.discount + order.couponDiscount;
 
       order.orderItems.forEach((item) => {
+        if (!item.product) return;
+
         const category = item.product.category.name;
         if (!acc[category]) {
           acc[category] = {

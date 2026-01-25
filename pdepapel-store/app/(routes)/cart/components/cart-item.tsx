@@ -8,6 +8,8 @@ import { QuantitySelector } from "@/components/ui/quantity-selector";
 import { useCart } from "@/hooks/use-cart";
 import { Product } from "@/types";
 
+import { currencyFormatter } from "@/lib/utils";
+
 interface CartItemProps {
   item: Product;
 }
@@ -84,12 +86,7 @@ export const CartItem: React.FC<CartItemProps> = ({ item }) => {
                 </div>
                 <span className="font-serif text-xs text-success">
                   Ahorra{" "}
-                  {new Intl.NumberFormat("es-CO", {
-                    style: "currency",
-                    currency: "COP",
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 0,
-                  }).format(
+                  {currencyFormatter.format(
                     (Number(item.originalPrice) - Number(item.price)) *
                       Number(item.quantity ?? 1),
                   )}

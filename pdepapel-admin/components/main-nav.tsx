@@ -17,6 +17,7 @@ import {
   Archive,
   Award,
   Box,
+  Calculator,
   ClipboardList,
   CreditCard,
   History,
@@ -183,6 +184,14 @@ export function MainNav({
       active: pathname === `/${params.storeId}/${Models.Customers}`,
       group: "sales",
       icon: Users,
+    },
+
+    {
+      href: `/${params.storeId}/quotations`,
+      label: "Cotizaciones",
+      active: pathname.includes(`/${params.storeId}/quotations`),
+      group: "sales",
+      icon: Calculator, // Or another appropriate icon
     },
     {
       href: `/${params.storeId}/${Models.Reviews}`,

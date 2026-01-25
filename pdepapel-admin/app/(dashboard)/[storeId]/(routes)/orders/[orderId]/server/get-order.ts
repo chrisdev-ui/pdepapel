@@ -14,6 +14,11 @@ export async function getOrder(orderId: string, storeId: string) {
       payment: true,
       shipping: true,
       coupon: true,
+      quoteRequests: {
+        orderBy: {
+          createdAt: "desc",
+        },
+      },
     },
   });
 
@@ -41,6 +46,7 @@ export async function getOrder(orderId: string, storeId: string) {
       color: {
         select: {
           name: true,
+          value: true,
         },
       },
       design: {
@@ -70,9 +76,9 @@ export async function getOrder(orderId: string, storeId: string) {
 
   let existingOrderProducts: ExistingOrderProduct[] = [];
   if (order && order.orderItems.length > 0) {
-    const existingProductIds = order.orderItems.map(
-      (item: { productId: string }) => item.productId,
-    );
+    const existingProductIds = order.orderItems
+      .map((item: { productId: string | null }) => item.productId)
+      .filter((id): id is string => id !== null);
 
     existingOrderProducts = await prismadb.product.findMany({
       where: {
@@ -98,6 +104,7 @@ export async function getOrder(orderId: string, storeId: string) {
         color: {
           select: {
             name: true,
+            value: true,
           },
         },
         design: {
@@ -137,7 +144,7 @@ export async function getOrder(orderId: string, storeId: string) {
     isAvailable: boolean;
     isArchived: boolean;
     size?: string;
-    color?: string;
+    color?: { name: string; value: string };
     design?: string;
   };
 
@@ -159,7 +166,9 @@ export async function getOrder(orderId: string, storeId: string) {
       isAvailable: true,
       isArchived: false,
       size: product.size?.name,
-      color: product.color?.name,
+      color: product.color
+        ? { name: product.color.name, value: product.color.value }
+        : undefined,
       design: product.design?.name,
     });
   });
@@ -181,7 +190,9 @@ export async function getOrder(orderId: string, storeId: string) {
       isAvailable,
       isArchived: product.isArchived,
       size: product.size?.name,
-      color: product.color?.name,
+      color: product.color
+        ? { name: product.color.name, value: product.color.value }
+        : undefined,
       design: product.design?.name,
     });
   });
@@ -193,9 +204,16 @@ export async function getOrder(orderId: string, storeId: string) {
     return a.label.localeCompare(b.label);
   });
 
+  const categories = await prismadb.category.findMany({
+    where: {
+      storeId,
+    },
+  });
+
   return {
     order,
     products,
+    categories,
   };
 }
 

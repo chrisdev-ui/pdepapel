@@ -108,7 +108,7 @@ export async function POST(req: Request) {
       });
 
       // Update shipping record
-      await tx.shipping.update({
+      const updatedShipping = await tx.shipping.update({
         where: { id: shipping.id },
         data: {
           status: newStatus,
@@ -128,6 +128,24 @@ export async function POST(req: Request) {
             : shipping.notes,
         },
       });
+
+      // SYNC: Update Parent Order Status based on Shipping Movement
+      // If shipping moves to InTransit/PickedUp/OutForDelivery/Delivered, mark Order as SENT
+      if (
+        (
+          [
+            ShippingStatus.PickedUp,
+            ShippingStatus.InTransit,
+            ShippingStatus.OutForDelivery,
+            ShippingStatus.Delivered,
+          ] as ShippingStatus[]
+        ).includes(newStatus)
+      ) {
+        await tx.order.update({
+          where: { id: shipping.orderId },
+          data: { status: "SENT" },
+        });
+      }
 
       // Store tracking events
       if (events.length > 0) {

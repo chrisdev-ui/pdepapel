@@ -85,6 +85,11 @@ export async function POST(
 
     // Validate stock for each item using the product map
     for (const item of order.orderItems) {
+      // Skip validation for Manual/Custom items (no productId)
+      if (!item.productId) {
+        continue;
+      }
+
       const product = productMap.get(item.productId);
 
       if (!product) {
@@ -122,7 +127,7 @@ export async function POST(
 
     // Generate payment based on method
     if (order.payment?.method === PaymentMethod.PayU) {
-      const payUData = generatePayUPayment(order);
+      const payUData = generatePayUPayment(order as CheckoutOrder);
 
       return NextResponse.json(
         {

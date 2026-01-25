@@ -45,23 +45,37 @@ export async function POST(
         "El código DANE de destino es requerido",
       );
 
-    const products = await prismadb.product.findMany({
-      where: {
-        id: { in: items.map((item: any) => item.productId) },
-        storeId: params.storeId,
-      },
-      select: {
-        id: true,
-        name: true,
-        size: { select: { value: true, name: true } },
-      },
-    });
+    // Filter valid product IDs (exclude manual items or undefined IDs)
+    // Manual items usually have IDs starting with "MAN-" or similar non-standard formats
+    const validProductIds = items
+      .map((item: any) => item.productId)
+      .filter((id: string) => id && !id.startsWith("MAN-"));
 
-    if (products.length === 0)
-      throw ErrorFactory.InvalidRequest("Productos no encontrados");
+    const products =
+      validProductIds.length > 0
+        ? await prismadb.product.findMany({
+            where: {
+              id: { in: validProductIds },
+              storeId: params.storeId,
+            },
+            select: {
+              id: true,
+              name: true,
+              size: { select: { value: true, name: true } },
+            },
+          })
+        : [];
 
-    if (products.length === 0)
+    // Allow proceeding even if NO products are found (e.g. all items are manual)
+    // The calculator will default to minimum size/weight if no products match
+    if (
+      products.length === 0 &&
+      items.length > 0 &&
+      validProductIds.length > 0
+    ) {
+      // Only throw if we expected to find products (had valid IDs) but found none
       throw ErrorFactory.InvalidRequest("Productos no encontrados");
+    }
 
     // Fetch all boxes for this store
     const dbBoxes = await prismadb.box.findMany({

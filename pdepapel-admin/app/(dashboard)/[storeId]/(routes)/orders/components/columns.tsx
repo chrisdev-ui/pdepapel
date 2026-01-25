@@ -16,7 +16,7 @@ import { paymentNames } from "@/constants";
 import { currencyFormatter } from "@/lib/utils";
 import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
 import { ColumnDef } from "@tanstack/react-table";
-import { Receipt } from "lucide-react";
+import { Check, Edit, Receipt, Sparkles } from "lucide-react";
 import { getOrders } from "../server/get-orders";
 import { CellAction } from "./cell-action";
 import { ProductList } from "./product-list";
@@ -43,16 +43,59 @@ export const columns: ColumnDef<OrderColumn>[] = [
     ),
   },
   {
+    accessorKey: "type",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Tipo" />
+    ),
+    cell: ({ row }) => {
+      const type = row.original.type; // OrderType
+      // Use string keys to avoid import dependency if enum not available in scope,
+      // but ideally we import OrderType.
+      // Based on schema: STANDARD, QUOTATION, CUSTOM
+      const icons = {
+        STANDARD: {
+          icon: <Check className="mr-2 h-4 w-4" />,
+          label: "Estándar",
+          variant: "outline",
+          className: "border-blue-200 bg-blue-50 text-blue-700",
+        },
+        QUOTATION: {
+          icon: <Sparkles className="mr-2 h-4 w-4" />,
+          label: "Cotización",
+          variant: "secondary",
+          className: "border-purple-200 bg-purple-50 text-purple-700",
+        },
+        CUSTOM: {
+          icon: <Edit className="mr-2 h-4 w-4" />,
+          label: "Manual",
+          variant: "secondary",
+          className: "border-orange-200 bg-orange-50 text-orange-700",
+        },
+      } as const;
+
+      const config = icons[type as keyof typeof icons] || icons.STANDARD;
+
+      return (
+        <Badge variant={config.variant as any} className={config.className}>
+          {config.icon}
+          {config.label}
+        </Badge>
+      );
+    },
+  },
+  {
     id: "products",
     accessorFn: (row) =>
       row.orderItems.map((orderItem) => ({
-        id: orderItem.product.id,
-        name: orderItem.product.name,
-        sku: orderItem.product.sku,
+        id: orderItem.product?.id || "manual",
+        name: orderItem.product?.name || orderItem.name,
+        sku: orderItem.product?.sku || orderItem.sku || "N/A",
         quantity: orderItem.quantity,
         image:
-          orderItem.product.images.find((image) => image.isMain)?.url ??
-          orderItem.product.images[0].url,
+          orderItem.product?.images.find((image) => image.isMain)?.url ??
+          orderItem.product?.images[0]?.url ??
+          orderItem.imageUrl ??
+          "",
       })),
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Productos" />
@@ -60,13 +103,15 @@ export const columns: ColumnDef<OrderColumn>[] = [
     cell: ({ row }) => (
       <ProductList
         products={row.original.orderItems.map((orderItem) => ({
-          id: orderItem.product.id,
-          name: orderItem.product.name,
-          sku: orderItem.product.sku,
+          id: orderItem.product?.id || "manual",
+          name: orderItem.product?.name || orderItem.name,
+          sku: orderItem.product?.sku || orderItem.sku || "N/A",
           quantity: orderItem.quantity,
           image:
-            orderItem.product.images.find((image) => image.isMain)?.url ??
-            orderItem.product.images[0].url,
+            orderItem.product?.images.find((image) => image.isMain)?.url ??
+            orderItem.product?.images[0]?.url ??
+            orderItem.imageUrl ??
+            "",
         }))}
       />
     ),
@@ -86,8 +131,8 @@ export const columns: ColumnDef<OrderColumn>[] = [
           phone: row.original.phone,
           totalPrice: currencyFormatter(row.original.total),
           products: row.original.orderItems.map((orderItem) => ({
-            name: orderItem.product.name,
-            sku: orderItem.product.sku,
+            name: orderItem.product?.name || orderItem.name,
+            sku: orderItem.product?.sku || orderItem.sku || "N/A",
             quantity: orderItem.quantity,
           })),
         }}
@@ -174,15 +219,28 @@ export const columns: ColumnDef<OrderColumn>[] = [
           variant: "destructive",
           text: `🚫 Cancelada`,
         },
+        [OrderStatus.DRAFT]: { variant: "outline", text: `📝 Borrador` },
+        [OrderStatus.QUOTATION]: { variant: "outline", text: `📋 Cotización` },
+        [OrderStatus.SENT]: { variant: "secondary", text: `📤 Enviada` },
+        [OrderStatus.VIEWED]: { variant: "secondary", text: `👀 Vista` },
+        [OrderStatus.ACCEPTED]: { variant: "success", text: `✅ Aceptada` },
+        [OrderStatus.REJECTED]: {
+          variant: "destructive",
+          text: `❌ Rechazada`,
+        },
       };
+
+      const statusConfig = variants[status] || {
+        variant: "outline",
+        text: status,
+      };
+
       return (
         <Badge
-          variant={variants[status].variant}
+          variant={statusConfig.variant}
           className="flex items-center justify-center [word-spacing:.2rem]"
         >
-          <span className="capitalize tracking-wide">
-            {variants[status].text}
-          </span>
+          <span className="capitalize tracking-wide">{statusConfig.text}</span>
         </Badge>
       );
     },

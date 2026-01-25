@@ -55,6 +55,11 @@ model Store {
   productGroups  ProductGroup[]  @relation("StoreToProductGroup")
   inventoryMovements InventoryMovement[] @relation("StoreToInventoryMovement")
   restockOrders  RestockOrder[]  @relation("StoreToRestockOrder")
+  customOrders    CustomOrder[]       @relation("StoreToCustomOrder")
+  quotations      Quotation[]         @relation("StoreToQuotation")
+  whatsappMessages WhatsAppMessage[]  @relation("StoreToWhatsAppMessage")
+  whatsappTemplates WhatsAppTemplate[] @relation("StoreToWhatsAppTemplate")
+  quoteRequests   QuoteRequest[]      @relation("StoreToQuoteRequest")
 }
 
 model Billboard {
@@ -260,6 +265,8 @@ model Product {
   offers      OfferProduct[]
   inventoryMovements InventoryMovement[]
   restockOrderItems RestockOrderItem[]
+  customOrderItems CustomOrderItem[]
+  quotationItems   QuotationItem[]
 
   @@index([storeId])
   @@index([categoryId])
@@ -341,7 +348,25 @@ model Order {
   orderItems  OrderItem[]
   shipping    Shipping?
   payment     PaymentDetails?
-
+  convertedFromCustomOrder CustomOrder? // Deprecated relationship, kept for backup
+  
+  // -- UNIFIED ORDER FIELDS --
+  type            OrderType       @default(STANDARD) 
+  
+  // Workflow & Public Access
+  token           String?         @unique // For public quote view
+  expiresAt       DateTime?       // For quotations validity
+  viewedAt        DateTime?       
+  
+  // Custom/Manual Order Fields
+  adminNotes      String?         @db.Text
+  internalNotes   String?         @db.Text
+  
+  // Sender Info
+  createdBy       String?         // Admin User ID
+  
+  quoteRequests   QuoteRequest[]
+  
   @@index([storeId])
   @@index([couponId])
   @@index([storeId, status])
@@ -357,15 +382,27 @@ model Order {
   @@index([userId, guestId, storeId, createdAt])
   @@index([storeId, userId, createdAt])
   @@index([storeId, guestId, createdAt])
+  @@index([token]) 
+  @@index([type])
 }
 
 model OrderItem {
   id        String  @id @default(uuid())
   orderId   String
-  productId String
+  productId String? // Made Optional for Manual Items
   quantity  Int
+  
+  // Snapshot Fields (To support Manual Items & Historical Fidelity)
+  name      String  @default("")
+  sku       String? @default("")
+  price     Float   @default(0)
+  imageUrl  String? @default("")
+  isCustom  Boolean @default(false)
+
   order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  product   Product? @relation(fields: [productId], references: [id], onDelete: Restrict) // Optional Link
+
+  createdAt DateTime @default(now())
 
   @@index([orderId])
   @@index([productId])
@@ -569,10 +606,25 @@ enum DiscountType {
   FIXED
 }
 
+enum OrderType {
+  STANDARD
+  CUSTOM
+  QUOTATION
+}
+
 enum OrderStatus {
-  CREATED
+  // Pre-Order States
+  DRAFT
+  QUOTATION
+  VIEWED
+  ACCEPTED
+  REJECTED // Legacy or Specific rejected quote
+  
+  // Active Order States
+  CREATED     // (Legacy) Treat as PENDING
   PENDING
   PAID
+  SENT
   CANCELLED
 }
 
@@ -581,6 +633,7 @@ enum PaymentMethod {
   BankTransfer
   Wompi
   PayU
+  CASH
 }
 
 enum ShippingStatus {
@@ -713,4 +766,282 @@ enum RestockOrderStatus {
   PARTIALLY_RECEIVED
   COMPLETED
   CANCELLED
+}
+
+// Custom Orders (For Backup/Reference)
+model CustomOrder {
+  id              String              @id @default(uuid())
+  storeId         String
+  quotationId     String?             
+  orderNumber     String              @unique
+  customerName    String
+  customerPhone   String
+  customerEmail   String?
+  status          CustomOrderStatus   @default(DRAFT)
+  type            CustomOrderType     @default(CUSTOM)
+  subtotal        Float               @default(0)
+  discount        Float               @default(0)
+  discountType    DiscountType?
+  shippingCost    Float               @default(0)
+  tax             Float               @default(0)
+  total           Float               @default(0)
+  
+  address         String?             @default("")
+  address2        String?             @default("")
+  city            String?             @default("")
+  department      String?             @default("")
+  daneCode        String?             @default("")
+  neighborhood    String?             @default("")
+  addressReference String?            @default("")
+  company         String?             @default("")
+  
+  notes           String?             @db.Text
+  adminNotes      String?             @db.Text
+  internalNotes   String?             @db.Text
+  validUntil      DateTime?
+  viewedAt        DateTime?
+  acceptedAt      DateTime?
+  rejectedAt      DateTime?
+  rejectionReason String?             @db.Text
+  publicUrl       String?
+  token           String?             @unique
+  createdBy       String              
+  convertedToOrderId String?          @unique
+  expirationReminded Boolean          @default(false)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  
+  store           Store               @relation("StoreToCustomOrder", fields: [storeId], references: [id])
+  items           CustomOrderItem[]
+  messages        WhatsAppMessage[]
+  quotation       Quotation?          @relation(fields: [quotationId], references: [id])
+  convertedOrder  Order?              @relation(fields: [convertedToOrderId], references: [id])
+  quoteRequest    QuoteRequest?
+  
+  @@index([storeId])
+  @@index([customerPhone])
+  @@index([status])
+  @@index([storeId, status])
+  @@index([quotationId])
+  @@index([token])
+  @@index([validUntil])
+  @@index([createdBy])
+  @@index([storeId, createdAt])
+  @@index([storeId, status, createdAt])
+}
+
+model CustomOrderItem {
+  id              String          @id @default(uuid())
+  customOrderId   String
+  productId       String?
+  name            String
+  description     String?         @db.Text
+  quantity        Int
+  unitPrice       Float
+  subtotal        Float
+  imageUrl        String?
+  sku             String?
+  isExternal      Boolean         @default(false) 
+  supplierInfo    String?         
+  supplierUrl     String?
+  category        String?
+  position        Int             @default(0)
+  customNotes     String?         @db.Text
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  customOrder     CustomOrder     @relation(fields: [customOrderId], references: [id], onDelete: Cascade)
+  product         Product?        @relation(fields: [productId], references: [id])
+
+  @@index([customOrderId])
+  @@index([productId])
+  @@index([customOrderId, position])
+}
+
+model Quotation {
+  id              String              @id @default(uuid())
+  storeId         String
+  name            String
+  description     String?             @db.Text
+  type            QuotationType       @default(GENERAL)
+  isTemplate      Boolean             @default(false)
+  isActive        Boolean             @default(true)
+  validityDays    Int                 @default(7)
+  termsConditions String?             @db.Text
+  defaultDiscount Float?              @default(0)
+  defaultDiscountType DiscountType?
+  createdBy       String
+  usageCount      Int                 @default(0)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  store           Store               @relation("StoreToQuotation", fields: [storeId], references: [id])
+  items           QuotationItem[]
+  customOrders    CustomOrder[]
+
+  @@index([storeId])
+  @@index([isTemplate])
+  @@index([type])
+  @@index([isActive])
+  @@index([storeId, isTemplate, isActive])
+}
+
+model QuotationItem {
+  id              String      @id @default(uuid())
+  quotationId     String
+  productId       String?
+  name            String
+  description     String?     @db.Text
+  quantity        Int         @default(1)
+  unitPrice       Float
+  isOptional      Boolean     @default(false)
+  category        String?
+  position        Int         @default(0)
+  imageUrl        String?
+
+  quotation       Quotation   @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  product         Product?    @relation(fields: [productId], references: [id])
+
+  @@index([quotationId])
+  @@index([productId])
+  @@index([quotationId, position])
+}
+
+model WhatsAppMessage {
+  id              String              @id @default(uuid())
+  storeId         String
+  customOrderId   String?
+  recipientPhone  String
+  recipientName   String?
+  message         String              @db.Text
+  mediaUrl        String?
+  mediaType       String? 
+  status          MessageStatus       @default(PENDING)
+  provider        String?             @default("manual") 
+  externalId      String?  
+  sentAt          DateTime?
+  deliveredAt     DateTime?
+  readAt          DateTime?
+  failedAt        DateTime?
+  errorMessage    String?             @db.Text
+  errorCode       String?
+  retryCount      Int                 @default(0)
+  templateId      String?
+  createdBy       String
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  store           Store               @relation("StoreToWhatsAppMessage", fields: [storeId], references: [id])
+  customOrder     CustomOrder?        @relation(fields: [customOrderId], references: [id])
+  template        WhatsAppTemplate?   @relation(fields: [templateId], references: [id])
+
+  @@index([storeId])
+  @@index([customOrderId])
+  @@index([recipientPhone])
+  @@index([status])
+  @@index([externalId])
+  @@index([storeId, status])
+  @@index([storeId, createdAt])
+}
+
+model WhatsAppTemplate {
+  id          String          @id @default(uuid())
+  storeId     String
+  name        String
+  type        TemplateType
+  message     String          @db.Text
+  variables   Json?           
+  mediaUrl    String?         
+  isActive    Boolean         @default(true)
+  usageCount  Int             @default(0)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  store       Store           @relation("StoreToWhatsAppTemplate", fields: [storeId], references: [id])
+  messages    WhatsAppMessage[]
+
+  @@index([storeId])
+  @@index([type])
+  @@index([isActive])
+  @@index([storeId, type, isActive])
+}
+
+model QuoteRequest {
+  id              String      @id @default(uuid())
+  storeId         String
+  customerName    String
+  customerPhone   String
+  customerEmail   String?
+  message         String?     @db.Text
+  attachmentUrl   String?     
+  status          String      @default("pending") 
+  assignedTo      String?     
+  customOrderId   String?     @unique
+  processedAt     DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt 
+
+  store           Store        @relation("StoreToQuoteRequest", fields: [storeId], references: [id])
+  customOrder     CustomOrder? @relation(fields: [customOrderId], references: [id])
+  order           Order?       @relation(fields: [orderId], references: [id])
+  orderId         String?
+
+  @@index([storeId])
+  @@index([status])
+  @@index([storeId, status])
+  @@index([customerPhone])
+  @@index([createdAt])
+}
+
+enum CustomOrderStatus {
+  DRAFT
+  SENT
+  VIEWED
+  NEGOTIATING
+  ACCEPTED
+  REJECTED
+  CONVERTED
+  EXPIRED
+  CANCELLED
+}
+
+enum CustomOrderType {
+  CUSTOM
+  QUOTATION
+  SCHOOL_LIST
+  WHOLESALE
+  EVENT
+  CORPORATE
+}
+
+enum QuotationType {
+  GENERAL
+  SCHOOL_LIST
+  WEDDING
+  EVENT
+  WHOLESALE
+  CORPORATE
+  BIRTHDAY
+  SEASONAL
+}
+
+enum MessageStatus {
+  PENDING
+  SENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  EXPIRED
+}
+
+enum TemplateType {
+  QUOTATION
+  ORDER_CONFIRMATION
+  ORDER_UPDATE
+  PAYMENT_REMINDER
+  SHIPPING_UPDATE
+  CUSTOM
+  WELCOME
+  FOLLOW_UP
 }

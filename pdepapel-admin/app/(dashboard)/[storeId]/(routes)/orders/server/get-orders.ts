@@ -12,6 +12,7 @@ export async function getOrders(storeId: string) {
     select: {
       id: true,
       orderNumber: true,
+      type: true,
       fullName: true,
       phone: true,
       address: true,
@@ -31,6 +32,10 @@ export async function getOrders(storeId: string) {
             },
           },
           quantity: true,
+          name: true,
+          sku: true,
+          imageUrl: true,
+          price: true,
         },
       },
       shipping: {

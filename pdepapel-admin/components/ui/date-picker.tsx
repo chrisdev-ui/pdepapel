@@ -40,7 +40,8 @@ export function DatePicker<T extends FieldValues>({
   control,
   disabled = false,
   needFutureYears = 2,
-}: DatePickerProps<T>) {
+  className,
+}: DatePickerProps<T> & { className?: string }) {
   const {
     field: { value, onChange },
   } = useController({ name, control });
@@ -60,6 +61,7 @@ export function DatePicker<T extends FieldValues>({
           className={cn(
             "w-[280px] items-center justify-between text-left font-normal",
             !value && "text-muted-foreground",
+            className,
           )}
         >
           {value ? (

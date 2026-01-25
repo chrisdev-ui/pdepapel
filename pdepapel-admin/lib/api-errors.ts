@@ -125,6 +125,19 @@ export const handleErrorResponse = (
     );
   }
 
+  // Handle Prisma Validation Errors (e.g. Invalid Enum Value)
+  if (error instanceof Prisma.PrismaClientValidationError) {
+    console.error("Prisma Validation Error:", error.message);
+    // In development/admin, we want to see the real error
+    return NextResponse.json(
+      {
+        error: "Error de validación de base de datos",
+        details: { message: error.message },
+      },
+      { status: 400, headers: options.headers },
+    );
+  }
+
   // Handle AppError instances
   if (error instanceof AppError) {
     return NextResponse.json(
@@ -144,6 +157,10 @@ export const getErrorMessage = (error: unknown): string => {
   let errorMessage = GENERIC_ERROR;
   if (axios.isAxiosError(error)) {
     errorMessage = error.response?.data?.error ?? error.message;
+    // Append details if available (e.g. from Prisma Validation)
+    if (error.response?.data?.details?.message) {
+      errorMessage += `: ${error.response?.data?.details?.message}`;
+    }
   } else if (error instanceof Error) {
     errorMessage = error.message;
   }

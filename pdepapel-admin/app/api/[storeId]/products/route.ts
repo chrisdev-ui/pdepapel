@@ -699,6 +699,7 @@ export async function GET(
           color: true,
           design: true,
           size: true,
+          productGroup: true,
           supplier: includeSupplier ? true : undefined,
           reviews: {
             orderBy: { createdAt: "desc" },
@@ -904,6 +905,7 @@ export async function GET(
             color: true,
             design: true,
             size: true,
+            productGroup: true,
             supplier: includeSupplier ? true : undefined,
             reviews: {
               orderBy: { createdAt: "desc" },

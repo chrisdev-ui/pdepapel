@@ -569,81 +569,116 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                             Progreso del Envío
                           </h3>
                           <div className="space-y-0">
-                            {steps.map((step, index) => {
-                              const currentIndex = Object.values(
-                                ShippingStatus,
-                              ).indexOf(
-                                (order?.shipping?.status as ShippingStatus) ??
-                                  ShippingStatus.Preparing,
+                            {(() => {
+                              const happySteps = steps.filter(
+                                (step) =>
+                                  ![
+                                    ShippingStatus.Returned,
+                                    ShippingStatus.Cancelled,
+                                    ShippingStatus.Exception,
+                                    ShippingStatus.FailedDelivery,
+                                  ].includes(step.status),
                               );
-                              const isCompleted = index < currentIndex;
-                              const isCurrent = index === currentIndex;
 
-                              const Icon =
-                                SHIPPING_ICONS[step.status] || Package;
+                              const currentStatus =
+                                (order?.shipping?.status as ShippingStatus) ??
+                                ShippingStatus.Preparing;
 
-                              return (
-                                <div key={index} className="flex gap-4 pb-0">
-                                  <div className="relative flex flex-col items-center">
-                                    <div
-                                      className={cn(
-                                        "flex h-10 w-10 items-center justify-center rounded-full shadow-lg transition-all duration-500",
-                                        isCompleted || isCurrent
-                                          ? "bg-gradient-to-br from-green-400 to-emerald-500 text-white"
-                                          : "bg-white text-gray-300",
-                                        isCurrent &&
-                                          "scale-110 animate-pulse ring-4 ring-primary/20",
-                                      )}
-                                    >
-                                      <Icon className="h-5 w-5" />
-                                    </div>
-                                    {index < steps.length - 1 && (
+                              let currentStepIndex = happySteps.findIndex(
+                                (s) => s.status === currentStatus,
+                              );
+
+                              if (currentStepIndex === -1) {
+                                // Handle unhappy paths mapping
+                                if (
+                                  currentStatus === ShippingStatus.Returned ||
+                                  currentStatus ===
+                                    ShippingStatus.FailedDelivery ||
+                                  currentStatus === ShippingStatus.Exception
+                                ) {
+                                  // Map to OutForDelivery (index of OutForDelivery in happySteps)
+                                  currentStepIndex = happySteps.findIndex(
+                                    (s) =>
+                                      s.status ===
+                                      ShippingStatus.OutForDelivery,
+                                  );
+                                } else if (
+                                  currentStatus === ShippingStatus.Cancelled
+                                ) {
+                                  currentStepIndex = -1;
+                                }
+                              }
+
+                              return happySteps.map((step, index) => {
+                                const isCompleted = index < currentStepIndex;
+                                const isCurrent = index === currentStepIndex;
+
+                                const Icon =
+                                  SHIPPING_ICONS[step.status] || Package;
+
+                                return (
+                                  <div key={index} className="flex gap-4 pb-0">
+                                    <div className="relative flex flex-col items-center">
                                       <div
                                         className={cn(
-                                          "h-12 w-0.5 transition-all duration-500",
-                                          index < currentIndex
-                                            ? "bg-primary"
-                                            : "bg-muted",
+                                          "flex h-10 w-10 items-center justify-center rounded-full shadow-lg transition-all duration-500",
+                                          isCompleted || isCurrent
+                                            ? "bg-gradient-to-br from-green-400 to-emerald-500 text-white"
+                                            : "bg-white text-gray-300",
+                                          isCurrent &&
+                                            "scale-110 animate-pulse ring-4 ring-primary/20",
                                         )}
-                                      />
-                                    )}
-                                  </div>
-                                  <div className="flex-1 pb-8 pt-1">
-                                    <p
-                                      className={cn(
-                                        "text-lg font-bold leading-tight transition-colors duration-300",
-                                        isCompleted || isCurrent
-                                          ? "text-foreground"
-                                          : "text-muted-foreground",
+                                      >
+                                        <Icon className="h-5 w-5" />
+                                      </div>
+                                      {index < happySteps.length - 1 && (
+                                        <div
+                                          className={cn(
+                                            "h-12 w-0.5 transition-all duration-500",
+                                            index < currentStepIndex
+                                              ? "bg-primary"
+                                              : "bg-muted",
+                                          )}
+                                        />
                                       )}
-                                    >
-                                      {step.value}
-                                    </p>
-                                    {(isCompleted || isCurrent) && (
-                                      <p className="mt-1 text-sm text-muted-foreground duration-500 animate-in fade-in slide-in-from-left-4">
-                                        {index === 0
-                                          ? format(
-                                              new Date(order.createdAt),
-                                              "EEEE d 'de' MMMM, yyyy",
-                                              { locale: es },
-                                            )
-                                          : order.shipping?.createdAt
-                                          ? format(
-                                              new Date(
-                                                order.shipping.createdAt,
-                                              ),
-                                              "EEEE d 'de' MMMM, yyyy",
-                                              { locale: es },
-                                            )
-                                          : isCurrent
-                                          ? "En proceso..."
-                                          : "Completado"}
+                                    </div>
+                                    <div className="flex-1 pb-8 pt-1">
+                                      <p
+                                        className={cn(
+                                          "text-lg font-bold leading-tight transition-colors duration-300",
+                                          isCompleted || isCurrent
+                                            ? "text-foreground"
+                                            : "text-muted-foreground",
+                                        )}
+                                      >
+                                        {step.value}
                                       </p>
-                                    )}
+                                      {(isCompleted || isCurrent) && (
+                                        <p className="mt-1 text-sm text-muted-foreground duration-500 animate-in fade-in slide-in-from-left-4">
+                                          {index === 0
+                                            ? format(
+                                                new Date(order.createdAt),
+                                                "EEEE d 'de' MMMM, yyyy",
+                                                { locale: es },
+                                              )
+                                            : order.shipping?.createdAt
+                                            ? format(
+                                                new Date(
+                                                  order.shipping.createdAt,
+                                                ),
+                                                "EEEE d 'de' MMMM, yyyy",
+                                                { locale: es },
+                                              )
+                                            : isCurrent
+                                            ? "En proceso..."
+                                            : "Completado"}
+                                        </p>
+                                      )}
+                                    </div>
                                   </div>
-                                </div>
-                              );
-                            })}
+                                );
+                              });
+                            })()}
                           </div>
                         </div>
 
@@ -835,64 +870,100 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                   </div>
 
                   <div className="space-y-4 p-6">
-                    {order.orderItems.map(({ product, quantity }) => (
-                      <div
-                        key={product.id}
-                        className="group flex gap-4 overflow-hidden rounded-xl border-2 bg-gradient-to-br from-white to-gray-50 p-4 transition-all hover:border-indigo-200 hover:shadow-lg"
-                      >
-                        <Link
-                          href={`/product/${product.id}`}
-                          className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-lg bg-white shadow-md"
+                    {order.orderItems.map((item) => {
+                      const product = item.product;
+                      const imageUrl =
+                        item.imageUrl ||
+                        product?.images.find((image) => image.isMain)?.url ||
+                        product?.images?.[0]?.url ||
+                        "";
+                      const name =
+                        item.name || product?.name || "Producto sin nombre";
+
+                      return (
+                        <div
+                          key={item.id}
+                          className="group flex gap-4 overflow-hidden rounded-xl border-2 bg-gradient-to-br from-white to-gray-50 p-4 transition-all hover:border-indigo-200 hover:shadow-lg"
                         >
-                          <CldImage
-                            src={
-                              product.images.find((image) => image.isMain)
-                                ?.url ?? product.images[0].url
-                            }
-                            alt={product.name ?? "Imagen del producto"}
-                            fill
-                            sizes="(max-width: 640px) 100vw, 640px"
-                            priority
-                            className="object-cover transition-transform group-hover:scale-110"
-                          />
-                        </Link>
-                        <div className="flex min-w-0 flex-1 flex-col justify-between">
-                          <div>
-                            <h3 className="text-lg font-bold leading-tight">
-                              {product.name}
-                            </h3>
-                            <div className="mt-1 space-y-0.5 text-sm text-muted-foreground">
-                              {product.design && (
-                                <p>Diseño: {product.design.name}</p>
-                              )}
-                              {product.color && (
-                                <p>Color: {product.color.name}</p>
-                              )}
-                              {product.size && (
-                                <p>Talla: {product.size.name}</p>
-                              )}
-                              <p>
-                                #{product.sku} | Cantidad:{" "}
-                                <span className="font-bold text-foreground">
-                                  {quantity}
-                                </span>
-                              </p>
-                            </div>
+                          <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100 shadow-md">
+                            {imageUrl ? (
+                              product ? (
+                                <Link href={`/product/${product.id}`}>
+                                  <CldImage
+                                    src={imageUrl}
+                                    alt={name}
+                                    fill
+                                    sizes="(max-width: 640px) 100vw, 640px"
+                                    priority
+                                    className="object-cover transition-transform group-hover:scale-110"
+                                  />
+                                </Link>
+                              ) : (
+                                <CldImage
+                                  src={imageUrl}
+                                  alt={name}
+                                  fill
+                                  sizes="(max-width: 640px) 100vw, 640px"
+                                  priority
+                                  className="object-cover transition-transform group-hover:scale-110"
+                                />
+                              )
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center bg-gray-100 text-xs text-muted-foreground">
+                                Sin imagen
+                              </div>
+                            )}
                           </div>
-                          <Currency
-                            className="text-xl font-bold text-indigo-600"
-                            value={Number(product.price) * quantity}
-                          />
+                          <div className="flex min-w-0 flex-1 flex-col justify-between">
+                            <div>
+                              <h3 className="text-lg font-bold leading-tight">
+                                {product ? (
+                                  <Link
+                                    href={`/product/${product.id}`}
+                                    className="hover:underline"
+                                  >
+                                    {name}
+                                  </Link>
+                                ) : (
+                                  name
+                                )}
+                              </h3>
+                              <div className="mt-1 space-y-0.5 text-sm text-muted-foreground">
+                                {product?.design && (
+                                  <p>Diseño: {product.design.name}</p>
+                                )}
+                                {product?.color && (
+                                  <p>Color: {product.color.name}</p>
+                                )}
+                                {product?.size && (
+                                  <p>Talla: {product.size.name}</p>
+                                )}
+                                <p>
+                                  {(item.sku || product?.sku) && (
+                                    <>#{item.sku || product?.sku} | </>
+                                  )}
+                                  Cantidad:{" "}
+                                  <span className="font-bold text-foreground">
+                                    {item.quantity}
+                                  </span>
+                                </p>
+                              </div>
+                            </div>
+                            <Currency
+                              className="text-xl font-bold text-indigo-600"
+                              value={Number(item.price) * item.quantity}
+                            />
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </div>
 
               {/* Right Column - Summary Sidebar */}
               <div className="space-y-6">
-                <div className="sticky top-32 overflow-hidden rounded-2xl border-2 bg-card shadow-xl">
+                <div className="sticky top-[110px] overflow-hidden rounded-2xl border-2 bg-card shadow-xl">
                   <div className="bg-gradient-to-r from-emerald-500 to-green-500 p-6">
                     <div className="flex items-center gap-3 text-white">
                       <div className="rounded-full bg-white/20 p-3 backdrop-blur">
@@ -1058,7 +1129,10 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                 formRef={payUFormRef}
                 referenceCode={payUformData.referenceCode}
                 products={order.orderItems.map((orderItem) => ({
-                  name: orderItem.product.name,
+                  name:
+                    orderItem.name ||
+                    orderItem.product?.name ||
+                    "Producto sin nombre",
                   quantity: orderItem.quantity || 1,
                 }))}
                 amount={payUformData.amount}

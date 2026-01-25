@@ -71,6 +71,7 @@ export async function POST(
       shipping,
       envioClickIdRate, // ⭐ ID de tarifa de EnvioClick (top level)
       documentId, // ⭐ Cédula/NIT (opcional)
+      customOrderToken, // ⭐ Token para convertir cotización
     } = await req.json();
 
     console.log(
@@ -264,6 +265,15 @@ export async function POST(
       orderItemsData.push({
         product: { connect: { id: productId } },
         quantity,
+        // Snapshot fields for historical accuracy
+        name: product.name,
+        price: discountedPricesMap.get(productId)?.price || product.price,
+        sku: product.sku || "N/A",
+        imageUrl:
+          product.images.find((img: any) => img.isMain)?.url ||
+          product.images[0]?.url ||
+          "",
+        isCustom: false,
       });
     }
 
@@ -357,68 +367,188 @@ export async function POST(
     }
 
     const orderNumber = generateOrderNumber();
-    const order = await prismadb.order.create({
-      data: {
-        storeId: params.storeId,
-        userId: authenticatedUserId,
-        guestId: !authenticatedUserId ? guestId : null,
-        orderNumber: orderNumber,
-        status: OrderStatus.PENDING,
-        fullName,
-        phone,
-        email,
-        documentId: documentId || null, // ⭐ Guardar documento
-        address,
-        address2: address2 || null,
-        addressReference: addressReference || null,
-        city,
-        department,
-        daneCode,
-        neighborhood: neighborhood || null,
-        company: company || null,
-        subtotal: totals.subtotal,
-        total: totals.total,
-        couponDiscount: totals.couponDiscount,
-        couponId: coupon?.id,
-        orderItems: { create: orderItemsData },
-        shipping: {
-          create: {
-            storeId: params.storeId,
-            provider: ShippingProvider.ENVIOCLICK,
-            status: ShippingStatus.Preparing,
-            envioClickIdRate: selectedQuote.idRate,
-            carrierId: selectedQuote.idCarrier,
-            carrierName: selectedQuote.carrier,
-            courier: selectedQuote.carrier,
-            productId: selectedQuote.idProduct,
-            productName: selectedQuote.product,
-            flete: selectedQuote.flete,
-            minimumInsurance: selectedQuote.minimumInsurance,
-            isCOD: selectedQuote.isCOD || false,
-            cost: selectedQuote.totalCost,
-            deliveryDays: selectedQuote.deliveryDays,
-            requestPickup: ENVIOCLICK_DEFAULTS.requestPickup,
-            hasInsurance: ENVIOCLICK_DEFAULTS.insurance,
-            // Guardar datos de cotización completos
-            quotationData: selectedQuote,
+
+    let order;
+
+    if (customOrderToken) {
+      // 🔄 Unified System: CONVERT Quotation to Order
+      const existingQuote = await prismadb.order.findUnique({
+        where: { token: customOrderToken, storeId: params.storeId },
+        include: { orderItems: true },
+      });
+
+      if (!existingQuote) {
+        throw ErrorFactory.NotFound("La cotización no existe o ha expirado");
+      }
+
+      if (
+        existingQuote.status !== OrderStatus.QUOTATION &&
+        existingQuote.status !== OrderStatus.DRAFT
+      ) {
+        throw ErrorFactory.Conflict(
+          "Esta cotización ya ha sido procesada o no está disponible para pago",
+        );
+      }
+
+      // Update the existing order (Quotation)
+      order = await prismadb.order.update({
+        where: { id: existingQuote.id },
+        data: {
+          status: OrderStatus.PENDING, // Ready for payment
+          updatedAt: new Date(), // Mark as active
+          // Update Customer Info (User might have changed it in Checkout)
+          fullName,
+          phone,
+          email,
+          documentId: documentId || null,
+          address,
+          address2: address2 || null,
+          addressReference: addressReference || null,
+          city,
+          department,
+          daneCode,
+          neighborhood: neighborhood || null,
+          company: company || null,
+          // Update Financials
+          subtotal: totals.subtotal,
+          total: totals.total,
+          couponDiscount: totals.couponDiscount,
+          couponId: coupon?.id,
+          // Sync Items: Re-create to ensure fidelity with checkout request
+          orderItems: {
+            deleteMany: {}, // Clear old quote items (safe refresh)
+            create: orderItemsData,
+          },
+          // Update Shipping
+          shipping: {
+            // Delete old shipping info if exists?
+            // Prisma doesn't have "upsert" on 1-1 easily for nested delete-create logic in one go usually,
+            // but we can try updating or we assume quote had no shipping or we overwrite.
+            // Safer: Update existing record or create new.
+            upsert: {
+              create: {
+                storeId: params.storeId,
+                provider: ShippingProvider.ENVIOCLICK,
+                status: ShippingStatus.Preparing,
+                envioClickIdRate: selectedQuote.idRate,
+                carrierId: selectedQuote.idCarrier,
+                carrierName: selectedQuote.carrier,
+                courier: selectedQuote.carrier,
+                productId: selectedQuote.idProduct,
+                productName: selectedQuote.product,
+                flete: selectedQuote.flete,
+                minimumInsurance: selectedQuote.minimumInsurance,
+                isCOD: selectedQuote.isCOD || false,
+                cost: selectedQuote.totalCost,
+                deliveryDays: selectedQuote.deliveryDays,
+                requestPickup: ENVIOCLICK_DEFAULTS.requestPickup,
+                hasInsurance: ENVIOCLICK_DEFAULTS.insurance,
+                quotationData: selectedQuote,
+              },
+              update: {
+                provider: ShippingProvider.ENVIOCLICK,
+                status: ShippingStatus.Preparing,
+                envioClickIdRate: selectedQuote.idRate,
+                carrierId: selectedQuote.idCarrier,
+                carrierName: selectedQuote.carrier,
+                courier: selectedQuote.carrier,
+                productId: selectedQuote.idProduct,
+                productName: selectedQuote.product,
+                flete: selectedQuote.flete,
+                minimumInsurance: selectedQuote.minimumInsurance,
+                isCOD: selectedQuote.isCOD || false,
+                cost: selectedQuote.totalCost,
+                deliveryDays: selectedQuote.deliveryDays,
+                requestPickup: ENVIOCLICK_DEFAULTS.requestPickup,
+                hasInsurance: ENVIOCLICK_DEFAULTS.insurance,
+                quotationData: selectedQuote,
+              },
+            },
+          },
+          payment: {
+            create: {
+              storeId: params.storeId,
+              method: payment.method,
+            },
           },
         },
-        payment: {
-          create: {
-            storeId: params.storeId,
-            method: payment.method,
+        include: {
+          orderItems: {
+            include: {
+              product: true,
+            },
+          },
+          coupon: true,
+        },
+      });
+
+      console.log(
+        `♻️ Converted Quotation ${existingQuote.orderNumber} to Pending Order ${order.orderNumber}`,
+      );
+    } else {
+      // 🆕 Create NEW Order (Standard Flow)
+      order = await prismadb.order.create({
+        data: {
+          storeId: params.storeId,
+          userId: authenticatedUserId,
+          guestId: !authenticatedUserId ? guestId : null,
+          orderNumber: orderNumber,
+          status: OrderStatus.PENDING,
+          fullName,
+          phone,
+          email,
+          documentId: documentId || null,
+          address,
+          address2: address2 || null,
+          addressReference: addressReference || null,
+          city,
+          department,
+          daneCode,
+          neighborhood: neighborhood || null,
+          company: company || null,
+          subtotal: totals.subtotal,
+          total: totals.total,
+          couponDiscount: totals.couponDiscount,
+          couponId: coupon?.id,
+          orderItems: { create: orderItemsData },
+          shipping: {
+            create: {
+              storeId: params.storeId,
+              provider: ShippingProvider.ENVIOCLICK,
+              status: ShippingStatus.Preparing,
+              envioClickIdRate: selectedQuote.idRate,
+              carrierId: selectedQuote.idCarrier,
+              carrierName: selectedQuote.carrier,
+              courier: selectedQuote.carrier,
+              productId: selectedQuote.idProduct,
+              productName: selectedQuote.product,
+              flete: selectedQuote.flete,
+              minimumInsurance: selectedQuote.minimumInsurance,
+              isCOD: selectedQuote.isCOD || false,
+              cost: selectedQuote.totalCost,
+              deliveryDays: selectedQuote.deliveryDays,
+              requestPickup: ENVIOCLICK_DEFAULTS.requestPickup,
+              hasInsurance: ENVIOCLICK_DEFAULTS.insurance,
+              quotationData: selectedQuote,
+            },
+          },
+          payment: {
+            create: {
+              storeId: params.storeId,
+              method: payment.method,
+            },
           },
         },
-      },
-      include: {
-        orderItems: {
-          include: {
-            product: true,
+        include: {
+          orderItems: {
+            include: {
+              product: true,
+            },
           },
+          coupon: true,
         },
-        coupon: true,
-      },
-    });
+      });
+    }
 
     // Send email asynchronously
     setImmediate(async () => {
@@ -446,14 +576,14 @@ export async function POST(
         `🔐 Generating ${payment.method} payment for order ${order.orderNumber}`,
       );
       if (payment.method === PaymentMethod.PayU) {
-        const payUData = generatePayUPayment(order);
+        const payUData = generatePayUPayment(order as any);
         console.log(
           `✅ PayU payment data generated - Reference: ${payUData.referenceCode}, Amount: ${currencyFormatter(payUData.amount)}`,
         );
         return NextResponse.json({ ...payUData }, { headers: corsHeaders });
       }
 
-      const url = await generateWompiPayment(order);
+      const url = await generateWompiPayment(order as any);
       console.log(
         `✅ Wompi payment URL generated for order ${order.orderNumber}`,
       );

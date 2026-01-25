@@ -212,6 +212,16 @@ export const formatPhoneNumber = (phone: string | null | undefined) => {
   }
 };
 
+export const normalizePhone = (phone: string | null | undefined) => {
+  if (!phone) return "";
+  try {
+    const phoneNumber = parsePhoneNumber(phone, "CO");
+    return phoneNumber ? phoneNumber.number.toString() : phone.trim();
+  } catch (error) {
+    return phone.trim();
+  }
+};
+
 export async function checkIfStoreOwner(
   userId: string | null,
   storeId: string,
@@ -504,6 +514,13 @@ export async function processOrderItemsInBatches(
         price: true,
         stock: true,
         name: true,
+        sku: true,
+        images: {
+          select: {
+            url: true,
+          },
+          take: 1,
+        },
         categoryId: true,
         productGroupId: true,
       },

@@ -2,10 +2,14 @@
 
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/ui/icons";
-import { cn, currencyFormatter, formatPhoneNumber } from "@/lib/utils";
+import { cn, currencyFormatter } from "@/lib/utils";
 import { OrderStatus } from "@prisma/client";
 import Link from "next/link";
 import { useMemo } from "react";
+import {
+  formatPhoneNumber,
+  isValidPhoneNumber,
+} from "react-phone-number-input";
 
 interface OrderData {
   orderNumber: string;
@@ -14,6 +18,8 @@ interface OrderData {
   phone: string;
   totalPrice?: number | string;
   products?: Array<{ name: string; quantity: number; sku?: string }>;
+  token?: string | null;
+  trackingCode?: string | null;
 }
 
 interface CustomerData {
@@ -32,35 +38,33 @@ interface CustomerData {
 interface WhatsappButtonProps {
   withText?: boolean;
   className?: string;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "default" | "icon";
+  variant?:
+    | "default"
+    | "destructive"
+    | "outline"
+    | "secondary"
+    | "ghost"
+    | "link";
   compact?: boolean;
   order?: OrderData;
   customer?: CustomerData;
+  storeUrl?: string;
 }
 
 export const WhatsappButton: React.FC<WhatsappButtonProps> = ({
   className,
   withText = false,
   size = "sm",
+  variant = "link",
   compact = false,
   order,
   customer,
+  storeUrl = process.env.NEXT_PUBLIC_FRONTEND_STORE_URL ||
+    process.env.FRONTEND_STORE_URL ||
+    "http://localhost:3001",
 }) => {
   const data = order || customer;
-
-  // Always call useMemo hooks unconditionally
-  const formattedPhone = useMemo(() => {
-    if (!data?.phone) return "";
-    // If it's already +57... just strip +, otherwise ensure 57 prefix if missing?
-    // Safer to use parsePhoneNumber to get the digits if possible, or just strip non-digits.
-    // If input is +57 300..., replace(\D) -> 57300...
-    // If input is 300..., replace(\D) -> 300... -> prepend 57 -> 57300...
-    // This assumes Colombian numbers if no country code?
-    // Let's rely on standard logic:
-    const cleaned = data.phone.replace(/\D/g, "");
-    if (cleaned.startsWith("57")) return cleaned;
-    return `57${cleaned}`;
-  }, [data]);
 
   const firstName = useMemo(() => {
     return data ? data.fullName.split(" ")[0] : "";
@@ -86,6 +90,7 @@ export const WhatsappButton: React.FC<WhatsappButtonProps> = ({
     const SMILE = "\u{1F60A}";
     const USER = "\u{1F464}";
     const CHART = "\u{1F4CA}";
+    const TRUCK = "\u{1F69A}";
 
     const baseMessage = `¡Hola ${firstName}! ${WAVE}\n\n`;
 
@@ -120,6 +125,16 @@ export const WhatsappButton: React.FC<WhatsappButtonProps> = ({
 
       let message: string;
       switch (order.status) {
+        case "QUOTATION": // Handle as string literal if OrderStatus.QUOTATION not strictly available in enum during dev, or import it. It is imported.
+          const quoteUrl = `${storeUrl}/quote/${order.token}`;
+          message =
+            `${baseMessage}Aquí tienes la cotización que solicitaste en P de Papel 👇\n\n` +
+            `📄 *Ver Cotización:* ${quoteUrl}\n\n` +
+            `Tu pedido incluye:\n${productsList}\n\n` +
+            `Total: ${orderPrice}\n\n` +
+            `Si tienes alguna duda o quieres confirmar, ¡avísame por aquí! ${SMILE}`;
+          break;
+
         case OrderStatus.PENDING:
           message =
             `${baseMessage}Te escribo respecto a tu orden #${order.orderNumber} en P de Papel.\n\n` +
@@ -134,6 +149,17 @@ export const WhatsappButton: React.FC<WhatsappButtonProps> = ({
             `Estamos esperando la confirmación de tu pago para proceder con el envío de:\n${productsList}\n\n` +
             `Total: ${orderPrice}\n\n` +
             `¿Ya realizaste el pago? Puedes enviarnos el comprobante por este medio ${CAMERA}`;
+          break;
+
+        case "SENT":
+        case OrderStatus.SENT:
+          const trackingMsg = order.trackingCode
+            ? `\n🚚 Guía: ${order.trackingCode}`
+            : "";
+          message =
+            `${baseMessage}¡Tu pedido va en camino! ${TRUCK}\n\n` +
+            `Orden #${order.orderNumber} enviada.${trackingMsg}\n\n` +
+            `¡Espero que lo disfrutes mucho! ${SMILE}`;
           break;
 
         case OrderStatus.PAID:
@@ -164,20 +190,24 @@ export const WhatsappButton: React.FC<WhatsappButtonProps> = ({
     return encodeURIComponent(
       `${baseMessage}¿En qué te puedo ayudar? ${SMILE}`,
     );
-  }, [data, order, customer, firstName, orderPrice]);
+  }, [data, order, customer, firstName, orderPrice, storeUrl]);
 
   const whatsappUrl = useMemo(
-    () => `whatsapp://send?phone=${formattedPhone}&text=${getMessage}`,
-    [formattedPhone, getMessage],
+    () => `whatsapp://send?phone=${data?.phone}&text=${getMessage}`,
+    [data?.phone, getMessage],
   );
 
   // Early return after all hooks have been called
-  if (!data) return null;
+  if (!data || !data.phone || !isValidPhoneNumber(data.phone)) return null;
+
+  // Resolve size 'md' to 'default' for Button component compatibility
+  const buttonSize = size === "md" ? "default" : size;
 
   if (compact) {
     return (
       <Button
-        variant="link"
+        variant={variant}
+        size={buttonSize === "sm" ? "icon" : buttonSize}
         className={cn("h-8 w-8 px-1", className)}
         asChild
         title={`Contactar a ${firstName} por WhatsApp`}
@@ -191,13 +221,19 @@ export const WhatsappButton: React.FC<WhatsappButtonProps> = ({
   }
 
   return (
-    <Button variant="link" className={cn("px-1", className)} asChild>
+    <Button
+      variant={variant}
+      size={buttonSize}
+      className={cn("px-1", className)}
+      asChild
+    >
       <Link href={whatsappUrl} target="_blank">
         <Icons.whatsapp
           className={cn("text-[#25D366]", {
             "h-5 w-5": size === "sm",
             "h-6 w-6": size === "md",
             "h-7 w-7": size === "lg",
+            "text-white": variant === "default", // Make icon white if button is solid
           })}
         />
         <span className="sr-only">Abrir WhatsApp Web</span>

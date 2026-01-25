@@ -327,21 +327,22 @@ export function ShipmentDetailClient({ shipment }: ShipmentDetailClientProps) {
                     </p>
                     <div className="space-y-2">
                       {shipment.order.orderItems.map((item) => {
-                        const mainImage = item.product.images.find(
+                        const product = item.product;
+                        const mainImage = product?.images.find(
                           (img) => img.isMain,
                         );
                         const imageUrl =
-                          mainImage?.url || item.product.images[0]?.url;
+                          mainImage?.url || product?.images[0]?.url;
 
                         return (
                           <div
                             key={item.id}
                             className="flex items-center gap-3 rounded-md bg-muted/50 p-2"
                           >
-                            {imageUrl && (
+                            {imageUrl && product && (
                               <Image
                                 src={imageUrl}
-                                alt={item.product.name}
+                                alt={product.name}
                                 width={40}
                                 height={40}
                                 className="rounded object-cover"
@@ -349,7 +350,7 @@ export function ShipmentDetailClient({ shipment }: ShipmentDetailClientProps) {
                             )}
                             <div className="flex-1">
                               <p className="text-sm font-medium">
-                                {item.product.name}
+                                {product?.name || "Producto (Sin datos)"}
                               </p>
                               <p className="text-xs text-muted-foreground">
                                 Cantidad: {item.quantity}

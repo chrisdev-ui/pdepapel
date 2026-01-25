@@ -161,8 +161,14 @@ export interface Order {
 
 export interface OrderItem {
   id: string;
-  product: Product;
+  product?: Product | null;
+  productId?: string | null;
   quantity: number;
+  name?: string;
+  sku?: string;
+  price?: number | string;
+  imageUrl?: string;
+  isCustom?: boolean;
 }
 
 export interface Payment {
@@ -313,6 +319,7 @@ export interface CheckoutOrder {
   };
   shippingProvider?: "ENVIOCLICK" | "NONE";
   envioClickIdRate?: number;
+  customOrderToken?: string;
 }
 
 export interface DaneLocation {
