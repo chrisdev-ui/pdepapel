@@ -342,7 +342,10 @@ interface ShippingQuote {
 const safeDate = (date: string | Date | null | undefined): Date | undefined => {
   if (!date) return undefined;
   const parsed = new Date(date);
-  return !isNaN(parsed.getTime()) ? parsed : undefined;
+  // Check if it's a valid date object and not "Invalid Date"
+  return parsed instanceof Date && !isNaN(parsed.getTime())
+    ? parsed
+    : undefined;
 };
 
 interface OrderFormProps {
