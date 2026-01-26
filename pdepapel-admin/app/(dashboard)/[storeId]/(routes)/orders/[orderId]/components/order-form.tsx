@@ -256,6 +256,7 @@ const formSchema = z
             .object({
               name: z.string(),
             })
+            .nullable()
             .optional(),
           id: z.string().optional(),
         }),
