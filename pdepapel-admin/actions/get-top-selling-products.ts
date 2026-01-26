@@ -14,6 +14,7 @@ export const getTopSellingProducts = async (storeId: string, year: number) => {
       orderItems: {
         some: {
           order: {
+            status: { in: ["PAID", "SENT"] },
             createdAt: {
               gte: startDate,
               lte: endDate,
@@ -37,6 +38,7 @@ export const getTopSellingProducts = async (storeId: string, year: number) => {
       orderItems: {
         where: {
           order: {
+            status: { in: ["PAID", "SENT"] },
             createdAt: {
               gte: startDate,
               lte: endDate,

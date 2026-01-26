@@ -16,7 +16,7 @@ export async function getCustomerAnalytics(storeId: string) {
       by: ["fullName", "phone"],
       where: {
         storeId,
-        status: "PAID",
+        status: { in: ["PAID", "SENT"] },
         fullName: {
           not: "",
         },

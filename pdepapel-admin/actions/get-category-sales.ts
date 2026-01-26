@@ -20,7 +20,9 @@ export async function getCategorySales(storeId: string, year: number) {
         gte: startDate,
         lte: endDate,
       },
-      status: OrderStatus.PAID,
+      status: {
+        in: [OrderStatus.PAID, OrderStatus.SENT],
+      },
     },
     select: {
       subtotal: true,

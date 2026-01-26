@@ -10,7 +10,9 @@ export const getSalesCount = async (storeId: string, year: number) => {
   const orders = await prismadb.order.findMany({
     where: {
       storeId,
-      status: OrderStatus.PAID,
+      status: {
+        in: [OrderStatus.PAID, OrderStatus.SENT],
+      },
       createdAt: {
         gte: firstDayOfYear,
         lt: lastDayOfYear,

@@ -23,7 +23,7 @@ export async function getSalesData(storeId: string, year: number) {
         gte: startDate,
         lte: endDate,
       },
-      status: "PAID",
+      status: { in: ["PAID", "SENT"] },
     },
     select: {
       createdAt: true,

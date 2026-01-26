@@ -1,4 +1,5 @@
 import prisma from "@/lib/prismadb";
+import { OrderStatus } from "@prisma/client";
 import { endOfYear, startOfYear } from "date-fns";
 
 export const getAverageOrderValue = async (
@@ -12,6 +13,9 @@ export const getAverageOrderValue = async (
   const orders = await prisma.order.findMany({
     where: {
       storeId,
+      status: {
+        in: [OrderStatus.PAID, OrderStatus.SENT],
+      },
       createdAt: {
         gte: firstDayOfYear,
         lte: lastDayOfYear,
