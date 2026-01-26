@@ -160,12 +160,13 @@ const shippingSchema = z
     trackingCode: z.string(),
     trackingUrl: z.string().optional(),
     guideUrl: z.string().optional(),
-    estimatedDeliveryDate: z
-      .date({
-        required_error: "La fecha de inicio es requerida",
-        invalid_type_error: "La fecha de inicio debe ser una fecha válida",
-      })
-      .optional(),
+    estimatedDeliveryDate: z.preprocess((arg) => {
+      if (typeof arg === "string" || arg instanceof Date) {
+        const date = new Date(arg);
+        return isNaN(date.getTime()) ? undefined : date;
+      }
+      return arg;
+    }, z.date().optional()),
     notes: z.string().optional(),
     adminNotes: z.string().optional(),
     internalNotes: z.string().optional(),
@@ -275,7 +276,13 @@ const formSchema = z
     total: z.coerce.number().default(0),
     discount: discountSchema,
     couponCode: z.string().optional(),
-    expiresAt: z.date().optional(),
+    expiresAt: z.preprocess((arg) => {
+      if (typeof arg === "string" || arg instanceof Date) {
+        const date = new Date(arg);
+        return isNaN(date.getTime()) ? undefined : date;
+      }
+      return arg;
+    }, z.date().optional()),
   })
   .superRefine((data, ctx) => {
     // 1. EnvioClick Validation
