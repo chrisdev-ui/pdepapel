@@ -28,7 +28,8 @@ const getCustomOrder = async (token: string): Promise<UnifiedOrder | null> => {
   );
   if (!res.ok) return null;
   const data = await res.json();
-  return normalizeOrder(data);
+  const normalized = normalizeOrder(data);
+  return { ...normalized, token }; // Ensure token is always present from URL
 };
 
 export default async function CheckoutPage({

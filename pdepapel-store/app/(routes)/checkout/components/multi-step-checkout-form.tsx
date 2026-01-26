@@ -450,8 +450,18 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     });
 
   const { mutate, status } = useCheckout({
-    onError(err) {
+    onError(err: any) {
       console.error(err);
+
+      if (err?.response?.status === 409) {
+        toast({
+          title: "Orden ya procesada ⚠️",
+          description: "Esta orden ya fue generada o pagada previamente.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       toast({
         title: "Error",
         description:

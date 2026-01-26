@@ -383,10 +383,11 @@ export async function POST(
 
       if (
         existingQuote.status !== OrderStatus.QUOTATION &&
-        existingQuote.status !== OrderStatus.DRAFT
+        existingQuote.status !== OrderStatus.DRAFT &&
+        existingQuote.status !== OrderStatus.PENDING
       ) {
         throw ErrorFactory.Conflict(
-          "Esta cotización ya ha sido procesada o no está disponible para pago",
+          "Esta cotización ya ha sido pagada o cancelada",
         );
       }
 
