@@ -5,7 +5,17 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: "/",
-      disallow: ["/order/", "/orders/"],
+      disallow: [
+        "/order/",
+        "/orders/",
+        "/checkout/",
+        "/cart/",
+        "/account/",
+        "/api/",
+        "/_next/",
+        "/private/",
+        "/quote/",
+      ],
     },
     sitemap: "https://papeleriapdepapel.com/sitemap.xml",
   };
