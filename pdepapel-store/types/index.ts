@@ -25,6 +25,16 @@ export interface Type {
   name: string;
 }
 
+export interface KitComponent {
+  component: {
+    id: string;
+    name: string;
+    images: Image[];
+    sku: string;
+  };
+  quantity: number;
+}
+
 export interface Product {
   id: string;
   category: Category;
@@ -51,6 +61,9 @@ export interface Product {
   hasDiscount?: boolean;
   minPrice?: number;
   maxPrice?: number;
+  // Kit fields
+  isKit?: boolean;
+  kitComponents?: KitComponent[];
 }
 
 export interface ProductVariant {

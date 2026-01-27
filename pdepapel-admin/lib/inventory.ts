@@ -126,7 +126,78 @@ export async function createInventoryMovement(
     });
   }
 
+  // 4. Reactive Update: Check if this product is part of any Kit
+  // If so, recalculate the stock of those Kits.
+  // We do this AFTER the atomic update to ensure we read the latest values.
+  const parentKits = await tx.productKit.findMany({
+    where: { componentId: productId },
+    select: { kitId: true },
+  });
+
+  if (parentKits.length > 0) {
+    const kitIds = Array.from(new Set(parentKits.map((p) => p.kitId)));
+    await recalculateKitStock(tx, kitIds);
+  }
+
   return movement;
+}
+
+// -- KIT LOGIC --
+
+export async function recalculateKitStock(tx: PrismaTx, kitIds: string[]) {
+  if (kitIds.length === 0) return;
+
+  const kits = await tx.product.findMany({
+    where: { id: { in: kitIds }, isKit: true },
+    include: {
+      kitComponents: {
+        include: {
+          component: { select: { stock: true } },
+        },
+      },
+    },
+  });
+
+  for (const kit of kits) {
+    // If no components, stock is 0 (or manually managed? Plan said determined by components)
+    if (kit.kitComponents.length === 0) {
+      // Option: Do nothing, or set to 0. Let's set to 0 to be safe.
+      await tx.product.update({
+        where: { id: kit.id },
+        data: { stock: 0 },
+      });
+      continue;
+    }
+
+    // Calculate max available kits based on components
+    // Example: Copmonent A (Stock 10, Qty 2) -> 10/2 = 5 kits.
+    //          Component B (Stock 3, Qty 1) -> 3/1 = 3 kits.
+    //          Max Kits = 3 (Min of results)
+
+    let maxKits = Number.MAX_SAFE_INTEGER;
+
+    for (const item of kit.kitComponents) {
+      const componentStock = item.component.stock;
+      const requiredQty = item.quantity;
+
+      if (requiredQty <= 0) continue; // Should not happen, but avoid division by zero
+
+      const possible = Math.floor(componentStock / requiredQty);
+      if (possible < maxKits) {
+        maxKits = possible;
+      }
+    }
+
+    // Safety check if maxKits wasn't touched (e.g. all qty 0)
+    if (maxKits === Number.MAX_SAFE_INTEGER) maxKits = 0;
+    // Don't allow negative
+    if (maxKits < 0) maxKits = 0;
+
+    await tx.product.update({
+      where: { id: kit.id },
+      data: { stock: maxKits },
+    });
+  }
 }
 
 export async function validateStockAvailability(
@@ -147,12 +218,15 @@ export async function validateStockAvailability(
 
   const products = await tx.product.findMany({
     where: { id: { in: productIds } },
-    select: { id: true, stock: true, name: true },
+    select: { id: true, stock: true, name: true, isKit: true },
   });
 
   const productMap = new Map(products.map((p) => [p.id, p]));
 
-  const missingItems: {
+  // Separate normal products from Kits
+  // Kits need recursive validation of their components
+  const kitValidations: { productId: string; quantity: number }[] = [];
+  const normalChecks: {
     productName: string;
     available: number;
     requested: number;
@@ -164,27 +238,68 @@ export async function validateStockAvailability(
       throw ErrorFactory.NotFound(`Producto no encontrado: ${productId}`);
     }
 
-    // Checking strictly: requiredQty is positive for requirements
-    // If usage passes negative numbers (returns), we don't care about limits.
-    if (requiredQty > 0 && product.stock < requiredQty) {
-      missingItems.push({
-        productName: product.name,
-        available: product.stock,
-        requested: requiredQty,
-      });
+    if (product.isKit) {
+      kitValidations.push({ productId, quantity: requiredQty });
+    } else {
+      // Checking strictly: requiredQty is positive for requirements
+      if (requiredQty > 0 && product.stock < requiredQty) {
+        normalChecks.push({
+          productName: product.name,
+          available: product.stock,
+          requested: requiredQty,
+        });
+      }
     }
   }
 
-  if (missingItems.length > 0) {
-    if (missingItems.length === 1) {
-      const item = missingItems[0];
+  // If we have kits, we need to "explode" them into components and validate those components
+  // ALONG WITH any other components that might be in the cart directly.
+  if (kitValidations.length > 0) {
+    // Find all components for these kits
+    const kits = await tx.product.findMany({
+      where: { id: { in: kitValidations.map((k) => k.productId) } },
+      include: { kitComponents: true },
+    });
+
+    const componentRequirements: { productId: string; quantity: number }[] = [];
+
+    for (const kitReq of kitValidations) {
+      const kit = kits.find((k) => k.id === kitReq.productId);
+      if (!kit || !kit.kitComponents) continue;
+
+      for (const component of kit.kitComponents) {
+        componentRequirements.push({
+          productId: component.componentId,
+          quantity: component.quantity * kitReq.quantity, // Scale by kit quantity
+        });
+      }
+    }
+
+    // Recursively validate components (merged with current transaction state validation)
+    // Note: This effectively branches the recursion.
+    // We pass 'false' to allow recursion? logic is simple function call.
+    if (componentRequirements.length > 0) {
+      await validateStockAvailability(tx, componentRequirements);
+    }
+  }
+
+  if (normalChecks.length > 0) {
+    if (normalChecks.length === 1) {
+      const item = normalChecks[0];
       throw ErrorFactory.InsufficientStock(
         item.productName,
         item.available,
         item.requested,
       );
     } else {
-      throw ErrorFactory.MultipleInsufficientStock(missingItems);
+      // Adapt to error factory signature if needed, assuming it takes array
+      // Re-mapping to expected type if changed
+      const missingFormatted = normalChecks.map((c) => ({
+        productName: c.productName,
+        available: c.available,
+        requested: c.requested,
+      }));
+      throw ErrorFactory.MultipleInsufficientStock(missingFormatted);
     }
   }
 }

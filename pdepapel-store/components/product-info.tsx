@@ -1,5 +1,7 @@
 "use client";
 
+import { KitContents } from "./kit-contents";
+
 import { Heart, ShoppingCart } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -432,6 +434,13 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
             </h3>
             <RichTextDisplay content={data?.description} />
           </div>
+        </>
+      )}
+
+      {data.isKit && data.kitComponents && (
+        <>
+          <Separator className="my-4" />
+          <KitContents components={data.kitComponents} />
         </>
       )}
     </div>

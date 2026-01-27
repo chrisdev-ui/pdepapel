@@ -32,6 +32,20 @@ export async function GET(
         reviews: {
           orderBy: { createdAt: "desc" },
         },
+        // [NEW] Include kit components
+        kitComponents: {
+          include: {
+            component: {
+              select: {
+                id: true,
+                name: true,
+                stock: true,
+                images: { where: { isMain: true } },
+                sku: true, // Useful for reference
+              },
+            },
+          },
+        },
       },
     });
 
@@ -95,6 +109,9 @@ export async function PATCH(
       isArchived,
       isFeatured,
       productGroupId,
+
+      isKit,
+      components,
     } = body;
 
     if (!name)
@@ -119,6 +136,13 @@ export async function PATCH(
       throw ErrorFactory.InvalidRequest(
         "El stock del producto debe ser cero o mayor a cero",
       );
+
+    // [NEW] Validate Kit Data
+    if (isKit && (!components || components.length === 0)) {
+      throw ErrorFactory.InvalidRequest(
+        "Un Kit debe tener productos (componentes).",
+      );
+    }
 
     const productToUpdate = await prismadb.product.findUnique({
       where: { id: params.productId, storeId: params.storeId },
@@ -198,6 +222,17 @@ export async function PATCH(
           images: {
             deleteMany: {},
           },
+          // [NEW] Update Kit info
+          isKit: isKit || false,
+          kitComponents: isKit
+            ? {
+                deleteMany: {}, // Wipe old
+                create: components.map((c: any) => ({
+                  componentId: c.componentId,
+                  quantity: c.quantity || 1,
+                })),
+              }
+            : undefined,
         },
       });
 
@@ -215,9 +250,23 @@ export async function PATCH(
           },
         },
       });
+
+      // Calculate Stock for Kit after update
+      // We can't await inside the return easily for the result, so we just run it.
+      // But we are in a transaction.
+      // Actually we need to wait for this update to finish before calculating stock?
+      // No, we are in transaction 'tx'. We can recalculate using 'tx'.
     });
 
+    // Perform Recalculation OUTSIDE transaction (or inside if we used tx)
+    // To play safe with imports and async, we do it after result.
+    if (isKit) {
+      const { recalculateKitStock } = await import("@/lib/inventory");
+      await recalculateKitStock(prismadb, [params.productId]);
+    }
+
     // Invalidate all product cache entries for this store
+
     try {
       const { Redis } = await import("@upstash/redis");
       const redis = Redis.fromEnv();

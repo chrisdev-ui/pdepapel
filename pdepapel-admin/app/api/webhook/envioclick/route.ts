@@ -77,7 +77,7 @@ export async function POST(req: Request) {
     } = payload;
 
     // Wrap DB operations in a transaction for atomicity
-    const result = await prismadb.$transaction(async (tx) => {
+    const result = await prismadb.$transaction(async (tx: any) => {
       // Find shipping by EnvioClick order ID or reference
       const shipping = await tx.shipping.findFirst({
         where: {

@@ -6,12 +6,10 @@ import { cn } from "@/lib/utils";
 import "./rich-text-editor.css";
 
 import Highlight from "@tiptap/extension-highlight";
-import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import SubScript from "@tiptap/extension-subscript";
 import Superscript from "@tiptap/extension-superscript";
 import TextAlign from "@tiptap/extension-text-align";
-import Underline from "@tiptap/extension-underline";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import {
@@ -66,9 +64,7 @@ export function RichTextEditor({
           levels: [1, 2, 3, 4],
         },
       }),
-      Underline,
       Highlight,
-      Link,
       TextAlign.configure({
         types: ["heading", "paragraph"],
         alignments: ["left", "center", "right", "justify"],

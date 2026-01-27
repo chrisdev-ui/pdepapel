@@ -525,7 +525,11 @@ export async function POST(
         include: {
           orderItems: {
             include: {
-              product: true,
+              product: {
+                include: {
+                  kitComponents: true, // [NEW] Fetch components for stock logic
+                },
+              },
             },
           },
         },
@@ -547,9 +551,38 @@ export async function POST(
             createdBy: authenticatedUserId || "SYSTEM",
           }));
 
+        // [NEW] Explode Kits into Component Movements
+        const explodedMovements: CreateInventoryMovementParams[] = [];
+
+        for (const move of stockMovements) {
+          explodedMovements.push(move); // Keep original movement (Kit or Product)
+
+          const item = createdOrder.orderItems.find(
+            (i) => i.productId === move.productId,
+          );
+          if (item?.product?.isKit && item.product.kitComponents) {
+            for (const comp of item.product.kitComponents) {
+              explodedMovements.push({
+                productId: comp.componentId,
+                storeId: params.storeId,
+                type: "ORDER_PLACED" as const,
+                quantity: move.quantity * comp.quantity, // quantity is negative, so this works
+                reason: `Orden #${createdOrder.orderNumber} (Kit: ${item.product.name})`,
+                referenceId: createdOrder.id,
+                // For cost/price, we might use component's values if we had them,
+                // but here we might not have component details loaded (only relations).
+                // It's acceptable to have 0 or fetch if strictly needed.
+                // createInventoryMovement will use snapshot for stock, but cost might need fetch.
+                // Let's rely on default or simple pass for now.
+                createdBy: authenticatedUserId || "SYSTEM",
+              });
+            }
+          }
+        }
+
         const stockResult = await createInventoryMovementBatchResilient(
           tx,
-          stockMovements,
+          explodedMovements, // Use expanded list
         );
 
         // Log stock update results but don't throw errors

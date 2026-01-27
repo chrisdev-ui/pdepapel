@@ -169,7 +169,7 @@ async function updateOrderData({
       },
     });
     if (currentStatus === OrderStatus.PAID) {
-      await prismadb.$transaction(async (tx) => {
+      await prismadb.$transaction(async (tx: any) => {
         // Prepare stock updates for batch processing (Sales = Negative)
         const stockMovements = order.orderItems
           .filter((item: any) => item.product) // Filter out manual items
@@ -213,7 +213,7 @@ async function updateOrderData({
         }
       });
     } else if (currentStatus === OrderStatus.CANCELLED) {
-      await prismadb.$transaction(async (tx) => {
+      await prismadb.$transaction(async (tx: any) => {
         // Restock products if order was previously paid
         if (order.status === OrderStatus.PAID) {
           const stockMovements = order.orderItems

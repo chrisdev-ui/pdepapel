@@ -12,6 +12,19 @@ export async function getProduct(id: string, storeId: string) {
     include: {
       images: true,
       reviews: true,
+      kitComponents: {
+        include: {
+          component: {
+            include: {
+              images: true,
+              category: true,
+              size: true,
+              color: true,
+              design: true,
+            },
+          },
+        },
+      },
     },
   });
   const categories = await prismadb.category.findMany({

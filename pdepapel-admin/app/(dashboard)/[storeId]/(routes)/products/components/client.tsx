@@ -15,7 +15,7 @@ import { Supplier } from "@prisma/client";
 import { PDFDownloadLink } from "@react-pdf/renderer";
 import { ColumnFiltersState } from "@tanstack/react-table";
 import { format } from "date-fns";
-import { Edit, FileDown, FileUp, Plus } from "lucide-react";
+import { Edit, FileDown, FileUp, FlaskConical, Plus } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import React, { useCallback, useState } from "react";
 import { ProductColumn, columns } from "./columns";
@@ -62,6 +62,35 @@ const ProductClient: React.FC<ProductClientProps> = ({ data, suppliers }) => {
     await fetchCatalogData();
   };
 
+  const onGenerateTestData = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch(`/api/${params.storeId}/test/seed-kits`, {
+        method: "POST",
+      });
+
+      if (!response.ok) throw new Error("Failed to generate test data");
+
+      const data = await response.json();
+      const logs = data.logs || [];
+
+      toast({
+        title: "Datos de Prueba Generados",
+        description: `Se han creado ${logs.length > 2 ? "Kits y Componentes" : "elementos"} de prueba.`,
+        variant: "success",
+      });
+      router.refresh();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudieron generar los datos de prueba.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Build group filter options for DataTable
   const groupFilterOptions = React.useMemo(() => {
     const groups = data
@@ -96,6 +125,14 @@ const ProductClient: React.FC<ProductClientProps> = ({ data, suppliers }) => {
         />
         <div className="flex items-center gap-x-2">
           <RefreshButton />
+          <Button
+            variant="secondary"
+            onClick={onGenerateTestData}
+            disabled={isLoading}
+          >
+            <FlaskConical className="mr-2 h-4 w-4" />
+            Test Kits
+          </Button>
           <Button variant="outline" onClick={() => setIsImportOpen(true)}>
             <FileUp className="mr-2 h-4 w-4" />
             Importar CSV

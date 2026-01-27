@@ -23,7 +23,7 @@ export default async function QuotationPage({
   const rawProducts = await getProducts(params.storeId);
 
   // Transform products to match ProductForItem type (specifically productGroup null -> undefined)
-  const products = rawProducts.map((product) => ({
+  const products = rawProducts.map((product: any) => ({
     ...product,
     productGroup: product.productGroup || undefined,
   }));

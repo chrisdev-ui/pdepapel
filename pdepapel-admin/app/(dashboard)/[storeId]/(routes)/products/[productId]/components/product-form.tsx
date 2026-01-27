@@ -1,10 +1,12 @@
 "use client";
 
+import { cn } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Eraser,
   Info,
   Loader2,
+  Package,
   PackageCheckIcon,
   Percent,
   Plus,
@@ -17,6 +19,7 @@ import z from "zod";
 import { RichTextEditor } from "@/components/editor/rich-text-editor";
 import { AlertModal } from "@/components/modals/alert-modal";
 import { IntakeModal } from "@/components/modals/intake-modal";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CurrencyInput } from "@/components/ui/currency-input";
@@ -42,6 +45,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
+import { Switch } from "@/components/ui/switch";
 import {
   Tooltip,
   TooltipContent,
@@ -64,6 +68,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getProduct } from "../server/get-product";
 import { ReviewColumn, columns } from "./columns";
+import { ComponentSelector } from "./component-selector";
 
 const formSchema = z.object({
   name: z.string().min(1, "El nombre del producto no puede estar vacío"),
@@ -94,6 +99,19 @@ const formSchema = z.object({
   isFeatured: z.boolean().default(false).optional(),
   isArchived: z.boolean().default(false).optional(),
   productGroupId: z.string().optional(),
+  isKit: z.boolean().default(false).optional(),
+  components: z
+    .object({
+      componentId: z.string(),
+      quantity: z.number().min(1),
+      // Optional display fields not sent to backend mostly
+      name: z.string().optional(),
+      sku: z.string().optional(),
+      image: z.string().optional(),
+      stock: z.number().optional(),
+    })
+    .array()
+    .optional(),
 });
 
 type ProductFormValues = z.infer<typeof formSchema>;
@@ -171,15 +189,36 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             ...initialData,
             acqPrice: initialData.acqPrice || 0,
             supplierId: initialData.supplierId || "",
-            images: initialData.images.map((image, idx) => ({
-              ...image,
-              isMain: idx === 0,
-            })),
+            images: initialData.images.map(
+              (image: { url: string }, idx: number) => ({
+                ...image,
+                isMain: idx === 0,
+              }),
+            ),
             percentageIncrease: INITIAL_PERCENTAGE_INCREASE,
             transportationCost: INITIAL_TRANSPORTATION_COST,
             miscCost: INITIAL_MISC_COST,
             productGroupId: initialData.productGroupId || "",
             stock: initialData.stock,
+            isKit: initialData.isKit || false,
+            components:
+              initialData.kitComponents?.map((c: any) => ({
+                componentId: c.componentId,
+                quantity: c.quantity,
+                name: c.component?.name || "",
+                sku: c.component?.sku || "",
+                stock: c.component?.stock || 0,
+                // Map first image if available, else empty
+                image:
+                  c.component?.images?.find((i: any) => i.isMain)?.url ||
+                  c.component?.images?.[0]?.url ||
+                  "",
+                // UI Details
+                categoryName: c.component?.category?.name,
+                sizeName: c.component?.size?.name,
+                colorName: c.component?.color?.name,
+                designName: c.component?.design?.name,
+              })) || [],
           }
         : {
             name: "",
@@ -198,6 +237,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             transportationCost: INITIAL_TRANSPORTATION_COST,
             miscCost: INITIAL_MISC_COST,
             productGroupId: productGroup?.id || "",
+            isKit: false,
+            components: [],
           },
     [initialData, productGroup],
   );
@@ -222,7 +263,9 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 
     const initialUrls = new Set<string>();
     if (initialData && initialData.images) {
-      initialData.images.forEach((img: any) => initialUrls.add(img.url));
+      initialData.images.forEach((img: { url: string }) =>
+        initialUrls.add(img.url),
+      );
     }
 
     const imagesToDelete = currentUrls.filter(
@@ -294,7 +337,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 
   useEffect(() => {
     if (watchedGroupId) {
-      const selectedGroup = productGroups?.find((g) => g.id === watchedGroupId);
+      const selectedGroup = productGroups?.find(
+        (g: any) => g.id === watchedGroupId,
+      );
+
       if (selectedGroup && selectedGroup.products.length > 0) {
         // 1. Auto-Inherit Category from the first product in the group
         const groupCategory = selectedGroup.products[0].categoryId;
@@ -320,11 +366,13 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     )
       return null;
 
-    const selectedGroup = productGroups?.find((g) => g.id === watchedGroupId);
+    const selectedGroup = productGroups?.find(
+      (g: any) => g.id === watchedGroupId,
+    );
     if (!selectedGroup) return null;
 
     const existingVariant = selectedGroup.products.find(
-      (p) =>
+      (p: any) =>
         p.colorId === watchedColorId &&
         p.sizeId === watchedSizeId &&
         p.designId === watchedDesignId &&
@@ -483,7 +531,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 />
               </div>
               <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-6">
-                {productGroup.images?.map((img) => {
+                {productGroup.images?.map((img: { url: string }) => {
                   const isUnavailable = unavailableImages.has(img.url);
                   const isSelected = form.watch("images")?.[0]?.url === img.url;
 
@@ -537,6 +585,62 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               </FormItem>
             )}
           />
+
+          <div className="mb-8">
+            <FormField
+              control={form.control}
+              name="isKit"
+              render={({ field }) => (
+                <FormItem
+                  className={cn(
+                    "flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm transition-all duration-300",
+                    field.value
+                      ? "border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20"
+                      : "bg-card",
+                  )}
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={cn(
+                          "flex h-8 w-8 items-center justify-center rounded-full border",
+                          field.value
+                            ? "border-indigo-200 bg-indigo-100 text-indigo-600 dark:border-indigo-800 dark:bg-indigo-900"
+                            : "bg-muted",
+                        )}
+                      >
+                        <Package className="h-4 w-4" />
+                      </div>
+                      <FormLabel isRequired className="text-base font-semibold">
+                        Modo Kit / Combo
+                      </FormLabel>
+                      {field.value && (
+                        <Badge
+                          variant="secondary"
+                          className="border-indigo-200 bg-indigo-100 text-indigo-700 dark:border-indigo-800 dark:bg-indigo-900 dark:text-indigo-300"
+                        >
+                          ACTIVO
+                        </Badge>
+                      )}
+                    </div>
+                    <FormDescription className="ml-10">
+                      Un Kit se compone de otros productos existentes. Su stock
+                      se gestiona automáticamente y sus componentes se
+                      descuentan del inventario al venderse.
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      className="data-[state=checked]:bg-indigo-600"
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+          </div>
+
           <div className="grid grid-cols-3 gap-8">
             <FormField
               control={form.control}
@@ -632,7 +736,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                     </FormControl>
                     <SelectContent>
                       <SelectItem value="none">-- Ninguno --</SelectItem>
-                      {productGroups?.map((group) => (
+                      {productGroups?.map((group: any) => (
                         <SelectItem key={group.id} value={group.id}>
                           {group.name}
                         </SelectItem>
@@ -741,8 +845,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                     // CREATE MODE: Show editable stock input
                     <FormControl>
                       <StockQuantityInput
-                        disabled={loading}
-                        value={field.value}
+                        disabled={loading || form.watch("isKit")}
+                        value={form.watch("isKit") ? 0 : field.value}
                         onChange={field.onChange}
                         min={0}
                       />
@@ -1064,6 +1168,32 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 </FormItem>
               )}
             />
+            {/* KIT COMPONENTS SELECTOR */}
+            {form.watch("isKit") && (
+              <div className="col-span-3 rounded-md border bg-muted/20 p-4">
+                <Heading
+                  title="Componentes del Kit"
+                  description="Agrega los productos que componen este kit y la cantidad requerida de cada uno."
+                />
+                <Separator className="my-4" />
+                <FormField
+                  control={form.control}
+                  name="components"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <ComponentSelector
+                          value={field.value || []}
+                          onChange={(val) => field.onChange(val)}
+                          disabled={loading}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
           </div>
           <Button disabled={loading} className="ml-auto" type="submit">
             {loading ? (

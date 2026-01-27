@@ -132,6 +132,8 @@ export async function POST(
       isArchived,
       isFeatured,
       productGroupId,
+      isKit, // [NEW]
+      components, // [NEW] Array of { componentId, quantity }
     } = body;
 
     if (!name)
@@ -151,6 +153,13 @@ export async function POST(
       throw ErrorFactory.InvalidRequest(
         "El stock debe ser cero o mayor a cero",
       );
+
+    // [NEW] Validate Kit Data
+    if (isKit && (!components || components.length === 0)) {
+      throw ErrorFactory.InvalidRequest(
+        "Un Kit debe tener productos (componentes).",
+      );
+    }
 
     // Fetch relations to generate Semantic SKU
     const [category, design, color, size] = await Promise.all([
@@ -198,11 +207,27 @@ export async function POST(
           },
         },
         storeId: params.storeId,
+        isKit: isKit || false,
+        kitComponents: isKit
+          ? {
+              create: components.map((c: any) => ({
+                componentId: c.componentId,
+                quantity: c.quantity || 1,
+              })),
+            }
+          : undefined,
       },
     });
 
+    // If Kit, calculate initial stock based on components
+    if (isKit) {
+      const { recalculateKitStock } = await import("@/lib/inventory");
+      await recalculateKitStock(prismadb, [product.id]);
+    }
+
     // Create INITIAL_INTAKE movement if stock was provided
-    if (stock && stock > 0) {
+    if (stock && stock > 0 && !isKit) {
+      // Logic: Kits don't have manual stock intake
       const { createInventoryMovement } = await import("@/lib/inventory");
       await createInventoryMovement(prismadb, {
         productId: product.id,
@@ -292,6 +317,7 @@ export async function GET(
       groupBy,
       productGroupId,
       isOnSale, // Include in cache key
+      v: "2", // Force cache invalidation for kit fix
     })}`;
 
     // Try to get from Redis cache
@@ -323,7 +349,9 @@ export async function GET(
         },
         select: { id: true },
       });
-      categoriesIds = categoriesForType.map((category) => category.id);
+      categoriesIds = categoriesForType.map(
+        (category: { id: string }) => category.id,
+      );
     }
 
     // Common Price Filter
@@ -508,8 +536,8 @@ export async function GET(
       ]);
 
       // Transform groups to unified format
-      const transformedGroups: UnifiedProduct[] = allGroups.map((g) => {
-        const prices = g.products.map((p) => Number(p.price));
+      const transformedGroups: UnifiedProduct[] = allGroups.map((g: any) => {
+        const prices = g.products.map((p: any) => Number(p.price));
         const minP = prices.length ? Math.min(...prices) : 0;
         const maxP = prices.length ? Math.max(...prices) : 0;
         return {
@@ -526,16 +554,16 @@ export async function GET(
           variantCount: g.products.length,
           category: g.products[0]?.category,
           categoryId: g.products[0]?.categoryId || "",
-          reviews: g.products.flatMap((p) => p.reviews),
+          reviews: g.products.flatMap((p: any) => p.reviews),
           sku: "GROUP",
           createdAt: g.createdAt,
-          stock: g.products.reduce((acc, p) => acc + p.stock, 0),
+          stock: g.products.reduce((acc: number, p: any) => acc + p.stock, 0),
         };
       });
 
       // Transform standalone products to unified format
       const transformedProducts: UnifiedProduct[] = allStandaloneProducts.map(
-        (p) => ({
+        (p: any) => ({
           id: p.id,
           productGroupId: null,
           name: p.name,
@@ -578,9 +606,9 @@ export async function GET(
         productGroupId: string | null;
       }> = [];
 
-      allGroups.forEach((g) => {
+      allGroups.forEach((g: any) => {
         allVariantProducts.push(
-          ...g.products.map((p) => ({
+          ...g.products.map((p: any) => ({
             id: p.id,
             categoryId: p.categoryId,
             price: Number(p.price),
@@ -589,7 +617,7 @@ export async function GET(
         );
       });
 
-      allStandaloneProducts.forEach((p) => {
+      allStandaloneProducts.forEach((p: any) => {
         allVariantProducts.push({
           id: p.id,
           categoryId: p.categoryId,
@@ -847,19 +875,19 @@ export async function GET(
         ]);
 
       facets = {
-        colors: colorFacets.map((f) => ({
+        colors: colorFacets.map((f: any) => ({
           id: f.colorId,
           count: f._count.colorId,
         })),
-        formattedSizes: sizeFacets.map((f) => ({
+        formattedSizes: sizeFacets.map((f: any) => ({
           id: f.sizeId,
           count: f._count.sizeId,
         })),
-        categories: categoryFacets.map((f) => ({
+        categories: categoryFacets.map((f: any) => ({
           id: f.categoryId,
           count: f._count.categoryId,
         })),
-        designs: designFacets.map((f) => ({
+        designs: designFacets.map((f: any) => ({
           id: f.designId,
           count: f._count.designId,
         })),
@@ -952,19 +980,19 @@ export async function GET(
       totalItems = count;
 
       facets = {
-        colors: colorFacets.map((f) => ({
+        colors: colorFacets.map((f: any) => ({
           id: f.colorId,
           count: f._count.colorId,
         })),
-        formattedSizes: sizeFacets.map((f) => ({
+        formattedSizes: sizeFacets.map((f: any) => ({
           id: f.sizeId,
           count: f._count.sizeId,
         })),
-        categories: categoryFacets.map((f) => ({
+        categories: categoryFacets.map((f: any) => ({
           id: f.categoryId,
           count: f._count.categoryId,
         })),
-        designs: designFacets.map((f) => ({
+        designs: designFacets.map((f: any) => ({
           id: f.designId,
           count: f._count.designId,
         })),
@@ -1039,7 +1067,7 @@ export async function DELETE(
         "Se requieren IDs de productos válidos en formato de arreglo",
       );
 
-    await prismadb.$transaction(async (tx) => {
+    await prismadb.$transaction(async (tx: any) => {
       const products = await tx.product.findMany({
         where: {
           storeId: params.storeId,
@@ -1060,7 +1088,7 @@ export async function DELETE(
         );
 
       const productsWithOrders = products.filter(
-        (product) => product.orderItems.length > 0,
+        (product: any) => product.orderItems.length > 0,
       );
       if (productsWithOrders.length > 0) {
         throw ErrorFactory.Conflict(
@@ -1068,17 +1096,17 @@ export async function DELETE(
           {
             ...parseErrorDetails(
               "productsWithOrders",
-              productsWithOrders.map((p) => ({ id: p.id, name: p.name })),
+              productsWithOrders.map((p: any) => ({ id: p.id, name: p.name })),
             ),
           },
         );
       }
 
       // Collect image public IDs for deletion
-      const publicIds = products.flatMap((product) =>
+      const publicIds = products.flatMap((product: any) =>
         product.images
-          .map((image) => getPublicIdFromCloudinaryUrl(image.url))
-          .filter((id): id is string => id !== null && id !== undefined),
+          .map((image: any) => getPublicIdFromCloudinaryUrl(image.url))
+          .filter((id: any): id is string => id !== null && id !== undefined),
       );
 
       // Delete images from Cloudinary if any exist
@@ -1181,7 +1209,7 @@ export async function PATCH(
     // Verify store ownership
     await verifyStoreOwner(userId, params.storeId);
 
-    const result = await prismadb.$transaction(async (tx) => {
+    const result = await prismadb.$transaction(async (tx: any) => {
       // Verify all products exist and belong to the store
       const existingProducts = await tx.product.findMany({
         where: {

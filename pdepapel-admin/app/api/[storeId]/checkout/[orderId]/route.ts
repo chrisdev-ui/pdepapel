@@ -66,48 +66,22 @@ export async function POST(
     }
 
     // Transform order items to match the format expected by processOrderItemsInBatches
-    const orderItemsForBatch = order.orderItems.map((item) => ({
+    const orderItemsForBatch = order.orderItems.map((item: any) => ({
       productId: item.productId,
       quantity: item.quantity,
     }));
 
-    // Batch process products for validation and pricing (using the same optimization as main checkout)
-    const products = await processOrderItemsInBatches(
-      orderItemsForBatch,
-      params.storeId,
-      BATCH_SIZE,
-    );
+    // Validate stock using centralized logic (Supports Kits)
+    const stockValidationItems = order.orderItems
+      .filter((item: any) => item.productId)
+      .map((item: any) => ({
+        productId: item.productId as string,
+        quantity: item.quantity,
+      }));
 
-    // Create product map for O(1) lookups (same optimization as main checkout)
-    const productMap = new Map(products.map((p) => [p.id, p]));
-
-    const errors: string[] = [];
-
-    // Validate stock for each item using the product map
-    for (const item of order.orderItems) {
-      // Skip validation for Manual/Custom items (no productId)
-      if (!item.productId) {
-        continue;
-      }
-
-      const product = productMap.get(item.productId);
-
-      if (!product) {
-        errors.push(`El producto ${item.productId} no existe`);
-        continue;
-      }
-
-      if (product.stock < item.quantity) {
-        errors.push(
-          `El producto ${product.name} no tiene suficiente stock disponible. Stock disponible: ${product.stock}, cantidad solicitada: ${item.quantity}`,
-        );
-        continue;
-      }
-    }
-
-    // Throw all errors at once if any exist
-    if (errors.length > 0) {
-      throw ErrorFactory.InvalidRequest(errors.join(", "));
+    if (stockValidationItems.length > 0) {
+      const { validateStockAvailability } = await import("@/lib/inventory");
+      await validateStockAvailability(prismadb, stockValidationItems);
     }
 
     // Send email notification asynchronously (same pattern as main checkout)

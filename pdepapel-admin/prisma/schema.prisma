@@ -267,6 +267,12 @@ model Product {
   restockOrderItems RestockOrderItem[]
   customOrderItems CustomOrderItem[]
   quotationItems   QuotationItem[]
+  
+  // -- KIT / COMBO FIELDS --
+  isKit            Boolean           @default(false)
+  kitComponents    ProductKit[]      @relation("KitToComponent")
+  componentIn      ProductKit[]      @relation("ComponentToKit")
+
 
   @@index([storeId])
   @@index([categoryId])
@@ -286,6 +292,20 @@ model Product {
   @@fulltext([name, description])
   @@index([productGroupId])
 }
+
+model ProductKit {
+  id          String  @id @default(uuid())
+  kitId       String
+  componentId String
+  quantity    Int     @default(1)
+
+  kit       Product @relation("KitToComponent", fields: [kitId], references: [id], onDelete: Cascade)
+  component Product @relation("ComponentToKit", fields: [componentId], references: [id]) // No Cascade delete to protect components
+
+  @@index([kitId])
+  @@index([componentId])
+}
+
 
 model Supplier {
   id        String   @id @default(uuid())
