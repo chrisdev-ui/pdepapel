@@ -69,6 +69,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getProduct } from "../server/get-product";
 import { ReviewColumn, columns } from "./columns";
 import { ComponentSelector } from "./component-selector";
+import { KitPriceCalculator } from "./kit-price-calculator";
 
 const formSchema = z.object({
   name: z.string().min(1, "El nombre del producto no puede estar vacío"),
@@ -109,6 +110,7 @@ const formSchema = z.object({
       sku: z.string().optional(),
       image: z.string().optional(),
       stock: z.number().optional(),
+      price: z.number().optional(), // Added price
     })
     .array()
     .optional(),
@@ -208,6 +210,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 name: c.component?.name || "",
                 sku: c.component?.sku || "",
                 stock: c.component?.stock || 0,
+                price: c.component?.price || 0, // Map price
                 // Map first image if available, else empty
                 image:
                   c.component?.images?.find((i: any) => i.isMain)?.url ||
@@ -1194,6 +1197,9 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 />
               </div>
             )}
+
+            {/* KIT PRICE SUGGESTION */}
+            {form.watch("isKit") && <KitPriceCalculator form={form} />}
           </div>
           <Button disabled={loading} className="ml-auto" type="submit">
             {loading ? (
