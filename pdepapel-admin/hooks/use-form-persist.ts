@@ -24,34 +24,42 @@ export function useFormPersist<T extends FieldValues>({
     excludeRef.current = exclude;
   }, [exclude]);
 
-  // Restore data on mount
+  // Restore data on mount - ONLY for new records, never for existing ones
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    // Skip restoration for existing records - server data is authoritative
+    // Keys for existing orders look like: 'order-form-{storeId}-{orderId}'
+    // Keys for new orders look like: 'order-form-{storeId}-new'
+    const isNewRecord = key.endsWith("-new");
+
     if (!isLoaded.current) {
-      // Access store directly to avoid unnecessary subscriptions/re-renders
-      const savedData = useFormPersistenceStore.getState().forms[key] as
-        | Partial<T>
-        | undefined;
+      if (isNewRecord) {
+        // Only restore saved data for NEW records (drafts)
+        const savedData = useFormPersistenceStore.getState().forms[key] as
+          | Partial<T>
+          | undefined;
 
-      if (savedData && typeof savedData === "object") {
-        try {
-          if (excludeRef.current.length > 0) {
-            excludeRef.current.forEach((k) => {
-              if (k in savedData) {
-                delete savedData[k];
-              }
-            });
+        if (savedData && typeof savedData === "object") {
+          try {
+            if (excludeRef.current.length > 0) {
+              excludeRef.current.forEach((k) => {
+                if (k in savedData) {
+                  delete savedData[k];
+                }
+              });
+            }
+
+            const currentValues = form.getValues();
+            const merged = { ...currentValues, ...savedData };
+
+            form.reset(merged);
+          } catch (error) {
+            console.error("Error restoring form data:", error);
           }
-
-          const currentValues = form.getValues();
-          const merged = { ...currentValues, ...savedData };
-
-          form.reset(merged);
-        } catch (error) {
-          console.error("Error restoring form data:", error);
         }
       }
+      // For existing records, we skip restoration - form already has fresh server data
       isLoaded.current = true;
     }
   }, [key, form]);
