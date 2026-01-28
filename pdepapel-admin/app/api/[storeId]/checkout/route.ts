@@ -13,6 +13,7 @@ import {
   CACHE_HEADERS,
   calculateOrderTotals,
   checkIfStoreOwner,
+  CheckoutOrder,
   currencyFormatter,
   generateOrderNumber,
   generatePayUPayment,
@@ -146,6 +147,41 @@ export async function POST(
     if (lastOrderTimestamp && lastOrderTimestamp > threeMinutesAgo)
       throw ErrorFactory.OrderLimit();
 
+    // ⭐ Unified System: Fetch Existing Quote Early (if applicable)
+    // We need to fetch this BEFORE price calculation to ensure we use valid quoted prices
+    let existingQuote: any = null;
+    let quotedPriceMap = new Map<string, number>();
+
+    if (customOrderToken) {
+      existingQuote = await prismadb.order.findUnique({
+        where: { token: customOrderToken, storeId: params.storeId },
+        include: { orderItems: true },
+      });
+
+      if (!existingQuote) {
+        throw ErrorFactory.NotFound("La cotización no existe o ha expirado");
+      }
+
+      if (
+        existingQuote.status !== OrderStatus.QUOTATION &&
+        existingQuote.status !== OrderStatus.DRAFT &&
+        existingQuote.status !== OrderStatus.PENDING
+      ) {
+        throw ErrorFactory.Conflict(
+          "Esta cotización ya ha sido pagada o cancelada",
+        );
+      }
+
+      // Build map of frozen prices from the quotation
+      // Key: productId || productName (fallback), Value: Unit Price
+      // We rely on productId match primarily.
+      existingQuote.orderItems.forEach((item: any) => {
+        if (item.productId) {
+          quotedPriceMap.set(item.productId, Number(item.price));
+        }
+      });
+    }
+
     // Try to validate against cache (security check)
     const shippingCaches = await prismadb.shippingQuote.findMany({
       where: {
@@ -262,12 +298,19 @@ export async function POST(
         continue;
       }
 
+      const quotedPrice = quotedPriceMap.get(productId);
+      // Priority: Quoted Price > Discounted Price > Base Price
+      const finalPrice =
+        quotedPrice !== undefined
+          ? quotedPrice
+          : discountedPricesMap.get(productId)?.price || product.price;
+
       orderItemsData.push({
         product: { connect: { id: productId } },
         quantity,
         // Snapshot fields for historical accuracy
         name: product.name,
-        price: discountedPricesMap.get(productId)?.price || product.price,
+        price: finalPrice,
         sku: product.sku || "N/A",
         imageUrl:
           product.images.find((img: any) => img.isMain)?.url ||
@@ -329,7 +372,15 @@ export async function POST(
         }
 
         const pricing = discountedPricesMap.get(productId);
-        const finalPrice = pricing ? pricing.price : product.price;
+        const quotedPrice = quotedPriceMap.get(productId);
+
+        // Priority: Quoted Price > Discounted Price > Base Price
+        const finalPrice =
+          quotedPrice !== undefined
+            ? quotedPrice
+            : pricing
+              ? pricing.price
+              : product.price;
 
         return {
           product: { price: finalPrice },
@@ -368,31 +419,14 @@ export async function POST(
 
     const orderNumber = generateOrderNumber();
 
-    let order;
+    let order: CheckoutOrder;
 
     if (customOrderToken) {
       // 🔄 Unified System: CONVERT Quotation to Order
-      const existingQuote = await prismadb.order.findUnique({
-        where: { token: customOrderToken, storeId: params.storeId },
-        include: { orderItems: true },
-      });
-
-      if (!existingQuote) {
-        throw ErrorFactory.NotFound("La cotización no existe o ha expirado");
-      }
-
-      if (
-        existingQuote.status !== OrderStatus.QUOTATION &&
-        existingQuote.status !== OrderStatus.DRAFT &&
-        existingQuote.status !== OrderStatus.PENDING
-      ) {
-        throw ErrorFactory.Conflict(
-          "Esta cotización ya ha sido pagada o cancelada",
-        );
-      }
+      // existingQuote is already fetched and validated above
 
       // Update the existing order (Quotation)
-      order = await prismadb.order.update({
+      order = (await prismadb.order.update({
         where: { id: existingQuote.id },
         data: {
           status: OrderStatus.PENDING, // Ready for payment
@@ -481,14 +515,14 @@ export async function POST(
           },
           coupon: true,
         },
-      });
+      })) as unknown as CheckoutOrder;
 
       console.log(
         `♻️ Converted Quotation ${existingQuote.orderNumber} to Pending Order ${order.orderNumber}`,
       );
     } else {
       // 🆕 Create NEW Order (Standard Flow)
-      order = await prismadb.order.create({
+      order = (await prismadb.order.create({
         data: {
           storeId: params.storeId,
           userId: authenticatedUserId,
@@ -548,7 +582,7 @@ export async function POST(
           },
           coupon: true,
         },
-      });
+      })) as unknown as CheckoutOrder;
     }
 
     // Send email asynchronously
@@ -577,14 +611,14 @@ export async function POST(
         `🔐 Generating ${payment.method} payment for order ${order.orderNumber}`,
       );
       if (payment.method === PaymentMethod.PayU) {
-        const payUData = generatePayUPayment(order as any);
+        const payUData = generatePayUPayment(order);
         console.log(
           `✅ PayU payment data generated - Reference: ${payUData.referenceCode}, Amount: ${currencyFormatter(payUData.amount)}`,
         );
         return NextResponse.json({ ...payUData }, { headers: corsHeaders });
       }
 
-      const url = await generateWompiPayment(order as any);
+      const url = await generateWompiPayment(order);
       console.log(
         `✅ Wompi payment URL generated for order ${order.orderNumber}`,
       );

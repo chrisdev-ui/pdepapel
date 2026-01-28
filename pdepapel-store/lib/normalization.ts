@@ -11,7 +11,10 @@ export const normalizeOrder = (jsonData: any): UnifiedOrder => {
           name: item.product.name || item.name,
           description: item.product.description,
           quantity: item.quantity,
-          unitPrice: Number(item.unitPrice || item.product.price || 0),
+          // Priority: item.unitPrice -> item.price (QUOTED) -> item.product.price (CATALOG)
+          unitPrice: Number(
+            item.unitPrice || item.price || item.product.price || 0,
+          ),
           imageUrl:
             item.product.images?.find((img: any) => img.isMain)?.url ||
             item.product.images?.[0]?.url,
