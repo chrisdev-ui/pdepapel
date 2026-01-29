@@ -53,7 +53,10 @@ export const getTopSellingProducts = async (storeId: string, year: number) => {
   const productsWithSales = topSellingProducts
     .map((product) => ({
       ...product,
-      totalSold: product.orderItems.length,
+      totalSold: product.orderItems.reduce(
+        (acc, item) => acc + item.quantity,
+        0,
+      ),
     }))
     .sort((a, b) => b.totalSold - a.totalSold)
     .slice(0, 10);

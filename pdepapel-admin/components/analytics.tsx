@@ -62,13 +62,15 @@ export const Analytics: React.FC<AnalyticsProps> = async ({
             <div>
               <h3 className="text-lg font-semibold">Ganancias brutas</h3>
               <p className="text-3xl font-bold">
-                {currencyFormatter(sales.totalGrossRevenue)}
+                {currencyFormatter(sales.totalGrossRevenue, {
+                  decimalScale: 0,
+                })}
               </p>
             </div>
             <div>
               <h3 className="text-lg font-semibold">Ganancias netas</h3>
               <p className="text-3xl font-bold">
-                {currencyFormatter(sales.totalNetRevenue)}
+                {currencyFormatter(sales.totalNetRevenue, { decimalScale: 0 })}
               </p>
             </div>
             <div>
@@ -76,6 +78,7 @@ export const Analytics: React.FC<AnalyticsProps> = async ({
               <p className="text-3xl font-bold">
                 {currencyFormatter(
                   sales.totalDiscounts + sales.totalCouponDiscounts,
+                  { decimalScale: 0 },
                 )}
               </p>
             </div>
@@ -90,7 +93,7 @@ export const Analytics: React.FC<AnalyticsProps> = async ({
             <div>
               <h3 className="text-lg font-semibold">Descuento promedio</h3>
               <p className="text-3xl font-bold">
-                {currencyFormatter(sales.averageDiscount)}
+                {currencyFormatter(sales.averageDiscount, { decimalScale: 0 })}
               </p>
             </div>
             <div>
@@ -98,7 +101,9 @@ export const Analytics: React.FC<AnalyticsProps> = async ({
                 Descuento promedio por cupones
               </h3>
               <p className="text-3xl font-bold">
-                {currencyFormatter(sales.averageCouponDiscount)}
+                {currencyFormatter(sales.averageCouponDiscount, {
+                  decimalScale: 0,
+                })}
               </p>
             </div>
             <div>
@@ -106,7 +111,9 @@ export const Analytics: React.FC<AnalyticsProps> = async ({
                 Valor promedio de una órden
               </h3>
               <p className="text-3xl font-bold">
-                {currencyFormatter(sales.averageOrderValue)}
+                {currencyFormatter(sales.averageOrderValue, {
+                  decimalScale: 0,
+                })}
               </p>
             </div>
           </div>
