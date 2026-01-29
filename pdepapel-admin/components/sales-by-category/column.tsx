@@ -21,7 +21,7 @@ export const columns: ColumnDef<SalesByCategoryColumn>[] = [
       <DataTableColumnHeader column={column} title="Ventas brutas" />
     ),
     cell: ({ row }) => (
-      <DataTableCellCurrency value={row.original.grossSales} />
+      <DataTableCellCurrency value={row.original.grossSales} decimalScale={0} />
     ),
   },
   {
@@ -29,7 +29,9 @@ export const columns: ColumnDef<SalesByCategoryColumn>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Ventas netas" />
     ),
-    cell: ({ row }) => <DataTableCellCurrency value={row.original.netSales} />,
+    cell: ({ row }) => (
+      <DataTableCellCurrency value={row.original.netSales} decimalScale={0} />
+    ),
   },
   {
     accessorKey: "orders",
@@ -44,7 +46,10 @@ export const columns: ColumnDef<SalesByCategoryColumn>[] = [
       <DataTableColumnHeader column={column} title="Impacto del descuento" />
     ),
     cell: ({ row }) => (
-      <DataTableCellCurrency value={row.original.discountImpact} />
+      <DataTableCellCurrency
+        value={row.original.discountImpact}
+        decimalScale={0}
+      />
     ),
   },
   {

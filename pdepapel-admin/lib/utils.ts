@@ -31,17 +31,20 @@ import { v4 as uuidv4 } from "uuid";
 import { ErrorFactory } from "./api-errors";
 import { env } from "./env.mjs";
 import { DefaultArgs } from "@prisma/client/runtime/library";
+import { formatValue } from "react-currency-input-field";
+import { parsePhoneNumber } from "libphonenumber-js";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-import { formatValue } from "react-currency-input-field";
-import { parsePhoneNumber } from "libphonenumber-js";
-
-export function currencyFormatter(value: number | string | undefined) {
+export function currencyFormatter(
+  value: number | string | undefined,
+  options?: { decimalScale?: number },
+) {
   return formatValue({
     value: value?.toString(),
+    decimalScale: options?.decimalScale,
     intlConfig: {
       locale: "es-CO",
       currency: "COP",
