@@ -426,8 +426,9 @@ export async function POST(
 
       const orderNumber = generateOrderNumber();
 
-      // CRITICAL FIX: Validate stock BEFORE creating PAID orders
-      if (status === OrderStatus.PAID) {
+      // CRITICAL FIX: Validate stock for ALL active orders (PENDING, PAID, etc.)
+      // We don't deduct stock yet (that happens on PAID), but we MUST ensure it exists.
+      if (isActiveOrder) {
         const stockValidationUpdates = orderItems.map(
           (item: { productId: string; quantity: number }) => ({
             productId: item.productId,

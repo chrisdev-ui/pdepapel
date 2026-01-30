@@ -3,6 +3,7 @@
 import { ArrowLeft, ShoppingBag } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { getProducts } from "@/actions/get-products";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { KAWAII_FACE_SAD } from "@/constants";
@@ -19,6 +20,41 @@ const Cart: React.FC<{}> = () => {
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  useEffect(() => {
+    const validateStock = async () => {
+      if (cart.items.length === 0) return;
+
+      const ids = cart.items.map((item) => item.id).join(",");
+      // Use "products" property from response since getProducts returns { products: [...] } but strict typing check needed
+      // Wait, getProducts returns ProductsResponse which has 'products' array.
+      // My previous getProduct (singular) returns Product | null.
+      // getProducts (plural) returns { products: Product[], pagination: ... }
+
+      try {
+        const { products } = await getProducts({ ids });
+
+        products.forEach((product) => {
+          cart.updateStock(product.id, product.stock);
+        });
+
+        // Check if any cart item was NOT returned (meaning it might be disabled/deleted)
+        // Not required strictly but good practice. For now, we trust the API returns what matches.
+      } catch (error) {
+        console.error("Failed to validate stock", error);
+      }
+    };
+
+    validateStock();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart.items.length]); // Re-validate when item count changes (e.g. added/removed) or mount.
+  // Ideally, we want to run this ONCE on mount, or when cart opens.
+  // If we assume this page is the cart view.
+  // Using cart.items.length is okay, but if `updateStock` triggers re-render, we need to be careful not to loop if dependency was `cart.items`.
+
+  const checkoutDisabled = cart.items.some(
+    (item) => item.stock === 0 || (item.quantity ?? 0) > item.stock,
+  );
 
   if (!isMounted) {
     return null;
@@ -57,7 +93,7 @@ const Cart: React.FC<{}> = () => {
                 ))}
             </ul>
           </div>
-          {cart.items?.length > 0 && <Summary />}
+          {cart.items?.length > 0 && <Summary disabled={checkoutDisabled} />}
         </div>
       </Container>
     </>

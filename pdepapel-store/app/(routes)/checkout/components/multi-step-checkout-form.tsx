@@ -462,6 +462,18 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         return;
       }
 
+      if (err?.response?.status === 400) {
+        toast({
+          title: "Stock insuficiente ⚠️",
+          description:
+            "Algunos productos de tu carrito ya no están disponibles. Por favor revísalos.",
+          variant: "destructive",
+        });
+        // Optionally redirect to cart to let them see which one
+        setTimeout(() => router.push("/cart"), 2000);
+        return;
+      }
+
       toast({
         title: "Error",
         description:

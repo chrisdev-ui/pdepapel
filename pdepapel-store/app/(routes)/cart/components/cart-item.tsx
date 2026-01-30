@@ -74,6 +74,14 @@ export const CartItem: React.FC<CartItemProps> = ({ item }) => {
               initialValue={item?.quantity ?? 1}
               onValueChange={onUpdateQuantity}
             />
+            {item.stock === 0 ? (
+              <span className="text-xs font-medium text-red-500">Agotado</span>
+            ) : (item.quantity ?? 0) > item.stock ? (
+              <span className="text-xs font-medium text-red-500">
+                Solo {item.stock} disponibles
+              </span>
+            ) : null}
+
             {item.hasDiscount ||
             (item.originalPrice && item.originalPrice > Number(item.price)) ? (
               <div className="flex flex-col gap-1">

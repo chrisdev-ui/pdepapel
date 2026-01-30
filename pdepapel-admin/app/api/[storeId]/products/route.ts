@@ -396,6 +396,76 @@ export async function GET(
       }
     }
 
+    const ids = searchParams.get("ids")?.split(",") || [];
+
+    // ---------------------------------------------------------
+    // OPTIMIZED BULK FETCH (BY IDs)
+    // ---------------------------------------------------------
+    // Used for Cart Validation / Refresh
+    // Bypasses heavy filtering to return specific items fast
+    if (ids.length > 0) {
+      const products = await prismadb.product.findMany({
+        where: {
+          storeId: params.storeId,
+          id: { in: ids },
+          isArchived: false,
+        },
+        include: {
+          images: true,
+          category: true,
+          color: true,
+          size: true,
+          design: true,
+          productGroup: true,
+        },
+      });
+
+      // Calculate prices/discounts for these specific items
+      const pricingMap = await getProductsPrices(
+        products.map((p) => ({
+          id: p.id,
+          categoryId: p.categoryId,
+          price: Number(p.price),
+          productGroupId: p.productGroupId,
+        })),
+        params.storeId,
+      );
+
+      const response = products.map((item) => {
+        const pricing = pricingMap.get(item.id);
+        const effectivePrice = pricing?.price ?? Number(item.price);
+
+        return {
+          id: item.id,
+          name: item.name,
+          price: effectivePrice,
+          originalPrice: Number(item.price),
+          description: item.description,
+          images: item.images,
+          category: item.category,
+          categoryId: item.categoryId,
+          color: item.color,
+          size: item.size,
+          design: item.design,
+          sku: item.sku,
+          createdAt: item.createdAt,
+          stock: item.stock,
+          isGroup: false, // Individual items only for id fetch
+          productGroupId: item.productGroupId,
+          offerLabel: pricing?.offerLabel ?? null,
+          hasDiscount: pricing ? pricing.discount > 0 : false,
+          discountedPrice: effectivePrice,
+        };
+      });
+
+      return NextResponse.json(response, {
+        headers: {
+          ...CACHE_HEADERS.NO_CACHE, // Always fresh for cart check
+          ...corsHeaders,
+        },
+      });
+    }
+
     interface FacetCount {
       id: string;
       count: number;

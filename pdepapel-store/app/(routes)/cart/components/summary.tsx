@@ -8,7 +8,11 @@ import { CreditCard } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo } from "react";
 
-export const Summary: React.FC<{}> = () => {
+interface SummaryProps {
+  disabled?: boolean;
+}
+
+export const Summary: React.FC<SummaryProps> = ({ disabled }) => {
   const router = useRouter();
   const items = useCart((state) => state.items);
 
@@ -33,8 +37,8 @@ export const Summary: React.FC<{}> = () => {
       </div>
       <Button
         onClick={goToCheckout}
-        disabled={items.length === 0}
-        className="group relative mt-6 w-full overflow-hidden rounded-full bg-blue-yankees font-serif text-base font-bold uppercase text-white hover:bg-blue-yankees"
+        disabled={items.length === 0 || disabled}
+        className="group relative mt-6 w-full overflow-hidden rounded-full bg-blue-yankees font-serif text-base font-bold uppercase text-white hover:bg-blue-yankees disabled:cursor-not-allowed disabled:opacity-50"
       >
         <CreditCard className="absolute left-0 h-5 w-5 -translate-x-full transform transition-transform duration-500 ease-out group-hover:translate-x-64" />
         <span className="transition-opacity duration-150 group-hover:opacity-0">

@@ -25,6 +25,7 @@ interface Query {
   groupBy?: string;
   productGroupId?: string;
   isOnSale?: boolean;
+  ids?: string;
 }
 
 export const getProducts = async (query: Query): Promise<ProductsResponse> => {
@@ -57,7 +58,10 @@ export const getProducts = async (query: Query): Promise<ProductsResponse> => {
     url.searchParams.append("fromShop", String(query.fromShop));
   if (query.search) url.searchParams.append("search", query.search);
   if (query.isOnSale) url.searchParams.append("isOnSale", "true");
+  if (query.ids) url.searchParams.append("ids", query.ids);
 
-  const response = await fetch(url);
+  const response = await fetch(url, {
+    cache: "no-store",
+  });
   return response.json();
 };
