@@ -44,6 +44,39 @@ export const columns: ColumnDef<OfferColumn>[] = [
     ),
   },
   {
+    accessorKey: "scope",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Alcance" />
+    ),
+    cell: ({ row }) => {
+      const counts = row.original._count;
+      return (
+        <div className="flex gap-2">
+          {counts.products > 0 && (
+            <div className="flex items-center gap-1 rounded-md border bg-muted px-2 py-1 text-xs">
+              <span className="font-medium">{counts.products}</span> Prods
+            </div>
+          )}
+          {counts.categories > 0 && (
+            <div className="flex items-center gap-1 rounded-md border bg-muted px-2 py-1 text-xs">
+              <span className="font-medium">{counts.categories}</span> Cats
+            </div>
+          )}
+          {counts.productGroups > 0 && (
+            <div className="flex items-center gap-1 rounded-md border bg-muted px-2 py-1 text-xs">
+              <span className="font-medium">{counts.productGroups}</span> Grupos
+            </div>
+          )}
+          {counts.products === 0 &&
+            counts.categories === 0 &&
+            counts.productGroups === 0 && (
+              <span className="text-xs text-muted-foreground">-</span>
+            )}
+        </div>
+      );
+    },
+  },
+  {
     accessorKey: "isActive",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Estado" />

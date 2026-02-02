@@ -8,6 +8,15 @@ export const getOffers = async (storeId: string) => {
     orderBy: {
       createdAt: "desc",
     },
+    include: {
+      _count: {
+        select: {
+          products: true,
+          categories: true,
+          productGroups: true,
+        },
+      },
+    },
   });
 
   return offers;

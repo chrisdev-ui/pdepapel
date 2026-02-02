@@ -94,6 +94,8 @@ interface OfferFormProps {
     stock: number;
     images: { url: string; isMain: boolean }[];
     category: { name: string };
+    categoryId: string;
+    productGroupId: string | null;
   }[];
   categories: {
     id: string;
@@ -252,6 +254,26 @@ export const OfferForm: React.FC<OfferFormProps> = ({
   const filteredGroups = productGroups.filter((group) =>
     group.name.toLowerCase().includes(groupSearch.toLowerCase()),
   );
+
+  const selectedProductIds = form.watch("productIds");
+  const selectedCategoryIds = form.watch("categoryIds");
+  const selectedGroupIds = form.watch("productGroupIds");
+
+  const affectedProducts = useMemo(() => {
+    const currentProductIds = selectedProductIds || [];
+    const currentCategoryIds = selectedCategoryIds || [];
+    const currentGroupIds = selectedGroupIds || [];
+
+    return products.filter((product) => {
+      const isDirectlySelected = currentProductIds.includes(product.id);
+      const isincategory = currentCategoryIds.includes(product.categoryId);
+      const isInGroup =
+        product.productGroupId &&
+        currentGroupIds.includes(product.productGroupId);
+
+      return isDirectlySelected || isincategory || isInGroup;
+    });
+  }, [products, selectedProductIds, selectedCategoryIds, selectedGroupIds]);
 
   return (
     <>
@@ -778,6 +800,49 @@ export const OfferForm: React.FC<OfferFormProps> = ({
           </Button>
         </form>
       </Form>
+      <Separator className="my-4" />
+      <div className="space-y-4">
+        <Heading
+          title={`Productos Afectados (${affectedProducts.length})`}
+          description="Resumen de productos que recibirán el descuento"
+        />
+        <ScrollArea className="h-72 w-full rounded-md border">
+          <div className="p-4">
+            {affectedProducts.length === 0 ? (
+              <p className="text-center text-sm text-muted-foreground">
+                No hay productos seleccionados.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {affectedProducts.map((product) => (
+                  <div
+                    key={product.id}
+                    className="flex items-center justify-between rounded-lg border p-2 text-sm"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="relative h-8 w-8 overflow-hidden rounded">
+                        <Image
+                          src={
+                            product.images.find((i) => i.isMain)?.url ||
+                            "/placeholder.png"
+                          }
+                          alt={product.name}
+                          fill
+                          className="object-cover"
+                        />
+                      </div>
+                      <span className="font-medium">{product.name}</span>
+                    </div>
+                    <div className="text-muted-foreground">
+                      {product.category.name}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </ScrollArea>
+      </div>
     </>
   );
 };
