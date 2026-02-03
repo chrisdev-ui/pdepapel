@@ -14,6 +14,7 @@ import {
   createInventoryMovementBatch,
   validateStockAvailability,
 } from "@/lib/inventory";
+import { invalidateStoreProductsCache } from "@/lib/cache";
 import { auth, clerkClient } from "@clerk/nextjs";
 import {
   DiscountType,
@@ -665,43 +666,49 @@ export async function PATCH(
           stockMovements,
         );
 
-        // Log any stock update failures but don't throw errors
         if (stockResult.failed.length > 0) {
-          console.warn("Some stock updates failed for order:", {
-            orderId: updated.id,
-            orderNumber: updated.orderNumber,
-            failed: stockResult.failed,
-            success: stockResult.success,
-          });
+          console.error(
+            "Partial stock update failure (Upgrade to Paid):",
+            stockResult.failed,
+          );
+          // Optionally throw here if strict
         }
+
+        // Invalidate cache since stock changed
+        await invalidateStoreProductsCache(params.storeId);
 
         // CRITICAL FIX: Increment coupon usage when order becomes PAID
         if (updated.coupon) {
           await tx.coupon.update({
             where: { id: updated.coupon.id },
             data: {
-              usedCount: {
-                increment: 1,
-              },
+              usedCount: { increment: 1 },
             },
           });
         }
-      } else if (!isNowPaid && wasPaid) {
-        // Restock products (Restock/Cancel)
-        // Restock products (Restock/Cancel)
+      }
+
+      // 4. Handle Refund/Restock (Paid -> Not Paid/Cancelled)
+      if (wasPaid && !isNowPaid) {
+        // Restock items
         const stockMovements = updated.orderItems
-          .filter((item) => item.productId) // Exclude manual items
+          .filter((item) => item.productId)
           .map((item) => ({
             productId: item.productId as string,
             storeId: params.storeId,
             type: "ORDER_CANCELLED" as const,
             quantity: item.quantity, // Positive for addition
-            reason: `Orden marcada como pendiente/cancelada #${updated.orderNumber}`,
+            reason: `Orden Cancelada/Revertida #${updated.orderNumber}`,
             referenceId: updated.id,
+            cost: Number(item.product?.acqPrice) || 0,
             createdBy: userId || "SYSTEM",
           }));
 
+        // We use standard batch because restocking shouldn't fail (unless product deleted?)
         await createInventoryMovementBatch(tx, stockMovements, false);
+
+        // Invalidate cache since stock changed
+        await invalidateStoreProductsCache(params.storeId);
 
         // CRITICAL FIX: Decrement coupon usage when PAID order becomes unpaid
         if (updated.coupon) {

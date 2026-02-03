@@ -4,6 +4,7 @@ import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { createInventoryMovementBatchResilient } from "@/lib/inventory";
 import { formatPayUValue, generatePayUSignature } from "@/lib/utils";
+import { invalidateStoreProductsCache } from "@/lib/cache";
 import {
   Coupon,
   Order,
@@ -201,6 +202,9 @@ async function updateOrderData({
           });
         }
 
+        // Invalidate cache for this store since stock changed
+        await invalidateStoreProductsCache(order.storeId);
+
         if (order.coupon) {
           await tx.coupon.update({
             where: { id: order.coupon.id },
@@ -244,6 +248,9 @@ async function updateOrderData({
               success: stockResult.success,
             });
           }
+
+          // Invalidate cache for this store since stock changed (Restock)
+          await invalidateStoreProductsCache(order.storeId);
         }
 
         // Handle coupon disconnection

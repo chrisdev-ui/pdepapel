@@ -22,6 +22,7 @@ import {
   validateStockAvailability,
   CreateInventoryMovementParams,
 } from "@/lib/inventory";
+import { invalidateStoreProductsCache } from "@/lib/cache";
 import { auth, clerkClient } from "@clerk/nextjs";
 import {
   Coupon,
@@ -609,6 +610,11 @@ export async function POST(
         });
       }
 
+      // Invalidate cache if stock was modified (Paid Order)
+      if (status === OrderStatus.PAID) {
+        await invalidateStoreProductsCache(params.storeId);
+      }
+
       return createdOrder;
     });
 
@@ -827,6 +833,8 @@ export async function DELETE(
               },
             );
           }
+
+          await invalidateStoreProductsCache(params.storeId);
         }
       }
 

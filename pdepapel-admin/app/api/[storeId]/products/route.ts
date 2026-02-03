@@ -27,41 +27,7 @@ import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 import { Redis } from "@upstash/redis";
 
-// Initialize Redis client (lazy - only when needed)
-let redis: Redis | null = null;
-function getRedis(): Redis {
-  if (!redis) {
-    redis = Redis.fromEnv();
-  }
-  return redis;
-}
-
-/**
- * Invalidate cache using SCAN instead of KEYS (Redis best practice).
- * SCAN is non-blocking and works better at scale.
- */
-async function invalidateProductCache(storeId: string): Promise<void> {
-  try {
-    const redisClient = getRedis();
-    const pattern = `store:${storeId}:products:*`;
-    let cursor = 0;
-
-    do {
-      const result = await redisClient.scan(cursor, {
-        match: pattern,
-        count: 100,
-      });
-      cursor = Number(result[0]);
-      const keys = result[1];
-
-      if (keys.length > 0) {
-        await redisClient.del(...keys);
-      }
-    } while (cursor !== 0);
-  } catch (error) {
-    console.error("Redis cache invalidation error:", error);
-  }
-}
+import { invalidateStoreProductsCache } from "@/lib/cache";
 
 /**
  * Unified product type for storefront responses.
@@ -241,7 +207,7 @@ export async function POST(
     }
 
     // Invalidate all product cache entries for this store
-    await invalidateProductCache(params.storeId);
+    await invalidateStoreProductsCache(params.storeId);
 
     return NextResponse.json(product, {
       headers: {
@@ -766,7 +732,8 @@ export async function GET(
 
       // Cache the response
       try {
-        const redisClient = getRedis();
+        const { Redis } = await import("@upstash/redis");
+        const redisClient = Redis.fromEnv();
         await redisClient.set(cacheKey, response, { ex: 5 * 60 }); // 5 minutes
       } catch (error) {
         console.error("Redis set error:", error);
@@ -1221,7 +1188,7 @@ export async function DELETE(
     });
 
     // Invalidate all product cache entries for this store
-    await invalidateProductCache(params.storeId);
+    await invalidateStoreProductsCache(params.storeId);
 
     return NextResponse.json(
       "Los productos han sido eliminados correctamente",
@@ -1312,7 +1279,7 @@ export async function PATCH(
     });
 
     // Invalidate all product cache entries for this store
-    await invalidateProductCache(params.storeId);
+    await invalidateStoreProductsCache(params.storeId);
 
     return NextResponse.json(result, {
       headers: {

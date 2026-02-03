@@ -3,6 +3,7 @@ import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { createInventoryMovementBatchResilient } from "@/lib/inventory";
+import { invalidateStoreProductsCache } from "@/lib/cache";
 import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
 import crypto from "crypto";
 import { NextResponse } from "next/server";
@@ -193,6 +194,9 @@ async function updateOrderData(order: any, transaction: any) {
             success: stockResult.success,
           });
         }
+
+        // Invalidate cache for this store since stock changed
+        await invalidateStoreProductsCache(order.storeId);
       });
     } else if (currentStatus === OrderStatus.CANCELLED) {
       await prismadb.$transaction(async (tx) => {
@@ -226,6 +230,9 @@ async function updateOrderData(order: any, transaction: any) {
               success: stockResult.success,
             });
           }
+
+          // Invalidate cache for this store since stock changed (Restock)
+          await invalidateStoreProductsCache(order.storeId);
         }
 
         // Handle coupon if exists

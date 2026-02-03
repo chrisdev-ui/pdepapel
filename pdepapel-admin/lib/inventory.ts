@@ -227,6 +227,7 @@ export async function validateStockAvailability(
   // Kits need recursive validation of their components
   const kitValidations: { productId: string; quantity: number }[] = [];
   const normalChecks: {
+    productId: string;
     productName: string;
     available: number;
     requested: number;
@@ -244,6 +245,7 @@ export async function validateStockAvailability(
       // Checking strictly: requiredQty is positive for requirements
       if (requiredQty > 0 && product.stock < requiredQty) {
         normalChecks.push({
+          productId: product.id,
           productName: product.name,
           available: product.stock,
           requested: requiredQty,
@@ -284,23 +286,15 @@ export async function validateStockAvailability(
   }
 
   if (normalChecks.length > 0) {
-    if (normalChecks.length === 1) {
-      const item = normalChecks[0];
-      throw ErrorFactory.InsufficientStock(
-        item.productName,
-        item.available,
-        item.requested,
-      );
-    } else {
-      // Adapt to error factory signature if needed, assuming it takes array
-      // Re-mapping to expected type if changed
-      const missingFormatted = normalChecks.map((c) => ({
-        productName: c.productName,
-        available: c.available,
-        requested: c.requested,
-      }));
-      throw ErrorFactory.MultipleInsufficientStock(missingFormatted);
-    }
+    // Always use MultipleInsufficientStock to provide consistent error structure (array of items)
+    // This allows the frontend to generically handle "details.items" for highlighting.
+    const missingFormatted = normalChecks.map((c) => ({
+      productId: c.productId,
+      productName: c.productName,
+      available: c.available,
+      requested: c.requested,
+    }));
+    throw ErrorFactory.MultipleInsufficientStock(missingFormatted);
   }
 }
 

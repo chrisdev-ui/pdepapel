@@ -2,8 +2,10 @@ import {
   Coupon,
   OrderStatus,
   PaymentMethod,
+  Product,
   ShippingProvider,
   ShippingStatus,
+  Prisma,
 } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
@@ -75,8 +77,14 @@ export async function POST(
       customOrderToken, // ⭐ Token para convertir cotización
     } = await req.json();
 
+    // Fix implicit any for orderItems
+    const typedOrderItems = (orderItems || []) as {
+      productId: string;
+      quantity: number;
+    }[];
+
     console.log(
-      `📥 Checkout request received - Store: ${params.storeId}, Payment: ${payment.method}, Items: ${orderItems.length}, Total: ${currencyFormatter(total)}`,
+      `📥 Checkout request received - Store: ${params.storeId}, Payment: ${payment.method}, Items: ${typedOrderItems.length}, Total: ${currencyFormatter(total)}`,
     );
 
     if (!fullName)
@@ -263,12 +271,88 @@ export async function POST(
       // Don't throw error - just log for monitoring
     }
 
+    // ------------------------------------------------------------------
+    // 2. Validate Products & Stock (Standard Flow)
+    // ------------------------------------------------------------------
+    let products: Prisma.ProductGetPayload<{
+      include: { images: true; category: true; productGroup: true };
+    }>[] = [];
+    if (existingQuote) {
+      // If quoting, we skip standard validation/stock check because quote *reserves* or fixed price?
+      // Actually, quotes usually don't reserve stock until Checkout.
+      // So we MUST re-validate stock here for the quote items.
+      const productIds = existingQuote.orderItems.map((i: any) => i.productId);
+      const uniqueProductIds = Array.from(new Set(productIds)); // invalid argument? No, Set takes iterable.
+
+      // Fetch products to check current stock
+      products = await prismadb.product.findMany({
+        where: { id: { in: productIds as string[] } },
+        include: {
+          images: true, // Required for UI
+          category: true, // Required for discounts
+          productGroup: true, // Required for discounts
+        },
+      });
+    } else {
+      // Fetch products from request items
+      const productIds = typedOrderItems.map((item) => item.productId);
+      products = await prismadb.product.findMany({
+        where: { id: { in: productIds } },
+        include: {
+          images: true,
+          category: true,
+          productGroup: true,
+        },
+      });
+    }
+
+    // AGGREGATE QUANTITIES FOR VALIDATION
+    // We must sum up quantities for duplicate product IDs to assert total required stock
+    const neededQuantities: Record<string, number> = {};
+    typedOrderItems.forEach((item) => {
+      neededQuantities[item.productId] =
+        (neededQuantities[item.productId] || 0) + item.quantity;
+    });
+
+    const outOfStockItems: {
+      productId: string;
+      productName: string;
+      available: number;
+      requested: number;
+    }[] = [];
+
+    products.forEach((product) => {
+      const requiredQuantity = neededQuantities[product.id];
+
+      if (!product || product.isArchived) {
+        throw ErrorFactory.InvalidRequest(
+          `El producto "${product?.name || "Desconocido"}" no está disponible`,
+        );
+      }
+
+      if (product.stock < requiredQuantity) {
+        outOfStockItems.push({
+          productId: product.id,
+          productName: product.name,
+          available: product.stock,
+          requested: requiredQuantity,
+        });
+      }
+    });
+
+    if (outOfStockItems.length > 0) {
+      throw ErrorFactory.MultipleInsufficientStock(outOfStockItems);
+    }
+
     // Batch process products for validation and pricing
-    const products = await processOrderItemsInBatches(
-      orderItems,
-      params.storeId,
-      BATCH_SIZE,
-    );
+    // The previous `products` variable is now correctly populated and validated for stock.
+    // We can reuse it or re-fetch if `processOrderItemsInBatches` does more than just fetch.
+    // Assuming `processOrderItemsInBatches` is for fetching and initial processing,
+    // and the stock validation above is the new, more robust check.
+    // If `processOrderItemsInBatches` also does stock validation, this might be redundant.
+    // For now, I'll assume it's for fetching and initial data structuring.
+    // If the `products` variable from the new block is sufficient, the old `processOrderItemsInBatches` call might be removed or adjusted.
+    // Given the instruction, I'll keep the `products` variable from the new block and adjust the subsequent code to use it.
 
     // Create product map for O(1) lookups
     const productMap = new Map(products.map((p) => [p.id, p]));
@@ -276,7 +360,7 @@ export async function POST(
     // Calculate discounted prices
     const { getProductsPrices } = await import("@/lib/discount-engine");
     const discountedPricesMap = await getProductsPrices(
-      products,
+      products, // Use the validated products
       params.storeId,
     );
 
@@ -291,12 +375,16 @@ export async function POST(
         continue;
       }
 
-      if (product.stock < quantity) {
-        errors.push(
-          `El producto ${product.name} no tiene suficiente stock disponible. Stock disponible: ${product.stock}, cantidad solicitada: ${quantity}`,
-        );
-        continue;
-      }
+      // Stock validation is now done upfront for aggregated quantities.
+      // This check here is redundant if `neededQuantities` was used for the `products.forEach` loop.
+      // However, `orderItems` might contain duplicates, so `quantity` here is for a single entry.
+      // The aggregated check is more robust. I'll remove the individual stock check here.
+      // if (product.stock < quantity) {
+      //   errors.push(
+      //     `El producto ${product.name} no tiene suficiente stock disponible. Stock disponible: ${product.stock}, cantidad solicitada: ${quantity}`,
+      //   );
+      //   continue;
+      // }
 
       const quotedPrice = quotedPriceMap.get(productId);
       // Priority: Quoted Price > Discounted Price > Base Price

@@ -52,7 +52,12 @@ export const ErrorFactory = {
     ),
 
   MultipleInsufficientStock: (
-    items: { productName: string; available: number; requested: number }[],
+    items: {
+      productId: string;
+      productName: string;
+      available: number;
+      requested: number;
+    }[],
   ) =>
     new AppError(
       `Stock insuficiente para múltiples productos:\n${items

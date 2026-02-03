@@ -20,7 +20,7 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { useGuestUser } from "@/hooks/use-guest-user";
 import { useToast } from "@/hooks/use-toast";
 import useValidateCoupon from "@/hooks/use-validate-coupon";
-import { calculateTotals, generateGuestId } from "@/lib/utils";
+import { calculateTotals, cn, generateGuestId } from "@/lib/utils";
 import {
   CheckoutByOrderResponse,
   Coupon,
@@ -199,6 +199,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   const { guestId, setGuestId, clearGuestId } = useGuestUser();
   const cart = useCart();
   const [isMounted, setIsMounted] = useState(false);
+  const [outOfStockItems, setOutOfStockItems] = useState<string[]>([]); // Product IDs
   const { toast } = useToast();
   const { fireConfetti } = useConfetti();
   const setStoredStep = useCheckoutStore((state) => state.setCurrentStep);
@@ -462,15 +463,35 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         return;
       }
 
-      if (err?.response?.status === 400) {
+      // Handle structured stock error (422)
+      if (
+        err?.response?.status === 422 &&
+        err?.response?.data?.details?.items
+      ) {
+        const items = err.response.data.details.items as {
+          productId: string;
+          productName: string;
+        }[];
+        const ids = items.map((i) => i.productId);
+        setOutOfStockItems(ids);
+
         toast({
           title: "Stock insuficiente ⚠️",
           description:
-            "Algunos productos de tu carrito ya no están disponibles. Por favor revísalos.",
+            "Algunos productos marcados en rojo ya no tienen stock disponible. Por favor revísalos.",
           variant: "destructive",
         });
-        // Optionally redirect to cart to let them see which one
-        setTimeout(() => router.push("/cart"), 2000);
+        // Do NOT redirect automatically, let user see the red items
+        return;
+      }
+
+      if (err?.response?.status === 400) {
+        toast({
+          title: "Solicitud inválida ⚠️",
+          description:
+            err?.response?.data?.error || "Revisa la información enviada.",
+          variant: "destructive",
+        });
         return;
       }
 
@@ -685,7 +706,12 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
               {activeItems.map((item) => (
                 <div
                   key={item.id}
-                  className="grid grid-cols-[80px_1fr] gap-2.5"
+                  className={cn(
+                    "grid grid-cols-[80px_1fr] gap-2.5 rounded-md p-2 transition-colors",
+                    outOfStockItems.includes(item.id)
+                      ? "border border-destructive bg-destructive/10"
+                      : "",
+                  )}
                 >
                   <Link
                     href={`/product/${item.id}`}
@@ -717,6 +743,11 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                         )}
                         {item.size && (
                           <span className="text-xs text-gray-400">{`Talla: ${item.size.name}`}</span>
+                        )}
+                        {outOfStockItems.includes(item.id) && (
+                          <span className="mt-1 font-bold text-destructive">
+                            Sin Stock
+                          </span>
                         )}
                       </div>
                       <div className="flex items-center gap-2">
