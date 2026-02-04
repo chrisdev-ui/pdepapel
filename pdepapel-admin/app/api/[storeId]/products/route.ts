@@ -1054,6 +1054,7 @@ export async function GET(
         originalPrice: Number(product.price), // Always base
         discountedPrice: effectivePrice,
         offerLabel: pricing?.offerLabel ?? null,
+        hasDiscount: pricing ? pricing.discount > 0 : false,
       };
     });
 
