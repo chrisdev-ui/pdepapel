@@ -33,6 +33,7 @@ export interface ProductForItem {
   sku?: string;
   productGroup?: { name: string };
   design?: string | { name: string };
+  originalPrice?: number;
 }
 
 interface EnhancedProductSelectorProps {
@@ -67,7 +68,7 @@ export function EnhancedProductSelector({
     if (!open) return null; // Don't fetch if closed
     if (previousPageData && !previousPageData.products?.length) return null; // reached the end
     // Page is 1-based in API
-    return `/api/${params.storeId}/products?search=${debouncedSearch}&limit=20&isArchived=false&page=${pageIndex + 1}&fromShop=true`;
+    return `/api/${params.storeId}/products?search=${debouncedSearch}&limit=20&isArchived=false&page=${pageIndex + 1}&fromShop=true&skipCache=true`;
   };
 
   const { data, size, setSize, isLoading, isValidating } = useSWRInfinite(
@@ -89,10 +90,35 @@ export function EnhancedProductSelector({
   // Combine Selected + API Results (Deduplicated)
   // We prioritize selectedProductsList at the top.
   // Then we append API results that are NOT in the selected list.
+  // Combine Selected + API Results (Deduplicated)
+  // We prioritize FRESH data from API over stale selectedProductsList data
   const displayProducts = React.useMemo(() => {
+    // Optimization: Create a Map of fresh API products for O(1) lookup
+    const apiMap = new Map(productsData.map((p) => [p.id, p]));
+
+    // 1. Process Selected List:
+    // If a selected product exists in the fresh API data, merge the fresh data (stock, price, offers)
+    // into the selected item for display purposes. This ensures the "Selected" section shows real-time info.
+    const updatedSelectedList = selectedProductsList.map((selected) => {
+      const fresh = apiMap.get(selected.id);
+      if (fresh) {
+        return {
+          ...selected,
+          ...fresh, // Override with fresh data (stock, originalPrice, hasDiscount, etc.)
+        };
+      }
+      return selected;
+    });
+
+    // 2. Identify IDs we just processed to avoid duplicates
     const selectedIds = new Set(selectedProductsList.map((p) => p.id));
-    const apiProducts = productsData.filter((p) => !selectedIds.has(p.id));
-    return [...selectedProductsList, ...apiProducts];
+
+    // 3. Append API results that are NOT in the selected list
+    const nonSelectedApiProducts = productsData.filter(
+      (p) => !selectedIds.has(p.id),
+    );
+
+    return [...updatedSelectedList, ...nonSelectedApiProducts];
   }, [selectedProductsList, productsData]);
 
   // Load More Handler (Infinite Scroll via Scroll Event)
@@ -268,7 +294,9 @@ export function EnhancedProductSelector({
                         </span>
                         {product.hasDiscount && (
                           <span className="text-xs text-muted-foreground line-through">
-                            {currencyFormatter(product.price)}
+                            {currencyFormatter(
+                              product.originalPrice || product.price,
+                            )}
                           </span>
                         )}
                       </div>

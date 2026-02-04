@@ -1291,7 +1291,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                                   productId,
                                   quantity,
                                   name: product.name,
-                                  price: product.price,
+                                  price: product.originalPrice || product.price,
                                   discountedPrice: product.discountedPrice,
                                   sku: product.sku || "",
                                   imageUrl: product.images?.[0]?.url || "",

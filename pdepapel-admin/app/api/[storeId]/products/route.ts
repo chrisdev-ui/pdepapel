@@ -250,6 +250,7 @@ export async function GET(
     const sortOption = searchParams.get("sortOption") || "default";
     const excludeProducts = searchParams.get("excludeProducts") || undefined;
     const groupBy = searchParams.get("groupBy"); // "parents"
+    const skipCache = searchParams.get("skipCache") === "true";
 
     const productGroupId = searchParams.get("productGroupId");
     const isOnSale = searchParams.get("isOnSale") === "true"; // New filter
@@ -288,18 +289,20 @@ export async function GET(
 
     // Try to get from Redis cache
     try {
-      const { Redis } = await import("@upstash/redis");
-      const redis = Redis.fromEnv();
-      const cached = await redis.get(cacheKey);
+      if (!skipCache) {
+        const { Redis } = await import("@upstash/redis");
+        const redis = Redis.fromEnv();
+        const cached = await redis.get(cacheKey);
 
-      if (cached) {
-        return NextResponse.json(cached, {
-          headers: {
-            ...CACHE_HEADERS.DYNAMIC,
-            "X-Cache": "HIT",
-            ...corsHeaders,
-          },
-        });
+        if (cached) {
+          return NextResponse.json(cached, {
+            headers: {
+              ...CACHE_HEADERS.DYNAMIC,
+              "X-Cache": "HIT",
+              ...corsHeaders,
+            },
+          });
+        }
       }
     } catch (error) {
       console.error("Redis get error:", error);
@@ -732,9 +735,11 @@ export async function GET(
 
       // Cache the response
       try {
-        const { Redis } = await import("@upstash/redis");
-        const redisClient = Redis.fromEnv();
-        await redisClient.set(cacheKey, response, { ex: 5 * 60 }); // 5 minutes
+        if (!skipCache) {
+          const { Redis } = await import("@upstash/redis");
+          const redisClient = Redis.fromEnv();
+          await redisClient.set(cacheKey, response, { ex: 5 * 60 }); // 5 minutes
+        }
       } catch (error) {
         console.error("Redis set error:", error);
       }
@@ -1061,10 +1066,12 @@ export async function GET(
 
     // Cache the response (5 minutes for shop queries, 15 minutes for others)
     try {
-      const { Redis } = await import("@upstash/redis");
-      const redis = Redis.fromEnv();
-      const ttl = fromShop ? 5 * 60 : 15 * 60;
-      await redis.set(cacheKey, response, { ex: ttl });
+      if (!skipCache) {
+        const { Redis } = await import("@upstash/redis");
+        const redis = Redis.fromEnv();
+        const ttl = fromShop ? 5 * 60 : 15 * 60;
+        await redis.set(cacheKey, response, { ex: ttl });
+      }
     } catch (error) {
       console.error("Redis set error:", error);
     }
