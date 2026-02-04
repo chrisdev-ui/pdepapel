@@ -44,6 +44,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import {
   INITIAL_MISC_COST,
   INITIAL_PERCENTAGE_INCREASE,
@@ -197,6 +198,10 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   const [batchIntakeVariants, setBatchIntakeVariants] = useState<
     BatchIntakeVariant[]
   >([]);
+
+  // Controls if we automatically fill the matrix when attributes change
+  // Defaults to TRUE for standard creation flow
+  const [autoGenerate, setAutoGenerate] = useState(true);
 
   // Determine if we are in "Edit" mode
   const isEdit = !!initialData;
@@ -593,6 +598,11 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
         return;
       }
 
+      // If Auto-Generate is OFF, we do not create new combinations automatically
+      if (!autoGenerate) {
+        return;
+      }
+
       const result = generateVariants({
         category: { id: catObj.id, name: catObj.name },
         sizes: sList.map((x) => ({
@@ -747,6 +757,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     colors,
     designs,
     form,
+    autoGenerate,
   ]);
 
   // Form Persistence
@@ -1193,6 +1204,9 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     });
 
     if (toAdd.length > 0) {
+      // TURN OFF AUTO-GENERATE upon import to prevent filling the gaps
+      setAutoGenerate(false);
+
       const finalVariants = [...currentVars, ...toAdd];
       const finalImages = [...existingImages, ...newImages];
 
@@ -1339,6 +1353,24 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       <div className="flex items-center justify-between">
         <Heading title={title} description={description} />
         <div className="flex items-center gap-2">
+          <div className="flex items-center space-x-2 rounded-md border p-2">
+            <Switch
+              id="auto-generate"
+              checked={autoGenerate}
+              onCheckedChange={setAutoGenerate}
+            />
+            <div className="grid gap-1.5 leading-none">
+              <label
+                htmlFor="auto-generate"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >
+                Auto-Generar
+              </label>
+              <p className="text-[0.8rem] text-muted-foreground">
+                {autoGenerate ? "ON: Matriz Completa" : "OFF: Selección Manual"}
+              </p>
+            </div>
+          </div>
           <Button variant="outline" size="sm" onClick={onClear} type="button">
             <Eraser className="mr-2 h-4 w-4" />
             Limpiar Formulario
