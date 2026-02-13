@@ -18,6 +18,15 @@ export async function getProducts(storeId: string) {
       isArchived: true,
       isFeatured: true,
       productGroupId: true,
+      isKit: true,
+      kitComponents: {
+        select: {
+          quantity: true,
+          component: {
+            select: { stock: true },
+          },
+        },
+      },
       images: {
         select: {
           url: true,
@@ -63,8 +72,21 @@ export async function getProducts(storeId: string) {
   // Merge discount information with products
   return products.map((product) => {
     const priceInfo = pricesMap.get(product.id);
+
+    // For kit products, compute effective stock from components
+    let effectiveStock = product.stock;
+    if (product.isKit && product.kitComponents.length > 0) {
+      effectiveStock = Math.min(
+        ...product.kitComponents.map((c) =>
+          c.quantity > 0 ? Math.floor(c.component.stock / c.quantity) : 0,
+        ),
+      );
+      if (effectiveStock < 0) effectiveStock = 0;
+    }
+
     return {
       ...product,
+      stock: effectiveStock,
       discountedPrice: priceInfo?.price ?? product.price,
       offerLabel: priceInfo?.offerLabel,
       hasDiscount: priceInfo ? priceInfo.price < product.price : false,

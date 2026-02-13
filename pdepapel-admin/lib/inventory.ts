@@ -371,6 +371,17 @@ export async function createInventoryMovementBatch(
       });
     }
   }
+
+  // Reactive: recalculate kit stock for any affected parent kits
+  const allAffectedIds = Array.from(new Set(movements.map((m) => m.productId)));
+  const parentKits = await tx.productKit.findMany({
+    where: { componentId: { in: allAffectedIds } },
+    select: { kitId: true },
+  });
+  if (parentKits.length > 0) {
+    const kitIds = Array.from(new Set(parentKits.map((p) => p.kitId)));
+    await recalculateKitStock(tx, kitIds);
+  }
 }
 
 export async function createInventoryMovementBatchResilient(
@@ -445,6 +456,19 @@ export async function createInventoryMovementBatchResilient(
         productName: product.name,
         reason: error.message || "Error desconocido",
       });
+    }
+  }
+
+  // Reactive: recalculate kit stock for any affected parent kits
+  if (results.success.length > 0) {
+    const successIds = results.success.map((s) => s.productId);
+    const parentKits = await tx.productKit.findMany({
+      where: { componentId: { in: successIds } },
+      select: { kitId: true },
+    });
+    if (parentKits.length > 0) {
+      const kitIds = Array.from(new Set(parentKits.map((p) => p.kitId)));
+      await recalculateKitStock(tx, kitIds);
     }
   }
 
