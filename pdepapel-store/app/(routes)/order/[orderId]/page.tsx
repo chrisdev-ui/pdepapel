@@ -1,6 +1,7 @@
 import { getOrder } from "@/actions/get-order";
 import { Metadata } from "next";
 import dynamic from "next/dynamic";
+import { notFound } from "next/navigation";
 
 const SingleOrderPage = dynamic(
   () => import("./components/single-order-page"),
@@ -49,6 +50,8 @@ export default async function OrderPage({
   params: { orderId: string };
 }) {
   const order = await getOrder(params.orderId);
+
+  if (!order) return notFound();
 
   return <SingleOrderPage order={order} />;
 }
