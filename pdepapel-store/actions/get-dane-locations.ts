@@ -18,6 +18,11 @@ export const getDaneLocations = async (
   if (query.q) url.searchParams.append("q", query.q);
   if (query.limit) url.searchParams.append("limit", String(query.limit));
 
-  const response = await fetch(url);
-  return response.json();
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return { results: [], count: 0 };
+    return await response.json();
+  } catch {
+    return { results: [], count: 0 };
+  }
 };

@@ -14,6 +14,11 @@ export const getOrders = async (query: Query): Promise<Order[]> => {
 
   if (query.userId) url.searchParams.append("userId", query.userId);
 
-  const response = await fetch(url);
-  return response.json();
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return [];
+    return await response.json();
+  } catch {
+    return [];
+  }
 };

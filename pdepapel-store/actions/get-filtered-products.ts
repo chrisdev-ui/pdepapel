@@ -18,6 +18,11 @@ export const getFilteredProducts = async (query: Query): Promise<Product[]> => {
   if (query.page) url.searchParams.append("page", String(query.page));
   if (query.limit) url.searchParams.append("limit", String(query.limit));
 
-  const response = await fetch(url);
-  return response.json();
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return [];
+    return await response.json();
+  } catch {
+    return [];
+  }
 };

@@ -28,6 +28,12 @@ interface Query {
   ids?: string;
 }
 
+const EMPTY_RESPONSE: ProductsResponse = {
+  products: [],
+  totalPages: 0,
+  totalItems: 0,
+};
+
 export const getProducts = async (query: Query): Promise<ProductsResponse> => {
   const url = new URL(API_URL);
 
@@ -60,8 +66,13 @@ export const getProducts = async (query: Query): Promise<ProductsResponse> => {
   if (query.isOnSale) url.searchParams.append("isOnSale", "true");
   if (query.ids) url.searchParams.append("ids", query.ids);
 
-  const response = await fetch(url, {
-    cache: "no-store",
-  });
-  return response.json();
+  try {
+    const response = await fetch(url, {
+      cache: "no-store",
+    });
+    if (!response.ok) return EMPTY_RESPONSE;
+    return await response.json();
+  } catch {
+    return EMPTY_RESPONSE;
+  }
 };

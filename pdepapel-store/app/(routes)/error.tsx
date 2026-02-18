@@ -41,7 +41,7 @@ export default function Error({
           <br />
           <br />
           <Button
-            onClick={() => reset()}
+            onClick={() => window.location.reload()}
             className="bg-pink-froly font-serif font-semibold"
           >
             Recargar
