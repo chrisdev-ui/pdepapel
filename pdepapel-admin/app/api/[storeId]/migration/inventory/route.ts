@@ -57,7 +57,7 @@ export async function POST(
         }
 
         // Run transaction
-        await prismadb.$transaction(async (tx) => {
+        await prismadb.$transaction(async (tx: Prisma.TransactionClient) => {
           // Manually insert logic to avoid double-counting stock
           await tx.inventoryMovement.create({
             data: {

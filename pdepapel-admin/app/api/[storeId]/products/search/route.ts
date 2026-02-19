@@ -67,7 +67,7 @@ export async function GET(
     const products = await prismadb.product.findMany({
       where: {
         storeId: params.storeId,
-        // isArchived: false, // Allow admins to search archived products
+        isArchived: false,
         OR: [{ name: { contains: query } }, { sku: { contains: query } }],
       },
       select: {

@@ -539,8 +539,6 @@ export async function GET(
 
       // Fetch ALL groups and products (no pagination at DB level)
       // This is intentional for correct sorting - works well for <500 items
-      // TODO: This "fetch all" approach causes performance issues and connection timeouts as the catalog grows.
-      // Consider refactoring to perform pagination and filtering at the database level.
       const [allGroups, allStandaloneProducts] = await Promise.all([
         prismadb.productGroup.findMany({
           where: baseGroupWhere,

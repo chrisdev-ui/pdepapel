@@ -1,18 +1,11 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { ErrorFactory } from "./api-errors";
-import { ExtendedPrismaClient } from "./prismadb";
 
 // Define a type that can be a transaction client or the main client
-type PrismaTx =
-  | Omit<
-      PrismaClient,
-      "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
-    >
-  | ExtendedPrismaClient
-  | Omit<
-      ExtendedPrismaClient,
-      "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
-    >;
+type PrismaTx = Omit<
+  PrismaClient,
+  "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
+>;
 
 export type MovementType =
   | "ORDER_PLACED"
