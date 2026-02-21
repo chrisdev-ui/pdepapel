@@ -50,7 +50,7 @@ export function currencyFormatter(
     typeof value === "number" ? round2(value).toString() : value?.toString();
   return formatValue({
     value: cleanValue,
-    decimalScale: options?.decimalScale,
+    decimalScale: options?.decimalScale ?? 0, // COP doesn't use decimals
     intlConfig: {
       locale: "es-CO",
       currency: "COP",
