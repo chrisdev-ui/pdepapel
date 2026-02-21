@@ -66,7 +66,9 @@ export async function getCustomerAnalytics(storeId: string) {
       0,
     );
     const averageLifetimeValue =
-      totalCustomers > 0 ? totalLifetimeValue / totalCustomers : 0;
+      totalCustomers > 0
+        ? Math.round((totalLifetimeValue / totalCustomers) * 100) / 100
+        : 0;
 
     // Get most valuable customers for different periods
     const getMostValuableCustomer = (startDate?: Date) => {

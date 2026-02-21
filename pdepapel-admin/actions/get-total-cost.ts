@@ -21,5 +21,5 @@ export async function getTotalCost(storeId: string) {
     0,
   );
 
-  return totalCost;
+  return Math.round(totalCost * 100) / 100;
 }

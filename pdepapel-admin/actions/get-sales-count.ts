@@ -86,5 +86,15 @@ export const getSalesCount = async (storeId: string, year: number) => {
   stats.averageOrderValue =
     orders.length > 0 ? stats.totalNetRevenue / orders.length : 0;
 
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+
+  stats.totalGrossRevenue = round2(stats.totalGrossRevenue);
+  stats.totalNetRevenue = round2(stats.totalNetRevenue);
+  stats.totalDiscounts = round2(stats.totalDiscounts);
+  stats.totalCouponDiscounts = round2(stats.totalCouponDiscounts);
+  stats.averageDiscount = round2(stats.averageDiscount);
+  stats.averageCouponDiscount = round2(stats.averageCouponDiscount);
+  stats.averageOrderValue = round2(stats.averageOrderValue);
+
   return stats;
 };

@@ -120,15 +120,18 @@ export async function PATCH(
           productId: item.productId,
           quantity: item.quantity,
           cost: item.cost,
-          subtotal: item.quantity * item.cost,
+          subtotal: Math.round(item.quantity * item.cost * 100) / 100,
           index: idx,
         })),
       };
 
-      totalAmount = items.reduce(
-        (sum: number, item: any) => sum + item.quantity * item.cost,
-        0,
-      );
+      totalAmount =
+        Math.round(
+          items.reduce(
+            (sum: number, item: any) => sum + item.quantity * item.cost,
+            0,
+          ) * 100,
+        ) / 100;
     }
 
     const updatedOrder = await prismadb.restockOrder.update({

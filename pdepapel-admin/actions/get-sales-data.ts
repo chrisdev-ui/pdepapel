@@ -78,10 +78,17 @@ export async function getSalesData(storeId: string, year: number) {
     {} as Record<string, SalesByDate>,
   );
 
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+
   return Object.entries(salesByDate)
     .sort(([dateA], [dateB]) => compareAsc(parseISO(dateA), parseISO(dateB)))
     .map(([date, data]) => ({
       date,
       ...data,
+      revenue: round2(data.revenue),
+      grossRevenue: round2(data.grossRevenue),
+      discounts: round2(data.discounts),
+      couponDiscounts: round2(data.couponDiscounts),
+      averageOrderValue: round2(data.averageOrderValue),
     }));
 }

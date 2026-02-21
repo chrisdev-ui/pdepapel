@@ -28,5 +28,5 @@ export async function getPotentialRevenue(storeId: string) {
     return sum + product.stock * finalPrice;
   }, 0);
 
-  return potentialRevenue;
+  return Math.round(potentialRevenue * 100) / 100;
 }

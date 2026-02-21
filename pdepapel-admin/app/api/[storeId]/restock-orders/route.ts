@@ -33,10 +33,14 @@ export async function POST(
     if (!items || items.length === 0)
       throw ErrorFactory.InvalidRequest("Items are required");
 
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+
     // Calculate total
-    const totalAmount = items.reduce(
-      (sum: number, item: any) => sum + item.quantity * item.cost,
-      0,
+    const totalAmount = round2(
+      items.reduce(
+        (sum: number, item: any) => sum + item.quantity * item.cost,
+        0,
+      ),
     );
 
     // Generate Order Number (Simple auto-increment logic or random)
@@ -60,7 +64,7 @@ export async function POST(
             productId: item.productId,
             quantity: item.quantity,
             cost: item.cost,
-            subtotal: item.quantity * item.cost,
+            subtotal: round2(item.quantity * item.cost),
             index: idx,
           })),
         },

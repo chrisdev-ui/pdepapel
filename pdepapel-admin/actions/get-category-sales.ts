@@ -80,15 +80,18 @@ export async function getCategorySales(storeId: string, year: number) {
     {} as Record<string, CategoryStats>,
   );
 
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+
   return Object.entries(categorySales)
     .map(([category, stats]) => ({
       category,
-      grossSales: stats.sales,
-      netSales: stats.discountedSales,
+      grossSales: round2(stats.sales),
+      netSales: round2(stats.discountedSales),
       orders: stats.orders,
-      discountImpact: stats.sales - stats.discountedSales,
-      discountPercentage:
+      discountImpact: round2(stats.sales - stats.discountedSales),
+      discountPercentage: round2(
         ((stats.sales - stats.discountedSales) / stats.sales) * 100,
+      ),
     }))
     .sort((a, b) => {
       return b.netSales - a.netSales;

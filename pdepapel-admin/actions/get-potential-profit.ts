@@ -30,5 +30,5 @@ export async function getPotentialProfit(storeId: string) {
     return sum + profit;
   }, 0);
 
-  return potentialProfit;
+  return Math.round(potentialProfit * 100) / 100;
 }

@@ -108,7 +108,7 @@ export async function getShippingAnalytics(storeId: string) {
     deliveredShipments,
     deliveryRate: Math.round(deliveryRate * 10) / 10, // 1 decimal
     failedDeliveries,
-    totalShippingCost,
+    totalShippingCost: Math.round(totalShippingCost * 100) / 100,
     averageShippingCost: Math.round(averageShippingCost),
     byStatus,
     byProvider,

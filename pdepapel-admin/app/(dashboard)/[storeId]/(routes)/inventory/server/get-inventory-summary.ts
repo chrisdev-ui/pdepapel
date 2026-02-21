@@ -108,14 +108,18 @@ export const getInventorySummary = async (storeId: string) => {
     0,
   );
 
+  // Round to 2 decimal places to avoid floating-point precision artifacts
+  // (e.g. 28352319.599999998 instead of 28352319.60)
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+
   return {
     totalProducts,
     lowStockProducts,
-    stockValue, // Potential COGS (Assets)
-    retailValue, // Potential Revenue (Assets)
-    realizedRevenue, // Actual Sales
-    realizedCOGS, // Actual Cost
-    grossMargin: realizedRevenue - realizedCOGS,
+    stockValue: round2(stockValue),
+    retailValue: round2(retailValue),
+    realizedRevenue: round2(realizedRevenue),
+    realizedCOGS: round2(realizedCOGS),
+    grossMargin: round2(realizedRevenue - realizedCOGS),
     recentMovements: recentMovements,
   };
 };

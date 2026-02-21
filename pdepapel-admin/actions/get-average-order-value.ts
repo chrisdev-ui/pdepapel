@@ -31,5 +31,5 @@ export const getAverageOrderValue = async (
   }
 
   const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0);
-  return totalRevenue / orders.length;
+  return Math.round((totalRevenue / orders.length) * 100) / 100;
 };

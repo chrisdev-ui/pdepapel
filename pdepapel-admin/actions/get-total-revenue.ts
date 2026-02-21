@@ -27,5 +27,5 @@ export const getTotalRevenue = async (storeId: string, year: number) => {
     return total + order.total;
   }, 0);
 
-  return totalRevenue;
+  return Math.round(totalRevenue * 100) / 100;
 };

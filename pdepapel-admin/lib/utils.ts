@@ -38,12 +38,18 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/** Round a number to 2 decimal places to avoid floating-point artifacts */
+export const round2 = (n: number) => Math.round(n * 100) / 100;
+
 export function currencyFormatter(
   value: number | string | undefined,
   options?: { decimalScale?: number },
 ) {
+  // Round numeric values to avoid floating-point artifacts (e.g. 28352319.599999998)
+  const cleanValue =
+    typeof value === "number" ? round2(value).toString() : value?.toString();
   return formatValue({
-    value: value?.toString(),
+    value: cleanValue,
     decimalScale: options?.decimalScale,
     intlConfig: {
       locale: "es-CO",
@@ -392,10 +398,10 @@ export function calculateOrderTotals(
   );
 
   return {
-    subtotal,
-    discount,
-    couponDiscount,
-    total,
+    subtotal: round2(subtotal),
+    discount: round2(discount),
+    couponDiscount: round2(couponDiscount),
+    total: round2(total),
   };
 }
 
