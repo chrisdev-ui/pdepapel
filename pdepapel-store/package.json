@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "email:dev": "email dev -p 3002 -d ./emails",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -30,6 +31,8 @@
     "@radix-ui/react-tabs": "^1.0.4",
     "@radix-ui/react-toast": "^1.1.5",
     "@radix-ui/react-tooltip": "^1.0.7",
+    "@react-email/components": "^1.0.8",
+    "@react-email/render": "^2.0.4",
     "@t3-oss/env-nextjs": "^0.7.1",
     "@tanstack/react-query": "^5.17.19",
     "@tanstack/react-table": "^8.10.7",
@@ -64,6 +67,7 @@
     "zustand": "^4.4.4"
   },
   "devDependencies": {
+    "@react-email/preview-server": "^5.2.8",
     "@tailwindcss/typography": "^0.5.19",
     "@tanstack/eslint-plugin-query": "^5.17.20",
     "@types/canvas-confetti": "^1.9.0",
@@ -76,6 +80,7 @@
     "postcss": "^8",
     "prettier": "^3.0.3",
     "prettier-plugin-tailwindcss": "^0.5.6",
+    "react-email": "^5.2.8",
     "tailwindcss": "^3",
     "typescript": "^5"
   }

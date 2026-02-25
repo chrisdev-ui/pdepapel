@@ -1,0 +1,23 @@
+name: Daily Store Operations (Scheduler)
+
+on:
+  schedule:
+    - cron: "0 9 * * *" # Every day at 9:00 AM UTC (4:00 AM Bogota Time)
+  workflow_dispatch: # Allow manual trigger for testing
+
+jobs:
+  run-daily-tasks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify System Starting
+        run: echo "Starting daily background tasks..."
+
+      - name: Trigger Automatic Customer Reactivation
+        run: |
+          curl -f -X POST "${{ secrets.PRODUCTION_URL }}/api/${{ secrets.STORE_ID }}/scheduler/auto-reactivation" \
+            -H "Authorization: Bearer ${{ secrets.SCHEDULER_SECRET }}"
+
+      - name: Trigger Bank Transfers Cancellation
+        run: |
+          curl -f -X POST "${{ secrets.PRODUCTION_URL }}/api/${{ secrets.STORE_ID }}/scheduler/bank-transfers" \
+            -H "Authorization: Bearer ${{ secrets.SCHEDULER_SECRET }}"

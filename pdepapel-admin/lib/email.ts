@@ -5,7 +5,7 @@ import {
   Shipping,
   ShippingStatus,
 } from "@prisma/client";
-import { EmailTemplate } from "@/components/email-template";
+import { OrderNotification } from "@/emails/order-notification";
 import { resend } from "@/lib/resend";
 import {
   currencyFormatter,
@@ -89,10 +89,10 @@ export const sendOrderEmail = async (
         from: "Papelería P de Papel <orders@papeleriapdepapel.com>",
         to: ["web.christian.dev@gmail.com", "papeleria.pdepapel@gmail.com"],
         subject: subjectAdmin,
-        react: EmailTemplate({
+        react: OrderNotification({
           name: order.fullName,
           orderNumber: order.orderNumber,
-          status,
+          status: status as string,
           isAdminEmail: true,
           paymentMethod: readablePayment,
           city: order.city || undefined,
@@ -104,7 +104,7 @@ export const sendOrderEmail = async (
           orderSummary,
           orderLink,
           thanksParagraph,
-        }),
+        }) as React.ReactElement,
         text: `Pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\n\n${orderSummary}\n\nVer detalles: ${orderLink}`,
       });
     }
@@ -115,17 +115,17 @@ export const sendOrderEmail = async (
         from: "Papelería P de Papel <orders@papeleriapdepapel.com>",
         to: [order.email],
         subject: subjectCustomer,
-        react: EmailTemplate({
+        react: OrderNotification({
           name: order.fullName,
           orderNumber: order.orderNumber,
-          status,
+          status: status as string,
           paymentMethod: readablePayment,
           trackingInfo: order.shipping?.trackingCode ?? undefined,
           orderSummary,
-          orderLink,
           city: order.city || undefined,
+          orderLink,
           thanksParagraph,
-        }),
+        }) as React.ReactElement,
         text: `Tu pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\n\n${orderSummary}\n\nVer detalles: ${orderLink}\n\n${thanksParagraph}`,
       });
     }
@@ -202,10 +202,10 @@ export const sendShippingEmail = async (
       from: "Papelería P de Papel <orders@papeleriapdepapel.com>",
       to: ["web.christian.dev@gmail.com", "papeleria.pdepapel@gmail.com"],
       subject: subjectAdmin,
-      react: EmailTemplate({
+      react: OrderNotification({
         name: order.fullName,
         orderNumber: order.orderNumber,
-        status: shippingStatus,
+        status: shippingStatus as string,
         isAdminEmail: true,
         paymentMethod: getReadablePaymentMethod(order.payment),
         trackingInfo: order.shipping?.trackingCode ?? undefined,
@@ -217,7 +217,7 @@ export const sendShippingEmail = async (
         orderSummary,
         orderLink,
         thanksParagraph,
-      }),
+      }) as React.ReactElement,
       text: `Pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\n\n${orderSummary}\n\nVer detalles: ${orderLink}`,
     });
 
@@ -227,17 +227,17 @@ export const sendShippingEmail = async (
         from: "Papelería P de Papel <orders@papeleriapdepapel.com>",
         to: [order.email],
         subject: subjectCustomer,
-        react: EmailTemplate({
+        react: OrderNotification({
           name: order.fullName,
           orderNumber: order.orderNumber,
-          status: shippingStatus,
+          status: shippingStatus as string,
           paymentMethod: getReadablePaymentMethod(order.payment),
           trackingInfo: order.shipping?.trackingCode ?? undefined,
           orderSummary,
           city: order.city || undefined,
           orderLink,
           thanksParagraph,
-        }),
+        }) as React.ReactElement,
         text: `${subjectCustomer}\n\n${orderSummary}\n\nVer detalles: ${orderLink}\n\n${thanksParagraph}`,
       });
     }

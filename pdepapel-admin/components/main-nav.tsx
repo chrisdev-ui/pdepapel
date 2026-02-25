@@ -25,6 +25,7 @@ import {
   Image as ImageIcon,
   Layout,
   LayoutDashboard,
+  LineChart,
   ListChecks,
   Menu,
   MessageSquare,
@@ -164,6 +165,13 @@ export function MainNav({
       icon: LayoutDashboard,
     },
     // Ventas
+    {
+      href: `/${params.storeId}/business-intelligence`,
+      label: "Business Intelligence",
+      active: pathname === `/${params.storeId}/business-intelligence`,
+      group: "sales",
+      icon: LineChart,
+    },
     {
       href: `/${params.storeId}/${Models.Orders}`,
       label: ModelLabels[Models.Orders],

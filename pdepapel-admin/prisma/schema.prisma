@@ -1,5 +1,5 @@
 generator client {
-  provider        = "prisma-client-js"
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -9,57 +9,59 @@ datasource db {
 }
 
 model Store {
-  id         String           @id @default(uuid())
-  name       String
-  userId     String
-  logoUrl    String?
-  phone      String?          @default("")
-  email      String?          @default("")
-  address    String?          @default("")
-  instagram  String?          @default("")
-  tiktok     String?          @default("")
-  youtube    String?          @default("")
-  facebook   String?          @default("")
-  twitter    String?          @default("")
-  pinterest  String?          @default("")
-  policies   Json?            @default("{}")
-  daneCode      String?       @default("")     
-  neighborhood  String?       @default("")     
-  addressReference String?    @default("")     
-  contactName   String?       @default("")
-  defaultPackageWeight  Float?  @default(1.0)     // Peso por defecto (kg)
-  defaultPackageHeight  Float?  @default(10.0)    // Alto por defecto (cm)
-  defaultPackageWidth   Float?  @default(10.0)    // Ancho por defecto (cm)
-  defaultPackageLength  Float?  @default(10.0)    // Largo por defecto (cm)
-  createdAt  DateTime         @default(now())
-  updatedAt  DateTime         @updatedAt
-  types      Type[]           @relation("StoreToType")
-  billboards Billboard[]      @relation("StoreToBillboard")
-  posts      Post[]           @relation("StoreToPost")
-  categories Category[]       @relation("StoreToCategory")
-  sizes      Size[]           @relation("StoreToSize")
-  colors     Color[]          @relation("StoreToColor")
-  designs    Design[]         @relation("StoreToDesign")
-  products   Product[]        @relation("StoreToProduct")
-  orders     Order[]          @relation("StoreToOrder")
-  mainBanner MainBanner?      @relation("StoreToMainBanner")
-  banners    Banner[]         @relation("StoreToBanner")
-  reviews    Review[]         @relation("StoreToReview")
-  shippings  Shipping[]       @relation("StoreToShipping")
-  payments   PaymentDetails[] @relation("StoreToPaymentDetails")
-  suppliers  Supplier[]       @relation("StoreToSupplier")
-  coupons    Coupon[]         @relation("StoreToCoupons")
-  shippingQuotes ShippingQuote[] @relation("StoreToShippingQuotes")
-  offers         Offer[]         @relation("StoreToOffer")
-  boxes          Box[]           @relation("StoreToBox")
-  productGroups  ProductGroup[]  @relation("StoreToProductGroup")
-  inventoryMovements InventoryMovement[] @relation("StoreToInventoryMovement")
-  restockOrders  RestockOrder[]  @relation("StoreToRestockOrder")
-  customOrders    CustomOrder[]       @relation("StoreToCustomOrder")
-  quotations      Quotation[]         @relation("StoreToQuotation")
-  whatsappMessages WhatsAppMessage[]  @relation("StoreToWhatsAppMessage")
-  whatsappTemplates WhatsAppTemplate[] @relation("StoreToWhatsAppTemplate")
-  quoteRequests   QuoteRequest[]      @relation("StoreToQuoteRequest")
+  id                    String                 @id @default(uuid())
+  name                  String
+  userId                String
+  logoUrl               String?
+  phone                 String?                @default("")
+  email                 String?                @default("")
+  address               String?                @default("")
+  instagram             String?                @default("")
+  tiktok                String?                @default("")
+  youtube               String?                @default("")
+  facebook              String?                @default("")
+  twitter               String?                @default("")
+  pinterest             String?                @default("")
+  policies              Json?                  @default("{}")
+  daneCode              String?                @default("")
+  neighborhood          String?                @default("")
+  addressReference      String?                @default("")
+  contactName           String?                @default("")
+  defaultPackageWeight  Float?                 @default(1.0) // Peso por defecto (kg)
+  defaultPackageHeight  Float?                 @default(10.0) // Alto por defecto (cm)
+  defaultPackageWidth   Float?                 @default(10.0) // Ancho por defecto (cm)
+  defaultPackageLength  Float?                 @default(10.0) // Largo por defecto (cm)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  types                 Type[]                 @relation("StoreToType")
+  billboards            Billboard[]            @relation("StoreToBillboard")
+  posts                 Post[]                 @relation("StoreToPost")
+  categories            Category[]             @relation("StoreToCategory")
+  sizes                 Size[]                 @relation("StoreToSize")
+  colors                Color[]                @relation("StoreToColor")
+  designs               Design[]               @relation("StoreToDesign")
+  products              Product[]              @relation("StoreToProduct")
+  orders                Order[]                @relation("StoreToOrder")
+  mainBanner            MainBanner?            @relation("StoreToMainBanner")
+  banners               Banner[]               @relation("StoreToBanner")
+  reviews               Review[]               @relation("StoreToReview")
+  shippings             Shipping[]             @relation("StoreToShipping")
+  payments              PaymentDetails[]       @relation("StoreToPaymentDetails")
+  suppliers             Supplier[]             @relation("StoreToSupplier")
+  coupons               Coupon[]               @relation("StoreToCoupons")
+  shippingQuotes        ShippingQuote[]        @relation("StoreToShippingQuotes")
+  offers                Offer[]                @relation("StoreToOffer")
+  boxes                 Box[]                  @relation("StoreToBox")
+  productGroups         ProductGroup[]         @relation("StoreToProductGroup")
+  inventoryMovements    InventoryMovement[]    @relation("StoreToInventoryMovement")
+  restockOrders         RestockOrder[]         @relation("StoreToRestockOrder")
+  customOrders          CustomOrder[]          @relation("StoreToCustomOrder")
+  quotations            Quotation[]            @relation("StoreToQuotation")
+  whatsappMessages      WhatsAppMessage[]      @relation("StoreToWhatsAppMessage")
+  whatsappTemplates     WhatsAppTemplate[]     @relation("StoreToWhatsAppTemplate")
+  quoteRequests         QuoteRequest[]         @relation("StoreToQuoteRequest")
+  invoices              Invoice[]              @relation("StoreToInvoice")
+  customerReactivations CustomerReactivation[] @relation("StoreToCustomerReactivation")
 }
 
 model Billboard {
@@ -72,28 +74,28 @@ model Billboard {
   redirectUrl String?
   title       String?
   buttonLabel String?
-  
-  store       Store    @relation("StoreToBillboard", fields: [storeId], references: [id])
+
+  store Store @relation("StoreToBillboard", fields: [storeId], references: [id])
 
   @@index([storeId])
 }
 
 model Offer {
-  id          String      @id @default(uuid())
-  storeId     String
-  name        String      // Internal name e.g. "Summer Sale"
-  label       String?     // Public label e.g. "20% OFF"
-  type        DiscountType // PERCENTAGE | FIXED (Reuse existing enum)
-  amount      Float       // e.g. 20 for 20%, or 5000 for $5000 off
-  startDate   DateTime
-  endDate     DateTime
-  isActive    Boolean     @default(true)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  
-  store       Store       @relation("StoreToOffer", fields: [storeId], references: [id])
-  products    OfferProduct[]
-  categories  OfferCategory[]
+  id        String       @id @default(uuid())
+  storeId   String
+  name      String // Internal name e.g. "Summer Sale"
+  label     String? // Public label e.g. "20% OFF"
+  type      DiscountType // PERCENTAGE | FIXED (Reuse existing enum)
+  amount    Float // e.g. 20 for 20%, or 5000 for $5000 off
+  startDate DateTime
+  endDate   DateTime
+  isActive  Boolean      @default(true)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  store         Store               @relation("StoreToOffer", fields: [storeId], references: [id])
+  products      OfferProduct[]
+  categories    OfferCategory[]
   productGroups OfferProductGroup[]
 
   @@index([storeId])
@@ -101,36 +103,36 @@ model Offer {
 }
 
 model OfferProduct {
-  id        String   @id @default(uuid())
+  id        String @id @default(uuid())
   offerId   String
   productId String
-  
-  offer     Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  offer   Offer   @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@unique([offerId, productId])
   @@index([productId])
 }
 
 model OfferCategory {
-  id         String   @id @default(uuid())
+  id         String @id @default(uuid())
   offerId    String
   categoryId String
-  
-  offer      Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
-  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  offer    Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   @@unique([offerId, categoryId])
   @@index([categoryId])
 }
 
 model OfferProductGroup {
-  id             String       @id @default(uuid())
+  id             String @id @default(uuid())
   offerId        String
   productGroupId String
 
-  offer          Offer        @relation(fields: [offerId], references: [id], onDelete: Cascade)
-  productGroup   ProductGroup @relation(fields: [productGroupId], references: [id], onDelete: Cascade)
+  offer        Offer        @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  productGroup ProductGroup @relation(fields: [productGroupId], references: [id], onDelete: Cascade)
 
   @@unique([offerId, productGroupId])
   @@index([productGroupId])
@@ -161,15 +163,15 @@ model Type {
 }
 
 model Category {
-  id        String    @id @default(uuid())
+  id        String          @id @default(uuid())
   storeId   String
   typeId    String
   name      String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  store     Store     @relation("StoreToCategory", fields: [storeId], references: [id])
-  type      Type      @relation(fields: [typeId], references: [id])
-  products  Product[] @relation("CategoryToProduct")
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  store     Store           @relation("StoreToCategory", fields: [storeId], references: [id])
+  type      Type            @relation(fields: [typeId], references: [id])
+  products  Product[]       @relation("CategoryToProduct")
   offers    OfferCategory[]
 
   @@index([storeId])
@@ -186,8 +188,8 @@ model Size {
   store     Store     @relation("StoreToSize", fields: [storeId], references: [id])
   products  Product[]
 
-  @@index([storeId])
   @@unique([storeId, value])
+  @@index([storeId])
 }
 
 model Color {
@@ -216,13 +218,13 @@ model Design {
 }
 
 model ProductGroup {
-  id          String    @id @default(uuid())
+  id          String              @id @default(uuid())
   storeId     String
-  store       Store     @relation("StoreToProductGroup", fields: [storeId], references: [id])
+  store       Store               @relation("StoreToProductGroup", fields: [storeId], references: [id])
   name        String
-  description String    @db.Text
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  description String              @db.Text
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
   products    Product[]
   images      Image[]
   offers      OfferProductGroup[]
@@ -234,45 +236,47 @@ model ProductGroup {
 }
 
 model Product {
-  id          String      @id @default(uuid())
-  storeId     String
-  categoryId  String
-  name        String
-  description String      @db.Text
-  stock       Int         @default(0)
-  price       Float       @default(0)
-  acqPrice    Float?      @default(0)
-  isFeatured  Boolean     @default(false)
-  isArchived  Boolean     @default(false)
-  sizeId      String
-  colorId     String
-  designId    String
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  sku         String      @unique
-  store       Store       @relation("StoreToProduct", fields: [storeId], references: [id])
-  category    Category    @relation("CategoryToProduct", fields: [categoryId], references: [id])
-  size        Size        @relation(fields: [sizeId], references: [id])
-  color       Color       @relation(fields: [colorId], references: [id])
-  design      Design      @relation(fields: [designId], references: [id])
-  images      Image[]
-  orderItems  OrderItem[]
-  reviews     Review[]
-  supplierId  String?
-  supplier    Supplier?   @relation(fields: [supplierId], references: [id])
-  productGroupId String?
-  productGroup ProductGroup? @relation(fields: [productGroupId], references: [id])
-  offers      OfferProduct[]
+  id                 String              @id @default(uuid())
+  storeId            String
+  categoryId         String
+  name               String
+  description        String              @db.Text
+  stock              Int                 @default(0)
+  price              Float               @default(0)
+  acqPrice           Float?              @default(0)
+  isFeatured         Boolean             @default(false)
+  isArchived         Boolean             @default(false)
+  sizeId             String
+  colorId            String
+  designId           String
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  sku                String              @unique
+  store              Store               @relation("StoreToProduct", fields: [storeId], references: [id])
+  category           Category            @relation("CategoryToProduct", fields: [categoryId], references: [id])
+  size               Size                @relation(fields: [sizeId], references: [id])
+  color              Color               @relation(fields: [colorId], references: [id])
+  design             Design              @relation(fields: [designId], references: [id])
+  images             Image[]
+  orderItems         OrderItem[]
+  reviews            Review[]
+  supplierId         String?
+  supplier           Supplier?           @relation(fields: [supplierId], references: [id])
+  productGroupId     String?
+  productGroup       ProductGroup?       @relation(fields: [productGroupId], references: [id])
+  offers             OfferProduct[]
   inventoryMovements InventoryMovement[]
-  restockOrderItems RestockOrderItem[]
-  customOrderItems CustomOrderItem[]
-  quotationItems   QuotationItem[]
-  
-  // -- KIT / COMBO FIELDS --
-  isKit            Boolean           @default(false)
-  kitComponents    ProductKit[]      @relation("KitToComponent")
-  componentIn      ProductKit[]      @relation("ComponentToKit")
+  restockOrderItems  RestockOrderItem[]
+  customOrderItems   CustomOrderItem[]
+  quotationItems     QuotationItem[]
 
+  // -- KIT / COMBO FIELDS --
+  isKit         Boolean      @default(false)
+  kitComponents ProductKit[] @relation("KitToComponent")
+  componentIn   ProductKit[] @relation("ComponentToKit")
+
+  // -- BI INTELLIGENCE --
+  abcClassification String? // "A", "B", "C" or null
 
   @@index([storeId])
   @@index([categoryId])
@@ -288,16 +292,16 @@ model Product {
   @@index([id, storeId, stock, price])
   @@index([storeId, id, isArchived])
   @@index([id, stock])
+  @@index([productGroupId])
   @@fulltext([name])
   @@fulltext([name, description])
-  @@index([productGroupId])
 }
 
 model ProductKit {
-  id          String  @id @default(uuid())
+  id          String @id @default(uuid())
   kitId       String
   componentId String
-  quantity    Int     @default(1)
+  quantity    Int    @default(1)
 
   kit       Product @relation("KitToComponent", fields: [kitId], references: [id], onDelete: Cascade)
   component Product @relation("ComponentToKit", fields: [componentId], references: [id]) // No Cascade delete to protect components
@@ -306,87 +310,95 @@ model ProductKit {
   @@index([componentId])
 }
 
-
 model Supplier {
-  id        String   @id @default(uuid())
-  storeId   String
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  store     Store    @relation("StoreToSupplier", fields: [storeId], references: [id])
-  products  Product[]
+  id            String         @id @default(uuid())
+  storeId       String
+  name          String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  store         Store          @relation("StoreToSupplier", fields: [storeId], references: [id])
+  products      Product[]
   restockOrders RestockOrder[]
 
   @@index([storeId])
 }
 
 model Image {
-  id        String   @id @default(uuid())
-  productId String?
-  product   Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  id             String        @id @default(uuid())
+  productId      String?
+  product        Product?      @relation(fields: [productId], references: [id], onDelete: Cascade)
   productGroupId String?
-  productGroup ProductGroup? @relation(fields: [productGroupId], references: [id], onDelete: Cascade)
-  url       String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  isMain    Boolean  @default(false)
+  productGroup   ProductGroup? @relation(fields: [productGroupId], references: [id], onDelete: Cascade)
+  url            String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  isMain         Boolean       @default(false)
 
   @@index([productId])
   @@index([productGroupId])
 }
 
 model Order {
-  id          String          @id @default(uuid())
-  storeId     String
-  email       String?         @default("")
-  phone       String          @default("")
-  address     String          @default("")
-  address2    String?         @default("")
-  city        String?         @default("")
-  department  String?         @default("")
-  daneCode    String?         @default("")
-  neighborhood String?        @default("")  // suburb en EnvioClick
-  addressReference String?    @default("") // reference en EnvioClick
-  company     String?         @default("")
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  orderNumber String          @unique
-  fullName    String          @default("")
-  documentId  String?         @default("")
-  status      OrderStatus     @default(CREATED)
-  userId      String?         @default("")
-  guestId     String?         @default("")
-  subtotal    Float           @default(0)
-  discount    Float           @default(0)
-  discountType    DiscountType?
-  discountReason  String?
-  couponId        String?
-  couponDiscount  Float       @default(0)
-  total       Float           @default(0)
-  coupon      Coupon?         @relation(fields: [couponId], references: [id])
-  store       Store           @relation("StoreToOrder", fields: [storeId], references: [id])
-  orderItems  OrderItem[]
-  shipping    Shipping?
-  payment     PaymentDetails?
+  id                       String          @id @default(uuid())
+  storeId                  String
+  email                    String?         @default("")
+  phone                    String          @default("")
+  address                  String          @default("")
+  address2                 String?         @default("")
+  city                     String?         @default("")
+  department               String?         @default("")
+  daneCode                 String?         @default("")
+  neighborhood             String?         @default("") // suburb en EnvioClick
+  addressReference         String?         @default("") // reference en EnvioClick
+  company                  String?         @default("")
+  createdAt                DateTime        @default(now())
+  updatedAt                DateTime        @updatedAt
+  orderNumber              String          @unique
+  fullName                 String          @default("")
+  documentId               String?         @default("")
+  status                   OrderStatus     @default(CREATED)
+  userId                   String?         @default("")
+  guestId                  String?         @default("")
+  subtotal                 Float           @default(0)
+  discount                 Float           @default(0)
+  discountType             DiscountType?
+  discountReason           String?
+  couponId                 String?
+  couponDiscount           Float           @default(0)
+  total                    Float           @default(0)
+  coupon                   Coupon?         @relation(fields: [couponId], references: [id])
+  store                    Store           @relation("StoreToOrder", fields: [storeId], references: [id])
+  orderItems               OrderItem[]
+  shipping                 Shipping?
+  payment                  PaymentDetails?
   convertedFromCustomOrder CustomOrder? // Deprecated relationship, kept for backup
-  
+
   // -- UNIFIED ORDER FIELDS --
-  type            OrderType       @default(STANDARD) 
-  
+  type OrderType @default(STANDARD)
+
   // Workflow & Public Access
-  token           String?         @unique // For public quote view
-  expiresAt       DateTime?       // For quotations validity
-  viewedAt        DateTime?       
-  
+  token     String?   @unique // For public quote view
+  expiresAt DateTime? // For quotations validity
+  viewedAt  DateTime?
+  paidAt    DateTime?
+
+  // -- BI Financial Fields --
+  totalProductCost Float?
+  gatewayFee       Float?
+  shippingCost     Float?
+  netProfit        Float?
+  profitMarginPct  Float?
+
   // Custom/Manual Order Fields
-  adminNotes      String?         @db.Text
-  internalNotes   String?         @db.Text
-  
+  adminNotes    String? @db.Text
+  internalNotes String? @db.Text
+
   // Sender Info
-  createdBy       String?         // Admin User ID
-  
-  quoteRequests   QuoteRequest[]
-  
+  createdBy String? // Admin User ID
+
+  quoteRequests QuoteRequest[]
+  invoices      Invoice[]
+
   @@index([storeId])
   @@index([couponId])
   @@index([storeId, status])
@@ -402,7 +414,7 @@ model Order {
   @@index([userId, guestId, storeId, createdAt])
   @@index([storeId, userId, createdAt])
   @@index([storeId, guestId, createdAt])
-  @@index([token]) 
+  @@index([token])
   @@index([type])
 }
 
@@ -411,16 +423,16 @@ model OrderItem {
   orderId   String
   productId String? // Made Optional for Manual Items
   quantity  Int
-  
-  // Snapshot Fields (To support Manual Items & Historical Fidelity)
-  name      String  @default("")
-  sku       String? @default("")
-  price     Float   @default(0)
-  imageUrl  String? @default("")
-  isCustom  Boolean @default(false)
 
-  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product   Product? @relation(fields: [productId], references: [id], onDelete: Restrict) // Optional Link
+  // Snapshot Fields (To support Manual Items & Historical Fidelity)
+  name     String  @default("")
+  sku      String? @default("")
+  price    Float   @default(0)
+  imageUrl String? @default("")
+  isCustom Boolean @default(false)
+
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: Restrict) // Optional Link
 
   createdAt DateTime @default(now())
 
@@ -478,50 +490,50 @@ model Review {
 }
 
 model Shipping {
-  id           String           @id @default(uuid())
-  orderId      String           @unique
-  status       ShippingStatus   @default(Preparing)
-  provider     ShippingProvider @default(MANUAL)
-  boxId        String?
-  box          Box?             @relation(fields: [boxId], references: [id])
-  envioClickIdRate  Int?            // ⭐ idRate de cotización (guardado al cotizar)
-  envioClickIdOrder Int?            // ⭐ idOrder de guía (retornado al crear guía)
-  myShipmentReference String?       // Referencia de tu sistema (orderNumber)
-  externalOrderId   String?         // ID externo adicional
-  carrierId         Int?            // idCarrier de EnvioClick
-  carrierName       String?         // Nombre: "COORDINADORA", "ENVIA", etc.
-  productId         Int?            // idProduct de EnvioClick
-  productName       String?         // "Normal", "Normal COD", etc.
-  flete             Float?          // Costo base de envío
-  minimumInsurance  Float?          // Seguro obligatorio
-  extraInsurance    Float?          // Seguro extra
-  hasInsurance      Boolean         @default(false)
-  isCOD             Boolean         @default(false)
-  codValue          Float?          // Valor a recaudar
-  codCost           Float?          // Costo adicional por COD
-  includeGuideCost  Boolean         @default(false)
-  codPaymentMethod  String?         // "cash" | "data_phone"
-  trackingCode      String?         // tracker de EnvioClick
-  trackingUrl       String?         // URL de tracking (si existe)
-  guideUrl          String?         // URL del PDF de guía (S3)
-  guidePdfBase64    String?         @db.LongText // PDF en base64 (opcional)
-  requestPickup     Boolean         @default(false)
-  pickupDate        DateTime?
-  quotationData     Json?
-  originData        Json?           // Datos completos de origen
-  destinationData   Json?           // Datos completos de destino
-  deliveryDays      Int?            // Días estimados de EnvioClick
+  id                    String                  @id @default(uuid())
+  orderId               String                  @unique
+  status                ShippingStatus          @default(Preparing)
+  provider              ShippingProvider        @default(MANUAL)
+  boxId                 String?
+  box                   Box?                    @relation(fields: [boxId], references: [id])
+  envioClickIdRate      Int? // ⭐ idRate de cotización (guardado al cotizar)
+  envioClickIdOrder     Int? // ⭐ idOrder de guía (retornado al crear guía)
+  myShipmentReference   String? // Referencia de tu sistema (orderNumber)
+  externalOrderId       String? // ID externo adicional
+  carrierId             Int? // idCarrier de EnvioClick
+  carrierName           String? // Nombre: "COORDINADORA", "ENVIA", etc.
+  productId             Int? // idProduct de EnvioClick
+  productName           String? // "Normal", "Normal COD", etc.
+  flete                 Float? // Costo base de envío
+  minimumInsurance      Float? // Seguro obligatorio
+  extraInsurance        Float? // Seguro extra
+  hasInsurance          Boolean                 @default(false)
+  isCOD                 Boolean                 @default(false)
+  codValue              Float? // Valor a recaudar
+  codCost               Float? // Costo adicional por COD
+  includeGuideCost      Boolean                 @default(false)
+  codPaymentMethod      String? // "cash" | "data_phone"
+  trackingCode          String? // tracker de EnvioClick
+  trackingUrl           String? // URL de tracking (si existe)
+  guideUrl              String? // URL del PDF de guía (S3)
+  guidePdfBase64        String?                 @db.LongText // PDF en base64 (opcional)
+  requestPickup         Boolean                 @default(false)
+  pickupDate            DateTime?
+  quotationData         Json?
+  originData            Json? // Datos completos de origen
+  destinationData       Json? // Datos completos de destino
+  deliveryDays          Int? // Días estimados de EnvioClick
   estimatedDeliveryDate DateTime?
   actualDeliveryDate    DateTime?
-  notes             String?         @db.Text
-  courier      String?
-  cost         Float?
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
-  storeId      String
-  store        Store            @relation("StoreToShipping", fields: [storeId], references: [id])
-  order        Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  trackingEvents    ShippingTrackingEvent[]
+  notes                 String?                 @db.Text
+  courier               String?
+  cost                  Float?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  storeId               String
+  store                 Store                   @relation("StoreToShipping", fields: [storeId], references: [id])
+  order                 Order                   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  trackingEvents        ShippingTrackingEvent[]
 
   @@index([orderId])
   @@index([storeId])
@@ -537,15 +549,15 @@ model Shipping {
 }
 
 model ShippingTrackingEvent {
-  id          String    @id @default(uuid())
+  id          String   @id @default(uuid())
   shippingId  String
   status      String
-  description String    @db.Text
+  description String   @db.Text
   location    String?
   timestamp   DateTime
-  createdAt   DateTime  @default(now())
+  createdAt   DateTime @default(now())
 
-  shipping    Shipping  @relation(fields: [shippingId], references: [id], onDelete: Cascade)
+  shipping Shipping @relation(fields: [shippingId], references: [id], onDelete: Cascade)
 
   @@index([shippingId])
   @@index([timestamp])
@@ -553,21 +565,21 @@ model ShippingTrackingEvent {
 }
 
 model ShippingQuote {
-  id              String    @id @default(uuid())
-  storeId         String
-  originDaneCode  String    // Código DANE origen
-  destDaneCode    String    // Código DANE destino
-  weight          Float     // Peso en kg
-  declaredValue   Float     // Valor declarado
-  height          Float?
-  width           Float?
-  length          Float?
-  quotesData      Json      // Array completo de rates
-  expiresAt       DateTime
-  hitCount        Int       @default(0)  // Cuántas veces se usó
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  store           Store     @relation("StoreToShippingQuotes", fields: [storeId], references: [id], onDelete: Cascade)
+  id             String   @id @default(uuid())
+  storeId        String
+  originDaneCode String // Código DANE origen
+  destDaneCode   String // Código DANE destino
+  weight         Float // Peso en kg
+  declaredValue  Float // Valor declarado
+  height         Float?
+  width          Float?
+  length         Float?
+  quotesData     Json // Array completo de rates
+  expiresAt      DateTime
+  hitCount       Int      @default(0) // Cuántas veces se usó
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  store          Store    @relation("StoreToShippingQuotes", fields: [storeId], references: [id], onDelete: Cascade)
 
   @@unique([storeId, originDaneCode, destDaneCode, weight, declaredValue])
   @@index([storeId])
@@ -594,21 +606,21 @@ model PaymentDetails {
 }
 
 model Coupon {
-  id            String         @id @default(uuid())
+  id            String       @id @default(uuid())
   storeId       String
-  code          String         @unique
+  code          String       @unique
   type          DiscountType
   amount        Float
   startDate     DateTime
   endDate       DateTime
-  maxUses       Int?           @default(99)
-  usedCount     Int            @default(0)
-  isActive      Boolean        @default(true)
-  minOrderValue Float?         @default(0)
-  orders        Order[]        
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  store         Store          @relation("StoreToCoupons", fields: [storeId], references: [id])
+  maxUses       Int?         @default(99)
+  usedCount     Int          @default(0)
+  isActive      Boolean      @default(true)
+  minOrderValue Float?       @default(0)
+  orders        Order[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  store         Store        @relation("StoreToCoupons", fields: [storeId], references: [id])
 
   @@unique([storeId, code])
   @@index([storeId])
@@ -639,9 +651,9 @@ enum OrderStatus {
   VIEWED
   ACCEPTED
   REJECTED // Legacy or Specific rejected quote
-  
+
   // Active Order States
-  CREATED     // (Legacy) Treat as PENDING
+  CREATED // (Legacy) Treat as PENDING
   PENDING
   PAID
   SENT
@@ -657,16 +669,16 @@ enum PaymentMethod {
 }
 
 enum ShippingStatus {
-  Preparing      
-  Shipped        
-  PickedUp       
-  InTransit      
-  OutForDelivery 
-  Delivered      
-  FailedDelivery 
-  Returned       
-  Cancelled      
-  Exception      
+  Preparing
+  Shipped
+  PickedUp
+  InTransit
+  OutForDelivery
+  Delivered
+  FailedDelivery
+  Returned
+  Cancelled
+  Exception
 }
 
 enum Social {
@@ -685,17 +697,17 @@ enum ShippingProvider {
 }
 
 model Box {
-  id        String   @id @default(uuid())
+  id        String     @id @default(uuid())
   storeId   String
   name      String
-  type      String   // "XS", "S", "M", "L", "XL"
+  type      String // "XS", "S", "M", "L", "XL"
   width     Float
   height    Float
   length    Float
-  isDefault Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  store     Store    @relation("StoreToBox", fields: [storeId], references: [id])
+  isDefault Boolean    @default(false)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  store     Store      @relation("StoreToBox", fields: [storeId], references: [id])
   shippings Shipping[]
 
   @@index([storeId])
@@ -707,16 +719,16 @@ model InventoryMovement {
   productId     String
   product       Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
   type          InventoryMovementType
-  quantity      Int                   // Positive = Add, Negative = Remove
-  previousStock Int                   // Snapshot
-  newStock      Int                   // Snapshot
-  cost          Float?                // Unit cost at this moment
-  price         Float?                // Unit sell price (if applicable)
+  quantity      Int // Positive = Add, Negative = Remove
+  previousStock Int // Snapshot
+  newStock      Int // Snapshot
+  cost          Float? // Unit cost at this moment
+  price         Float? // Unit sell price (if applicable)
   reason        String?
   description   String?               @db.Text
-  referenceId   String?               // Order ID, etc.
+  referenceId   String? // Order ID, etc.
   createdAt     DateTime              @default(now())
-  createdBy     String?               // User ID or System
+  createdBy     String? // User ID or System
 
   store Store @relation("StoreToInventoryMovement", fields: [storeId], references: [id])
 
@@ -727,54 +739,54 @@ model InventoryMovement {
 }
 
 enum InventoryMovementType {
-  ORDER_PLACED        // Decrease
-  ORDER_CANCELLED     // Increase (Restock)
-  MANUAL_ADJUSTMENT   // Increase/Decrease
-  INITIAL_MIGRATION   // Increase
-  RETURN              // Increase
-  DAMAGE              // Decrease
-  LOST                // Decrease
-  PROMOTION           // Decrease
-  PURCHASE            // Increase (Buying stock from supplier)
-  INITIAL_INTAKE      // First-time stock entry
-  RESTOCK_RECEIVED    // Supplier restock
-  STORE_USE           // Internal store consumption
+  ORDER_PLACED // Decrease
+  ORDER_CANCELLED // Increase (Restock)
+  MANUAL_ADJUSTMENT // Increase/Decrease
+  INITIAL_MIGRATION // Increase
+  RETURN // Increase
+  DAMAGE // Decrease
+  LOST // Decrease
+  PROMOTION // Decrease
+  PURCHASE // Increase (Buying stock from supplier)
+  INITIAL_INTAKE // First-time stock entry
+  RESTOCK_RECEIVED // Supplier restock
+  STORE_USE // Internal store consumption
 }
 
 model RestockOrder {
-  id          String             @id @default(uuid())
-  storeId     String
-  supplierId  String
-  orderNumber String             // Auto-generated e.g., PO-1001
-  status      RestockOrderStatus @default(DRAFT)
-  totalAmount Float              @default(0) // Expected total cost
-  shippingCost Float             @default(0) // Extra logistics cost to distribute
-  notes       String?            @db.Text
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  id           String             @id @default(uuid())
+  storeId      String
+  supplierId   String
+  orderNumber  String // Auto-generated e.g., PO-1001
+  status       RestockOrderStatus @default(DRAFT)
+  totalAmount  Float              @default(0) // Expected total cost
+  shippingCost Float              @default(0) // Extra logistics cost to distribute
+  notes        String?            @db.Text
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
 
-  store       Store              @relation("StoreToRestockOrder", fields: [storeId], references: [id])
-  supplier    Supplier           @relation(fields: [supplierId], references: [id])
-  items       RestockOrderItem[]
+  store    Store              @relation("StoreToRestockOrder", fields: [storeId], references: [id])
+  supplier Supplier           @relation(fields: [supplierId], references: [id])
+  items    RestockOrderItem[]
 
+  @@unique([storeId, orderNumber])
   @@index([storeId])
   @@index([supplierId])
   @@index([status])
-  @@unique([storeId, orderNumber])
 }
 
 model RestockOrderItem {
-  id             String       @id @default(uuid())
-  restockOrderId String
-  productId      String
-  index          Int          @default(0)
-  quantity       Int          // Ordered quantity
-  quantityReceived Int        @default(0) // Track received amount
-  cost           Float        // Unit cost agreed
-  subtotal       Float        // quantity * cost
+  id               String @id @default(uuid())
+  restockOrderId   String
+  productId        String
+  index            Int    @default(0)
+  quantity         Int // Ordered quantity
+  quantityReceived Int    @default(0) // Track received amount
+  cost             Float // Unit cost agreed
+  subtotal         Float // quantity * cost
 
-  restockOrder   RestockOrder @relation(fields: [restockOrderId], references: [id], onDelete: Cascade)
-  product        Product      @relation(fields: [productId], references: [id])
+  restockOrder RestockOrder @relation(fields: [restockOrderId], references: [id], onDelete: Cascade)
+  product      Product      @relation(fields: [productId], references: [id])
 
   @@index([restockOrderId])
   @@index([productId])
@@ -790,54 +802,54 @@ enum RestockOrderStatus {
 
 // Custom Orders (For Backup/Reference)
 model CustomOrder {
-  id              String              @id @default(uuid())
-  storeId         String
-  quotationId     String?             
-  orderNumber     String              @unique
-  customerName    String
-  customerPhone   String
-  customerEmail   String?
-  status          CustomOrderStatus   @default(DRAFT)
-  type            CustomOrderType     @default(CUSTOM)
-  subtotal        Float               @default(0)
-  discount        Float               @default(0)
-  discountType    DiscountType?
-  shippingCost    Float               @default(0)
-  tax             Float               @default(0)
-  total           Float               @default(0)
-  
-  address         String?             @default("")
-  address2        String?             @default("")
-  city            String?             @default("")
-  department      String?             @default("")
-  daneCode        String?             @default("")
-  neighborhood    String?             @default("")
-  addressReference String?            @default("")
-  company         String?             @default("")
-  
-  notes           String?             @db.Text
-  adminNotes      String?             @db.Text
-  internalNotes   String?             @db.Text
-  validUntil      DateTime?
-  viewedAt        DateTime?
-  acceptedAt      DateTime?
-  rejectedAt      DateTime?
-  rejectionReason String?             @db.Text
-  publicUrl       String?
-  token           String?             @unique
-  createdBy       String              
-  convertedToOrderId String?          @unique
-  expirationReminded Boolean          @default(false)
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-  
-  store           Store               @relation("StoreToCustomOrder", fields: [storeId], references: [id])
-  items           CustomOrderItem[]
-  messages        WhatsAppMessage[]
-  quotation       Quotation?          @relation(fields: [quotationId], references: [id])
-  convertedOrder  Order?              @relation(fields: [convertedToOrderId], references: [id])
-  quoteRequest    QuoteRequest?
-  
+  id            String            @id @default(uuid())
+  storeId       String
+  quotationId   String?
+  orderNumber   String            @unique
+  customerName  String
+  customerPhone String
+  customerEmail String?
+  status        CustomOrderStatus @default(DRAFT)
+  type          CustomOrderType   @default(CUSTOM)
+  subtotal      Float             @default(0)
+  discount      Float             @default(0)
+  discountType  DiscountType?
+  shippingCost  Float             @default(0)
+  tax           Float             @default(0)
+  total         Float             @default(0)
+
+  address          String? @default("")
+  address2         String? @default("")
+  city             String? @default("")
+  department       String? @default("")
+  daneCode         String? @default("")
+  neighborhood     String? @default("")
+  addressReference String? @default("")
+  company          String? @default("")
+
+  notes              String?   @db.Text
+  adminNotes         String?   @db.Text
+  internalNotes      String?   @db.Text
+  validUntil         DateTime?
+  viewedAt           DateTime?
+  acceptedAt         DateTime?
+  rejectedAt         DateTime?
+  rejectionReason    String?   @db.Text
+  publicUrl          String?
+  token              String?   @unique
+  createdBy          String
+  convertedToOrderId String?   @unique
+  expirationReminded Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  store          Store             @relation("StoreToCustomOrder", fields: [storeId], references: [id])
+  items          CustomOrderItem[]
+  messages       WhatsAppMessage[]
+  quotation      Quotation?        @relation(fields: [quotationId], references: [id])
+  convertedOrder Order?            @relation(fields: [convertedToOrderId], references: [id])
+  quoteRequest   QuoteRequest?
+
   @@index([storeId])
   @@index([customerPhone])
   @@index([status])
@@ -851,27 +863,27 @@ model CustomOrder {
 }
 
 model CustomOrderItem {
-  id              String          @id @default(uuid())
-  customOrderId   String
-  productId       String?
-  name            String
-  description     String?         @db.Text
-  quantity        Int
-  unitPrice       Float
-  subtotal        Float
-  imageUrl        String?
-  sku             String?
-  isExternal      Boolean         @default(false) 
-  supplierInfo    String?         
-  supplierUrl     String?
-  category        String?
-  position        Int             @default(0)
-  customNotes     String?         @db.Text
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  id            String   @id @default(uuid())
+  customOrderId String
+  productId     String?
+  name          String
+  description   String?  @db.Text
+  quantity      Int
+  unitPrice     Float
+  subtotal      Float
+  imageUrl      String?
+  sku           String?
+  isExternal    Boolean  @default(false)
+  supplierInfo  String?
+  supplierUrl   String?
+  category      String?
+  position      Int      @default(0)
+  customNotes   String?  @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  customOrder     CustomOrder     @relation(fields: [customOrderId], references: [id], onDelete: Cascade)
-  product         Product?        @relation(fields: [productId], references: [id])
+  customOrder CustomOrder @relation(fields: [customOrderId], references: [id], onDelete: Cascade)
+  product     Product?    @relation(fields: [productId], references: [id])
 
   @@index([customOrderId])
   @@index([productId])
@@ -879,25 +891,25 @@ model CustomOrderItem {
 }
 
 model Quotation {
-  id              String              @id @default(uuid())
-  storeId         String
-  name            String
-  description     String?             @db.Text
-  type            QuotationType       @default(GENERAL)
-  isTemplate      Boolean             @default(false)
-  isActive        Boolean             @default(true)
-  validityDays    Int                 @default(7)
-  termsConditions String?             @db.Text
-  defaultDiscount Float?              @default(0)
+  id                  String        @id @default(uuid())
+  storeId             String
+  name                String
+  description         String?       @db.Text
+  type                QuotationType @default(GENERAL)
+  isTemplate          Boolean       @default(false)
+  isActive            Boolean       @default(true)
+  validityDays        Int           @default(7)
+  termsConditions     String?       @db.Text
+  defaultDiscount     Float?        @default(0)
   defaultDiscountType DiscountType?
-  createdBy       String
-  usageCount      Int                 @default(0)
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  createdBy           String
+  usageCount          Int           @default(0)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
 
-  store           Store               @relation("StoreToQuotation", fields: [storeId], references: [id])
-  items           QuotationItem[]
-  customOrders    CustomOrder[]
+  store        Store           @relation("StoreToQuotation", fields: [storeId], references: [id])
+  items        QuotationItem[]
+  customOrders CustomOrder[]
 
   @@index([storeId])
   @@index([isTemplate])
@@ -907,20 +919,20 @@ model Quotation {
 }
 
 model QuotationItem {
-  id              String      @id @default(uuid())
-  quotationId     String
-  productId       String?
-  name            String
-  description     String?     @db.Text
-  quantity        Int         @default(1)
-  unitPrice       Float
-  isOptional      Boolean     @default(false)
-  category        String?
-  position        Int         @default(0)
-  imageUrl        String?
+  id          String  @id @default(uuid())
+  quotationId String
+  productId   String?
+  name        String
+  description String? @db.Text
+  quantity    Int     @default(1)
+  unitPrice   Float
+  isOptional  Boolean @default(false)
+  category    String?
+  position    Int     @default(0)
+  imageUrl    String?
 
-  quotation       Quotation   @relation(fields: [quotationId], references: [id], onDelete: Cascade)
-  product         Product?    @relation(fields: [productId], references: [id])
+  quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  product   Product?  @relation(fields: [productId], references: [id])
 
   @@index([quotationId])
   @@index([productId])
@@ -928,32 +940,32 @@ model QuotationItem {
 }
 
 model WhatsAppMessage {
-  id              String              @id @default(uuid())
-  storeId         String
-  customOrderId   String?
-  recipientPhone  String
-  recipientName   String?
-  message         String              @db.Text
-  mediaUrl        String?
-  mediaType       String? 
-  status          MessageStatus       @default(PENDING)
-  provider        String?             @default("manual") 
-  externalId      String?  
-  sentAt          DateTime?
-  deliveredAt     DateTime?
-  readAt          DateTime?
-  failedAt        DateTime?
-  errorMessage    String?             @db.Text
-  errorCode       String?
-  retryCount      Int                 @default(0)
-  templateId      String?
-  createdBy       String
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  id             String        @id @default(uuid())
+  storeId        String
+  customOrderId  String?
+  recipientPhone String
+  recipientName  String?
+  message        String        @db.Text
+  mediaUrl       String?
+  mediaType      String?
+  status         MessageStatus @default(PENDING)
+  provider       String?       @default("manual")
+  externalId     String?
+  sentAt         DateTime?
+  deliveredAt    DateTime?
+  readAt         DateTime?
+  failedAt       DateTime?
+  errorMessage   String?       @db.Text
+  errorCode      String?
+  retryCount     Int           @default(0)
+  templateId     String?
+  createdBy      String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
-  store           Store               @relation("StoreToWhatsAppMessage", fields: [storeId], references: [id])
-  customOrder     CustomOrder?        @relation(fields: [customOrderId], references: [id])
-  template        WhatsAppTemplate?   @relation(fields: [templateId], references: [id])
+  store       Store             @relation("StoreToWhatsAppMessage", fields: [storeId], references: [id])
+  customOrder CustomOrder?      @relation(fields: [customOrderId], references: [id])
+  template    WhatsAppTemplate? @relation(fields: [templateId], references: [id])
 
   @@index([storeId])
   @@index([customOrderId])
@@ -965,20 +977,20 @@ model WhatsAppMessage {
 }
 
 model WhatsAppTemplate {
-  id          String          @id @default(uuid())
-  storeId     String
-  name        String
-  type        TemplateType
-  message     String          @db.Text
-  variables   Json?           
-  mediaUrl    String?         
-  isActive    Boolean         @default(true)
-  usageCount  Int             @default(0)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  id         String       @id @default(uuid())
+  storeId    String
+  name       String
+  type       TemplateType
+  message    String       @db.Text
+  variables  Json?
+  mediaUrl   String?
+  isActive   Boolean      @default(true)
+  usageCount Int          @default(0)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
 
-  store       Store           @relation("StoreToWhatsAppTemplate", fields: [storeId], references: [id])
-  messages    WhatsAppMessage[]
+  store    Store             @relation("StoreToWhatsAppTemplate", fields: [storeId], references: [id])
+  messages WhatsAppMessage[]
 
   @@index([storeId])
   @@index([type])
@@ -987,24 +999,24 @@ model WhatsAppTemplate {
 }
 
 model QuoteRequest {
-  id              String      @id @default(uuid())
-  storeId         String
-  customerName    String
-  customerPhone   String
-  customerEmail   String?
-  message         String?     @db.Text
-  attachmentUrl   String?     
-  status          String      @default("pending") 
-  assignedTo      String?     
-  customOrderId   String?     @unique
-  processedAt     DateTime?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt 
+  id            String    @id @default(uuid())
+  storeId       String
+  customerName  String
+  customerPhone String
+  customerEmail String?
+  message       String?   @db.Text
+  attachmentUrl String?
+  status        String    @default("pending")
+  assignedTo    String?
+  customOrderId String?   @unique
+  processedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  store           Store        @relation("StoreToQuoteRequest", fields: [storeId], references: [id])
-  customOrder     CustomOrder? @relation(fields: [customOrderId], references: [id])
-  order           Order?       @relation(fields: [orderId], references: [id])
-  orderId         String?
+  store       Store        @relation("StoreToQuoteRequest", fields: [storeId], references: [id])
+  customOrder CustomOrder? @relation(fields: [customOrderId], references: [id])
+  order       Order?       @relation(fields: [orderId], references: [id])
+  orderId     String?
 
   @@index([storeId])
   @@index([status])
@@ -1064,4 +1076,86 @@ enum TemplateType {
   CUSTOM
   WELCOME
   FOLLOW_UP
+}
+
+model Invoice {
+  id            String        @id @default(uuid())
+  storeId       String
+  orderId       String
+  invoiceNumber String        @unique
+  invoiceStatus InvoiceStatus @default(DRAFT)
+  dianStatus    DianStatus    @default(PENDING)
+  cufe          String? // DIAN unique electronic ID
+  xmlPayload    String?       @db.LongText
+  xmlPath       String?
+  pdfPath       String?
+  sentToDianAt  DateTime?
+  totalAmount   Float
+  taxAmount     Float         @default(0)
+  customerName  String
+  customerDocId String?
+  customerEmail String?
+  providerRef   String? // External provider reference
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  store Store @relation("StoreToInvoice", fields: [storeId], references: [id])
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@index([storeId])
+  @@index([orderId])
+  @@index([invoiceNumber])
+  @@index([dianStatus])
+  @@index([storeId, createdAt])
+}
+
+model CustomerReactivation {
+  id                    String             @id @default(uuid())
+  storeId               String
+  customerEmail         String
+  customerName          String
+  status                ReactivationStatus @default(SENT)
+  lastOrderDate         DateTime
+  totalSpent            Float              @default(0)
+  orderCount            Int                @default(0)
+  daysSinceLastPurchase Int
+  sentAt                DateTime?          @default(now())
+  openedAt              DateTime?
+  clickedAt             DateTime?
+  couponUsed            Boolean            @default(false)
+  errorMessage          String?            @db.Text
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  store Store @relation("StoreToCustomerReactivation", fields: [storeId], references: [id])
+
+  @@index([storeId])
+  @@index([customerEmail])
+  @@index([status])
+  @@index([storeId, status])
+  @@index([storeId, customerEmail])
+}
+
+enum InvoiceStatus {
+  DRAFT
+  GENERATED
+  SENT
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+enum DianStatus {
+  PENDING
+  SUBMITTED
+  ACCEPTED
+  REJECTED
+  ERROR
+}
+
+enum ReactivationStatus {
+  SENT // Email sent automatically
+  OPENED // Customer opened email
+  CLICKED // Customer clicked CTA
+  FAILED // Send failed
 }

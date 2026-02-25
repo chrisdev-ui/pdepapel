@@ -5,6 +5,7 @@ import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { createInventoryMovementBatchResilient } from "@/lib/inventory";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
+import { calculateOrderFinancials } from "@/lib/financial";
 import crypto from "crypto";
 import { NextResponse } from "next/server";
 
@@ -184,6 +185,22 @@ async function updateOrderData(order: any, transaction: any) {
           tx,
           stockMovements,
         );
+
+        // Calculate and persist financial metrics
+        const financials = await calculateOrderFinancials(
+          order,
+          PaymentMethod.Wompi,
+          order.shipping?.cost || 0,
+          tx,
+        );
+
+        await tx.order.update({
+          where: { id: order.id },
+          data: {
+            ...financials,
+            paidAt: new Date(),
+          } as any,
+        });
 
         // Log any stock update failures but don't throw errors
         if (stockResult.failed.length > 0) {

@@ -14,6 +14,7 @@ import {
   createInventoryMovementBatch,
   validateStockAvailability,
 } from "@/lib/inventory";
+import { calculateOrderFinancials } from "@/lib/financial";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { auth, clerkClient } from "@clerk/nextjs";
 import {
@@ -686,6 +687,22 @@ export async function PATCH(
             },
           });
         }
+
+        // BI Platform: Calculate and persist financial metrics when manually paid
+        const financials = await calculateOrderFinancials(
+          updated as any,
+          updated.payment?.method,
+          updated.shipping?.cost || 0,
+          tx,
+        );
+
+        await tx.order.update({
+          where: { id: updated.id },
+          data: {
+            ...financials,
+            paidAt: new Date(),
+          } as any,
+        });
       }
 
       // 4. Handle Refund/Restock (Paid -> Not Paid/Cancelled)

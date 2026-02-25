@@ -1,4 +1,4 @@
-import { EmailTemplate } from "@/components/email-template";
+import { ContactFormEmail } from "@/emails/contact-form";
 import { env } from "@/lib/env.mjs";
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
       from: "Contact <admin@papeleriapdepapel.com>",
       to: ["web.christian.dev@gmail.com", "papeleria.pdepapel@gmail.com"],
       subject: `Nueva solicitud de contacto - ${name}`,
-      react: EmailTemplate({
+      react: ContactFormEmail({
         name,
         email,
         subject,

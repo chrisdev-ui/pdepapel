@@ -74,6 +74,7 @@ const parseOrderDetails = (details: any) => {
 };
 
 import { RichTextEditor } from "@/components/editor/rich-text-editor";
+import type { InvoiceData } from "@/components/invoice/store-invoice-pdf";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -133,11 +134,32 @@ import {
 import { ENVIOCLICK_LIMITS, getCarrierInfo } from "@/constants/shipping";
 import { getErrorMessage } from "@/lib/api-errors";
 import { cn, currencyFormatter } from "@/lib/utils";
+import dynamic from "next/dynamic";
 import { getBoxes } from "../server/get-boxes";
 import { getCoupons } from "../server/get-coupons";
 import { type GetOrderResult, type ProductOption } from "../server/get-order";
 import { QuoteRequestsList } from "./quote-requests-list";
-import { TestDataGenerator } from "./test-data-generator";
+
+const InvoiceDownloadButton = dynamic(
+  () =>
+    import("@/components/invoice/invoice-download-button").then(
+      (mod) => mod.InvoiceDownloadButton,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <Button
+        type="button"
+        variant="outline"
+        disabled
+        className="flex items-center gap-2"
+      >
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Preparando PDF...
+      </Button>
+    ),
+  },
+);
 
 const paymentSchema = z
   .object({
@@ -707,7 +729,6 @@ export const OrderForm: React.FC<OrderFormProps> = ({
 
   const orderTotals = useMemo(() => {
     const items = watchedItems || [];
-    console.log("Calculating totals with items:", items);
     // Calculate subtotal
     const subtotal = items.reduce((sum, item) => {
       // Find original product to check for discounts/offers logic if needed
@@ -1068,6 +1089,32 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     }
   }, [initialData]);
 
+  const invoiceData: InvoiceData | null = useMemo(() => {
+    if (!initialData) return null;
+    return {
+      orderNumber: initialData.orderNumber || "",
+      createdAt: initialData.createdAt,
+      customerName: form.getValues("fullName") || "Cliente General",
+      customerEmail: form.getValues("email") || "",
+      customerPhone: form.getValues("phone") || "",
+      documentId: form.getValues("documentId") || "",
+      address: form.getValues("address") || "",
+      city: form.getValues("city") || "",
+      department: form.getValues("department") || "",
+      items: (watchedItems || []).map((item) => ({
+        name: item.name,
+        quantity: item.quantity,
+        price: Number(item.price),
+        sku: item.sku,
+      })),
+      subtotal: orderTotals.subtotal,
+      discount: orderTotals.discount + orderTotals.couponDiscount,
+      shipping: Number(shippingCost) || 0,
+      total: orderTotals.total,
+      paymentMethod: form.getValues("payment.method") || "N/A",
+    };
+  }, [initialData, form, watchedItems, orderTotals, shippingCost]);
+
   return (
     <>
       <AlertModal
@@ -1199,8 +1246,8 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 )}
             </>
           )}
-          {process.env.NODE_ENV !== "production" && (
-            <TestDataGenerator form={form} products={products} />
+          {initialData && invoiceData && (
+            <InvoiceDownloadButton data={invoiceData} disabled={loading} />
           )}
           {initialData && (
             <Button
