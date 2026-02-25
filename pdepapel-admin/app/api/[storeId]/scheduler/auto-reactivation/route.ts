@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { processAutomaticReactivations } from "@/lib/reactivation";
 
-export const maxDuration = 300; // Allow 5 minutes execution time for Vercel Hobby
+export const maxDuration = 60; // Allow 1 minute execution time for Vercel Hobby
 
 export async function POST(
   req: Request,
