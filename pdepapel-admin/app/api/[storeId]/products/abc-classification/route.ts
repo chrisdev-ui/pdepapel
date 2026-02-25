@@ -8,26 +8,34 @@ export async function POST(
   { params }: { params: { storeId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const authHeader = req.headers.get("Authorization");
+    const isScheduler = authHeader === `Bearer ${process.env.SCHEDULER_SECRET}`;
 
-    if (!userId) {
-      return new NextResponse("Unauthenticated", { status: 401 });
-    }
+    let storeIdToProcess = params.storeId;
 
-    if (!params.storeId) {
-      return new NextResponse("Store ID is required", { status: 400 });
-    }
+    // If not a scheduler, require manual Clerk authentication
+    if (!isScheduler) {
+      const { userId } = auth();
 
-    // Verify store ownership
-    const storeByUserId = await prismadb.store.findFirst({
-      where: {
-        id: params.storeId,
-        userId,
-      },
-    });
+      if (!userId) {
+        return new NextResponse("Unauthenticated", { status: 401 });
+      }
 
-    if (!storeByUserId) {
-      return new NextResponse("Unauthorized", { status: 403 });
+      if (!params.storeId) {
+        return new NextResponse("Store ID is required", { status: 400 });
+      }
+
+      // Verify store ownership
+      const storeByUserId = await prismadb.store.findFirst({
+        where: {
+          id: params.storeId,
+          userId,
+        },
+      });
+
+      if (!storeByUserId) {
+        return new NextResponse("Unauthorized", { status: 403 });
+      }
     }
 
     // Get product profitability for the last 180 days (or 365 days)

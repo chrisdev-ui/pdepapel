@@ -132,7 +132,7 @@ async function main() {
     );
 
     let cumulativeProfit = 0;
-    let productsUpdated = 0;
+    const updatePromises: any[] = [];
 
     for (const p of productProfits) {
       cumulativeProfit += p.profit;
@@ -146,15 +146,43 @@ async function main() {
         classification = "B";
       }
 
-      await prisma.product.update({
-        where: { id: p.id },
-        data: { abcClassification: classification },
-      });
-      productsUpdated++;
+      updatePromises.push(
+        prisma.product.update({
+          where: { id: p.id },
+          data: { abcClassification: classification },
+        }),
+      );
     }
-    console.log(
-      `Updated ABC classification for ${productsUpdated} products in ${store.name}.`,
-    );
+
+    // Execute updates in chunks of 50 to avoid overloading the DB connection
+    const chunkSize = 50;
+
+    // Clear line helper for the progress bar
+    const clearLine = () => {
+      if (process.stdout.clearLine) {
+        process.stdout.clearLine(0);
+        process.stdout.cursorTo(0);
+      } else {
+        process.stdout.write("\\r");
+      }
+    };
+
+    for (let i = 0; i < updatePromises.length; i += chunkSize) {
+      const chunk = updatePromises.slice(i, i + chunkSize);
+      await Promise.all(chunk);
+
+      const progress = Math.min(i + chunkSize, updatePromises.length);
+      const percentage = Math.round((progress / updatePromises.length) * 100);
+      const hashes = "#".repeat(Math.floor(percentage / 5));
+      const dashes = "-".repeat(20 - Math.floor(percentage / 5));
+
+      clearLine();
+      process.stdout.write(
+        `[${hashes}${dashes}] ${percentage}% | Clasificando ${progress}/${updatePromises.length} productos...`,
+      );
+    }
+
+    console.log(`\n¡Clasificación ABC finalizada para ${store.name}!`);
   }
 
   console.log("Data migration complete!");
