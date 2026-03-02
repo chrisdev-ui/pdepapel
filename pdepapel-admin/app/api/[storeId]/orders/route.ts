@@ -394,35 +394,41 @@ export async function POST(
         shippingCost: shipping?.cost || 0,
       });
 
-      // Use tolerance of 1 COP (appropriate for Colombian Peso which has no decimal places)
-      // This accounts for floating-point rounding differences between frontend/backend
-      const PRICE_TOLERANCE = 1;
-      const totalDiff = Math.abs(totals.total - total);
-      const subtotalDiff = Math.abs(totals.subtotal - subtotal);
+      // Skip price validation for admin orders — the backend's calculated totals
+      // are authoritative and already used for the DB record. This mismatch check
+      // guards against storefront price tampering, not admin workflows where offer
+      // prices may change between page load and submission.
+      if (!isStoreOwner) {
+        // Use tolerance of 1 COP (appropriate for Colombian Peso which has no decimal places)
+        // This accounts for floating-point rounding differences between frontend/backend
+        const PRICE_TOLERANCE = 1;
+        const totalDiff = Math.abs(totals.total - total);
+        const subtotalDiff = Math.abs(totals.subtotal - subtotal);
 
-      if (totalDiff > PRICE_TOLERANCE || subtotalDiff > PRICE_TOLERANCE) {
-        // Log detailed info for debugging
-        console.error("[ORDERS_POST] Price mismatch detected:", {
-          sent: { subtotal, total, shippingCost: shipping?.cost || 0 },
-          calculated: totals,
-          differences: { subtotalDiff, totalDiff },
-          items: itemsWithPrices.map(
-            (
-              item: { product: { price: number }; quantity: number },
-              idx: number,
-            ) => ({
-              productId: orderItems[idx].productId,
-              quantity: item.quantity,
-              price: item.product.price,
-            }),
-          ),
-          couponCode: coupon?.code ?? null,
-          discount: discount ?? null,
-        });
+        if (totalDiff > PRICE_TOLERANCE || subtotalDiff > PRICE_TOLERANCE) {
+          // Log detailed info for debugging
+          console.error("[ORDERS_POST] Price mismatch detected:", {
+            sent: { subtotal, total, shippingCost: shipping?.cost || 0 },
+            calculated: totals,
+            differences: { subtotalDiff, totalDiff },
+            items: itemsWithPrices.map(
+              (
+                item: { product: { price: number }; quantity: number },
+                idx: number,
+              ) => ({
+                productId: orderItems[idx].productId,
+                quantity: item.quantity,
+                price: item.product.price,
+              }),
+            ),
+            couponCode: coupon?.code ?? null,
+            discount: discount ?? null,
+          });
 
-        throw ErrorFactory.InvalidRequest(
-          "Los montos calculados no coinciden con los enviados",
-        );
+          throw ErrorFactory.InvalidRequest(
+            "Los montos calculados no coinciden con los enviados",
+          );
+        }
       }
 
       const orderNumber = generateOrderNumber();
