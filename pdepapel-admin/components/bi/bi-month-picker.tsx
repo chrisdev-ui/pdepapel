@@ -9,26 +9,32 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { format } from "date-fns";
+import { utcToZonedTime } from "date-fns-tz";
 import { es } from "date-fns/locale";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 interface BiMonthPickerProps {
-  currentDate: Date;
+  /** The active year (e.g. 2026). Plain number avoids Date serialization issues. */
+  activeYear: number;
+  /** The active month index (0-11). Plain number avoids Date serialization issues. */
+  activeMonth: number;
 }
 
 export const BiMonthPicker: React.FC<BiMonthPickerProps> = ({
-  currentDate,
+  activeYear,
+  activeMonth,
 }) => {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const today = new Date();
+  // Always use Colombia timezone for "today" so the picker limits match
+  // the business timezone, regardless of browser or server timezone.
+  const today = utcToZonedTime(new Date(), "America/Bogota");
   const currentYear = today.getFullYear();
   const currentMonthIdx = today.getMonth(); // 0-11
 
-  const activeYear = currentDate.getFullYear();
-  const activeMonthIdx = currentDate.getMonth();
+  const activeMonthIdx = activeMonth;
 
   // Hardcode starting year or get it dynamically. Let's start from 2024 for example.
   const START_YEAR = 2024;
@@ -53,29 +59,38 @@ export const BiMonthPicker: React.FC<BiMonthPickerProps> = ({
   };
 
   const handlePrevMonth = () => {
-    const newDate = new Date(currentDate);
-    newDate.setMonth(currentDate.getMonth() - 1);
+    let newYear = activeYear;
+    let newMonth = activeMonthIdx - 1;
+
+    if (newMonth < 0) {
+      newMonth = 11;
+      newYear -= 1;
+    }
 
     // Prevent going before START_YEAR
-    if (newDate.getFullYear() < START_YEAR) return;
+    if (newYear < START_YEAR) return;
 
-    updateParams(newDate.getFullYear(), newDate.getMonth());
+    updateParams(newYear, newMonth);
   };
 
   const handleNextMonth = () => {
-    const newDate = new Date(currentDate);
-    newDate.setMonth(currentDate.getMonth() + 1);
+    let newYear = activeYear;
+    let newMonth = activeMonthIdx + 1;
+
+    if (newMonth > 11) {
+      newMonth = 0;
+      newYear += 1;
+    }
 
     // Prevent going into the future
     if (
-      newDate.getFullYear() > currentYear ||
-      (newDate.getFullYear() === currentYear &&
-        newDate.getMonth() > currentMonthIdx)
+      newYear > currentYear ||
+      (newYear === currentYear && newMonth > currentMonthIdx)
     ) {
       return;
     }
 
-    updateParams(newDate.getFullYear(), newDate.getMonth());
+    updateParams(newYear, newMonth);
   };
 
   const isCurrentMonth = () => {
@@ -121,7 +136,7 @@ export const BiMonthPicker: React.FC<BiMonthPickerProps> = ({
           </SelectTrigger>
           <SelectContent>
             {months.map((mIdx) => {
-              const dateObj = new Date(activeYear, mIdx, 1);
+              const dateObj = new Date(activeYear, mIdx, 15);
               return (
                 <SelectItem
                   key={mIdx}

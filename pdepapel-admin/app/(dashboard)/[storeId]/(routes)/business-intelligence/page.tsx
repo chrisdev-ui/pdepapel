@@ -24,6 +24,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { getColombiaDate } from "@/lib/date-utils";
 import { currencyFormatter } from "@/lib/utils";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -40,13 +41,15 @@ export default async function BIDashboardPage({
 }: BIDashboardPageProps) {
   const storeId = params.storeId;
 
-  // Parse requested date or default to now
+  // Use Colombia timezone to determine the current date — the server may
+  // run in UTC, which can be a different calendar day than Bogotá (UTC-5).
+  const colombiaToday = getColombiaDate();
   const requestedYear = searchParams.year
     ? parseInt(searchParams.year)
-    : new Date().getFullYear();
+    : colombiaToday.getFullYear();
   const requestedMonth = searchParams.month
     ? parseInt(searchParams.month) - 1
-    : new Date().getMonth();
+    : colombiaToday.getMonth();
   const now = new Date(requestedYear, requestedMonth, 1);
 
   // 1. Financial Analytics
@@ -86,15 +89,22 @@ export default async function BIDashboardPage({
     90,
   );
 
+  // Use the 15th of the month for display formatting to avoid timezone
+  // boundary issues (midnight UTC on the 1st = previous month in UTC-5).
+  const displayDate = new Date(requestedYear, requestedMonth, 15);
+
   return (
     <div className="flex-col">
       <div className="flex-1 space-y-4 p-8 pt-6">
         <div className="flex items-center justify-between">
           <Heading
             title={`Inteligencia de Negocios`}
-            description={`Métricas avanzadas (Rendimiento de ${format(now, "MMMM 'de' yyyy", { locale: es }).replace(/^\w/, (c) => c.toUpperCase())})`}
+            description={`Métricas avanzadas (Rendimiento de ${format(displayDate, "MMMM 'de' yyyy", { locale: es }).replace(/^\w/, (c) => c.toUpperCase())})`}
           />
-          <BiMonthPicker currentDate={now} />
+          <BiMonthPicker
+            activeYear={requestedYear}
+            activeMonth={requestedMonth}
+          />
         </div>
         <Separator />
 
