@@ -25,6 +25,13 @@ export default function useCheckout({
   onMutate?: (variables: CheckoutOrder) => void;
 } = {}) {
   const mutationFn = async (formData: CheckoutOrder) => {
+    // If this is a quotation conversion, always use /checkout route
+    // which handles the customOrderToken and updates the existing order
+    // instead of creating a duplicate via /orders
+    if (formData.customOrderToken) {
+      return await checkoutOrder(formData);
+    }
+
     switch (formData.payment.method) {
       case PaymentMethod.BankTransfer:
       case PaymentMethod.COD:
