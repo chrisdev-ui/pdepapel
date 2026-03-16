@@ -158,20 +158,21 @@ export async function POST(
 
             await tx.product.update({
               where: { id: variant.id, storeId: params.storeId },
-              data: {
-                ...productDataWithoutStock,
-                images: {
-                  deleteMany: {},
-                  createMany: {
-                    data: applicableImages.map(
-                      (img: { url: string; isMain?: boolean }) => ({
-                        url: img.url,
-                        isMain: img.isMain || false,
-                      }),
-                    ),
-                  },
-                },
-              },
+              data: productDataWithoutStock,
+            });
+
+            // Prisma 6: explicit image replacement for optional relations
+            await tx.image.deleteMany({
+              where: { productId: variant.id },
+            });
+            await tx.image.createMany({
+              data: applicableImages.map(
+                (img: { url: string; isMain?: boolean }) => ({
+                  url: img.url,
+                  isMain: img.isMain || false,
+                  productId: variant.id,
+                }),
+              ),
             });
           } else {
             // CREATE NEW PRODUCT

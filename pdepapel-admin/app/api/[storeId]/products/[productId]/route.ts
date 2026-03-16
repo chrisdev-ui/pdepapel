@@ -219,9 +219,6 @@ export async function PATCH(
           isFeatured,
           productGroupId: productGroupId || null,
           description,
-          images: {
-            deleteMany: {},
-          },
           // [NEW] Update Kit info
           isKit: isKit || false,
           kitComponents: isKit
@@ -236,19 +233,22 @@ export async function PATCH(
         },
       });
 
-      // Create new images
-      return await tx.product.update({
+      // Prisma 6: explicit image replacement for optional relations
+      await tx.image.deleteMany({
+        where: { productId: params.productId },
+      });
+      await tx.image.createMany({
+        data: images.map((image: { url: string; isMain?: boolean }) => ({
+          url: image.url,
+          isMain: image.isMain ?? false,
+          productId: params.productId,
+        })),
+      });
+
+      // Return updated product
+      return await tx.product.findUnique({
         where: { id: params.productId },
-        data: {
-          images: {
-            createMany: {
-              data: images.map((image: { url: string; isMain?: boolean }) => ({
-                url: image.url,
-                isMain: image.isMain ?? false,
-              })),
-            },
-          },
-        },
+        include: { images: true },
       });
 
       // Calculate Stock for Kit after update

@@ -97,25 +97,21 @@ export async function PATCH(
       const initialMovements: any[] = [];
       const stockAdjustments: any[] = [];
       // 1. Update Group Details
-      const groupData: any = {
-        name,
-        description,
-        images: {
-          deleteMany: {},
-          createMany: {
-            data: [
-              ...images.map((image: { url: string; isMain?: boolean }) => ({
-                url: image.url,
-                isMain: image.isMain ?? false,
-              })),
-            ],
-          },
-        },
-      };
-
       const group = await tx.productGroup.update({
         where: { id: params.productGroupId },
-        data: groupData,
+        data: { name, description },
+      });
+
+      // Prisma 6: explicit image replacement for optional relations
+      await tx.image.deleteMany({
+        where: { productGroupId: params.productGroupId },
+      });
+      await tx.image.createMany({
+        data: images.map((image: { url: string; isMain?: boolean }) => ({
+          url: image.url,
+          isMain: image.isMain ?? false,
+          productGroupId: params.productGroupId,
+        })),
       });
 
       // 2. Fetch Existing Variants to Handle Deletions
@@ -201,7 +197,7 @@ export async function PATCH(
           const dataToUpsert = {
             storeId: params.storeId,
             productGroupId: params.productGroupId,
-            categoryId, // Update category if provided
+            categoryId,
             sizeId,
             colorId,
             designId,
@@ -214,24 +210,31 @@ export async function PATCH(
             supplierId: finalSupplierId,
             isFeatured: variant.isFeatured ?? isFeatured ?? false,
             isArchived: variant.isArchived || false,
-            images: {
-              deleteMany: {}, // Clear old images for this specific product
-              createMany: {
-                data: applicableImages.map(
-                  (img: { url: string; isMain?: boolean }) => ({
-                    url: img.url,
-                    isMain: img.isMain || false,
-                  }),
-                ),
-              },
-            },
           };
+
+          const imageData = applicableImages.map(
+            (img: { url: string; isMain?: boolean }) => ({
+              url: img.url,
+              isMain: img.isMain || false,
+            }),
+          );
 
           if (variant.id && payloadIds.has(variant.id)) {
             // UPDATE Existing
             await tx.product.update({
               where: { id: variant.id },
               data: dataToUpsert,
+            });
+
+            // Prisma 6: explicit image replacement for optional relations
+            await tx.image.deleteMany({
+              where: { productId: variant.id },
+            });
+            await tx.image.createMany({
+              data: imageData.map((img: { url: string; isMain: boolean }) => ({
+                ...img,
+                productId: variant.id,
+              })),
             });
 
             // Detect stock change and create adjustment movement
@@ -254,12 +257,17 @@ export async function PATCH(
           } else {
             // CREATE New
             const newProduct = await tx.product.create({
-              data: dataToUpsert,
+              data: {
+                ...dataToUpsert,
+                images: {
+                  createMany: {
+                    data: imageData,
+                  },
+                },
+              },
             });
 
             if (finalStock > 0 && !dataToUpsert.stock) {
-              // Logic: dataToUpsert.stock is 0 for new items (line 206).
-              // So if finalStock (payload) > 0, we add movement.
               initialMovements.push({
                 storeId: params.storeId,
                 productId: newProduct.id,
