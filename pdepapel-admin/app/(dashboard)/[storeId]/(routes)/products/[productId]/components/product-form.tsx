@@ -467,10 +467,12 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 
   const selectOptions = useMemo(
     () => ({
-      categories: categories.map((category) => ({
-        value: category.id,
-        label: category.name,
-      })),
+      categories: [...categories]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((category) => ({
+          value: category.id,
+          label: category.name,
+        })),
       sizes: sizes.map((size) => ({
         value: size.id,
         label: size.name,
@@ -901,9 +903,9 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                         </button>
                       )}
                       {selectOptions.categories?.length > 0 &&
-                        categories.map((category) => (
-                          <SelectItem key={category.id} value={category.id}>
-                            {category.name}
+                        selectOptions.categories.map((category) => (
+                          <SelectItem key={category.value} value={category.value}>
+                            {category.label}
                           </SelectItem>
                         ))}
                     </SelectContent>
