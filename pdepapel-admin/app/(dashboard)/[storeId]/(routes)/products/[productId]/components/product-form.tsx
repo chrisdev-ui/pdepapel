@@ -482,14 +482,18 @@ export const ProductForm: React.FC<ProductFormProps> = ({
         label: color.name,
         color: color.value,
       })),
-      designs: designs.map((design) => ({
-        value: design.id,
-        label: design.name,
-      })),
-      suppliers: suppliers.map((supplier) => ({
-        value: supplier.id,
-        label: supplier.name,
-      })),
+      designs: [...designs]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((design) => ({
+          value: design.id,
+          label: design.name,
+        })),
+      suppliers: [...suppliers]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((supplier) => ({
+          value: supplier.id,
+          label: supplier.name,
+        })),
     }),
     [categories, sizes, colors, designs, suppliers],
   );
@@ -1042,10 +1046,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                           No hay resultados
                         </button>
                       )}
-                      {designs?.length > 0 &&
-                        designs.map((design) => (
-                          <SelectItem key={design.id} value={design.id}>
-                            {design.name}
+                      {selectOptions.designs?.length > 0 &&
+                        selectOptions.designs.map((design) => (
+                          <SelectItem key={design.value} value={design.value}>
+                            {design.label}
                           </SelectItem>
                         ))}
                     </SelectContent>
@@ -1098,10 +1102,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                           No hay resultados
                         </button>
                       )}
-                      {suppliers?.length > 0 &&
-                        suppliers.map((design) => (
-                          <SelectItem key={design.id} value={design.id}>
-                            {design.name}
+                      {selectOptions.suppliers?.length > 0 &&
+                        selectOptions.suppliers.map((supplier) => (
+                          <SelectItem key={supplier.value} value={supplier.value}>
+                            {supplier.label}
                           </SelectItem>
                         ))}
                     </SelectContent>
