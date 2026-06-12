@@ -1,4 +1,4 @@
-import { addDays, format, isWeekend, nextMonday } from "date-fns";
+import { format, isWeekend, nextMonday } from "date-fns";
 import { utcToZonedTime } from "date-fns-tz";
 
 type CodPaymentMethod = "cash" | "data_phone";
@@ -153,13 +153,12 @@ export const ENVIOCLICK_DEFAULTS = {
 // ============================================================================
 
 /**
- * Calcula la fecha de recolección (siguiente día hábil)
+ * Calcula la fecha de recolección (mismo día o siguiente día hábil en fin de semana)
  */
 export function getPickupDate(): string {
   const now = utcToZonedTime(new Date(), "America/Bogota");
-  const tomorrow = addDays(now, 1);
 
-  const pickupDate = isWeekend(tomorrow) ? nextMonday(tomorrow) : tomorrow;
+  const pickupDate = isWeekend(now) ? nextMonday(now) : now;
 
   return format(pickupDate, "yyyy-MM-dd");
 }

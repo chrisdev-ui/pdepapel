@@ -473,15 +473,19 @@ export const ProductForm: React.FC<ProductFormProps> = ({
           value: category.id,
           label: category.name,
         })),
-      sizes: sizes.map((size) => ({
-        value: size.id,
-        label: size.name,
-      })),
-      colors: colors.map((color) => ({
-        value: color.id,
-        label: color.name,
-        color: color.value,
-      })),
+      sizes: [...sizes]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((size) => ({
+          value: size.id,
+          label: size.name,
+        })),
+      colors: [...colors]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((color) => ({
+          value: color.id,
+          label: color.name,
+          color: color.value,
+        })),
       designs: [...designs]
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((design) => ({
@@ -947,10 +951,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                           No hay resultados
                         </button>
                       )}
-                      {sizes?.length > 0 &&
-                        sizes.map((size) => (
-                          <SelectItem key={size.id} value={size.id}>
-                            {size.name}
+                      {selectOptions.sizes?.length > 0 &&
+                        selectOptions.sizes.map((size) => (
+                          <SelectItem key={size.value} value={size.value}>
+                            {size.label}
                           </SelectItem>
                         ))}
                     </SelectContent>
@@ -993,15 +997,15 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                           No hay resultados
                         </button>
                       )}
-                      {colors?.length > 0 &&
-                        colors.map((color) => (
-                          <SelectItem key={color.id} value={color.id}>
+                      {selectOptions.colors?.length > 0 &&
+                        selectOptions.colors.map((color) => (
+                          <SelectItem key={color.value} value={color.value}>
                             <div className="flex items-start gap-2">
                               <span
                                 className="h-5 w-5 rounded-full border"
-                                style={{ backgroundColor: color.value }}
+                                style={{ backgroundColor: color.color }}
                               ></span>
-                              {color.name}
+                              {color.label}
                             </div>
                           </SelectItem>
                         ))}

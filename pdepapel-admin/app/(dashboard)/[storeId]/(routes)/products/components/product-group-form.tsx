@@ -879,27 +879,41 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
 
   const selectOptions = useMemo(
     () => ({
-      categories: categories.map((category) => ({
-        value: category.id,
-        label: category.name,
-      })),
-      sizes: sizes.map((size) => ({
-        value: size.id,
-        label: size.name,
-      })),
-      colors: colors.map((color) => ({
-        value: color.id,
-        label: color.name,
-        style: {
-          badgeColor: color.value,
-        },
-      })),
-      designs: designs.map((design) => ({
-        value: design.id,
-        label: design.name,
-      })),
+      categories: [...categories]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((category) => ({
+          value: category.id,
+          label: category.name,
+        })),
+      sizes: [...sizes]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((size) => ({
+          value: size.id,
+          label: size.name,
+        })),
+      colors: [...colors]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((color) => ({
+          value: color.id,
+          label: color.name,
+          style: {
+            badgeColor: color.value,
+          },
+        })),
+      designs: [...designs]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((design) => ({
+          value: design.id,
+          label: design.name,
+        })),
+      suppliers: [...suppliers]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((supplier) => ({
+          value: supplier.id,
+          label: supplier.name,
+        })),
     }),
-    [categories, sizes, colors, designs],
+    [categories, sizes, colors, designs, suppliers],
   );
 
   // Helper to get selected attributes for scoping
@@ -1702,9 +1716,9 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {suppliers.map((supplier) => (
-                        <SelectItem key={supplier.id} value={supplier.id}>
-                          {supplier.name}
+                      {selectOptions.suppliers.map((supplier) => (
+                        <SelectItem key={supplier.value} value={supplier.value}>
+                          {supplier.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1775,9 +1789,9 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                     </FormControl>
                     <SelectContent>
                       {selectOptions.categories?.length > 0 &&
-                        categories.map((category) => (
-                          <SelectItem key={category.id} value={category.id}>
-                            {category.name}
+                        selectOptions.categories.map((category) => (
+                          <SelectItem key={category.value} value={category.value}>
+                            {category.label}
                           </SelectItem>
                         ))}
                     </SelectContent>
