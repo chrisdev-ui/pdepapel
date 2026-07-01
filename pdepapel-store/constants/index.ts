@@ -215,6 +215,14 @@ export const SHIPPINGCARRIERS: ShippingCarrier[] = [
     logoUrl: "https://www.envioclick.com/img/paqueterias/SERVIENTREGA.svg",
     color: "#55a962",
   },
+  {
+    idCarrier: 70, // TODO: Verify actual idCarrier for Rappi in EnvioClick
+    carrier: "RAPPI",
+    code: "RAPPI",
+    comercialName: "Rappi",
+    logoUrl: "https://www.envioclick.com/img/paqueterias/RAPPI.svg",
+    color: "#FE603B",
+  },
 ];
 
 import { Season, SeasonConfig } from "@/types";

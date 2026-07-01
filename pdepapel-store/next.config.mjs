@@ -22,6 +22,11 @@ const nextConfig = {
         hostname: "www.envioclickpro.com.co",
         port: "",
       },
+      {
+        protocol: "https",
+        hostname: "www.envioclick.com",
+        port: "",
+      },
     ],
   },
   async headers() {

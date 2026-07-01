@@ -39,6 +39,7 @@ export function getCourierIcon(courier: string): string {
     coordinadora: "/images/coordinadora.webp",
     tcc: "/images/tcc.webp",
     deprisa: "/images/deprisa.webp",
+    rappi: "/images/rappi.webp",
   };
 
   const courierLower = courier.toLocaleLowerCase();
