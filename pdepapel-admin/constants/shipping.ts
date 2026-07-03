@@ -108,7 +108,7 @@ export const SHIPPINGCARRIERS: ShippingCarrier[] = [
     code: "RAPPI",
     comercialName: "Rappi",
     logoUrl: "https://www.envioclick.com/img/paqueterias/RAPPI.svg",
-    color: "#FE603B",
+    color: "#FFFFFF", // "#FE603B"
   },
 ];
 
