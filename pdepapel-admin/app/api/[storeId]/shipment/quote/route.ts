@@ -3,6 +3,7 @@ import {
   ENVIOCLICK_DEFAULTS,
   SHIPPING_QUOTE_CACHE,
   STORE_SHIPPING_INFO,
+  truncateField,
 } from "@/constants/shipping";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import {
@@ -221,7 +222,7 @@ export async function POST(
       },
       destination: {
         daneCode: destination.daneCode,
-        address: destination.address,
+        address: truncateField(destination.address, "address"),
       },
     });
 

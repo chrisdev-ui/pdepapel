@@ -294,11 +294,17 @@ export class EnvioClickClient {
       const data = await response.json();
 
       if (data.status !== "OK") {
-        const errorMsg =
-          data.status_messages?.[0]?.error ||
-          data.status_messages?.error ||
-          "Error en cotización";
-        throw new Error(errorMsg);
+        const statusMessages = data.status_messages || [];
+        const errorDetails = Array.isArray(statusMessages)
+          ? statusMessages
+              .map((msg: any) => {
+                const errorVal = msg?.error || msg;
+                return typeof errorVal === "object" ? JSON.stringify(errorVal) : String(errorVal);
+              })
+              .join(", ")
+          : String(statusMessages);
+
+        throw new Error(errorDetails || "Error en cotización");
       }
 
       return data;
@@ -447,11 +453,17 @@ export class EnvioClickClient {
       const data = await response.json();
 
       if (data.status !== "OK") {
-        const errorMsg =
-          data.status_messages?.[0]?.error ||
-          data.status_messages?.error ||
-          "Error al cancelar";
-        throw new Error(errorMsg);
+        const statusMessages = data.status_messages || [];
+        const errorDetails = Array.isArray(statusMessages)
+          ? statusMessages
+              .map((msg: any) => {
+                const errorVal = msg?.error || msg;
+                return typeof errorVal === "object" ? JSON.stringify(errorVal) : String(errorVal);
+              })
+              .join(", ")
+          : String(statusMessages);
+
+        throw new Error(errorDetails || "Error al cancelar");
       }
 
       return data;
