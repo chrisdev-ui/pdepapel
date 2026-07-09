@@ -205,7 +205,9 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
   const hasGuide = !!shipping?.envioClickIdOrder;
   const hasRateWithoutGuide =
     !!shipping?.envioClickIdRate && !hasGuide;
-  const canCreateGuide = hasRateWithoutGuide && orderStatus === "PAID";
+  const canCreateGuide =
+    hasRateWithoutGuide &&
+    (orderStatus === "PAID" || (shipping?.isCOD && orderStatus === "PENDING"));
   const carrierInfo = shipping?.carrierName
     ? getCarrierInfo(shipping.carrierName)
     : shipping?.courier

@@ -8,6 +8,7 @@ import {
   Prisma,
 } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { env } from "@/lib/env.mjs";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { getColombiaDate } from "@/lib/date-utils";
 import prismadb from "@/lib/prismadb";
@@ -704,6 +705,13 @@ export async function POST(
           `✅ PayU payment data generated - Reference: ${payUData.referenceCode}, Amount: ${currencyFormatter(payUData.amount)}`,
         );
         return NextResponse.json({ ...payUData }, { headers: corsHeaders });
+      }
+
+      if (payment.method === PaymentMethod.COD || payment.method === PaymentMethod.BankTransfer) {
+        console.log(
+          `✅ COD/BankTransfer payment selected - no gateway required. Returning order details directly.`,
+        );
+        return NextResponse.json(order, { headers: corsHeaders });
       }
 
       const url = await generateWompiPayment(order);

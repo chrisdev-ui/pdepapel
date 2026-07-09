@@ -148,6 +148,14 @@ export async function createGuideForOrder(
     );
   }
 
+  if (order.shipping.isCOD) {
+    if (order.total < 0 || order.total > 3000000) {
+      throw ErrorFactory.InvalidRequest(
+        `El valor a recaudar contra entrega ($${order.total}) debe estar entre $0 y $3.000.000 COP.`,
+      );
+    }
+  }
+
   // 4. Crear guía (with error handling for expired rates)
   let result;
   try {
@@ -199,6 +207,11 @@ export async function createGuideForOrder(
         reference: truncateField(order.addressReference || "NA", "reference"),
         daneCode: order.daneCode!,
       },
+      ...(order.shipping.isCOD && {
+        codValue: order.total,
+        codPaymentMethod: order.shipping.codPaymentMethod || ENVIOCLICK_DEFAULTS.codPaymentMethod,
+        includeGuideCost: order.shipping.includeGuideCost || ENVIOCLICK_DEFAULTS.includeGuideCost,
+      }),
     };
 
     console.log(

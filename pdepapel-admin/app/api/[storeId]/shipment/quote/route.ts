@@ -29,7 +29,7 @@ export async function POST(
   { params }: { params: { storeId: string } },
 ) {
   try {
-    const { destination, orderTotal, items, forceRefresh, boxId } =
+    const { destination, orderTotal, items, forceRefresh, boxId, isCOD } =
       await req.json();
 
     if (!orderTotal || isNaN(orderTotal) || orderTotal <= 0)
@@ -174,8 +174,8 @@ export async function POST(
       declaredValue: Math.round(orderTotal / 1000) * 1000,
     };
 
-    // 5. CACHE: Buscar en caché (si no es forzado)
-    if (!forceRefresh) {
+    // 5. CACHE: Buscar en caché (si no es forzado y no es COD)
+    if (!forceRefresh && !isCOD) {
       const cached = await prismadb.shippingQuote.findUnique({
         where: {
           storeId_originDaneCode_destDaneCode_weight_declaredValue: cacheKey,
@@ -224,6 +224,11 @@ export async function POST(
         daneCode: destination.daneCode,
         address: truncateField(destination.address, "address"),
       },
+      ...(isCOD && {
+        codValue: orderTotal,
+        codPaymentMethod: ENVIOCLICK_DEFAULTS.codPaymentMethod,
+        includeGuideCost: ENVIOCLICK_DEFAULTS.includeGuideCost,
+      }),
     });
 
     const processedPackage = quotation.data.packages?.[0] || packageForApi;
@@ -248,29 +253,31 @@ export async function POST(
       isCOD: rate.cod,
     }));
 
-    await prismadb.shippingQuote.upsert({
-      where: {
-        storeId_originDaneCode_destDaneCode_weight_declaredValue: cacheKey,
-      },
-      create: {
-        ...cacheKey,
-        weight: finalDimensions.weight,
-        height: finalDimensions.height,
-        width: finalDimensions.width,
-        length: finalDimensions.length,
-        quotesData: quotes,
-        expiresAt: new Date(Date.now() + SHIPPING_QUOTE_CACHE.TTL_MS),
-      },
-      update: {
-        weight: finalDimensions.weight,
-        height: finalDimensions.height,
-        width: finalDimensions.width,
-        length: finalDimensions.length,
-        quotesData: quotes,
-        expiresAt: new Date(Date.now() + SHIPPING_QUOTE_CACHE.TTL_MS),
-        hitCount: 0, // Reset hit count on refresh
-      },
-    });
+    if (!isCOD) {
+      await prismadb.shippingQuote.upsert({
+        where: {
+          storeId_originDaneCode_destDaneCode_weight_declaredValue: cacheKey,
+        },
+        create: {
+          ...cacheKey,
+          weight: finalDimensions.weight,
+          height: finalDimensions.height,
+          width: finalDimensions.width,
+          length: finalDimensions.length,
+          quotesData: quotes,
+          expiresAt: new Date(Date.now() + SHIPPING_QUOTE_CACHE.TTL_MS),
+        },
+        update: {
+          weight: finalDimensions.weight,
+          height: finalDimensions.height,
+          width: finalDimensions.width,
+          length: finalDimensions.length,
+          quotesData: quotes,
+          expiresAt: new Date(Date.now() + SHIPPING_QUOTE_CACHE.TTL_MS),
+          hitCount: 0, // Reset hit count on refresh
+        },
+      });
+    }
 
     if (Math.random() < SHIPPING_QUOTE_CACHE.AUTO_CLEANUP_PROBABILITY) {
       prismadb.shippingQuote

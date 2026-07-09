@@ -56,10 +56,17 @@ export async function POST(
       );
     }
 
-    // Verificar que la orden esté pagada
-    if (order.status !== OrderStatus.PAID) {
+    // Verificar que la orden esté pagada (o sea COD y esté pendiente)
+    const isCODOrder = order.shipping?.isCOD;
+    const allowedStatuses: OrderStatus[] = isCODOrder
+      ? [OrderStatus.PAID, OrderStatus.PENDING]
+      : [OrderStatus.PAID];
+
+    if (!allowedStatuses.includes(order.status)) {
       throw ErrorFactory.InvalidRequest(
-        "La orden debe estar en estado PAGADA para crear la guía",
+        isCODOrder
+          ? "La orden debe estar en estado PAGADA o PENDIENTE para crear la guía de pago contra entrega"
+          : "La orden debe estar en estado PAGADA para crear la guía",
       );
     }
 

@@ -17,6 +17,8 @@ interface PaymentInfoStepProps {
 }
 
 export const PaymentInfoStep = ({ form, isLoading }: PaymentInfoStepProps) => {
+  const isCODShipment = form.watch("shipping.isCOD");
+
   return (
     <div className="space-y-8 duration-500 animate-in fade-in-0 slide-in-from-right-4">
       <div className="space-y-2">
@@ -39,7 +41,7 @@ export const PaymentInfoStep = ({ form, isLoading }: PaymentInfoStepProps) => {
                 value={field.value}
                 onChange={field.onChange}
                 disabled={isLoading}
-                omit={[PaymentMethod.COD]}
+                omit={!isCODShipment ? [PaymentMethod.COD] : []}
               />
             </FormControl>
             <FormDescription>
