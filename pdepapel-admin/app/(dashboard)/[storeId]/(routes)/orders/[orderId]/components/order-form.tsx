@@ -702,18 +702,10 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   const shippingCost = form.watch("shipping.cost");
   const shippingCourier = form.watch("shipping.courier");
   const shippingCarrierName = form.watch("shipping.carrierName");
-  const isCODShipment = form.watch("shipping.isCOD");
-  const paymentMethod = form.watch("payment.method");
  
   const carrierInfo = useMemo(() => {
     return getCarrierInfo(shippingCarrierName || shippingCourier || "");
   }, [shippingCarrierName, shippingCourier]);
-
-  useEffect(() => {
-    if (!isCODShipment && paymentMethod === PaymentMethod.COD) {
-      form.setValue("payment.method", PaymentMethod.BankTransfer, { shouldDirty: true });
-    }
-  }, [isCODShipment, paymentMethod, form]);
 
   const {
     formState: { isDirty },
@@ -2338,7 +2330,10 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   <FormLabel>Método de pago</FormLabel>
                   <Select
                     disabled={loading}
-                    onValueChange={field.onChange}
+                    onValueChange={(val) => {
+                      field.onChange(val);
+                      form.setValue("shipping.isCOD", val === PaymentMethod.COD, { shouldDirty: true });
+                    }}
                     value={field.value}
                     defaultValue={field.value}
                   >
@@ -2351,13 +2346,11 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {Object.values(PaymentMethod)
-                        .filter((state) => state !== PaymentMethod.COD || isCODShipment)
-                        .map((state) => (
-                          <SelectItem key={state} value={state}>
-                            {paymentOptions[state]}
-                          </SelectItem>
-                        ))}
+                      {Object.values(PaymentMethod).map((state) => (
+                        <SelectItem key={state} value={state}>
+                          {paymentOptions[state]}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -3067,7 +3060,16 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                         <FormControl>
                           <Checkbox
                             checked={field.value}
-                            onCheckedChange={field.onChange}
+                            onCheckedChange={(checked) => {
+                              field.onChange(checked);
+                              if (checked) {
+                                form.setValue("payment.method", PaymentMethod.COD, { shouldDirty: true });
+                              } else {
+                                if (form.getValues("payment.method") === PaymentMethod.COD) {
+                                  form.setValue("payment.method", PaymentMethod.BankTransfer, { shouldDirty: true });
+                                }
+                              }
+                            }}
                           />
                         </FormControl>
                         <div className="space-y-1 leading-none">

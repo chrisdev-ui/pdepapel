@@ -348,15 +348,6 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     }
   }, [payUformData, hasSubmittedPayU]);
 
-  const isCODShipment = form.watch("shipping.isCOD");
-  const paymentMethod = form.watch("paymentMethod");
-
-  useEffect(() => {
-    if (!isCODShipment && paymentMethod === PaymentMethod.COD) {
-      form.setValue("paymentMethod", PaymentMethod.BankTransfer, { shouldDirty: true });
-    }
-  }, [isCODShipment, paymentMethod, form]);
-
   const shippingCost = form.watch("shipping.cost");
 
   const { total, subtotal, couponDiscount, productSavings } = useMemo(
