@@ -150,6 +150,23 @@ export async function POST(
       },
     });
 
+    // SYNC: Update Parent Order Status based on Shipping Movement
+    if (
+      (
+        [
+          ShippingStatus.PickedUp,
+          ShippingStatus.InTransit,
+          ShippingStatus.OutForDelivery,
+          ShippingStatus.Delivered,
+        ] as ShippingStatus[]
+      ).includes(newStatus)
+    ) {
+      await prismadb.order.update({
+        where: { id: shipping.orderId },
+        data: { status: "SENT" },
+      });
+    }
+
     return NextResponse.json({
       success: true,
       shipping: updatedShipping,
