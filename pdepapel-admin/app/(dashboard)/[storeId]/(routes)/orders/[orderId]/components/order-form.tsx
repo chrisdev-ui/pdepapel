@@ -2777,12 +2777,19 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                                       <span className="font-semibold">
                                         {quote.carrier}
                                       </span>
-                                      {quote.isCOD && (
+                                      {quote.isCOD ? (
+                                        <Badge
+                                          variant="outline"
+                                          className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 font-semibold text-[10px] rounded-full px-2 py-0.5"
+                                        >
+                                          ✓ Admite contraentrega
+                                        </Badge>
+                                      ) : (
                                         <Badge
                                           variant="secondary"
-                                          className="text-xs"
+                                          className="text-muted-foreground/80 font-medium text-[10px] rounded-full px-2 py-0.5"
                                         >
-                                          Contra entrega
+                                          ✗ Solo pago online
                                         </Badge>
                                       )}
                                     </div>

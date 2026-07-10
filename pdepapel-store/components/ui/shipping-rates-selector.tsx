@@ -104,9 +104,13 @@ export const ShippingRatesSelector = ({
                       <p className="font-semibold text-foreground">
                         {quote.carrier}
                       </p>
-                      {quote.isCOD && (
-                        <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-600">
-                          Pago contraentrega
+                      {quote.isCOD ? (
+                        <span className="rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 shadow-sm flex items-center gap-0.5">
+                          ✓ Admite contraentrega
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-muted border border-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground/80 flex items-center gap-0.5">
+                          ✗ Solo pago online
                         </span>
                       )}
                     </div>
