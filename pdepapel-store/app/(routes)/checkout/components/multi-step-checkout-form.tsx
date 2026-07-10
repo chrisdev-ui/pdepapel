@@ -286,9 +286,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         shippingProvider: "ENVIOCLICK",
         envioClickIdRate: storedFormData.envioClickIdRate ?? 0,
         paymentMethod:
-          storedFormData.paymentMethod === PaymentMethod.COD
-            ? PaymentMethod.BankTransfer
-            : (storedFormData.paymentMethod ?? PaymentMethod.BankTransfer),
+          storedFormData.paymentMethod ?? PaymentMethod.BankTransfer,
         shipping: {
           carrierName: storedFormData.shipping?.carrierName ?? "",
           courier: storedFormData.shipping?.courier ?? "",
@@ -349,6 +347,15 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       }, 100);
     }
   }, [payUformData, hasSubmittedPayU]);
+
+  const isCODShipment = form.watch("shipping.isCOD");
+  const paymentMethod = form.watch("paymentMethod");
+
+  useEffect(() => {
+    if (!isCODShipment && paymentMethod === PaymentMethod.COD) {
+      form.setValue("paymentMethod", PaymentMethod.BankTransfer, { shouldDirty: true });
+    }
+  }, [isCODShipment, paymentMethod, form]);
 
   const shippingCost = form.watch("shipping.cost");
 

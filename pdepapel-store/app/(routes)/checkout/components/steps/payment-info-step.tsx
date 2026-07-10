@@ -7,7 +7,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { PaymentMethodSelector } from "@/components/ui/payment-method-selector";
-import { PaymentMethod } from "@/constants";
 import { UseFormReturn } from "react-hook-form";
 import { CheckoutFormValue } from "../multi-step-checkout-form";
 
@@ -39,7 +38,6 @@ export const PaymentInfoStep = ({ form, isLoading }: PaymentInfoStepProps) => {
                 value={field.value}
                 onChange={field.onChange}
                 disabled={isLoading}
-                omit={[PaymentMethod.COD]}
               />
             </FormControl>
             <FormDescription>
