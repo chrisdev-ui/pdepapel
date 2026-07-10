@@ -286,7 +286,9 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         shippingProvider: "ENVIOCLICK",
         envioClickIdRate: storedFormData.envioClickIdRate ?? 0,
         paymentMethod:
-          storedFormData.paymentMethod ?? PaymentMethod.BankTransfer,
+          storedFormData.paymentMethod === PaymentMethod.COD
+            ? PaymentMethod.BankTransfer
+            : (storedFormData.paymentMethod ?? PaymentMethod.BankTransfer),
         shipping: {
           carrierName: storedFormData.shipping?.carrierName ?? "",
           courier: storedFormData.shipping?.courier ?? "",
