@@ -219,6 +219,7 @@ interface PaymentMethodSelectorProps {
   onChange: (value: PaymentMethod) => void;
   omit?: PaymentMethod[];
   disabled?: boolean;
+  disabledMessages?: Partial<Record<PaymentMethod, string>>;
 }
 
 export const PaymentMethodSelector = ({
@@ -226,6 +227,7 @@ export const PaymentMethodSelector = ({
   onChange,
   omit = [],
   disabled = false,
+  disabledMessages = {},
 }: PaymentMethodSelectorProps) => {
   // Separate available and omitted options
   const availableOptions = PAYMENT_OPTIONS.filter(
@@ -302,9 +304,10 @@ export const PaymentMethodSelector = ({
           );
         })}
 
-        {/* Omitted payment methods with "Próximamente" badge */}
+        {/* Omitted payment methods with status badge */}
         {omittedOptions.map((option) => {
           const Icon = option.icon;
+          const disabledMessage = disabledMessages?.[option.value] || "Próximamente";
 
           return (
             <div key={option.value} className="relative">
@@ -321,7 +324,7 @@ export const PaymentMethodSelector = ({
                   </p>
                 </div>
 
-                {/* "Próximamente" badge - static */}
+                {/* Status badge - static */}
                 <div className="absolute right-2 top-2">
                   <span className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs font-semibold text-muted-foreground shadow-sm">
                     <svg
@@ -337,7 +340,7 @@ export const PaymentMethodSelector = ({
                         d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                       />
                     </svg>
-                    Próximamente
+                    {disabledMessage}
                   </span>
                 </div>
               </div>

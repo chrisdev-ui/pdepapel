@@ -1014,6 +1014,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           })),
           boxId: formData.shipping.boxId,
           forceRefresh: true,
+          isCOD: true,
         },
       );
 
