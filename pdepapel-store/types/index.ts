@@ -370,6 +370,7 @@ export interface ShippingQuoteRequest {
     quantity: number;
   }[];
   forceRefresh?: boolean;
+  isCOD?: boolean;
 }
 
 export interface ShippingQuoteResponse {

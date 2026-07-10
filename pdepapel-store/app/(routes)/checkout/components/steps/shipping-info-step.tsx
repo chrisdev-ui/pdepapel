@@ -91,6 +91,7 @@ export const ShippingInfoStep = ({
         productId: item.id,
         quantity: item.quantity,
       })),
+      isCOD: true,
     });
   };
 
