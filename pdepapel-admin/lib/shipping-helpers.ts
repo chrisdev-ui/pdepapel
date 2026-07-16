@@ -12,6 +12,10 @@ import { envioClickClient } from "./envioclick";
 import { ShippingStatus } from "@prisma/client";
 import { getColombiaDate } from "./date-utils";
 import { parsePhoneNumberFromString } from "libphonenumber-js/mobile";
+import {
+  calculatePackageDimensions,
+  BoxConfiguration,
+} from "./package-calculator";
 
 /**
  * Extracts national phone number (10 digits) from E.164 format for EnvioClick API
@@ -99,24 +103,101 @@ export async function createGuideForOrder(
     },
   });
 
-  if (!shippingQuote) {
-    throw ErrorFactory.InvalidRequest(
-      "La cotización de envío ha expirado o no se encontró. Por favor, elimina la cotización actual y solicita una nueva.",
-    );
-  }
-
-  if (shippingQuote.expiresAt < new Date()) {
-    throw ErrorFactory.InvalidRequest(
-      "La cotización de envío ha expirado. Por favor, solicita una nueva cotización para esta orden.",
-    );
-  }
-
-  const packageDimensions = {
-    weight: shippingQuote.weight,
-    height: shippingQuote.height,
-    width: shippingQuote.width,
-    length: shippingQuote.length,
+  let packageDimensions: {
+    weight: number;
+    height: number;
+    width: number;
+    length: number;
   };
+  let declaredValue: number;
+
+  if (shippingQuote && shippingQuote.expiresAt >= new Date()) {
+    packageDimensions = {
+      weight: shippingQuote.weight,
+      height: shippingQuote.height,
+      width: shippingQuote.width,
+      length: shippingQuote.length,
+    };
+    declaredValue = shippingQuote.declaredValue;
+  } else {
+    // FALLBACK: Calculate dynamically if quote is missing or expired
+    console.log(
+      `[SHIPPING_HELPERS] Quote not found or expired for order ${order.orderNumber}. Calculating dynamically.`,
+    );
+
+    // Fetch boxes configurations
+    const dbBoxes = await db.box.findMany({
+      where: { storeId },
+    });
+
+    const boxConfigurations: Record<string, BoxConfiguration> = {};
+    const types = ["XS", "S", "M", "L", "XL"];
+
+    types.forEach((type) => {
+      const defaultBox = dbBoxes.find(
+        (b: any) => b.type === type && b.isDefault,
+      );
+      const anyBox = dbBoxes.find((b: any) => b.type === type);
+      const boxToUse = defaultBox || anyBox;
+
+      if (boxToUse) {
+        boxConfigurations[type] = {
+          width: boxToUse.width,
+          height: boxToUse.height,
+          length: boxToUse.length,
+          type: "box",
+          size: boxToUse.type as any,
+          id: boxToUse.id,
+          name: boxToUse.name,
+        };
+      }
+    });
+
+    const validItems = order.orderItems.filter(
+      (oi: any) => oi.productId && oi.product,
+    );
+
+    const items = validItems.map((oi: any) => ({
+      productId: oi.productId!,
+      quantity: oi.quantity,
+    }));
+    const products = validItems.map((oi: any) => oi.product!);
+
+    let calculatedDims;
+    const savedBoxId = order.shipping?.boxId;
+    if (savedBoxId) {
+      const manualBox = dbBoxes.find((b: any) => b.id === savedBoxId);
+      if (manualBox) {
+        const tempDims = calculatePackageDimensions(items, products); // Get weight
+        calculatedDims = {
+          weight: tempDims.weight,
+          width: manualBox.width,
+          height: manualBox.height,
+          length: manualBox.length,
+        };
+      } else {
+        calculatedDims = calculatePackageDimensions(
+          items,
+          products,
+          boxConfigurations,
+        );
+      }
+    } else {
+      calculatedDims = calculatePackageDimensions(
+        items,
+        products,
+        boxConfigurations,
+      );
+    }
+
+    packageDimensions = {
+      weight: calculatedDims.weight,
+      height: calculatedDims.height,
+      width: calculatedDims.width,
+      length: calculatedDims.length,
+    };
+    declaredValue = order.total;
+  }
 
   if (
     !packageDimensions.weight ||
@@ -168,7 +249,7 @@ export async function createGuideForOrder(
       description: prepareShipmentDescription(
         ENVIOCLICK_DEFAULTS.defaultDescription,
       ),
-      contentValue: shippingQuote.declaredValue,
+      contentValue: declaredValue,
       packages: [
         {
           weight: packageDimensions.weight,
