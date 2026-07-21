@@ -208,7 +208,7 @@ export const ComponentSelector: React.FC<ComponentSelectorProps> = ({
           <DialogTitle className="sr-only">
             Buscar productos para el kit
           </DialogTitle>
-          <div className="flex items-center justify-between border-b px-4 py-2">
+          <div className="flex items-center justify-between border-b pl-4 pr-12 py-2">
             <div className="flex flex-1 items-center gap-2">
               <Search className="h-5 w-5 text-muted-foreground" />
               <input

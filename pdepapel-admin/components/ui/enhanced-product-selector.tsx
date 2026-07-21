@@ -169,7 +169,7 @@ export function EnhancedProductSelector({
       {/* Maximized Dialog */}
       <DialogContent className="max-w-[95vw] gap-0 p-0 lg:max-w-7xl">
         <DialogTitle className="sr-only">Buscar productos</DialogTitle>
-        <div className="flex items-center justify-between border-b px-4 py-2">
+        <div className="flex items-center justify-between border-b pl-4 pr-14 py-2">
           <div className="flex flex-1 items-center gap-2">
             <Search className="h-5 w-5 text-muted-foreground" />
             <input
