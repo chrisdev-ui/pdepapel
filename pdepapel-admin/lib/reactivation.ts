@@ -4,13 +4,11 @@ import { DiscountType, ReactivationStatus } from "@prisma/client";
 import { addDays } from "date-fns";
 import { v4 as uuidv4 } from "uuid";
 import crypto from "crypto";
-import { Resend } from "resend";
+import { resend } from "@/lib/resend";
 import { ReactivationEmailTemplate } from "@/emails/reactivation-email";
 import { render } from "@react-email/render";
 import { env } from "@/lib/env.mjs";
 import { currencyFormatter } from "@/lib/utils";
-
-const resend = new Resend(env.RESEND_API_KEY);
 
 /**
  * Core engine for automated customer reactivation.
@@ -51,6 +49,7 @@ export async function processAutomaticReactivations(storeId: string) {
         where: {
           storeId,
           customerEmail: customer.email,
+          status: ReactivationStatus.SENT,
           createdAt: {
             // Prevent sending more than once every 60 days to the same person
             gte: addDays(new Date(), -60),
@@ -142,23 +141,26 @@ export async function processAutomaticReactivations(storeId: string) {
         },
       });
 
+      const rawName = customer.name || "Cliente Ideal";
+      const firstName = rawName.trim() ? rawName.trim().split(" ")[0] : "Cliente";
+
       // 5. Render HTML Email
       const htmlContent = await render(
         ReactivationEmailTemplate({
-          customerName: customer.name || "Cliente Ideal",
+          customerName: rawName,
           storeName: store.name,
           discountCode: code,
           discountPercentage: 10,
           recommendedProducts,
-          storeUrl: `https://${store.name.toLowerCase().replace(/\\s/g, "")}.com`, // Should use real store URL, this is fallback
+          storeUrl: env.FRONTEND_STORE_URL || "https://papeleriapdepapel.com",
         }),
       );
 
       // 6. Send Email via Resend
       const response = await resend.emails.send({
-        from: `Novedades ${store.name} <hola@novedades.pdepapel.com>`, // Replace domain when ready
+        from: `Novedades ${store.name} <novedades@papeleriapdepapel.com>`,
         to: customer.email,
-        subject: `¡Te extrañamos, ${customer.name.split(" ")[0]}! Tienes un regalo 🎁`,
+        subject: `¡Te extrañamos, ${firstName}! Tienes un regalo 🎁`,
         html: htmlContent,
       });
 
