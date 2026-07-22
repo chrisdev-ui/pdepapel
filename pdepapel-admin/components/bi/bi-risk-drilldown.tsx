@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { currencyFormatter } from "@/lib/utils";
 import axios from "axios";
 import { Copy, Send } from "lucide-react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 
 interface BiRiskDrilldownProps {
@@ -30,6 +30,7 @@ export const BiRiskDrilldown: React.FC<BiRiskDrilldownProps> = ({
 }) => {
   const { toast } = useToast();
   const params = useParams();
+  const router = useRouter();
   const [isReactivating, setIsReactivating] = useState(false);
 
   const isDanger = type === "dead_stock" || type === "stockout";
@@ -39,13 +40,13 @@ export const BiRiskDrilldown: React.FC<BiRiskDrilldownProps> = ({
       case "dead_stock":
         return "Inventario Muerto (Detalle)";
       case "stockout":
-        return "Riesgo de Stockout (Detalle)";
+        return "Riesgo de Agotado (<7 días)";
       case "inactive":
-        return "Clientes Inactivos (Detalle)";
+        return "Clientes Inactivos (Elegibles para Reactivación)";
       case "vip":
-        return "Clientes VIP (Detalle)";
+        return "Clientes VIP (Top 10% Facturación)";
       case "top_products":
-        return "Ranking de Productos por Rentabilidad";
+        return "Ranking de Productos Más Vendidos";
       default:
         return "Detalle";
     }
@@ -54,15 +55,15 @@ export const BiRiskDrilldown: React.FC<BiRiskDrilldownProps> = ({
   const getDescription = () => {
     switch (type) {
       case "dead_stock":
-        return "Productos sin movimiento en más de 60 días.";
+        return "Productos activos sin ventas en los últimos 60 días.";
       case "stockout":
-        return "Productos con inventario proyectado a agotarse en menos de 7 días.";
+        return "Productos con stock estimado para menos de 7 días.";
       case "inactive":
-        return "Clientes que no te compran hace más de 90 días.";
+        return "Clientes con compras anteriores pero inactivos cerca de 90 días.";
       case "vip":
-        return "Top 20% de tus clientes por Life-Time Value (LTV).";
+        return "Tus clientes más valiosos por volumen total comprado.";
       case "top_products":
-        return "Análisis de ganancia neta pura por producto despachado en este periodo.";
+        return "Productos con mayor cantidad de unidades vendidas en este período.";
       default:
         return "";
     }
@@ -100,10 +101,15 @@ export const BiRiskDrilldown: React.FC<BiRiskDrilldownProps> = ({
                   const res = await axios.post(
                     `/api/${params.storeId}/customers/reactivation`,
                   );
+                  const processed = res.data?.processed || 0;
                   toast({
-                    title: "Campaña iniciada",
-                    description: `Se reactivaron ${res.data.processed} clientes exitosamente.`,
+                    title: "Campaña de reactivación",
+                    description:
+                      processed > 0
+                        ? `Se enviaron correos a ${processed} cliente(s) exitosamente.`
+                        : "Todos los clientes elegibles ya fueron contactados recientemente (protección anti-spam de 60 días).",
                   });
+                  router.refresh();
                 } catch (error) {
                   toast({
                     variant: "destructive",
