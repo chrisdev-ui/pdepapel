@@ -1,6 +1,6 @@
 import prismadb from "@/lib/prismadb";
 import { OrderStatus } from "@prisma/client";
-import { subDays } from "date-fns";
+import { startOfMonth, endOfMonth, subDays } from "date-fns";
 
 export interface ProductProfitRanking {
   productId: string;
@@ -40,8 +40,9 @@ export async function getProductProfitRanking(
   let endDate: Date;
 
   if (year && month) {
-    startDate = new Date(year, month - 1, 1);
-    endDate = new Date(year, month, 0, 23, 59, 59, 999);
+    const targetDate = new Date(year, month - 1, 1);
+    startDate = startOfMonth(targetDate);
+    endDate = endOfMonth(targetDate);
   } else {
     startDate = subDays(new Date(), 30);
     endDate = new Date();
@@ -51,10 +52,21 @@ export async function getProductProfitRanking(
     where: {
       storeId,
       status: { in: [OrderStatus.PAID, OrderStatus.SENT] },
-      createdAt: {
-        gte: startDate,
-        lte: endDate,
-      },
+      OR: [
+        {
+          paidAt: {
+            gte: startDate,
+            lte: endDate,
+          },
+        },
+        {
+          paidAt: null,
+          createdAt: {
+            gte: startDate,
+            lte: endDate,
+          },
+        },
+      ],
     },
     include: {
       orderItems: {
@@ -66,28 +78,27 @@ export async function getProductProfitRanking(
   const productStats = new Map<string, ProductProfitRanking>();
 
   for (const order of orders) {
-    // We already filter by createdAt in Prisma, but to be robust with paidAt if used:
-    const paidAtDate = (order as any).paidAt;
-    if (paidAtDate) {
-      const pDate = new Date(paidAtDate);
+    const orderDate = (order as any).paidAt || order.createdAt;
+    if (orderDate) {
+      const pDate = new Date(orderDate);
       if (pDate < startDate || pDate > endDate) continue;
     }
 
-    const netProfit = (order as any).netProfit;
-    if (!netProfit || !order.total) continue;
+    if (!order.total || order.total <= 0) continue;
+    const netProfit = (order as any).netProfit || 0;
 
     // Distribute order profit proportionally to items based on their revenue share
     for (const item of (order as any).orderItems) {
       if (!item.productId || !item.product) continue;
 
       const itemRevenue = item.price * item.quantity;
-      const revenueShare = itemRevenue / order.total;
+      const revenueShare = order.total > 0 ? itemRevenue / order.total : 0;
       const itemProfitShare = netProfit * revenueShare;
 
       const existing = productStats.get(item.productId) || {
         productId: item.productId,
         name: item.product.name,
-        category: item.product.category.name,
+        category: item.product.category?.name || "Sin categoría",
         totalQuantitySold: 0,
         totalRevenue: 0,
         totalProfit: 0,
@@ -99,7 +110,9 @@ export async function getProductProfitRanking(
       existing.totalRevenue += itemRevenue;
       existing.totalProfit += itemProfitShare;
       existing.profitMarginPct =
-        (existing.totalProfit / existing.totalRevenue) * 100;
+        existing.totalRevenue > 0
+          ? (existing.totalProfit / existing.totalRevenue) * 100
+          : 0;
 
       productStats.set(item.productId, existing);
     }

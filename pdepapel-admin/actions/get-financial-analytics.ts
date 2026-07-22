@@ -49,20 +49,26 @@ export async function getMonthlyFinancialSummary(
     where: {
       storeId,
       status: { in: [OrderStatus.PAID, OrderStatus.SENT] },
-      paidAt: {
-        gte: start,
-        lte: end,
-      },
+      OR: [
+        {
+          paidAt: {
+            gte: start,
+            lte: end,
+          },
+        },
+        {
+          paidAt: null,
+          createdAt: {
+            gte: start,
+            lte: end,
+          },
+        },
+      ],
     } as any,
-    // select: {
-    //   total: true,
-    //   netProfit: true,
-    //   profitMarginPct: true,
-    // },
   });
 
   const total_revenue = orders.reduce(
-    (sum, order) => sum + (order.subtotal || 0),
+    (sum, order) => sum + (order.total || order.subtotal || 0),
     0,
   );
   const total_net_profit = orders.reduce(
@@ -98,16 +104,22 @@ export async function getDailyFinancialBreakdown(
     where: {
       storeId,
       status: { in: [OrderStatus.PAID, OrderStatus.SENT] },
-      paidAt: {
-        gte: start,
-        lte: end,
-      },
+      OR: [
+        {
+          paidAt: {
+            gte: start,
+            lte: end,
+          },
+        },
+        {
+          paidAt: null,
+          createdAt: {
+            gte: start,
+            lte: end,
+          },
+        },
+      ],
     } as any,
-    // select: {
-    //   total: true,
-    //   netProfit: true,
-    //   paidAt: true,
-    // },
   });
 
   const daysInMonth = eachDayOfInterval({ start, end });
@@ -120,14 +132,15 @@ export async function getDailyFinancialBreakdown(
 
   // Aggregate orders into daily buckets
   for (const order of orders) {
-    if (!(order as any).paidAt) continue;
+    const orderDate = (order as any).paidAt || order.createdAt;
+    if (!orderDate) continue;
 
     // Ensure we group by the local date
-    const dateStr = format((order as any).paidAt, "yyyy-MM-dd");
+    const dateStr = format(new Date(orderDate), "yyyy-MM-dd");
     const existing = dailyMap.get(dateStr) || { revenue: 0, profit: 0 };
 
     dailyMap.set(dateStr, {
-      revenue: existing.revenue + (order.subtotal || 0),
+      revenue: existing.revenue + (order.total || order.subtotal || 0),
       profit: existing.profit + ((order as any).netProfit || 0),
     });
   }
