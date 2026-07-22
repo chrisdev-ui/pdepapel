@@ -96,6 +96,7 @@ interface OfferFormProps {
     category: { name: string };
     categoryId: string;
     productGroupId: string | null;
+    isArchived?: boolean;
   }[];
   categories: {
     id: string;
@@ -241,9 +242,23 @@ export const OfferForm: React.FC<OfferFormProps> = ({
     }
   };
 
-  const filteredProducts = products.filter((product) =>
-    product.name.toLowerCase().includes(productSearch.toLowerCase()),
-  );
+  const selectedProductIds = form.watch("productIds");
+  const selectedCategoryIds = form.watch("categoryIds");
+  const selectedGroupIds = form.watch("productGroupIds");
+
+  const filteredProducts = useMemo(() => {
+    const currentSelectedIds = selectedProductIds || [];
+    return products.filter((product) => {
+      // Exclude archived products
+      if (product.isArchived) return false;
+
+      // Exclude out of stock products unless already selected in this offer
+      const isSelected = currentSelectedIds.includes(product.id);
+      if (product.stock <= 0 && !isSelected) return false;
+
+      return product.name.toLowerCase().includes(productSearch.toLowerCase());
+    });
+  }, [products, selectedProductIds, productSearch]);
 
   const filteredCategories = categories.filter(
     (category) =>
@@ -255,16 +270,15 @@ export const OfferForm: React.FC<OfferFormProps> = ({
     group.name.toLowerCase().includes(groupSearch.toLowerCase()),
   );
 
-  const selectedProductIds = form.watch("productIds");
-  const selectedCategoryIds = form.watch("categoryIds");
-  const selectedGroupIds = form.watch("productGroupIds");
-
   const affectedProducts = useMemo(() => {
     const currentProductIds = selectedProductIds || [];
     const currentCategoryIds = selectedCategoryIds || [];
     const currentGroupIds = selectedGroupIds || [];
 
     return products.filter((product) => {
+      // Do not list archived or out of stock products in affected summary
+      if (product.isArchived || product.stock <= 0) return false;
+
       const isDirectlySelected = currentProductIds.includes(product.id);
       const isincategory = currentCategoryIds.includes(product.categoryId);
       const isInGroup =
@@ -770,8 +784,10 @@ export const OfferForm: React.FC<OfferFormProps> = ({
                                   {currencyFormatter(product.price)} •{" "}
                                   {product.category.name}
                                   {product.stock <= 5 && (
-                                    <span className="ml-2 text-red-500">
-                                      Stock: {product.stock}
+                                    <span className="ml-2 font-medium text-red-500">
+                                      {product.stock <= 0
+                                        ? "Sin stock"
+                                        : `Stock: ${product.stock}`}
                                     </span>
                                   )}
                                 </p>
