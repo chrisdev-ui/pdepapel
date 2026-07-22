@@ -71,14 +71,19 @@ export function EnhancedProductSelector({
     return `/api/${params.storeId}/products?search=${debouncedSearch}&limit=20&isArchived=false&page=${pageIndex + 1}&fromShop=true&skipCache=true`;
   };
 
-  const { data, size, setSize, isLoading, isValidating } = useSWRInfinite(
-    getKey,
-    fetcher,
-    {
-      revalidateFirstPage: false,
+  const { data, size, setSize, isLoading, isValidating, mutate } =
+    useSWRInfinite(getKey, fetcher, {
+      revalidateFirstPage: true,
+      revalidateOnFocus: true,
       persistSize: false,
-    },
-  );
+    });
+
+  // Force revalidation whenever modal opens to guarantee live stock values
+  React.useEffect(() => {
+    if (open) {
+      mutate();
+    }
+  }, [open, mutate]);
 
   const productsData = React.useMemo(() => {
     return data ? data.flatMap((page) => page.products) : [];

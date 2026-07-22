@@ -977,6 +977,13 @@ export async function GET(
             size: true,
             productGroup: true,
             supplier: includeSupplier ? true : undefined,
+            kitComponents: {
+              include: {
+                component: {
+                  select: { stock: true },
+                },
+              },
+            },
             reviews: {
               orderBy: { createdAt: "desc" },
             },
@@ -1048,8 +1055,23 @@ export async function GET(
     const productsWithPrices = products.map((product) => {
       const pricing = pricesMap.get(product.id);
       const effectivePrice = pricing?.price ?? Number(product.price);
+
+      // Compute effective stock for kit products based on component availability
+      let effectiveStock = product.stock;
+      if (product.isKit && (product as any).kitComponents?.length > 0) {
+        effectiveStock = Math.min(
+          ...(product as any).kitComponents.map((c: any) =>
+            c.quantity > 0
+              ? Math.floor((c.component?.stock || 0) / c.quantity)
+              : 0,
+          ),
+        );
+        if (effectiveStock < 0) effectiveStock = 0;
+      }
+
       return {
         ...product,
+        stock: effectiveStock,
         price: effectivePrice, // Always effective
         originalPrice: Number(product.price), // Always base
         discountedPrice: effectivePrice,
