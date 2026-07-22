@@ -138,6 +138,9 @@ export function EnhancedProductSelector({
 
   const handleIncrement = (product: ProductForItem) => {
     const currentQty = selectedItems[product.id] || 0;
+    if (product.stock <= 0 || currentQty >= product.stock) {
+      return;
+    }
     onUpdate(product.id, currentQty + 1, product);
   };
 
@@ -215,6 +218,7 @@ export function EnhancedProductSelector({
             {displayProducts.map((product) => {
               const quantity = selectedItems[product.id] || 0;
               const isSelected = quantity > 0;
+              const isOutOfStock = product.stock <= 0;
 
               return (
                 <div
@@ -222,6 +226,7 @@ export function EnhancedProductSelector({
                   className={cn(
                     "group relative flex flex-col overflow-hidden rounded-xl border bg-card transition-all hover:shadow-lg",
                     isSelected && "ring-2 ring-primary ring-offset-2",
+                    isOutOfStock && "opacity-80 bg-muted/30",
                   )}
                 >
                   {/* Image Area */}
@@ -232,6 +237,23 @@ export function EnhancedProductSelector({
                       alt={product.name}
                       className="object-cover transition-transform duration-500 group-hover:scale-105"
                     />
+                    {isOutOfStock ? (
+                      <Badge
+                        variant="destructive"
+                        className="absolute left-2 top-2 font-semibold shadow-sm"
+                      >
+                        Agotado
+                      </Badge>
+                    ) : (
+                      product.stock <= 5 && (
+                        <Badge
+                          variant="secondary"
+                          className="absolute left-2 top-2 border-none bg-amber-500 font-medium text-white shadow-sm"
+                        >
+                          Stock: {product.stock}
+                        </Badge>
+                      )
+                    )}
                     {product.hasDiscount && (
                       <Badge
                         variant="destructive"
@@ -305,11 +327,18 @@ export function EnhancedProductSelector({
                       {quantity === 0 ? (
                         <Button
                           className="w-full"
-                          variant="secondary"
+                          variant={isOutOfStock ? "outline" : "secondary"}
+                          disabled={isOutOfStock}
                           onClick={() => handleIncrement(product)}
                         >
-                          <Plus className="mr-2 h-4 w-4" />
-                          Agregar
+                          {isOutOfStock ? (
+                            "Sin Stock"
+                          ) : (
+                            <>
+                              <Plus className="mr-2 h-4 w-4" />
+                              Agregar
+                            </>
+                          )}
                         </Button>
                       ) : (
                         <div className="flex items-center justify-between rounded-md border bg-background p-1 shadow-sm">
@@ -328,6 +357,7 @@ export function EnhancedProductSelector({
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 rounded-sm hover:bg-muted"
+                            disabled={quantity >= product.stock}
                             onClick={() => handleIncrement(product)}
                           >
                             <Plus className="h-4 w-4" />

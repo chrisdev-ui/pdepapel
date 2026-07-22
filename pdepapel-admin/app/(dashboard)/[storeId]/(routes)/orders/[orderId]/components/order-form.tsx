@@ -1329,15 +1329,31 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                             );
 
                             if (quantity > 0) {
+                              const availableStock =
+                                product?.stock ??
+                                (fields[existingIndex] as any)?.stock ??
+                                9999;
+                              if (availableStock <= 0) {
+                                toast({
+                                  variant: "destructive",
+                                  title: "Producto sin stock",
+                                  description: `El producto "${product?.name || "seleccionado"}" está agotado.`,
+                                });
+                                return;
+                              }
+                              const validQuantity = Math.min(
+                                quantity,
+                                availableStock,
+                              );
                               if (existingIndex !== -1) {
                                 update(existingIndex, {
                                   ...fields[existingIndex],
-                                  quantity,
+                                  quantity: validQuantity,
                                 });
                               } else if (product) {
                                 append({
                                   productId,
-                                  quantity,
+                                  quantity: validQuantity,
                                   name: product.name,
                                   price: product.originalPrice || product.price,
                                   discountedPrice: product.discountedPrice,
