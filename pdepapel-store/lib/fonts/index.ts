@@ -1,4 +1,4 @@
-import { Caudex, Nunito, Roboto } from "next/font/google";
+import { Caudex, Comfortaa, Fredoka, Nunito, Quicksand, Roboto } from "next/font/google";
 import localFont from "next/font/local";
 
 export const caudex = Caudex({
@@ -27,3 +27,16 @@ export const roboto = Roboto({
   display: "swap",
   variable: "--font-roboto",
 });
+export const fredoka = Fredoka({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+  display: "swap",
+  variable: "--font-fredoka",
+});
+export const quicksand = Quicksand({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+  display: "swap",
+  variable: "--font-quicksand",
+});
+

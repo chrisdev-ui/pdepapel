@@ -6,7 +6,7 @@ import type { Metadata } from "next";
 
 import { Footer } from "@/components/footer";
 import { getCurrentSeason } from "@/lib/date-utils";
-import { beautifulEveryTime, caudex, nunito, roboto } from "@/lib/fonts";
+import { beautifulEveryTime, caudex, fredoka, nunito, quicksand, roboto } from "@/lib/fonts";
 import { ModalProvider } from "@/providers/modal-provider";
 import { ReactQueryProvider } from "@/providers/query-client-provider";
 import { Toaster } from "@/providers/toaster";
@@ -100,7 +100,7 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -111,7 +111,7 @@ export default function RootLayout({
     <ClerkProvider localization={esES}>
       <html lang="es" suppressHydrationWarning>
         <body
-          className={`${beautifulEveryTime.variable} ${caudex.variable} ${nunito.variable} ${roboto.variable}`}
+          className={`${beautifulEveryTime.variable} ${caudex.variable} ${nunito.variable} ${roboto.variable} ${fredoka.variable} ${quicksand.variable}`}
         >
           <link rel="dns-prefetch" href="https://res.cloudinary.com" />
           <link rel="preconnect" href="https://res.cloudinary.com" />

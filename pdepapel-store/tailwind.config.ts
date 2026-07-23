@@ -53,8 +53,10 @@ const config: Config = {
       },
       fontFamily: {
         mono: ["var(--font-caudex)", ...fontFamily.mono],
-        sans: ["var(--font-nunito)", ...fontFamily.sans],
+        sans: ["var(--font-fredoka)", "var(--font-quicksand)", "var(--font-nunito)", ...fontFamily.sans],
         serif: ["var(--font-caudex)", ...fontFamily.serif],
+        fredoka: ["var(--font-fredoka)", ...fontFamily.sans],
+        quicksand: ["var(--font-quicksand)", ...fontFamily.sans],
         script: ["var(--font-beautiful-every-time-regular)", ...fontFamily.sans],
         roboto: ["var(--font-roboto)", ...fontFamily.sans],
       },
