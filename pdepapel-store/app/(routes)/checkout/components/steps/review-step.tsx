@@ -41,13 +41,13 @@ export const ReviewStep = ({
   const getPaymentMethodLabel = (method: PaymentMethod) => {
     switch (method) {
       case PaymentMethod.COD:
-        return "Pago contra entrega";
+        return "Pago contra entrega (Efectivo / Datáfono)";
       case PaymentMethod.BankTransfer:
-        return "Transferencia Bancaria";
+        return "Transferencia bancaria directa (Bancolombia / Nequi)";
       case PaymentMethod.Wompi:
-        return "Wompi (Tarjetas, PSE, Nequi, etc.)";
+        return "Pago en línea (Tarjeta de crédito / débito, PSE, Nequi)";
       case PaymentMethod.PayU:
-        return "PayU (Tarjetas, PSE, Efectivo, etc.)";
+        return "PayU (Desactivado)";
       default:
         return method;
     }
