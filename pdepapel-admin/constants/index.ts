@@ -61,12 +61,12 @@ export const statusOptions = {
 };
 
 export const paymentOptions: Record<PaymentMethod, string> = {
-  [PaymentMethod.BankTransfer]: "Transferencia bancaria",
-  [PaymentMethod.COD]: "Contra entrega",
-  [PaymentMethod.Wompi]: "Wompi",
-  [PaymentMethod.Bold]: "Bold (Próximamente)",
+  [PaymentMethod.Wompi]: "Pago en línea (Tarjeta de Crédito / Débito, PSE, Nequi)",
+  [PaymentMethod.BankTransfer]: "Transferencia bancaria directa (Bancolombia / Nequi)",
+  [PaymentMethod.COD]: "Pago contra entrega (Efectivo / Datáfono)",
+  [PaymentMethod.Bold]: "Bold - Pago en línea (Próximamente)",
   [PaymentMethod.PayU]: "PayU (Desactivado)",
-  [PaymentMethod.CASH]: "Efectivo",
+  [PaymentMethod.CASH]: "Pago en efectivo en tienda",
 };
 
 export const discountOptions: Record<DiscountType, string> = {
@@ -108,11 +108,11 @@ export const paymentMethodsByOption: {
   [P in PaymentMethod]: WompiPaymentMethods | null;
 } = {
   [PaymentMethod.Wompi]: {
-    CARD: "Tarjeta de crédito",
+    CARD: "Tarjeta de crédito / débito",
     BANCOLOMBIA_TRANSFER: "Transferencia bancaria Bancolombia",
-    BANCOLOMBIA_QR: "Código QR",
-    NEQUI: "Nequi",
-    PSE: "PSE",
+    BANCOLOMBIA_QR: "Código QR Bancolombia",
+    NEQUI: "Billetera Nequi",
+    PSE: "Debito bancario PSE",
     PCOL: "Puntos Colombia",
   },
   [PaymentMethod.Bold]: null,
@@ -136,13 +136,13 @@ export const KITS_ID = "6fd0c357-45c3-4d61-84b1-78921cfb1f21";
 
 export const TRESHOLD_LOW_STOCK = 5;
 
-export const paymentNames = {
-  [PaymentMethod.BankTransfer]: "Transferencia Bancaria Bancolombia",
-  [PaymentMethod.COD]: "Pago Contra Entrega",
-  [PaymentMethod.Wompi]: "Pago con Wompi",
-  [PaymentMethod.Bold]: "Bold (Próximamente)",
-  [PaymentMethod.PayU]: "Pago con PayU",
-  [PaymentMethod.CASH]: "Pago en Efectivo",
+export const paymentNames: Record<PaymentMethod, string> = {
+  [PaymentMethod.Wompi]: "Pago en línea (Tarjeta de Crédito, Débito, PSE, Nequi)",
+  [PaymentMethod.BankTransfer]: "Transferencia Bancaria Directa (Bancolombia / Nequi)",
+  [PaymentMethod.COD]: "Pago Contra Entrega (Efectivo / Datáfono)",
+  [PaymentMethod.Bold]: "Pago en línea con Bold (Próximamente)",
+  [PaymentMethod.PayU]: "Pago con PayU (Desactivado)",
+  [PaymentMethod.CASH]: "Pago en Efectivo (Presencial)",
 };
 
 export enum Models {

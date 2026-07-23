@@ -393,16 +393,18 @@ export function getReadableStatus(status: OrderStatus | ShippingStatus) {
 
 export function getReadablePaymentMethod(method?: PaymentMethod | null) {
   switch (method) {
+    case PaymentMethod.Wompi:
+      return "Pago en línea (Tarjeta, PSE, Nequi)";
     case PaymentMethod.BankTransfer:
-      return "Transferencia Bancaria";
+      return "Transferencia Bancaria Directa";
     case PaymentMethod.COD:
       return "Pago contra entrega";
+    case PaymentMethod.CASH:
+      return "Pago en efectivo";
     case PaymentMethod.Bold:
-      return "Bold";
-    case PaymentMethod.Wompi:
-      return "Wompi";
+      return "Pago en línea con Bold (Próximamente)";
     case PaymentMethod.PayU:
-      return "PayU";
+      return "PayU (Desactivado)";
     default:
       return "No especificado";
   }
