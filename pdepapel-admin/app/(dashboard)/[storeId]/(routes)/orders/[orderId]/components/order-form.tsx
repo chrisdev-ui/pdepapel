@@ -1232,21 +1232,30 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 size="sm"
                 className={cn(
                   "border-emerald-200 bg-emerald-50 px-4 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800",
-                  (form.watch("status") === OrderStatus.PAID || initialData?.status === OrderStatus.PAID) &&
+                  (form.watch("status") === OrderStatus.PAID ||
+                    form.watch("status") === OrderStatus.SENT ||
+                    initialData?.status === OrderStatus.PAID ||
+                    initialData?.status === OrderStatus.SENT) &&
                     "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400 opacity-60 hover:bg-gray-100 hover:text-gray-400",
                 )}
                 disabled={
                   copyingWompi ||
-                  (form.watch("status") === OrderStatus.PAID || initialData?.status === OrderStatus.PAID)
+                  form.watch("status") === OrderStatus.PAID ||
+                  form.watch("status") === OrderStatus.SENT ||
+                  initialData?.status === OrderStatus.PAID ||
+                  initialData?.status === OrderStatus.SENT
                 }
                 onClick={async () => {
-                  const isPaid =
-                    form.watch("status") === OrderStatus.PAID || initialData?.status === OrderStatus.PAID;
-                  if (isPaid) {
+                  const isClosed =
+                    form.watch("status") === OrderStatus.PAID ||
+                    form.watch("status") === OrderStatus.SENT ||
+                    initialData?.status === OrderStatus.PAID ||
+                    initialData?.status === OrderStatus.SENT;
+                  if (isClosed) {
                     toast({
-                      title: "Orden Pagada",
+                      title: "Orden Cerrada",
                       description:
-                        "Esta orden ya fue pagada. No es necesario ni posible generar un nuevo link de pago.",
+                        "Esta orden ya está cerrada (Pagada o Enviada). No es necesario ni posible generar un nuevo link de pago.",
                       variant: "destructive",
                     });
                     return;
@@ -1279,8 +1288,11 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 type="button"
               >
                 <CreditCard className="mr-2 h-4 w-4" />
-                {form.watch("status") === OrderStatus.PAID || initialData?.status === OrderStatus.PAID
-                  ? "Orden Pagada (Sin Link)"
+                {form.watch("status") === OrderStatus.PAID ||
+                form.watch("status") === OrderStatus.SENT ||
+                initialData?.status === OrderStatus.PAID ||
+                initialData?.status === OrderStatus.SENT
+                  ? "Orden Cerrada (Sin Link)"
                   : "Copiar Link de Pago Wompi"}
               </Button>
               {initialData.token && (

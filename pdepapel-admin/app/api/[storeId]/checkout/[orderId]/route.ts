@@ -54,9 +54,12 @@ export async function POST(
     if (!order)
       throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
 
-    if (order.status === OrderStatus.PAID)
+    if (
+      order.status === OrderStatus.PAID ||
+      order.status === OrderStatus.SENT
+    )
       throw ErrorFactory.Conflict(
-        `La orden #${order.orderNumber || params.orderId} ya fue pagada. No es posible generar un nuevo link de pago.`,
+        `La orden #${order.orderNumber || params.orderId} ya está completada (${order.status === OrderStatus.PAID ? "Pagada" : "Enviada"}). No es posible generar un nuevo link de pago.`,
       );
 
     // Validate order items count (similar to main checkout)

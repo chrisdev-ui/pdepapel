@@ -32,7 +32,8 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const [open, setOpen] = useState(false);
   const [copyingWompi, setCopyingWompi] = useState(false);
 
-  const isPaidOrder = data.status === OrderStatus.PAID;
+  const isClosedOrder =
+    data.status === OrderStatus.PAID || data.status === OrderStatus.SENT;
 
   const onCopy = (id: string, message: string) => {
     navigator.clipboard.writeText(id);
@@ -43,11 +44,10 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   };
 
   const onCopyWompiLink = async () => {
-    if (isPaidOrder) {
+    if (isClosedOrder) {
       toast({
-        title: "Orden Pagada",
-        description:
-          "Esta orden ya fue pagada. No es necesario ni posible generar un nuevo link de pago.",
+        title: "Orden Cerrada",
+        description: `Esta orden ya está cerrada (${data.status === OrderStatus.PAID ? "Pagada" : "Enviada"}). No es necesario ni posible generar un nuevo link de pago.`,
         variant: "destructive",
       });
       return;
@@ -137,11 +137,13 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
           </DropdownMenuItem>
           <DropdownMenuItem
             className="cursor-pointer"
-            disabled={copyingWompi || isPaidOrder}
+            disabled={copyingWompi || isClosedOrder}
             onClick={onCopyWompiLink}
           >
             <CreditCard className="mr-2 h-4 w-4" />
-            {isPaidOrder ? "Link de Pago (Orden Pagada)" : "Copiar Link de Pago Wompi"}
+            {isClosedOrder
+              ? `Link de Pago (Orden ${data.status === OrderStatus.PAID ? "Pagada" : "Enviada"})`
+              : "Copiar Link de Pago Wompi"}
           </DropdownMenuItem>
           <DropdownMenuItem
             className="cursor-pointer"
