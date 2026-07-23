@@ -32,7 +32,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const [open, setOpen] = useState(false);
   const [copyingWompi, setCopyingWompi] = useState(false);
 
-  const isPaidOrder = data.isPaid || data.status === OrderStatus.PAID;
+  const isPaidOrder = data.status === OrderStatus.PAID;
 
   const onCopy = (id: string, message: string) => {
     navigator.clipboard.writeText(id);

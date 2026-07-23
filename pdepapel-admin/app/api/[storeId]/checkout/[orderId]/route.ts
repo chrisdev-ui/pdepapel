@@ -54,7 +54,7 @@ export async function POST(
     if (!order)
       throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
 
-    if (order.isPaid || order.status === OrderStatus.PAID)
+    if (order.status === OrderStatus.PAID)
       throw ErrorFactory.Conflict(
         `La orden #${order.orderNumber || params.orderId} ya fue pagada. No es posible generar un nuevo link de pago.`,
       );

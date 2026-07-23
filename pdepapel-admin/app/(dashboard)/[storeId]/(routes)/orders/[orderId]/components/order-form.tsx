@@ -1232,16 +1232,16 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 size="sm"
                 className={cn(
                   "border-emerald-200 bg-emerald-50 px-4 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800",
-                  (initialData?.isPaid || form.watch("status") === OrderStatus.PAID) &&
+                  (form.watch("status") === OrderStatus.PAID || initialData?.status === OrderStatus.PAID) &&
                     "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400 opacity-60 hover:bg-gray-100 hover:text-gray-400",
                 )}
                 disabled={
                   copyingWompi ||
-                  Boolean(initialData?.isPaid || form.watch("status") === OrderStatus.PAID)
+                  (form.watch("status") === OrderStatus.PAID || initialData?.status === OrderStatus.PAID)
                 }
                 onClick={async () => {
                   const isPaid =
-                    initialData?.isPaid || form.watch("status") === OrderStatus.PAID;
+                    form.watch("status") === OrderStatus.PAID || initialData?.status === OrderStatus.PAID;
                   if (isPaid) {
                     toast({
                       title: "Orden Pagada",
@@ -1279,7 +1279,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 type="button"
               >
                 <CreditCard className="mr-2 h-4 w-4" />
-                {initialData?.isPaid || form.watch("status") === OrderStatus.PAID
+                {form.watch("status") === OrderStatus.PAID || initialData?.status === OrderStatus.PAID
                   ? "Orden Pagada (Sin Link)"
                   : "Copiar Link de Pago Wompi"}
               </Button>
