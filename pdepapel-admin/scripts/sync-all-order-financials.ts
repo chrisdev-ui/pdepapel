@@ -1,6 +1,6 @@
-import prismadb from "@/lib/prismadb";
+import prismadb from "../lib/prismadb";
 import { OrderStatus } from "@prisma/client";
-import { calculateOrderFinancials } from "@/lib/financial";
+import { calculateOrderFinancials } from "../lib/financial";
 
 async function main() {
   console.log("Starting full database financial synchronization for ALL paid/sent orders...");
