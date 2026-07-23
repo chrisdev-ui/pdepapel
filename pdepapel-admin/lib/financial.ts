@@ -108,3 +108,46 @@ export async function calculateOrderFinancials(
     profitMarginPct,
   };
 }
+
+/**
+ * Robust helper function to extract or compute net profit for an order.
+ * Falls back to dynamic calculation if netProfit is null or missing in DB.
+ */
+export function getOrderNetProfit(order: any): number {
+  if (
+    order.netProfit !== null &&
+    order.netProfit !== undefined &&
+    !isNaN(Number(order.netProfit)) &&
+    Number(order.netProfit) !== 0
+  ) {
+    return Number(order.netProfit);
+  }
+
+  const total = Number(order.total || order.subtotal || 0);
+  if (total <= 0) return 0;
+
+  const paymentMethod = order.payment?.method || order.paymentMethod || undefined;
+  const shippingCost = Number(order.shipping?.cost || order.shippingCost || 0);
+
+  // Gateway fee calculation
+  let gatewayFee = 0;
+  if (paymentMethod === PaymentMethod.Wompi || paymentMethod === "Wompi") {
+    const baseFee = total * 0.0265 + 700;
+    gatewayFee = baseFee + baseFee * 0.19;
+  }
+
+  // Product cost calculation
+  let totalProductCost = Number(order.totalProductCost || 0);
+  if (!totalProductCost && Array.isArray(order.orderItems)) {
+    for (const item of order.orderItems) {
+      const acqPrice = Number(
+        item.product?.acqPrice ?? item.acqPrice ?? 0,
+      );
+      totalProductCost += acqPrice * Number(item.quantity || 1);
+    }
+  }
+
+  const calculatedProfit = total - totalProductCost - gatewayFee - shippingCost;
+  return isNaN(calculatedProfit) ? 0 : calculatedProfit;
+}
+

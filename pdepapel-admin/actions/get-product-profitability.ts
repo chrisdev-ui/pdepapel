@@ -1,3 +1,4 @@
+import { getOrderNetProfit } from "@/lib/financial";
 import prismadb from "@/lib/prismadb";
 import { OrderStatus } from "@prisma/client";
 import { startOfMonth, endOfMonth, subDays } from "date-fns";
@@ -85,7 +86,7 @@ export async function getProductProfitRanking(
     }
 
     if (!order.total || order.total <= 0) continue;
-    const netProfit = (order as any).netProfit || 0;
+    const netProfit = getOrderNetProfit(order);
 
     // Distribute order profit proportionally to items based on their revenue share
     for (const item of (order as any).orderItems) {

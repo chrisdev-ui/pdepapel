@@ -1,6 +1,6 @@
+import { getOrderNetProfit } from "@/lib/financial";
 import prismadb from "@/lib/prismadb";
 import { OrderStatus } from "@prisma/client";
-import { subDays } from "date-fns";
 
 export type CustomerSegment = "VIP" | "RECURRENT" | "OCCASIONAL" | "INACTIVE";
 
@@ -31,15 +31,19 @@ export async function getCustomerIntelligence(
       },
       email: { not: "" }, // Ensure we have an email to group by
     },
-    select: {
-      email: true,
-      fullName: true,
-      phone: true,
-      total: true,
-      netProfit: true,
-      paidAt: true,
-      createdAt: true,
-    } as any,
+    include: {
+      orderItems: {
+        include: {
+          product: {
+            select: {
+              acqPrice: true,
+            },
+          },
+        },
+      },
+      payment: true,
+      shipping: true,
+    },
     orderBy: {
       createdAt: "desc",
     },
@@ -78,7 +82,7 @@ export async function getCustomerIntelligence(
 
     existing.totalOrders += 1;
     existing.totalSpent += order.total || 0;
-    existing.totalProfitGenerated += order.netProfit || 0;
+    existing.totalProfitGenerated += getOrderNetProfit(order);
 
     // Update last purchase date
     const orderDate = (order as any).paidAt || order.createdAt;

@@ -1,3 +1,4 @@
+import { getOrderNetProfit } from "@/lib/financial";
 import prismadb from "@/lib/prismadb";
 import { OrderStatus } from "@prisma/client";
 import {
@@ -65,6 +66,19 @@ export async function getMonthlyFinancialSummary(
         },
       ],
     } as any,
+    include: {
+      orderItems: {
+        include: {
+          product: {
+            select: {
+              acqPrice: true,
+            },
+          },
+        },
+      },
+      payment: true,
+      shipping: true,
+    },
   });
 
   const total_revenue = orders.reduce(
@@ -72,7 +86,7 @@ export async function getMonthlyFinancialSummary(
     0,
   );
   const total_net_profit = orders.reduce(
-    (sum, order) => sum + ((order as any).netProfit || 0),
+    (sum, order) => sum + getOrderNetProfit(order),
     0,
   );
   const total_orders = orders.length;
@@ -120,6 +134,19 @@ export async function getDailyFinancialBreakdown(
         },
       ],
     } as any,
+    include: {
+      orderItems: {
+        include: {
+          product: {
+            select: {
+              acqPrice: true,
+            },
+          },
+        },
+      },
+      payment: true,
+      shipping: true,
+    },
   });
 
   const daysInMonth = eachDayOfInterval({ start, end });
@@ -141,7 +168,7 @@ export async function getDailyFinancialBreakdown(
 
     dailyMap.set(dateStr, {
       revenue: existing.revenue + (order.total || order.subtotal || 0),
-      profit: existing.profit + ((order as any).netProfit || 0),
+      profit: existing.profit + getOrderNetProfit(order),
     });
   }
 
