@@ -4,7 +4,6 @@ import prismadb from "@/lib/prismadb";
 import {
   CACHE_HEADERS,
   CheckoutOrder,
-  generatePayUPayment,
   generateWompiPayment,
   processOrderItemsInBatches,
 } from "@/lib/utils";
@@ -98,18 +97,6 @@ export async function POST(
         console.error("Failed to send order email:", emailError);
       }
     });
-
-    // Generate payment based on method
-    if (order.payment?.method === PaymentMethod.PayU) {
-      const payUData = generatePayUPayment(order as CheckoutOrder);
-
-      return NextResponse.json(
-        {
-          ...payUData,
-        },
-        { headers: corsHeaders },
-      );
-    }
 
     const url = await generateWompiPayment(order as CheckoutOrder);
 

@@ -17,8 +17,6 @@ export const env = createEnv({
     WOMPI_EVENTS_KEY: z.string().min(1),
     WOMPI_INTEGRITY_KEY: z.string().min(1),
     RESEND_API_KEY: z.string().min(1),
-    PAYU_MERCHANT_ID: z.string().min(1),
-    PAYU_API_KEY: z.string().min(1),
     CRON_SECRET: z.string().min(1),
     // Internal API authentication for server-to-server calls (webhooks, etc.)
     INTERNAL_API_SECRET: z.string().min(1),

@@ -665,6 +665,7 @@ enum PaymentMethod {
   BankTransfer
   Wompi
   PayU
+  Bold
   CASH
 }
 

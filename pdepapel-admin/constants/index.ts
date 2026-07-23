@@ -60,11 +60,12 @@ export const statusOptions = {
   [OrderStatus.CANCELLED]: "Cancelada",
 };
 
-export const paymentOptions = {
+export const paymentOptions: Record<PaymentMethod, string> = {
   [PaymentMethod.BankTransfer]: "Transferencia bancaria",
   [PaymentMethod.COD]: "Contra entrega",
-  [PaymentMethod.PayU]: "PayU",
   [PaymentMethod.Wompi]: "Wompi",
+  [PaymentMethod.Bold]: "Bold (Próximamente)",
+  [PaymentMethod.PayU]: "PayU (Desactivado)",
   [PaymentMethod.CASH]: "Efectivo",
 };
 
@@ -114,6 +115,7 @@ export const paymentMethodsByOption: {
     PSE: "PSE",
     PCOL: "Puntos Colombia",
   },
+  [PaymentMethod.Bold]: null,
   [PaymentMethod.PayU]: null,
   [PaymentMethod.BankTransfer]: null,
   [PaymentMethod.COD]: null,
@@ -137,8 +139,9 @@ export const TRESHOLD_LOW_STOCK = 5;
 export const paymentNames = {
   [PaymentMethod.BankTransfer]: "Transferencia Bancaria Bancolombia",
   [PaymentMethod.COD]: "Pago Contra Entrega",
-  [PaymentMethod.PayU]: "Pago con PayU",
   [PaymentMethod.Wompi]: "Pago con Wompi",
+  [PaymentMethod.Bold]: "Bold (Próximamente)",
+  [PaymentMethod.PayU]: "Pago con PayU",
   [PaymentMethod.CASH]: "Pago en Efectivo",
 };
 

@@ -19,7 +19,6 @@ import {
   CheckoutOrder,
   currencyFormatter,
   generateOrderNumber,
-  generatePayUPayment,
   generateWompiPayment,
   getLastOrderTimestamp,
   processOrderItemsInBatches,
@@ -699,14 +698,6 @@ export async function POST(
       console.log(
         `🔐 Generating ${payment.method} payment for order ${order.orderNumber}`,
       );
-      if (payment.method === PaymentMethod.PayU) {
-        const payUData = generatePayUPayment(order);
-        console.log(
-          `✅ PayU payment data generated - Reference: ${payUData.referenceCode}, Amount: ${currencyFormatter(payUData.amount)}`,
-        );
-        return NextResponse.json({ ...payUData }, { headers: corsHeaders });
-      }
-
       if (payment.method === PaymentMethod.COD || payment.method === PaymentMethod.BankTransfer) {
         console.log(
           `✅ COD/BankTransfer payment selected - no gateway required. Returning order details directly.`,

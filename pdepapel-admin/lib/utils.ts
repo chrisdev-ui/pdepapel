@@ -107,198 +107,6 @@ export async function generateIntegritySignature({
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export function generatePayUSignature({
-  apiKey,
-  merchantId,
-  referenceCode,
-  amount,
-  hashAlgorithm = "md5",
-  currency = "COP",
-  statePol,
-}: {
-  apiKey: string;
-  merchantId: string;
-  referenceCode: string;
-  amount: number | string;
-  hashAlgorithm?: "md5" | "sha1" | "sha256";
-  currency?: string;
-  statePol?: string;
-}): string {
-  const stringToSign = `${apiKey}~${merchantId}~${referenceCode}~${amount}~${currency}${
-    statePol ? `~${statePol}` : ""
-  }`;
-  return crypto.createHash(hashAlgorithm).update(stringToSign).digest("hex");
-}
-
-export function parseOrderDetails(input: string | null | undefined): {
-  customer_email: string;
-  payment_method_type: string;
-  reference_pol: string;
-} {
-  if (input === null || input === undefined) {
-    return {
-      customer_email: "",
-      payment_method_type: "",
-      reference_pol: "",
-    };
-  }
-  const keyValuePairs = input.split(" | ");
-  let parsedData = {
-    customer_email: "",
-    payment_method_type: "",
-    reference_pol: "",
-  };
-
-  keyValuePairs.forEach((pair) => {
-    const [key, value] = pair.split(": ").map((item) => item.trim());
-    if (key === "customer_email") {
-      parsedData.customer_email = value;
-    } else if (key === "payment_method_type") {
-      parsedData.payment_method_type = value;
-    } else if (key === "reference_pol") {
-      parsedData.reference_pol = value;
-    }
-  });
-
-  return parsedData;
-}
-
-export function parseAndSplitAddress(address: string): {
-  shippingAddress: string;
-  shippingCity: string;
-} {
-  let addressSections = address.split(", ");
-  addressSections = addressSections.filter((section) => section !== null);
-  let shippingAddress = addressSections[0];
-  let shippingCity = addressSections[1];
-  if (addressSections.length > 2) {
-    shippingAddress += ", " + addressSections[1];
-    shippingCity = addressSections[2];
-  }
-
-  return {
-    shippingAddress,
-    shippingCity,
-  };
-}
-
-export async function getLastOrderTimestamp(
-  userId: string | null | undefined,
-  guestId: string | null | undefined,
-  storeId: string,
-) {
-  if (!userId && !guestId && !storeId) return null;
-  const lastOrder = await prismadb.order.findFirst({
-    where: { OR: [{ userId }, { guestId }], storeId },
-    orderBy: { createdAt: "desc" },
-  });
-
-  return lastOrder?.createdAt;
-}
-
-export function formatPayUValue(value: string): string {
-  const valueNumber = parseFloat(value);
-  let formattedValue = valueNumber.toFixed(2);
-
-  if (formattedValue.charAt(formattedValue.length - 1) === "0") {
-    formattedValue = valueNumber.toFixed(1);
-  }
-
-  return formattedValue;
-}
-
-export const capitalizeFirstLetter = (string: string) => {
-  return string.charAt(0).toUpperCase() + string.slice(1);
-};
-
-export const formatPhoneNumber = (phone: string | null | undefined) => {
-  if (!phone) return null;
-  try {
-    const phoneNumber = parsePhoneNumber(phone);
-    return phoneNumber ? phoneNumber.format("INTERNATIONAL") : phone;
-  } catch (error) {
-    return phone;
-  }
-};
-
-export const normalizePhone = (phone: string | null | undefined) => {
-  if (!phone) return "";
-  try {
-    const phoneNumber = parsePhoneNumber(phone, "CO");
-    return phoneNumber ? phoneNumber.number.toString() : phone.trim();
-  } catch (error) {
-    return phone.trim();
-  }
-};
-
-export async function checkIfStoreOwner(
-  userId: string | null,
-  storeId: string,
-) {
-  if (!userId) return false;
-  const storeByUserId = await prismadb.store.findFirst({
-    where: {
-      id: storeId,
-      userId,
-    },
-  });
-  return !!storeByUserId;
-}
-
-export async function verifyStoreOwner(userId: string, storeId: string) {
-  const isStoreOwner = await checkIfStoreOwner(userId, storeId);
-  if (!isStoreOwner) throw ErrorFactory.Unauthorized();
-}
-
-export const parseErrorDetails = (
-  key: string,
-  list: unknown[],
-): Record<string, unknown> => ({
-  [key]: JSON.stringify(list),
-});
-
-export async function getClerkUserById(
-  userId: string | undefined,
-): Promise<string | null> {
-  if (!userId) return null;
-  const user = await clerkClient.users.getUser(userId);
-  return user ? user.id : null;
-}
-
-export function checkRequiredFields(
-  fields: Record<string, any>,
-  requiredFields: Record<string, string>,
-) {
-  for (const [field, message] of Object.entries(requiredFields)) {
-    if (
-      Array.isArray(fields[field]) ? !fields[field]?.length : !fields[field]
-    ) {
-      throw ErrorFactory.InvalidRequest(message);
-    }
-  }
-}
-export interface CheckoutOrder extends Order {
-  orderItems: CheckoutOrderItem[];
-  payment?: PaymentDetails | null;
-}
-
-export type CheckoutOrderItem = OrderItem & { product: Product };
-
-export interface PayUResponse {
-  referenceCode: string;
-  amount: number;
-  tax?: number;
-  taxReturnBase?: number;
-  currency?: string;
-  signature: string;
-  test: number;
-  responseUrl: string;
-  confirmationUrl: string;
-  shippingAddress: string;
-  shippingCity: string;
-  shippingCountry: string;
-}
-
 export async function generateWompiPayment(
   order: CheckoutOrder,
 ): Promise<string> {
@@ -319,32 +127,6 @@ export async function generateWompiPayment(
   const url = `https://checkout.wompi.co/p/?public-key=${env.WOMPI_API_KEY}&currency=COP&amount-in-cents=${amountInCents}&reference=${order.id}&signature:integrity=${signatureIntegrity}&redirect-url=${env.FRONTEND_STORE_URL}/order/${order.id}&expiration-time=${expirationTime}`;
 
   return url;
-}
-
-export function generatePayUPayment(order: CheckoutOrder): PayUResponse {
-  const { shippingAddress, shippingCity } = parseAndSplitAddress(order.address);
-  return {
-    referenceCode: order.id,
-    amount: order.total,
-    signature: generatePayUSignature({
-      apiKey: env.PAYU_API_KEY,
-      merchantId: env.PAYU_MERCHANT_ID,
-      referenceCode: order.id,
-      amount: order.total,
-    }),
-    test: env.NODE_ENV === "production" ? 0 : 1,
-    responseUrl:
-      env.NODE_ENV === "production"
-        ? `${env.FRONTEND_STORE_URL}/order/${order.id}`
-        : `https://21dmqprm-3001.use2.devtunnels.ms/order/${order.id}`,
-    confirmationUrl:
-      env.NODE_ENV === "production"
-        ? `${env.ADMIN_WEB_URL}/api/webhook/payu`
-        : "https://4d8b-2800-e6-4010-ec51-ac30-1677-a33f-4dd9.ngrok-free.app/api/webhook/payu",
-    shippingAddress,
-    shippingCity,
-    shippingCountry: DEFAULT_COUNTRY,
-  };
 }
 
 export interface OrderTotals {
@@ -471,10 +253,12 @@ export function getReadablePaymentMethod(method?: PaymentMethod | null) {
       return "Transferencia Bancaria";
     case PaymentMethod.COD:
       return "Pago contra entrega";
-    case PaymentMethod.PayU:
-      return "PayU";
+    case PaymentMethod.Bold:
+      return "Bold";
     case PaymentMethod.Wompi:
       return "Wompi";
+    case PaymentMethod.PayU:
+      return "PayU";
     default:
       return "No especificado";
   }

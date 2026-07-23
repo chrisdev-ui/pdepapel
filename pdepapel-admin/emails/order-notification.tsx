@@ -35,7 +35,7 @@ export const OrderNotification = ({
   status = "PAID",
   isAdminEmail = false,
   paymentMethod = "Wompi",
-  trackingInfo = "TRACK-123",
+  trackingInfo,
   address = "Calle 123",
   phone = "1234567890",
   email = "john@example.com",
@@ -225,7 +225,7 @@ export const OrderNotification = ({
               </Text>
             )}
 
-            {trackingInfo && (
+            {Boolean(trackingInfo) && trackingInfo !== "TRACK-123" && (
               <Container style={trackingBox}>
                 <Heading style={trackingTitle}>🚚 Información de envío</Heading>
                 <Text style={trackingText}>

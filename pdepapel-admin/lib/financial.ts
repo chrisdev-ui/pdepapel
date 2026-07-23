@@ -68,14 +68,8 @@ export function calculateGatewayFee(
       return baseFee + vat;
     }
 
-    // PayU rates: ~3.49% + $900 COP + 19% VAT on the fee
-    case PaymentMethod.PayU: {
-      const baseFee = validTotal * 0.0349 + 900;
-      const vat = baseFee * 0.19;
-      return baseFee + vat;
-    }
-
-    // Default to 0 for Bank transfers, Cash, COD
+    // Default to 0 for Bank transfers, Cash, COD, Bold
+    case PaymentMethod.Bold:
     case PaymentMethod.BankTransfer:
     case PaymentMethod.COD:
     case PaymentMethod.CASH:

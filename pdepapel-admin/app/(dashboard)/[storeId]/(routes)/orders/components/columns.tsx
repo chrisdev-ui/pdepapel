@@ -167,10 +167,12 @@ export const columns: ColumnDef<OrderColumn>[] = [
             return <Icons.bancolombia className="h-8 w-8" />;
           case PaymentMethod.COD:
             return <Icons.cashOnDelivery className="h-8 w-8" />;
-          case PaymentMethod.PayU:
-            return <Icons.payu className="h-12 w-12" />;
           case PaymentMethod.Wompi:
             return <Icons.wompi className="h-auto w-16" />;
+          case PaymentMethod.Bold:
+            return <span className="font-semibold text-xs text-primary">Bold</span>;
+          case PaymentMethod.PayU:
+            return <span className="text-xs text-muted-foreground">PayU</span>;
           default:
             return null;
         }
