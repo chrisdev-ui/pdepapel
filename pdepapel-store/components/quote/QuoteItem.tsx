@@ -106,10 +106,10 @@ const QuoteItem = ({ item, index }: QuoteItemProps) => {
           <div className="mt-2 flex items-center gap-3 text-sm">
             <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-gray-700">
               <Package className="h-3 w-3" />
-              <span className="font-serif font-medium">x{item.quantity}</span>
+              <span className="font-quicksand font-semibold">x{item.quantity}</span>
             </span>
             {item.quantity > 1 && (
-              <span className="font-serif text-gray-500">
+              <span className="font-quicksand font-medium text-gray-500">
                 {currencyFormatter.format(item.unitPrice)} c/u
               </span>
             )}
@@ -121,7 +121,7 @@ const QuoteItem = ({ item, index }: QuoteItemProps) => {
           className="text-right md:text-left"
           whileHover={{ scale: 1.05 }}
         >
-          <p className="font-serif text-lg font-bold text-blue-900 md:text-xl">
+          <p className="font-quicksand text-lg font-bold text-blue-900 md:text-xl">
             {currencyFormatter.format(item.unitPrice * item.quantity)}
           </p>
         </motion.div>

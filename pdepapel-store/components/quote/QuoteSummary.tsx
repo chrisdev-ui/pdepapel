@@ -74,7 +74,7 @@ const QuoteSummary = ({
       <div className="space-y-3 border-b border-gray-100 pb-4">
         <div className="flex justify-between text-sm">
           <span className="text-gray-500">Subtotal</span>
-          <span className="font-serif font-medium text-gray-900">
+          <span className="font-quicksand font-semibold text-gray-900">
             {currencyFormatter.format(subtotal)}
           </span>
         </div>
@@ -85,7 +85,7 @@ const QuoteSummary = ({
             <span className="text-gray-500">Envío</span>
           </div>
           {shippingCost !== undefined && shippingCost !== null ? (
-            <span className="font-serif font-medium text-gray-900">
+            <span className="font-quicksand font-semibold text-gray-900">
               {currencyFormatter.format(shippingCost)}
             </span>
           ) : (
@@ -104,7 +104,7 @@ const QuoteSummary = ({
             <span className="flex items-center gap-2 text-green-500">
               <Gift className="h-4 w-4" /> Descuento
             </span>
-            <span className="font-serif font-medium text-green-500">
+            <span className="font-quicksand font-semibold text-green-500">
               - {currencyFormatter.format(discount)}
             </span>
           </motion.div>
@@ -120,7 +120,7 @@ const QuoteSummary = ({
         <div className="flex items-center justify-between">
           <span className="text-lg font-bold text-gray-900">Total</span>
           <motion.span
-            className="font-serif text-2xl font-extrabold text-blue-600"
+            className="font-quicksand text-2xl font-extrabold text-blue-600"
             animate={{ scale: [1, 1.02, 1] }}
             transition={{ duration: 2, repeat: Infinity }}
           >
