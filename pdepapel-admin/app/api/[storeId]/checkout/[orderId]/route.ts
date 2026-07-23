@@ -62,6 +62,15 @@ export async function POST(
         `La orden #${order.orderNumber || params.orderId} ya está completada (${order.status === OrderStatus.PAID ? "Pagada" : "Enviada"}). No es posible generar un nuevo link de pago.`,
       );
 
+    if (
+      order.payment?.method &&
+      order.payment.method !== PaymentMethod.Wompi
+    ) {
+      throw ErrorFactory.InvalidRequest(
+        `La orden #${order.orderNumber || params.orderId} fue registrada para pago por Transferencia o Efectivo (${order.payment.method}). Los links de pago de Wompi solo aplican para pagos en línea.`,
+      );
+    }
+
     // Validate order items count (similar to main checkout)
     if (order.orderItems.length > 1000) {
       throw ErrorFactory.InvalidRequest(

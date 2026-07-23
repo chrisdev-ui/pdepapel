@@ -1235,7 +1235,9 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   (form.watch("status") === OrderStatus.PAID ||
                     form.watch("status") === OrderStatus.SENT ||
                     initialData?.status === OrderStatus.PAID ||
-                    initialData?.status === OrderStatus.SENT) &&
+                    initialData?.status === OrderStatus.SENT ||
+                    (initialData?.payment?.method &&
+                      initialData.payment.method !== PaymentMethod.Wompi)) &&
                     "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400 opacity-60 hover:bg-gray-100 hover:text-gray-400",
                 )}
                 disabled={
@@ -1243,7 +1245,11 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   form.watch("status") === OrderStatus.PAID ||
                   form.watch("status") === OrderStatus.SENT ||
                   initialData?.status === OrderStatus.PAID ||
-                  initialData?.status === OrderStatus.SENT
+                  initialData?.status === OrderStatus.SENT ||
+                  Boolean(
+                    initialData?.payment?.method &&
+                      initialData.payment.method !== PaymentMethod.Wompi,
+                  )
                 }
                 onClick={async () => {
                   const isClosed =
@@ -1256,6 +1262,19 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                       title: "Orden Cerrada",
                       description:
                         "Esta orden ya está cerrada (Pagada o Enviada). No es necesario ni posible generar un nuevo link de pago.",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+
+                  const isOffline =
+                    initialData?.payment?.method &&
+                    initialData.payment.method !== PaymentMethod.Wompi;
+                  if (isOffline) {
+                    toast({
+                      title: "Pago por Transferencia",
+                      description:
+                        "Esta orden fue registrada para Pago por Transferencia Directa o Efectivo. Los links de pago Wompi solo aplican para pagos en línea.",
                       variant: "destructive",
                     });
                     return;
@@ -1293,7 +1312,10 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 initialData?.status === OrderStatus.PAID ||
                 initialData?.status === OrderStatus.SENT
                   ? "Orden Cerrada (Sin Link)"
-                  : "Copiar Link de Pago Wompi"}
+                  : initialData?.payment?.method &&
+                      initialData.payment.method !== PaymentMethod.Wompi
+                    ? "Transferencia Directa (Sin Link Wompi)"
+                    : "Copiar Link de Pago Wompi"}
               </Button>
               {initialData.token && (
                 <Button

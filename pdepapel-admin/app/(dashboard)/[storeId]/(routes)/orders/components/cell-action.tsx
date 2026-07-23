@@ -17,7 +17,7 @@ import {
 import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import { OrderStatus } from "@prisma/client";
+import { OrderStatus, PaymentMethod } from "@prisma/client";
 import { OrderColumn } from "./columns";
 
 interface CellActionProps {
@@ -35,6 +35,10 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const isClosedOrder =
     data.status === OrderStatus.PAID || data.status === OrderStatus.SENT;
 
+  const isOfflinePayment =
+    Boolean(data.payment?.method) &&
+    data.payment?.method !== PaymentMethod.Wompi;
+
   const onCopy = (id: string, message: string) => {
     navigator.clipboard.writeText(id);
     toast({
@@ -48,6 +52,16 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
       toast({
         title: "Orden Cerrada",
         description: `Esta orden ya está cerrada (${data.status === OrderStatus.PAID ? "Pagada" : "Enviada"}). No es necesario ni posible generar un nuevo link de pago.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (isOfflinePayment) {
+      toast({
+        title: "Pago por Transferencia / Directo",
+        description:
+          "Esta orden fue registrada para Pago por Transferencia Directa o Efectivo. Los links de pago Wompi solo aplican para compras con Pago en Línea.",
         variant: "destructive",
       });
       return;
@@ -137,13 +151,15 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
           </DropdownMenuItem>
           <DropdownMenuItem
             className="cursor-pointer"
-            disabled={copyingWompi || isClosedOrder}
+            disabled={copyingWompi || isClosedOrder || isOfflinePayment}
             onClick={onCopyWompiLink}
           >
             <CreditCard className="mr-2 h-4 w-4" />
             {isClosedOrder
               ? `Link de Pago (Orden ${data.status === OrderStatus.PAID ? "Pagada" : "Enviada"})`
-              : "Copiar Link de Pago Wompi"}
+              : isOfflinePayment
+                ? "Link de Pago (Transferencia Directa)"
+                : "Copiar Link de Pago Wompi"}
           </DropdownMenuItem>
           <DropdownMenuItem
             className="cursor-pointer"
