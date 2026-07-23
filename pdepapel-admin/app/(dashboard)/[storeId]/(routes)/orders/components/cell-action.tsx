@@ -17,6 +17,7 @@ import {
 import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
+import { OrderStatus } from "@prisma/client";
 import { OrderColumn } from "./columns";
 
 interface CellActionProps {
@@ -31,6 +32,8 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const [open, setOpen] = useState(false);
   const [copyingWompi, setCopyingWompi] = useState(false);
 
+  const isPaidOrder = data.isPaid || data.status === OrderStatus.PAID;
+
   const onCopy = (id: string, message: string) => {
     navigator.clipboard.writeText(id);
     toast({
@@ -40,6 +43,16 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   };
 
   const onCopyWompiLink = async () => {
+    if (isPaidOrder) {
+      toast({
+        title: "Orden Pagada",
+        description:
+          "Esta orden ya fue pagada. No es necesario ni posible generar un nuevo link de pago.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       setCopyingWompi(true);
       const response = await axios.post(
@@ -124,11 +137,11 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
           </DropdownMenuItem>
           <DropdownMenuItem
             className="cursor-pointer"
-            disabled={copyingWompi}
+            disabled={copyingWompi || isPaidOrder}
             onClick={onCopyWompiLink}
           >
             <CreditCard className="mr-2 h-4 w-4" />
-            Copiar Link de Pago Wompi
+            {isPaidOrder ? "Link de Pago (Orden Pagada)" : "Copiar Link de Pago Wompi"}
           </DropdownMenuItem>
           <DropdownMenuItem
             className="cursor-pointer"
