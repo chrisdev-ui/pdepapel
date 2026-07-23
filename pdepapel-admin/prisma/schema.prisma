@@ -970,6 +970,7 @@ model WhatsAppMessage {
 
   @@index([storeId])
   @@index([customOrderId])
+  @@index([templateId])
   @@index([recipientPhone])
   @@index([status])
   @@index([externalId])
@@ -1020,6 +1021,7 @@ model QuoteRequest {
   orderId     String?
 
   @@index([storeId])
+  @@index([orderId])
   @@index([status])
   @@index([storeId, status])
   @@index([customerPhone])
