@@ -33,6 +33,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { Forbidden } from "@/components/forbidden";
+import { BankTransferInstructions } from "@/components/bank-transfer-instructions";
 import { Icons } from "@/components/icons";
 import { PayUForm } from "@/components/payu-form";
 import { CldImage } from "@/components/ui/CldImage";
@@ -1108,22 +1109,19 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                         </Button>
                       )}
 
-                    {order.status !== OrderStatus.PAID && (
-                      <div className="rounded-lg border-2 border-amber-200 bg-amber-50 p-4 text-xs">
-                        <p className="leading-relaxed text-amber-800">
-                          *** Recuerda que si pagas por transferencia bancaria
-                          debes enviar un mensaje al número de WhatsApp
-                          <Icons.whatsapp className="mx-1 inline-flex h-3 w-3 text-green-600" />
-                          <strong className="font-serif">313-258-2293</strong>{" "}
-                          con el comprobante de pago del depósito hecho a la
-                          cuenta Bancolombia
-                          <Icons.payments.bancolombia className="mx-1 inline-flex h-3 w-3" />
-                          <strong className="font-serif">236-000036-64</strong>{" "}
-                          para que podamos procesar tu orden lo más pronto
-                          posible.
-                        </p>
-                      </div>
-                    )}
+                    {order.status !== OrderStatus.PAID &&
+                      (order.status as string) !== "SENT" && (
+                        <div className="mt-4">
+                          <BankTransferInstructions
+                            order={{
+                              id: order.id,
+                              orderNumber: order.orderNumber,
+                              total: order.total,
+                              fullName: order.fullName,
+                            }}
+                          />
+                        </div>
+                      )}
                   </div>
                 </div>
               </div>
