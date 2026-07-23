@@ -53,8 +53,9 @@ const config: Config = {
       },
       fontFamily: {
         mono: ["var(--font-caudex)", ...fontFamily.mono],
-        sans: ["var(--font-beautiful-every-time-regular)", ...fontFamily.sans],
-        serif: ["var(--font-nunito)", ...fontFamily.serif],
+        sans: ["var(--font-nunito)", ...fontFamily.sans],
+        serif: ["var(--font-caudex)", ...fontFamily.serif],
+        script: ["var(--font-beautiful-every-time-regular)", ...fontFamily.sans],
         roboto: ["var(--font-roboto)", ...fontFamily.sans],
       },
       colors: {
