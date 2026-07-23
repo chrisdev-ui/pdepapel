@@ -787,11 +787,11 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
               </div>
               {productSavings > 0 ? (
                 <div className="flex flex-1 items-center justify-between">
-                  <span className="text-lg text-gray-600">
+                  <span className="font-quicksand text-lg font-semibold text-gray-600">
                     Ahorros en ofertas
                   </span>
                   <Currency
-                    className="font-serif text-lg text-success"
+                    className="font-quicksand font-bold text-lg text-success"
                     value={productSavings}
                   />
                 </div>

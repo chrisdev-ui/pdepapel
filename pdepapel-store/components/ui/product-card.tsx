@@ -202,7 +202,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
                     className="text-sm text-gray-500 line-through"
                   />
                 </div>
-                <span className="text-xs text-green-600">
+                <span className="font-quicksand text-xs font-semibold text-green-600">
                   Ahorra{" "}
                   {new Intl.NumberFormat("es-CO", {
                     style: "currency",
@@ -239,7 +239,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
                 className="text-sm text-gray-500 line-through"
               />
             </div>
-            <span className="text-xs text-green-600">
+            <span className="font-quicksand text-xs font-semibold text-green-600">
               Ahorra{" "}
               {new Intl.NumberFormat("es-CO", {
                 style: "currency",

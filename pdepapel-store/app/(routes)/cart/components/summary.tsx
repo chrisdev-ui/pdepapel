@@ -54,10 +54,10 @@ const SavingsRow = ({ formattedSavings }: { formattedSavings: number }) => {
 
   return (
     <div className="flex items-center justify-between border-t border-gray-200 pt-4">
-      <div className="text-base text-gray-600">Ahorros en ofertas</div>
+      <div className="font-quicksand text-base font-semibold text-gray-600">Ahorros en ofertas</div>
       <Currency
         value={formattedSavings}
-        className="font-serif text-lg text-success"
+        className="font-quicksand font-bold text-lg text-success"
       />
     </div>
   );

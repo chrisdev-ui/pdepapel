@@ -182,7 +182,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
                   className="text-lg text-gray-500 line-through"
                 />
               </div>
-              <span className="text-sm text-success">
+              <span className="font-quicksand font-semibold text-sm text-success">
                 Ahorra{" "}
                 {new Intl.NumberFormat("es-CO", {
                   style: "currency",
@@ -199,7 +199,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
                 %)
               </span>
               {data.offerLabel && (
-                <span className="mt-2 inline-block animate-bounce rounded bg-pink-froly px-2 py-1 text-xs font-semibold text-white">
+                <span className="mt-2 inline-block animate-bounce rounded bg-pink-froly px-2 py-1 font-quicksand text-xs font-semibold text-white">
                   {data.offerLabel}
                 </span>
               )}

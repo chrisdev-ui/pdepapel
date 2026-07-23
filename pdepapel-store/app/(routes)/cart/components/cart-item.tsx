@@ -92,7 +92,7 @@ export const CartItem: React.FC<CartItemProps> = ({ item }) => {
                     className="text-sm text-gray-500 line-through"
                   />
                 </div>
-                <span className="font-serif text-xs text-success">
+                <span className="font-quicksand text-xs font-semibold text-success">
                   Ahorra{" "}
                   {currencyFormatter.format(
                     (Number(item.originalPrice) - Number(item.price)) *
@@ -100,7 +100,7 @@ export const CartItem: React.FC<CartItemProps> = ({ item }) => {
                   )}
                 </span>
                 {item.offerLabel && (
-                  <span className="inline-block animate-bounce rounded bg-pink-froly px-2 py-0.5 text-xs font-semibold uppercase text-white">
+                  <span className="inline-block animate-bounce rounded bg-pink-froly px-2 py-0.5 font-quicksand text-xs font-semibold uppercase text-white">
                     {item.offerLabel}
                   </span>
                 )}
