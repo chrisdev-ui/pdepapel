@@ -1,7 +1,7 @@
 "use client";
 
 import axios from "axios";
-import { Copy, Edit, MoreHorizontal, Trash } from "lucide-react";
+import { Copy, CreditCard, Edit, MoreHorizontal, Trash } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -29,6 +29,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const params = useParams();
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [copyingWompi, setCopyingWompi] = useState(false);
 
   const onCopy = (id: string, message: string) => {
     navigator.clipboard.writeText(id);
@@ -36,6 +37,31 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
       description: message,
       variant: "success",
     });
+  };
+
+  const onCopyWompiLink = async () => {
+    try {
+      setCopyingWompi(true);
+      const response = await axios.post(
+        `/api/${params.storeId}/checkout/${data.id}`,
+      );
+      if (response.data?.url) {
+        navigator.clipboard.writeText(response.data.url);
+        toast({
+          description: "Link de pago Wompi copiado al portapapeles",
+          variant: "success",
+        });
+      } else {
+        throw new Error("No se pudo obtener el link de pago");
+      }
+    } catch (error) {
+      toast({
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
+    } finally {
+      setCopyingWompi(false);
+    }
   };
 
   const onDelete = async () => {
@@ -95,6 +121,14 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
           >
             <Copy className="mr-2 h-4 w-4" />
             Copiar URL de la orden
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="cursor-pointer"
+            disabled={copyingWompi}
+            onClick={onCopyWompiLink}
+          >
+            <CreditCard className="mr-2 h-4 w-4" />
+            Copiar Link de Pago Wompi
           </DropdownMenuItem>
           <DropdownMenuItem
             className="cursor-pointer"

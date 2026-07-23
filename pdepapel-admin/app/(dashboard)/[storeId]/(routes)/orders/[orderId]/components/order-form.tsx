@@ -20,6 +20,7 @@ import {
   Check,
   ChevronsUpDown,
   Copy,
+  CreditCard,
   Eraser,
   Loader2,
   Package,
@@ -518,6 +519,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   const [open, setOpen] = useState(false);
   const [validatingCoupon, setValidatingCoupon] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [copyingWompi, setCopyingWompi] = useState(false);
   const [loadingQuotes, setLoadingQuotes] = useState(false);
   const [shippingQuotes, setShippingQuotes] = useState<ShippingQuote[]>([]);
   const [selectedRateId, setSelectedRateId] = useState<number | null>(
@@ -1205,6 +1207,61 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           </Button>
           {initialData && (
             <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-purple-200 bg-purple-50 px-4 text-purple-700 hover:bg-purple-100 hover:text-purple-800"
+                onClick={() => {
+                  const storeUrl =
+                    process.env.NEXT_PUBLIC_FRONTEND_STORE_URL ||
+                    "https://papeleriapdepapel.com";
+                  const url = `${storeUrl}/order/${initialData.id}`;
+                  navigator.clipboard.writeText(url);
+                  toast({
+                    description: "URL de la orden copiada al portapapeles",
+                    variant: "success",
+                  });
+                }}
+                type="button"
+              >
+                <Copy className="mr-2 h-4 w-4" />
+                Copiar URL de Orden
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-emerald-200 bg-emerald-50 px-4 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
+                disabled={copyingWompi}
+                onClick={async () => {
+                  try {
+                    setCopyingWompi(true);
+                    const response = await axios.post(
+                      `/api/${params.storeId}/checkout/${initialData.id}`,
+                    );
+                    if (response.data?.url) {
+                      navigator.clipboard.writeText(response.data.url);
+                      toast({
+                        description:
+                          "Link de pago Wompi copiado al portapapeles",
+                        variant: "success",
+                      });
+                    } else {
+                      throw new Error("No se pudo obtener el link de pago");
+                    }
+                  } catch (error) {
+                    toast({
+                      description: getErrorMessage(error),
+                      variant: "destructive",
+                    });
+                  } finally {
+                    setCopyingWompi(false);
+                  }
+                }}
+                type="button"
+              >
+                <CreditCard className="mr-2 h-4 w-4" />
+                Copiar Link de Pago Wompi
+              </Button>
               {initialData.token && (
                 <Button
                   variant="outline"
@@ -1221,7 +1278,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   type="button"
                 >
                   <Copy className="mr-2 h-4 w-4" />
-                  Copiar Link
+                  Copiar Link Cotización
                 </Button>
               )}
               {form.watch("phone") &&

@@ -166,7 +166,7 @@ export async function POST(
       );
     }
 
-    let authenticatedUserId = userLogged;
+    let authenticatedUserId = isStoreOwner ? null : userLogged;
     if (userId) {
       if (isStoreOwner) {
         try {

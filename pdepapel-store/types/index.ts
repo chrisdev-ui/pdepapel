@@ -169,6 +169,7 @@ export interface Order {
   documentId?: string | null;
   coupon?: Coupon | null;
   couponDiscount?: number;
+  createdBy?: string | null;
   createdAt: string;
 }
 

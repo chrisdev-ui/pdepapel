@@ -348,9 +348,15 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
 
   const isAdmin = (user: string) => ADMIN_USER_IDS.includes(user);
 
-  const hasAccess = userId
-    ? userId === order?.userId || isAdmin(userId)
-    : guestId === order?.guestId || isAdmin(guestId);
+  const isOrderCreatedByAdmin =
+    (order?.userId ? isAdmin(order.userId) : false) || !!order?.createdBy;
+
+  const hasAccess =
+    isOrderCreatedByAdmin ||
+    !order?.userId ||
+    (userId
+      ? userId === order?.userId || isAdmin(userId)
+      : guestId === order?.guestId || isAdmin(guestId));
 
   return (
     <>
