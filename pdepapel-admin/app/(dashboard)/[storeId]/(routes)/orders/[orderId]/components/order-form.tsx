@@ -520,6 +520,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   const [validatingCoupon, setValidatingCoupon] = useState(false);
   const [loading, setLoading] = useState(false);
   const [copyingWompi, setCopyingWompi] = useState(false);
+  const [pushingBold, setPushingBold] = useState(false);
   const [loadingQuotes, setLoadingQuotes] = useState(false);
   const [shippingQuotes, setShippingQuotes] = useState<ShippingQuote[]>([]);
   const [selectedRateId, setSelectedRateId] = useState<number | null>(
@@ -1316,6 +1317,77 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                       initialData.payment.method !== PaymentMethod.Wompi
                     ? "Transferencia Directa (Sin Link Wompi)"
                     : "Copiar Link de Pago Wompi"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
+                disabled={
+                  pushingBold ||
+                  form.watch("status") === OrderStatus.PAID ||
+                  form.watch("status") === OrderStatus.SENT ||
+                  initialData?.status === OrderStatus.PAID ||
+                  initialData?.status === OrderStatus.SENT
+                }
+                onClick={async () => {
+                  if (!initialData?.id) return;
+                  try {
+                    setPushingBold(true);
+                    const res = await axios.post(
+                      `/api/${params.storeId}/bold/terminal/${initialData.id}`,
+                    );
+                    toast({
+                      title: "Notificación enviada",
+                      description:
+                        res.data?.message ||
+                        "¡Cobro enviado al Datáfono Bold! (Si la pantalla del equipo está ocupada, presiona Cancelar 'X' en el datáfono para liberar la cola).",
+                      variant: "success",
+                    });
+                  } catch (err) {
+                    toast({
+                      title: "Error Datáfono Bold",
+                      description: getErrorMessage(err),
+                      variant: "destructive",
+                    });
+                  } finally {
+                    setPushingBold(false);
+                  }
+                }}
+                type="button"
+              >
+                {pushingBold ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <CreditCard className="mr-2 h-4 w-4 text-emerald-600" />
+                )}
+                {form.watch("status") === OrderStatus.PAID ||
+                form.watch("status") === OrderStatus.SENT ||
+                initialData?.status === OrderStatus.PAID ||
+                initialData?.status === OrderStatus.SENT
+                  ? "Datáfono Bold (Orden Completada)"
+                  : "Cobrar en Datáfono Bold"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
+                onClick={() => {
+                  if (!initialData?.id) return;
+                  const storeUrl =
+                    process.env.NEXT_PUBLIC_FRONTEND_STORE_URL ||
+                    "https://papeleriapdepapel.com";
+                  const url = `${storeUrl}/order/${initialData.id}?autoPay=true`;
+                  navigator.clipboard.writeText(url);
+                  toast({
+                    title: "Link de Pago Bold copiado",
+                    description: "Se ha copiado el enlace directo de pago.",
+                    variant: "success",
+                  });
+                }}
+                type="button"
+              >
+                <Copy className="mr-2 h-4 w-4 text-emerald-600" />
+                Copiar Link de Pago Bold
               </Button>
               {initialData.token && (
                 <Button

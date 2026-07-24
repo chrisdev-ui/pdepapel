@@ -31,6 +31,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [copyingWompi, setCopyingWompi] = useState(false);
+  const [pushingBold, setPushingBold] = useState(false);
 
   const isClosedOrder =
     data.status === OrderStatus.PAID || data.status === OrderStatus.SENT;
@@ -45,6 +46,39 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
       description: message,
       variant: "success",
     });
+  };
+
+  const onPushBoldDatafono = async () => {
+    if (isClosedOrder) {
+      toast({
+        title: "Orden Cerrada",
+        description: `Esta orden ya está completada (${data.status === OrderStatus.PAID ? "Pagada" : "Enviada"}).`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setPushingBold(true);
+      const response = await axios.post(
+        `/api/${params.storeId}/bold/terminal/${data.id}`,
+      );
+      toast({
+        title: "Notificación enviada",
+        description:
+          response.data?.message ||
+          "¡Cobro enviado al Datáfono Bold! (Si la pantalla del equipo está ocupada, presiona Cancelar 'X' en el datáfono para liberar la cola).",
+        variant: "success",
+      });
+    } catch (error) {
+      toast({
+        title: "Error Datáfono Bold",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
+    } finally {
+      setPushingBold(false);
+    }
   };
 
   const onCopyWompiLink = async () => {
@@ -160,6 +194,28 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
               : isOfflinePayment
                 ? "Link de Pago (Transferencia Directa)"
                 : "Copiar Link de Pago Wompi"}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="cursor-pointer"
+            onClick={() =>
+              onCopy(
+                `https://papeleriapdepapel.com/order/${data.id}?autoPay=true`,
+                "Link de pago Bold copiado al portapapeles",
+              )
+            }
+          >
+            <CreditCard className="mr-2 h-4 w-4 text-emerald-600" />
+            Copiar Link de Pago Bold
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="cursor-pointer"
+            disabled={pushingBold || isClosedOrder}
+            onClick={onPushBoldDatafono}
+          >
+            <CreditCard className="mr-2 h-4 w-4 text-emerald-600" />
+            {isClosedOrder
+              ? "Datáfono Bold (Orden Completada)"
+              : "Cobrar en Datáfono Bold"}
           </DropdownMenuItem>
           <DropdownMenuItem
             className="cursor-pointer"

@@ -35,6 +35,38 @@ const corsHeaders = {
   ...CACHE_HEADERS.NO_CACHE,
 };
 
+const parseOptionalInt = (val: any): number | null => {
+  if (val === null || val === undefined || val === "") return null;
+  const parsed = parseInt(String(val), 10);
+  return isNaN(parsed) ? null : parsed;
+};
+
+const parseOptionalFloat = (val: any): number | null => {
+  if (val === null || val === undefined || val === "") return null;
+  const parsed = parseFloat(String(val));
+  return isNaN(parsed) ? null : parsed;
+};
+
+const buildShippingPayload = (storeId: string, quote: any) => ({
+  storeId,
+  provider: ShippingProvider.ENVIOCLICK,
+  status: ShippingStatus.Preparing,
+  envioClickIdRate: parseOptionalInt(quote.idRate),
+  carrierId: parseOptionalInt(quote.idCarrier),
+  carrierName: quote.carrier || quote.carrierName || null,
+  courier: quote.carrier || quote.courier || null,
+  productId: parseOptionalInt(quote.idProduct),
+  productName: quote.product || quote.productName || null,
+  flete: parseOptionalFloat(quote.flete),
+  minimumInsurance: parseOptionalFloat(quote.minimumInsurance),
+  isCOD: Boolean(quote.isCOD),
+  cost: parseOptionalFloat(quote.totalCost ?? quote.cost) || 0,
+  deliveryDays: parseOptionalInt(quote.deliveryDays),
+  requestPickup: ENVIOCLICK_DEFAULTS.requestPickup,
+  hasInsurance: ENVIOCLICK_DEFAULTS.insurance,
+  quotationData: quote,
+});
+
 export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
 }
@@ -544,48 +576,9 @@ export async function POST(
           },
           // Update Shipping
           shipping: {
-            // Delete old shipping info if exists?
-            // Prisma doesn't have "upsert" on 1-1 easily for nested delete-create logic in one go usually,
-            // but we can try updating or we assume quote had no shipping or we overwrite.
-            // Safer: Update existing record or create new.
             upsert: {
-              create: {
-                storeId: params.storeId,
-                provider: ShippingProvider.ENVIOCLICK,
-                status: ShippingStatus.Preparing,
-                envioClickIdRate: selectedQuote.idRate,
-                carrierId: selectedQuote.idCarrier,
-                carrierName: selectedQuote.carrier,
-                courier: selectedQuote.carrier,
-                productId: selectedQuote.idProduct,
-                productName: selectedQuote.product,
-                flete: selectedQuote.flete,
-                minimumInsurance: selectedQuote.minimumInsurance,
-                isCOD: selectedQuote.isCOD || false,
-                cost: selectedQuote.totalCost,
-                deliveryDays: selectedQuote.deliveryDays,
-                requestPickup: ENVIOCLICK_DEFAULTS.requestPickup,
-                hasInsurance: ENVIOCLICK_DEFAULTS.insurance,
-                quotationData: selectedQuote,
-              },
-              update: {
-                provider: ShippingProvider.ENVIOCLICK,
-                status: ShippingStatus.Preparing,
-                envioClickIdRate: selectedQuote.idRate,
-                carrierId: selectedQuote.idCarrier,
-                carrierName: selectedQuote.carrier,
-                courier: selectedQuote.carrier,
-                productId: selectedQuote.idProduct,
-                productName: selectedQuote.product,
-                flete: selectedQuote.flete,
-                minimumInsurance: selectedQuote.minimumInsurance,
-                isCOD: selectedQuote.isCOD || false,
-                cost: selectedQuote.totalCost,
-                deliveryDays: selectedQuote.deliveryDays,
-                requestPickup: ENVIOCLICK_DEFAULTS.requestPickup,
-                hasInsurance: ENVIOCLICK_DEFAULTS.insurance,
-                quotationData: selectedQuote,
-              },
+              create: buildShippingPayload(params.storeId, selectedQuote),
+              update: buildShippingPayload(params.storeId, selectedQuote),
             },
           },
           payment: {
@@ -635,25 +628,7 @@ export async function POST(
           couponId: coupon?.id,
           orderItems: { create: orderItemsData },
           shipping: {
-            create: {
-              storeId: params.storeId,
-              provider: ShippingProvider.ENVIOCLICK,
-              status: ShippingStatus.Preparing,
-              envioClickIdRate: selectedQuote.idRate,
-              carrierId: selectedQuote.idCarrier,
-              carrierName: selectedQuote.carrier,
-              courier: selectedQuote.carrier,
-              productId: selectedQuote.idProduct,
-              productName: selectedQuote.product,
-              flete: selectedQuote.flete,
-              minimumInsurance: selectedQuote.minimumInsurance,
-              isCOD: selectedQuote.isCOD || false,
-              cost: selectedQuote.totalCost,
-              deliveryDays: selectedQuote.deliveryDays,
-              requestPickup: ENVIOCLICK_DEFAULTS.requestPickup,
-              hasInsurance: ENVIOCLICK_DEFAULTS.insurance,
-              quotationData: selectedQuote,
-            },
+            create: buildShippingPayload(params.storeId, selectedQuote),
           },
           payment: {
             create: {
@@ -698,9 +673,21 @@ export async function POST(
       console.log(
         `🔐 Generating ${payment.method} payment for order ${order.orderNumber}`,
       );
-      if (payment.method === PaymentMethod.COD || payment.method === PaymentMethod.BankTransfer) {
+      if (payment.method === PaymentMethod.Bold) {
+        const { generateBoldCheckoutData } = await import("@/lib/bold");
+        const boldData = generateBoldCheckoutData(order);
         console.log(
-          `✅ COD/BankTransfer payment selected - no gateway required. Returning order details directly.`,
+          `✅ Bold pre-signed payload generated for order ${order.orderNumber}`,
+        );
+        return NextResponse.json({ order, boldData }, { headers: corsHeaders });
+      }
+
+      if (
+        payment.method === PaymentMethod.COD ||
+        payment.method === PaymentMethod.BankTransfer
+      ) {
+        console.log(
+          `✅ ${payment.method} payment selected - returning order details directly for client handling.`,
         );
         return NextResponse.json(order, { headers: corsHeaders });
       }
