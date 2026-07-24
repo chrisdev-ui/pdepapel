@@ -126,7 +126,7 @@ const PriceFilter: React.FC<PriceFilterProps> = ({
   return (
     <div className="w-full pb-8 pt-6">
       <div className="mb-8">
-        <h3 className="mb-2 font-serif text-base font-semibold text-gray-900">
+        <h3 className="mb-2 font-sans text-base font-semibold text-gray-900">
           Precio
         </h3>
       </div>

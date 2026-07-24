@@ -169,7 +169,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
 
   return (
     <div>
-      <h1 className="font-serif text-3xl font-bold">{data?.name}</h1>
+      <h1 className="font-sans text-3xl font-bold">{data?.name}</h1>
       <div className="mt-3 flex items-end justify-between">
         <div className="flex flex-col gap-1 text-2xl">
           {data.hasDiscount ||
@@ -384,7 +384,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
         )}
 
         <div className="flex items-center gap-x-4">
-          <h3 className="font-serif font-semibold">Cantidad:</h3>
+          <h3 className="font-sans font-semibold">Cantidad:</h3>
           <div>
             <QuantitySelector
               max={data.stock}
@@ -400,7 +400,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
       <div className="mt-10 flex flex-wrap items-center gap-x-3 gap-y-4 sm:gap-y-0">
         <Button
           disabled={data.stock === 0 || (isLoading && !!data.isGroup)}
-          className="flex gap-2 rounded-full border-none bg-blue-yankees px-8 py-4 font-serif text-sm font-semibold text-white outline-none [transition:0.2s]"
+          className="flex gap-2 rounded-full border-none bg-blue-yankees px-8 py-4 font-sans text-sm font-semibold text-white outline-none [transition:0.2s]"
           onClick={handleAddToCart}
         >
           {isLoading && data.isGroup
@@ -411,7 +411,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
         <Button
           variant="outline"
           onClick={handleAddToWishlist}
-          className="flex gap-2 rounded-full border-2 border-blue-yankees px-6 py-4 font-serif text-sm font-semibold text-blue-yankees hover:bg-blue-yankees hover:text-white"
+          className="flex gap-2 rounded-full border-2 border-blue-yankees px-6 py-4 font-sans text-sm font-semibold text-blue-yankees hover:bg-blue-yankees hover:text-white"
         >
           <Heart
             className={cn("h-5 w-5", {
@@ -429,7 +429,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
         <>
           <Separator className="my-4" />
           <div className="flex flex-col items-start">
-            <h3 className="font-serif font-semibold">
+            <h3 className="font-sans font-semibold">
               Descripción del producto
             </h3>
             <RichTextDisplay content={data?.description} />

@@ -21,7 +21,7 @@ export const OnSaleFilter = () => {
       />
       <Label
         htmlFor="on-sale-filter"
-        className="cursor-pointer font-serif text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+        className="cursor-pointer font-sans text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
       >
         Mostrar solo ofertas
       </Label>

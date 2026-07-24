@@ -160,7 +160,7 @@ export const ShopContent: React.FC<ShopContentProps> = ({
       </div>
       <div className="mt-6 space-y-8 lg:col-span-4 lg:mt-0">
         <div className="flex w-full items-center justify-between">
-          <h2 className="font-serif text-3xl font-bold">Todos los productos</h2>
+          <h2 className="font-sans text-3xl font-bold">Todos los productos</h2>
           <section className="flex w-full items-center gap-4 md:w-auto">
             <ShopSearchBar className="hidden md:flex" />
             <SortSelector options={SORT_OPTIONS} />

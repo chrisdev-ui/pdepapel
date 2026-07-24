@@ -9,7 +9,7 @@ import { cva } from "class-variance-authority";
 type Sizes = "default" | "medium" | "large";
 
 const buttonLeftVariants = cva(
-  "group border-none bg-white py-2 font-serif font-semibold text-blue-yankees disabled:cursor-not-allowed",
+  "group border-none bg-white py-2 font-sans font-semibold text-blue-yankees disabled:cursor-not-allowed",
   {
     variants: {
       size: {
@@ -25,7 +25,7 @@ const buttonLeftVariants = cva(
 );
 
 const buttonRightVariants = cva(
-  "group border-none bg-white py-2 font-serif font-semibold text-blue-yankees disabled:cursor-not-allowed",
+  "group border-none bg-white py-2 font-sans font-semibold text-blue-yankees disabled:cursor-not-allowed",
   {
     variants: {
       size: {

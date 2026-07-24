@@ -68,7 +68,7 @@ const Filter: React.FC<FilterProps> = ({
   return (
     <Accordion type="single" collapsible defaultValue={name}>
       <AccordionItem value={name} className="border-none">
-        <AccordionTrigger className="font-serif text-base font-semibold">
+        <AccordionTrigger className="font-sans text-base font-semibold">
           <span className="flex items-center gap-2">
             {name}
             {activeCount > 0 && (

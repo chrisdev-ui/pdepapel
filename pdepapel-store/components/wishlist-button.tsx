@@ -25,7 +25,7 @@ export const WishlistButton: React.FC<{}> = () => {
     >
       <Icons.heart className="h-6 w-6" isFilled={items.length > 0} />
       {items.length > 0 && (
-        <span className="absolute -right-3 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-blue-yankees font-serif text-xxs text-white">
+        <span className="absolute -right-3 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-blue-yankees font-sans text-xxs text-white">
           {items.length}
         </span>
       )}

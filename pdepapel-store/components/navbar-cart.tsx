@@ -73,7 +73,7 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
           )}
         >
           <ShoppingBag className="h-5 w-5" />
-          <span className="ml-2 flex pt-1 font-serif text-base font-medium">
+          <span className="ml-2 flex font-sans text-base font-medium">
             {totalQuantity}
           </span>
         </Button>
@@ -82,7 +82,7 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
         variant="cart"
         className="flex w-full max-w-full flex-col p-0 sm:max-w-sm lg:max-w-md"
       >
-        <SheetTitle className="flex w-full items-center justify-center bg-blue-baby p-5 font-serif">
+        <SheetTitle className="flex w-full items-center justify-center bg-blue-baby p-5 font-sans font-bold">
           Carrito de compras
         </SheetTitle>
         <SheetDescription className="sr-only">

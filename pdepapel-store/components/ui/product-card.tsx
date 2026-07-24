@@ -173,14 +173,14 @@ const ProductCard: React.FC<ProductCardProps> = ({
         </div>
       </div>
       <div>
-        <p className="font-serif text-lg font-semibold">{product.name}</p>
+        <p className="font-sans text-lg font-semibold">{product.name}</p>
         <p className="text-sm text-gray-500">{product.category?.name}</p>
       </div>
       <StarRating
         currentRating={calculateAverageRating(product.reviews)}
         isDisabled
       />
-      <div className="flex flex-col gap-1 font-serif">
+      <div className="flex flex-col gap-1 font-sans">
         {product.minPrice &&
         product.maxPrice &&
         product.minPrice !== product.maxPrice ? (
