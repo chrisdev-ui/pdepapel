@@ -43,7 +43,7 @@ export const ReviewStep = ({
       case PaymentMethod.COD:
         return "Pago contra entrega (Efectivo / Datáfono)";
       case PaymentMethod.BankTransfer:
-        return "Transferencia bancaria directa (Bancolombia / Nequi)";
+        return "Transferencia bancaria directa (Sin costo con Bre-B / Bancolombia / Nequi)";
       case PaymentMethod.Wompi:
         return "Pago en línea (Tarjeta de crédito / débito, PSE, Nequi)";
       case PaymentMethod.PayU:

@@ -28,6 +28,12 @@ interface PaymentMethodOption {
 
 const BankTransferSteps = () => (
   <div className="space-y-3 font-serif text-sm">
+    <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/90 p-2.5 text-xs font-semibold text-emerald-950 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200">
+      <Icons.payments.breB className="h-5 w-auto shrink-0" />
+      <span>
+        <strong>¡Transferencia 100% Gratis!</strong> Transfiere sin ninguna comisión o costo adicional desde cualquier banco colombiano usando <strong>Bre-B</strong> o transferencia directa.
+      </span>
+    </div>
     <div className="flex items-start gap-2">
       <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
         1
@@ -136,7 +142,7 @@ const PAYMENT_OPTIONS: PaymentMethodOption[] = [
   },
   {
     value: PaymentMethod.BankTransfer,
-    label: "Transferencia bancaria directa (Transfiere desde cualquier banco)",
+    label: "Transferencia bancaria directa (Sin costo desde cualquier banco con Bre-B)",
     icon: Icons.payments.transfer,
     badges: [
       { name: "Bre-B (Cualquier Banco)", icon: Icons.payments.breB },
