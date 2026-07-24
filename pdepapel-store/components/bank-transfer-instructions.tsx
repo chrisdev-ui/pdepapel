@@ -5,11 +5,8 @@ import Image from "next/image";
 import {
   Copy,
   Check,
-  QrCode,
   Smartphone,
   Building2,
-  Send,
-  Sparkles,
   ExternalLink,
   ShieldCheck,
   Zap,
@@ -70,57 +67,57 @@ export const BankTransferInstructions: React.FC<
 
   return (
     <Card className="w-full overflow-hidden border-2 border-purple-200/90 bg-gradient-to-b from-purple-50/40 via-white to-pink-50/20 shadow-md dark:border-purple-900/60 dark:from-purple-950/30 dark:via-zinc-900 dark:to-pink-950/20">
-      {/* Header */}
+      {/* Header - Single column flow for narrow sidebars */}
       <CardHeader className="p-4 pb-3 sm:p-5 sm:pb-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-purple-600 text-white shadow-sm dark:bg-purple-500">
-              <Zap className="h-5 w-5" />
-            </div>
-            <div>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-purple-600 text-white shadow-sm dark:bg-purple-500">
+                <Zap className="h-4 w-4" />
+              </div>
               <CardTitle className="font-sans text-base font-bold text-purple-950 dark:text-purple-100 sm:text-lg">
-                Paga por Transferencia o Bre-B
+                Transferencia Directa / Bre-B
               </CardTitle>
-              <p className="text-xs text-purple-700/90 dark:text-purple-300">
-                Usa tu app bancaria favorita sin comisiones
-              </p>
             </div>
+            <Badge
+              variant="outline"
+              className="shrink-0 border-purple-300 bg-purple-100/80 text-[10px] font-semibold text-purple-900 dark:border-purple-800 dark:bg-purple-950/60 dark:text-purple-200"
+            >
+              Pago Inmediato
+            </Badge>
           </div>
-          <Badge
-            variant="outline"
-            className="w-fit border-purple-300 bg-purple-100/80 text-purple-900 dark:border-purple-800 dark:bg-purple-950/60 dark:text-purple-200"
-          >
-            <Sparkles className="mr-1 h-3 w-3 text-purple-600 dark:text-purple-400" />
-            Pago Inmediato
-          </Badge>
+          <p className="text-xs text-purple-700/90 dark:text-purple-300">
+            Paga fácilmente sin comisiones adicionales
+          </p>
         </div>
       </CardHeader>
 
       <CardContent className="space-y-4 p-4 pt-1 sm:p-5 sm:pt-1">
-        {/* Exact Amount Banner */}
-        <div className="flex flex-col gap-3 rounded-2xl border border-purple-100 bg-white p-3.5 shadow-sm dark:border-purple-900/40 dark:bg-zinc-900 sm:flex-row sm:items-center sm:justify-between">
+        {/* Exact Amount Banner - Clean 2-row layout */}
+        <div className="flex flex-col gap-3 rounded-2xl border border-purple-100 bg-white p-3.5 shadow-sm dark:border-purple-900/40 dark:bg-zinc-900">
           <div className="space-y-0.5">
-            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
               Monto exacto a transferir:
             </span>
-            <div className="font-quicksand text-2xl font-bold text-purple-900 dark:text-purple-100">
+            <div className="font-quicksand text-2xl font-bold text-purple-950 dark:text-purple-100">
               {formattedTotal}
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+
+          <div className="grid grid-cols-2 gap-2 pt-1 border-t border-purple-50 dark:border-zinc-800">
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="h-9 w-full border-purple-200 bg-purple-50/60 px-3 text-xs font-semibold text-purple-900 hover:bg-purple-100 hover:text-purple-950 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-200 sm:w-auto"
+              className="h-8 w-full border-purple-200 bg-purple-50/60 px-2 text-xs font-semibold text-purple-950 hover:bg-purple-100 hover:text-purple-950 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-200"
               onClick={() =>
                 copyToClipboard(order.total.toString(), "Valor de la orden")
               }
             >
               {copiedField === "Valor de la orden" ? (
-                <Check className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
+                <Check className="mr-1.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
               ) : (
-                <Copy className="mr-1.5 h-3.5 w-3.5 text-purple-600" />
+                <Copy className="mr-1.5 h-3.5 w-3.5 shrink-0 text-purple-600" />
               )}
               Copiar Valor
             </Button>
@@ -128,15 +125,15 @@ export const BankTransferInstructions: React.FC<
               type="button"
               variant="outline"
               size="sm"
-              className="h-9 w-full border-purple-200 bg-purple-50/60 px-3 text-xs font-semibold text-purple-900 hover:bg-purple-100 hover:text-purple-950 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-200 sm:w-auto"
+              className="h-8 w-full border-purple-200 bg-purple-50/60 px-2 text-xs font-semibold text-purple-950 hover:bg-purple-100 hover:text-purple-950 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-200"
               onClick={() =>
                 copyToClipboard(order.orderNumber, "Número de Orden")
               }
             >
               {copiedField === "Número de Orden" ? (
-                <Check className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
+                <Check className="mr-1.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
               ) : (
-                <Copy className="mr-1.5 h-3.5 w-3.5 text-purple-600" />
+                <Copy className="mr-1.5 h-3.5 w-3.5 shrink-0 text-purple-600" />
               )}
               Copiar Orden
             </Button>
@@ -148,16 +145,16 @@ export const BankTransferInstructions: React.FC<
           <TabsList className="grid w-full grid-cols-2 rounded-xl bg-purple-100/70 p-1 dark:bg-purple-950/60">
             <TabsTrigger
               value="breb"
-              className="rounded-lg font-sans text-xs font-bold text-purple-900 data-[state=active]:bg-white data-[state=active]:text-purple-950 data-[state=active]:shadow-sm dark:text-purple-200 dark:data-[state=active]:bg-zinc-900 dark:data-[state=active]:text-purple-100"
+              className="flex items-center justify-center h-9 rounded-lg font-sans text-xs font-bold text-purple-900 transition-all data-[state=active]:bg-white data-[state=active]:text-purple-950 data-[state=active]:shadow-sm dark:text-purple-200 dark:data-[state=active]:bg-zinc-900 dark:data-[state=active]:text-purple-100"
             >
-              <Smartphone className="mr-1.5 h-3.5 w-3.5 text-pink-600" />
+              <Smartphone className="mr-1.5 h-3.5 w-3.5 shrink-0 text-pink-600" />
               Bre-B / Nequi / QR
             </TabsTrigger>
             <TabsTrigger
               value="bancolombia"
-              className="rounded-lg font-sans text-xs font-bold text-purple-900 data-[state=active]:bg-white data-[state=active]:text-purple-950 data-[state=active]:shadow-sm dark:text-purple-200 dark:data-[state=active]:bg-zinc-900 dark:data-[state=active]:text-purple-100"
+              className="flex items-center justify-center h-9 rounded-lg font-sans text-xs font-bold text-purple-900 transition-all data-[state=active]:bg-white data-[state=active]:text-purple-950 data-[state=active]:shadow-sm dark:text-purple-200 dark:data-[state=active]:bg-zinc-900 dark:data-[state=active]:text-purple-100"
             >
-              <Building2 className="mr-1.5 h-3.5 w-3.5 text-blue-600" />
+              <Building2 className="mr-1.5 h-3.5 w-3.5 shrink-0 text-blue-600" />
               Bancolombia
             </TabsTrigger>
           </TabsList>
@@ -165,7 +162,7 @@ export const BankTransferInstructions: React.FC<
           {/* TAB 1: Bre-B & QR */}
           <TabsContent value="breb" className="m-0 space-y-3">
             <div className="flex flex-col gap-3 rounded-2xl border border-purple-100 bg-white p-3.5 shadow-sm dark:border-purple-900/40 dark:bg-zinc-900">
-              {/* QR Image Preview Card (Centered & Big) */}
+              {/* QR Image Preview Card */}
               <div className="flex flex-col items-center justify-center rounded-xl border border-purple-200/80 bg-purple-50/40 p-3 text-center dark:border-purple-900/50 dark:bg-purple-950/20">
                 <Dialog open={qrOpen} onOpenChange={setQrOpen}>
                   <DialogTrigger asChild>
@@ -226,10 +223,10 @@ export const BankTransferInstructions: React.FC<
                 </button>
               </div>
 
-              {/* Llave Bre-B Box */}
+              {/* Llave Bre-B Box - Removed "(INTEROPERABLE)" */}
               <div className="space-y-1.5">
                 <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
-                  Llave Bre-B (Interoperable):
+                  Llave Bre-B:
                 </span>
                 <div className="flex items-center justify-between rounded-xl border border-purple-200 bg-purple-50/50 p-2.5 dark:border-purple-900/60 dark:bg-purple-950/30">
                   <code className="font-mono text-sm font-bold text-purple-950 dark:text-purple-100 truncate pr-2">
@@ -239,7 +236,7 @@ export const BankTransferInstructions: React.FC<
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="h-8 shrink-0 border-purple-200 bg-white px-2.5 text-xs font-semibold text-purple-900 hover:bg-purple-100 dark:border-purple-800 dark:bg-zinc-900 dark:text-purple-200"
+                    className="h-8 shrink-0 border-purple-200 bg-white px-2.5 text-xs font-semibold text-purple-950 hover:bg-purple-100 dark:border-purple-800 dark:bg-zinc-900 dark:text-purple-200"
                     onClick={() => copyToClipboard(breBKey, "Llave Bre-B")}
                   >
                     {copiedField === "Llave Bre-B" ? (
@@ -291,7 +288,7 @@ export const BankTransferInstructions: React.FC<
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="h-8 shrink-0 border-blue-200 bg-white px-2.5 text-xs font-semibold text-blue-900 hover:bg-blue-100 dark:border-blue-800 dark:bg-zinc-900 dark:text-blue-200"
+                    className="h-8 shrink-0 border-blue-200 bg-white px-2.5 text-xs font-semibold text-blue-950 hover:bg-blue-100 dark:border-blue-800 dark:bg-zinc-900 dark:text-blue-200"
                     onClick={() =>
                       copyToClipboard(
                         bancolombiaAccount,
