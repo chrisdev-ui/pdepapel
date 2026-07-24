@@ -107,9 +107,9 @@ const GatewayLogos = ({
 
 const PAYMENT_OPTIONS: PaymentMethodOption[] = [
   {
-    value: PaymentMethod.Wompi,
+    value: PaymentMethod.Bold,
     label: "Pago en línea (Tarjeta de crédito / débito, PSE, Nequi)",
-    icon: Icons.payments.wompi,
+    icon: Icons.payments.bold,
     badges: [
       { name: "Visa", icon: Icons.gateways.visa },
       { name: "Mastercard", icon: Icons.gateways.mastercard },
@@ -118,10 +118,9 @@ const PAYMENT_OPTIONS: PaymentMethodOption[] = [
       { name: "Bancolombia", icon: Icons.payments.bancolombia },
     ],
     description: (
-      <div className="font-serif text-sm">
+      <div className="font-sans text-sm">
         <p className="mb-2">
-          Paga de forma segura con tarjeta de crédito o débito, transfiere con
-          tu cuenta Bancolombia, Nequi, PSE, Daviplata o paga en efectivo en corresponsal bancario.
+          Paga de forma instantánea y 100% segura con tarjeta de crédito o débito, PSE, Nequi o Bancolombia a través de nuestra pasarela de pagos en línea.
         </p>
         <GatewayLogos
           gateways={[
@@ -137,11 +136,15 @@ const PAYMENT_OPTIONS: PaymentMethodOption[] = [
   },
   {
     value: PaymentMethod.BankTransfer,
-    label: "Transferencia bancaria directa (Bancolombia / Nequi)",
+    label: "Transferencia bancaria directa (Transfiere desde cualquier banco)",
     icon: Icons.payments.transfer,
     badges: [
+      { name: "Bre-B (Cualquier Banco)", icon: Icons.payments.breB },
       { name: "Bancolombia", icon: Icons.payments.bancolombia },
       { name: "Nequi", icon: Icons.gateways.nequi },
+      { name: "Davivienda / Daviplata", icon: Icons.payments.davivienda },
+      { name: "BBVA", icon: Icons.payments.bbva },
+      { name: "Banco de Bogotá", icon: Icons.payments.bancoDeBogota },
     ],
     description: <BankTransferSteps />,
   },

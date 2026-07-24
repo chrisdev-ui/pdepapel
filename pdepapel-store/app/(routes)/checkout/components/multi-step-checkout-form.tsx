@@ -494,19 +494,15 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         return;
       }
 
-      if (err?.response?.status === 400) {
-        toast({
-          title: "Solicitud inválida ⚠️",
-          description:
-            err?.response?.data?.error || "Revisa la información enviada.",
-          variant: "destructive",
-        });
-        return;
-      }
+      const serverError =
+        err?.response?.data?.error ||
+        err?.response?.data?.message ||
+        err?.message;
 
       toast({
-        title: "Error",
+        title: "Error al crear la orden",
         description:
+          serverError ||
           "Ha ocurrido un error creando tu orden, intenta de nuevo más tarde.",
         variant: "destructive",
       });
@@ -526,6 +522,44 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       ) {
         const { url } = data as CheckoutByOrderResponse as WompiResponse;
         window.location.href = url;
+      }
+      // Check for Bold response
+      else if ((data as any)?.boldData !== undefined) {
+        const { order, boldData } = data as any;
+        fireConfetti();
+        toast({
+          title: "Orden creada",
+          description: `Tu orden #${order.orderNumber || order.id} ha sido creada exitosamente. Redirigiendo a pasarela Bold...`,
+          variant: "success",
+        });
+
+        cart.removeAll();
+        form.reset();
+        resetCheckout();
+        if (userId) clearGuestId();
+
+        // 🚀 Redirect to Bold directly from the checkout page
+        if (typeof window !== "undefined" && (window as any).BoldCheckout) {
+          try {
+            const boldCheckout = new (window as any).BoldCheckout({
+              orderId: boldData.orderNumber,
+              currency: boldData.currency,
+              amount: String(boldData.amount),
+              apiKey: boldData.identityKey,
+              integritySignature: boldData.integritySignature,
+              redirectionUrl: boldData.redirectionUrl,
+              description: boldData.description,
+              // Omit renderMode to use Bold's default redirect mode
+            });
+            boldCheckout.open();
+            return; // Exit here, the browser will redirect
+          } catch (e) {
+            console.error("Error opening Bold checkout:", e);
+          }
+        }
+
+        // Fallback: Navigate to order page where BoldCheckoutButton will auto-open
+        router.push(`/order/${order.id}?autoPay=true`);
       }
       // Finally check for direct order creation (COD/BankTransfer)
       else if ((data as Order).id !== undefined) {

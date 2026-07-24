@@ -34,6 +34,7 @@ import Link from "next/link";
 
 import { Forbidden } from "@/components/forbidden";
 import { BankTransferInstructions } from "@/components/bank-transfer-instructions";
+import { BoldCheckoutButton } from "@/components/bold-checkout-button";
 import { Icons } from "@/components/icons";
 import { PayUForm } from "@/components/payu-form";
 import { CldImage } from "@/components/ui/CldImage";
@@ -1082,6 +1083,19 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
 
                     {/* Payment Buttons */}
                     {order.status !== OrderStatus.PAID &&
+                      (order?.payment?.method === PaymentMethod.Bold ||
+                        (order?.payment?.method as string) === "Bold") && (
+                        <BoldCheckoutButton
+                          order={{
+                            id: order.id,
+                            orderNumber: order.orderNumber,
+                            total: order.total,
+                          }}
+                          autoOpen={searchParams.get("autoPay") === "true"}
+                        />
+                      )}
+
+                    {order.status !== OrderStatus.PAID &&
                       order?.payment?.method === PaymentMethod.Wompi && (
                         <Button
                           className="flex w-full items-center justify-center gap-2 font-serif"
@@ -1110,7 +1124,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                       )}
 
                     {order.status !== OrderStatus.PAID &&
-                      (order.status as string) !== "SENT" && (
+                      order?.payment?.method === PaymentMethod.BankTransfer && (
                         <div className="mt-4">
                           <BankTransferInstructions
                             order={{

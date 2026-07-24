@@ -22,6 +22,7 @@ const Christmas = dynamic(
   },
 );
 
+import Script from "next/script";
 import Navbar from "@/components/navbar";
 
 export const metadata: Metadata = {
@@ -124,6 +125,10 @@ export default async function RootLayout({
             <Toaster />
             <Analytics />
             <SpeedInsights />
+            <Script
+              src="https://checkout.bold.co/library/boldPaymentButton.js"
+              strategy="lazyOnload"
+            />
           </ReactQueryProvider>
         </body>
       </html>

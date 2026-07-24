@@ -28,6 +28,7 @@ export enum PaymentMethod {
   BankTransfer = "BankTransfer",
   Wompi = "Wompi",
   PayU = "PayU",
+  Bold = "Bold",
 }
 
 export enum ShippingStatus {

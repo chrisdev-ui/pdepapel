@@ -36,6 +36,7 @@ export default function useCheckout({
       case PaymentMethod.BankTransfer:
       case PaymentMethod.COD:
         return await createNewOrder(formData);
+      case PaymentMethod.Bold:
       case PaymentMethod.Wompi:
       case PaymentMethod.PayU:
         return await checkoutOrder(formData);
