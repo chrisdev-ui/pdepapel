@@ -1,7 +1,7 @@
 "use client";
 
 import axios from "axios";
-import { Copy, CreditCard, Edit, MoreHorizontal, Trash } from "lucide-react";
+import { Copy, CreditCard, Edit, MessageSquare, MoreHorizontal, Trash } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -79,6 +79,24 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
     } finally {
       setPushingBold(false);
     }
+  };
+
+  const onSendWhatsAppStatus = () => {
+    const rawPhone = data.phone ? data.phone.replace(/\D/g, "") : "";
+    const cleanPhone = rawPhone.length === 10 ? `57${rawPhone}` : rawPhone;
+    const orderUrl = `https://papeleriapdepapel.com/order/${data.id}`;
+    const statusText =
+      data.status === OrderStatus.PAID
+        ? "Pagada y Confirmada"
+        : data.status === OrderStatus.SENT
+          ? "Enviada"
+          : data.status === OrderStatus.PENDING
+            ? "Pendiente de Pago"
+            : data.status;
+    const text = encodeURIComponent(
+      `¡Hola ${data.fullName || "Cliente"}! 👋 Te escribimos de Papelería P de Papel. Tu orden #${data.orderNumber} se encuentra actualmente en estado: ${statusText}. Puedes ver los detalles de tu pedido aquí: ${orderUrl}`,
+    );
+    window.open(`https://wa.me/${cleanPhone}?text=${text}`, "_blank");
   };
 
   const onCopyWompiLink = async () => {
@@ -216,6 +234,13 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
             {isClosedOrder
               ? "Datáfono Bold (Orden Completada)"
               : "Cobrar en Datáfono Bold"}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="cursor-pointer"
+            onClick={onSendWhatsAppStatus}
+          >
+            <MessageSquare className="mr-2 h-4 w-4 text-emerald-600" />
+            Enviar WhatsApp al cliente
           </DropdownMenuItem>
           <DropdownMenuItem
             className="cursor-pointer"

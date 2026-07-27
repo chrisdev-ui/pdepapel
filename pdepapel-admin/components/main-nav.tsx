@@ -145,7 +145,7 @@ export function MainNav({
       href: `/${params.storeId}/${Models.RestockOrders}`,
       label: ModelLabels[Models.RestockOrders],
       active: pathname.includes(`/${params.storeId}/${Models.RestockOrders}`),
-      group: "catalog",
+      group: "inventory",
       icon: ClipboardList,
     },
     {
@@ -154,14 +154,14 @@ export function MainNav({
       active: pathname.includes(
         `/${params.storeId}/${Models.InventoryMovements}`,
       ),
-      group: "catalog",
+      group: "inventory",
       icon: History,
     },
     {
       href: `/${params.storeId}/${Models.Inventory}`,
       label: ModelLabels[Models.Inventory],
       active: pathname === `/${params.storeId}/${Models.Inventory}`,
-      group: "catalog",
+      group: "inventory",
       icon: LayoutDashboard,
     },
     // Ventas
@@ -244,6 +244,7 @@ export function MainNav({
 
   const catalogRoutes = routes.filter((r) => r.group === "catalog");
   const salesRoutes = routes.filter((r) => r.group === "sales");
+  const inventoryRoutes = routes.filter((r) => r.group === "inventory");
   const marketingRoutes = routes.filter((r) => r.group === "marketing");
 
   return (
@@ -308,6 +309,32 @@ export function MainNav({
               <NavigationMenuContent>
                 <ul className="grid w-[400px] gap-3 p-4 md:w-[500px] md:grid-cols-2 lg:w-[600px]">
                   {salesRoutes.map((route) => (
+                    <ListItem
+                      key={route.href}
+                      title={route.label}
+                      href={route.href}
+                      active={route.active}
+                      icon={route.icon}
+                    />
+                  ))}
+                </ul>
+              </NavigationMenuContent>
+            </NavigationMenuItem>
+
+            {/* Inventario */}
+            <NavigationMenuItem>
+              <NavigationMenuTrigger
+                className={cn(
+                  inventoryRoutes.some((r) => r.active) &&
+                    "bg-accent text-accent-foreground",
+                )}
+              >
+                <LayoutDashboard className="mr-2 h-4 w-4" />
+                Centro de Inventario
+              </NavigationMenuTrigger>
+              <NavigationMenuContent>
+                <ul className="grid w-[400px] gap-3 p-4 md:w-[500px] md:grid-cols-2 lg:w-[600px]">
+                  {inventoryRoutes.map((route) => (
                     <ListItem
                       key={route.href}
                       title={route.label}
@@ -422,6 +449,28 @@ export function MainNav({
               <h4 className="font-medium leading-none">Ventas</h4>
               <div className="grid grid-cols-1 gap-1">
                 {salesRoutes.map((route) => (
+                  <Link
+                    key={route.href}
+                    href={route.href}
+                    onClick={closeMenu}
+                    className={cn(
+                      "flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
+                      route.active
+                        ? "bg-accent text-accent-foreground"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    <route.icon className="mr-2 h-4 w-4" />
+                    {route.label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h4 className="font-medium leading-none">Centro de Inventario</h4>
+              <div className="grid grid-cols-1 gap-1">
+                {inventoryRoutes.map((route) => (
                   <Link
                     key={route.href}
                     href={route.href}
