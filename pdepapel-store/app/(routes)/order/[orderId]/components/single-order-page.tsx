@@ -32,6 +32,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 
+import axios from "axios";
 import { Forbidden } from "@/components/forbidden";
 import { BankTransferInstructions } from "@/components/bank-transfer-instructions";
 import { BoldCheckoutButton } from "@/components/bold-checkout-button";
@@ -146,6 +147,56 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
   );
   const removeAll = useCart((state) => state.removeAll);
   const { fireConfetti } = useConfetti();
+  const [currentOrder, setCurrentOrder] = useState(order);
+  const activeOrder = currentOrder || order;
+
+  // 🚀 Real-time status polling for PENDING or CREATED orders
+  useEffect(() => {
+    if (
+      currentOrder.status !== OrderStatus.PENDING &&
+      currentOrder.status !== OrderStatus.CREATED
+    ) {
+      return;
+    }
+
+    const intervalId = setInterval(async () => {
+      try {
+        const storeApiUrl = process.env.NEXT_PUBLIC_API_URL;
+        if (!storeApiUrl) return;
+
+        const response = await axios.get(`${storeApiUrl}/orders/${order.id}`);
+        const fetchedOrder = response.data;
+        if (fetchedOrder && fetchedOrder.status !== currentOrder.status) {
+          setCurrentOrder(fetchedOrder);
+
+          if (fetchedOrder.status === OrderStatus.PAID) {
+            toast({
+              title: "¡Pago Confirmado con Éxito!",
+              description:
+                "¡Tu pago ha sido recibido con éxito! Tu pedido ha sido confirmado y ya se encuentra en preparación.",
+              variant: "success",
+              icon: <ShieldCheck className="h-8 w-8 text-emerald-600" />,
+              duration: 10000,
+            });
+            fireConfetti();
+            removeAll();
+          } else if (fetchedOrder.status === OrderStatus.CANCELLED) {
+            toast({
+              title: "Intento de pago no procesado",
+              description:
+                "El intento de pago no fue completado. Puedes reintentar cuando desees.",
+              variant: "destructive",
+              duration: 8000,
+            });
+          }
+        }
+      } catch (e) {
+        // Silent catch for background polling
+      }
+    }, 4000);
+
+    return () => clearInterval(intervalId);
+  }, [currentOrder.status, order.id, removeAll, fireConfetti, toast]);
 
   const { mutate, status } = useCheckoutOrder({
     orderId: order.id,
@@ -394,17 +445,17 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                   <div className="space-y-3">
                     <span
                       className={cn(
-                        "inline-flex items-center rounded-full border-2 px-6 py-2 text-base font-semibold",
-                        getStatusColor(order.status),
+                        "rounded-full px-2.5 py-1 text-xs font-bold shadow-sm",
+                        getStatusColor(activeOrder.status),
                       )}
                     >
-                      {order.status === "PAID"
-                        ? "✓ Pago Completado"
-                        : order.status === "PENDING"
-                        ? "⏳ Pago Pendiente"
-                        : order.status === "CANCELLED"
-                        ? "✕ Orden Cancelada"
-                        : "⏳ Esperando Pago"}
+                      {activeOrder.status === "PAID"
+                        ? "PAGADO"
+                        : activeOrder.status === "PENDING"
+                          ? "PENDIENTE DE PAGO"
+                          : activeOrder.status === "CANCELLED"
+                            ? "CANCELADO"
+                            : activeOrder.status}
                     </span>
 
                     <h1 className="text-balance font-serif text-4xl font-black leading-tight md:text-5xl lg:text-6xl">
@@ -481,7 +532,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                           Estado del Envío
                         </h2>
                         <p className="text-sm text-white/90">
-                          Seguimiento en tiempo real
+                          Seguimiento de tu paquete
                         </p>
                       </div>
                     </div>

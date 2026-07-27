@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/tooltip";
 import { PaymentMethod } from "@/constants";
 import { cn } from "@/lib/utils";
-import { Info, LucideProps } from "lucide-react";
+import { Info, LucideProps, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 
 interface PaymentMethodOption {
@@ -323,6 +323,18 @@ export const PaymentMethodSelector = ({
           );
         })}
       </RadioGroup>
+
+      {/* 🛡️ Trust & Security Badges */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-2xl border border-purple-100 bg-purple-50/50 p-3.5 text-xs text-purple-950 dark:border-purple-900/40 dark:bg-purple-950/20 dark:text-purple-200">
+        <div className="flex items-center gap-2 font-medium">
+          <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+          <span><strong>Compra 100% Segura</strong> con encriptación SSL de 256 bits.</span>
+        </div>
+        <div className="flex items-center gap-2 font-medium">
+          <Icons.whatsapp className="h-4 w-4 text-emerald-600 shrink-0" />
+          <span><strong>Soporte en Vivo</strong> directo por WhatsApp.</span>
+        </div>
+      </div>
 
       {/* Info Alert - Shows when a method is selected */}
       {selectedOption && (
