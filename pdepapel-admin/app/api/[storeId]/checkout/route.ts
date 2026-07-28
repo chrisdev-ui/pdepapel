@@ -51,7 +51,7 @@ const buildShippingPayload = (storeId: string, quote: any) => ({
   storeId,
   provider:
     quote?.provider === "CUSTOM" || quote?.shippingProvider === "CUSTOM"
-      ? "CUSTOM"
+      ? ShippingProvider.MANUAL
       : ShippingProvider.ENVIOCLICK,
   status: ShippingStatus.Preparing,
   envioClickIdRate: parseOptionalInt(quote?.idRate),
