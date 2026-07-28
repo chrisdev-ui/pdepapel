@@ -1,4 +1,5 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { invalidateStoreProductsCache } from "@/lib/cache";
 import cloudinaryInstance from "@/lib/cloudinary";
 import prismadb from "@/lib/prismadb";
 import {
@@ -265,19 +266,8 @@ export async function PATCH(
       await recalculateKitStock(prismadb, [params.productId]);
     }
 
-    // Invalidate all product cache entries for this store
-
-    try {
-      const { Redis } = await import("@upstash/redis");
-      const redis = Redis.fromEnv();
-      const pattern = `store:${params.storeId}:products:*`;
-      const keys = await redis.keys(pattern);
-      if (keys.length > 0) {
-        await redis.del(...keys);
-      }
-    } catch (error) {
-      console.error("Redis cache invalidation error:", error);
-    }
+    // Invalidate product cache & trigger instant storefront revalidation
+    await invalidateStoreProductsCache(params.storeId, params.productId);
 
     return NextResponse.json(result, {
       headers: CACHE_HEADERS.NO_CACHE,
@@ -362,17 +352,8 @@ export async function DELETE(
     });
 
     // Invalidate all product cache entries for this store
-    try {
-      const { Redis } = await import("@upstash/redis");
-      const redis = Redis.fromEnv();
-      const pattern = `store:${params.storeId}:products:*`;
-      const keys = await redis.keys(pattern);
-      if (keys.length > 0) {
-        await redis.del(...keys);
-      }
-    } catch (error) {
-      console.error("Redis cache invalidation error:", error);
-    }
+    // Invalidate product cache & trigger instant storefront revalidation
+    await invalidateStoreProductsCache(params.storeId, params.productId);
 
     return NextResponse.json("El producto ha sido eliminado correctamente", {
       headers: CACHE_HEADERS.NO_CACHE,

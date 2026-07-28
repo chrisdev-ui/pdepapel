@@ -1,4 +1,5 @@
 import { Redis } from "@upstash/redis";
+import { triggerStorefrontRevalidation } from "./revalidate-store";
 
 // Initialize Redis client (lazy - only when needed)
 let redis: Redis | null = null;
@@ -15,8 +16,12 @@ function getRedis(): Redis {
  */
 export async function invalidateStoreProductsCache(
   storeId: string,
+  productId?: string,
 ): Promise<void> {
   try {
+    // ⚡ Trigger instant storefront On-Demand Revalidation on Vercel Edge CDN
+    await triggerStorefrontRevalidation({ productId });
+
     const redisClient = getRedis();
     const pattern = `store:${storeId}:products:*`;
     let cursor = 0;

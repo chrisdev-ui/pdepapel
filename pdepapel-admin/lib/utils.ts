@@ -419,9 +419,9 @@ export const CACHE_HEADERS = {
   SEMI_STATIC: {
     "Cache-Control": "public, s-maxage=300, stale-while-revalidate=3600",
   },
-  // For data that changes frequently (e.g., products, orders)
+  // For data that changes frequently (e.g., products, stock, orders)
   DYNAMIC: {
-    "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+    "Cache-Control": "public, s-maxage=0, must-revalidate",
   },
   // For data that should not be cached
   NO_CACHE: {
