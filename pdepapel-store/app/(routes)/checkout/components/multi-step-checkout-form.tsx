@@ -1,5 +1,6 @@
 "use client";
 
+import { checkLiveStock } from "@/actions/check-live-stock";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
@@ -228,6 +229,49 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   useEffect(() => {
     setStoredCouponState(couponState);
   }, [couponState, setStoredCouponState]);
+
+  const hasVerifiedStockRef = useRef(false);
+
+  // Real-time live stock verification on checkout mount to prevent overselling
+  useEffect(() => {
+    setIsMounted(true);
+    if (hasVerifiedStockRef.current || customOrder) return;
+    hasVerifiedStockRef.current = true;
+
+    const cartState = useCart.getState();
+    if (cartState.items.length === 0) return;
+
+    const itemIds = cartState.items.map((i) => i.id);
+    checkLiveStock(itemIds).then((stockMap) => {
+      if (!stockMap || Object.keys(stockMap).length === 0) return;
+
+      const currentCart = useCart.getState();
+      let hasAdjusted = false;
+
+      currentCart.items.forEach((item) => {
+        const liveInfo = stockMap[item.id];
+        if (liveInfo !== undefined) {
+          const liveStock = liveInfo.stock;
+          if (item.stock !== liveStock) {
+            currentCart.updateStock(item.id, liveStock);
+            if (item.quantity && item.quantity > liveStock) {
+              currentCart.updateQuantity(item.id, Math.max(0, liveStock));
+              hasAdjusted = true;
+            }
+          }
+        }
+      });
+
+      if (hasAdjusted) {
+        toast({
+          title: "Actualización de Inventario",
+          description:
+            "Ajustamos las cantidades de tu pedido de acuerdo a la disponibilidad actual.",
+          variant: "warning",
+        });
+      }
+    });
+  }, [customOrder, toast]);
 
   const form = useForm<CheckoutFormValue>({
     mode: "onChange",
