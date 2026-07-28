@@ -49,19 +49,22 @@ const parseOptionalFloat = (val: any): number | null => {
 
 const buildShippingPayload = (storeId: string, quote: any) => ({
   storeId,
-  provider: ShippingProvider.ENVIOCLICK,
+  provider:
+    quote?.provider === "CUSTOM" || quote?.shippingProvider === "CUSTOM"
+      ? "CUSTOM"
+      : ShippingProvider.ENVIOCLICK,
   status: ShippingStatus.Preparing,
-  envioClickIdRate: parseOptionalInt(quote.idRate),
-  carrierId: parseOptionalInt(quote.idCarrier),
-  carrierName: quote.carrier || quote.carrierName || null,
-  courier: quote.carrier || quote.courier || null,
-  productId: parseOptionalInt(quote.idProduct),
-  productName: quote.product || quote.productName || null,
-  flete: parseOptionalFloat(quote.flete),
-  minimumInsurance: parseOptionalFloat(quote.minimumInsurance),
-  isCOD: Boolean(quote.isCOD),
-  cost: parseOptionalFloat(quote.totalCost ?? quote.cost) || 0,
-  deliveryDays: parseOptionalInt(quote.deliveryDays),
+  envioClickIdRate: parseOptionalInt(quote?.idRate),
+  carrierId: parseOptionalInt(quote?.idCarrier),
+  carrierName: quote?.carrier || quote?.carrierName || "Acordar por WhatsApp",
+  courier: quote?.carrier || quote?.courier || "Transportadora",
+  productId: parseOptionalInt(quote?.idProduct),
+  productName: quote?.product || quote?.productName || null,
+  flete: parseOptionalFloat(quote?.flete) || 0,
+  minimumInsurance: parseOptionalFloat(quote?.minimumInsurance) || 0,
+  isCOD: Boolean(quote?.isCOD),
+  cost: parseOptionalFloat(quote?.totalCost ?? quote?.cost) || 0,
+  deliveryDays: parseOptionalInt(quote?.deliveryDays) || 0,
   requestPickup: ENVIOCLICK_DEFAULTS.requestPickup,
   hasInsurance: ENVIOCLICK_DEFAULTS.insurance,
   quotationData: quote,
@@ -141,14 +144,20 @@ export async function POST(
       );
 
     // Validate shipping data is provided
-    if (!shipping || !shipping.cost) {
+    if (!shipping) {
       throw ErrorFactory.InvalidRequest(
         "Debe proporcionar información de envío válida",
       );
     }
 
+    const isCustomShipping =
+      shipping?.provider === "CUSTOM" ||
+      shipping?.carrierName?.includes("Medellín") ||
+      shipping?.carrierName?.includes("WhatsApp") ||
+      envioClickIdRate === 0;
+
     const rateId = envioClickIdRate || shipping?.idRate;
-    if (!rateId) {
+    if (!isCustomShipping && !rateId) {
       throw ErrorFactory.InvalidRequest("Debe seleccionar un método de envío");
     }
 
@@ -236,11 +245,11 @@ export async function POST(
 
     const fallbackQuote = {
       ...shipping,
-      totalCost: shipping.cost,
-      carrier: shipping.carrierName || shipping.courier,
-      product: shipping.productName,
-      idRate: shipping.idRate || envioClickIdRate,
-      // Provide fallback values for fields that might not exist in frontend shipping object
+      provider: isCustomShipping ? "CUSTOM" : ShippingProvider.ENVIOCLICK,
+      totalCost: shipping.cost ?? 0,
+      carrier: shipping.carrierName || shipping.courier || "Acordar por WhatsApp",
+      product: shipping.productName || "Envío",
+      idRate: shipping.idRate || envioClickIdRate || 0,
       idCarrier: shipping.carrierId || null,
       idProduct: shipping.productId || null,
       flete: shipping.flete || shipping.cost || 0,
@@ -251,8 +260,8 @@ export async function POST(
 
     let selectedQuote: any = fallbackQuote; // Default to provided shipping data (normalized)
 
-    // If we have active caches, try to validate
-    if (shippingCaches && shippingCaches.length > 0) {
+    // If we have active caches, try to validate (only for ENVIOCLICK rates)
+    if (!isCustomShipping && shippingCaches && shippingCaches.length > 0) {
       for (const cache of shippingCaches) {
         const quotesData = cache.quotesData as any;
         const quotes = quotesData?.rates || [];
@@ -275,7 +284,7 @@ export async function POST(
           `✅ Using cached quote for rate ID ${rateId}, carrier: ${selectedQuote.carrier}, cost: ${currencyFormatter(selectedQuote.totalCost)}`,
         );
       }
-    } else {
+    } else if (!isCustomShipping) {
       // No active caches, use provided shipping data
       console.warn(
         `⚠️ No active shipping caches found for daneCode ${daneCode}, store ${params.storeId}. ` +
@@ -284,7 +293,7 @@ export async function POST(
     }
 
     // Ensure selectedQuote has required fields
-    if (!selectedQuote.totalCost || !selectedQuote.carrier) {
+    if (selectedQuote.totalCost === undefined || !selectedQuote.carrier) {
       throw ErrorFactory.InvalidRequest(
         "Los datos de envío son inválidos. Por favor, solicita una nueva cotización.",
       );
