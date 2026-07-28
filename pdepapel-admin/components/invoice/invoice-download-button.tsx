@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { PDFDownloadLink } from "@react-pdf/renderer";
-import { Download, Loader2 } from "lucide-react";
+import { FileText, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { StoreInvoicePDF, type InvoiceData } from "./store-invoice-pdf";
 
@@ -55,7 +55,7 @@ export const InvoiceDownloadButton = ({
               </>
             ) : (
               <>
-                <Download className="h-4 w-4" />
+                <FileText className="h-4 w-4" />
                 Descargar Recibo
               </>
             )}
