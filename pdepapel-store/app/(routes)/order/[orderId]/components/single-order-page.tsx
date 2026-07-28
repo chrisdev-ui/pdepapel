@@ -775,7 +775,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                             >
                               <Link href={getTrackingUrl()} target="_blank">
                                 <ExternalLink className="h-5 w-5" />
-                                Ver en EnvioClick
+                                Rastrear Guía de Envío
                               </Link>
                             </Button>
                           )}

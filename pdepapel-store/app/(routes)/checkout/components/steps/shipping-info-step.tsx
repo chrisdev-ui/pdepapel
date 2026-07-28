@@ -9,6 +9,9 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ShippingRatesSelector } from "@/components/ui/shipping-rates-selector";
 import { Textarea } from "@/components/ui/textarea";
 import { ShippingStatus } from "@/constants";
@@ -16,8 +19,8 @@ import { useCheckoutStore } from "@/hooks/use-checkout-store";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useLocations } from "@/hooks/use-locations";
 import { useShippingQuote } from "@/hooks/use-shipping-quote";
-import { Loader2, PackageSearch } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Bike, Loader2, MessageSquare, PackageSearch, Truck } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { UseFormReturn } from "react-hook-form";
 import { CheckoutFormValue } from "../multi-step-checkout-form";
 
@@ -45,7 +48,33 @@ export const ShippingInfoStep = ({
   // Watch form fields for shipping quote
   const selectedDaneCode = form.watch("daneCode");
   const address1 = form.watch("address1");
+  const selectedCity = form.watch("city") || "";
+  const selectedDept = form.watch("department") || "";
   const locationsDisabled = isLoading || isLoadingLocations;
+
+  const isMedellinArea = useMemo(() => {
+    const cityLower = selectedCity.toLowerCase();
+    const deptLower = selectedDept.toLowerCase();
+    const areaCities = [
+      "medellin",
+      "medellín",
+      "envigado",
+      "itagui",
+      "itaguí",
+      "sabaneta",
+      "bello",
+      "la estrella",
+      "caldas",
+      "copacabana",
+      "girardota",
+      "barbosa",
+      "rionegro",
+    ];
+    return (
+      areaCities.some((c) => cityLower.includes(c)) ||
+      deptLower.includes("antioquia")
+    );
+  }, [selectedCity, selectedDept]);
 
   // Get quote data from store
   const storedQuoteData = useCheckoutStore((state) => state.quoteData);
@@ -302,113 +331,263 @@ export const ShippingInfoStep = ({
           )}
         />
 
-        {/* Calculate Rates Button */}
-        <div className="col-span-1 sm:col-span-2">
-          {!localQuoteData && (
-            <Button
-              type="button"
-              onClick={handleFetchQuotes}
-              disabled={!canFetchQuotes || isLoadingQuotes}
-              className="w-full bg-gradient-to-r from-blue-baby to-blue-baby/80 text-primary shadow-lg transition-all hover:scale-[1.02] hover:shadow-xl"
-            >
-              {isLoadingQuotes ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Calculando tarifas...
-                </>
-              ) : (
-                <>
-                  <PackageSearch className="mr-2 h-5 w-5" />
-                  Calcular tarifas de envío
-                </>
-              )}
-            </Button>
-          )}
-          {localQuoteData && (
-            <Button
-              type="button"
-              onClick={handleResetQuotes}
-              variant="outline"
-              className="w-full"
-            >
-              <PackageSearch className="mr-2 h-5 w-5" />
-              Recalcular tarifas de envío
-            </Button>
-          )}
-          {!canFetchQuotes && !localQuoteData && (
-            <p className="mt-2 text-center text-sm text-muted-foreground">
-              Completa la ubicación y dirección para calcular las tarifas
-            </p>
-          )}
-          {quoteError && (
-            <p className="mt-2 text-center text-sm text-destructive">
-              Error: {quoteError.message ?? "Error desconocido"}
-            </p>
-          )}
-        </div>
-
-        {/* Shipping Rates - Always render field for validation */}
+        {/* Shipping Option Type Selector */}
         <div className="col-span-1 sm:col-span-2">
           <FormField
             control={form.control}
-            name="envioClickIdRate"
+            name="shippingOptionType"
             render={({ field }) => (
-              <FormItem>
-                {localQuoteData && (
-                  <FormLabel className="text-foreground/90">
-                    Selecciona una tarifa de envío *
-                  </FormLabel>
-                )}
+              <FormItem className="space-y-3">
+                <FormLabel className="text-foreground/90 font-medium">
+                  Selecciona la modalidad de entrega *
+                </FormLabel>
                 <FormControl>
-                  {localQuoteData ? (
-                    <ShippingRatesSelector
-                      quotes={localQuoteData?.quotes || []}
-                      selectedRate={field.value}
-                      onSelect={async (idRate) => {
-                        field.onChange(idRate);
-
-                        // Find selected quote and update shipping details
-                        const selectedQuote = localQuoteData?.quotes.find(
-                          (q) => q.idRate === idRate,
-                        );
-
-                        if (selectedQuote) {
-                          form.setValue("shipping", {
-                            carrierName: selectedQuote.carrier,
-                            courier: selectedQuote.carrier,
-                            productName: selectedQuote.product,
-                            flete: selectedQuote.flete,
-                            minimumInsurance: selectedQuote.minimumInsurance,
-                            deliveryDays: Number(selectedQuote.deliveryDays),
-                            isCOD: selectedQuote.isCOD,
-                            cost: selectedQuote.totalCost,
-                            status: ShippingStatus.Preparing,
-                          });
-                        }
-
-                        // Trigger validation to clear any errors
-                        await form.trigger("envioClickIdRate");
-                      }}
-                      onClear={() => {
-                        field.onChange(undefined);
+                  <RadioGroup
+                    onValueChange={(val) => {
+                      field.onChange(val);
+                      if (val === "MEDELLIN_LOCAL") {
+                        form.setValue("shippingProvider", "CUSTOM");
+                        form.setValue("envioClickIdRate", 0);
+                        form.setValue("shipping", {
+                          carrierName: "Domicilio Mismo Día (Medellín)",
+                          courier: "Domiciliario Local",
+                          productName: "Entrega Mismo Día Medellín",
+                          cost: 0,
+                          flete: 0,
+                          status: ShippingStatus.Preparing,
+                        });
+                      } else if (val === "CUSTOM_WHATSAPP") {
+                        form.setValue("shippingProvider", "CUSTOM");
+                        form.setValue("envioClickIdRate", 0);
+                        form.setValue("shipping", {
+                          carrierName: "Acordar por WhatsApp",
+                          courier: "Transportadora a Convenir",
+                          productName: "Envío Especial / Flete al Cobro",
+                          cost: 0,
+                          flete: 0,
+                          status: ShippingStatus.Preparing,
+                        });
+                      } else {
+                        form.setValue("shippingProvider", "ENVIOCLICK");
                         form.setValue("shipping", {});
-                      }}
-                      isLoading={isLoadingQuotes}
-                    />
-                  ) : (
-                    <input type="hidden" {...field} />
-                  )}
+                      }
+                    }}
+                    value={field.value || "ENVIOCLICK"}
+                    className="grid grid-cols-1 md:grid-cols-3 gap-3"
+                  >
+                    {/* Card 1: EnvioClick */}
+                    <div className="relative">
+                      <RadioGroupItem
+                        value="ENVIOCLICK"
+                        id="opt-envioclick"
+                        className="peer sr-only"
+                      />
+                      <Label
+                        htmlFor="opt-envioclick"
+                        className="flex flex-col h-full items-start justify-between rounded-xl border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-purple-600 peer-data-[state=checked]:bg-purple-50/40 cursor-pointer transition-all"
+                      >
+                        <div className="flex items-center gap-2 font-semibold">
+                          <Truck className="h-5 w-5 text-purple-600 shrink-0" />
+                          <span className="text-sm">Encomienda Nacional</span>
+                        </div>
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Cotización en vivo con múltiples transportadoras nacionales (según cobertura). <b>Soporta Pago Contraentrega</b>.
+                        </p>
+                      </Label>
+                    </div>
+
+                    {/* Card 2: Domicilio Mismo Día Medellín */}
+                    <div className="relative">
+                      <RadioGroupItem
+                        value="MEDELLIN_LOCAL"
+                        id="opt-medellin"
+                        className="peer sr-only"
+                      />
+                      <Label
+                        htmlFor="opt-medellin"
+                        className="flex flex-col h-full items-start justify-between rounded-xl border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-purple-600 peer-data-[state=checked]:bg-purple-50/40 cursor-pointer transition-all"
+                      >
+                        <div className="flex items-center justify-between w-full font-semibold">
+                          <div className="flex items-center gap-2">
+                            <Bike className="h-5 w-5 text-emerald-600 shrink-0" />
+                            <span className="text-sm">Domicilio Mismo Día</span>
+                          </div>
+                          {isMedellinArea && (
+                            <Badge variant="outline" className="bg-emerald-100 text-emerald-800 text-[10px]">
+                              Medellín
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Mensajería local especializada en Medellín y Valle de Aburrá.
+                        </p>
+                      </Label>
+                    </div>
+
+                    {/* Card 3: Acordar por WhatsApp */}
+                    <div className="relative">
+                      <RadioGroupItem
+                        value="CUSTOM_WHATSAPP"
+                        id="opt-whatsapp"
+                        className="peer sr-only"
+                      />
+                      <Label
+                        htmlFor="opt-whatsapp"
+                        className="flex flex-col h-full items-start justify-between rounded-xl border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-purple-600 peer-data-[state=checked]:bg-purple-50/40 cursor-pointer transition-all"
+                      >
+                        <div className="flex items-center gap-2 font-semibold">
+                          <MessageSquare className="h-5 w-5 text-green-600 shrink-0" />
+                          <span className="text-sm">Acordar por WhatsApp</span>
+                        </div>
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Interrapidísimo contraentrega, flete al cobro o transportadoras especiales.
+                        </p>
+                      </Label>
+                    </div>
+                  </RadioGroup>
                 </FormControl>
-                {localQuoteData && (
-                  <FormDescription>
-                    Selecciona la tarifa de envío que deseas utilizar.
-                  </FormDescription>
-                )}
                 <FormMessage />
               </FormItem>
             )}
           />
         </div>
+
+        {/* Dynamic Shipping Option Details */}
+        {(form.watch("shippingOptionType") === "MEDELLIN_LOCAL") && (
+          <div className="col-span-1 sm:col-span-2 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 text-emerald-900 flex items-start gap-3">
+            <Bike className="h-6 w-6 text-emerald-600 shrink-0 mt-0.5" />
+            <div>
+              <h4 className="font-semibold text-sm">Domicilio Mismo Día (Medellín y Área Metropolitana)</h4>
+              <p className="text-xs text-emerald-700 mt-1">
+                Tu pedido será entregado directamente con nuestro domiciliario especializado. Coordinaremos la hora exacta de entrega por WhatsApp tras finalizar el pedido.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {(form.watch("shippingOptionType") === "CUSTOM_WHATSAPP") && (
+          <div className="col-span-1 sm:col-span-2 rounded-xl border border-blue-200 bg-blue-50/60 p-4 text-blue-900 flex items-start gap-3">
+            <MessageSquare className="h-6 w-6 text-blue-600 shrink-0 mt-0.5" />
+            <div>
+              <h4 className="font-semibold text-sm">Acordar Transportadora y Flete por WhatsApp</h4>
+              <p className="text-xs text-blue-700 mt-1">
+                Ideal para Interrapidísimo flete al cobro o transportadoras personalizadas. Realiza tu pago online y al finalizar podrás coordinar directamente con nuestro asesor por WhatsApp.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Calculate Rates Button (Only shown for ENVIOCLICK mode) */}
+        {(!form.watch("shippingOptionType") || form.watch("shippingOptionType") === "ENVIOCLICK") && (
+          <>
+            <div className="col-span-1 sm:col-span-2">
+              {!localQuoteData && (
+                <Button
+                  type="button"
+                  onClick={handleFetchQuotes}
+                  disabled={!canFetchQuotes || isLoadingQuotes}
+                  className="w-full bg-gradient-to-r from-blue-baby to-blue-baby/80 text-primary shadow-lg transition-all hover:scale-[1.02] hover:shadow-xl"
+                >
+                  {isLoadingQuotes ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Calculando tarifas...
+                    </>
+                  ) : (
+                    <>
+                      <PackageSearch className="mr-2 h-5 w-5" />
+                      Calcular tarifas de envío
+                    </>
+                  )}
+                </Button>
+              )}
+              {localQuoteData && (
+                <Button
+                  type="button"
+                  onClick={handleResetQuotes}
+                  variant="outline"
+                  className="w-full"
+                >
+                  <PackageSearch className="mr-2 h-5 w-5" />
+                  Recalcular tarifas de envío
+                </Button>
+              )}
+              {!canFetchQuotes && !localQuoteData && (
+                <p className="mt-2 text-center text-sm text-muted-foreground">
+                  Completa la ubicación y dirección para calcular las tarifas
+                </p>
+              )}
+              {quoteError && (
+                <p className="mt-2 text-center text-sm text-destructive">
+                  Error: {quoteError.message ?? "Error desconocido"}
+                </p>
+              )}
+            </div>
+
+            {/* Shipping Rates */}
+            <div className="col-span-1 sm:col-span-2">
+              <FormField
+                control={form.control}
+                name="envioClickIdRate"
+                render={({ field }) => (
+                  <FormItem>
+                    {localQuoteData && (
+                      <FormLabel className="text-foreground/90">
+                        Selecciona una tarifa de envío *
+                      </FormLabel>
+                    )}
+                    <FormControl>
+                      {localQuoteData ? (
+                        <ShippingRatesSelector
+                          quotes={localQuoteData?.quotes || []}
+                          selectedRate={field.value}
+                          onSelect={async (idRate) => {
+                            field.onChange(idRate);
+
+                            // Find selected quote and update shipping details
+                            const selectedQuote = localQuoteData?.quotes.find(
+                              (q) => q.idRate === idRate,
+                            );
+
+                            if (selectedQuote) {
+                              form.setValue("shipping", {
+                                carrierName: selectedQuote.carrier,
+                                courier: selectedQuote.carrier,
+                                productName: selectedQuote.product,
+                                flete: selectedQuote.flete,
+                                minimumInsurance: selectedQuote.minimumInsurance,
+                                deliveryDays: Number(selectedQuote.deliveryDays),
+                                isCOD: selectedQuote.isCOD,
+                                cost: selectedQuote.totalCost,
+                                status: ShippingStatus.Preparing,
+                              });
+                            }
+
+                            // Trigger validation to clear any errors
+                            await form.trigger("envioClickIdRate");
+                          }}
+                          onClear={() => {
+                            field.onChange(undefined);
+                            form.setValue("shipping", {});
+                          }}
+                          isLoading={isLoadingQuotes}
+                        />
+                      ) : (
+                        <input type="hidden" {...field} />
+                      )}
+                    </FormControl>
+                    {localQuoteData && (
+                      <FormDescription>
+                        Selecciona la tarifa de envío que deseas utilizar.
+                      </FormDescription>
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

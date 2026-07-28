@@ -135,14 +135,22 @@ const formSchema = z.object({
   paymentMethod: z
     .nativeEnum(PaymentMethod)
     .default(PaymentMethod.BankTransfer),
-  shippingProvider: z.literal("ENVIOCLICK"),
-  envioClickIdRate: z
-    .number({
-      required_error: "Escoge una tarifa para el envío",
-      invalid_type_error: "La tarifa debe ser un número",
-    })
-    .min(1, "Debes calcular y seleccionar una tarifa de envío"),
+  shippingProvider: z.string().default("ENVIOCLICK"),
+  shippingOptionType: z
+    .enum(["ENVIOCLICK", "MEDELLIN_LOCAL", "CUSTOM_WHATSAPP"])
+    .default("ENVIOCLICK"),
+  envioClickIdRate: z.number().optional(),
   shipping: shippingSchema,
+}).superRefine((data, ctx) => {
+  if (data.shippingOptionType === "ENVIOCLICK") {
+    if (data.envioClickIdRate === undefined || data.envioClickIdRate < 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Por favor, calcula y selecciona una tarifa de envío",
+        path: ["envioClickIdRate"],
+      });
+    }
+  }
 });
 
 export type CheckoutFormValue = z.infer<typeof formSchema>;
@@ -300,6 +308,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
           couponCode: "",
           paymentMethod: PaymentMethod.BankTransfer,
           shippingProvider: "ENVIOCLICK",
+          shippingOptionType: "ENVIOCLICK",
           envioClickIdRate: customOrder.shipping?.envioClickIdRate ?? 0,
           shipping: customOrder.shipping
             ? {
@@ -327,7 +336,8 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         department: storedFormData.department ?? "",
         daneCode: storedFormData.daneCode ?? "",
         couponCode: storedFormData.couponCode ?? "",
-        shippingProvider: "ENVIOCLICK",
+        shippingProvider: storedFormData.shippingProvider ?? "ENVIOCLICK",
+        shippingOptionType: storedFormData.shippingOptionType ?? "ENVIOCLICK",
         envioClickIdRate: storedFormData.envioClickIdRate ?? 0,
         paymentMethod:
           storedFormData.paymentMethod ?? PaymentMethod.BankTransfer,
@@ -428,6 +438,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         "city",
         "department",
         "daneCode",
+        "shippingOptionType",
         "envioClickIdRate",
       ];
     } else if (step === 3) {
@@ -660,6 +671,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       paymentMethod,
       shipping,
       shippingProvider,
+      shippingOptionType,
       envioClickIdRate,
     } = data;
     const isUserLoggedIn = Boolean(userId);
@@ -685,6 +697,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       company,
       documentId,
       shippingProvider,
+      shippingOptionType,
       envioClickIdRate,
       payment: {
         method: paymentMethod,

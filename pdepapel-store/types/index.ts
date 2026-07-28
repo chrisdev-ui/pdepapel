@@ -331,7 +331,8 @@ export interface CheckoutOrder {
     cost?: number;
     status?: string;
   };
-  shippingProvider?: "ENVIOCLICK" | "NONE";
+  shippingProvider?: string;
+  shippingOptionType?: string;
   envioClickIdRate?: number;
   customOrderToken?: string;
 }
