@@ -18,10 +18,12 @@ import axios from "axios";
 import {
   ArrowLeft,
   Check,
+  ChevronDown,
   ChevronsUpDown,
   Copy,
   CreditCard,
   Eraser,
+  Link2,
   Loader2,
   Package,
   Percent,
@@ -29,6 +31,8 @@ import {
   RefreshCw,
   RotateCcw,
   ShoppingCart,
+  Smartphone,
+  Sparkles,
   Store,
   Ticket,
   Trash,
@@ -90,6 +94,14 @@ import {
 } from "@/components/ui/command";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { DatePicker } from "@/components/ui/date-picker";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Form,
   FormControl,
@@ -1185,14 +1197,14 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           setConversionIndex(null);
         }}
       />
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col gap-y-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
           <Button variant="outline" size="icon" onClick={() => router.back()}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <Heading title={title} description={description} />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" onClick={onClear} type="button">
             {initialData ? (
               <>
@@ -1206,231 +1218,238 @@ export const OrderForm: React.FC<OrderFormProps> = ({
               </>
             )}
           </Button>
+
           {initialData && (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-purple-200 bg-purple-50 px-4 text-purple-700 hover:bg-purple-100 hover:text-purple-800"
-                onClick={() => {
-                  const storeUrl =
-                    process.env.NEXT_PUBLIC_FRONTEND_STORE_URL ||
-                    "https://papeleriapdepapel.com";
-                  const url = `${storeUrl}/order/${initialData.id}`;
-                  navigator.clipboard.writeText(url);
-                  toast({
-                    description: "URL de la orden copiada al portapapeles",
-                    variant: "success",
-                  });
-                }}
-                type="button"
-              >
-                <Copy className="mr-2 h-4 w-4" />
-                Copiar URL de Orden
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className={cn(
-                  "border-emerald-200 bg-emerald-50 px-4 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800",
-                  (form.watch("status") === OrderStatus.PAID ||
-                    form.watch("status") === OrderStatus.SENT ||
-                    initialData?.status === OrderStatus.PAID ||
-                    initialData?.status === OrderStatus.SENT ||
-                    (initialData?.payment?.method &&
-                      initialData.payment.method !== PaymentMethod.Wompi)) &&
-                    "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400 opacity-60 hover:bg-gray-100 hover:text-gray-400",
-                )}
-                disabled={
-                  copyingWompi ||
-                  form.watch("status") === OrderStatus.PAID ||
-                  form.watch("status") === OrderStatus.SENT ||
-                  initialData?.status === OrderStatus.PAID ||
-                  initialData?.status === OrderStatus.SENT ||
-                  Boolean(
-                    initialData?.payment?.method &&
-                      initialData.payment.method !== PaymentMethod.Wompi,
-                  )
-                }
-                onClick={async () => {
-                  const isClosed =
-                    form.watch("status") === OrderStatus.PAID ||
-                    form.watch("status") === OrderStatus.SENT ||
-                    initialData?.status === OrderStatus.PAID ||
-                    initialData?.status === OrderStatus.SENT;
-                  if (isClosed) {
-                    toast({
-                      title: "Orden Cerrada",
-                      description:
-                        "Esta orden ya está cerrada (Pagada o Enviada). No es necesario ni posible generar un nuevo link de pago.",
-                      variant: "destructive",
-                    });
-                    return;
-                  }
-
-                  const isOffline =
-                    initialData?.payment?.method &&
-                    initialData.payment.method !== PaymentMethod.Wompi;
-                  if (isOffline) {
-                    toast({
-                      title: "Pago por Transferencia",
-                      description:
-                        "Esta orden fue registrada para Pago por Transferencia Directa o Efectivo. Los links de pago Wompi solo aplican para pagos en línea.",
-                      variant: "destructive",
-                    });
-                    return;
-                  }
-
-                  try {
-                    setCopyingWompi(true);
-                    const response = await axios.post(
-                      `/api/${params.storeId}/checkout/${initialData.id}`,
-                    );
-                    if (response.data?.url) {
-                      navigator.clipboard.writeText(response.data.url);
-                      toast({
-                        description:
-                          "Link de pago Wompi copiado al portapapeles",
-                        variant: "success",
-                      });
-                    } else {
-                      throw new Error("No se pudo obtener el link de pago");
-                    }
-                  } catch (error) {
-                    toast({
-                      description: getErrorMessage(error),
-                      variant: "destructive",
-                    });
-                  } finally {
-                    setCopyingWompi(false);
-                  }
-                }}
-                type="button"
-              >
-                <CreditCard className="mr-2 h-4 w-4" />
-                {form.watch("status") === OrderStatus.PAID ||
-                form.watch("status") === OrderStatus.SENT ||
-                initialData?.status === OrderStatus.PAID ||
-                initialData?.status === OrderStatus.SENT
-                  ? "Orden Cerrada (Sin Link)"
-                  : initialData?.payment?.method &&
-                      initialData.payment.method !== PaymentMethod.Wompi
-                    ? "Transferencia Directa (Sin Link Wompi)"
-                    : "Copiar Link de Pago Wompi"}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
-                disabled={
-                  pushingBold ||
-                  form.watch("status") === OrderStatus.PAID ||
-                  form.watch("status") === OrderStatus.SENT ||
-                  initialData?.status === OrderStatus.PAID ||
-                  initialData?.status === OrderStatus.SENT
-                }
-                onClick={async () => {
-                  if (!initialData?.id) return;
-                  try {
-                    setPushingBold(true);
-                    const res = await axios.post(
-                      `/api/${params.storeId}/bold/terminal/${initialData.id}`,
-                    );
-                    toast({
-                      title: "Notificación enviada",
-                      description:
-                        res.data?.message ||
-                        "¡Cobro enviado al Datáfono Bold! (Si la pantalla del equipo está ocupada, presiona Cancelar 'X' en el datáfono para liberar la cola).",
-                      variant: "success",
-                    });
-                  } catch (err) {
-                    toast({
-                      title: "Error Datáfono Bold",
-                      description: getErrorMessage(err),
-                      variant: "destructive",
-                    });
-                  } finally {
-                    setPushingBold(false);
-                  }
-                }}
-                type="button"
-              >
-                {pushingBold ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <CreditCard className="mr-2 h-4 w-4 text-emerald-600" />
-                )}
-                {form.watch("status") === OrderStatus.PAID ||
-                form.watch("status") === OrderStatus.SENT ||
-                initialData?.status === OrderStatus.PAID ||
-                initialData?.status === OrderStatus.SENT
-                  ? "Datáfono Bold (Orden Completada)"
-                  : "Cobrar en Datáfono Bold"}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
-                onClick={() => {
-                  if (!initialData?.id) return;
-                  const storeUrl =
-                    process.env.NEXT_PUBLIC_FRONTEND_STORE_URL ||
-                    "https://papeleriapdepapel.com";
-                  const url = `${storeUrl}/order/${initialData.id}?autoPay=true`;
-                  navigator.clipboard.writeText(url);
-                  toast({
-                    title: "Link de Pago Bold copiado",
-                    description: "Se ha copiado el enlace directo de pago.",
-                    variant: "success",
-                  });
-                }}
-                type="button"
-              >
-                <Copy className="mr-2 h-4 w-4 text-emerald-600" />
-                Copiar Link de Pago Bold
-              </Button>
-              {initialData.token && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="border-blue-200 bg-blue-50 px-4 text-blue-700 hover:bg-blue-100 hover:text-blue-800"
+                  className="border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 hover:text-purple-800 font-medium"
+                  type="button"
+                >
+                  <Sparkles className="mr-2 h-4 w-4 text-purple-600" />
+                  Links y Pagos
+                  <ChevronDown className="ml-2 h-4 w-4 text-purple-600" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-72">
+                <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Enlaces & Métodos de Pago
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+
+                <DropdownMenuItem
                   onClick={() => {
                     const storeUrl =
                       process.env.NEXT_PUBLIC_FRONTEND_STORE_URL ||
-                      "http://localhost:3001";
-                    const url = `${storeUrl}/quote/${initialData.token}`;
+                      "https://papeleriapdepapel.com";
+                    const url = `${storeUrl}/order/${initialData.id}`;
                     navigator.clipboard.writeText(url);
-                    toast({ description: "Link copiado al portapapeles" });
+                    toast({
+                      description: "URL de la orden copiada al portapapeles",
+                      variant: "success",
+                    });
                   }}
-                  type="button"
+                  className="cursor-pointer py-2"
                 >
-                  <Copy className="mr-2 h-4 w-4" />
-                  Copiar Link Cotización
-                </Button>
-              )}
-              {form.watch("phone") &&
-                isValidPhoneNumber(form.watch("phone") || "") && (
-                  <WhatsappButton
-                    withText
-                    variant="default" // Use defaults button style (solid)
-                    className="bg-[#25D366] px-4 hover:bg-[#128C7E]" // Override with WhatsApp Brand Color
-                    order={{
-                      orderNumber: initialData.orderNumber,
-                      status: form.watch("status"),
-                      fullName: form.watch("fullName") || "Cliente",
-                      phone: form.watch("phone") || "",
-                      totalPrice: form.watch("total"),
-                      products: form.watch("orderItems").map((i: any) => ({
-                        name: i.name,
-                        quantity: i.quantity,
-                      })),
-                      token: initialData.token,
-                      trackingCode: form.watch("shipping.trackingCode"),
+                  <Copy className="mr-2 h-4 w-4 text-purple-600" />
+                  <span>Copiar URL de la Orden</span>
+                </DropdownMenuItem>
+
+                <DropdownMenuItem
+                  disabled={
+                    copyingWompi ||
+                    form.watch("status") === OrderStatus.PAID ||
+                    form.watch("status") === OrderStatus.SENT ||
+                    initialData?.status === OrderStatus.PAID ||
+                    initialData?.status === OrderStatus.SENT ||
+                    Boolean(
+                      initialData?.payment?.method &&
+                        initialData.payment.method !== PaymentMethod.Wompi,
+                    )
+                  }
+                  onClick={async () => {
+                    const isClosed =
+                      form.watch("status") === OrderStatus.PAID ||
+                      form.watch("status") === OrderStatus.SENT ||
+                      initialData?.status === OrderStatus.PAID ||
+                      initialData?.status === OrderStatus.SENT;
+                    if (isClosed) {
+                      toast({
+                        title: "Orden Cerrada",
+                        description:
+                          "Esta orden ya está cerrada (Pagada o Enviada). No es necesario ni posible generar un nuevo link de pago.",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+
+                    const isOffline =
+                      initialData?.payment?.method &&
+                      initialData.payment.method !== PaymentMethod.Wompi;
+                    if (isOffline) {
+                      toast({
+                        title: "Pago por Transferencia",
+                        description:
+                          "Esta orden fue registrada para Pago por Transferencia Directa o Efectivo. Los links de pago Wompi solo aplican para pagos en línea.",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+
+                    try {
+                      setCopyingWompi(true);
+                      const response = await axios.post(
+                        `/api/${params.storeId}/checkout/${initialData.id}`,
+                      );
+                      if (response.data?.url) {
+                        navigator.clipboard.writeText(response.data.url);
+                        toast({
+                          description:
+                            "Link de pago Wompi copiado al portapapeles",
+                          variant: "success",
+                        });
+                      } else {
+                        throw new Error("No se pudo obtener el link de pago");
+                      }
+                    } catch (error) {
+                      toast({
+                        description: getErrorMessage(error),
+                        variant: "destructive",
+                      });
+                    } finally {
+                      setCopyingWompi(false);
+                    }
+                  }}
+                  className="cursor-pointer py-2"
+                >
+                  <CreditCard className="mr-2 h-4 w-4 text-emerald-600" />
+                  <span>
+                    {form.watch("status") === OrderStatus.PAID ||
+                    form.watch("status") === OrderStatus.SENT ||
+                    initialData?.status === OrderStatus.PAID ||
+                    initialData?.status === OrderStatus.SENT
+                      ? "Orden Cerrada (Sin Link Wompi)"
+                      : initialData?.payment?.method &&
+                          initialData.payment.method !== PaymentMethod.Wompi
+                        ? "Transferencia Directa (Sin Link Wompi)"
+                        : "Copiar Link de Pago Wompi"}
+                  </span>
+                </DropdownMenuItem>
+
+                <DropdownMenuItem
+                  disabled={
+                    pushingBold ||
+                    form.watch("status") === OrderStatus.PAID ||
+                    form.watch("status") === OrderStatus.SENT ||
+                    initialData?.status === OrderStatus.PAID ||
+                    initialData?.status === OrderStatus.SENT
+                  }
+                  onClick={async () => {
+                    if (!initialData?.id) return;
+                    try {
+                      setPushingBold(true);
+                      const res = await axios.post(
+                        `/api/${params.storeId}/bold/terminal/${initialData.id}`,
+                      );
+                      toast({
+                        title: "Notificación enviada",
+                        description:
+                          res.data?.message ||
+                          "¡Cobro enviado al Datáfono Bold! (Si la pantalla del equipo está ocupada, presiona Cancelar 'X' en el datáfono para liberar la cola).",
+                        variant: "success",
+                      });
+                    } catch (err) {
+                      toast({
+                        title: "Error Datáfono Bold",
+                        description: getErrorMessage(err),
+                        variant: "destructive",
+                      });
+                    } finally {
+                      setPushingBold(false);
+                    }
+                  }}
+                  className="cursor-pointer py-2"
+                >
+                  {pushingBold ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin text-emerald-600" />
+                  ) : (
+                    <Smartphone className="mr-2 h-4 w-4 text-emerald-600" />
+                  )}
+                  <span>
+                    {form.watch("status") === OrderStatus.PAID ||
+                    form.watch("status") === OrderStatus.SENT ||
+                    initialData?.status === OrderStatus.PAID ||
+                    initialData?.status === OrderStatus.SENT
+                      ? "Datáfono Bold (Orden Completada)"
+                      : "Cobrar en Datáfono Bold"}
+                  </span>
+                </DropdownMenuItem>
+
+                <DropdownMenuItem
+                  onClick={() => {
+                    if (!initialData?.id) return;
+                    const storeUrl =
+                      process.env.NEXT_PUBLIC_FRONTEND_STORE_URL ||
+                      "https://papeleriapdepapel.com";
+                    const url = `${storeUrl}/order/${initialData.id}?autoPay=true`;
+                    navigator.clipboard.writeText(url);
+                    toast({
+                      title: "Link de Pago Bold copiado",
+                      description: "Se ha copiado el enlace directo de pago.",
+                      variant: "success",
+                    });
+                  }}
+                  className="cursor-pointer py-2"
+                >
+                  <Link2 className="mr-2 h-4 w-4 text-emerald-600" />
+                  <span>Copiar Link de Pago Bold</span>
+                </DropdownMenuItem>
+
+                {initialData.token && (
+                  <DropdownMenuItem
+                    onClick={() => {
+                      const storeUrl =
+                        process.env.NEXT_PUBLIC_FRONTEND_STORE_URL ||
+                        "http://localhost:3001";
+                      const url = `${storeUrl}/quote/${initialData.token}`;
+                      navigator.clipboard.writeText(url);
+                      toast({ description: "Link copiado al portapapeles" });
                     }}
-                  />
+                    className="cursor-pointer py-2"
+                  >
+                    <Copy className="mr-2 h-4 w-4 text-blue-600" />
+                    <span>Copiar Link Cotización</span>
+                  </DropdownMenuItem>
                 )}
-            </>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
+
+          {initialData &&
+            form.watch("phone") &&
+            isValidPhoneNumber(form.watch("phone") || "") && (
+              <WhatsappButton
+                withText
+                variant="default"
+                className="bg-[#25D366] px-4 hover:bg-[#128C7E]"
+                order={{
+                  orderNumber: initialData.orderNumber,
+                  status: form.watch("status"),
+                  fullName: form.watch("fullName") || "Cliente",
+                  phone: form.watch("phone") || "",
+                  totalPrice: form.watch("total"),
+                  products: form.watch("orderItems").map((i: any) => ({
+                    name: i.name,
+                    quantity: i.quantity,
+                  })),
+                  token: initialData.token,
+                  trackingCode: form.watch("shipping.trackingCode"),
+                }}
+              />
+            )}
+
           {initialData && invoiceData && (
             <InvoiceDownloadButton data={invoiceData} disabled={loading} />
           )}
