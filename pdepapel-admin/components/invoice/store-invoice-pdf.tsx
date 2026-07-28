@@ -32,81 +32,103 @@ Font.register({
 const styles = StyleSheet.create({
   page: {
     fontFamily: "Inter",
-    fontSize: 10,
-    paddingTop: 30,
+    fontSize: 9.5,
+    paddingTop: 35,
     paddingLeft: 40,
     paddingRight: 40,
-    paddingBottom: 30,
+    paddingBottom: 40,
     lineHeight: 1.5,
     flexDirection: "column",
   },
   logo: {
-    width: 120,
-    height: 120,
+    width: 110,
+    height: 60,
     objectFit: "contain",
-    marginBottom: 10,
+    marginBottom: 6,
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 30,
+    marginBottom: 24,
     alignItems: "flex-start",
   },
   headerLeft: {
     flexDirection: "column",
-    width: "45%",
+    width: "48%",
   },
   headerRight: {
     flexDirection: "column",
     alignItems: "flex-end",
-    width: "50%",
+    width: "48%",
+  },
+  merchantName: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: "#be185d",
+    marginBottom: 2,
+  },
+  merchantInfo: {
+    fontSize: 9,
+    color: "#64748b",
   },
   title: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 700,
     color: "#be185d", // P de Papel Pink
-    marginBottom: 8,
+    marginBottom: 6,
+    letterSpacing: 0.5,
   },
   orderNumber: {
-    fontSize: 12,
-    color: "#475569",
-    marginBottom: 4,
+    fontFamily: "Courier",
+    fontSize: 11,
+    fontWeight: 700,
+    color: "#334155",
+    marginBottom: 6,
   },
   date: {
-    fontSize: 10,
+    fontSize: 9.5,
     color: "#64748b",
   },
   sectionTitle: {
-    fontSize: 12,
-    fontWeight: 600,
+    fontSize: 11,
+    fontWeight: 700,
     color: "#1e293b",
-    marginBottom: 8,
+    marginBottom: 6,
     borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
-    paddingBottom: 4,
+    borderBottomColor: "#cbd5e1",
+    paddingBottom: 3,
   },
   customerBlock: {
     flexDirection: "row",
     justifyContent: "space-between",
     backgroundColor: "#f8fafc",
-    padding: 15,
-    borderRadius: 8,
-    marginBottom: 30,
+    padding: 12,
+    borderRadius: 6,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: "#f1f5f9",
   },
   customerColumn: {
     flexDirection: "column",
     width: "48%",
   },
   label: {
-    fontSize: 9,
+    fontSize: 8.5,
     fontWeight: 600,
     color: "#64748b",
-    marginBottom: 2,
+    marginBottom: 1,
+    marginTop: 3,
   },
   value: {
-    fontSize: 10,
+    fontSize: 9.5,
     color: "#1e293b",
-    marginBottom: 6,
+    marginBottom: 3,
+  },
+  monoValue: {
+    fontFamily: "Courier",
+    fontSize: 9.5,
+    color: "#1e293b",
+    marginBottom: 3,
   },
   table: {
     width: "auto",
@@ -114,11 +136,11 @@ const styles = StyleSheet.create({
   },
   tableHeader: {
     flexDirection: "row",
-    backgroundColor: "#fdf2f8", // Very light pink
-    borderBottomWidth: 1,
+    backgroundColor: "#fdf2f8", // Light Pink Accent
+    borderBottomWidth: 1.5,
     borderBottomColor: "#fbcfe8",
     padding: 8,
-    fontWeight: 600,
+    fontWeight: 700,
     color: "#831843",
   },
   tableRow: {
@@ -126,11 +148,18 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#f1f5f9",
     padding: 8,
+    alignItems: "center",
   },
-  colProduct: { width: "45%" },
-  colQty: { width: "15%", textAlign: "center" },
-  colUnit: { width: "20%", textAlign: "right" },
-  colTotal: { width: "20%", textAlign: "right" },
+  colProduct: { width: "46%" },
+  colQty: { width: "12%", textAlign: "center", fontFamily: "Courier" },
+  colUnit: { width: "21%", textAlign: "right", fontFamily: "Courier" },
+  colTotal: { width: "21%", textAlign: "right", fontFamily: "Courier" },
+  skuText: {
+    fontFamily: "Courier",
+    fontSize: 8,
+    color: "#64748b",
+    marginTop: 2,
+  },
   summaryBlock: {
     flexDirection: "column",
     alignItems: "flex-end",
@@ -139,39 +168,43 @@ const styles = StyleSheet.create({
   summaryRow: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    width: "50%",
+    width: "45%",
     marginBottom: 4,
   },
   summaryLabel: {
-    width: "60%",
+    width: "55%",
     textAlign: "right",
     paddingRight: 10,
     color: "#475569",
+    fontSize: 9.5,
   },
   summaryValue: {
-    width: "40%",
+    fontFamily: "Courier",
+    width: "45%",
     textAlign: "right",
     color: "#1e293b",
+    fontSize: 9.5,
   },
   grandTotalRow: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    width: "50%",
+    width: "45%",
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 2,
     borderTopColor: "#fbcfe8",
   },
   grandTotalLabel: {
-    width: "60%",
+    width: "55%",
     textAlign: "right",
     paddingRight: 10,
     fontWeight: 700,
     color: "#be185d",
-    fontSize: 12,
+    fontSize: 11.5,
   },
   grandTotalValue: {
-    width: "40%",
+    fontFamily: "Courier-Bold",
+    width: "45%",
     textAlign: "right",
     fontWeight: 700,
     color: "#be185d",
@@ -179,15 +212,16 @@ const styles = StyleSheet.create({
   },
   footer: {
     position: "absolute",
-    bottom: 30,
+    bottom: 25,
     left: 40,
     right: 40,
     textAlign: "center",
-    color: "#94a3b8",
-    fontSize: 9,
+    color: "#64748b",
+    fontSize: 8.5,
     borderTopWidth: 1,
     borderTopColor: "#f1f5f9",
     paddingTop: 10,
+    lineHeight: 1.4,
   },
 });
 
@@ -198,6 +232,35 @@ const formatCurrency = (amount: number) => {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount);
+};
+
+const formatPaymentMethod = (method?: string) => {
+  if (!method) return "Pendiente";
+  switch (method.toUpperCase()) {
+    case "BANKTRANSFER":
+    case "BANK_TRANSFER":
+      return "Transferencia Bancaria (Bre-B / Bancolombia / Nequi)";
+    case "WOMPI":
+      return "Wompi (Tarjeta / Nequi / PSE)";
+    case "BOLD":
+      return "Bold (Datáfono / Link de Pago)";
+    case "COD":
+      return "Pago Contraentrega";
+    case "PAYU":
+      return "PayU Latam";
+    default:
+      return method;
+  }
+};
+
+const cleanProductName = (name: string) => {
+  if (!name) return "";
+  return name
+    .replace(/\s+S-P$/i, "")
+    .replace(/\s+S-L$/i, "")
+    .replace(/\s+N\/A$/i, "")
+    .replace(/\s+DEFAULT$/i, "")
+    .trim();
 };
 
 export interface InvoiceData {
@@ -230,14 +293,15 @@ export const StoreInvoicePDF = ({ data }: { data: InvoiceData }) => {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            {/* Direct fallback to png for react-pdf safety */}
             {/* eslint-disable-next-line jsx-a11y/alt-text */}
             <Image
               src="https://papeleriapdepapel.com/images/text-below-transparent-bg.png"
               style={styles.logo}
             />
-            <Text style={styles.label}>Papelería P de Papel</Text>
-            <Text style={styles.date}>NIT: 123456789-0 (Reemplazar NIT)</Text>
+            <Text style={styles.merchantName}>Papelería P de Papel</Text>
+            <Text style={styles.merchantInfo}>NIT: 1030579584-5</Text>
+            <Text style={styles.merchantInfo}>Medellín, Antioquia - Colombia</Text>
+            <Text style={styles.merchantInfo}>https://papeleriapdepapel.com</Text>
           </View>
           <View style={styles.headerRight}>
             <Text style={styles.title}>ORDEN DE COMPRA</Text>
@@ -250,18 +314,18 @@ export const StoreInvoicePDF = ({ data }: { data: InvoiceData }) => {
           </View>
         </View>
 
-        {/* Customer Info */}
+        {/* Customer & Shipping Info */}
         <View style={styles.customerBlock}>
           <View style={styles.customerColumn}>
             <Text style={styles.sectionTitle}>Facturado a</Text>
             <Text style={styles.value}>{data.customerName}</Text>
             <Text style={styles.label}>Doc / NIT:</Text>
-            <Text style={styles.value}>
+            <Text style={styles.monoValue}>
               {data.documentId || "Consumidor Final"}
             </Text>
             <Text style={styles.label}>Contacto:</Text>
             <Text style={styles.value}>{data.customerEmail}</Text>
-            <Text style={styles.value}>{data.customerPhone}</Text>
+            <Text style={styles.monoValue}>{data.customerPhone}</Text>
           </View>
           <View style={styles.customerColumn}>
             <Text style={styles.sectionTitle}>Datos de Envío</Text>
@@ -271,7 +335,7 @@ export const StoreInvoicePDF = ({ data }: { data: InvoiceData }) => {
             </Text>
             <Text style={styles.label}>Método de Pago:</Text>
             <Text style={styles.value}>
-              {data.paymentMethod || "Pendiente"}
+              {formatPaymentMethod(data.paymentMethod)}
             </Text>
           </View>
         </View>
@@ -289,12 +353,12 @@ export const StoreInvoicePDF = ({ data }: { data: InvoiceData }) => {
             <View style={styles.tableRow} key={index}>
               <View style={styles.colProduct}>
                 <Text
-                  style={{ fontSize: 10, color: "#1e293b", marginBottom: 2 }}
+                  style={{ fontSize: 9.5, color: "#1e293b", marginBottom: 2 }}
                 >
-                  {item.name}
+                  {cleanProductName(item.name)}
                 </Text>
                 {item.sku && (
-                  <Text style={{ fontSize: 8, color: "#94a3b8" }}>
+                  <Text style={styles.skuText}>
                     SKU: {item.sku}
                   </Text>
                 )}
@@ -343,10 +407,10 @@ export const StoreInvoicePDF = ({ data }: { data: InvoiceData }) => {
 
         {/* Footer */}
         <Text style={styles.footer}>
-          ¡Gracias por comprar en P de Papel! 📝{"\n"}
+          ¡Gracias por tu compra en Papelería P de Papel!{"\n"}
           Este documento es un recibo de compra interno y no representa una
           factura electrónica de venta con obligaciones tributarias.{"\n"}
-          Contáctanos: https://papeleriapdepapel.com | Ig: @pdepapelcol
+          Contáctanos: https://papeleriapdepapel.com | Instagram: @papeleria.pdepapel
         </Text>
       </Page>
     </Document>
