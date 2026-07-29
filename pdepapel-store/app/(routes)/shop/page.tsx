@@ -30,13 +30,15 @@ export async function generateMetadata({
     title = `Resultados para "${search}"`;
   } else if (categoryId) {
     const categories = await getCategories();
-    const category = categories.find((c) => c.id === categoryId);
+    const category = categories.find(
+      (c) => c.id === categoryId || c.slug === categoryId,
+    );
     if (category) {
       title = category.name;
     }
   } else if (typeId) {
     const types = await getTypes();
-    const type = types.find((t) => t.id === typeId);
+    const type = types.find((t) => t.id === typeId || t.slug === typeId);
     if (type) {
       title = type.name;
     }
@@ -173,7 +175,10 @@ async function ShopContentWrapper({
   ];
 
   if (searchParams.categoryId) {
-    const category = categories.find((c) => c.id === searchParams.categoryId);
+    const category = categories.find(
+      (c) =>
+        c.id === searchParams.categoryId || c.slug === searchParams.categoryId,
+    );
     if (category) {
       breadcrumbItems[0].isCurrent = false;
       breadcrumbItems.push({
@@ -182,7 +187,9 @@ async function ShopContentWrapper({
       });
     }
   } else if (searchParams.typeId) {
-    const type = types.find((t) => t.id === searchParams.typeId);
+    const type = types.find(
+      (t) => t.id === searchParams.typeId || t.slug === searchParams.typeId,
+    );
     if (type) {
       breadcrumbItems[0].isCurrent = false;
       breadcrumbItems.push({

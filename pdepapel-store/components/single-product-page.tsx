@@ -31,7 +31,7 @@ export const SingleProductPage: React.FC<SingleProductPageProps> = ({
   if (product.category) {
     breadcrumbItems.push({
       label: product.category.name,
-      href: `/shop?categoryId=${product.category.id}`,
+      href: `/shop?categoryId=${product.category.slug || product.category.id}`,
     });
   }
 

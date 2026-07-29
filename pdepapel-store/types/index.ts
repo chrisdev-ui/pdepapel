@@ -82,6 +82,7 @@ export interface Category {
   id: string;
   typeId: string;
   name: string;
+  slug?: string;
 }
 
 export interface Size {
