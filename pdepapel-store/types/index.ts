@@ -260,6 +260,7 @@ export interface ProductsResponse {
 
 export interface SearchResult {
   id: string;
+  slug?: string;
   name: string;
   price: string | number;
   minPrice?: number;

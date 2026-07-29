@@ -18,6 +18,7 @@ export const searchProducts = async (
       // Map Product[] to SearchResult[]
       return products.map((product) => ({
         id: product.id,
+        slug: product.slug || product.id,
         name: product.name,
         price: product.price,
         minPrice: product.minPrice,
