@@ -54,6 +54,7 @@ export async function GET(
       where: whereClause,
       select: {
         id: true,
+        slug: true,
         name: true,
         price: true,
         sku: true,

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs";
 import prismadb from "@/lib/prismadb";
+import { getProductsPrices } from "@/lib/discount-engine";
 import { verifyStoreOwner } from "@/lib/utils";
 
 export async function GET(
@@ -55,6 +56,7 @@ export async function GET(
       where: whereClause,
       select: {
         id: true,
+        slug: true,
         name: true,
         price: true,
         sku: true,
@@ -110,17 +112,6 @@ export async function GET(
     const hasMore = products.length > limit;
     const data = hasMore ? products.slice(0, limit) : products;
 
-    // We can also calculate discounted prices here if needed, but for selector listing usually base price is fine
-    // Or we can inject it. For speed, let's inject it if easy.
-    const { getProductsPrices } = await import("@/lib/discount-engine");
-    // Cast to any to satisfy type check for this utility if it expects full product
-    // ensure mapping happens correctly
-    // The utility likely expects full products.
-    // Let's rely on basic price for now or replicate the mapping.
-    
-    // NOTE: discount-engine expects specific fields. 
-    // Let's assume we return standard data and the frontend helps or we do it here.
-    // Doing it here is better for UI consistency.
     const pricesMap = await getProductsPrices(data as any[], params.storeId);
 
     const enrichedData = data.map(product => {

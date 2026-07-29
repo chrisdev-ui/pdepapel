@@ -1,4 +1,5 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { getProductsPrices } from "@/lib/discount-engine";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { NextRequest, NextResponse } from "next/server";
@@ -111,7 +112,6 @@ export async function GET(
       .map((id) => unsortedProducts.find((p) => p.id === id))
       .filter((p): p is NonNullable<typeof p> => p !== undefined);
 
-    const { getProductsPrices } = await import("@/lib/discount-engine");
     const pricesMap = await getProductsPrices(products, params.storeId);
 
     const processedResults = new Map<string, any>();
@@ -130,6 +130,7 @@ export async function GET(
 
           processedResults.set(groupId, {
             id: groupId,
+            slug: product.productGroup.slug || product.slug || groupId,
             name: product.productGroup.name,
             price: effectivePrice, // Representative price
             image: groupImage,
@@ -148,6 +149,7 @@ export async function GET(
 
           processedResults.set(product.id, {
             id: product.id,
+            slug: product.slug || product.id,
             name: product.name,
             price: effectivePrice,
             image: product.images[0],

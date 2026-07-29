@@ -1,5 +1,6 @@
 import { BATCH_SIZE } from "@/constants";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { getProductsPrices } from "@/lib/discount-engine";
 import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
@@ -333,7 +334,6 @@ export async function PATCH(
       }
 
       // Calculate discounted prices from active offers
-      const { getProductsPrices } = await import("@/lib/discount-engine");
       const pricesMap = await getProductsPrices(products, params.storeId);
 
       const itemsWithPrices = orderItems.map((item: any) => {

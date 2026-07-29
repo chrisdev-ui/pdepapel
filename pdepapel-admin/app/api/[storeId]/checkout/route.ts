@@ -10,7 +10,9 @@ import {
 import { NextResponse } from "next/server";
 import { env } from "@/lib/env.mjs";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { generateBoldCheckoutData } from "@/lib/bold";
 import { getColombiaDate } from "@/lib/date-utils";
+import { getProductsPrices } from "@/lib/discount-engine";
 import prismadb from "@/lib/prismadb";
 import {
   CACHE_HEADERS,
@@ -399,7 +401,6 @@ export async function POST(
     const productMap = new Map(products.map((p) => [p.id, p]));
 
     // Calculate discounted prices
-    const { getProductsPrices } = await import("@/lib/discount-engine");
     const discountedPricesMap = await getProductsPrices(
       products, // Use the validated products
       params.storeId,
@@ -683,7 +684,6 @@ export async function POST(
         `🔐 Generating ${payment.method} payment for order ${order.orderNumber}`,
       );
       if (payment.method === PaymentMethod.Bold) {
-        const { generateBoldCheckoutData } = await import("@/lib/bold");
         const boldData = generateBoldCheckoutData(order);
         console.log(
           `✅ Bold pre-signed payload generated for order ${order.orderNumber}`,

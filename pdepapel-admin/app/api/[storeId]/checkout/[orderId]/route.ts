@@ -1,5 +1,6 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { sendOrderEmail } from "@/lib/email";
+import { validateStockAvailability } from "@/lib/inventory";
 import prismadb from "@/lib/prismadb";
 import {
   CACHE_HEADERS,
@@ -93,7 +94,6 @@ export async function POST(
       }));
 
     if (stockValidationItems.length > 0) {
-      const { validateStockAvailability } = await import("@/lib/inventory");
       await validateStockAvailability(prismadb, stockValidationItems);
     }
 

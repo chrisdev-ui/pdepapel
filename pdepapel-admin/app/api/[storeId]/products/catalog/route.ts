@@ -1,5 +1,6 @@
 import { CAPSULAS_SORPRESA_ID, KITS_ID } from "@/constants";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { calculateDiscountedPrice } from "@/lib/discount-engine";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { NextResponse } from "next/server";
@@ -73,8 +74,6 @@ export async function GET(
     if (!store) {
       throw ErrorFactory.NotFound("La tienda no se encuentra");
     }
-
-    const { calculateDiscountedPrice } = await import("@/lib/discount-engine");
 
     const productsWithDiscounts = await Promise.all(
       products.map(async (product) => {
