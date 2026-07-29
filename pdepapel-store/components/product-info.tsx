@@ -139,7 +139,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
         onVariantChange(targetVariant);
         return;
       }
-      router.push(`/product/${targetVariant.id}`);
+      router.push(`/product/${targetVariant.slug || targetVariant.id}`);
     }
   };
 

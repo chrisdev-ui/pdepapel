@@ -102,7 +102,7 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
                   className="grid grid-cols-[80px_1fr] gap-2.5"
                 >
                   <Link
-                    href={`/product/${item.id}`}
+                    href={`/product/${item.slug || item.id}`}
                     className="relative block h-20 w-20"
                   >
                     <CldImage

@@ -31,7 +31,7 @@ export const CartItem: React.FC<CartItemProps> = ({ item }) => {
   return (
     <li className="flex border-b py-6">
       <div className="relative h-24 w-24 overflow-hidden rounded-md sm:h-48 sm:w-48">
-        <Link href={`/product/${item.id}`}>
+        <Link href={`/product/${item.slug || item.id}`}>
           <CldImage
             fill
             src={mainImage.url}
@@ -48,7 +48,7 @@ export const CartItem: React.FC<CartItemProps> = ({ item }) => {
         </div>
         <div className="relative pr-9 sm:grid sm:grid-cols-2 sm:gap-x-6 sm:pr-0">
           <div className="flex justify-between">
-            <Link href={`/product/${item.id}`}>
+            <Link href={`/product/${item.slug || item.id}`}>
               <p className="font-serif text-lg font-semibold hover:underline">
                 {item.name}
               </p>

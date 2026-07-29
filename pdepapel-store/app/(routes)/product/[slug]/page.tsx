@@ -1,5 +1,5 @@
 import { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Product as ProductSchema, WithContext } from "schema-dts";
 
 import { getProduct } from "@/actions/get-product";
@@ -9,14 +9,14 @@ import { BASE_URL } from "@/constants";
 
 interface ProductPageProps {
   params: {
-    productId: string;
+    slug: string;
   };
 }
 
 export async function generateMetadata({
   params,
 }: ProductPageProps): Promise<Metadata> {
-  const product = await getProduct(params.productId);
+  const product = await getProduct(params.slug);
 
   if (!product) {
     return {
@@ -29,6 +29,7 @@ export async function generateMetadata({
     };
   }
 
+  const canonicalSlug = product.slug || product.id;
   const images = product.images?.map((image) => image.url);
 
   const variantAttributes = [
@@ -49,12 +50,12 @@ export async function generateMetadata({
       product.description ??
       `Descubre ${product.name} en Papelería P de Papel. Este artículo kawaii/oficina es perfecto para añadir un toque especial a tu espacio. Detalles, especificaciones, y todo lo que necesitas saber para tomar la mejor decisión. Calidad y diseño se unen para ofrecerte lo mejor en papelería.`,
     alternates: {
-      canonical: `/product/${params.productId}`,
+      canonical: `/product/${canonicalSlug}`,
     },
     openGraph: {
       title: title,
       description: product.description,
-      url: `https://papeleriapdepapel.com/product/${params.productId}`,
+      url: `${BASE_URL}/product/${canonicalSlug}`,
       siteName: "Papelería P de Papel",
       images,
     },
@@ -71,9 +72,14 @@ export async function generateMetadata({
 export const revalidate = 60;
 
 export default async function ProductPage({ params }: ProductPageProps) {
-  const product = await getProduct(params.productId);
+  const product = await getProduct(params.slug);
 
   if (!product) return notFound();
+
+  // 301 Permanent Redirect if accessed via legacy UUID or non-canonical slug
+  if (product.slug && params.slug !== product.slug) {
+    redirect(`/product/${product.slug}`);
+  }
 
   const siblingsPromise = product.productGroupId
     ? getProducts({
@@ -83,7 +89,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
   const suggestedProductsPromise = getProducts({
     categoryId: product.category?.id,
-    excludeProducts: params.productId,
+    excludeProducts: product.id,
     groupBy: "parents",
     limit: 4,
   });
@@ -95,6 +101,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
   const siblings = siblingsResponse.products.map((variant) => ({
     id: variant.id,
+    slug: variant.slug,
     size: variant.size,
     color: variant.color,
     design: variant.design,
@@ -115,36 +122,26 @@ export default async function ProductPage({ params }: ProductPageProps) {
     },
     offers: {
       "@type": "Offer",
-      url: `${BASE_URL}/product/${product.id}`,
+      url: `${BASE_URL}/product/${product.slug || product.id}`,
       priceCurrency: "COP",
       price: product.price,
-      priceValidUntil: new Date(
-        new Date().setFullYear(new Date().getFullYear() + 1),
-      )
-        .toISOString()
-        .split("T")[0],
-      itemCondition: "https://schema.org/NewCondition",
       availability:
         product.stock > 0
           ? "https://schema.org/InStock"
           : "https://schema.org/OutOfStock",
-      seller: {
-        "@type": "Organization",
-        name: "Papelería P de Papel",
-      },
     },
   };
 
   return (
     <>
-      <SingleProductPage
-        product={product}
-        suggestedProducts={suggestedProducts}
-        siblings={siblings}
-      />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <SingleProductPage
+        product={product}
+        siblings={siblings}
+        suggestedProducts={suggestedProducts}
       />
     </>
   );

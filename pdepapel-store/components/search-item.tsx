@@ -5,6 +5,7 @@ import { Currency } from "./ui/currency";
 
 interface SearchItemProps {
   id: string;
+  slug?: string;
   image?: Image;
   name: string;
   price: number | string;
@@ -16,6 +17,7 @@ interface SearchItemProps {
 
 export const SearchItem: React.FC<SearchItemProps> = ({
   id,
+  slug,
   image,
   name,
   price,
@@ -27,7 +29,7 @@ export const SearchItem: React.FC<SearchItemProps> = ({
   return (
     <Link
       ref={innerRef}
-      href={`/product/${id}`}
+      href={`/product/${slug || id}`}
       className="grid grid-cols-[40px_1fr] gap-2.5 rounded p-1 hover:bg-blue-baby/50 hover:ring-1 hover:ring-slate-200"
       onClick={closeAll}
       onKeyDown={(e) => {

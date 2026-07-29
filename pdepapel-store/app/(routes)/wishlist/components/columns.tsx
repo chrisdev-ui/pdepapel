@@ -15,6 +15,7 @@ import { DeleteButton } from "./delete-button";
 
 export type WishlistColumn = {
   id: string;
+  slug?: string;
   imageUrl: string;
   name: string;
   price: string | number;
@@ -34,19 +35,18 @@ export const columns: ColumnDef<WishlistColumn>[] = [
     header: ({ table }) => (
       <Checkbox
         checked={
-          table.getIsSomePageRowsSelected()
-            ? "indeterminate"
-            : table.getIsAllPageRowsSelected()
+          table.getIsAllPageRowsSelected() ||
+          (table.getIsSomePageRowsSelected() && "indeterminate")
         }
         onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-        aria-label="Select all"
+        aria-label="Seleccionar todo"
       />
     ),
     cell: ({ row }) => (
       <Checkbox
         checked={row.getIsSelected()}
         onCheckedChange={(value) => row.toggleSelected(!!value)}
-        aria-label="Select row"
+        aria-label="Seleccionar fila"
       />
     ),
     enableSorting: false,
@@ -57,7 +57,7 @@ export const columns: ColumnDef<WishlistColumn>[] = [
     header: "",
     cell: ({ row }) => (
       <Link
-        href={`/product/${row.original.id}`}
+        href={`/product/${row.original.slug || row.original.id}`}
         className="relative block h-12 w-12 overflow-hidden rounded-md sm:h-24 sm:w-24"
       >
         <CldImage
@@ -78,7 +78,7 @@ export const columns: ColumnDef<WishlistColumn>[] = [
     ),
     cell: ({ row }) => (
       <Link
-        href={`/product/${row.original.id}`}
+        href={`/product/${row.original.slug || row.original.id}`}
         className="flex flex-col hover:underline"
       >
         <span className="font-medium">{row.original.name}</span>

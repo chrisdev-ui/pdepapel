@@ -23,6 +23,7 @@ export interface Type {
   id: string;
   categories: Category[];
   name: string;
+  slug?: string;
 }
 
 export interface KitComponent {
@@ -31,12 +32,14 @@ export interface KitComponent {
     name: string;
     images: Image[];
     sku: string;
+    slug?: string;
   };
   quantity: number;
 }
 
 export interface Product {
   id: string;
+  slug?: string;
   category: Category;
   name: string;
   description: string;
@@ -68,6 +71,7 @@ export interface Product {
 
 export interface ProductVariant {
   id: string;
+  slug?: string;
   size: Size;
   color: Color;
   design: Design;

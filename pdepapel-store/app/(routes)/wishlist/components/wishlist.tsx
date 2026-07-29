@@ -28,6 +28,7 @@ export function Wishlist() {
 
   const formattedItems: WishlistColumn[] = items?.map((item) => ({
     id: item.id,
+    slug: item.slug,
     imageUrl: item.images[0].url,
     name: item.name,
     price: item.price,

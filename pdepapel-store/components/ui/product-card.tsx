@@ -42,7 +42,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
     product?.images.find((image) => image.isMain) ?? product?.images[0];
 
   const handleClick = () => {
-    router.push(`/product/${product.id}`);
+    router.push(`/product/${product.slug || product.id}`);
   };
 
   const onPreview: MouseEventHandler<HTMLButtonElement> = (event) => {
