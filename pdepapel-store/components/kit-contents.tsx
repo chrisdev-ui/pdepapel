@@ -25,10 +25,7 @@ export const KitContents: React.FC<KitContentsProps> = ({ components }) => {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
           >
-            <Link
-              href={`/product/${item.component.slug || item.component.id}`}
-              className="block"
-            >
+            <Link href={`/product/${item.component.id}`} className="block">
               <Card className="group cursor-pointer overflow-hidden transition-shadow hover:shadow-lg">
                 <CardContent className="flex items-center gap-4 p-4">
                   <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-md border bg-gray-50">

@@ -139,7 +139,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
         onVariantChange(targetVariant);
         return;
       }
-      router.push(`/product/${targetVariant.slug || targetVariant.id}`);
+      router.push(`/product/${targetVariant.id}`);
     }
   };
 
@@ -182,7 +182,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
                   className="text-lg text-gray-500 line-through"
                 />
               </div>
-              <span className="font-quicksand font-semibold text-sm text-success">
+              <span className="font-quicksand text-sm font-semibold text-success">
                 Ahorra{" "}
                 {new Intl.NumberFormat("es-CO", {
                   style: "currency",
@@ -429,15 +429,15 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
       {/* 🔒 High-Trust Product Guarantee Banner */}
       <div className="mt-6 grid grid-cols-3 gap-2 rounded-2xl border border-purple-100 bg-purple-50/50 p-3 text-center text-xs font-semibold text-purple-950 dark:border-purple-900/40 dark:bg-purple-950/20 dark:text-purple-200">
         <div className="flex flex-col items-center gap-1">
-          <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+          <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />
           <span>Compra Segura</span>
         </div>
         <div className="flex flex-col items-center gap-1">
-          <Truck className="h-4 w-4 text-purple-600 shrink-0" />
+          <Truck className="h-4 w-4 shrink-0 text-purple-600" />
           <span>Envíos Colombia</span>
         </div>
         <div className="flex flex-col items-center gap-1">
-          <Award className="h-4 w-4 text-amber-500 shrink-0" />
+          <Award className="h-4 w-4 shrink-0 text-amber-500" />
           <span>Calidad P de Papel</span>
         </div>
       </div>
