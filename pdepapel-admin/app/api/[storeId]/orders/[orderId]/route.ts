@@ -340,14 +340,18 @@ export async function PATCH(
         if (item.productId) {
           const product = productMap.get(item.productId);
           const priceInfo = pricesMap.get(item.productId);
-          const effectivePrice = priceInfo?.price ?? product!.price;
+          // Priority: 1. Sent item.price (preserves historical order item price/custom admin price) -> 2. Active discount price -> 3. Base product price
+          const effectivePrice =
+            item.price !== undefined && item.price !== null
+              ? Number(item.price)
+              : (priceInfo?.price ?? product?.price ?? 0);
           return {
             product: { price: effectivePrice },
             quantity: item.quantity || 1,
-            // Snapshot fields from product
-            name: product!.name,
-            sku: product!.sku,
-            imageUrl: product!.images[0]?.url || "",
+            // Snapshot fields from product / item
+            name: item.name || product?.name || "Producto",
+            sku: item.sku || product?.sku || "N/A",
+            imageUrl: item.imageUrl || product?.images[0]?.url || "",
             isCustom: false,
             // CRITICAL: Preserve productId to maintain link to real product. Do not remove.
             productId: item.productId,
@@ -355,7 +359,7 @@ export async function PATCH(
         } else {
           // Manual Item
           return {
-            product: { price: item.price },
+            product: { price: Number(item.price || 0) },
             quantity: item.quantity || 1,
             name: item.name,
             sku: item.sku || "MANUAL",
@@ -381,24 +385,24 @@ export async function PATCH(
                 amount: order.coupon.amount,
               }
             : undefined,
-        shippingCost: shipping?.cost || 0,
+        shippingCost:
+          shipping?.cost !== undefined
+            ? Number(shipping.cost)
+            : Number(order.shipping?.cost || 0),
       });
 
-      // Use tolerance of 1 COP (appropriate for Colombian Peso which has no decimal places)
+      // Log informative log if sent totals differ from recalculated totals,
+      // but do NOT throw error — store owner admin updates are authoritative.
       const PRICE_TOLERANCE = 1;
       const totalDiff = Math.abs(totals.total - total);
       const subtotalDiff = Math.abs(totals.subtotal - subtotal);
 
       if (totalDiff > PRICE_TOLERANCE || subtotalDiff > PRICE_TOLERANCE) {
-        console.error("[ORDER_PATCH] Price mismatch detected:", {
+        console.warn("[ORDER_PATCH] Admin adjusted prices/totals:", {
           sent: { subtotal, total, shippingCost: shipping?.cost || 0 },
           calculated: totals,
           differences: { subtotalDiff, totalDiff },
         });
-
-        throw ErrorFactory.InvalidRequest(
-          "Los montos calculados no coinciden con los enviados",
-        );
       }
 
       // CRITICAL FIX: Validate stock for PAID orders when changing items
