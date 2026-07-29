@@ -238,7 +238,7 @@ export async function GET(
     const itemsPerPage =
       limit || Number(searchParams.get("itemsPerPage")) || 52;
     const typeId = searchParams.get("typeId")?.split(",") || [];
-    const categoryId = searchParams.get("categoryId")?.split(",") || [];
+    let categoryId = searchParams.get("categoryId")?.split(",") || [];
     const colorId = searchParams.get("colorId")?.split(",") || [];
     const sizeId = searchParams.get("sizeId")?.split(",") || [];
     const designId = searchParams.get("designId")?.split(",") || [];
@@ -308,12 +308,34 @@ export async function GET(
       console.error("Redis get error:", error);
     }
 
-    // Resolve categories from Type if needed
+    // Resolve categoryId if provided (supports both UUIDs and Slugs)
+    if (categoryId.length > 0) {
+      const resolvedCategories = await prismadb.category.findMany({
+        where: {
+          storeId: params.storeId,
+          OR: [{ id: { in: categoryId } }, { slug: { in: categoryId } }],
+        },
+        select: { id: true },
+      });
+      if (resolvedCategories.length > 0) {
+        categoryId = resolvedCategories.map((c: { id: string }) => c.id);
+      }
+    }
+
+    // Resolve categories from Type if needed (supports both UUIDs and Slugs)
     let categoriesIds: string[] = [];
     if (typeId.length > 0) {
+      const resolvedTypes = await prismadb.type.findMany({
+        where: {
+          storeId: params.storeId,
+          OR: [{ id: { in: typeId } }, { slug: { in: typeId } }],
+        },
+        select: { id: true },
+      });
+      const actualTypeIds = resolvedTypes.map((t: { id: string }) => t.id);
       const categoriesForType = await prismadb.category.findMany({
         where: {
-          typeId: { in: typeId },
+          typeId: { in: actualTypeIds.length > 0 ? actualTypeIds : typeId },
           storeId: params.storeId,
         },
         select: { id: true },
