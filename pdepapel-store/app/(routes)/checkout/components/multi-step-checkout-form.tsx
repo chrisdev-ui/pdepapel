@@ -814,7 +814,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                   )}
                 >
                   <Link
-                    href={`/product/${item.id}`}
+                    href={`/product/${item.slug || item.id}`}
                     className="relative h-20 w-20"
                   >
                     <CldImage

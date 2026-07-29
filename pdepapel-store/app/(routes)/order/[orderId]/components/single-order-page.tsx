@@ -947,7 +947,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                           <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100 shadow-md">
                             {imageUrl ? (
                               product ? (
-                                <Link href={`/product/${product.id}`}>
+                                <Link href={`/product/${product.slug || product.id}`}>
                                   <CldImage
                                     src={imageUrl}
                                     alt={name}
@@ -978,7 +978,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                               <h3 className="text-lg font-bold leading-tight">
                                 {product ? (
                                   <Link
-                                    href={`/product/${product.id}`}
+                                    href={`/product/${product.slug || product.id}`}
                                     className="hover:underline"
                                   >
                                     {name}
