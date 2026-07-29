@@ -13,70 +13,96 @@ const db = new PrismaClient({
 
 async function main() {
   console.log(
-    `🚀 Starting slug backfill for Database (${process.env.DATABASE_URL ? "Production" : "Local"})...`,
+    `🚀 Starting 100% Raw SQL slug backfill for Database (${process.env.DATABASE_URL ? "Production" : "Local"})...`,
   );
 
   // 1. Backfill Types
-  const types = await db.type.findMany({
-    where: { slug: "" },
-  });
-  console.log(`Found ${types.length} types to backfill...`);
+  const types: any[] = await db.$queryRaw`SELECT id, name FROM Type WHERE slug IS NULL OR slug = ''`;
   for (const t of types) {
     const s = slugify(t.name) || t.id.slice(0, 8);
-    await db.type.update({ where: { id: t.id }, data: { slug: s } });
+    await db.$executeRaw`UPDATE Type SET slug = ${s} WHERE id = ${t.id}`;
   }
 
   // 2. Backfill Categories
-  const categories = await db.category.findMany({
-    where: { slug: "" },
-  });
-  console.log(`Found ${categories.length} categories to backfill...`);
+  const categories: any[] = await db.$queryRaw`SELECT id, name FROM Category WHERE slug IS NULL OR slug = ''`;
   for (const c of categories) {
     const s = slugify(c.name) || c.id.slice(0, 8);
-    await db.category.update({ where: { id: c.id }, data: { slug: s } });
+    await db.$executeRaw`UPDATE Category SET slug = ${s} WHERE id = ${c.id}`;
   }
 
   // 3. Backfill ProductGroups
-  const groups = await db.productGroup.findMany({
-    where: { slug: "" },
-  });
-  console.log(`Found ${groups.length} product groups to backfill...`);
+  const groups: any[] = await db.$queryRaw`SELECT id, name FROM ProductGroup WHERE slug IS NULL OR slug = ''`;
   for (const g of groups) {
     const s = slugify(g.name) || g.id.slice(0, 8);
-    await db.productGroup.update({
-      where: { id: g.id },
-      data: { slug: s },
-    });
+    await db.$executeRaw`UPDATE ProductGroup SET slug = ${s} WHERE id = ${g.id}`;
   }
 
-  // 4. Backfill Products
-  const products = await db.product.findMany({
-    where: { slug: "" },
-    include: { color: true, design: true, size: true },
-  });
-  console.log(`Found ${products.length} products to backfill...`);
+  // 4. Load ALL existing non-empty slugs to prevent collisions
+  const existingSlugs = new Set<string>();
+  const populated: any[] = await db.$queryRaw`SELECT slug FROM Product WHERE slug IS NOT NULL AND slug != ''`;
+  populated.forEach((p) => existingSlugs.add(p.slug));
 
-  const slugCount: Record<string, number> = {};
+  let [emptyCountRes]: any = await db.$queryRaw`SELECT COUNT(*) as count FROM Product WHERE slug IS NULL OR slug = ''`;
+  let remaining = Number(emptyCountRes.count);
 
-  for (const p of products) {
-    let baseSlug = generateProductSlug(p);
-    if (!baseSlug) baseSlug = slugify(p.name) || `prod-${p.id.slice(0, 8)}`;
+  while (remaining > 0) {
+    console.log(`Remaining products without slug: ${remaining}... Processing next batch...`);
+    const unpopulated: any[] = await db.$queryRaw`
+      SELECT 
+        p.id, 
+        p.name, 
+        c.name as colorName, 
+        d.name as designName, 
+        s.name as sizeName 
+      FROM Product p
+      LEFT JOIN Color c ON p.colorId = c.id
+      LEFT JOIN Design d ON p.designId = d.id
+      LEFT JOIN Size s ON p.sizeId = s.id
+      WHERE p.slug IS NULL OR p.slug = ''
+      LIMIT 100
+    `;
 
-    let uniqueSlug = baseSlug;
-    if (slugCount[baseSlug]) {
-      slugCount[baseSlug] += 1;
-      uniqueSlug = `${baseSlug}-${slugCount[baseSlug]}`;
-    } else {
-      slugCount[baseSlug] = 1;
+    if (unpopulated.length === 0) break;
+
+    for (const p of unpopulated) {
+      const colorObj = p.colorName ? { name: p.colorName } : undefined;
+      const designObj = p.designName ? { name: p.designName } : undefined;
+      const sizeObj = p.sizeName ? { name: p.sizeName } : undefined;
+
+      let baseSlug = "";
+      try {
+        baseSlug = generateProductSlug({
+          name: p.name,
+          color: colorObj,
+          design: designObj,
+          size: sizeObj,
+        });
+      } catch (e) {
+        baseSlug = "";
+      }
+
+      if (!baseSlug) baseSlug = slugify(p.name) || `prod-${p.id.slice(0, 8)}`;
+
+      let uniqueSlug = baseSlug;
+      let counter = 1;
+
+      while (existingSlugs.has(uniqueSlug)) {
+        counter++;
+        uniqueSlug = `${baseSlug}-${counter}`;
+      }
+
+      existingSlugs.add(uniqueSlug);
+
+      await db.$executeRaw`UPDATE Product SET slug = ${uniqueSlug} WHERE id = ${p.id}`;
     }
 
-    await db.product.update({
-      where: { id: p.id },
-      data: { slug: uniqueSlug },
-    });
+    [emptyCountRes] = await db.$queryRaw`SELECT COUNT(*) as count FROM Product WHERE slug IS NULL OR slug = ''`;
+    remaining = Number(emptyCountRes.count);
   }
 
-  console.log("✅ Backfill completed successfully!");
+  console.log(
+    `🎉 100% COMPLETE! Remaining products without slug: ${remaining}`,
+  );
 }
 
 main()
