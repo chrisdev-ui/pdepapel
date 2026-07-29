@@ -21,8 +21,11 @@ export async function GET(
     if (!params.productId)
       throw ErrorFactory.InvalidRequest("El ID del producto es requerido");
 
-    const product = await prismadb.product.findUnique({
-      where: { id: params.productId },
+    const product = await prismadb.product.findFirst({
+      where: {
+        storeId: params.storeId,
+        OR: [{ id: params.productId }, { slug: params.productId }],
+      },
       include: {
         images: true,
         category: true,

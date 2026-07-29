@@ -146,9 +146,25 @@ export async function POST(
       );
     }
 
+    const { generateProductSlug } = await import("@/lib/slugify");
+    let baseSlug = generateProductSlug({ name, color, design, size });
+    if (!baseSlug) baseSlug = "producto";
+
+    let uniqueSlug = baseSlug;
+    let count = 1;
+    while (
+      await prismadb.product.findFirst({
+        where: { storeId: params.storeId, slug: uniqueSlug },
+      })
+    ) {
+      count++;
+      uniqueSlug = `${baseSlug}-${count}`;
+    }
+
     const product = await prismadb.product.create({
       data: {
         name,
+        slug: uniqueSlug,
         price,
         acqPrice,
         description,

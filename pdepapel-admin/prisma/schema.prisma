@@ -154,12 +154,14 @@ model Type {
   id         String     @id @default(uuid())
   storeId    String
   name       String
+  slug       String     @default("")
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
   store      Store      @relation("StoreToType", fields: [storeId], references: [id])
   categories Category[]
 
   @@index([storeId])
+  @@index([storeId, slug])
 }
 
 model Category {
@@ -167,6 +169,7 @@ model Category {
   storeId   String
   typeId    String
   name      String
+  slug      String          @default("")
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
   store     Store           @relation("StoreToCategory", fields: [storeId], references: [id])
@@ -176,6 +179,7 @@ model Category {
 
   @@index([storeId])
   @@index([typeId])
+  @@index([storeId, slug])
 }
 
 model Size {
@@ -222,6 +226,7 @@ model ProductGroup {
   storeId     String
   store       Store               @relation("StoreToProductGroup", fields: [storeId], references: [id])
   name        String
+  slug        String              @default("")
   description String              @db.Text
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
@@ -230,6 +235,7 @@ model ProductGroup {
   offers      OfferProductGroup[]
 
   @@index([storeId])
+  @@index([storeId, slug])
   @@index([createdAt])
   @@fulltext([name])
   @@fulltext([name, description])
@@ -240,6 +246,7 @@ model Product {
   storeId            String
   categoryId         String
   name               String
+  slug               String              @default("")
   description        String              @db.Text
   stock              Int                 @default(0)
   price              Float               @default(0)
@@ -279,6 +286,8 @@ model Product {
   abcClassification String? // "A", "B", "C" or null
 
   @@index([storeId])
+  @@index([slug])
+  @@index([storeId, slug])
   @@index([categoryId])
   @@index([sizeId])
   @@index([colorId])
