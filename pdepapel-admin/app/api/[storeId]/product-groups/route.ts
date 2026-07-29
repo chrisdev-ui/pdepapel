@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs";
 
 import prismadb from "@/lib/prismadb";
+import { generateProductSlug, slugify } from "@/lib/slugify";
 import { verifyStoreOwner } from "@/lib/utils";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 
@@ -63,6 +64,7 @@ export async function POST(
         data: {
           storeId: params.storeId,
           name,
+          slug: slugify(name),
           description: description || "",
           images: {
             createMany: {
@@ -90,6 +92,22 @@ export async function POST(
             return;
           }
 
+          const [colorObj, designObj, sizeObj] = await Promise.all([
+            tx.color.findUnique({ where: { id: colorId } }),
+            tx.design.findUnique({ where: { id: designId } }),
+            tx.size.findUnique({ where: { id: sizeId } }),
+          ]);
+
+          const variantName = variant.name || name;
+          let variantSlug = generateProductSlug({
+            name: variantName,
+            color: colorObj,
+            design: designObj,
+            size: sizeObj,
+          });
+          if (!variantSlug)
+            variantSlug = slugify(variantName) || `variant-${Date.now()}`;
+
           // Determine Applicable Images
           let applicableImages: { url: string }[] = [];
 
@@ -108,8 +126,17 @@ export async function POST(
                 return colorId === cId && designId === dId;
               }
 
-              // Single Attribute Match (Color or Design)
-              return mapping.scope === colorId || mapping.scope === designId;
+              if (mapping.scope.startsWith("COLOR|")) {
+                const [, cId] = mapping.scope.split("|");
+                return colorId === cId;
+              }
+
+              if (mapping.scope.startsWith("DESIGN|")) {
+                const [, dId] = mapping.scope.split("|");
+                return designId === dId;
+              }
+
+              return true;
             });
           }
 
@@ -120,7 +147,9 @@ export async function POST(
           const finalAcqPrice =
             variant.acqPrice !== undefined
               ? parseFloat(variant.acqPrice)
-              : parseFloat(effectiveDefaultCost || "0");
+              : effectiveDefaultCost
+                ? parseFloat(effectiveDefaultCost)
+                : null;
           const finalStock =
             variant.stock !== undefined
               ? parseInt(variant.stock)
@@ -132,7 +161,8 @@ export async function POST(
             storeId: params.storeId,
             productGroupId: group.id,
             categoryId,
-            name: variant.name || name, // Fallback to group name if variant name missing
+            name: variantName,
+            slug: variantSlug,
             sku: variant.sku,
             description: variant.description || description || "",
             price: finalPrice,

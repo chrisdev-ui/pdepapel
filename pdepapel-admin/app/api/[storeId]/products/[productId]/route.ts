@@ -9,6 +9,7 @@ import {
   generateRandomSKU,
 } from "@/lib/utils";
 import { generateSemanticSKU } from "@/lib/variant-generator";
+import { generateProductSlug } from "@/lib/slugify";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
@@ -158,23 +159,48 @@ export async function PATCH(
         `El Producto ${params.productId} no existe en esta tienda`,
       );
 
+    const [categoryObj, designObj, colorObj, sizeObj] = await Promise.all([
+      prismadb.category.findUnique({ where: { id: categoryId } }),
+      prismadb.design.findUnique({ where: { id: designId } }),
+      prismadb.color.findUnique({ where: { id: colorId } }),
+      prismadb.size.findUnique({ where: { id: sizeId } }),
+    ]);
+
     // SKU Regeneration for Manual Items
     let newSku: string | undefined = undefined;
     if (productToUpdate.sku.startsWith("MAN-")) {
-      const [category, design, color, size] = await Promise.all([
-        prismadb.category.findUnique({ where: { id: categoryId } }),
-        prismadb.design.findUnique({ where: { id: designId } }),
-        prismadb.color.findUnique({ where: { id: colorId } }),
-        prismadb.size.findUnique({ where: { id: sizeId } }),
-      ]);
-
-      if (category && design && color && size) {
+      if (categoryObj && designObj && colorObj && sizeObj) {
         newSku = generateSemanticSKU(
-          category.name,
-          design.name,
-          color.name,
-          size.value || size.name,
+          categoryObj.name,
+          designObj.name,
+          colorObj.name,
+          sizeObj.value || sizeObj.name,
         );
+      }
+    }
+
+    let updatedSlug = generateProductSlug({
+      name,
+      color: colorObj,
+      design: designObj,
+      size: sizeObj,
+    });
+    if (!updatedSlug) updatedSlug = "producto";
+
+    let uniqueSlug = updatedSlug;
+    if (uniqueSlug !== productToUpdate.slug) {
+      let count = 1;
+      while (
+        await prismadb.product.findFirst({
+          where: {
+            storeId: params.storeId,
+            slug: uniqueSlug,
+            NOT: { id: params.productId },
+          },
+        })
+      ) {
+        count++;
+        uniqueSlug = `${updatedSlug}-${count}`;
       }
     }
 
@@ -211,6 +237,7 @@ export async function PATCH(
         where: { id: params.productId },
         data: {
           name,
+          slug: uniqueSlug,
           ...(newSku && { sku: newSku }),
           price,
           acqPrice,

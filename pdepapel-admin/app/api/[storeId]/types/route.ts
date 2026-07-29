@@ -1,5 +1,6 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
+import { slugify } from "@/lib/slugify";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextRequest, NextResponse } from "next/server";
@@ -40,6 +41,7 @@ export async function POST(
     const type = await prismadb.type.create({
       data: {
         name: name.trim(),
+        slug: slugify(name.trim()),
         storeId: params.storeId,
       },
     });

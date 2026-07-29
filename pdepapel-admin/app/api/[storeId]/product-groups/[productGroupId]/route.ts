@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs";
 
 import prismadb from "@/lib/prismadb";
-
+import { generateProductSlug, slugify } from "@/lib/slugify";
 import {
   CACHE_HEADERS,
   getPublicIdFromCloudinaryUrl,
@@ -30,9 +30,10 @@ export async function GET(
       throw ErrorFactory.InvalidRequest("Product Group ID is required");
     }
 
-    const productGroup = await prismadb.productGroup.findUnique({
+    const productGroup = await prismadb.productGroup.findFirst({
       where: {
-        id: params.productGroupId,
+        storeId: params.storeId,
+        OR: [{ id: params.productGroupId }, { slug: params.productGroupId }],
       },
       include: {
         images: true,
@@ -99,7 +100,7 @@ export async function PATCH(
       // 1. Update Group Details
       const group = await tx.productGroup.update({
         where: { id: params.productGroupId },
-        data: { name, description },
+        data: { name, slug: slugify(name), description },
       });
 
       // Prisma 6: explicit image replacement for optional relations
@@ -158,6 +159,22 @@ export async function PATCH(
           const colorId = variant.color?.id || variant.colorId;
           const designId = variant.design?.id || variant.designId;
 
+          const [colorObj, designObj, sizeObj] = await Promise.all([
+            tx.color.findUnique({ where: { id: colorId } }),
+            tx.design.findUnique({ where: { id: designId } }),
+            tx.size.findUnique({ where: { id: sizeId } }),
+          ]);
+
+          const variantName = variant.name || name;
+          let variantSlug = generateProductSlug({
+            name: variantName,
+            color: colorObj,
+            design: designObj,
+            size: sizeObj,
+          });
+          if (!variantSlug)
+            variantSlug = slugify(variantName) || `variant-${Date.now()}`;
+
           // Determine Image Logic
           let applicableImages: { url: string }[] = [];
 
@@ -201,7 +218,8 @@ export async function PATCH(
             sizeId,
             colorId,
             designId,
-            name: variant.name || name,
+            name: variantName,
+            slug: variantSlug,
             sku: variant.sku,
             description: variant.description || description || "",
             price: finalPrice,

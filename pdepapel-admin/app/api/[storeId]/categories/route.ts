@@ -1,5 +1,6 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
+import { slugify } from "@/lib/slugify";
 import {
   CACHE_HEADERS,
   parseErrorDetails,
@@ -35,10 +36,16 @@ export async function POST(
       );
 
     const category = await prismadb.category.create({
-      data: { name, typeId, storeId: params.storeId },
+      data: {
+        name,
+        slug: slugify(name),
+        typeId,
+        storeId: params.storeId,
+      },
       select: {
         id: true,
         name: true,
+        slug: true,
       },
     });
 
@@ -62,6 +69,7 @@ export async function GET(
       select: {
         id: true,
         name: true,
+        slug: true,
         typeId: true,
       },
     });

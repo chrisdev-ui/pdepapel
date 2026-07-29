@@ -1,5 +1,6 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
+import { slugify } from "@/lib/slugify";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
@@ -15,11 +16,15 @@ export async function GET(
     if (!params.categoryId)
       throw ErrorFactory.InvalidRequest("Se requiere un ID de sub-categoría");
 
-    const category = await prismadb.category.findUnique({
-      where: { id: params.categoryId, storeId: params.storeId },
+    const category = await prismadb.category.findFirst({
+      where: {
+        storeId: params.storeId,
+        OR: [{ id: params.categoryId }, { slug: params.categoryId }],
+      },
       select: {
         id: true,
         name: true,
+        slug: true,
         typeId: true,
       },
     });
@@ -81,11 +86,13 @@ export async function PATCH(
         where: { id: params.categoryId, storeId: params.storeId },
         data: {
           name,
+          slug: slugify(name),
           typeId,
         },
         select: {
           id: true,
           name: true,
+          slug: true,
           typeId: true,
         },
       });

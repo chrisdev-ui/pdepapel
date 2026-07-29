@@ -1,5 +1,6 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
+import { slugify } from "@/lib/slugify";
 import {
   CACHE_HEADERS,
   parseErrorDetails,
@@ -20,8 +21,11 @@ export async function GET(
       throw ErrorFactory.InvalidRequest("El ID de la categoría es requerido");
     }
 
-    const type = await prismadb.type.findUnique({
-      where: { id: params.typeId, storeId: params.storeId },
+    const type = await prismadb.type.findFirst({
+      where: {
+        storeId: params.storeId,
+        OR: [{ id: params.typeId }, { slug: params.typeId }],
+      },
     });
 
     return NextResponse.json(type, {
@@ -65,7 +69,7 @@ export async function PATCH(
     });
 
     if (!existingType) {
-      throw ErrorFactory.NotFound(
+      throw ErrorFactory.Conflict(
         "Categoría no encontrada o no pertenece a esta tienda",
       );
     }
@@ -90,6 +94,7 @@ export async function PATCH(
       },
       data: {
         name: name.trim(),
+        slug: slugify(name.trim()),
       },
     });
 

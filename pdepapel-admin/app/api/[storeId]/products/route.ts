@@ -21,7 +21,6 @@ import {
   verifyStoreOwner,
 } from "@/lib/utils";
 import { generateSemanticSKU } from "@/lib/variant-generator";
-import { generateProductSlug } from "@/lib/slugify";
 
 import { getActiveOffers, getProductsPrices } from "@/lib/discount-engine";
 import { auth } from "@clerk/nextjs";
@@ -147,24 +146,9 @@ export async function POST(
       );
     }
 
-    let baseSlug = generateProductSlug({ name, color, design, size });
-    if (!baseSlug) baseSlug = "producto";
-
-    let uniqueSlug = baseSlug;
-    let count = 1;
-    while (
-      await prismadb.product.findFirst({
-        where: { storeId: params.storeId, slug: uniqueSlug },
-      })
-    ) {
-      count++;
-      uniqueSlug = `${baseSlug}-${count}`;
-    }
-
     const product = await prismadb.product.create({
       data: {
         name,
-        slug: uniqueSlug,
         price,
         acqPrice,
         description,
@@ -300,7 +284,7 @@ export async function GET(
       groupBy,
       productGroupId,
       isOnSale, // Include in cache key
-      v: "3", // Force cache invalidation for slug integration
+      v: "2", // Force cache invalidation for kit fix
     })}`;
 
     // Try to get from Redis cache
@@ -422,7 +406,6 @@ export async function GET(
 
         return {
           id: item.id,
-          slug: item.slug || item.id,
           name: item.name,
           price: effectivePrice,
           originalPrice: Number(item.price),
@@ -598,7 +581,6 @@ export async function GET(
         const maxP = prices.length ? Math.max(...prices) : 0;
         return {
           id: g.products[0]?.id || g.id,
-          slug: g.slug || g.products[0]?.slug || g.id,
           productGroupId: g.id,
           name: g.name,
           description: g.description,
@@ -622,7 +604,6 @@ export async function GET(
       const transformedProducts: UnifiedProduct[] = allStandaloneProducts.map(
         (p: any) => ({
           id: p.id,
-          slug: p.slug || p.id,
           productGroupId: null,
           name: p.name,
           description: p.description,
