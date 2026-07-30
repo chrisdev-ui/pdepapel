@@ -131,6 +131,14 @@ export async function POST(
       createdBy, // Optional admin user ID
     } = body;
 
+    if (
+      !isStoreOwner &&
+      status &&
+      ![OrderStatus.CREATED, OrderStatus.PENDING].includes(status)
+    ) {
+      throw ErrorFactory.Unauthorized();
+    }
+
     if (!orderItems || orderItems.length === 0) {
       throw ErrorFactory.InvalidRequest(
         "La orden debe tener al menos un producto",

@@ -43,6 +43,12 @@ export async function POST(
     if (!order)
       throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
 
+    if (order.payment?.method !== PaymentMethod.Bold) {
+      throw ErrorFactory.InvalidRequest(
+        "Esta orden no está configurada para pago con Bold.",
+      );
+    }
+
     if (
       order.status === OrderStatus.PAID ||
       order.status === OrderStatus.SENT

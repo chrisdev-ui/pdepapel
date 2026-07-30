@@ -18,6 +18,7 @@ interface AdminCartItemProps {
   onUpdateQuantity: (quantity: number) => void;
   onUpdateNotes?: (notes: string) => void;
   onConvert?: () => void;
+  hideStockWarning?: boolean;
 }
 
 export const AdminCartItem: React.FC<AdminCartItemProps> = ({
@@ -26,6 +27,7 @@ export const AdminCartItem: React.FC<AdminCartItemProps> = ({
   onUpdateQuantity,
   onUpdateNotes,
   onConvert,
+  hideStockWarning,
 }) => {
   const mainImage = item.images?.[0]?.url || "/placeholder.png";
 
@@ -104,12 +106,12 @@ export const AdminCartItem: React.FC<AdminCartItemProps> = ({
             </div>
           </div>
 
-          {item.stock < 10 && (
+          {!hideStockWarning && item.stock < 10 && (
             <p className="mt-2 text-xs text-red-500">
               ¡Solo quedan {item.stock} unidades!
             </p>
           )}
-          {item.quantity > item.stock && (
+          {!hideStockWarning && item.quantity > item.stock && (
             <p className="mt-2 text-xs font-bold text-red-600">
               Advertencia: La cantidad excede el stock disponible ({item.stock}
               ).

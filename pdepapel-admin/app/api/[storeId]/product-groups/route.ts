@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs";
 
 import prismadb from "@/lib/prismadb";
 import { generateProductSlug, slugify } from "@/lib/slugify";
+import { synchronizeProductGroupSlugs } from "@/lib/product-slugs";
 import { verifyStoreOwner } from "@/lib/utils";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 
@@ -104,6 +105,7 @@ export async function POST(
             color: colorObj,
             design: designObj,
             size: sizeObj,
+            includeVariantAttributes: variantsPayload.length > 1,
           });
           if (!variantSlug)
             variantSlug = slugify(variantName) || `variant-${Date.now()}`;
@@ -239,6 +241,8 @@ export async function POST(
           }
         }),
       );
+
+      await synchronizeProductGroupSlugs(tx, params.storeId, group.id);
 
       // Execute Initial Movements
       if (initialMovements.length > 0) {

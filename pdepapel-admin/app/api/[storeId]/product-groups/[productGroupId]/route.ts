@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs";
 
 import prismadb from "@/lib/prismadb";
 import { generateProductSlug, slugify } from "@/lib/slugify";
+import { synchronizeProductGroupSlugs } from "@/lib/product-slugs";
 import {
   CACHE_HEADERS,
   getPublicIdFromCloudinaryUrl,
@@ -171,6 +172,7 @@ export async function PATCH(
             color: colorObj,
             design: designObj,
             size: sizeObj,
+            includeVariantAttributes: variantsPayload.length > 1,
           });
           if (!variantSlug)
             variantSlug = slugify(variantName) || `variant-${Date.now()}`;
@@ -299,6 +301,12 @@ export async function PATCH(
             }
           }
         }),
+      );
+
+      await synchronizeProductGroupSlugs(
+        tx,
+        params.storeId,
+        params.productGroupId,
       );
 
       // Execute Initial Movements for new variants

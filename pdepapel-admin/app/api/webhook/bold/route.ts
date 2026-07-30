@@ -98,6 +98,15 @@ async function processBoldPayment(transaction: any, targetStatus: OrderStatus) {
     );
   }
 
+  if (order.payment?.method !== PaymentMethod.Bold) {
+    return NextResponse.json(
+      {
+        error: `La orden ${order.orderNumber} no está configurada para pago con Bold`,
+      },
+      { status: 400 },
+    );
+  }
+
   // Idempotency Guard: If order is already PAID and event is SALE_APPROVED, skip processing
   if (order.status === OrderStatus.PAID && targetStatus === OrderStatus.PAID) {
     return NextResponse.json(

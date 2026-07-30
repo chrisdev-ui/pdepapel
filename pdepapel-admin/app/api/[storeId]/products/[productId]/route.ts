@@ -10,6 +10,11 @@ import {
 } from "@/lib/utils";
 import { generateSemanticSKU } from "@/lib/variant-generator";
 import { generateProductSlug } from "@/lib/slugify";
+import {
+  getUniqueProductSlug,
+  preserveProductSlugAlias,
+  synchronizeProductGroupSlugs,
+} from "@/lib/product-slugs";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
@@ -22,37 +27,57 @@ export async function GET(
     if (!params.productId)
       throw ErrorFactory.InvalidRequest("El ID del producto es requerido");
 
-    const product = await prismadb.product.findFirst({
-      where: {
-        storeId: params.storeId,
-        OR: [{ id: params.productId }, { slug: params.productId }],
+    const productInclude = {
+      images: true,
+      category: true,
+      size: true,
+      color: true,
+      design: true,
+      supplier: true,
+      reviews: {
+        orderBy: { createdAt: "desc" },
       },
-      include: {
-        images: true,
-        category: true,
-        size: true,
-        color: true,
-        design: true,
-        supplier: true,
-        reviews: {
-          orderBy: { createdAt: "desc" },
-        },
-        // [NEW] Include kit components
-        kitComponents: {
-          include: {
-            component: {
-              select: {
-                id: true,
-                name: true,
-                stock: true,
-                images: { where: { isMain: true } },
-                sku: true, // Useful for reference
-              },
+      kitComponents: {
+        include: {
+          component: {
+            select: {
+              id: true,
+              name: true,
+              stock: true,
+              images: { where: { isMain: true } },
+              sku: true,
             },
           },
         },
       },
+    } as const;
+
+    let product = await prismadb.product.findFirst({
+      where: {
+        storeId: params.storeId,
+        OR: [{ id: params.productId }, { slug: params.productId }],
+      },
+      include: productInclude,
     });
+
+    if (!product) {
+      const alias = await prismadb.productSlugAlias.findUnique({
+        where: {
+          storeId_slug: {
+            storeId: params.storeId,
+            slug: params.productId,
+          },
+        },
+        select: { productId: true },
+      });
+
+      if (alias) {
+        product = await prismadb.product.findFirst({
+          where: { id: alias.productId, storeId: params.storeId },
+          include: productInclude,
+        });
+      }
+    }
 
     if (!product) {
       throw ErrorFactory.NotFound("Producto no encontrado");
@@ -179,30 +204,22 @@ export async function PATCH(
       }
     }
 
-    let updatedSlug = generateProductSlug({
-      name,
-      color: colorObj,
-      design: designObj,
-      size: sizeObj,
-    });
+    let updatedSlug = generateProductSlug({ name });
     if (!updatedSlug) updatedSlug = "producto";
 
-    let uniqueSlug = updatedSlug;
-    if (uniqueSlug !== productToUpdate.slug) {
-      let count = 1;
-      while (
-        await prismadb.product.findFirst({
-          where: {
-            storeId: params.storeId,
-            slug: uniqueSlug,
-            NOT: { id: params.productId },
-          },
-        })
-      ) {
-        count++;
-        uniqueSlug = `${updatedSlug}-${count}`;
-      }
-    }
+    const uniqueSlug = await getUniqueProductSlug(prismadb, {
+      storeId: params.storeId,
+      baseSlug: updatedSlug,
+      excludeProductId: params.productId,
+    });
+    const targetProductGroupId = productGroupId || null;
+    const affectedProductGroupIds = Array.from(
+      new Set(
+        [productToUpdate.productGroupId, targetProductGroupId].filter(
+          (groupId): groupId is string => Boolean(groupId),
+        ),
+      ),
+    );
 
     const currentImageUrls = productToUpdate.images.map((image) => image.url);
     const newImageUrls = images.map((image: { url: string }) => image.url);
@@ -248,7 +265,7 @@ export async function PATCH(
           supplierId,
           isArchived,
           isFeatured,
-          productGroupId: productGroupId || null,
+          productGroupId: targetProductGroupId,
           description,
           // [NEW] Update Kit info
           isKit: isKit || false,
@@ -275,6 +292,21 @@ export async function PATCH(
           productId: params.productId,
         })),
       });
+
+      if (
+        affectedProductGroupIds.length === 0 &&
+        productToUpdate.slug !== uniqueSlug
+      ) {
+        await preserveProductSlugAlias(tx, {
+          storeId: params.storeId,
+          productId: productToUpdate.id,
+          slug: productToUpdate.slug,
+        });
+      }
+
+      for (const groupId of affectedProductGroupIds) {
+        await synchronizeProductGroupSlugs(tx, params.storeId, groupId);
+      }
 
       // Return updated product
       return await tx.product.findUnique({

@@ -21,6 +21,11 @@ import {
   verifyStoreOwner,
 } from "@/lib/utils";
 import { generateSemanticSKU } from "@/lib/variant-generator";
+import { generateProductSlug } from "@/lib/slugify";
+import {
+  getUniqueProductSlug,
+  synchronizeProductGroupSlugs,
+} from "@/lib/product-slugs";
 
 import { getActiveOffers, getProductsPrices } from "@/lib/discount-engine";
 import { auth } from "@clerk/nextjs";
@@ -146,9 +151,15 @@ export async function POST(
       );
     }
 
-    const product = await prismadb.product.create({
+    const slug = await getUniqueProductSlug(prismadb, {
+      storeId: params.storeId,
+      baseSlug: generateProductSlug({ name }),
+    });
+
+    let product = await prismadb.product.create({
       data: {
         name,
+        slug,
         price,
         acqPrice,
         description,
@@ -184,6 +195,15 @@ export async function POST(
           : undefined,
       },
     });
+
+    if (productGroupId) {
+      await prismadb.$transaction((tx) =>
+        synchronizeProductGroupSlugs(tx, params.storeId, productGroupId),
+      );
+      product = await prismadb.product.findUniqueOrThrow({
+        where: { id: product.id },
+      });
+    }
 
     // If Kit, calculate initial stock based on components
     if (isKit) {

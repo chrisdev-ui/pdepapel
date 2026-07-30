@@ -17,8 +17,13 @@ export function generateProductSlug(product: {
   color?: { name?: string; value?: string } | null;
   design?: { name?: string } | null;
   size?: { name?: string; value?: string } | null;
+  includeVariantAttributes?: boolean;
 }): string {
   const base = slugify(product.name);
+
+  if (!product.includeVariantAttributes) {
+    return base;
+  }
 
   const attributes: string[] = [];
 
@@ -48,9 +53,13 @@ export function generateProductSlug(product: {
   }
 
   if (attributes.length > 0) {
-    const attrSlug = slugify(attributes.join(" "));
-    if (attrSlug && !base.includes(attrSlug)) {
-      return `${base}-${attrSlug}`;
+    const baseTokens = new Set(base.split("-").filter(Boolean));
+    const missingAttributeTokens = slugify(attributes.join(" "))
+      .split("-")
+      .filter((token) => token && !baseTokens.has(token));
+
+    if (missingAttributeTokens.length > 0) {
+      return `${base}-${missingAttributeTokens.join("-")}`;
     }
   }
 

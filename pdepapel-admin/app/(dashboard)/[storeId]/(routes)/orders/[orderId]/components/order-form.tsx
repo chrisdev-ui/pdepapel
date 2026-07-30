@@ -712,12 +712,28 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     control: form.control,
     name: "orderItems",
   });
+  const watchedStatus = useWatch({
+    control: form.control,
+    name: "status",
+  });
+  const watchedPaymentMethod = useWatch({
+    control: form.control,
+    name: "payment.method",
+  });
+
+  const isCompletedOrder =
+    watchedStatus === OrderStatus.PAID ||
+    watchedStatus === OrderStatus.SENT ||
+    initialData?.status === OrderStatus.PAID ||
+    initialData?.status === OrderStatus.SENT;
+  const isBoldPayment = watchedPaymentMethod === PaymentMethod.Bold;
+
   const discountType = form.watch("discount.type");
   const discountAmount = form.watch("discount.amount");
   const shippingCost = form.watch("shipping.cost");
   const shippingCourier = form.watch("shipping.courier");
   const shippingCarrierName = form.watch("shipping.carrierName");
- 
+
   const carrierInfo = useMemo(() => {
     return getCarrierInfo(shippingCarrierName || shippingCourier || "");
   }, [shippingCarrierName, shippingCourier]);
@@ -1339,13 +1355,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 </DropdownMenuItem>
 
                 <DropdownMenuItem
-                  disabled={
-                    pushingBold ||
-                    form.watch("status") === OrderStatus.PAID ||
-                    form.watch("status") === OrderStatus.SENT ||
-                    initialData?.status === OrderStatus.PAID ||
-                    initialData?.status === OrderStatus.SENT
-                  }
+                  disabled={pushingBold || isCompletedOrder || !isBoldPayment}
                   onClick={async () => {
                     if (!initialData?.id) return;
                     try {
@@ -1378,12 +1388,11 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                     <Smartphone className="mr-2 h-4 w-4 text-emerald-600" />
                   )}
                   <span>
-                    {form.watch("status") === OrderStatus.PAID ||
-                    form.watch("status") === OrderStatus.SENT ||
-                    initialData?.status === OrderStatus.PAID ||
-                    initialData?.status === OrderStatus.SENT
+                    {isCompletedOrder
                       ? "Datáfono Bold (Orden Completada)"
-                      : "Cobrar en Datáfono Bold"}
+                      : !isBoldPayment
+                        ? "Datáfono Bold (Solo para pagos Bold)"
+                        : "Cobrar en Datáfono Bold"}
                   </span>
                 </DropdownMenuItem>
 
@@ -1691,6 +1700,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                               <div key={field.id} className="relative">
                                 <AdminCartItem
                                   key={field.id}
+                                  hideStockWarning={isCompletedOrder}
                                   item={{
                                     id: field.productId || field.id,
                                     name: field.name,

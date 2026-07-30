@@ -119,6 +119,7 @@ export async function processAutomaticReactivations(storeId: string) {
 
       const recommendedProducts = recommendedProductsQuery.map((p) => ({
         id: p.id,
+        slug: p.slug,
         name: p.name,
         imageUrl: p.images?.[0]?.url || "",
         priceFormatted: currencyFormatter(p.price),

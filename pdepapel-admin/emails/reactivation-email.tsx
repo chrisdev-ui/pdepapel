@@ -15,6 +15,7 @@ import * as React from "react";
 
 interface RecommendedProduct {
   id: string;
+  slug?: string;
   name: string;
   imageUrl: string;
   priceFormatted: string;
@@ -144,7 +145,7 @@ export const ReactivationEmailTemplate: React.FC<
                       <Text style={productName}>{product.name}</Text>
                       <Text style={productPrice}>{product.priceFormatted}</Text>
                       <Link
-                        href={`${storeUrl}/product/${product.id}`}
+                        href={`${storeUrl}/product/${product.slug || product.id}`}
                         style={buyButton}
                       >
                         Ver producto

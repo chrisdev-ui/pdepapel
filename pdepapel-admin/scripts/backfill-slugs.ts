@@ -41,6 +41,15 @@ async function main() {
   const existingSlugs = new Set<string>();
   const populated: any[] = await db.$queryRaw`SELECT slug FROM Product WHERE slug IS NOT NULL AND slug != ''`;
   populated.forEach((p) => existingSlugs.add(p.slug));
+  const groupCounts: any[] = await db.$queryRaw`
+    SELECT productGroupId, COUNT(*) as count
+    FROM Product
+    WHERE productGroupId IS NOT NULL
+    GROUP BY productGroupId
+  `;
+  const variantCountsByGroup = new Map(
+    groupCounts.map((group) => [group.productGroupId, Number(group.count)]),
+  );
 
   let [emptyCountRes]: any = await db.$queryRaw`SELECT COUNT(*) as count FROM Product WHERE slug IS NULL OR slug = ''`;
   let remaining = Number(emptyCountRes.count);
@@ -49,8 +58,9 @@ async function main() {
     console.log(`Remaining products without slug: ${remaining}... Processing next batch...`);
     const unpopulated: any[] = await db.$queryRaw`
       SELECT 
-        p.id, 
-        p.name, 
+        p.id,
+        p.name,
+        p.productGroupId,
         c.name as colorName, 
         d.name as designName, 
         s.name as sizeName 
@@ -76,6 +86,9 @@ async function main() {
           color: colorObj,
           design: designObj,
           size: sizeObj,
+          includeVariantAttributes:
+            p.productGroupId &&
+            (variantCountsByGroup.get(p.productGroupId) || 0) > 1,
         });
       } catch (e) {
         baseSlug = "";

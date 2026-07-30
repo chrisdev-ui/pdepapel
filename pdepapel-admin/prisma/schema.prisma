@@ -41,6 +41,7 @@ model Store {
   colors                Color[]                @relation("StoreToColor")
   designs               Design[]               @relation("StoreToDesign")
   products              Product[]              @relation("StoreToProduct")
+  productSlugAliases    ProductSlugAlias[]
   orders                Order[]                @relation("StoreToOrder")
   mainBanner            MainBanner?            @relation("StoreToMainBanner")
   banners               Banner[]               @relation("StoreToBanner")
@@ -276,6 +277,7 @@ model Product {
   restockOrderItems  RestockOrderItem[]
   customOrderItems   CustomOrderItem[]
   quotationItems     QuotationItem[]
+  slugAliases        ProductSlugAlias[]
 
   // -- KIT / COMBO FIELDS --
   isKit         Boolean      @default(false)
@@ -304,6 +306,21 @@ model Product {
   @@index([productGroupId])
   @@fulltext([name])
   @@fulltext([name, description])
+}
+
+model ProductSlugAlias {
+  id        String   @id @default(uuid())
+  storeId   String
+  productId String
+  slug      String
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, slug])
+  @@index([productId])
+  @@index([storeId, createdAt])
 }
 
 model ProductKit {

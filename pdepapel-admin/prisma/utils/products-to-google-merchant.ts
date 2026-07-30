@@ -112,7 +112,7 @@ async function exportProductsToGoogleMerchant() {
         product.sku || product.id, // Use SKU if available, otherwise use ID
         cleanText(product.name),
         cleanText(product.description || product.name),
-        `${BASE_URL}/product/${product.id}`,
+        `${BASE_URL}/product/${product.slug || product.id}`,
         mainImage,
         additionalImages,
         formattedPrice,
