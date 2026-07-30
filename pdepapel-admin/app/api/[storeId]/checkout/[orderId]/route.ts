@@ -55,20 +55,14 @@ export async function POST(
     if (!order)
       throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
 
-    if (
-      order.status === OrderStatus.PAID ||
-      order.status === OrderStatus.SENT
-    )
+    if (order.status === OrderStatus.PAID || order.status === OrderStatus.SENT)
       throw ErrorFactory.Conflict(
         `La orden #${order.orderNumber || params.orderId} ya está completada (${order.status === OrderStatus.PAID ? "Pagada" : "Enviada"}). No es posible generar un nuevo link de pago.`,
       );
 
-    if (
-      order.payment?.method &&
-      order.payment.method !== PaymentMethod.Wompi
-    ) {
+    if (order.payment?.method && order.payment.method !== PaymentMethod.Wompi) {
       throw ErrorFactory.InvalidRequest(
-        `La orden #${order.orderNumber || params.orderId} fue registrada para pago por Transferencia o Efectivo (${order.payment.method}). Los links de pago de Wompi solo aplican para pagos en línea.`,
+        `La orden #${order.orderNumber || params.orderId} fue registrada para transferencia o efectivo. Los enlaces de pago solo aplican para pagos en línea.`,
       );
     }
 

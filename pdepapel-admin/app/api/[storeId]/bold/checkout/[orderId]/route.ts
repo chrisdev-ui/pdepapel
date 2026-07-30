@@ -49,7 +49,7 @@ export async function POST(
 
     if (order.payment?.method !== PaymentMethod.Bold) {
       throw ErrorFactory.InvalidRequest(
-        "Esta orden no está configurada para pago con Bold.",
+        "Esta orden no está configurada para pago en línea.",
       );
     }
 
@@ -65,7 +65,7 @@ export async function POST(
     const boldConfig = getBoldConfig();
     if (!boldConfig.identityKey || !boldConfig.secretKey) {
       throw ErrorFactory.InternalServerError(
-        "Bold Colombia no está configurado correctamente con API Keys.",
+        "El pago en línea no está configurado correctamente.",
       );
     }
 

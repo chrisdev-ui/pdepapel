@@ -33,7 +33,7 @@ export async function pushToBoldDatafono(
     if (!apiKey) {
       return {
         success: false,
-        message: "No se encontró la Llave de Identidad para la API de Datáfono Bold.",
+        message: "No se encontró la configuración necesaria para el datáfono.",
       };
     }
 
@@ -70,14 +70,14 @@ export async function pushToBoldDatafono(
       return {
         success: false,
         message:
-          firstError || `Error (${response.status}) al conectar con Datáfono Bold.`,
+          firstError || `Error (${response.status}) al conectar con el datáfono.`,
         data: resData,
       };
     }
 
     return {
       success: true,
-      message: `¡Notificación enviada con éxito al Datáfono Bold (${terminalSerial})! ID: ${resData?.payload?.integration_id || "OK"}`,
+      message: `¡Notificación enviada con éxito al datáfono (${terminalSerial})! ID: ${resData?.payload?.integration_id || "OK"}`,
       data: resData,
     };
   } catch (error: any) {

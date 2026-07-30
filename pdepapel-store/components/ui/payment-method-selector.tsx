@@ -116,7 +116,7 @@ const GatewayLogos = ({
 const PAYMENT_OPTIONS: PaymentMethodOption[] = [
   {
     value: PaymentMethod.Bold,
-    label: "Paga con Bold (Tarjeta de crédito / débito, PSE, Nequi)",
+    label: "Pago en línea (Tarjeta de crédito / débito, PSE, Nequi)",
     icon: Icons.payments.bold,
     badges: [
       { name: "Visa", icon: Icons.gateways.visa },
@@ -129,7 +129,7 @@ const PAYMENT_OPTIONS: PaymentMethodOption[] = [
       <div className="font-sans text-sm">
         <p className="mb-2">
           Paga de forma instantánea y 100% segura con tarjeta de crédito o
-          débito, PSE, Nequi o Bancolombia a través de Bold.
+          débito, PSE, Nequi o Bancolombia.
         </p>
         <GatewayLogos
           gateways={[

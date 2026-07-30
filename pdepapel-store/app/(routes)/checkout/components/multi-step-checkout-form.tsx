@@ -584,7 +584,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         fireConfetti();
         toast({
           title: "Orden creada",
-          description: `Tu orden #${order.orderNumber || order.id} ha sido creada exitosamente. Redirigiendo a pasarela Bold...`,
+          description: `Tu orden #${order.orderNumber || order.id} ha sido creada exitosamente. Redirigiendo al pago en línea...`,
           variant: "success",
         });
 

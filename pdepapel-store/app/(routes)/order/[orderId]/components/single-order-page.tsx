@@ -113,8 +113,9 @@ const getStatusColor = (status: string) => {
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   [PaymentMethod.COD]: "Contra entrega",
   [PaymentMethod.BankTransfer]: "Transferencia bancaria",
-  [PaymentMethod.Wompi]: "Wompi",
-  [PaymentMethod.PayU]: "PayU",
+  [PaymentMethod.Bold]: "Pago en línea",
+  [PaymentMethod.Wompi]: "Pago en línea",
+  [PaymentMethod.PayU]: "Pago en línea",
 };
 
 const normalizeText = (text: string): string => {
@@ -361,7 +362,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
             variant: "destructive",
             icon: <ShieldClose className="h-14 w-14" />,
             description:
-              "Hemos recibido una respuesta desconocida de PayU. Por favor, contacta a nuestro equipo de soporte para más información.",
+              "Hemos recibido una respuesta desconocida del pago en línea. Por favor, contacta a nuestro equipo de soporte para más información.",
             duration: 10000,
           });
           break;
@@ -1154,8 +1155,8 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                           onClick={() => mutate()}
                         >
                           {status === "pending"
-                            ? "Pagando con..."
-                            : "Pagar con"}{" "}
+                            ? "Procesando pago..."
+                            : "Pagar ahora"}{" "}
                           <Icons.payments.wompi className="w-20" />
                         </Button>
                       )}
@@ -1168,8 +1169,8 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                           onClick={() => mutate()}
                         >
                           {status === "pending"
-                            ? "Pagando con..."
-                            : "Pagar con"}{" "}
+                            ? "Procesando pago..."
+                            : "Pagar ahora"}{" "}
                           <Icons.payments.payu className="w-10" />
                         </Button>
                       )}

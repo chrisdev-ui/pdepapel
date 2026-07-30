@@ -125,7 +125,7 @@ async function processBoldPayment(transaction: any, targetStatus: OrderStatus) {
   if (order.payment?.method !== PaymentMethod.Bold) {
     return NextResponse.json(
       {
-        error: `La orden ${order.orderNumber} no está configurada para pago con Bold`,
+        error: `La orden ${order.orderNumber} no está configurada para pago en línea`,
       },
       { status: 400 },
     );

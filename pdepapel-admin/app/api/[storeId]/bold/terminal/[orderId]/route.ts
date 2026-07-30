@@ -49,7 +49,7 @@ export async function POST(
 
     if (order.payment?.method !== PaymentMethod.Bold) {
       throw ErrorFactory.InvalidRequest(
-        "El datáfono Bold solo puede cobrar órdenes configuradas con pago Bold.",
+        "El datáfono solo puede cobrar órdenes configuradas para pago en línea.",
       );
     }
 

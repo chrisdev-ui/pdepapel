@@ -53,7 +53,7 @@ export const BoldCheckoutButton: React.FC<BoldCheckoutButtonProps> = ({
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.message || "Error al preparar el pago con Bold");
+        throw new Error(data.message || "Error al preparar el pago en línea");
       }
 
       setCheckoutData(data);
@@ -62,7 +62,7 @@ export const BoldCheckoutButton: React.FC<BoldCheckoutButtonProps> = ({
       toast({
         title: "Error al iniciar pago",
         description:
-          err.message || "No se pudo conectar con el servidor de Bold.",
+          err.message || "No se pudo conectar con el servicio de pago.",
         variant: "destructive",
       });
     } finally {
@@ -107,7 +107,7 @@ export const BoldCheckoutButton: React.FC<BoldCheckoutButtonProps> = ({
     <div
       className="flex flex-col items-center gap-3 w-full"
       role="region"
-      aria-label="Pasarela de pago Bold"
+      aria-label="Pago en línea"
     >
       <Script
         src="https://checkout.bold.co/library/boldPaymentButton.js"
@@ -120,7 +120,7 @@ export const BoldCheckoutButton: React.FC<BoldCheckoutButtonProps> = ({
           className="w-full h-12 rounded-xl bg-zinc-900 text-white font-bold"
         >
           <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-          Preparando pasarela de Bold...
+          Preparando pago...
         </Button>
       )}
 
@@ -129,16 +129,16 @@ export const BoldCheckoutButton: React.FC<BoldCheckoutButtonProps> = ({
           <Button
             type="button"
             className="w-full h-12 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2 text-base transition-all duration-200"
-            aria-label="Pagar con Bold"
+            aria-label="Pagar ahora"
             onClick={openBoldCheckout}
           >
-            <span>Pagar con</span>
+            <span>Pagar ahora</span>
             <Icons.payments.bold className="h-5 w-auto text-white" />
           </Button>
 
           <span className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
             <ShieldCheck className="h-4 w-4 text-emerald-600" />
-            Transacción 100% cifrada y protegida por Bold Colombia
+            Transacción 100% cifrada y protegida
           </span>
         </div>
       )}

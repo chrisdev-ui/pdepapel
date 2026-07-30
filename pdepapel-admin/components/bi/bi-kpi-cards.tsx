@@ -87,8 +87,8 @@ export const BiKpiCards: React.FC<BiKpiCardsProps> = ({ data }) => {
                 <TooltipContent>
                   <p className="min-w-xs text-sm">
                     Dinero real ganado. Se calcula restando los costos del
-                    producto, la tarifa de envío y la comisión de la pasarela de
-                    pago (Wompi) al total facturado.
+                    producto, la tarifa de envío y la comisión del pago en línea
+                    al total facturado.
                   </p>
                 </TooltipContent>
               </Tooltip>

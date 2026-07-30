@@ -74,12 +74,12 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
         title: "Notificación enviada",
         description:
           response.data?.message ||
-          "¡Cobro enviado al Datáfono Bold! (Si la pantalla del equipo está ocupada, presiona Cancelar 'X' en el datáfono para liberar la cola).",
+          "¡Cobro enviado al datáfono! (Si la pantalla del equipo está ocupada, presiona Cancelar 'X' en el datáfono para liberar la cola).",
         variant: "success",
       });
     } catch (error) {
       toast({
-        title: "Error Datáfono Bold",
+        title: "Error de datáfono",
         description: getErrorMessage(error),
         variant: "destructive",
       });
@@ -120,7 +120,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
       toast({
         title: "Pago por Transferencia / Directo",
         description:
-          "Esta orden fue registrada para transferencia directa o efectivo. Los links de Wompi solo aplican para pagos con Wompi.",
+          "Esta orden fue registrada para transferencia directa o efectivo. Los enlaces de pago solo aplican para pagos en línea.",
         variant: "destructive",
       });
       return;
@@ -134,7 +134,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
       if (response.data?.url) {
         navigator.clipboard.writeText(response.data.url);
         toast({
-          description: "Link de pago Wompi copiado al portapapeles",
+          description: "Enlace de pago copiado al portapapeles",
           variant: "success",
         });
       } else {
@@ -218,19 +218,19 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
               ? `Link de Pago (Orden ${data.status === OrderStatus.PAID ? "Pagada" : "Enviada"})`
               : isOfflinePayment
                 ? "Link de Pago (Transferencia Directa)"
-                : "Copiar Link de Pago Wompi"}
+                : "Copiar enlace de pago"}
           </DropdownMenuItem>
           <DropdownMenuItem
             className="cursor-pointer"
             onClick={() =>
               onCopy(
                 `https://papeleriapdepapel.com/order/${data.id}?autoPay=true`,
-                "Link de pago Bold copiado al portapapeles",
+                "Enlace de pago copiado al portapapeles",
               )
             }
           >
             <CreditCard className="mr-2 h-4 w-4 text-emerald-600" />
-            Copiar Link de Pago Bold
+            Copiar enlace de pago
           </DropdownMenuItem>
           <DropdownMenuItem
             className="cursor-pointer"
@@ -239,8 +239,8 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
           >
             <CreditCard className="mr-2 h-4 w-4 text-emerald-600" />
             {isClosedOrder
-              ? "Datáfono Bold (Orden Completada)"
-              : "Cobrar en Datáfono Bold"}
+              ? "Datáfono (Orden completada)"
+              : "Cobrar en datáfono"}
           </DropdownMenuItem>
           <DropdownMenuItem
             className="cursor-pointer"

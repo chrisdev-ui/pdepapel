@@ -241,13 +241,13 @@ const formatPaymentMethod = (method?: string) => {
     case "BANK_TRANSFER":
       return "Transferencia Bancaria (Bre-B / Bancolombia / Nequi)";
     case "WOMPI":
-      return "Wompi (Tarjeta / Nequi / PSE)";
+      return "Pago en línea (Tarjeta / Nequi / PSE)";
     case "BOLD":
-      return "Bold (Datáfono / Link de Pago)";
+      return "Pago en línea (Datáfono / Link de pago)";
     case "COD":
       return "Pago Contraentrega";
     case "PAYU":
-      return "PayU Latam";
+      return "Pago en línea";
     default:
       return method;
   }

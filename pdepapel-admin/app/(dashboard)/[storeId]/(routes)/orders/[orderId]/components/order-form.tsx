@@ -1308,7 +1308,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                       toast({
                         title: "Pago por Transferencia",
                         description:
-                          "Esta orden fue registrada para Pago por Transferencia Directa o Efectivo. Los links de pago Wompi solo aplican para pagos en línea.",
+                          "Esta orden fue registrada para transferencia directa o efectivo. Los enlaces de pago solo aplican para pagos en línea.",
                         variant: "destructive",
                       });
                       return;
@@ -1322,8 +1322,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                       if (response.data?.url) {
                         navigator.clipboard.writeText(response.data.url);
                         toast({
-                          description:
-                            "Link de pago Wompi copiado al portapapeles",
+                          description: "Enlace de pago copiado al portapapeles",
                           variant: "success",
                         });
                       } else {
@@ -1346,11 +1345,11 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                     form.watch("status") === OrderStatus.SENT ||
                     initialData?.status === OrderStatus.PAID ||
                     initialData?.status === OrderStatus.SENT
-                      ? "Orden Cerrada (Sin Link Wompi)"
+                      ? "Orden cerrada (sin enlace de pago)"
                       : initialData?.payment?.method &&
                           initialData.payment.method !== PaymentMethod.Wompi
-                        ? "Transferencia Directa (Sin Link Wompi)"
-                        : "Copiar Link de Pago Wompi"}
+                        ? "Transferencia directa (sin enlace de pago)"
+                        : "Copiar enlace de pago"}
                   </span>
                 </DropdownMenuItem>
 
@@ -1367,12 +1366,12 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                         title: "Notificación enviada",
                         description:
                           res.data?.message ||
-                          "¡Cobro enviado al Datáfono Bold! (Si la pantalla del equipo está ocupada, presiona Cancelar 'X' en el datáfono para liberar la cola).",
+                          "¡Cobro enviado al datáfono! (Si la pantalla del equipo está ocupada, presiona Cancelar 'X' en el datáfono para liberar la cola).",
                         variant: "success",
                       });
                     } catch (err) {
                       toast({
-                        title: "Error Datáfono Bold",
+                        title: "Error de datáfono",
                         description: getErrorMessage(err),
                         variant: "destructive",
                       });
@@ -1389,10 +1388,10 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   )}
                   <span>
                     {isCompletedOrder
-                      ? "Datáfono Bold (Orden Completada)"
+                      ? "Datáfono (Orden completada)"
                       : !isBoldPayment
-                        ? "Datáfono Bold (Solo para pagos Bold)"
-                        : "Cobrar en Datáfono Bold"}
+                        ? "Datáfono (Solo para pagos en línea)"
+                        : "Cobrar en datáfono"}
                   </span>
                 </DropdownMenuItem>
 
@@ -1405,7 +1404,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                     const url = `${storeUrl}/order/${initialData.id}?autoPay=true`;
                     navigator.clipboard.writeText(url);
                     toast({
-                      title: "Link de Pago Bold copiado",
+                      title: "Enlace de pago copiado",
                       description: "Se ha copiado el enlace directo de pago.",
                       variant: "success",
                     });
@@ -1413,7 +1412,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   className="cursor-pointer py-2"
                 >
                   <Link2 className="mr-2 h-4 w-4 text-emerald-600" />
-                  <span>Copiar Link de Pago Bold</span>
+                  <span>Copiar enlace de pago</span>
                 </DropdownMenuItem>
 
                 {initialData.token && (
