@@ -1,5 +1,5 @@
 import { Metadata } from "next";
-import { notFound, redirect } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { Product as ProductSchema, WithContext } from "schema-dts";
 
 import { getProduct } from "@/actions/get-product";
@@ -76,9 +76,9 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
   if (!product) return notFound();
 
-  // 301 Permanent Redirect if accessed via legacy UUID or non-canonical slug
+  // Permanently redirect legacy UUIDs and replaced slugs to the canonical URL.
   if (product.slug && params.slug !== product.slug) {
-    redirect(`/product/${product.slug}`);
+    permanentRedirect(`/product/${product.slug}`);
   }
 
   const siblingsPromise = product.productGroupId

@@ -53,6 +53,7 @@ export interface Product {
   reviews: Review[];
   sku: string;
   quantity?: number;
+  updatedAt?: string;
   // Discount fields
   discountedPrice?: number;
   originalPrice?: number;
