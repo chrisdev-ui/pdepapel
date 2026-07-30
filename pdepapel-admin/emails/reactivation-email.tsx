@@ -145,7 +145,7 @@ export const ReactivationEmailTemplate: React.FC<
                       <Text style={productName}>{product.name}</Text>
                       <Text style={productPrice}>{product.priceFormatted}</Text>
                       <Link
-                        href={`${storeUrl}/product/${product.slug || product.id}`}
+                        href={`${storeUrl}/producto/${product.slug || product.id}`}
                         style={buyButton}
                       >
                         Ver producto

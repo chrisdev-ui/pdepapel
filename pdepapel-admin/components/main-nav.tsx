@@ -53,6 +53,7 @@ export function MainNav({
   const pathname = usePathname();
   const params = useParams();
   const [isOpen, setIsOpen] = useState(false);
+  const dashboardPath = (segment: string) => `/${params.storeId}/${segment}`;
 
   const routes = [
     {
@@ -64,59 +65,59 @@ export function MainNav({
     },
     // Catálogo
     {
-      href: `/${params.storeId}/${Models.Products}`,
+      href: dashboardPath("productos"),
       label: ModelLabels[Models.Products],
-      active: pathname === `/${params.storeId}/${Models.Products}`,
+      active: pathname === dashboardPath("productos"),
       group: "catalog",
       icon: ShoppingBag,
     },
     // Bulk Manager
     {
-      href: `/${params.storeId}/products/bulk-manage`,
+      href: dashboardPath("productos/gestion-masiva"),
       label: ModelLabels[Models.BulkProducts],
-      active: pathname === `/${params.storeId}/products/bulk-manage`,
+      active: pathname === dashboardPath("productos/gestion-masiva"),
       group: "catalog",
       icon: ListChecks,
     },
     {
-      href: `/${params.storeId}/${Models.Categories}`,
+      href: dashboardPath("categorias"),
       label: ModelLabels[Models.Categories],
-      active: pathname === `/${params.storeId}/${Models.Categories}`,
+      active: pathname === dashboardPath("categorias"),
       group: "catalog",
       icon: LayoutDashboard,
     },
     {
-      href: `/${params.storeId}/${Models.Types}`,
+      href: dashboardPath("tipos"),
       label: ModelLabels[Models.Types],
-      active: pathname === `/${params.storeId}/${Models.Types}`,
+      active: pathname === dashboardPath("tipos"),
       group: "catalog",
       icon: Type,
     },
     {
-      href: `/${params.storeId}/${Models.Sizes}`,
+      href: dashboardPath("tamanos"),
       label: ModelLabels[Models.Sizes],
-      active: pathname === `/${params.storeId}/${Models.Sizes}`,
+      active: pathname === dashboardPath("tamanos"),
       group: "catalog",
       icon: Ruler,
     },
     {
-      href: `/${params.storeId}/${Models.Colors}`,
+      href: dashboardPath("colores"),
       label: ModelLabels[Models.Colors],
-      active: pathname === `/${params.storeId}/${Models.Colors}`,
+      active: pathname === dashboardPath("colores"),
       group: "catalog",
       icon: Palette,
     },
     {
-      href: `/${params.storeId}/${Models.Designs}`,
+      href: dashboardPath("disenos"),
       label: ModelLabels[Models.Designs],
-      active: pathname === `/${params.storeId}/${Models.Designs}`,
+      active: pathname === dashboardPath("disenos"),
       group: "catalog",
       icon: Layout,
     },
     {
-      href: `/${params.storeId}/${Models.Billboards}`,
+      href: dashboardPath("diapositivas"),
       label: ModelLabels[Models.Billboards],
-      active: pathname === `/${params.storeId}/${Models.Billboards}`,
+      active: pathname === dashboardPath("diapositivas"),
       group: "catalog",
       icon: ImageIcon,
     },
@@ -128,113 +129,113 @@ export function MainNav({
       icon: Star,
     },
     {
-      href: `/${params.storeId}/${Models.Suppliers}`,
+      href: dashboardPath("proveedores"),
       label: ModelLabels[Models.Suppliers],
-      active: pathname === `/${params.storeId}/${Models.Suppliers}`,
+      active: pathname === dashboardPath("proveedores"),
       group: "catalog",
       icon: Archive,
     },
     {
-      href: `/${params.storeId}/${Models.Boxes}`,
+      href: dashboardPath("cajas"),
       label: ModelLabels[Models.Boxes],
-      active: pathname === `/${params.storeId}/${Models.Boxes}`,
+      active: pathname === dashboardPath("cajas"),
       group: "catalog",
       icon: Package,
     },
     {
-      href: `/${params.storeId}/${Models.RestockOrders}`,
+      href: dashboardPath("aprovisionamiento"),
       label: ModelLabels[Models.RestockOrders],
-      active: pathname.includes(`/${params.storeId}/${Models.RestockOrders}`),
+      active: pathname.includes(dashboardPath("aprovisionamiento")),
       group: "inventory",
       icon: ClipboardList,
     },
     {
-      href: `/${params.storeId}/${Models.InventoryMovements}`,
+      href: dashboardPath("movimientos-inventario"),
       label: ModelLabels[Models.InventoryMovements],
       active: pathname.includes(
-        `/${params.storeId}/${Models.InventoryMovements}`,
+        dashboardPath("movimientos-inventario"),
       ),
       group: "inventory",
       icon: History,
     },
     {
-      href: `/${params.storeId}/${Models.Inventory}`,
+      href: dashboardPath("inventario"),
       label: ModelLabels[Models.Inventory],
-      active: pathname === `/${params.storeId}/${Models.Inventory}`,
+      active: pathname === dashboardPath("inventario"),
       group: "inventory",
       icon: LayoutDashboard,
     },
     // Ventas
     {
-      href: `/${params.storeId}/business-intelligence`,
+      href: dashboardPath("inteligencia-negocio"),
       label: "Business Intelligence",
-      active: pathname === `/${params.storeId}/business-intelligence`,
+      active: pathname === dashboardPath("inteligencia-negocio"),
       group: "sales",
       icon: LineChart,
     },
     {
-      href: `/${params.storeId}/${Models.Orders}`,
+      href: dashboardPath("pedidos"),
       label: ModelLabels[Models.Orders],
-      active: pathname === `/${params.storeId}/${Models.Orders}`,
+      active: pathname === dashboardPath("pedidos"),
       group: "sales",
       icon: ShoppingCart,
     },
     {
-      href: `/${params.storeId}/${Models.Shipments}`,
+      href: dashboardPath("envios"),
       label: ModelLabels[Models.Shipments],
-      active: pathname === `/${params.storeId}/${Models.Shipments}`,
+      active: pathname === dashboardPath("envios"),
       group: "sales",
       icon: Truck,
     },
     {
-      href: `/${params.storeId}/${Models.Customers}`,
+      href: dashboardPath("clientes"),
       label: ModelLabels[Models.Customers],
-      active: pathname === `/${params.storeId}/${Models.Customers}`,
+      active: pathname === dashboardPath("clientes"),
       group: "sales",
       icon: Users,
     },
 
     {
-      href: `/${params.storeId}/quotations`,
+      href: dashboardPath("cotizaciones"),
       label: "Cotizaciones",
-      active: pathname.includes(`/${params.storeId}/quotations`),
+      active: pathname.includes(dashboardPath("cotizaciones")),
       group: "sales",
       icon: Calculator, // Or another appropriate icon
     },
     {
-      href: `/${params.storeId}/${Models.Reviews}`,
+      href: dashboardPath("resenas"),
       label: ModelLabels[Models.Reviews],
-      active: pathname === `/${params.storeId}/${Models.Reviews}`,
+      active: pathname === dashboardPath("resenas"),
       group: "sales",
       icon: MessageSquare,
     },
     // Marketing
     {
-      href: `/${params.storeId}/${Models.Offers}`,
+      href: dashboardPath("ofertas"),
       label: ModelLabels[Models.Offers],
-      active: pathname === `/${params.storeId}/${Models.Offers}`,
+      active: pathname === dashboardPath("ofertas"),
       group: "marketing",
       icon: Percent,
     },
     {
-      href: `/${params.storeId}/${Models.Coupons}`,
+      href: dashboardPath("cupones"),
       label: ModelLabels[Models.Coupons],
-      active: pathname === `/${params.storeId}/${Models.Coupons}`,
+      active: pathname === dashboardPath("cupones"),
       group: "marketing",
       icon: Tag,
     },
     {
-      href: `/${params.storeId}/${Models.Posts}`,
+      href: dashboardPath("publicaciones"),
       label: ModelLabels[Models.Posts],
-      active: pathname === `/${params.storeId}/${Models.Posts}`,
+      active: pathname === dashboardPath("publicaciones"),
       group: "marketing",
       icon: Box,
     },
     // Configuración
     {
-      href: `/${params.storeId}/settings`,
+      href: dashboardPath("configuracion"),
       label: "Ajustes",
-      active: pathname === `/${params.storeId}/settings`,
+      active: pathname === dashboardPath("configuracion"),
       group: "settings",
       icon: Settings,
     },
@@ -376,14 +377,14 @@ export function MainNav({
             {/* Ajustes */}
             <NavigationMenuItem>
               <Link
-                href={`/${params.storeId}/settings`}
+                href={dashboardPath("configuracion")}
                 legacyBehavior
                 passHref
               >
                 <NavigationMenuLink
                   className={cn(
                     navigationMenuTriggerStyle(),
-                    pathname === `/${params.storeId}/settings` &&
+                    pathname === dashboardPath("configuracion") &&
                       "bg-accent text-accent-foreground",
                   )}
                 >
@@ -514,11 +515,11 @@ export function MainNav({
             <div className="space-y-3">
               <h4 className="font-medium leading-none">Configuración</h4>
               <Link
-                href={`/${params.storeId}/settings`}
+                href={dashboardPath("configuracion")}
                 onClick={closeMenu}
                 className={cn(
                   "flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
-                  pathname === `/${params.storeId}/settings`
+                  pathname === dashboardPath("configuracion")
                     ? "bg-accent text-accent-foreground"
                     : "text-muted-foreground",
                 )}

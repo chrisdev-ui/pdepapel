@@ -25,7 +25,7 @@ function getOrderSummary(order: any) {
 
 function getOrderLink(orderId: string) {
   // Adjust this URL to your frontend order details page
-  return `https://papeleriapdepapel.com/order/${orderId}`;
+  return `https://papeleriapdepapel.com/pedido/${orderId}`;
 }
 
 export const sendOrderEmail = async (

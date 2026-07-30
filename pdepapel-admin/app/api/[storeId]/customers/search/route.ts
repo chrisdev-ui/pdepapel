@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { clerkClient } from "@clerk/nextjs";
 import prismadb from "@/lib/prismadb";
-import { AvailableCustomer } from "@/app/(dashboard)/[storeId]/(routes)/orders/[orderId]/server/get-available-customers";
+import { AvailableCustomer } from "@/app/(dashboard)/[storeId]/(routes)/pedidos/[orderId]/server/get-available-customers";
 import parsePhoneNumber from "libphonenumber-js";
 import { normalizePhone } from "@/lib/utils";
 

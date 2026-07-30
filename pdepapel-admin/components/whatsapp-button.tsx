@@ -126,7 +126,7 @@ export const WhatsappButton: React.FC<WhatsappButtonProps> = ({
       let message: string;
       switch (order.status) {
         case "QUOTATION": // Handle as string literal if OrderStatus.QUOTATION not strictly available in enum during dev, or import it. It is imported.
-          const quoteUrl = `${storeUrl}/quote/${order.token}`;
+          const quoteUrl = `${storeUrl}/cotizacion/${order.token}`;
           message =
             `${baseMessage}Aquí tienes la cotización que solicitaste en P de Papel 👇\n\n` +
             `📄 *Ver Cotización:* ${quoteUrl}\n\n` +

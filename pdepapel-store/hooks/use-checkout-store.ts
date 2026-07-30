@@ -1,8 +1,8 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
-import { CouponState } from "@/app/(routes)/checkout/components/multi-step-checkout-form";
-import { CheckoutFormValue } from "@/app/(routes)/checkout/components/multi-step-checkout-form";
+import { CouponState } from "@/app/(routes)/finalizar-compra/components/multi-step-checkout-form";
+import { CheckoutFormValue } from "@/app/(routes)/finalizar-compra/components/multi-step-checkout-form";
 import { ShippingQuoteResponse } from "@/types";
 
 interface CheckoutStore {

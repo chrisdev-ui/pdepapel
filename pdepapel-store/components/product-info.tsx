@@ -13,6 +13,7 @@ import { ToastIcon } from "@/components/ui/toast-icon";
 import { useCart } from "@/hooks/use-cart";
 import { toast } from "@/hooks/use-toast";
 import { useWishlist } from "@/hooks/use-wishlist";
+import { productPath } from "@/lib/routes";
 import { calculateAverageRating, cn } from "@/lib/utils";
 import { Color, Design, Product, ProductVariant, Size } from "@/types";
 import { useRouter } from "next/navigation";
@@ -139,7 +140,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
         onVariantChange(targetVariant);
         return;
       }
-      router.push(`/product/${targetVariant.slug || targetVariant.id}`);
+      router.push(productPath(targetVariant.slug || targetVariant.id));
     }
   };
 

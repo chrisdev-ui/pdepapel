@@ -1,0 +1,31 @@
+import { getCategories } from "../../categorias/server/get-categories";
+import { getProductGroups } from "../../productos/server/get-product-groups";
+import { getProducts } from "../../productos/server/get-products";
+import { OfferForm } from "./components/offer-form";
+import { getOffer } from "./server/get-offer";
+
+export default async function OfferPage({
+  params,
+}: {
+  params: { storeId: string; offerId: string };
+}) {
+  const offer =
+    params.offerId === "nuevo" ? null : await getOffer(params.offerId);
+
+  const products = await getProducts(params.storeId);
+  const categories = await getCategories(params.storeId);
+  const productGroups = await getProductGroups(params.storeId);
+
+  return (
+    <div className="flex-col">
+      <div className="flex-1 space-y-4 p-8 pt-6">
+        <OfferForm
+          initialData={offer}
+          products={products}
+          categories={categories}
+          productGroups={productGroups}
+        />
+      </div>
+    </div>
+  );
+}

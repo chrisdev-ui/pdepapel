@@ -1,5 +1,6 @@
 import { Icons } from "@/components/icons";
 import { SEASON_CONFIG } from "@/constants";
+import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { Season } from "@/types";
 import { CalendarDays, Mail, Phone } from "lucide-react";
 import Image from "next/image";
@@ -76,7 +77,7 @@ export const Footer: React.FC<FooterProps> = ({ season = Season.Default }) => {
             <ul className="space-y-1">
               <li className="">
                 <Link
-                  href="/policies/returns"
+                  href={STOREFRONT_ROUTES.returnsPolicy}
                   className="flex items-center gap-2 text-blue-yankees hover:text-pink-shell focus-visible:text-pink-shell"
                 >
                   Políticas de devolución o cambio
@@ -84,7 +85,7 @@ export const Footer: React.FC<FooterProps> = ({ season = Season.Default }) => {
               </li>
               <li className="">
                 <Link
-                  href="/policies/shipping"
+                  href={STOREFRONT_ROUTES.shippingPolicy}
                   className="flex items-center gap-2 text-blue-yankees hover:text-pink-shell focus-visible:text-pink-shell"
                 >
                   Políticas de entrega
@@ -92,7 +93,7 @@ export const Footer: React.FC<FooterProps> = ({ season = Season.Default }) => {
               </li>
               <li className="">
                 <Link
-                  href="/policies/data"
+                  href={STOREFRONT_ROUTES.dataPolicy}
                   className="flex items-center gap-2 text-blue-yankees hover:text-pink-shell focus-visible:text-pink-shell"
                 >
                   Políticas de tratamiento de datos

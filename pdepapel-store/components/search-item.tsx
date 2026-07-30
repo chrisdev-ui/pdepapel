@@ -1,4 +1,5 @@
 import { Image } from "@/types";
+import { productPath } from "@/lib/routes";
 import NextImage from "next/image";
 import Link from "next/link";
 import { Currency } from "./ui/currency";
@@ -29,7 +30,7 @@ export const SearchItem: React.FC<SearchItemProps> = ({
   return (
     <Link
       ref={innerRef}
-      href={`/product/${slug || id}`}
+      href={productPath(slug || id)}
       className="grid grid-cols-[40px_1fr] gap-2.5 rounded p-1 hover:bg-blue-baby/50 hover:ring-1 hover:ring-slate-200"
       onClick={closeAll}
       onKeyDown={(e) => {

@@ -1,5 +1,6 @@
 import { getProducts } from "@/actions/get-products";
 import { BASE_URL } from "@/constants";
+import { productPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import { MetadataRoute } from "next";
 
 const SITEMAP_PAGE_SIZE = 500;
@@ -34,7 +35,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ];
 
     productsUrls = products.map((product) => ({
-      url: `${BASE_URL}/product/${product.slug || product.id}`,
+      url: `${BASE_URL}${productPath(product.slug || product.id)}`,
       lastModified: getLastModified(product.updatedAt),
     }));
   } catch (error) {
@@ -49,22 +50,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       url: BASE_URL,
     },
     {
-      url: `${BASE_URL}/about`,
+      url: `${BASE_URL}${STOREFRONT_ROUTES.about}`,
     },
     {
-      url: `${BASE_URL}/contact`,
+      url: `${BASE_URL}${STOREFRONT_ROUTES.contact}`,
     },
     {
-      url: `${BASE_URL}/policies/data`,
+      url: `${BASE_URL}${STOREFRONT_ROUTES.dataPolicy}`,
     },
     {
-      url: `${BASE_URL}/policies/returns`,
+      url: `${BASE_URL}${STOREFRONT_ROUTES.returnsPolicy}`,
     },
     {
-      url: `${BASE_URL}/policies/shipping`,
+      url: `${BASE_URL}${STOREFRONT_ROUTES.shippingPolicy}`,
     },
     {
-      url: `${BASE_URL}/shop`,
+      url: `${BASE_URL}${STOREFRONT_ROUTES.shop}`,
     },
     ...productsUrls,
   ];

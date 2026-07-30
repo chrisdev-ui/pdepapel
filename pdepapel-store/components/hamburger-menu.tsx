@@ -27,6 +27,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { STOREFRONT_ROUTES } from "@/lib/routes";
 
 export const HamburgerMenu: React.FC = () => {
   const pathname = usePathname();
@@ -56,7 +57,7 @@ export const HamburgerMenu: React.FC = () => {
         >
           <Link
             className="flex w-full items-center gap-6"
-            href="/shop"
+            href={STOREFRONT_ROUTES.shop}
             onClick={() => setOpen(false)}
           >
             <Store className="h-6 w-6" />
@@ -69,7 +70,7 @@ export const HamburgerMenu: React.FC = () => {
         >
           <Link
             className="flex w-full items-center gap-6"
-            href="/about"
+            href={STOREFRONT_ROUTES.about}
             onClick={() => setOpen(false)}
           >
             <Info className="h-6 w-6" />
@@ -82,7 +83,7 @@ export const HamburgerMenu: React.FC = () => {
         >
           <Link
             className="flex w-full items-center gap-6"
-            href="/contact"
+            href={STOREFRONT_ROUTES.contact}
             onClick={() => setOpen(false)}
           >
             <Contact className="h-6 w-6" />
@@ -95,7 +96,7 @@ export const HamburgerMenu: React.FC = () => {
         >
           <Link
             className="flex w-full items-center gap-6"
-            href="/wishlist"
+            href={STOREFRONT_ROUTES.wishlist}
             onClick={() => setOpen(false)}
           >
             <Heart className="h-6 w-6" />
@@ -108,7 +109,7 @@ export const HamburgerMenu: React.FC = () => {
         >
           <Link
             className="flex w-full items-center gap-6"
-            href="/cart"
+            href={STOREFRONT_ROUTES.cart}
             onClick={() => setOpen(false)}
           >
             <ShoppingCart className="h-6 w-6" />
@@ -136,7 +137,7 @@ export const HamburgerMenu: React.FC = () => {
           >
             <Link
               className="flex w-full items-center gap-6"
-              href="/my-orders"
+              href={STOREFRONT_ROUTES.myOrders}
               onClick={() => setOpen(false)}
             >
               <Contact className="h-6 w-6" />

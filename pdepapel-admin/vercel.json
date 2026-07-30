@@ -13,7 +13,7 @@
     "app/api/**/*": {
       "maxDuration": 60
     },
-    "app/(dashboard)/[storeId]/(routes)/customers/page.tsx": {
+    "app/(dashboard)/[storeId]/(routes)/clientes/page.tsx": {
       "maxDuration": 60
     },
     "app/api/orders/**": {

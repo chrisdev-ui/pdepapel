@@ -9,7 +9,7 @@ import {
 } from "@tanstack/react-table";
 import { useState } from "react";
 
-import { WishlistColumn } from "@/app/(routes)/wishlist/components/columns";
+import { WishlistColumn } from "@/app/(routes)/favoritos/components/columns";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import {
   Table,

@@ -21,6 +21,7 @@ import { Container } from "@/components/ui/container";
 import { Currency } from "@/components/ui/currency";
 import { NoResults } from "@/components/ui/no-results";
 import { KAWAII_FACE_SAD, OrderStatus, ShippingStatus } from "@/constants";
+import { orderPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import { Order } from "@/types";
 
 export const OrderHistory: React.FC<{}> = () => {
@@ -48,7 +49,7 @@ export const OrderHistory: React.FC<{}> = () => {
       <Container className="space-y-10">
         <NoResults message={`No hay ordenes a tu nombre ${KAWAII_FACE_SAD}`} />
         <div>
-          <Link href="/shop">
+          <Link href={STOREFRONT_ROUTES.shop}>
             <Button className="w-full">
               {" "}
               <Store className="mr-2 h-5 w-5" /> Ir a la tienda
@@ -113,7 +114,7 @@ export const OrderHistory: React.FC<{}> = () => {
             </CardHeader>
             <CardFooter>
               <div className="w-full">
-                <Link href={`/order/${order.id}`}>
+                <Link href={orderPath(order.id)}>
                   <Button className="w-full">Ver detalles</Button>
                 </Link>
               </div>

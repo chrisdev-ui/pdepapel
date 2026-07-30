@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import { Icons } from "@/components/icons";
 import { useWishlist } from "@/hooks/use-wishlist";
+import { STOREFRONT_ROUTES } from "@/lib/routes";
 
 export const WishlistButton: React.FC<{}> = () => {
   const { items } = useWishlist();
@@ -19,7 +20,7 @@ export const WishlistButton: React.FC<{}> = () => {
   }
   return (
     <Link
-      href="/wishlist"
+      href={STOREFRONT_ROUTES.wishlist}
       className="relative hover:opacity-75"
       aria-label="Ver lista de deseos"
     >

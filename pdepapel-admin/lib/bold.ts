@@ -91,7 +91,7 @@ export function generateBoldCheckoutData(order: any) {
   } else if (storeUrl.startsWith("http://")) {
     storeUrl = storeUrl.replace(/^http:\/\//, "https://");
   }
-  const redirectionUrl = `${storeUrl}/order/${order.id}`;
+  const redirectionUrl = `${storeUrl}/pedido/${order.id}`;
 
   return {
     orderId: order.id,

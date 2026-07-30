@@ -17,6 +17,7 @@ import { OrderHistory } from "@/components/order-history";
 import { SearchBar } from "@/components/search-bar";
 import { WishlistButton } from "@/components/wishlist-button";
 import { useScrollPosition } from "@/hooks/use-scroll-position";
+import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
 interface NavbarProps {
@@ -100,13 +101,13 @@ const Navbar: React.FC<NavbarProps> = ({ season = Season.Default }) => {
               <NavigationLink href="/">Inicio</NavigationLink>
             </li>
             <li>
-              <NavigationLink href="/shop">Tienda</NavigationLink>
+              <NavigationLink href={STOREFRONT_ROUTES.shop}>Tienda</NavigationLink>
             </li>
             <li>
-              <NavigationLink href="/about">Nosotros</NavigationLink>
+              <NavigationLink href={STOREFRONT_ROUTES.about}>Nosotros</NavigationLink>
             </li>
             <li>
-              <NavigationLink href="/contact">Contacto</NavigationLink>
+              <NavigationLink href={STOREFRONT_ROUTES.contact}>Contacto</NavigationLink>
             </li>
           </ul>
           <div className="hidden items-center space-x-5 lg:flex">
@@ -129,7 +130,7 @@ const Navbar: React.FC<NavbarProps> = ({ season = Season.Default }) => {
             </SignedIn>
             <SignedOut>
               <Link
-                href={`/sign-in?redirectUrl=${pathname}`}
+                href={`${STOREFRONT_ROUTES.signIn}?redirect_url=${pathname}`}
                 className="hover:opacity-75"
                 aria-label="Iniciar sesión"
               >

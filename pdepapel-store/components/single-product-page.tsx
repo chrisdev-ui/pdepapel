@@ -8,6 +8,7 @@ import { Reviews } from "@/components/reviews/reviews";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { Container } from "@/components/ui/container";
 import { Separator } from "@/components/ui/separator";
+import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { Product, ProductVariant } from "@/types";
 import { useRef } from "react";
 
@@ -25,13 +26,13 @@ export const SingleProductPage: React.FC<SingleProductPageProps> = ({
   const reviewsRef = useRef<HTMLDivElement>(null);
 
   const breadcrumbItems: BreadcrumbItem[] = [
-    { label: "Tienda", href: "/shop" },
+    { label: "Tienda", href: STOREFRONT_ROUTES.shop },
   ];
 
   if (product.category) {
     breadcrumbItems.push({
       label: product.category.name,
-      href: `/shop?categoryId=${product.category.slug || product.category.id}`,
+      href: `${STOREFRONT_ROUTES.shop}?categoryId=${product.category.slug || product.category.id}`,
     });
   }
 

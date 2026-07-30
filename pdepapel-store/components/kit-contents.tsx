@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { productPath } from "@/lib/routes";
 import { Product } from "@/types";
 
 interface KitContentsProps {
@@ -26,7 +27,7 @@ export const KitContents: React.FC<KitContentsProps> = ({ components }) => {
             whileTap={{ scale: 0.98 }}
           >
             <Link
-              href={`/product/${item.component.slug || item.component.id}`}
+              href={productPath(item.component.slug || item.component.id)}
               className="block"
             >
               <Card className="group cursor-pointer overflow-hidden transition-shadow hover:shadow-lg">

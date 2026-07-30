@@ -88,7 +88,7 @@ export async function POST(
     } else if (storeUrl.startsWith("http://")) {
       storeUrl = storeUrl.replace(/^http:\/\//, "https://");
     }
-    const redirectionUrl = `${storeUrl}/order/${order.id}`;
+    const redirectionUrl = `${storeUrl}/pedido/${order.id}`;
 
     return NextResponse.json(
       {

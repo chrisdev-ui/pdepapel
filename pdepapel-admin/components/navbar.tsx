@@ -9,7 +9,7 @@ import prismadb from "@/lib/prismadb";
 export async function Navbar() {
   const { userId } = auth();
   if (!userId) {
-    redirect("/sign-in");
+    redirect("/iniciar-sesion");
   }
   const stores = await prismadb.store.findMany({ where: { userId } });
   return (

@@ -1,6 +1,6 @@
 import { Table } from "@tanstack/react-table";
 
-import { WishlistColumn } from "@/app/(routes)/wishlist/components/columns";
+import { WishlistColumn } from "@/app/(routes)/favoritos/components/columns";
 import { Button } from "@/components/ui/button";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { ArrowLeft, ArrowRight, PlusCircle, Trash } from "lucide-react";

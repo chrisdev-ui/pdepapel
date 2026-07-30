@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { KAWAII_FACE_SAD } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { env } from "@/lib/env.mjs";
+import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { Review } from "@/types";
 import axios from "axios";
 
@@ -118,7 +119,7 @@ export const Reviews: React.FC<ReviewsProps> = ({
           </div>
         </SignedIn>
         <SignedOut>
-          <Link href={`/sign-in?redirect_url=${pathname}`}>
+          <Link href={`${STOREFRONT_ROUTES.signIn}?redirect_url=${pathname}`}>
             <Button className="my-4">
               Inicia sesión para dejar un comentario
             </Button>

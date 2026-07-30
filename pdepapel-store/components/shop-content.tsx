@@ -11,10 +11,10 @@ import { LIMIT_SHOP_ITEMS, SORT_OPTIONS } from "@/constants";
 import { useProductFilters } from "@/hooks/use-product-filters";
 import { Category, Color, Design, Product, Size, Type } from "@/types";
 
-import Products from "../app/(routes)/shop/components/products";
-import ShopSearchBar from "../app/(routes)/shop/components/shop-search-bar";
-import { ProductListSkeleton } from "../app/(routes)/shop/components/skeletons";
-import SortSelector from "../app/(routes)/shop/components/sort-selector";
+import Products from "../app/(routes)/tienda/components/products";
+import ShopSearchBar from "../app/(routes)/tienda/components/shop-search-bar";
+import { ProductListSkeleton } from "../app/(routes)/tienda/components/skeletons";
+import SortSelector from "../app/(routes)/tienda/components/sort-selector";
 
 const MobileFilters = dynamic(() => import("@/components/mobile-filters"), {
   ssr: false,

@@ -1,5 +1,6 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
+import { productPath, STOREFRONT_ROUTES } from "@/lib/routes";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -57,9 +58,9 @@ async function handleRevalidation(req: NextRequest) {
 
     // Revalidate specific product path
     if (productId) {
-      const productPath = `/product/${productId}`;
-      revalidatePath(productPath);
-      revalidatedPaths.push(productPath);
+      const productUrl = productPath(productId);
+      revalidatePath(productUrl);
+      revalidatedPaths.push(productUrl);
     }
 
     // Revalidate custom path if provided
@@ -70,13 +71,13 @@ async function handleRevalidation(req: NextRequest) {
 
     // Default global paths affected by stock/variants
     if (!path && !productId) {
-      revalidatePath("/shop");
+      revalidatePath(STOREFRONT_ROUTES.shop);
       revalidatePath("/");
-      revalidatedPaths.push("/shop", "/");
+      revalidatedPaths.push(STOREFRONT_ROUTES.shop, "/");
     } else {
       // Always revalidate /shop when stock/product updates
-      revalidatePath("/shop");
-      revalidatedPaths.push("/shop");
+      revalidatePath(STOREFRONT_ROUTES.shop);
+      revalidatedPaths.push(STOREFRONT_ROUTES.shop);
     }
 
     // Revalidate tag if provided or fallback to 'products'

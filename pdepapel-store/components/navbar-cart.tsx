@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/sheet";
 import { KAWAII_FACE_SAD } from "@/constants";
 import { useCart } from "@/hooks/use-cart";
+import { productPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import { calculateTotals, cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 
@@ -50,12 +51,12 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
 
   const onGoToCart = () => {
     setIsSheetOpen(false);
-    router.push("/cart");
+    router.push(STOREFRONT_ROUTES.cart);
   };
 
   const onCheckout = () => {
     setIsSheetOpen(false);
-    router.push("/checkout");
+    router.push(STOREFRONT_ROUTES.checkout);
   };
 
   const totalQuantity = cart.items.reduce(
@@ -102,7 +103,7 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
                   className="grid grid-cols-[80px_1fr] gap-2.5"
                 >
                   <Link
-                    href={`/product/${item.slug || item.id}`}
+                    href={productPath(item.slug || item.id)}
                     className="relative block h-20 w-20"
                   >
                     <CldImage

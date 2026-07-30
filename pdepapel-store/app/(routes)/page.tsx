@@ -5,6 +5,7 @@ import { Organization, WebSite } from "schema-dts";
 
 import { getBillboards } from "@/actions/get-billboards";
 import { BASE_URL } from "@/constants";
+import { STOREFRONT_ROUTES } from "@/lib/routes";
 
 import Features from "@/components/features";
 
@@ -41,7 +42,7 @@ const jsonLd: {
         "@type": "SearchAction",
         target: {
           "@type": "EntryPoint",
-          urlTemplate: `${BASE_URL}/shop?search={search_term_string}`,
+          urlTemplate: `${BASE_URL}${STOREFRONT_ROUTES.shop}?search={search_term_string}`,
         },
         "query-input": "required name=search_term_string",
       } as any,

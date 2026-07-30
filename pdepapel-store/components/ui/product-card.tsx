@@ -14,6 +14,7 @@ import { StarRating } from "@/components/ui/star-rating";
 import { useCart } from "@/hooks/use-cart";
 import { usePreviewModal } from "@/hooks/use-preview-modal";
 import { useWishlist } from "@/hooks/use-wishlist";
+import { productPath } from "@/lib/routes";
 import { calculateAverageRating, cn } from "@/lib/utils";
 import { Product } from "@/types";
 
@@ -42,7 +43,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
     product?.images.find((image) => image.isMain) ?? product?.images[0];
 
   const handleClick = () => {
-    router.push(`/product/${product.slug || product.id}`);
+    router.push(productPath(product.slug || product.id));
   };
 
   const onPreview: MouseEventHandler<HTMLButtonElement> = (event) => {
