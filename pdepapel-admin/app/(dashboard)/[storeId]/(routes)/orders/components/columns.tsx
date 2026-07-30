@@ -170,11 +170,7 @@ export const columns: ColumnDef<OrderColumn>[] = [
           case PaymentMethod.Wompi:
             return <Icons.wompi className="h-auto w-16" />;
           case PaymentMethod.Bold:
-            return (
-              <span className="text-xs font-semibold text-primary">
-                Pago en línea
-              </span>
-            );
+            return <Icons.bold className="h-auto w-12" />;
           case PaymentMethod.PayU:
             return (
               <span className="text-xs text-muted-foreground">
