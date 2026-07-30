@@ -1,4 +1,3 @@
-import { OrderHistory } from "@/components/order-history";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -8,6 +7,8 @@ export const metadata: Metadata = {
   },
 };
 
-export default function MyOrders() {
-  return <OrderHistory />;
+export default function QuoteLayout({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
+  return children;
 }

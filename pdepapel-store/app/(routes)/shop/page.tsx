@@ -22,6 +22,9 @@ export async function generateMetadata({
   searchParams,
 }: ShopPageProps): Promise<Metadata> {
   const { typeId, categoryId, search, minPrice, maxPrice } = searchParams;
+  const hasActiveFilters = Object.values(searchParams).some(
+    (value) => value !== undefined && value !== "",
+  );
   let title = "Tienda";
   let description =
     "Explora nuestra tienda online en Papelería P de Papel. Un mundo de artículos kawaii, suministros de oficina y papelería general te espera.";
@@ -84,21 +87,17 @@ export async function generateMetadata({
   if (title !== "Tienda") keywords.unshift(title.toLowerCase());
   if (search) keywords.push(search);
 
-  // Construct canonical URL with essential filters
-  const canonicalUrl = new URL(`${BASE_URL}/shop`);
-  if (categoryId) canonicalUrl.searchParams.set("categoryId", categoryId);
-  if (typeId) canonicalUrl.searchParams.set("typeId", typeId);
-  if (search) canonicalUrl.searchParams.set("search", search);
+  const canonicalUrl = `${BASE_URL}/shop`;
 
   return {
     title: `${title} | P de Papel`,
     description,
     keywords,
     robots: {
-      index: true,
+      index: !hasActiveFilters,
       follow: true,
       googleBot: {
-        index: true,
+        index: !hasActiveFilters,
         follow: true,
         "max-video-preview": -1,
         "max-image-preview": "large",
@@ -106,7 +105,7 @@ export async function generateMetadata({
       },
     },
     alternates: {
-      canonical: canonicalUrl.toString(),
+      canonical: canonicalUrl,
     },
     openGraph: {
       title: `${title} | P de Papel`,
@@ -115,7 +114,7 @@ export async function generateMetadata({
       locale: "es_CO",
       siteName: "Papelería P de Papel",
       images,
-      url: canonicalUrl.toString(),
+      url: canonicalUrl,
     },
     twitter: {
       card: "summary_large_image",

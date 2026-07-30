@@ -11,6 +11,10 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "/wishlist",
   },
+  robots: {
+    index: false,
+    follow: false,
+  },
 };
 
 export default function WishlistPage() {

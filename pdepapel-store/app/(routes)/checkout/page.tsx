@@ -15,6 +15,10 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "/checkout",
   },
+  robots: {
+    index: false,
+    follow: false,
+  },
 };
 
 import { getCurrentSeason } from "@/lib/date-utils";

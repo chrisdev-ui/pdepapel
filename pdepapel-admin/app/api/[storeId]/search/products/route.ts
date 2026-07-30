@@ -30,7 +30,7 @@ export async function GET(
     // ---------------------------------------------------------
     // REDIS CACHING (1 Hour)
     // ---------------------------------------------------------
-    const cacheKey = `store:${params.storeId}:search:${search}:${page}:${limit}:v2`;
+    const cacheKey = `store:${params.storeId}:search:${search}:${page}:${limit}:v3`;
     try {
       const { Redis } = await import("@upstash/redis");
       const redis = Redis.fromEnv();
@@ -129,8 +129,8 @@ export async function GET(
           const effectivePrice = priceInfo?.price ?? Number(product.price);
 
           processedResults.set(groupId, {
-            id: groupId,
-            slug: product.productGroup.slug || product.slug || groupId,
+            id: product.id,
+            slug: product.slug || product.id,
             name: product.productGroup.name,
             price: effectivePrice, // Representative price
             image: groupImage,
