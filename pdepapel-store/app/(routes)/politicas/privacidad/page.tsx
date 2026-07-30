@@ -4,6 +4,7 @@ import Image from "next/image";
 
 import { Container } from "@/components/ui/container";
 import { Separator } from "@/components/ui/separator";
+import { BASE_URL } from "@/constants";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 
 export const metadata: Metadata = {
@@ -12,6 +13,9 @@ export const metadata: Metadata = {
     "Explora nuestra Política de Tratamiento de Datos en Papelería P de Papel. Comprometidos con la seguridad y privacidad de tu información. Conoce cómo recopilamos, usamos y protegemos tus datos personales en nuestras operaciones de venta de artículos kawaii y de oficina.",
   alternates: {
     canonical: STOREFRONT_ROUTES.dataPolicy,
+  },
+  openGraph: {
+    url: `${BASE_URL}${STOREFRONT_ROUTES.dataPolicy}`,
   },
 };
 

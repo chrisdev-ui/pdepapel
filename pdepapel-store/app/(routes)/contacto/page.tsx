@@ -17,6 +17,9 @@ export const metadata: Metadata = {
   alternates: {
     canonical: STOREFRONT_ROUTES.contact,
   },
+  openGraph: {
+    url: `${BASE_URL}${STOREFRONT_ROUTES.contact}`,
+  },
   keywords: [
     "contacto",
     "atención al cliente",
