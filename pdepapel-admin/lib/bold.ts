@@ -29,21 +29,63 @@ export function generateBoldIntegritySignature(
 }
 
 /**
+ * Returns the stable external reference that Bold sends back in
+ * `data.metadata.reference` in its webhook payload.
+ */
+export function getBoldOrderReference(order: {
+  id: string;
+  orderNumber?: string | null;
+}): string {
+  const reference = order.orderNumber || order.id;
+
+  if (!/^[A-Za-z0-9_-]{1,60}$/.test(reference)) {
+    throw new Error("La referencia de orden para Bold no es válida");
+  }
+
+  return reference;
+}
+
+/**
+ * Verifies the HMAC signature documented by Bold for webhook requests.
+ */
+export function verifyBoldWebhookSignature(
+  rawPayload: string,
+  signature: string | null,
+  secretKey: string,
+): boolean {
+  if (!signature) return false;
+
+  const expectedSignature = crypto
+    .createHmac("sha256", secretKey)
+    .update(Buffer.from(rawPayload, "utf8").toString("base64"))
+    .digest("hex");
+  const receivedSignature = signature.trim();
+
+  return (
+    receivedSignature.length === expectedSignature.length &&
+    crypto.timingSafeEqual(
+      Buffer.from(receivedSignature, "utf8"),
+      Buffer.from(expectedSignature, "utf8"),
+    )
+  );
+}
+
+/**
  * Generates pre-signed Bold checkout payload for direct checkout creation
  */
 export function generateBoldCheckoutData(order: any) {
   const boldConfig = getBoldConfig();
-  // Bold requires a clean alphanumeric unique sale identifier for each payment attempt
-  const uniqueBoldTransactionId = `ORD${Date.now()}`;
+  const boldOrderReference = getBoldOrderReference(order);
   const amount = Math.round(order.total);
   const currency = "COP";
   const integritySignature = generateBoldIntegritySignature(
-    uniqueBoldTransactionId,
+    boldOrderReference,
     amount,
     currency,
     boldConfig.secretKey,
   );
-  let storeUrl = process.env.FRONTEND_STORE_URL || "https://papeleriapdepapel.com";
+  let storeUrl =
+    process.env.FRONTEND_STORE_URL || "https://papeleriapdepapel.com";
   if (storeUrl.includes("localhost")) {
     storeUrl = "https://papeleriapdepapel.com";
   } else if (storeUrl.startsWith("http://")) {
@@ -53,7 +95,7 @@ export function generateBoldCheckoutData(order: any) {
 
   return {
     orderId: order.id,
-    orderNumber: uniqueBoldTransactionId,
+    orderNumber: boldOrderReference,
     amount,
     currency,
     identityKey: boldConfig.identityKey,

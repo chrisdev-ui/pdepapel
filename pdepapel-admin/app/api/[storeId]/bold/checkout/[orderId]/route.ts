@@ -1,5 +1,9 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { generateBoldIntegritySignature, getBoldConfig } from "@/lib/bold";
+import {
+  generateBoldIntegritySignature,
+  getBoldConfig,
+  getBoldOrderReference,
+} from "@/lib/bold";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { OrderStatus, PaymentMethod } from "@prisma/client";
@@ -65,20 +69,20 @@ export async function POST(
       );
     }
 
-    // Bold requires a clean alphanumeric unique sale identifier for each payment attempt
-    const uniqueBoldTransactionId = `ORD${Date.now()}`;
+    const boldOrderReference = getBoldOrderReference(order);
     const amount = Math.round(order.total);
     const currency = "COP";
 
     // Calculate official SHA-256 integrity signature: SHA256(order_id + amount + currency + secret_key)
     const integritySignature = generateBoldIntegritySignature(
-      uniqueBoldTransactionId,
+      boldOrderReference,
       amount,
       currency,
       boldConfig.secretKey,
     );
 
-    let storeUrl = process.env.FRONTEND_STORE_URL || "https://papeleriapdepapel.com";
+    let storeUrl =
+      process.env.FRONTEND_STORE_URL || "https://papeleriapdepapel.com";
     if (storeUrl.includes("localhost")) {
       storeUrl = "https://papeleriapdepapel.com";
     } else if (storeUrl.startsWith("http://")) {
@@ -89,7 +93,7 @@ export async function POST(
     return NextResponse.json(
       {
         orderId: order.id,
-        orderNumber: uniqueBoldTransactionId,
+        orderNumber: boldOrderReference,
         amount,
         currency,
         identityKey: boldConfig.identityKey,

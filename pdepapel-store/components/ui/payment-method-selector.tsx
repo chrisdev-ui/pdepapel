@@ -31,7 +31,9 @@ const BankTransferSteps = () => (
     <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/90 p-2.5 text-xs font-semibold text-emerald-950 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200">
       <Icons.payments.breB className="h-5 w-auto shrink-0" />
       <span>
-        <strong>¡Transferencia 100% Gratis!</strong> Transfiere sin ninguna comisión o costo adicional desde cualquier banco colombiano usando <strong>Bre-B</strong> o transferencia directa.
+        <strong>¡Transferencia 100% Gratis!</strong> Transfiere sin ninguna
+        comisión o costo adicional desde cualquier banco colombiano usando{" "}
+        <strong>Bre-B</strong> o transferencia directa.
       </span>
     </div>
     <div className="flex items-start gap-2">
@@ -114,7 +116,7 @@ const GatewayLogos = ({
 const PAYMENT_OPTIONS: PaymentMethodOption[] = [
   {
     value: PaymentMethod.Bold,
-    label: "Pago en línea (Tarjeta de crédito / débito, PSE, Nequi)",
+    label: "Paga con Bold (Tarjeta de crédito / débito, PSE, Nequi)",
     icon: Icons.payments.bold,
     badges: [
       { name: "Visa", icon: Icons.gateways.visa },
@@ -126,7 +128,8 @@ const PAYMENT_OPTIONS: PaymentMethodOption[] = [
     description: (
       <div className="font-sans text-sm">
         <p className="mb-2">
-          Paga de forma instantánea y 100% segura con tarjeta de crédito o débito, PSE, Nequi o Bancolombia a través de nuestra pasarela de pagos en línea.
+          Paga de forma instantánea y 100% segura con tarjeta de crédito o
+          débito, PSE, Nequi o Bancolombia a través de Bold.
         </p>
         <GatewayLogos
           gateways={[
@@ -142,7 +145,8 @@ const PAYMENT_OPTIONS: PaymentMethodOption[] = [
   },
   {
     value: PaymentMethod.BankTransfer,
-    label: "Transferencia bancaria directa (Sin costo desde cualquier banco con Bre-B)",
+    label:
+      "Transferencia bancaria directa (Sin costo desde cualquier banco con Bre-B)",
     icon: Icons.payments.transfer,
     badges: [
       { name: "Bre-B (Cualquier Banco)", icon: Icons.payments.breB },
@@ -159,7 +163,10 @@ const PAYMENT_OPTIONS: PaymentMethodOption[] = [
     label: "Pago contra entrega (Efectivo / Datáfono)",
     icon: Icons.payments.cashOnDelivery,
     badges: [
-      { name: "Pago en Efectivo / Datáfono", icon: Icons.payments.cashOnDelivery },
+      {
+        name: "Pago en Efectivo / Datáfono",
+        icon: Icons.payments.cashOnDelivery,
+      },
     ],
     description:
       "Paga en efectivo o datáfono únicamente cuando recibas tu pedido en la dirección de entrega. Disponible solo en zonas con cobertura.",
@@ -239,7 +246,7 @@ export const PaymentMethodSelector = ({
                         <div
                           key={badge.name}
                           title={badge.name}
-                          className="flex h-7 w-11 items-center justify-center rounded border bg-white p-1 shadow-2xs transition-transform duration-200 group-hover:scale-105"
+                          className="shadow-2xs flex h-7 w-11 items-center justify-center rounded border bg-white p-1 transition-transform duration-200 group-hover:scale-105"
                         >
                           {badge.icon ? (
                             <badge.icon className="h-full w-full object-contain" />
@@ -282,7 +289,8 @@ export const PaymentMethodSelector = ({
         {/* Omitted payment methods with status badge */}
         {omittedOptions.map((option) => {
           const Icon = option.icon;
-          const disabledMessage = disabledMessages?.[option.value] || "Próximamente";
+          const disabledMessage =
+            disabledMessages?.[option.value] || "No disponible";
 
           return (
             <div key={option.value} className="relative">
@@ -325,14 +333,19 @@ export const PaymentMethodSelector = ({
       </RadioGroup>
 
       {/* 🛡️ Trust & Security Badges */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-2xl border border-purple-100 bg-purple-50/50 p-3.5 text-xs text-purple-950 dark:border-purple-900/40 dark:bg-purple-950/20 dark:text-purple-200">
+      <div className="grid grid-cols-1 gap-3 rounded-2xl border border-purple-100 bg-purple-50/50 p-3.5 text-xs text-purple-950 dark:border-purple-900/40 dark:bg-purple-950/20 dark:text-purple-200 sm:grid-cols-2">
         <div className="flex items-center gap-2 font-medium">
-          <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
-          <span><strong>Compra 100% Segura</strong> con encriptación SSL de 256 bits.</span>
+          <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />
+          <span>
+            <strong>Compra 100% Segura</strong> con encriptación SSL de 256
+            bits.
+          </span>
         </div>
         <div className="flex items-center gap-2 font-medium">
-          <Icons.whatsapp className="h-4 w-4 text-emerald-600 shrink-0" />
-          <span><strong>Soporte en Vivo</strong> directo por WhatsApp.</span>
+          <Icons.whatsapp className="h-4 w-4 shrink-0 text-emerald-600" />
+          <span>
+            <strong>Soporte en Vivo</strong> directo por WhatsApp.
+          </span>
         </div>
       </div>
 

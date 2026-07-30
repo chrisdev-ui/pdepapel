@@ -1,7 +1,14 @@
 "use client";
 
 import axios from "axios";
-import { Copy, CreditCard, Edit, MessageSquare, MoreHorizontal, Trash } from "lucide-react";
+import {
+  Copy,
+  CreditCard,
+  Edit,
+  MessageSquare,
+  MoreHorizontal,
+  Trash,
+} from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -113,7 +120,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
       toast({
         title: "Pago por Transferencia / Directo",
         description:
-          "Esta orden fue registrada para Pago por Transferencia Directa o Efectivo. Los links de pago Wompi solo aplican para compras con Pago en Línea.",
+          "Esta orden fue registrada para transferencia directa o efectivo. Los links de Wompi solo aplican para pagos con Wompi.",
         variant: "destructive",
       });
       return;

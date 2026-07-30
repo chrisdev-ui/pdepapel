@@ -45,8 +45,9 @@ export const ReviewStep = ({
       case PaymentMethod.BankTransfer:
         return "Transferencia bancaria directa (Sin costo con Bre-B / Bancolombia / Nequi)";
       case PaymentMethod.Bold:
+        return "Paga con Bold (Tarjeta de crédito / débito, PSE, Nequi)";
       case PaymentMethod.Wompi:
-        return "Pago en línea (Tarjeta de crédito / débito, PSE, Nequi)";
+        return "Paga con Wompi (Tarjeta de crédito / débito, PSE, Nequi)";
       case PaymentMethod.PayU:
         return "PayU (Desactivado)";
       default:

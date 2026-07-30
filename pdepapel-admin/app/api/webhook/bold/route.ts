@@ -3,14 +3,38 @@ import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { createInventoryMovementBatchResilient } from "@/lib/inventory";
 import { invalidateStoreProductsCache } from "@/lib/cache";
+import { getBoldConfig, verifyBoldWebhookSignature } from "@/lib/bold";
 import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
 import { calculateOrderFinancials } from "@/lib/financial";
-import crypto from "crypto";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
-    const payload = await req.json();
+    const rawPayload = await req.text();
+
+    if (!rawPayload) {
+      return NextResponse.json(
+        { error: "Payload no recibido" },
+        { status: 400 },
+      );
+    }
+
+    const boldConfig = getBoldConfig();
+    const isValidSignature = verifyBoldWebhookSignature(
+      rawPayload,
+      req.headers.get("x-bold-signature"),
+      boldConfig.secretKey,
+    );
+
+    if (!isValidSignature) {
+      console.warn("Bold webhook rejected due to an invalid signature");
+      return NextResponse.json(
+        { error: "Firma de webhook Bold inválida" },
+        { status: 400 },
+      );
+    }
+
+    const payload = JSON.parse(rawPayload);
 
     if (!payload) {
       return NextResponse.json(
@@ -59,10 +83,10 @@ export async function POST(req: Request) {
 
 async function processBoldPayment(transaction: any, targetStatus: OrderStatus) {
   const orderReference =
+    transaction.metadata?.reference ||
     transaction.reference ||
     transaction.order_id ||
-    transaction.orderId ||
-    transaction.subject;
+    transaction.orderId;
 
   if (!orderReference) {
     return NextResponse.json(
@@ -107,6 +131,31 @@ async function processBoldPayment(transaction: any, targetStatus: OrderStatus) {
     );
   }
 
+  const paidAmount = Number(transaction.amount?.total);
+  if (
+    targetStatus === OrderStatus.PAID &&
+    (!Number.isFinite(paidAmount) ||
+      Math.round(paidAmount) !== Math.round(order.total))
+  ) {
+    return NextResponse.json(
+      {
+        error: `El monto de Bold no coincide con la orden ${order.orderNumber}`,
+      },
+      { status: 400 },
+    );
+  }
+
+  if (
+    targetStatus === OrderStatus.PAID &&
+    transaction.amount?.currency &&
+    transaction.amount.currency !== "COP"
+  ) {
+    return NextResponse.json(
+      { error: "La moneda reportada por Bold no es COP" },
+      { status: 400 },
+    );
+  }
+
   // Idempotency Guard: If order is already PAID and event is SALE_APPROVED, skip processing
   if (order.status === OrderStatus.PAID && targetStatus === OrderStatus.PAID) {
     return NextResponse.json(
@@ -116,19 +165,30 @@ async function processBoldPayment(transaction: any, targetStatus: OrderStatus) {
   }
 
   const transactionId =
+    transaction.payment_id ||
     transaction.id ||
     transaction.transaction_id ||
     `BOLD-${Date.now()}`;
 
-  // Update order status
-  await prismadb.order.update({
-    where: { id: order.id },
-    data: { status: targetStatus },
-  });
-
+  let paymentProcessed = false;
   if (targetStatus === OrderStatus.PAID) {
-    await prismadb.$transaction(async (tx) => {
-      // 1. Stock Movements (Sales = Negative)
+    paymentProcessed = await prismadb.$transaction(async (tx) => {
+      const claim = await tx.order.updateMany({
+        where: {
+          id: order.id,
+          status: {
+            in: [
+              OrderStatus.CREATED,
+              OrderStatus.PENDING,
+              OrderStatus.CANCELLED,
+            ],
+          },
+        },
+        data: { status: OrderStatus.PAID },
+      });
+
+      if (claim.count === 0) return false;
+
       const stockMovements = order.orderItems
         .filter((item: any) => item.product)
         .map((orderItem: any) => ({
@@ -145,7 +205,6 @@ async function processBoldPayment(transaction: any, targetStatus: OrderStatus) {
 
       await createInventoryMovementBatchResilient(tx, stockMovements);
 
-      // 2. Financial Metrics calculation
       const financials = await calculateOrderFinancials(
         order,
         PaymentMethod.Bold,
@@ -161,38 +220,84 @@ async function processBoldPayment(transaction: any, targetStatus: OrderStatus) {
         } as any,
       });
 
-      await invalidateStoreProductsCache(order.storeId);
+      await tx.paymentDetails.upsert({
+        where: { orderId: order.id },
+        update: {
+          transactionId,
+          details: `Bold Transaction ID: ${transactionId} | Reference: ${orderReference} | Status: ${targetStatus}`,
+        },
+        create: {
+          method: PaymentMethod.Bold,
+          transactionId,
+          details: `Bold Transaction ID: ${transactionId} | Reference: ${orderReference} | Status: ${targetStatus}`,
+          store: { connect: { id: order.storeId } },
+          order: { connect: { id: order.id } },
+        },
+      });
+
+      await tx.shipping.upsert({
+        where: { orderId: order.id },
+        update: { status: ShippingStatus.Preparing },
+        create: {
+          status: ShippingStatus.Preparing,
+          store: { connect: { id: order.storeId } },
+          order: { connect: { id: order.id } },
+        },
+      });
+
+      return true;
     });
+
+    if (!paymentProcessed) {
+      return NextResponse.json(
+        {
+          message: `Orden ${order.orderNumber} ya fue procesada anteriormente`,
+        },
+        { status: 200 },
+      );
+    }
+
+    await invalidateStoreProductsCache(order.storeId);
+  } else {
+    paymentProcessed = await prismadb.$transaction(async (tx) => {
+      const claim = await tx.order.updateMany({
+        where: {
+          id: order.id,
+          status: { in: [OrderStatus.CREATED, OrderStatus.PENDING] },
+        },
+        data: { status: targetStatus },
+      });
+
+      if (claim.count === 0) return false;
+
+      await tx.paymentDetails.upsert({
+        where: { orderId: order.id },
+        update: {
+          transactionId,
+          details: `Bold Transaction ID: ${transactionId} | Reference: ${orderReference} | Status: ${targetStatus}`,
+        },
+        create: {
+          method: PaymentMethod.Bold,
+          transactionId,
+          details: `Bold Transaction ID: ${transactionId} | Reference: ${orderReference} | Status: ${targetStatus}`,
+          store: { connect: { id: order.storeId } },
+          order: { connect: { id: order.id } },
+        },
+      });
+
+      return true;
+    });
+
+    if (!paymentProcessed) {
+      return NextResponse.json(
+        {
+          message: `Orden ${order.orderNumber} ya fue procesada anteriormente`,
+        },
+        { status: 200 },
+      );
+    }
   }
 
-  // 3. Upsert Payment Details
-  await prismadb.paymentDetails.upsert({
-    where: { orderId: order.id },
-    update: {
-      transactionId,
-      details: `Bold Transaction ID: ${transactionId} | Status: ${targetStatus}`,
-    },
-    create: {
-      method: PaymentMethod.Bold,
-      transactionId,
-      details: `Bold Transaction ID: ${transactionId} | Status: ${targetStatus}`,
-      store: { connect: { id: order.storeId } },
-      order: { connect: { id: order.id } },
-    },
-  });
-
-  // 4. Update Shipping status
-  await prismadb.shipping.upsert({
-    where: { orderId: order.id },
-    update: { status: ShippingStatus.Preparing },
-    create: {
-      status: ShippingStatus.Preparing,
-      store: { connect: { id: order.storeId } },
-      order: { connect: { id: order.id } },
-    },
-  });
-
-  // 5. Send order notification email & auto shipping guide if applicable
   const updatedOrder = await prismadb.order.findUnique({
     where: { id: order.id },
     include: {
@@ -227,5 +332,8 @@ async function processBoldPayment(transaction: any, targetStatus: OrderStatus) {
     );
   }
 
-  return NextResponse.json({ success: true, orderId: order.id }, { status: 200 });
+  return NextResponse.json(
+    { success: true, orderId: order.id },
+    { status: 200 },
+  );
 }

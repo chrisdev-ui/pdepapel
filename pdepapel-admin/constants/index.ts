@@ -61,10 +61,13 @@ export const statusOptions = {
 };
 
 export const paymentOptions: Record<PaymentMethod, string> = {
-  [PaymentMethod.Wompi]: "Pago en línea (Tarjeta de Crédito / Débito, PSE, Nequi)",
-  [PaymentMethod.BankTransfer]: "Transferencia bancaria directa (Bancolombia / Nequi)",
+  [PaymentMethod.Wompi]:
+    "Paga con Wompi (Tarjeta de Crédito / Débito, PSE, Nequi)",
+  [PaymentMethod.BankTransfer]:
+    "Transferencia bancaria directa (Bancolombia / Nequi)",
   [PaymentMethod.COD]: "Pago contra entrega (Efectivo / Datáfono)",
-  [PaymentMethod.Bold]: "Bold - Pago en línea (Próximamente)",
+  [PaymentMethod.Bold]:
+    "Paga con Bold (Tarjeta de Crédito / Débito, PSE, Nequi)",
   [PaymentMethod.PayU]: "PayU (Desactivado)",
   [PaymentMethod.CASH]: "Pago en efectivo en tienda",
 };
@@ -137,10 +140,13 @@ export const KITS_ID = "6fd0c357-45c3-4d61-84b1-78921cfb1f21";
 export const TRESHOLD_LOW_STOCK = 5;
 
 export const paymentNames: Record<PaymentMethod, string> = {
-  [PaymentMethod.Wompi]: "Pago en línea (Tarjeta de Crédito, Débito, PSE, Nequi)",
-  [PaymentMethod.BankTransfer]: "Transferencia Bancaria Directa (Bancolombia / Nequi)",
+  [PaymentMethod.Wompi]:
+    "Paga con Wompi (Tarjeta de Crédito, Débito, PSE, Nequi)",
+  [PaymentMethod.BankTransfer]:
+    "Transferencia Bancaria Directa (Bancolombia / Nequi)",
   [PaymentMethod.COD]: "Pago Contra Entrega (Efectivo / Datáfono)",
-  [PaymentMethod.Bold]: "Pago en línea con Bold (Próximamente)",
+  [PaymentMethod.Bold]:
+    "Paga con Bold (Tarjeta de Crédito, Débito, PSE, Nequi)",
   [PaymentMethod.PayU]: "Pago con PayU (Desactivado)",
   [PaymentMethod.CASH]: "Pago en Efectivo (Presencial)",
 };

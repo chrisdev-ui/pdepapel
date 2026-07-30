@@ -173,7 +173,7 @@ export const WhatsappButton: React.FC<WhatsappButtonProps> = ({
         case OrderStatus.CANCELLED:
           message =
             `${baseMessage}Te escribo respecto a tu orden #${order.orderNumber} en P de Papel.\n\n` +
-            `Lamentamos informarte que tu orden fue cancelada. Esto puede suceder cuando hay problemas con el procesamiento del pago en línea.\n\n` +
+            `Lamentamos informarte que tu orden fue cancelada. Esto puede suceder cuando hay problemas al procesar el pago.\n\n` +
             `¿Te gustaría intentar nuevamente tu compra? Podemos ayudarte a procesar tu orden con un método de pago alternativo ${SHOPPING_BAGS}\n\n` +
             `¡Estamos aquí para ayudarte! ${SMILE}`;
           break;
