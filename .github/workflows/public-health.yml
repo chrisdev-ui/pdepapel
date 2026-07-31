@@ -1,0 +1,30 @@
+name: Public health checks
+
+on:
+  deployment_status:
+  schedule:
+    - cron: "0 14 * * 1"
+  workflow_dispatch:
+
+jobs:
+  public-routes:
+    if: >-
+      github.event_name != 'deployment_status' ||
+      (github.event.deployment_status.state == 'success' &&
+      (github.event.deployment.environment == 'Production' || github.event.deployment.environment == 'production'))
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pdepapel-store
+    env:
+      E2E_BASE_URL: https://papeleriapdepapel.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: pdepapel-store/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e

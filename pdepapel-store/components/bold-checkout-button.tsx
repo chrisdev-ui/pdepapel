@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import Script from "next/script";
 import { Loader2, ShieldCheck } from "lucide-react";
+import { BoldCheckoutSdk } from "@/components/bold-checkout-sdk";
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/icons";
 import { useToast } from "@/hooks/use-toast";
+import { BoldCheckoutPayload, toBoldCheckoutConfig } from "@/lib/bold";
 
 interface BoldCheckoutButtonProps {
   order: {
@@ -24,15 +25,12 @@ export const BoldCheckoutButton: React.FC<BoldCheckoutButtonProps> = ({
 }) => {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const [checkoutData, setCheckoutData] = useState<{
-    identityKey: string;
-    integritySignature: string;
-    amount: number;
-    currency: string;
-    orderNumber: string;
-    redirectionUrl: string;
-    description: string;
-  } | null>(null);
+  const [isBoldSdkReady, setIsBoldSdkReady] = useState(
+    () => typeof window !== "undefined" && Boolean(window.BoldCheckout),
+  );
+  const [checkoutData, setCheckoutData] = useState<BoldCheckoutPayload | null>(
+    null,
+  );
 
   const fetchBoldSignature = useCallback(async () => {
     try {
@@ -75,60 +73,62 @@ export const BoldCheckoutButton: React.FC<BoldCheckoutButtonProps> = ({
   }, [fetchBoldSignature]);
 
   const openBoldCheckout = useCallback(() => {
-    if (!checkoutData) return;
-
-    if (typeof window !== "undefined" && (window as any).BoldCheckout) {
-      try {
-        const boldCheckout = new (window as any).BoldCheckout({
-          orderId: checkoutData.orderNumber,
-          currency: checkoutData.currency,
-          amount: String(checkoutData.amount),
-          apiKey: checkoutData.identityKey,
-          integritySignature: checkoutData.integritySignature,
-          description: checkoutData.description,
-          redirectionUrl: checkoutData.redirectionUrl,
-        });
-        boldCheckout.open();
-      } catch (err) {
-        console.error("Error opening Bold checkout:", err);
-      }
-    } else {
-      console.warn("BoldCheckout SDK not yet loaded");
+    if (!checkoutData || !window.BoldCheckout) {
+      toast({
+        title: "Preparando pago",
+        description:
+          "El servicio de pago se está cargando. Intenta de nuevo en unos segundos.",
+      });
+      return;
     }
-  }, [checkoutData]);
+
+    try {
+      const boldCheckout = new window.BoldCheckout(
+        toBoldCheckoutConfig(checkoutData),
+      );
+      boldCheckout.open();
+    } catch (err) {
+      console.error("Error opening Bold checkout:", err);
+      toast({
+        title: "No pudimos abrir el pago",
+        description: "Intenta de nuevo en unos segundos.",
+        variant: "destructive",
+      });
+    }
+  }, [checkoutData, toast]);
 
   useEffect(() => {
-    if (autoOpen && checkoutData) {
+    if (autoOpen && checkoutData && isBoldSdkReady) {
       openBoldCheckout();
     }
-  }, [autoOpen, checkoutData, openBoldCheckout]);
+  }, [autoOpen, checkoutData, isBoldSdkReady, openBoldCheckout]);
 
   return (
     <div
-      className="flex flex-col items-center gap-3 w-full"
+      className="flex w-full flex-col items-center gap-3"
       role="region"
       aria-label="Pago en línea"
     >
-      <Script
-        src="https://checkout.bold.co/library/boldPaymentButton.js"
-        strategy="lazyOnload"
+      <BoldCheckoutSdk
+        onReady={() => setIsBoldSdkReady(true)}
+        onError={() => setIsBoldSdkReady(false)}
       />
 
-      {isLoading && (
+      {(isLoading || (checkoutData && !isBoldSdkReady)) && (
         <Button
           disabled
-          className="w-full h-12 rounded-xl bg-zinc-900 text-white font-bold"
+          className="h-12 w-full rounded-xl bg-zinc-900 font-bold text-white"
         >
           <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-          Preparando pago...
+          {isLoading ? "Preparando pago..." : "Cargando pago..."}
         </Button>
       )}
 
-      {!isLoading && checkoutData && (
-        <div className="w-full flex flex-col items-center">
+      {!isLoading && checkoutData && isBoldSdkReady && (
+        <div className="flex w-full flex-col items-center">
           <Button
             type="button"
-            className="w-full h-12 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2 text-base transition-all duration-200"
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-zinc-900 text-base font-bold text-white shadow-md transition-all duration-200 hover:bg-zinc-800"
             aria-label="Pagar ahora"
             onClick={openBoldCheckout}
           >

@@ -2,3 +2,6 @@
 # Mac DS Files
 .DS_STORE*
 
+# Playwright artifacts
+playwright-report/
+test-results/

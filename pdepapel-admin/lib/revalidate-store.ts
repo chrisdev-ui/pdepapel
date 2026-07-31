@@ -1,5 +1,7 @@
 import axios from "axios";
 
+import { sendRevalidationFailureAlert } from "@/lib/revalidation-alert";
+
 interface RevalidateParams {
   productId?: string;
   path?: string;
@@ -24,9 +26,13 @@ export async function triggerStorefrontRevalidation(
     const secret = process.env.REVALIDATION_SECRET;
 
     if (!secret) {
-      console.warn(
-        "Storefront revalidation skipped: REVALIDATION_SECRET is not configured.",
-      );
+      const message =
+        "Storefront revalidation skipped: REVALIDATION_SECRET is not configured.";
+      console.warn(message);
+      await sendRevalidationFailureAlert({
+        endpoints: [storefrontUrl],
+        details: [message],
+      });
       return;
     }
 
@@ -62,6 +68,8 @@ export async function triggerStorefrontRevalidation(
       }),
     );
 
+    const failures: { endpoint: string; detail: string }[] = [];
+
     results.forEach((result, index) => {
       const endpoint = `${urlsToCall[index].replace(/\/$/, "")}/api/revalidate`;
       if (result.status === "fulfilled") {
@@ -71,12 +79,25 @@ export async function triggerStorefrontRevalidation(
         );
         return;
       }
-      console.warn(
-        `⚠️ Storefront revalidation failed on ${endpoint}:`,
-        result.reason instanceof Error ? result.reason.message : result.reason,
-      );
+      const detail =
+        result.reason instanceof Error
+          ? result.reason.message
+          : String(result.reason);
+      console.warn(`⚠️ Storefront revalidation failed on ${endpoint}:`, detail);
+      failures.push({ endpoint, detail });
     });
+
+    if (failures.length > 0) {
+      await sendRevalidationFailureAlert({
+        endpoints: failures.map((failure) => failure.endpoint),
+        details: failures.map((failure) => failure.detail),
+      });
+    }
   } catch (error) {
     console.error("Error triggering storefront revalidation:", error);
+    await sendRevalidationFailureAlert({
+      endpoints: ["storefront revalidation"],
+      details: [error instanceof Error ? error.message : String(error)],
+    });
   }
 }

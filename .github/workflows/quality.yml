@@ -1,0 +1,45 @@
+name: Quality checks
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tienda-en-linea:
+    name: Tienda en línea
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pdepapel-store
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: pdepapel-store/package-lock.json
+      - run: npm ci
+      - run: npm run type-check
+
+  administracion:
+    name: Administración
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pdepapel-admin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: pdepapel-admin/package-lock.json
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx tsc --noEmit

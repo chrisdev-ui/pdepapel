@@ -22,6 +22,7 @@ import { useGuestUser } from "@/hooks/use-guest-user";
 import { useToast } from "@/hooks/use-toast";
 import useValidateCoupon from "@/hooks/use-validate-coupon";
 import { calculateTotals, cn, generateGuestId } from "@/lib/utils";
+import { toBoldCheckoutConfig } from "@/lib/bold";
 import { orderPath, productPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import {
   CheckoutByOrderResponse,
@@ -595,18 +596,11 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         if (userId) clearGuestId();
 
         // 🚀 Redirect to Bold directly from the checkout page
-        if (typeof window !== "undefined" && (window as any).BoldCheckout) {
+        if (window.BoldCheckout) {
           try {
-            const boldCheckout = new (window as any).BoldCheckout({
-              orderId: boldData.orderNumber,
-              currency: boldData.currency,
-              amount: String(boldData.amount),
-              apiKey: boldData.identityKey,
-              integritySignature: boldData.integritySignature,
-              redirectionUrl: boldData.redirectionUrl,
-              description: boldData.description,
-              // Omit renderMode to use Bold's default redirect mode
-            });
+            const boldCheckout = new window.BoldCheckout(
+              toBoldCheckoutConfig(boldData),
+            );
             boldCheckout.open();
             return; // Exit here, the browser will redirect
           } catch (e) {

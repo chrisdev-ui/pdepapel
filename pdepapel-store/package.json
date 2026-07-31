@@ -7,6 +7,7 @@
     "email:dev": "email dev -p 3002 -d ./emails",
     "build": "next build",
     "start": "next start",
+    "test:e2e": "playwright test",
     "lint": "next lint",
     "format:prettier": "prettier --write \"./**/*.{js,jsx,mjs,cjs,ts,tsx,json}\"",
     "type-check": "tsc --noEmit"
@@ -67,6 +68,7 @@
     "zustand": "^4.4.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@react-email/preview-server": "^5.2.8",
     "@tailwindcss/typography": "^0.5.19",
     "@tanstack/eslint-plugin-query": "^5.17.20",

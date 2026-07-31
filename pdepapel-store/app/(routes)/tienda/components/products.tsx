@@ -29,7 +29,7 @@ const Products: React.FC<ProductsProps> = ({ products, totalPages }) => {
             <ProductCard
               key={product.id}
               product={product}
-              priority={index < 6}
+              priority={index === 0}
             />
           ))}
         </div>

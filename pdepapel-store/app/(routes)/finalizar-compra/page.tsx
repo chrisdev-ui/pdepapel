@@ -4,6 +4,7 @@ import { Metadata } from "next";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { BoldCheckoutSdk } from "@/components/bold-checkout-sdk";
 import { Container } from "@/components/ui/container";
 import { KAWAII_FACE_WELCOME } from "@/constants";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
@@ -60,6 +61,7 @@ export default async function CheckoutPage({
 
   return (
     <>
+      <BoldCheckoutSdk />
       <Container>
         <div className="flex w-full flex-col items-center justify-between sm:flex-row">
           <h1 className="flex items-center justify-start font-serif text-3xl font-bold">

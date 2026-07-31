@@ -8,6 +8,7 @@ import { getDesigns } from "@/actions/get-designs";
 import { getProducts } from "@/actions/get-products";
 import { getSizes } from "@/actions/get-sizes";
 import { CategoryLinksSection } from "@/components/category-links-section";
+import { CategorySeoContent } from "@/components/category-seo-content";
 import { ShopContent } from "@/components/shop-content";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { Container } from "@/components/ui/container";
@@ -190,6 +191,7 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
           heading={`Productos de ${category.name}`}
           searchPlaceholder={`Buscar en ${category.name}`}
         />
+        <CategorySeoContent categoryName={category.name} />
       </Container>
       <CategoryLinksSection
         categories={relatedCategories}
