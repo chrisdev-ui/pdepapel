@@ -3,12 +3,14 @@ import axios from "axios";
 interface RevalidateParams {
   productId?: string;
   path?: string;
+  paths?: string[];
   tag?: string;
+  tags?: string[];
 }
 
 /**
- * Triggers instant On-Demand Revalidation on pdepapel-store (sub-500ms Edge CDN cache purge)
- * Whenever an admin creates/updates a product, variant, stock, or inventory movement.
+ * Triggers On-Demand Revalidation on pdepapel-store whenever public catalog
+ * content changes.
  */
 export async function triggerStorefrontRevalidation(
   params: RevalidateParams = {},
@@ -19,8 +21,14 @@ export async function triggerStorefrontRevalidation(
       process.env.STOREFRONT_URL ||
       "https://papeleriapdepapel.com";
 
-    const secret =
-      process.env.REVALIDATION_SECRET || "pdepapel_revalidate_secret_2026";
+    const secret = process.env.REVALIDATION_SECRET;
+
+    if (!secret) {
+      console.warn(
+        "Storefront revalidation skipped: REVALIDATION_SECRET is not configured.",
+      );
+      return;
+    }
 
     // In local dev mode, also attempt local store revalidation if on localhost
     const isDev = process.env.NODE_ENV === "development";
@@ -30,39 +38,44 @@ export async function triggerStorefrontRevalidation(
       urlsToCall.push("http://localhost:3000");
     }
 
-    for (const baseUrl of urlsToCall) {
-      const endpoint = `${baseUrl.replace(/\/$/, "")}/api/revalidate`;
+    const results = await Promise.allSettled(
+      urlsToCall.map((baseUrl) => {
+        const endpoint = `${baseUrl.replace(/\/$/, "")}/api/revalidate`;
 
-      axios
-        .post(
+        return axios.post(
           endpoint,
           {
             productId: params.productId,
             path: params.path,
-            tag: params.tag || "products",
+            paths: params.paths,
+            tag: params.tag,
+            tags: params.tags || ["products"],
           },
           {
             headers: {
               "x-revalidate-secret": secret,
               "Content-Type": "application/json",
             },
-            timeout: 3000, // Non-blocking 3s timeout
+            timeout: 3000,
           },
-        )
-        .then((res) => {
-          console.log(
-            `⚡ Storefront revalidation triggered on ${endpoint}:`,
-            res.data,
-          );
-        })
-        .catch((err) => {
-          // Non-blocking log
-          console.log(
-            `⚠️ Storefront revalidation dispatch to ${endpoint} returned:`,
-            err.message,
-          );
-        });
-    }
+        );
+      }),
+    );
+
+    results.forEach((result, index) => {
+      const endpoint = `${urlsToCall[index].replace(/\/$/, "")}/api/revalidate`;
+      if (result.status === "fulfilled") {
+        console.log(
+          `⚡ Storefront revalidated on ${endpoint}:`,
+          result.value.data,
+        );
+        return;
+      }
+      console.warn(
+        `⚠️ Storefront revalidation failed on ${endpoint}:`,
+        result.reason instanceof Error ? result.reason.message : result.reason,
+      );
+    });
   } catch (error) {
     console.error("Error triggering storefront revalidation:", error);
   }

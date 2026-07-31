@@ -1,17 +1,18 @@
 import { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 
+import { getCategory } from "@/actions/get-category";
 import { getCategories } from "@/actions/get-categories";
 import { getColors } from "@/actions/get-colors";
 import { getDesigns } from "@/actions/get-designs";
 import { getProducts } from "@/actions/get-products";
 import { getSizes } from "@/actions/get-sizes";
-import { getTypes } from "@/actions/get-types";
+import { CategoryLinksSection } from "@/components/category-links-section";
 import { ShopContent } from "@/components/shop-content";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { Container } from "@/components/ui/container";
 import { BASE_URL, LIMIT_SHOP_ITEMS } from "@/constants";
-import { categoryPath, STOREFRONT_ROUTES } from "@/lib/routes";
+import { categoryPath, productPath, STOREFRONT_ROUTES } from "@/lib/routes";
 
 interface CategoryPageProps {
   params: {
@@ -21,15 +22,10 @@ interface CategoryPageProps {
 
 export const revalidate = 60;
 
-const getCategoryBySlug = async (slug: string) => {
-  const categories = await getCategories();
-  return categories.find((category) => category.slug === slug);
-};
-
 export async function generateMetadata({
   params,
 }: CategoryPageProps): Promise<Metadata> {
-  const category = await getCategoryBySlug(params.slug);
+  const category = await getCategory(params.slug);
 
   if (!category) {
     return {
@@ -43,6 +39,9 @@ export async function generateMetadata({
   const description =
     category.seoDescription ||
     `Explora ${category.name} en Papelería P de Papel. Encuentra artículos creativos con envíos a toda Colombia.`;
+  const socialImages = category.imageUrl
+    ? [{ url: category.imageUrl, alt: category.name }]
+    : undefined;
 
   return {
     title,
@@ -68,20 +67,30 @@ export async function generateMetadata({
       siteName: "Papelería P de Papel",
       locale: "es_CO",
       type: "website",
+      images: socialImages,
     },
     twitter: {
       card: "summary_large_image",
       title: `${title} | Papelería P de Papel`,
       description,
+      images: socialImages,
     },
   };
 }
 
 export default async function CategoryPage({ params }: CategoryPageProps) {
-  const category = await getCategoryBySlug(params.slug);
+  const [category, categories] = await Promise.all([
+    getCategory(params.slug),
+    getCategories(),
+  ]);
   if (!category) notFound();
 
-  const [{ products, totalPages, facets }, types, sizes, colors, designs] =
+  const canonicalSlug = category.slug || category.id;
+  if (params.slug !== canonicalSlug) {
+    permanentRedirect(categoryPath(canonicalSlug));
+  }
+
+  const [{ products, totalPages, totalItems, facets }, sizes, colors, designs] =
     await Promise.all([
       getProducts({
         categoryId: category.id,
@@ -89,7 +98,6 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
         itemsPerPage: LIMIT_SHOP_ITEMS,
         groupBy: "parents",
       }),
-      getTypes(),
       getSizes(),
       getColors(),
       getDesigns(),
@@ -99,6 +107,13 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
     { label: category.name, isCurrent: true },
   ];
   const categoryUrl = categoryPath(category.slug || category.id);
+  const relatedCategories = categories.filter(
+    (item) =>
+      item.id !== category.id &&
+      item.seoEnabled &&
+      item.seoFeatured &&
+      item.slug,
+  );
   const breadcrumbJsonLd = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
@@ -123,6 +138,18 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
       },
     ],
   };
+  const itemListJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: `Productos de ${category.name}`,
+    numberOfItems: products.length,
+    itemListElement: products.map((product, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: product.name,
+      item: `${BASE_URL}${productPath(product.slug || product.id)}`,
+    })),
+  };
 
   return (
     <>
@@ -130,6 +157,14 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
+      {products.length > 0 && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(itemListJsonLd),
+          }}
+        />
+      )}
       <Container className="space-y-8 py-6">
         <Breadcrumb items={breadcrumbItems} />
         <section className="max-w-3xl space-y-3">
@@ -144,16 +179,23 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
         <ShopContent
           initialProducts={products}
           initialTotalPages={totalPages}
+          initialTotalItems={totalItems}
           initialFacets={facets}
-          types={types}
+          types={[]}
           categories={[category]}
           sizes={sizes}
           colors={colors}
           designs={designs}
           fixedCategoryId={category.id}
           heading={`Productos de ${category.name}`}
+          searchPlaceholder={`Buscar en ${category.name}`}
         />
       </Container>
+      <CategoryLinksSection
+        categories={relatedCategories}
+        title="Sigue explorando"
+        description="Descubre más categorías de papelería creativa que tenemos para ti."
+      />
     </>
   );
 }

@@ -2,6 +2,7 @@
 
 import { Search } from "lucide-react";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { track } from "@vercel/analytics/react";
 
 import { Input } from "@/components/ui/input";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -10,9 +11,13 @@ import { cn } from "@/lib/utils";
 
 interface ShopSearchBarProps {
   className?: string;
+  placeholder?: string;
 }
 
-const ShopSearchBar: React.FC<ShopSearchBarProps> = ({ className }) => {
+const ShopSearchBar: React.FC<ShopSearchBarProps> = ({
+  className,
+  placeholder = "Buscar un producto",
+}) => {
   const { filters, setFilter } = useProductFilters();
   const [searchTerm, setSearchTerm] = useState<string>(filters.search || "");
 
@@ -47,6 +52,9 @@ const ShopSearchBar: React.FC<ShopSearchBarProps> = ({ className }) => {
       inputRef.current.offsetParent !== null
     ) {
       setFilter("search", debouncedSearch || null);
+      if (debouncedSearch) {
+        track("catalog_search", { query_length: debouncedSearch.length });
+      }
     }
   }, [debouncedSearch, filters.search, setFilter]);
 
@@ -62,7 +70,7 @@ const ShopSearchBar: React.FC<ShopSearchBarProps> = ({ className }) => {
         ref={inputRef}
         type="text"
         className="h-10 items-center border-blue-baby bg-background py-2 pl-9 pr-3 text-base"
-        placeholder="Buscar un producto"
+        placeholder={placeholder}
         value={searchTerm}
         onChange={handleSearchChange}
       />

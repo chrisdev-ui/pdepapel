@@ -1,3 +1,6 @@
+"use client";
+
+import { track } from "@vercel/analytics/react";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -32,6 +35,12 @@ export function CategoryLinksSection({
             key={category.id}
             href={categoryPath(category.slug || category.id)}
             aria-label={`Ver ${category.name}`}
+            onClick={() =>
+              track("select_category", {
+                category_slug: category.slug || category.id,
+                section: title,
+              })
+            }
             className="group relative aspect-square overflow-hidden rounded-2xl bg-kawaii-pink-light shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kawaii-pink focus-visible:ring-offset-2"
           >
             {category.imageUrl ? (

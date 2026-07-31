@@ -14,6 +14,7 @@ interface MobileFiltersProps {
   sizes: Size[];
   colors: Color[];
   designs: Design[];
+  hideCategoryFilters?: boolean;
 }
 
 const MobileFilters: React.FC<MobileFiltersProps> = ({
@@ -22,6 +23,7 @@ const MobileFilters: React.FC<MobileFiltersProps> = ({
   sizes,
   colors,
   designs,
+  hideCategoryFilters = false,
 }) => {
   return (
     <Sheet>
@@ -33,36 +35,46 @@ const MobileFilters: React.FC<MobileFiltersProps> = ({
       </SheetTrigger>
       <SheetContent className="max-h-screen overflow-y-auto lg:hidden">
         <div className="p-4">
-          <Filter
-            valueKey="typeId"
-            name="Categorías"
-            data={types}
-            emptyMessage="No hay tipos disponibles"
-          />
-          <Filter
-            valueKey="categoryId"
-            name="Sub-Categorías"
-            emptyMessage="No hay categorías disponibles"
-            data={categories}
-          />
-          <Filter
-            valueKey="sizeId"
-            name="Tamaños"
-            emptyMessage="No hay tamaños disponibles"
-            data={sizes}
-          />
-          <Filter
-            valueKey="colorId"
-            name="Colores"
-            emptyMessage="No hay colores disponibles"
-            data={colors}
-          />
-          <Filter
-            valueKey="designId"
-            name="Diseños"
-            emptyMessage="No hay diseños disponibles"
-            data={designs}
-          />
+          {!hideCategoryFilters && (
+            <>
+              <Filter
+                valueKey="typeId"
+                name="Categorías"
+                data={types}
+                emptyMessage="No hay tipos disponibles"
+              />
+              <Filter
+                valueKey="categoryId"
+                name="Sub-Categorías"
+                emptyMessage="No hay categorías disponibles"
+                data={categories}
+              />
+            </>
+          )}
+          {sizes.length > 0 && (
+            <Filter
+              valueKey="sizeId"
+              name="Tamaños"
+              emptyMessage="No hay tamaños disponibles"
+              data={sizes}
+            />
+          )}
+          {colors.length > 0 && (
+            <Filter
+              valueKey="colorId"
+              name="Colores"
+              emptyMessage="No hay colores disponibles"
+              data={colors}
+            />
+          )}
+          {designs.length > 0 && (
+            <Filter
+              valueKey="designId"
+              name="Diseños"
+              emptyMessage="No hay diseños disponibles"
+              data={designs}
+            />
+          )}
           <PriceFilter min={0} max={1000000} step={1000} />
         </div>
       </SheetContent>

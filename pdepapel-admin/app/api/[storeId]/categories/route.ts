@@ -1,5 +1,7 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { getUniqueCategorySlug } from "@/lib/category-slugs";
 import prismadb from "@/lib/prismadb";
+import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 import { slugify } from "@/lib/slugify";
 import {
   CACHE_HEADERS,
@@ -9,7 +11,12 @@ import {
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
-// Enable Edge Runtime for faster response times
+const getCategoryRevalidationPaths = (...slugs: string[]) => [
+  "/",
+  "/tienda",
+  "/sitemap.xml",
+  ...slugs.filter(Boolean).map((slug) => `/categoria/${slug}`),
+];
 
 export async function POST(
   req: Request,
@@ -44,10 +51,15 @@ export async function POST(
         "Se requiere un tipo para la sub-categoría",
       );
 
+    const slug = await getUniqueCategorySlug(prismadb, {
+      storeId: params.storeId,
+      baseSlug: slugify(name),
+    });
+
     const category = await prismadb.category.create({
       data: {
         name,
-        slug: slugify(name),
+        slug,
         typeId,
         storeId: params.storeId,
         seoEnabled: Boolean(seoEnabled),
@@ -68,6 +80,11 @@ export async function POST(
         seoIntro: true,
         imageUrl: true,
       },
+    });
+
+    await triggerStorefrontRevalidation({
+      paths: getCategoryRevalidationPaths(category.slug),
+      tags: ["categories", "products"],
     });
 
     return NextResponse.json(category, {
@@ -101,9 +118,7 @@ export async function GET(
       },
     });
 
-    return NextResponse.json(categories, {
-      headers: CACHE_HEADERS.SEMI_STATIC,
-    });
+    return NextResponse.json(categories, { headers: CACHE_HEADERS.DYNAMIC });
   } catch (error) {
     return handleErrorResponse(error, "CATEGORIES_GET");
   }

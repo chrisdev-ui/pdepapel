@@ -3,6 +3,7 @@
 import { KitContents } from "./kit-contents";
 
 import { Award, Heart, ShieldCheck, ShoppingCart, Truck } from "lucide-react";
+import { track } from "@vercel/analytics/react";
 
 import { Button } from "@/components/ui/button";
 import { Currency } from "@/components/ui/currency";
@@ -145,8 +146,11 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
   };
 
   const productInCart = cart.items.find((item) => item.id === data.id);
+  const isUnavailable = Boolean(data.isArchived || data.stock === 0);
 
   const handleAddToCart = () => {
+    if (isUnavailable) return;
+
     if (productInCart) {
       cart.updateQuantity(data.id, quantity ?? 1);
       toast({
@@ -157,6 +161,11 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
     } else {
       cart.addItem(data, quantity);
     }
+    track("add_to_cart", {
+      source: "product_detail",
+      product_slug: data.slug || data.id,
+      quantity: quantity ?? 1,
+    });
     // router.push("/cart"); // Removed navigation
     onAddedToCart?.();
   };
@@ -384,29 +393,33 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
           </>
         )}
 
-        <div className="flex items-center gap-x-4">
-          <h3 className="font-sans font-semibold">Cantidad:</h3>
-          <div>
-            <QuantitySelector
-              max={data.stock}
-              initialValue={productInCart?.quantity || 1}
-              size="medium"
-              onValueChange={(value) => {
-                setQuantity(value);
-              }}
-            />
+        {!data.isArchived && (
+          <div className="flex items-center gap-x-4">
+            <h3 className="font-sans font-semibold">Cantidad:</h3>
+            <div>
+              <QuantitySelector
+                max={data.stock}
+                initialValue={productInCart?.quantity || 1}
+                size="medium"
+                onValueChange={(value) => {
+                  setQuantity(value);
+                }}
+              />
+            </div>
           </div>
-        </div>
+        )}
       </div>
       <div className="mt-10 flex flex-wrap items-center gap-x-3 gap-y-4 sm:gap-y-0">
         <Button
-          disabled={data.stock === 0 || (isLoading && !!data.isGroup)}
+          disabled={isUnavailable || (isLoading && !!data.isGroup)}
           className="flex gap-2 rounded-full border-none bg-blue-yankees px-8 py-4 font-sans text-sm font-semibold text-white outline-none [transition:0.2s]"
           onClick={handleAddToCart}
         >
           {isLoading && data.isGroup
             ? "Cargando opciones..."
-            : "Agregar al carrito"}
+            : data.isArchived
+              ? "No disponible"
+              : "Agregar al carrito"}
           {!isLoading && <ShoppingCart className="h-5 w-5" />}
         </Button>
         <Button
@@ -420,11 +433,15 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
             })}
           />
         </Button>
-        {data.stock === 0 && (
+        {data.isArchived ? (
+          <span className="text-xs text-muted-foreground">
+            Este producto ya no está disponible para la venta.
+          </span>
+        ) : data.stock === 0 ? (
           <span className="animate-pulse text-xs text-red-500">
             Este producto está agotado por el momento
           </span>
-        )}
+        ) : null}
       </div>
 
       {/* 🔒 High-Trust Product Guarantee Banner */}

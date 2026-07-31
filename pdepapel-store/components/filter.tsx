@@ -2,6 +2,7 @@
 
 import { ChevronsDown, ChevronsUp, Search, X } from "lucide-react";
 import { useMemo, useState } from "react";
+import { track } from "@vercel/analytics/react";
 
 import { ProductFilters, useProductFilters } from "@/hooks/use-product-filters";
 
@@ -43,6 +44,10 @@ const Filter: React.FC<FilterProps> = ({
   }, [data]);
 
   const handleToggleFilter = (id: string) => {
+    track("catalog_filter", {
+      filter: valueKey,
+      action: parsedSelectedValues.includes(id) ? "remove" : "add",
+    });
     toggleFilter(valueKey as keyof ProductFilters, id);
   };
 

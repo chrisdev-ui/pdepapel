@@ -42,6 +42,7 @@ model Store {
   designs               Design[]               @relation("StoreToDesign")
   products              Product[]              @relation("StoreToProduct")
   productSlugAliases    ProductSlugAlias[]
+  categorySlugAliases   CategorySlugAlias[]
   orders                Order[]                @relation("StoreToOrder")
   mainBanner            MainBanner?            @relation("StoreToMainBanner")
   banners               Banner[]               @relation("StoreToBanner")
@@ -166,27 +167,28 @@ model Type {
 }
 
 model Category {
-  id             String          @id @default(uuid())
+  id             String              @id @default(uuid())
   storeId        String
   typeId         String
   name           String
-  slug           String          @default("")
-  seoEnabled     Boolean         @default(false)
-  seoFeatured    Boolean         @default(false)
-  seoTitle       String?         @db.VarChar(70)
-  seoDescription String?         @db.VarChar(170)
-  seoIntro       String?         @db.Text
-  imageUrl       String?         @db.Text
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  store          Store           @relation("StoreToCategory", fields: [storeId], references: [id])
-  type           Type            @relation(fields: [typeId], references: [id])
-  products       Product[]       @relation("CategoryToProduct")
+  slug           String              @default("")
+  seoEnabled     Boolean             @default(false)
+  seoFeatured    Boolean             @default(false)
+  seoTitle       String?             @db.VarChar(70)
+  seoDescription String?             @db.VarChar(170)
+  seoIntro       String?             @db.Text
+  imageUrl       String?             @db.Text
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  store          Store               @relation("StoreToCategory", fields: [storeId], references: [id])
+  type           Type                @relation(fields: [typeId], references: [id])
+  products       Product[]           @relation("CategoryToProduct")
   offers         OfferCategory[]
+  slugAliases    CategorySlugAlias[]
 
+  @@unique([storeId, slug])
   @@index([storeId])
   @@index([typeId])
-  @@index([storeId, slug])
 }
 
 model Size {
@@ -250,45 +252,45 @@ model ProductGroup {
 }
 
 model Product {
-  id                 String              @id @default(uuid())
-  storeId            String
-  categoryId         String
-  name               String
-  slug               String              @default("")
-  description        String              @db.Text
-  stock              Int                 @default(0)
-  price              Float               @default(0)
-  acqPrice           Float?              @default(0)
-  isFeatured         Boolean             @default(false)
-  isArchived         Boolean             @default(false)
-  sizeId             String
-  colorId            String
-  designId           String
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  sku                String              @unique
-  brand              String?             @db.VarChar(120)
-  gtin               String?             @db.VarChar(14)
-  mpn                String?             @db.VarChar(70)
-  hasNoProductIdentifier Boolean         @default(false)
-  store              Store               @relation("StoreToProduct", fields: [storeId], references: [id])
-  category           Category            @relation("CategoryToProduct", fields: [categoryId], references: [id])
-  size               Size                @relation(fields: [sizeId], references: [id])
-  color              Color               @relation(fields: [colorId], references: [id])
-  design             Design              @relation(fields: [designId], references: [id])
-  images             Image[]
-  orderItems         OrderItem[]
-  reviews            Review[]
-  supplierId         String?
-  supplier           Supplier?           @relation(fields: [supplierId], references: [id])
-  productGroupId     String?
-  productGroup       ProductGroup?       @relation(fields: [productGroupId], references: [id])
-  offers             OfferProduct[]
-  inventoryMovements InventoryMovement[]
-  restockOrderItems  RestockOrderItem[]
-  customOrderItems   CustomOrderItem[]
-  quotationItems     QuotationItem[]
-  slugAliases        ProductSlugAlias[]
+  id                     String              @id @default(uuid())
+  storeId                String
+  categoryId             String
+  name                   String
+  slug                   String              @default("")
+  description            String              @db.Text
+  stock                  Int                 @default(0)
+  price                  Float               @default(0)
+  acqPrice               Float?              @default(0)
+  isFeatured             Boolean             @default(false)
+  isArchived             Boolean             @default(false)
+  sizeId                 String
+  colorId                String
+  designId               String
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  sku                    String              @unique
+  brand                  String?             @db.VarChar(120)
+  gtin                   String?             @db.VarChar(14)
+  mpn                    String?             @db.VarChar(70)
+  hasNoProductIdentifier Boolean             @default(false)
+  store                  Store               @relation("StoreToProduct", fields: [storeId], references: [id])
+  category               Category            @relation("CategoryToProduct", fields: [categoryId], references: [id])
+  size                   Size                @relation(fields: [sizeId], references: [id])
+  color                  Color               @relation(fields: [colorId], references: [id])
+  design                 Design              @relation(fields: [designId], references: [id])
+  images                 Image[]
+  orderItems             OrderItem[]
+  reviews                Review[]
+  supplierId             String?
+  supplier               Supplier?           @relation(fields: [supplierId], references: [id])
+  productGroupId         String?
+  productGroup           ProductGroup?       @relation(fields: [productGroupId], references: [id])
+  offers                 OfferProduct[]
+  inventoryMovements     InventoryMovement[]
+  restockOrderItems      RestockOrderItem[]
+  customOrderItems       CustomOrderItem[]
+  quotationItems         QuotationItem[]
+  slugAliases            ProductSlugAlias[]
 
   // -- KIT / COMBO FIELDS --
   isKit         Boolean      @default(false)
@@ -331,6 +333,21 @@ model ProductSlugAlias {
 
   @@unique([storeId, slug])
   @@index([productId])
+  @@index([storeId, createdAt])
+}
+
+model CategorySlugAlias {
+  id         String   @id @default(uuid())
+  storeId    String
+  categoryId String
+  slug       String
+  createdAt  DateTime @default(now())
+
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  store    Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, slug])
+  @@index([categoryId])
   @@index([storeId, createdAt])
 }
 

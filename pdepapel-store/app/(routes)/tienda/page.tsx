@@ -146,7 +146,7 @@ async function ShopContentWrapper({
 }: {
   searchParams: ShopPageProps["searchParams"];
 }) {
-  const { products, totalPages, facets } = await getProducts({
+  const { products, totalPages, totalItems, facets } = await getProducts({
     typeId: searchParams.typeId,
     categoryId: searchParams.categoryId,
     colorId: searchParams.colorId,
@@ -211,6 +211,7 @@ async function ShopContentWrapper({
       <ShopContent
         initialProducts={products}
         initialTotalPages={totalPages}
+        initialTotalItems={totalItems}
         initialFacets={facets}
         types={types}
         categories={categories}

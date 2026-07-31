@@ -52,6 +52,12 @@ export async function generateMetadata({
     alternates: {
       canonical: canonicalPath,
     },
+    robots: product.isArchived
+      ? {
+          index: false,
+          follow: true,
+        }
+      : undefined,
     openGraph: {
       title,
       description: product.description,
@@ -224,10 +230,12 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
   return (
     <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+      {!product.isArchived && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      )}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}

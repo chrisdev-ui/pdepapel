@@ -3,12 +3,12 @@ import { Category } from "@/types";
 
 const API_URL = `${env.NEXT_PUBLIC_API_URL}/categories`;
 
-export const getCategory = async (id: string): Promise<Category> => {
+export const getCategory = async (id: string): Promise<Category | null> => {
   try {
-    const response = await fetch(`${API_URL}/${id}`);
-    if (!response.ok) return { id: "", typeId: "", name: "" };
+    const response = await fetch(`${API_URL}/${id}`, { cache: "no-store" });
+    if (!response.ok) return null;
     return await response.json();
   } catch {
-    return { id: "", typeId: "", name: "" };
+    return null;
   }
 };

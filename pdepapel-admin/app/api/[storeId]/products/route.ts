@@ -40,6 +40,7 @@ import { invalidateStoreProductsCache } from "@/lib/cache";
  */
 interface UnifiedProduct {
   id: string;
+  slug?: string;
   name: string;
   description?: string | null;
   price: number;
@@ -319,7 +320,7 @@ export async function GET(
       groupBy,
       productGroupId,
       isOnSale, // Include in cache key
-      v: "2", // Force cache invalidation for kit fix
+      v: "3",
     })}`;
 
     // Try to get from Redis cache
@@ -536,6 +537,7 @@ export async function GET(
     // GROUP BY PARENTS LOGIC
     // ---------------------------------------------------------
     if (groupBy === "parents") {
+      const shouldScopeGroupVariants = categoryId.length > 0;
       // Filter for Products (used to filter Groups via relation)
       const productFilters: Prisma.ProductWhereInput = {
         storeId: params.storeId,
@@ -578,6 +580,7 @@ export async function GET(
                 {
                   products: {
                     some: {
+                      ...productFilters,
                       OR: [{ name: { contains: search } }],
                     },
                   },
@@ -602,12 +605,17 @@ export async function GET(
           include: {
             images: true,
             products: {
+              where: shouldScopeGroupVariants ? productFilters : undefined,
               select: {
                 price: true,
                 stock: true,
                 id: true,
+                slug: true,
                 category: true,
                 categoryId: true,
+                colorId: true,
+                sizeId: true,
+                designId: true,
                 reviews: {
                   select: {
                     rating: true,
@@ -639,6 +647,7 @@ export async function GET(
         return {
           id: g.products[0]?.id || g.id,
           productGroupId: g.id,
+          slug: g.products[0]?.slug,
           name: g.name,
           description: g.description,
           images: g.images,
@@ -783,11 +792,90 @@ export async function GET(
         }
       });
 
+      let groupFacets: ProductFacets | undefined;
+      if (shouldScopeGroupVariants) {
+        const getFacetWhere = (
+          excludedKey: "colorId" | "sizeId" | "categoryId" | "designId",
+        ): Prisma.ProductWhereInput => {
+          const conditions: Prisma.ProductWhereInput[] = [];
+
+          if (search) {
+            conditions.push({
+              OR: [
+                { name: { contains: search } },
+                { productGroup: { is: { name: { contains: search } } } },
+              ],
+            });
+          }
+          if (isOnSale && onSaleFilter) {
+            conditions.push(onSaleFilter);
+          }
+
+          return {
+            ...productFilters,
+            colorId:
+              excludedKey === "colorId" ? undefined : productFilters.colorId,
+            sizeId:
+              excludedKey === "sizeId" ? undefined : productFilters.sizeId,
+            categoryId:
+              excludedKey === "categoryId"
+                ? undefined
+                : productFilters.categoryId,
+            designId:
+              excludedKey === "designId" ? undefined : productFilters.designId,
+            ...(conditions.length > 0 ? { AND: conditions } : {}),
+          };
+        };
+
+        const [colorFacets, sizeFacets, categoryFacets, designFacets] =
+          await Promise.all([
+            prismadb.product.groupBy({
+              by: ["colorId"],
+              where: getFacetWhere("colorId"),
+              _count: { colorId: true },
+            }),
+            prismadb.product.groupBy({
+              by: ["sizeId"],
+              where: getFacetWhere("sizeId"),
+              _count: { sizeId: true },
+            }),
+            prismadb.product.groupBy({
+              by: ["categoryId"],
+              where: getFacetWhere("categoryId"),
+              _count: { categoryId: true },
+            }),
+            prismadb.product.groupBy({
+              by: ["designId"],
+              where: getFacetWhere("designId"),
+              _count: { designId: true },
+            }),
+          ]);
+
+        groupFacets = {
+          colors: colorFacets.map((facet) => ({
+            id: facet.colorId,
+            count: facet._count.colorId,
+          })),
+          formattedSizes: sizeFacets.map((facet) => ({
+            id: facet.sizeId,
+            count: facet._count.sizeId,
+          })),
+          categories: categoryFacets.map((facet) => ({
+            id: facet.categoryId,
+            count: facet._count.categoryId,
+          })),
+          designs: designFacets.map((facet) => ({
+            id: facet.designId,
+            count: facet._count.designId,
+          })),
+        };
+      }
+
       const response = {
         products: finalResponse,
         totalItems,
         totalPages,
-        facets: undefined,
+        facets: groupFacets,
       };
 
       // Cache the response

@@ -3,6 +3,7 @@
 import { CreditCard, ShoppingBag, ShoppingCart, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { track } from "@vercel/analytics/react";
 
 import { Button } from "@/components/ui/button";
 import { CldImage } from "@/components/ui/CldImage";
@@ -55,6 +56,10 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
   };
 
   const onCheckout = () => {
+    track("begin_checkout", {
+      items: cart.items.length,
+      total: Number(total),
+    });
     setIsSheetOpen(false);
     router.push(STOREFRONT_ROUTES.checkout);
   };

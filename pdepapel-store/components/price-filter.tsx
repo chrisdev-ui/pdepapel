@@ -68,6 +68,52 @@ const PriceFilter: React.FC<PriceFilterProps> = ({
     setIsDragging(type);
   };
 
+  const updateSliderValue = (type: "min" | "max", value: number) => {
+    if (type === "min") {
+      setMinValue(Math.max(min, Math.min(value, maxValue - step)));
+      return;
+    }
+
+    setMaxValue(Math.min(max, Math.max(value, minValue + step)));
+  };
+
+  const handleSliderKeyDown = (
+    type: "min" | "max",
+    event: React.KeyboardEvent<HTMLDivElement>,
+  ) => {
+    const currentValue = type === "min" ? minValue : maxValue;
+    const pageStep = step * 10;
+    let nextValue: number | null = null;
+
+    switch (event.key) {
+      case "ArrowLeft":
+      case "ArrowDown":
+        nextValue = currentValue - step;
+        break;
+      case "ArrowRight":
+      case "ArrowUp":
+        nextValue = currentValue + step;
+        break;
+      case "PageDown":
+        nextValue = currentValue - pageStep;
+        break;
+      case "PageUp":
+        nextValue = currentValue + pageStep;
+        break;
+      case "Home":
+        nextValue = type === "min" ? min : min + step;
+        break;
+      case "End":
+        nextValue = type === "max" ? max : max - step;
+        break;
+      default:
+        return;
+    }
+
+    event.preventDefault();
+    updateSliderValue(type, nextValue);
+  };
+
   const handleMove = useCallback(
     (clientX: number) => {
       if (!isDragging || !sliderRef.current) return;
@@ -124,9 +170,16 @@ const PriceFilter: React.FC<PriceFilterProps> = ({
   }, [isDragging, handleMouseMove, handleMouseUp, handleTouchMove]);
 
   return (
-    <div className="w-full pb-8 pt-6">
+    <div
+      className="w-full pb-8 pt-6"
+      role="group"
+      aria-labelledby="price-filter-title"
+    >
       <div className="mb-8">
-        <h3 className="mb-2 font-sans text-base font-semibold text-gray-900">
+        <h3
+          id="price-filter-title"
+          className="mb-2 font-sans text-base font-semibold text-gray-900"
+        >
           Precio
         </h3>
       </div>
@@ -189,12 +242,20 @@ const PriceFilter: React.FC<PriceFilterProps> = ({
         {/* Min Thumb */}
         <div
           className={cn(
-            "absolute top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-grab hover:scale-110 focus:outline-none active:cursor-grabbing",
+            "absolute top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-grab hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kawaii-pink focus-visible:ring-offset-2 active:cursor-grabbing",
             isDragging === "min" && "z-20 scale-110",
           )}
           style={{ left: `${minPercent}%` }}
+          role="slider"
+          tabIndex={0}
+          aria-label="Precio mínimo"
+          aria-valuemin={min}
+          aria-valuemax={maxValue - step}
+          aria-valuenow={minValue}
+          aria-valuetext={formatPrice(minValue)}
           onMouseDown={() => handleMouseDown("min")}
           onTouchStart={() => handleMouseDown("min")}
+          onKeyDown={(event) => handleSliderKeyDown("min", event)}
         >
           <div
             className={cn(
@@ -207,12 +268,20 @@ const PriceFilter: React.FC<PriceFilterProps> = ({
         {/* Max Thumb */}
         <div
           className={cn(
-            "absolute top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-grab hover:scale-110 focus:outline-none active:cursor-grabbing",
+            "absolute top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-grab hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kawaii-pink focus-visible:ring-offset-2 active:cursor-grabbing",
             isDragging === "max" && "z-20 scale-110",
           )}
           style={{ left: `${maxPercent}%` }}
+          role="slider"
+          tabIndex={0}
+          aria-label="Precio máximo"
+          aria-valuemin={minValue + step}
+          aria-valuemax={max}
+          aria-valuenow={maxValue}
+          aria-valuetext={formatPrice(maxValue)}
           onMouseDown={() => handleMouseDown("max")}
           onTouchStart={() => handleMouseDown("max")}
+          onKeyDown={(event) => handleSliderKeyDown("max", event)}
         >
           <div
             className={cn(
@@ -234,6 +303,7 @@ const PriceFilter: React.FC<PriceFilterProps> = ({
         ].map((preset) => (
           <button
             key={preset.label}
+            type="button"
             onClick={() => {
               setMinValue(preset.min);
               setMaxValue(preset.max);

@@ -46,6 +46,7 @@ export interface Product {
   price: string;
   stock: number;
   isFeatured: boolean;
+  isArchived?: boolean;
   size: Size;
   color: Color;
   design: Design;
