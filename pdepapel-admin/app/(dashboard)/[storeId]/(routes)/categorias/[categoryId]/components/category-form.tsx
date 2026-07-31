@@ -13,12 +13,14 @@ import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
 import { Heading } from "@/components/ui/heading";
+import { ImageUpload } from "@/components/ui/image-upload";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -48,6 +50,7 @@ const formSchema = z
     seoTitle: z.string().max(70).optional(),
     seoDescription: z.string().max(170).optional(),
     seoIntro: z.string().max(1200).optional(),
+    imageUrl: z.string().url().optional().or(z.literal("")),
   })
   .superRefine((values, context) => {
     if (!values.seoEnabled) return;
@@ -71,6 +74,13 @@ const formSchema = z
         code: z.ZodIssueCode.custom,
         path: ["seoIntro"],
         message: "La introducción SEO es requerida para indexar esta categoría",
+      });
+    }
+    if (values.seoFeatured && !values.imageUrl?.trim()) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["imageUrl"],
+        message: "La imagen es requerida para destacar esta categoría en inicio",
       });
     }
   });
@@ -117,6 +127,7 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
       seoTitle: initialData?.seoTitle || "",
       seoDescription: initialData?.seoDescription || "",
       seoIntro: initialData?.seoIntro || "",
+      imageUrl: initialData?.imageUrl || "",
     }),
     [initialData],
   );
@@ -133,6 +144,7 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
 
   useFormValidationToast({ form });
   const seoEnabled = form.watch("seoEnabled");
+  const seoFeatured = form.watch("seoFeatured");
 
   const onClear = () => {
     form.reset(defaultValues);
@@ -326,6 +338,38 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
                     </FormItem>
                   )}
                 />
+                {seoFeatured && (
+                  <FormField
+                    control={form.control}
+                    name="imageUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel isRequired>Imagen de categoría</FormLabel>
+                        <FormControl>
+                          <ImageUpload
+                            value={
+                              field.value
+                                ? [{ url: field.value, isMain: true }]
+                                : []
+                            }
+                            disabled={loading}
+                            onChange={(images) =>
+                              field.onChange(
+                                images.length > 0 ? images[0].url : "",
+                              )
+                            }
+                            onRemove={() => field.onChange("")}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Se muestra en inicio. Usa una imagen cuadrada, sin
+                          texto y representativa de la categoría.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
                 <FormField
                   control={form.control}
                   name="seoTitle"

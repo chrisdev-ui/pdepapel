@@ -25,6 +25,7 @@ export async function GET(
       billboards,
       mainBanner,
       banners,
+      categories,
       productImages,
       shippings,
       products,
@@ -43,6 +44,10 @@ export async function GET(
         select: { imageUrl: true },
       }),
       prismadb.banner.findMany({
+        where: { storeId: params.storeId },
+        select: { imageUrl: true },
+      }),
+      prismadb.category.findMany({
         where: { storeId: params.storeId },
         select: { imageUrl: true },
       }),
@@ -76,6 +81,9 @@ export async function GET(
     if (mainBanner?.imageUrl) activeUrls.add(mainBanner.imageUrl);
     billboards.forEach((b) => activeUrls.add(b.imageUrl));
     banners.forEach((b) => activeUrls.add(b.imageUrl));
+    categories.forEach((category) => {
+      if (category.imageUrl) activeUrls.add(category.imageUrl);
+    });
     productImages.forEach((i) => activeUrls.add(i.url));
     shippings.forEach((s) => {
       if (s.guideUrl) activeUrls.add(s.guideUrl);

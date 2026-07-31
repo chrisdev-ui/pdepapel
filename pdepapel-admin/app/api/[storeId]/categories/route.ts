@@ -31,6 +31,7 @@ export async function POST(
       seoTitle,
       seoDescription,
       seoIntro,
+      imageUrl,
     } = body;
 
     if (!name)
@@ -54,6 +55,7 @@ export async function POST(
         seoTitle: seoTitle?.trim() || null,
         seoDescription: seoDescription?.trim() || null,
         seoIntro: seoIntro?.trim() || null,
+        imageUrl: imageUrl?.trim() || null,
       },
       select: {
         id: true,
@@ -64,6 +66,7 @@ export async function POST(
         seoTitle: true,
         seoDescription: true,
         seoIntro: true,
+        imageUrl: true,
       },
     });
 
@@ -94,6 +97,7 @@ export async function GET(
         seoTitle: true,
         seoDescription: true,
         seoIntro: true,
+        imageUrl: true,
       },
     });
 

@@ -176,6 +176,7 @@ model Category {
   seoTitle       String?         @db.VarChar(70)
   seoDescription String?         @db.VarChar(170)
   seoIntro       String?         @db.Text
+  imageUrl       String?         @db.Text
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   store          Store           @relation("StoreToCategory", fields: [storeId], references: [id])

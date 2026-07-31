@@ -98,6 +98,7 @@ export interface Category {
   seoTitle?: string | null;
   seoDescription?: string | null;
   seoIntro?: string | null;
+  imageUrl?: string | null;
 }
 
 export interface Size {
