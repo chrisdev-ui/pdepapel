@@ -45,8 +45,7 @@ export function CategoryLinksSection({
             ) : (
               <div className="absolute inset-0 bg-gradient-to-br from-kawaii-pink-light to-kawaii-blue-light" />
             )}
-            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-blue-yankees/85 via-blue-yankees/45 to-transparent px-4 pb-4 pt-12" />
-            <span className="absolute inset-x-0 bottom-0 px-4 py-4 text-center text-sm font-bold text-white sm:text-base">
+            <span className="absolute inset-x-4 bottom-4 rounded-full bg-white/95 px-3 py-2 text-center text-sm font-bold text-blue-yankees shadow-md backdrop-blur-sm sm:text-base">
               {category.name}
             </span>
           </Link>
