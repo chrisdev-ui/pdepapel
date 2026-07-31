@@ -49,7 +49,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { QUOTATION_TYPE_LABELS } from "@/lib/quotation-types";
-import { currencyFormatter, datePresets } from "@/lib/utils";
+import { currencyFormatter, getDatePresets } from "@/lib/utils";
 import { Quotation, QuotationItem } from "@prisma/client";
 
 const itemSchema = z.object({
@@ -310,7 +310,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                   </FormLabel>
                   <FormControl>
                     <DateRangePicker
-                      customDates={datePresets}
+                      customDates={getDatePresets}
                       name={field.name}
                       control={form.control}
                     />

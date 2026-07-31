@@ -29,7 +29,7 @@ import { useFormPersist } from "@/hooks/use-form-persist";
 import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import { datePresets } from "@/lib/utils";
+import { getDatePresets } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Coupon, DiscountType } from "@prisma/client";
 import axios from "axios";
@@ -323,7 +323,7 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData }) => {
                   </FormLabel>
                   <FormControl>
                     <DateRangePicker
-                      customDates={datePresets}
+                      customDates={getDatePresets}
                       name={field.name}
                       control={form.control}
                     />

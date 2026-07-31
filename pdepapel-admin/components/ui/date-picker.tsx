@@ -89,6 +89,7 @@ export function DatePicker<T extends FieldValues>({
     <Popover>
       <PopoverTrigger asChild>
         <Button
+          type="button"
           disabled={disabled}
           variant={"outline"}
           className={cn(
@@ -111,6 +112,7 @@ export function DatePicker<T extends FieldValues>({
             {presets.map((preset) => (
               <Button
                 key={preset.name}
+                type="button"
                 variant="ghost"
                 className={cn("justify-start font-normal", {
                   "bg-accent text-accent-foreground":

@@ -26,6 +26,7 @@ import {
   startOfMonth,
   startOfWeek,
 } from "date-fns";
+import { es } from "date-fns/locale";
 import { twMerge } from "tailwind-merge";
 import { v4 as uuidv4 } from "uuid";
 import { ErrorFactory } from "./api-errors";
@@ -337,34 +338,40 @@ export interface CustomDate {
   to: Date;
 }
 
-export const datePresets: Array<CustomDate> = [
-  { name: "Hoy", from: startOfDay(new Date()), to: endOfDay(new Date()) },
-  {
-    name: "Mañana",
-    from: startOfDay(addDays(new Date(), 1)),
-    to: endOfDay(addDays(new Date(), 1)),
-  },
-  {
-    name: "Esta semana",
-    from: startOfWeek(new Date()),
-    to: endOfWeek(new Date()),
-  },
-  {
-    name: "La próxima semana",
-    from: startOfWeek(addWeeks(new Date(), 1)),
-    to: endOfWeek(addWeeks(new Date(), 1)),
-  },
-  {
-    name: "Este mes",
-    from: startOfMonth(new Date()),
-    to: endOfMonth(new Date()),
-  },
-  {
-    name: "El próximo mes",
-    from: startOfMonth(addMonths(new Date(), 1)),
-    to: endOfMonth(addMonths(new Date(), 1)),
-  },
-];
+export function getDatePresets(referenceDate = new Date()): Array<CustomDate> {
+  return [
+    {
+      name: "Hoy",
+      from: startOfDay(referenceDate),
+      to: endOfDay(referenceDate),
+    },
+    {
+      name: "Mañana",
+      from: startOfDay(addDays(referenceDate, 1)),
+      to: endOfDay(addDays(referenceDate, 1)),
+    },
+    {
+      name: "Esta semana",
+      from: startOfWeek(referenceDate, { locale: es }),
+      to: endOfWeek(referenceDate, { locale: es }),
+    },
+    {
+      name: "La próxima semana",
+      from: startOfWeek(addWeeks(referenceDate, 1), { locale: es }),
+      to: endOfWeek(addWeeks(referenceDate, 1), { locale: es }),
+    },
+    {
+      name: "Este mes",
+      from: startOfMonth(referenceDate),
+      to: endOfMonth(referenceDate),
+    },
+    {
+      name: "El próximo mes",
+      from: startOfMonth(addMonths(referenceDate, 1)),
+      to: endOfMonth(addMonths(referenceDate, 1)),
+    },
+  ];
+}
 
 export function getReadableStatus(status: OrderStatus | ShippingStatus) {
   switch (status) {

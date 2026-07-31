@@ -8,10 +8,10 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn, CustomDate } from "@/lib/utils";
-import { format } from "date-fns";
+import { format, isValid } from "date-fns";
 import { es } from "date-fns/locale";
 import { CalendarDays } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DateRange } from "react-day-picker";
 import {
   Control,
@@ -20,16 +20,61 @@ import {
   useController,
 } from "react-hook-form";
 
-interface DateRangePickerProps<T extends FieldValues>
-  extends React.HTMLAttributes<HTMLDivElement> {
-  customDates?: Array<CustomDate>;
+interface DateRangePickerProps<
+  T extends FieldValues,
+> extends React.HTMLAttributes<HTMLDivElement> {
+  customDates?: Array<CustomDate> | (() => Array<CustomDate>);
   name: FieldPath<T>;
   control: Control<T>;
   placeholder?: string;
   disabled?: boolean;
 }
 
-const currentYear = new Date().getFullYear();
+interface CompleteDateRange {
+  from: Date;
+  to: Date;
+}
+
+function normalizeDate(value: unknown): Date | undefined {
+  if (value instanceof Date) {
+    return isValid(value) ? value : undefined;
+  }
+
+  if (typeof value === "string") {
+    const parsedDate = new Date(value);
+    return isValid(parsedDate) ? parsedDate : undefined;
+  }
+
+  return undefined;
+}
+
+function normalizeDateRange(value: unknown): DateRange | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const range = value as { from?: unknown; to?: unknown };
+  const from = normalizeDate(range.from);
+  const to = normalizeDate(range.to);
+
+  if (!from && !to) {
+    return undefined;
+  }
+
+  return { from, to };
+}
+
+function hasSerializedDate(value: unknown): boolean {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const range = value as { from?: unknown; to?: unknown };
+  return (
+    (typeof range.from === "string" && Boolean(normalizeDate(range.from))) ||
+    (typeof range.to === "string" && Boolean(normalizeDate(range.to)))
+  );
+}
 
 export function DateRangePicker<T extends FieldValues>({
   className,
@@ -37,43 +82,73 @@ export function DateRangePicker<T extends FieldValues>({
   placeholder = "Selecciona un rango de fechas",
   name,
   control,
+  disabled = false,
   ...props
 }: DateRangePickerProps<T>) {
   const [customDateSelected, setCustomDateselected] = useState<string>("");
+  const [open, setOpen] = useState(false);
 
   const {
     field: { value, onChange },
   } = useController({ name, control });
 
+  const selectedDateRange = useMemo(() => normalizeDateRange(value), [value]);
+  const presets = useMemo(
+    () => (typeof customDates === "function" ? customDates() : customDates),
+    [customDates, open],
+  );
+  const currentYear = useMemo(() => new Date().getFullYear(), []);
+  const [month, setMonth] = useState<Date>(
+    () => selectedDateRange?.from ?? new Date(),
+  );
+
+  useEffect(() => {
+    if (selectedDateRange?.from) {
+      setMonth(selectedDateRange.from);
+    }
+  }, [selectedDateRange?.from]);
+
+  useEffect(() => {
+    if (hasSerializedDate(value) && selectedDateRange) {
+      onChange(selectedDateRange);
+    }
+  }, [onChange, selectedDateRange, value]);
+
   const handleSelect = (selectedDate: DateRange | undefined) => {
     setCustomDateselected("");
+    if (selectedDate?.from) {
+      setMonth(selectedDate.from);
+    }
     onChange(selectedDate);
   };
 
   const handleCustomDates = (
     customDateSelected: string,
-    selectedDate: DateRange,
+    selectedDate: CompleteDateRange,
   ) => {
     setCustomDateselected(customDateSelected);
+    setMonth(selectedDate.from);
     onChange(selectedDate);
   };
 
   return (
     <div className={cn("grid gap-2", className)} {...props}>
-      <Popover>
+      <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
+            type="button"
+            disabled={disabled}
             variant={"outline"}
             className={cn("justify-between bg-white px-3.5 py-2.5")}
           >
-            {value?.from ? (
-              value.to ? (
+            {selectedDateRange?.from ? (
+              selectedDateRange.to ? (
                 <>
-                  {format(value.from, "PPPP", { locale: es })} -{" "}
-                  {format(value.to, "PPPP", { locale: es })}
+                  {format(selectedDateRange.from, "PPPP", { locale: es })} -{" "}
+                  {format(selectedDateRange.to, "PPPP", { locale: es })}
                 </>
               ) : (
-                format(value.from, "PPPP", { locale: es })
+                format(selectedDateRange.from, "PPPP", { locale: es })
               )
             ) : (
               <span>{placeholder}</span>
@@ -84,9 +159,10 @@ export function DateRangePicker<T extends FieldValues>({
         <PopoverContent className="w-auto p-0" align="start">
           <div className="flex flex-row">
             <div className="flex max-h-[350px] flex-col overflow-y-auto">
-              {customDates.map((customDate: CustomDate) => (
+              {presets.map((customDate: CustomDate) => (
                 <Button
                   key={customDate.name}
+                  type="button"
                   variant="ghost"
                   className={cn("justify-start", {
                     "bg-accent text-accent-foreground":
@@ -105,8 +181,9 @@ export function DateRangePicker<T extends FieldValues>({
             </div>
             <Calendar
               mode="range"
-              defaultMonth={value?.from}
-              selected={value}
+              month={month}
+              onMonthChange={setMonth}
+              selected={selectedDateRange}
               onSelect={handleSelect}
               fromYear={currentYear - 5}
               toYear={currentYear + 5}
