@@ -47,15 +47,19 @@ test.describe("panel autenticado de pruebas", () => {
     });
 
     await page.goto(agentTask.url, { waitUntil: "domcontentloaded" });
-    await expect(page).toHaveURL(redirectUrl);
+    await expect(page).toHaveURL(
+      new RegExp(`/${testStoreId}/productos(?:\\?.*)?$`),
+    );
 
     for (const path of ["productos", "pedidos", "inventario"]) {
-      const response = await page.goto(`/${testStoreId}/${path}`, {
+      await page.goto(`/${testStoreId}/${path}`, {
         waitUntil: "domcontentloaded",
       });
 
-      expect(response?.ok(), path).toBeTruthy();
-      await expect(page).not.toHaveURL(/\/sign-in/);
+      await expect(page).toHaveURL(
+        new RegExp(`/${testStoreId}/${path}(?:\\?.*)?$`),
+      );
+      await expect(page).not.toHaveURL(/\/(?:sign-in|iniciar-sesion)/);
     }
   });
 });

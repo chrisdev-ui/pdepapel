@@ -47,7 +47,7 @@ Las comprobaciones autenticadas crean una sesión temporal de hasta cinco minuto
 
 1. En Clerk Dashboard, crea un usuario exclusivo de pruebas y copia su ID (`user_...`).
 2. Copia `pdepapel-admin/.env.e2e.example` como `pdepapel-admin/.env.e2e.local`.
-3. Completa `CLERK_SECRET_KEY` y las claves publicables con valores `sk_test_...` y `pk_test_...` de esa instancia, además de `E2E_ADMIN_CLERK_USER_ID`.
+3. Completa `E2E_ADMIN_CLERK_USER_ID`. Si `pdepapel-admin/.env` ya contiene claves `sk_test_...` y `pk_test_...`, el runner las carga automáticamente; de lo contrario, define allí `CLERK_SECRET_KEY` y las claves publicables de esa instancia.
 4. Prepara la base local y la tienda cuyo dueño es ese usuario:
 
 ```bash

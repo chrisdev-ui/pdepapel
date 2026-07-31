@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const baseURL = process.env.E2E_ADMIN_BASE_URL || "http://127.0.0.1:3101";
+const healthCheckUrl = new URL("/images/placeholder_1.png", baseURL).toString();
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -17,7 +18,7 @@ export default defineConfig({
     : {
         command:
           "node scripts/with-e2e-env.mjs node scripts/with-test-env.mjs npm run dev -- -p 3101",
-        url: baseURL,
+        url: healthCheckUrl,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
       },
