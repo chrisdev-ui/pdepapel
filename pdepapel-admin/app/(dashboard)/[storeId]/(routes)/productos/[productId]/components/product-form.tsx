@@ -97,6 +97,16 @@ const formSchema = z.object({
   sizeId: z.string().min(1),
   designId: z.string().min(1),
   supplierId: z.string().optional(),
+  brand: z.string().max(120).optional(),
+  gtin: z
+    .string()
+    .refine(
+      (value) => !value || /^(\d{8}|\d{12,14})$/.test(value),
+      "El GTIN debe tener 8, 12, 13 o 14 dígitos",
+    )
+    .optional(),
+  mpn: z.string().max(70).optional(),
+  hasNoProductIdentifier: z.boolean().default(false).optional(),
   isFeatured: z.boolean().default(false).optional(),
   isArchived: z.boolean().default(false).optional(),
   productGroupId: z.string().optional(),
@@ -191,6 +201,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             ...initialData,
             acqPrice: initialData.acqPrice || 0,
             supplierId: initialData.supplierId || "",
+            brand: initialData.brand || "",
+            gtin: initialData.gtin || "",
+            mpn: initialData.mpn || "",
+            hasNoProductIdentifier: initialData.hasNoProductIdentifier || false,
             images: initialData.images.map(
               (image: { url: string }, idx: number) => ({
                 ...image,
@@ -234,6 +248,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             sizeId: "",
             designId: "",
             supplierId: "",
+            brand: "",
+            gtin: "",
+            mpn: "",
+            hasNoProductIdentifier: false,
             isFeatured: false,
             isArchived: false,
             percentageIncrease: INITIAL_PERCENTAGE_INCREASE,
@@ -674,6 +692,26 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             />
             <FormField
               control={form.control}
+              name="brand"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Marca o fabricante</FormLabel>
+                  <FormControl>
+                    <Input
+                      disabled={loading}
+                      placeholder="Ej. Sanrio, Stabilo"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Se usa en Google Merchant y datos estructurados.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="acqPrice"
               render={({ field }) => (
                 <FormItem>
@@ -870,6 +908,69 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               )}
             />
 
+            <FormField
+              control={form.control}
+              name="gtin"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>GTIN / código de barras</FormLabel>
+                  <FormControl>
+                    <Input
+                      disabled={loading || form.watch("hasNoProductIdentifier")}
+                      inputMode="numeric"
+                      placeholder="8, 12, 13 o 14 dígitos"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Regístralo solo si corresponde a esta variante.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="mpn"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Referencia del fabricante (MPN)</FormLabel>
+                  <FormControl>
+                    <Input
+                      disabled={loading || form.watch("hasNoProductIdentifier")}
+                      placeholder="Referencia del fabricante"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="hasNoProductIdentifier"
+              render={({ field }) => (
+                <FormItem className="flex h-fit items-start space-x-3 space-y-0 rounded-md border p-4">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      disabled={loading}
+                      onCheckedChange={(checked) =>
+                        field.onChange(checked === true)
+                      }
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel>No tiene identificador global</FormLabel>
+                    <FormDescription>
+                      Úsalo únicamente para productos sin GTIN ni MPN del
+                      fabricante.
+                    </FormDescription>
+                  </div>
+                </FormItem>
+              )}
+            />
+
             {initialData && (
               <IntakeModal
                 isOpen={intakeOpen}
@@ -912,7 +1013,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                       )}
                       {selectOptions.categories?.length > 0 &&
                         selectOptions.categories.map((category) => (
-                          <SelectItem key={category.value} value={category.value}>
+                          <SelectItem
+                            key={category.value}
+                            value={category.value}
+                          >
                             {category.label}
                           </SelectItem>
                         ))}
@@ -1108,7 +1212,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                       )}
                       {selectOptions.suppliers?.length > 0 &&
                         selectOptions.suppliers.map((supplier) => (
-                          <SelectItem key={supplier.value} value={supplier.value}>
+                          <SelectItem
+                            key={supplier.value}
+                            value={supplier.value}
+                          >
                             {supplier.label}
                           </SelectItem>
                         ))}

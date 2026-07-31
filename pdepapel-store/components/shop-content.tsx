@@ -2,7 +2,7 @@
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { getProducts } from "@/actions/get-products";
 import Filter from "@/components/filter";
@@ -34,6 +34,8 @@ interface ShopContentProps {
   sizes: Size[];
   colors: Color[];
   designs: Design[];
+  fixedCategoryId?: string;
+  heading?: string;
 }
 
 export const ShopContent: React.FC<ShopContentProps> = ({
@@ -45,37 +47,47 @@ export const ShopContent: React.FC<ShopContentProps> = ({
   sizes,
   colors,
   designs,
+  fixedCategoryId,
+  heading = "Todos los productos",
 }) => {
-  const { filters, setFilter } = useProductFilters();
+  const { filters } = useProductFilters();
   const [isMounted, setIsMounted] = useState(false);
+
+  const effectiveFilters = useMemo(
+    () => ({
+      ...filters,
+      categoryId: fixedCategoryId ? [fixedCategoryId] : filters.categoryId,
+    }),
+    [filters, fixedCategoryId],
+  );
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
   const { data, isLoading, isPlaceholderData, isFetching } = useQuery({
-    queryKey: ["products", filters],
+    queryKey: ["products", fixedCategoryId, effectiveFilters],
     queryFn: () =>
       getProducts({
-        ...filters,
-        page: filters.page,
-        colorId: Array.isArray(filters.colorId)
-          ? filters.colorId.join(",")
-          : filters.colorId,
-        sizeId: Array.isArray(filters.sizeId)
-          ? filters.sizeId.join(",")
-          : filters.sizeId,
-        typeId: Array.isArray(filters.typeId)
-          ? filters.typeId.join(",")
-          : filters.typeId,
-        categoryId: Array.isArray(filters.categoryId)
-          ? filters.categoryId.join(",")
-          : filters.categoryId,
-        designId: Array.isArray(filters.designId)
-          ? filters.designId.join(",")
-          : filters.designId,
-        minPrice: filters.minPrice,
-        maxPrice: filters.maxPrice,
+        ...effectiveFilters,
+        page: effectiveFilters.page,
+        colorId: Array.isArray(effectiveFilters.colorId)
+          ? effectiveFilters.colorId.join(",")
+          : effectiveFilters.colorId,
+        sizeId: Array.isArray(effectiveFilters.sizeId)
+          ? effectiveFilters.sizeId.join(",")
+          : effectiveFilters.sizeId,
+        typeId: Array.isArray(effectiveFilters.typeId)
+          ? effectiveFilters.typeId.join(",")
+          : effectiveFilters.typeId,
+        categoryId: Array.isArray(effectiveFilters.categoryId)
+          ? effectiveFilters.categoryId.join(",")
+          : effectiveFilters.categoryId,
+        designId: Array.isArray(effectiveFilters.designId)
+          ? effectiveFilters.designId.join(",")
+          : effectiveFilters.designId,
+        minPrice: effectiveFilters.minPrice,
+        maxPrice: effectiveFilters.maxPrice,
         fromShop: true,
         itemsPerPage: LIMIT_SHOP_ITEMS,
         groupBy: "parents",
@@ -111,8 +123,8 @@ export const ShopContent: React.FC<ShopContentProps> = ({
   // Actually, facets from backend might already respect the type filter if it restricts the product set.
   // The 'filteredCategories' logic ensures we only show categories belonging to the selected TYPE.
   const typeFilteredCategories = categories.filter((category) => {
-    if (filters.typeId.length === 0) return true;
-    return filters.typeId.includes(category.typeId);
+    if (effectiveFilters.typeId.length === 0) return true;
+    return effectiveFilters.typeId.includes(category.typeId);
   });
 
   const categoriesWithCounts = mergeCounts(
@@ -132,12 +144,14 @@ export const ShopContent: React.FC<ShopContentProps> = ({
           data={types} // Types might not have facets in the spec provided, leaving as is or assuming no counts requested for Types yet.
           emptyMessage="No hay tipos disponibles"
         />
-        <Filter
-          valueKey="categoryId"
-          name="Sub-Categorías"
-          emptyMessage="No hay categorías disponibles"
-          data={categoriesWithCounts}
-        />
+        {!fixedCategoryId && (
+          <Filter
+            valueKey="categoryId"
+            name="Sub-Categorías"
+            emptyMessage="No hay categorías disponibles"
+            data={categoriesWithCounts}
+          />
+        )}
         <Filter
           valueKey="sizeId"
           name="Tamaños"
@@ -160,7 +174,7 @@ export const ShopContent: React.FC<ShopContentProps> = ({
       </div>
       <div className="mt-6 space-y-8 lg:col-span-4 lg:mt-0">
         <div className="flex w-full items-center justify-between">
-          <h2 className="font-sans text-3xl font-bold">Todos los productos</h2>
+          <h2 className="font-sans text-3xl font-bold">{heading}</h2>
           <section className="flex w-full items-center gap-4 md:w-auto">
             <ShopSearchBar className="hidden md:flex" />
             <SortSelector options={SORT_OPTIONS} />

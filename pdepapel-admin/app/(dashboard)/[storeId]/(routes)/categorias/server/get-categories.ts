@@ -10,6 +10,7 @@ export async function getCategories(storeId: string) {
     select: {
       id: true,
       name: true,
+      seoEnabled: true,
       createdAt: true,
       type: {
         select: {

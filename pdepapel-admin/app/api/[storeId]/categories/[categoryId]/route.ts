@@ -26,6 +26,10 @@ export async function GET(
         name: true,
         slug: true,
         typeId: true,
+        seoEnabled: true,
+        seoTitle: true,
+        seoDescription: true,
+        seoIntro: true,
       },
     });
 
@@ -51,7 +55,14 @@ export async function PATCH(
     await verifyStoreOwner(userId, params.storeId);
 
     const body = await req.json();
-    const { name, typeId } = body;
+    const {
+      name,
+      typeId,
+      seoEnabled = false,
+      seoTitle,
+      seoDescription,
+      seoIntro,
+    } = body;
 
     if (!name)
       throw ErrorFactory.InvalidRequest(
@@ -88,12 +99,20 @@ export async function PATCH(
           name,
           slug: slugify(name),
           typeId,
+          seoEnabled: Boolean(seoEnabled),
+          seoTitle: seoTitle?.trim() || null,
+          seoDescription: seoDescription?.trim() || null,
+          seoIntro: seoIntro?.trim() || null,
         },
         select: {
           id: true,
           name: true,
           slug: true,
           typeId: true,
+          seoEnabled: true,
+          seoTitle: true,
+          seoDescription: true,
+          seoIntro: true,
         },
       });
     });

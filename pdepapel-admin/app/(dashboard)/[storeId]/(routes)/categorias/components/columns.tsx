@@ -2,6 +2,7 @@
 
 import { DataTableCellDate } from "@/components/ui/data-table-cell-date";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
+import { Badge } from "@/components/ui/badge";
 import { ColumnDef } from "@tanstack/react-table";
 import { getCategories } from "../server/get-categories";
 import { CellAction } from "./cell-action";
@@ -33,6 +34,18 @@ export const columns: ColumnDef<CategoryColumn>[] = [
       />
     ),
     cell: ({ row }) => row.original._count.products,
+  },
+  {
+    accessorKey: "seoEnabled",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="SEO" />
+    ),
+    cell: ({ row }) =>
+      row.original.seoEnabled ? (
+        <Badge variant="success">Indexable</Badge>
+      ) : (
+        <Badge variant="secondary">No indexable</Badge>
+      ),
   },
   {
     accessorKey: "createdAt",

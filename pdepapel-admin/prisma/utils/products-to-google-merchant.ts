@@ -1,49 +1,50 @@
 import { PrismaClient } from "@prisma/client";
-import path from "path";
 import * as fs from "fs";
+import path from "path";
 
 const prismadb = new PrismaClient();
-
-// Your BASE_URL - adjust this to your actual domain
 const BASE_URL = "https://papeleriapdepapel.com";
 
 function generateUniqueName(baseName = "file") {
   const now = new Date();
+  const dateString = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+  ].join("");
+  const timeString = [
+    String(now.getHours()).padStart(2, "0"),
+    String(now.getMinutes()).padStart(2, "0"),
+    String(now.getSeconds()).padStart(2, "0"),
+  ].join("");
 
-  const dateString =
-    now.getFullYear().toString() +
-    (now.getMonth() + 1).toString().padStart(2, "0") +
-    now.getDate().toString().padStart(2, "0") +
-    "_" +
-    now.getHours().toString().padStart(2, "0") +
-    now.getMinutes().toString().padStart(2, "0") +
-    now.getSeconds().toString().padStart(2, "0") +
-    "_" +
-    now.getMilliseconds().toString().padStart(3, "0");
+  return `${baseName}_${dateString}_${timeString}`;
+}
 
-  return `${baseName}_${dateString}`;
+function cleanText(value: string | null | undefined) {
+  return (value || "")
+    .replace(/[\t\n\r]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 async function exportProductsToGoogleMerchant() {
   try {
     console.log("Fetching products from the database for Google Merchant...");
 
-    // Only get active (non-archived) products for Google Merchant
     const products = await prismadb.product.findMany({
-      where: {
-        isArchived: false, // Only active products
-      },
+      where: { isArchived: false },
       include: {
-        store: true,
-        category: true,
-        size: true,
+        category: { include: { type: true } },
         color: true,
         design: true,
-        images: true,
+        size: true,
+        productGroup: true,
+        images: {
+          orderBy: [{ isMain: "desc" }, { createdAt: "asc" }],
+        },
       },
-      orderBy: {
-        name: "asc",
-      },
+      orderBy: { name: "asc" },
     });
 
     if (products.length === 0) {
@@ -51,16 +52,37 @@ async function exportProductsToGoogleMerchant() {
       return;
     }
 
-    console.log(
-      `Found ${products.length} active products. Preparing Google Merchant TSV data...`,
-    );
+    const groupVariantCombinations = new Map<string, Set<string>>();
+    const groupsWithDuplicateVariants = new Set<string>();
 
-    // Create TSV file (tab-separated values)
-    const filePath = path.resolve(
-      `${generateUniqueName("google_merchant_feed")}.txt`,
-    );
+    for (const product of products) {
+      if (!product.productGroupId) continue;
 
-    // Manual TSV generation (more reliable than csv-writer with tabs)
+      const combination = [
+        product.sizeId,
+        product.colorId,
+        product.designId,
+      ].join("|");
+      const combinations = groupVariantCombinations.get(product.productGroupId);
+
+      if (combinations?.has(combination)) {
+        groupsWithDuplicateVariants.add(product.productGroupId);
+      } else if (combinations) {
+        combinations.add(combination);
+      } else {
+        groupVariantCombinations.set(
+          product.productGroupId,
+          new Set([combination]),
+        );
+      }
+    }
+
+    if (groupsWithDuplicateVariants.size > 0) {
+      console.warn(
+        `Excluded item_group_id for ${groupsWithDuplicateVariants.size} group(s) with duplicate variant attributes. Fix those variants in the admin before grouping them in Merchant.`,
+      );
+    }
+
     const headers = [
       "id",
       "title",
@@ -73,97 +95,76 @@ async function exportProductsToGoogleMerchant() {
       "availability",
       "brand",
       "gtin",
+      "mpn",
       "identifier_exists",
       "product_type",
-      "google_product_category",
-      "age_group",
-      "gender",
+      "item_group_id",
+      "color",
+      "size",
+      "pattern",
     ];
+    const rows = products.map((product) => {
+      const mainImage = product.images.find((image) => image.isMain);
+      const orderedImages = product.images.filter(
+        (image) => image.url !== mainImage?.url,
+      );
+      const brand = product.brand || product.productGroup?.brand || "";
+      const productType = [product.category?.type?.name, product.category?.name]
+        .filter(Boolean)
+        .join(" > ");
+      const identifierExists =
+        product.hasNoProductIdentifier ||
+        (!product.gtin && !(brand && product.mpn))
+          ? "no"
+          : "";
+      const itemGroupId = groupsWithDuplicateVariants.has(
+        product.productGroupId || "",
+      )
+        ? ""
+        : product.productGroupId || "";
 
-    let tsvContent = headers.join("\t") + "\n";
-
-    // Generate TSV content manually
-    products.forEach((product) => {
-      // Clean text fields to remove tabs and newlines
-      const cleanText = (text: string) => {
-        return text
-          .replace(/[\t\n\r]/g, " ") // Replace tabs and newlines with spaces
-          .replace(/\s+/g, " ") // Replace multiple spaces with single space
-          .trim();
-      };
-
-      // Get main image and additional images
-      const mainImage = product.images[0]?.url || "";
-      const additionalImages = product.images
-        .slice(1, 10) // Google allows up to 10 additional images
-        .map((img) => img.url)
-        .join(",");
-
-      // Determine availability based on stock and archived status
-      let availability = "out_of_stock";
-      if (!product.isArchived && product.stock > 0) {
-        availability = "in_stock";
-      }
-
-      // Format price for Google Merchant (price + currency)
-      const formattedPrice = `${product.price} COP`;
-
-      const rowData = [
-        product.sku || product.id, // Use SKU if available, otherwise use ID
+      return [
+        product.sku || product.id,
         cleanText(product.name),
         cleanText(product.description || product.name),
         `${BASE_URL}/producto/${product.slug || product.id}`,
-        mainImage,
-        additionalImages,
-        formattedPrice,
-        "new", // Assuming all products are new
-        availability,
-        product.store?.name || "Papelería de Papel", // Use store name as brand
-        "", // Add if you have GTIN/EAN codes in your database
-        "no", // Change to 'yes' if you have GTINs
-        product.category?.name || "",
-        "", // You'll need to map your categories to Google's taxonomy
-        "adult", // Default to adult, adjust as needed
-        "unisex", // Default to unisex, adjust as needed
-      ];
-
-      // Join with tabs and add to content
-      tsvContent += rowData.join("\t") + "\n";
+        mainImage?.url || product.images[0]?.url || "",
+        orderedImages
+          .slice(0, 10)
+          .map((image) => image.url)
+          .join(","),
+        `${product.price} COP`,
+        "new",
+        product.stock > 0 ? "in_stock" : "out_of_stock",
+        cleanText(brand),
+        product.gtin || "",
+        product.mpn || "",
+        identifierExists,
+        cleanText(productType),
+        itemGroupId,
+        cleanText(product.color?.name),
+        cleanText(product.size?.value || product.size?.name),
+        cleanText(product.design?.name),
+      ].join("\t");
     });
 
-    console.log("Writing TSV data to file...");
+    const filePath = path.resolve(
+      `${generateUniqueName("google_merchant_feed")}.txt`,
+    );
+    fs.writeFileSync(
+      filePath,
+      `${headers.join("\t")}\n${rows.join("\n")}\n`,
+      "utf8",
+    );
 
-    // Write the TSV content manually using fs
-    const fs = require("fs");
-    fs.writeFileSync(filePath, tsvContent, "utf8");
-
-    console.log(
-      `Google Merchant feed has been created successfully at: ${filePath}`,
-    );
-    console.log(
-      `File contains ${products.length} products ready for Google Merchant Center.`,
-    );
-    console.log(`\nNext steps:`);
-    console.log(
-      `1. Review the generated file and adjust any categories or brands as needed`,
-    );
-    console.log(`2. Upload the .txt file to Google Merchant Center`);
-    console.log(
-      `3. Map your product_type categories to Google's product categories if needed`,
-    );
+    console.log(`Google Merchant feed created at: ${filePath}`);
+    console.log(`File contains ${products.length} active products.`);
   } catch (error) {
-    if (error instanceof Error) {
-      console.error(
-        "Error exporting products to Google Merchant:",
-        error.message,
-      );
-    } else {
-      console.error("Error exporting products to Google Merchant:", error);
-    }
+    console.error("Error exporting products to Google Merchant:", error);
+    process.exitCode = 1;
   } finally {
     await prismadb.$disconnect();
   }
 }
 
-// Run the export
 exportProductsToGoogleMerchant();

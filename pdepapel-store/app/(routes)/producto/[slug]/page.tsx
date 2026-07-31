@@ -1,12 +1,12 @@
 import { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
-import { Product as ProductSchema, WithContext } from "schema-dts";
 
 import { getProduct } from "@/actions/get-product";
 import { getProducts } from "@/actions/get-products";
 import { SingleProductPage } from "@/components/single-product-page";
 import { BASE_URL } from "@/constants";
-import { productPath } from "@/lib/routes";
+import { categoryPath, productPath } from "@/lib/routes";
+import { Product } from "@/types";
 
 interface ProductPageProps {
   params: {
@@ -71,6 +71,48 @@ export async function generateMetadata({
 
 export const revalidate = 60;
 
+function buildProductSchema(product: Product, includeGroupReference = true) {
+  const slug = product.slug || product.id;
+  const path = productPath(slug);
+  const brand = product.brand || product.productGroup?.brand;
+
+  return {
+    "@type": "Product",
+    name: product.name,
+    description: product.description,
+    url: `${BASE_URL}${path}`,
+    image: product.images?.map((image) => image.url) || [],
+    sku: product.sku || product.id,
+    ...(brand
+      ? {
+          brand: {
+            "@type": "Brand",
+            name: brand,
+          },
+        }
+      : {}),
+    ...(product.gtin ? { gtin: product.gtin } : {}),
+    ...(product.mpn ? { mpn: product.mpn } : {}),
+    ...(product.color?.name ? { color: product.color.name } : {}),
+    ...(product.size?.name ? { size: product.size.name } : {}),
+    ...(product.design?.name ? { pattern: product.design.name } : {}),
+    ...(includeGroupReference && product.productGroupId
+      ? { inProductGroupWithID: product.productGroupId }
+      : {}),
+    offers: {
+      "@type": "Offer",
+      url: `${BASE_URL}${path}`,
+      priceCurrency: "COP",
+      price: product.price,
+      itemCondition: "https://schema.org/NewCondition",
+      availability:
+        product.stock > 0
+          ? "https://schema.org/InStock"
+          : "https://schema.org/OutOfStock",
+    },
+  };
+}
+
 export default async function ProductPage({ params }: ProductPageProps) {
   const product = await getProduct(params.slug);
 
@@ -104,27 +146,80 @@ export default async function ProductPage({ params }: ProductPageProps) {
   }));
   const suggestedProducts = suggestedProductsResponse.products;
   const canonicalPath = productPath(canonicalSlug);
-  const jsonLd: WithContext<ProductSchema> = {
+  const seenVariantCombinations = new Set<string>();
+  const hasDuplicateVariantCombination = siblingsResponse.products.some(
+    (variant) => {
+      const combination = [
+        variant.size?.id,
+        variant.color?.id,
+        variant.design?.id,
+      ].join("|");
+
+      if (seenVariantCombinations.has(combination)) return true;
+
+      seenVariantCombinations.add(combination);
+      return false;
+    },
+  );
+  const hasVariants = Boolean(
+    product.productGroupId &&
+    siblingsResponse.products.length > 1 &&
+    !hasDuplicateVariantCombination,
+  );
+  const productSchema = buildProductSchema(product, hasVariants);
+  const jsonLd = hasVariants
+    ? {
+        "@context": "https://schema.org",
+        "@type": "ProductGroup",
+        name: product.productGroup?.name || product.name,
+        description: product.description,
+        productGroupID: product.productGroupId,
+        variesBy: [
+          "https://schema.org/color",
+          "https://schema.org/size",
+          "https://schema.org/pattern",
+        ],
+        hasVariant: siblingsResponse.products.map((variant) =>
+          buildProductSchema(variant),
+        ),
+      }
+    : {
+        "@context": "https://schema.org",
+        ...productSchema,
+      };
+  const breadcrumbJsonLd = {
     "@context": "https://schema.org",
-    "@type": "Product",
-    name: product.name,
-    description: product.description,
-    image: product.images?.map((image) => image.url) || [],
-    sku: product.sku || product.id,
-    brand: {
-      "@type": "Brand",
-      name: "Papelería P de Papel",
-    },
-    offers: {
-      "@type": "Offer",
-      url: `${BASE_URL}${canonicalPath}`,
-      priceCurrency: "COP",
-      price: product.price,
-      availability:
-        product.stock > 0
-          ? "https://schema.org/InStock"
-          : "https://schema.org/OutOfStock",
-    },
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Inicio",
+        item: BASE_URL,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "Tienda",
+        item: `${BASE_URL}/tienda`,
+      },
+      ...(product.category
+        ? [
+            {
+              "@type": "ListItem",
+              position: 3,
+              name: product.category.name,
+              item: `${BASE_URL}${categoryPath(product.category.slug || product.category.id)}`,
+            },
+          ]
+        : []),
+      {
+        "@type": "ListItem",
+        position: product.category ? 4 : 3,
+        name: product.name,
+        item: `${BASE_URL}${canonicalPath}`,
+      },
+    ],
   };
 
   return (
@@ -132,6 +227,10 @@ export default async function ProductPage({ params }: ProductPageProps) {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
       <SingleProductPage
         product={product}

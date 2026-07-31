@@ -97,6 +97,10 @@ export async function POST(
       sizeId,
       designId,
       supplierId,
+      brand,
+      gtin,
+      mpn,
+      hasNoProductIdentifier,
       description,
       stock,
       images,
@@ -124,6 +128,13 @@ export async function POST(
       throw ErrorFactory.InvalidRequest(
         "El stock debe ser cero o mayor a cero",
       );
+
+    const normalizedGtin = typeof gtin === "string" ? gtin.trim() : "";
+    if (normalizedGtin && !/^(\d{8}|\d{12,14})$/.test(normalizedGtin)) {
+      throw ErrorFactory.InvalidRequest(
+        "El GTIN debe tener 8, 12, 13 o 14 dígitos",
+      );
+    }
 
     // [NEW] Validate Kit Data
     if (isKit && (!components || components.length === 0)) {
@@ -171,6 +182,10 @@ export async function POST(
         colorId,
         designId,
         supplierId,
+        brand: typeof brand === "string" ? brand.trim() || null : null,
+        gtin: normalizedGtin || null,
+        mpn: typeof mpn === "string" ? mpn.trim() || null : null,
+        hasNoProductIdentifier: Boolean(hasNoProductIdentifier),
         productGroupId: productGroupId || null,
         sku,
         images: {

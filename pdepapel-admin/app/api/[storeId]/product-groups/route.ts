@@ -5,6 +5,7 @@ import prismadb from "@/lib/prismadb";
 import { generateProductSlug, slugify } from "@/lib/slugify";
 import { synchronizeProductGroupSlugs } from "@/lib/product-slugs";
 import { verifyStoreOwner } from "@/lib/utils";
+import { hasDuplicateVariantCombination } from "@/lib/variant-combinations";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 
 const corsHeaders = {
@@ -27,6 +28,7 @@ export async function POST(
 
     const {
       name,
+      brand,
       description,
       images,
       imageMapping, // { url: string, scope: string }[]
@@ -57,6 +59,11 @@ export async function POST(
     if (!variantsPayload || !variantsPayload.length) {
       throw ErrorFactory.InvalidRequest("Variants are required");
     }
+    if (hasDuplicateVariantCombination(variantsPayload)) {
+      throw ErrorFactory.InvalidRequest(
+        "No se pueden crear dos variantes con la misma combinación de tamaño, color y diseño.",
+      );
+    }
 
     const productGroup = await prismadb.$transaction(async (tx) => {
       const initialMovements: any[] = [];
@@ -65,6 +72,7 @@ export async function POST(
         data: {
           storeId: params.storeId,
           name,
+          brand: typeof brand === "string" ? brand.trim() || null : null,
           slug: slugify(name),
           description: description || "",
           images: {

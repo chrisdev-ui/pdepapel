@@ -33,6 +33,7 @@ export async function GET(
       size: true,
       color: true,
       design: true,
+      productGroup: true,
       supplier: true,
       reviews: {
         orderBy: { createdAt: "desc" },
@@ -133,6 +134,10 @@ export async function PATCH(
       sizeId,
       designId,
       supplierId,
+      brand,
+      gtin,
+      mpn,
+      hasNoProductIdentifier,
       description,
       stock,
       images,
@@ -166,6 +171,13 @@ export async function PATCH(
       throw ErrorFactory.InvalidRequest(
         "El stock del producto debe ser cero o mayor a cero",
       );
+
+    const normalizedGtin = typeof gtin === "string" ? gtin.trim() : "";
+    if (normalizedGtin && !/^(\d{8}|\d{12,14})$/.test(normalizedGtin)) {
+      throw ErrorFactory.InvalidRequest(
+        "El GTIN debe tener 8, 12, 13 o 14 dígitos",
+      );
+    }
 
     // [NEW] Validate Kit Data
     if (isKit && (!components || components.length === 0)) {
@@ -263,6 +275,10 @@ export async function PATCH(
           sizeId,
           designId,
           supplierId,
+          brand: typeof brand === "string" ? brand.trim() || null : null,
+          gtin: normalizedGtin || null,
+          mpn: typeof mpn === "string" ? mpn.trim() || null : null,
+          hasNoProductIdentifier: Boolean(hasNoProductIdentifier),
           isArchived,
           isFeatured,
           productGroupId: targetProductGroupId,

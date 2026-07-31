@@ -20,6 +20,8 @@ import {
 } from "@/components/ui/form";
 import { Heading } from "@/components/ui/heading";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -35,10 +37,42 @@ import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
-const formSchema = z.object({
-  name: z.string().min(1, "El nombre de la sub-categoría no puede estar vacío"),
-  typeId: z.string().min(1),
-});
+const formSchema = z
+  .object({
+    name: z
+      .string()
+      .min(1, "El nombre de la sub-categoría no puede estar vacío"),
+    typeId: z.string().min(1),
+    seoEnabled: z.boolean().default(false),
+    seoTitle: z.string().max(70).optional(),
+    seoDescription: z.string().max(170).optional(),
+    seoIntro: z.string().max(1200).optional(),
+  })
+  .superRefine((values, context) => {
+    if (!values.seoEnabled) return;
+
+    if (!values.seoTitle?.trim()) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["seoTitle"],
+        message: "El título SEO es requerido para indexar esta categoría",
+      });
+    }
+    if (!values.seoDescription?.trim()) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["seoDescription"],
+        message: "La descripción SEO es requerida para indexar esta categoría",
+      });
+    }
+    if (!values.seoIntro?.trim()) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["seoIntro"],
+        message: "La introducción SEO es requerida para indexar esta categoría",
+      });
+    }
+  });
 
 type CategoryFormValues = z.infer<typeof formSchema>;
 
@@ -74,11 +108,14 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
   );
 
   const defaultValues = useMemo(
-    () =>
-      initialData || {
-        name: "",
-        typeId: "",
-      },
+    () => ({
+      name: initialData?.name || "",
+      typeId: initialData?.typeId || "",
+      seoEnabled: initialData?.seoEnabled || false,
+      seoTitle: initialData?.seoTitle || "",
+      seoDescription: initialData?.seoDescription || "",
+      seoIntro: initialData?.seoIntro || "",
+    }),
     [initialData],
   );
 
@@ -93,6 +130,7 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
   });
 
   useFormValidationToast({ form });
+  const seoEnabled = form.watch("seoEnabled");
 
   const onClear = () => {
     form.reset(defaultValues);
@@ -233,6 +271,90 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
                 </FormItem>
               )}
             />
+          </div>
+          <div className="space-y-6 rounded-lg border p-6">
+            <FormField
+              control={form.control}
+              name="seoEnabled"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={(checked) =>
+                        field.onChange(checked === true)
+                      }
+                      disabled={loading}
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel>Indexar página de categoría</FormLabel>
+                    <p className="text-sm text-muted-foreground">
+                      Solo actívalo cuando tengas contenido único y stock
+                      estable.
+                    </p>
+                  </div>
+                </FormItem>
+              )}
+            />
+            {seoEnabled && (
+              <div className="space-y-6">
+                <FormField
+                  control={form.control}
+                  name="seoTitle"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel isRequired>Título SEO</FormLabel>
+                      <FormControl>
+                        <Input
+                          disabled={loading}
+                          placeholder="Ej. Agendas kawaii en Colombia"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="seoDescription"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel isRequired>Descripción SEO</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          disabled={loading}
+                          placeholder="Explica qué encontrará la persona y el beneficio de comprarlo."
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="seoIntro"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel isRequired>
+                        Introducción de la categoría
+                      </FormLabel>
+                      <FormControl>
+                        <Textarea
+                          disabled={loading}
+                          placeholder="Escribe contenido útil y específico para esta categoría."
+                          className="min-h-32"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
           </div>
           <Button disabled={loading} className="ml-auto" type="submit">
             {loading ? (

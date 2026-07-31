@@ -16,6 +16,8 @@ export const STOREFRONT_ROUTES = {
 
 export const productPath = (slug: string) => `/producto/${slug}`;
 
+export const categoryPath = (slug: string) => `/categoria/${slug}`;
+
 export const orderPath = (orderId: string) => `/pedido/${orderId}`;
 
 export const quotePath = (token: string) => `/cotizacion/${token}`;

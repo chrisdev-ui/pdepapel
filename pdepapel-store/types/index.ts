@@ -52,6 +52,10 @@ export interface Product {
   images: Image[];
   reviews: Review[];
   sku: string;
+  brand?: string | null;
+  gtin?: string | null;
+  mpn?: string | null;
+  hasNoProductIdentifier?: boolean;
   quantity?: number;
   updatedAt?: string;
   // Discount fields
@@ -62,6 +66,11 @@ export interface Product {
   isGroup?: boolean;
   variantCount?: number;
   productGroupId?: string | null;
+  productGroup?: {
+    id: string;
+    name: string;
+    brand?: string | null;
+  } | null;
   hasDiscount?: boolean;
   minPrice?: number;
   maxPrice?: number;
@@ -84,6 +93,10 @@ export interface Category {
   typeId: string;
   name: string;
   slug?: string;
+  seoEnabled?: boolean;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
+  seoIntro?: string | null;
 }
 
 export interface Size {

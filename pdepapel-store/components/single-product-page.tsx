@@ -6,6 +6,7 @@ import { ProductInfo } from "@/components/product-info";
 import { ProductList } from "@/components/product-list";
 import { Reviews } from "@/components/reviews/reviews";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
+import { categoryPath } from "@/lib/routes";
 import { Container } from "@/components/ui/container";
 import { Separator } from "@/components/ui/separator";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
@@ -32,7 +33,7 @@ export const SingleProductPage: React.FC<SingleProductPageProps> = ({
   if (product.category) {
     breadcrumbItems.push({
       label: product.category.name,
-      href: `${STOREFRONT_ROUTES.shop}?categoryId=${product.category.slug || product.category.id}`,
+      href: categoryPath(product.category.slug || product.category.id),
     });
   }
 

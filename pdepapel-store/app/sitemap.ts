@@ -1,6 +1,7 @@
+import { getCategories } from "@/actions/get-categories";
 import { getProducts } from "@/actions/get-products";
 import { BASE_URL } from "@/constants";
-import { productPath, STOREFRONT_ROUTES } from "@/lib/routes";
+import { categoryPath, productPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import { MetadataRoute } from "next";
 
 const SITEMAP_PAGE_SIZE = 500;
@@ -14,6 +15,7 @@ const getLastModified = (updatedAt?: string) => {
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   let productsUrls: MetadataRoute.Sitemap = [];
+  let categoryUrls: MetadataRoute.Sitemap = [];
 
   try {
     const firstPage = await getProducts({
@@ -21,12 +23,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       itemsPerPage: SITEMAP_PAGE_SIZE,
     });
     const remainingPages = await Promise.all(
-      Array.from({ length: Math.max(firstPage.totalPages - 1, 0) }, (_, index) =>
-        getProducts({
-          fromShop: true,
-          itemsPerPage: SITEMAP_PAGE_SIZE,
-          page: index + 2,
-        }),
+      Array.from(
+        { length: Math.max(firstPage.totalPages - 1, 0) },
+        (_, index) =>
+          getProducts({
+            fromShop: true,
+            itemsPerPage: SITEMAP_PAGE_SIZE,
+            page: index + 2,
+          }),
       ),
     );
     const products = [
@@ -43,6 +47,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       "Failed to fetch products for sitemap, using static routes only:",
       error,
     );
+  }
+
+  try {
+    const categories = await getCategories();
+    categoryUrls = categories
+      .filter((category) => category.seoEnabled && category.slug)
+      .map((category) => ({
+        url: `${BASE_URL}${categoryPath(category.slug!)}`,
+      }));
+  } catch (error) {
+    console.warn("Failed to fetch SEO categories for sitemap:", error);
   }
 
   return [
@@ -67,6 +82,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     {
       url: `${BASE_URL}${STOREFRONT_ROUTES.shop}`,
     },
+    ...categoryUrls,
     ...productsUrls,
   ];
 }

@@ -4,6 +4,7 @@ import { auth } from "@clerk/nextjs";
 import prismadb from "@/lib/prismadb";
 import { generateProductSlug, slugify } from "@/lib/slugify";
 import { synchronizeProductGroupSlugs } from "@/lib/product-slugs";
+import { hasDuplicateVariantCombination } from "@/lib/variant-combinations";
 import {
   CACHE_HEADERS,
   getPublicIdFromCloudinaryUrl,
@@ -69,6 +70,7 @@ export async function PATCH(
 
     const {
       name,
+      brand,
       description,
       images,
       imageMapping,
@@ -92,6 +94,11 @@ export async function PATCH(
     if (!variantsPayload || !Array.isArray(variantsPayload)) {
       throw ErrorFactory.InvalidRequest("Variants array is required");
     }
+    if (hasDuplicateVariantCombination(variantsPayload)) {
+      throw ErrorFactory.InvalidRequest(
+        "No se pueden guardar dos variantes con la misma combinación de tamaño, color y diseño.",
+      );
+    }
 
     await verifyStoreOwner(userId, params.storeId);
 
@@ -101,7 +108,12 @@ export async function PATCH(
       // 1. Update Group Details
       const group = await tx.productGroup.update({
         where: { id: params.productGroupId },
-        data: { name, slug: slugify(name), description },
+        data: {
+          name,
+          brand: typeof brand === "string" ? brand.trim() || null : null,
+          slug: slugify(name),
+          description,
+        },
       });
 
       // Prisma 6: explicit image replacement for optional relations

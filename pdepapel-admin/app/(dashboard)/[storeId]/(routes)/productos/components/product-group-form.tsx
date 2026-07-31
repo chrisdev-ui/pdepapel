@@ -72,6 +72,7 @@ import { VariantMatrix } from "./variant-matrix";
 
 const formSchema = z.object({
   name: z.string().min(1, "El nombre del grupo es requerido"),
+  brand: z.string().max(120).optional(),
   description: z.string().optional(),
   images: z
     .object({ url: z.string(), isMain: z.boolean().optional() })
@@ -401,6 +402,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   const defaultValues: ProductGroupFormValues = initialData
     ? {
         name: initialData.name,
+        brand: initialData.brand || "",
         description: initialData.description || "",
         images: getAllImages(),
         categoryId: initialData.products?.[0]?.categoryId || "",
@@ -452,6 +454,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       }
     : {
         name: "",
+        brand: "",
         description: "",
         images: [],
         categoryId: "",
@@ -1549,6 +1552,26 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
             />
             <FormField
               control={form.control}
+              name="brand"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Marca o fabricante</FormLabel>
+                  <FormControl>
+                    <Input
+                      disabled={loading}
+                      placeholder="Ej. Sanrio, Stabilo"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Se aplicará a todas las variantes en Google Merchant.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="acqPrice"
               render={({ field }) => (
                 <FormItem>
@@ -1790,7 +1813,10 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                     <SelectContent>
                       {selectOptions.categories?.length > 0 &&
                         selectOptions.categories.map((category) => (
-                          <SelectItem key={category.value} value={category.value}>
+                          <SelectItem
+                            key={category.value}
+                            value={category.value}
+                          >
                             {category.label}
                           </SelectItem>
                         ))}

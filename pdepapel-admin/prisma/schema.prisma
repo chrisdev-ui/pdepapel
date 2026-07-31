@@ -166,17 +166,21 @@ model Type {
 }
 
 model Category {
-  id        String          @id @default(uuid())
-  storeId   String
-  typeId    String
-  name      String
-  slug      String          @default("")
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
-  store     Store           @relation("StoreToCategory", fields: [storeId], references: [id])
-  type      Type            @relation(fields: [typeId], references: [id])
-  products  Product[]       @relation("CategoryToProduct")
-  offers    OfferCategory[]
+  id             String          @id @default(uuid())
+  storeId        String
+  typeId         String
+  name           String
+  slug           String          @default("")
+  seoEnabled     Boolean         @default(false)
+  seoTitle       String?         @db.VarChar(70)
+  seoDescription String?         @db.VarChar(170)
+  seoIntro       String?         @db.Text
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  store          Store           @relation("StoreToCategory", fields: [storeId], references: [id])
+  type           Type            @relation(fields: [typeId], references: [id])
+  products       Product[]       @relation("CategoryToProduct")
+  offers         OfferCategory[]
 
   @@index([storeId])
   @@index([typeId])
@@ -229,6 +233,7 @@ model ProductGroup {
   name        String
   slug        String              @default("")
   description String              @db.Text
+  brand       String?             @db.VarChar(120)
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
   products    Product[]
@@ -260,6 +265,10 @@ model Product {
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   sku                String              @unique
+  brand              String?             @db.VarChar(120)
+  gtin               String?             @db.VarChar(14)
+  mpn                String?             @db.VarChar(70)
+  hasNoProductIdentifier Boolean         @default(false)
   store              Store               @relation("StoreToProduct", fields: [storeId], references: [id])
   category           Category            @relation("CategoryToProduct", fields: [categoryId], references: [id])
   size               Size                @relation(fields: [sizeId], references: [id])

@@ -4,6 +4,8 @@ import { Suspense } from "react";
 import { Organization, WebSite } from "schema-dts";
 
 import { getBillboards } from "@/actions/get-billboards";
+import { getCategories } from "@/actions/get-categories";
+import { CategoryLinksSection } from "@/components/category-links-section";
 import { BASE_URL } from "@/constants";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 
@@ -52,9 +54,9 @@ const jsonLd: {
 
 export const metadata: Metadata = {
   metadataBase: new URL(BASE_URL),
-  title: "Inicio | Papelería P de Papel",
+  title: "Papelería kawaii en Colombia",
   description:
-    "Bienvenido a Papelería P de Papel, tu destino en línea para encontrar los más encantadores artículos kawaii y una amplia gama de suministros de oficina. Descubre productos únicos y de calidad para agregar creatividad a tu espacio de trabajo o estudio. Experimenta una compra fácil y alegre con nosotros desde nuestra página principal.",
+    "Compra papelería kawaii, agendas, cuadernos, útiles escolares y regalos creativos con envíos a toda Colombia. Descubre novedades en Papelería P de Papel.",
   keywords: [
     "papelería kawaii",
     "útiles escolares",
@@ -80,9 +82,9 @@ export const metadata: Metadata = {
     canonical: "/",
   },
   openGraph: {
-    title: "Inicio | Papelería P de Papel",
+    title: "Papelería kawaii en Colombia | Papelería P de Papel",
     description:
-      "Bienvenido a Papelería P de Papel, tu destino en línea para encontrar los más encantadores artículos kawaii y una amplia gama de suministros de oficina.",
+      "Papelería kawaii, útiles escolares y regalos creativos con envíos a toda Colombia.",
     url: "/",
     siteName: "Papelería P de Papel",
     locale: "es_CO",
@@ -104,9 +106,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Inicio | Papelería P de Papel",
+    title: "Papelería kawaii en Colombia | Papelería P de Papel",
     description:
-      "Bienvenido a Papelería P de Papel, tu destino en línea para encontrar los más encantadores artículos kawaii.",
+      "Papelería kawaii, útiles escolares y regalos creativos con envíos a toda Colombia.",
     images: ["/images/no-text-lightpink-bg.webp"],
   },
 };
@@ -126,12 +128,28 @@ import { MainBannerSection } from "@/components/main-banner-section";
 import { NewArrivalsSection } from "@/components/new-arrivals-section";
 
 export default async function HomePage() {
-  const billboards = await getBillboards();
+  const [billboards, categories] = await Promise.all([
+    getBillboards(),
+    getCategories(),
+  ]);
+  const seoCategories = categories
+    .filter((category) => category.seoEnabled && category.slug)
+    .slice(0, 8);
 
   return (
     <>
       <HeroSlider data={billboards} />
+      <section className="bg-kawaii-pink-light/15 py-8 text-center">
+        <h1 className="font-serif text-3xl font-extrabold sm:text-4xl">
+          Papelería kawaii y creativa con envíos a toda Colombia
+        </h1>
+        <p className="mx-auto mt-3 max-w-2xl px-6 text-muted-foreground">
+          Encuentra agendas, cuadernos, útiles escolares y regalos con diseños
+          únicos para estudiar, crear y regalar.
+        </p>
+      </section>
       <Features />
+      <CategoryLinksSection categories={seoCategories} />
       <Suspense fallback={<FeaturedProductsSkeleton />}>
         <FeaturedProductsSection />
       </Suspense>
