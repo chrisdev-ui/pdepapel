@@ -319,7 +319,8 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
                         <FormLabel>Destacar enlace en inicio</FormLabel>
                         <p className="text-sm text-muted-foreground">
                           Úsalo para las categorías prioritarias que deben
-                          aparecer en la navegación principal del storefront.
+                          aparecer en la navegación principal de la tienda en
+                          línea.
                         </p>
                       </div>
                     </FormItem>
