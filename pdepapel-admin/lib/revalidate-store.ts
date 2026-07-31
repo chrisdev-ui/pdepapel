@@ -23,11 +23,22 @@ export async function triggerStorefrontRevalidation(
       process.env.STOREFRONT_URL ||
       "https://papeleriapdepapel.com";
 
-    const secret = process.env.REVALIDATION_SECRET;
+    const secret = process.env.REVALIDATION_SECRET?.trim();
 
     if (!secret) {
       const message =
         "Storefront revalidation skipped: REVALIDATION_SECRET is not configured.";
+      console.warn(message);
+      await sendRevalidationFailureAlert({
+        endpoints: [storefrontUrl],
+        details: [message],
+      });
+      return;
+    }
+
+    if (!/^[\x21-\x7e]+$/.test(secret)) {
+      const message =
+        "Storefront revalidation skipped: REVALIDATION_SECRET must be a single-line printable value.";
       console.warn(message);
       await sendRevalidationFailureAlert({
         endpoints: [storefrontUrl],

@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
 async function handleRevalidation(req: NextRequest) {
   try {
     const secret = req.headers.get("x-revalidate-secret");
-    const expectedSecret = process.env.REVALIDATION_SECRET;
+    const expectedSecret = process.env.REVALIDATION_SECRET?.trim();
 
     if (!expectedSecret) {
       return NextResponse.json(
