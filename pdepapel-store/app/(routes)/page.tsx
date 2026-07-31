@@ -132,9 +132,9 @@ export default async function HomePage() {
     getBillboards(),
     getCategories(),
   ]);
-  const seoCategories = categories
-    .filter((category) => category.seoEnabled && category.slug)
-    .slice(0, 8);
+  const seoCategories = categories.filter(
+    (category) => category.seoEnabled && category.seoFeatured && category.slug,
+  );
 
   return (
     <>

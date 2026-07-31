@@ -44,6 +44,7 @@ const formSchema = z
       .min(1, "El nombre de la sub-categoría no puede estar vacío"),
     typeId: z.string().min(1),
     seoEnabled: z.boolean().default(false),
+    seoFeatured: z.boolean().default(false),
     seoTitle: z.string().max(70).optional(),
     seoDescription: z.string().max(170).optional(),
     seoIntro: z.string().max(1200).optional(),
@@ -112,6 +113,7 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
       name: initialData?.name || "",
       typeId: initialData?.typeId || "",
       seoEnabled: initialData?.seoEnabled || false,
+      seoFeatured: initialData?.seoFeatured || false,
       seoTitle: initialData?.seoTitle || "",
       seoDescription: initialData?.seoDescription || "",
       seoIntro: initialData?.seoIntro || "",
@@ -299,6 +301,30 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
             />
             {seoEnabled && (
               <div className="space-y-6">
+                <FormField
+                  control={form.control}
+                  name="seoFeatured"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={(checked) =>
+                            field.onChange(checked === true)
+                          }
+                          disabled={loading}
+                        />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel>Destacar enlace en inicio</FormLabel>
+                        <p className="text-sm text-muted-foreground">
+                          Úsalo para las categorías prioritarias que deben
+                          aparecer en la navegación principal del storefront.
+                        </p>
+                      </div>
+                    </FormItem>
+                  )}
+                />
                 <FormField
                   control={form.control}
                   name="seoTitle"

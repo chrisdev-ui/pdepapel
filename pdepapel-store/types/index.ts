@@ -94,6 +94,7 @@ export interface Category {
   name: string;
   slug?: string;
   seoEnabled?: boolean;
+  seoFeatured?: boolean;
   seoTitle?: string | null;
   seoDescription?: string | null;
   seoIntro?: string | null;
