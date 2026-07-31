@@ -5,7 +5,7 @@ const API_URL = `${env.NEXT_PUBLIC_API_URL}/categories`;
 
 export const getCategories = async (): Promise<Category[]> => {
   try {
-    const response = await fetch(API_URL);
+    const response = await fetch(API_URL, { cache: "no-store" });
     if (!response.ok) return [];
     return await response.json();
   } catch {
