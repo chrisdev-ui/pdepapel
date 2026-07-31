@@ -7,7 +7,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { cn, CustomDate } from "@/lib/utils";
+import type { CustomDate } from "@/lib/date-presets";
+import { cn } from "@/lib/utils";
 import { format, isValid } from "date-fns";
 import { es } from "date-fns/locale";
 import { CalendarDays } from "lucide-react";

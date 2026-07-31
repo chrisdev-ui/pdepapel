@@ -68,6 +68,7 @@ async function processWebhookPayment(response: any) {
                 id: true,
               },
             },
+            shipping: true,
           },
         });
 
@@ -155,16 +156,26 @@ function isPaymentValid(order: any, transaction: any): boolean {
 async function updateOrderData(order: any, transaction: any) {
   try {
     const currentStatus = applyStatus(transaction.status);
-    await prismadb.order.update({
-      where: {
-        id: order.id,
-      },
-      data: {
-        status: currentStatus,
-      },
-    });
-    if (currentStatus === OrderStatus.PAID) {
-      await prismadb.$transaction(async (tx) => {
+    const result = await prismadb.$transaction(async (tx) => {
+      if (currentStatus === OrderStatus.PAID) {
+        const claim = await tx.order.updateMany({
+          where: {
+            id: order.id,
+            status: {
+              in: [
+                OrderStatus.CREATED,
+                OrderStatus.PENDING,
+                OrderStatus.CANCELLED,
+              ],
+            },
+          },
+          data: { status: OrderStatus.PAID },
+        });
+
+        if (claim.count === 0) {
+          return { processed: false, shouldInvalidateCache: false };
+        }
+
         // Prepare stock updates for batch processing (Sales = Negative)
         const stockMovements = order.orderItems
           .filter((item: any) => item.product) // Filter out manual items
@@ -202,6 +213,13 @@ async function updateOrderData(order: any, transaction: any) {
           } as any,
         });
 
+        if (order.coupon) {
+          await tx.coupon.update({
+            where: { id: order.coupon.id },
+            data: { usedCount: { increment: 1 } },
+          });
+        }
+
         // Log any stock update failures but don't throw errors
         if (stockResult.failed.length > 0) {
           console.warn("Some stock updates failed in Wompi webhook:", {
@@ -212,13 +230,31 @@ async function updateOrderData(order: any, transaction: any) {
           });
         }
 
-        // Invalidate cache for this store since stock changed
-        await invalidateStoreProductsCache(order.storeId);
-      });
-    } else if (currentStatus === OrderStatus.CANCELLED) {
-      await prismadb.$transaction(async (tx) => {
-        // Restock products if order was previously paid
-        if (order.status === OrderStatus.PAID) {
+        return { processed: true, shouldInvalidateCache: true };
+      }
+
+      if (currentStatus === OrderStatus.CANCELLED) {
+        const paidCancellation = await tx.order.updateMany({
+          where: { id: order.id, status: OrderStatus.PAID },
+          data: { status: OrderStatus.CANCELLED },
+        });
+        let restockedPaidOrder = paidCancellation.count > 0;
+
+        if (!restockedPaidOrder) {
+          const pendingCancellation = await tx.order.updateMany({
+            where: {
+              id: order.id,
+              status: { in: [OrderStatus.CREATED, OrderStatus.PENDING] },
+            },
+            data: { status: OrderStatus.CANCELLED },
+          });
+
+          if (pendingCancellation.count === 0) {
+            return { processed: false, shouldInvalidateCache: false };
+          }
+        }
+
+        if (restockedPaidOrder) {
           const stockMovements = order.orderItems
             .filter((item: any) => item.product) // Filter out manual items
             .map((orderItem: any) => ({
@@ -247,13 +283,9 @@ async function updateOrderData(order: any, transaction: any) {
               success: stockResult.success,
             });
           }
-
-          // Invalidate cache for this store since stock changed (Restock)
-          await invalidateStoreProductsCache(order.storeId);
         }
 
-        // Handle coupon if exists
-        if (order.coupon) {
+        if (restockedPaidOrder && order.coupon) {
           await tx.coupon.update({
             where: { id: order.coupon.id },
             data: {
@@ -271,8 +303,37 @@ async function updateOrderData(order: any, transaction: any) {
             },
           });
         }
+
+        return {
+          processed: true,
+          shouldInvalidateCache: restockedPaidOrder,
+        };
+      }
+
+      const pendingClaim = await tx.order.updateMany({
+        where: { id: order.id, status: OrderStatus.CREATED },
+        data: { status: OrderStatus.PENDING },
       });
+
+      return {
+        processed: pendingClaim.count > 0,
+        shouldInvalidateCache: false,
+      };
+    });
+
+    if (!result.processed) {
+      return NextResponse.json(
+        {
+          message: `Orden ${order.orderNumber} ya fue procesada anteriormente`,
+        },
+        { status: 200 },
+      );
     }
+
+    if (result.shouldInvalidateCache) {
+      await invalidateStoreProductsCache(order.storeId);
+    }
+
     await prismadb.paymentDetails.upsert({
       where: {
         orderId: order.id,

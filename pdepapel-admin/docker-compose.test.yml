@@ -1,0 +1,18 @@
+services:
+  mysql-test:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: pdepapel_test
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "${TEST_MYSQL_PORT:-3307}:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - pdepapel-mysql-test-data:/var/lib/mysql
+
+volumes:
+  pdepapel-mysql-test-data:

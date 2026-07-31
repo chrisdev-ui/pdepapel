@@ -16,7 +16,6 @@ import { getProductsPrices } from "@/lib/discount-engine";
 import prismadb from "@/lib/prismadb";
 import {
   CACHE_HEADERS,
-  calculateOrderTotals,
   checkIfStoreOwner,
   CheckoutOrder,
   currencyFormatter,
@@ -25,6 +24,7 @@ import {
   getLastOrderTimestamp,
   processOrderItemsInBatches,
 } from "@/lib/utils";
+import { calculateOrderTotals } from "@/lib/order-totals";
 import { auth, clerkClient } from "@clerk/nextjs";
 import { sendOrderEmail } from "@/lib/email";
 import { BATCH_SIZE } from "@/constants";
@@ -249,7 +249,8 @@ export async function POST(
       ...shipping,
       provider: isCustomShipping ? "CUSTOM" : ShippingProvider.ENVIOCLICK,
       totalCost: shipping.cost ?? 0,
-      carrier: shipping.carrierName || shipping.courier || "Acordar por WhatsApp",
+      carrier:
+        shipping.carrierName || shipping.courier || "Acordar por WhatsApp",
       product: shipping.productName || "Envío",
       idRate: shipping.idRate || envioClickIdRate || 0,
       idCarrier: shipping.carrierId || null,

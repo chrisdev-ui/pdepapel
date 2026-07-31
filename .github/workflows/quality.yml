@@ -26,10 +26,26 @@ jobs:
           cache-dependency-path: pdepapel-store/package-lock.json
       - run: npm ci
       - run: npm run type-check
+      - run: npm run test:coverage
 
   administracion:
     name: Administración
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: pdepapel_test
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      TEST_DATABASE_URL: mysql://root:root@127.0.0.1:3306/pdepapel_test
     defaults:
       run:
         working-directory: pdepapel-admin
@@ -43,3 +59,6 @@ jobs:
       - run: npm ci
       - run: npx prisma generate
       - run: npx tsc --noEmit
+      - run: npm run test:coverage
+      - run: npm run test:db:push
+      - run: npm run test:integration

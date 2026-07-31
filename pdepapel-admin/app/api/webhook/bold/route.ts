@@ -225,6 +225,13 @@ async function processBoldPayment(transaction: any, targetStatus: OrderStatus) {
         } as any,
       });
 
+      if (order.coupon) {
+        await tx.coupon.update({
+          where: { id: order.coupon.id },
+          data: { usedCount: { increment: 1 } },
+        });
+      }
+
       await tx.paymentDetails.upsert({
         where: { orderId: order.id },
         update: {

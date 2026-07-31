@@ -5,3 +5,4 @@
 # Playwright artifacts
 playwright-report/
 test-results/
+coverage/

@@ -2,7 +2,6 @@ import { BATCH_SIZE, DEFAULT_COUNTRY } from "@/constants";
 import prismadb from "@/lib/prismadb";
 import { clerkClient } from "@clerk/nextjs";
 import {
-  DiscountType,
   Order,
   OrderItem,
   OrderStatus,
@@ -15,18 +14,6 @@ import {
 } from "@prisma/client";
 import { clsx, type ClassValue } from "clsx";
 import crypto from "crypto";
-import {
-  addDays,
-  addMonths,
-  addWeeks,
-  endOfDay,
-  endOfMonth,
-  endOfWeek,
-  startOfDay,
-  startOfMonth,
-  startOfWeek,
-} from "date-fns";
-import { es } from "date-fns/locale";
 import { twMerge } from "tailwind-merge";
 import { v4 as uuidv4 } from "uuid";
 import { ErrorFactory } from "./api-errors";
@@ -34,13 +21,19 @@ import { env } from "./env.mjs";
 import { DefaultArgs } from "@prisma/client/runtime/library";
 import { formatValue } from "react-currency-input-field";
 import { parsePhoneNumber } from "libphonenumber-js";
+import { round2 } from "@/lib/order-totals";
+
+export { getDatePresets, type CustomDate } from "@/lib/date-presets";
+export {
+  calculateOrderTotals,
+  round2,
+  type DiscountConfig,
+  type OrderTotals,
+} from "@/lib/order-totals";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
-
-/** Round a number to 2 decimal places to avoid floating-point artifacts */
-export const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export function currencyFormatter(
   value: number | string | undefined,
@@ -272,105 +265,6 @@ export async function generateWompiPayment(
   const url = `https://checkout.wompi.co/p/?public-key=${env.WOMPI_API_KEY}&currency=COP&amount-in-cents=${amountInCents}&reference=${order.id}&signature:integrity=${signatureIntegrity}&redirect-url=${env.FRONTEND_STORE_URL}/pedido/${order.id}&expiration-time=${expirationTime}`;
 
   return url;
-}
-
-export interface OrderTotals {
-  subtotal: number;
-  discount: number;
-  couponDiscount: number;
-  total: number;
-}
-
-export interface DiscountConfig {
-  type: DiscountType;
-  amount: number;
-}
-
-export function calculateOrderTotals(
-  orderItems: Array<{
-    product: { price: number };
-    quantity: number;
-  }>,
-  config?: {
-    discount?: DiscountConfig;
-    coupon?: DiscountConfig;
-    shippingCost?: number;
-  },
-): OrderTotals {
-  const subtotal = orderItems.reduce(
-    (sum, item) => sum + Number(item.product.price) * item.quantity,
-    0,
-  );
-
-  let discount = 0;
-  if (config?.discount) {
-    discount =
-      config.discount.type === DiscountType.PERCENTAGE
-        ? (subtotal * config.discount.amount) / 100
-        : Math.min(config.discount.amount, subtotal);
-  }
-
-  let couponDiscount = 0;
-  if (config?.coupon) {
-    const afterDiscount = subtotal - discount;
-    couponDiscount =
-      config.coupon.type === DiscountType.PERCENTAGE
-        ? (afterDiscount * config.coupon.amount) / 100
-        : Math.min(config.coupon.amount, afterDiscount);
-  }
-
-  const total = Math.max(
-    0,
-    subtotal - discount - couponDiscount + (config?.shippingCost || 0),
-  );
-
-  return {
-    subtotal: round2(subtotal),
-    discount: round2(discount),
-    couponDiscount: round2(couponDiscount),
-    total: round2(total),
-  };
-}
-
-export interface CustomDate {
-  name: string;
-  from: Date;
-  to: Date;
-}
-
-export function getDatePresets(referenceDate = new Date()): Array<CustomDate> {
-  return [
-    {
-      name: "Hoy",
-      from: startOfDay(referenceDate),
-      to: endOfDay(referenceDate),
-    },
-    {
-      name: "Mañana",
-      from: startOfDay(addDays(referenceDate, 1)),
-      to: endOfDay(addDays(referenceDate, 1)),
-    },
-    {
-      name: "Esta semana",
-      from: startOfWeek(referenceDate, { locale: es }),
-      to: endOfWeek(referenceDate, { locale: es }),
-    },
-    {
-      name: "La próxima semana",
-      from: startOfWeek(addWeeks(referenceDate, 1), { locale: es }),
-      to: endOfWeek(addWeeks(referenceDate, 1), { locale: es }),
-    },
-    {
-      name: "Este mes",
-      from: startOfMonth(referenceDate),
-      to: endOfMonth(referenceDate),
-    },
-    {
-      name: "El próximo mes",
-      from: startOfMonth(addMonths(referenceDate, 1)),
-      to: endOfMonth(addMonths(referenceDate, 1)),
-    },
-  ];
 }
 
 export function getReadableStatus(status: OrderStatus | ShippingStatus) {
