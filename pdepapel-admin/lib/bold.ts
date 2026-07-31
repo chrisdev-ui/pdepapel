@@ -70,6 +70,12 @@ export function verifyBoldWebhookSignature(
   );
 }
 
+export function getBoldWebhookSecretKey(): string {
+  return process.env.BOLD_ENVIRONMENT === "test"
+    ? ""
+    : process.env.BOLD_SECRET_KEY || "";
+}
+
 /**
  * Generates pre-signed Bold checkout payload for direct checkout creation
  */

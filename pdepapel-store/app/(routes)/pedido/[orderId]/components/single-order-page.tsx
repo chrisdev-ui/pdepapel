@@ -1042,14 +1042,14 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                     <div
                       className={cn(
                         "flex flex-col items-center gap-4 rounded-xl border-2 p-6 text-center transition-all",
-                        getStatusColor(order.status),
+                        getStatusColor(activeOrder.status),
                       )}
                     >
                       <div className="bg-current/10 rounded-full p-4">
-                        {STATUS[order?.status as OrderStatus].icon}
+                        {STATUS[activeOrder.status as OrderStatus].icon}
                       </div>
                       <p className="text-pretty text-sm font-medium leading-relaxed">
-                        {STATUS[order?.status as OrderStatus].text}
+                        {STATUS[activeOrder.status as OrderStatus].text}
                       </p>
                     </div>
 
@@ -1135,7 +1135,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                     </div>
 
                     {/* Payment Buttons */}
-                    {order.status !== OrderStatus.PAID &&
+                    {activeOrder.status !== OrderStatus.PAID &&
                       (order?.payment?.method === PaymentMethod.Bold ||
                         (order?.payment?.method as string) === "Bold") && (
                         <BoldCheckoutButton
@@ -1148,7 +1148,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                         />
                       )}
 
-                    {order.status !== OrderStatus.PAID &&
+                    {activeOrder.status !== OrderStatus.PAID &&
                       order?.payment?.method === PaymentMethod.Wompi && (
                         <Button
                           className="flex w-full items-center justify-center gap-2 font-serif"
@@ -1162,7 +1162,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                         </Button>
                       )}
 
-                    {order.status !== OrderStatus.PAID &&
+                    {activeOrder.status !== OrderStatus.PAID &&
                       order?.payment?.method === PaymentMethod.PayU && (
                         <Button
                           className="flex w-full items-center justify-center gap-2 font-serif"
@@ -1176,7 +1176,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                         </Button>
                       )}
 
-                    {order.status !== OrderStatus.PAID &&
+                    {activeOrder.status !== OrderStatus.PAID &&
                       order?.payment?.method === PaymentMethod.BankTransfer && (
                         <div className="mt-4">
                           <BankTransferInstructions

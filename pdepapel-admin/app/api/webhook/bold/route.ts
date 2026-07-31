@@ -3,7 +3,10 @@ import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { createInventoryMovementBatchResilient } from "@/lib/inventory";
 import { invalidateStoreProductsCache } from "@/lib/cache";
-import { getBoldConfig, verifyBoldWebhookSignature } from "@/lib/bold";
+import {
+  getBoldWebhookSecretKey,
+  verifyBoldWebhookSignature,
+} from "@/lib/bold";
 import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
 import { calculateOrderFinancials } from "@/lib/financial";
 import { NextResponse } from "next/server";
@@ -19,11 +22,10 @@ export async function POST(req: Request) {
       );
     }
 
-    const boldConfig = getBoldConfig();
     const isValidSignature = verifyBoldWebhookSignature(
       rawPayload,
       req.headers.get("x-bold-signature"),
-      boldConfig.secretKey,
+      getBoldWebhookSecretKey(),
     );
 
     if (!isValidSignature) {
@@ -132,10 +134,13 @@ async function processBoldPayment(transaction: any, targetStatus: OrderStatus) {
   }
 
   const paidAmount = Number(transaction.amount?.total);
+  const isSandboxZeroAmount =
+    process.env.BOLD_ENVIRONMENT === "test" && paidAmount === 0;
   if (
     targetStatus === OrderStatus.PAID &&
     (!Number.isFinite(paidAmount) ||
-      Math.round(paidAmount) !== Math.round(order.total))
+      (!isSandboxZeroAmount &&
+        Math.round(paidAmount) !== Math.round(order.total)))
   ) {
     return NextResponse.json(
       {
