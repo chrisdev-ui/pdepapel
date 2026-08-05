@@ -1,10 +1,14 @@
 import { authMiddleware } from "@clerk/nextjs";
 
-// This example protects all routes including api/trpc routes
-// Please edit this to allow other routes to be public as needed.
-// See https://clerk.com/docs/references/nextjs/auth-middleware for more information about configuring your middleware
+export const publicRoutes = [
+  "/api/:path*",
+  "/iniciar-sesion(.*)",
+  "/crear-cuenta(.*)",
+];
+
 export default authMiddleware({
-  publicRoutes: ["/api/:path*"],
+  publicRoutes,
+  signInUrl: "/iniciar-sesion",
 });
 
 export const config = {

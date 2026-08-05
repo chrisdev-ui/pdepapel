@@ -5,5 +5,5 @@ test("protege el panel de administración antes de cargar datos de la tienda", a
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
-  await expect(page).toHaveURL(/\/sign-in/);
+  await page.waitForURL(/\/iniciar-sesion/, { timeout: 30_000 });
 });

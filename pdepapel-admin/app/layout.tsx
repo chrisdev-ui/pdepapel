@@ -25,7 +25,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <ClerkProvider localization={esES}>
+    <ClerkProvider
+      localization={esES}
+      signInUrl="/iniciar-sesion"
+      signUpUrl="/crear-cuenta"
+    >
       <html lang="es" suppressHydrationWarning>
         <body className={inter.className}>
           <NextTopLoader
