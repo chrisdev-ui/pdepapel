@@ -86,6 +86,7 @@
     "csv-writer": "^1.6.0",
     "date-fns": "^2.30.0",
     "date-fns-tz": "^2.0.0",
+    "exceljs": "^4.4.0",
     "framer-motion": "^10.18.0",
     "lucide-react": "^0.562.0",
     "million": "^2.6.4",

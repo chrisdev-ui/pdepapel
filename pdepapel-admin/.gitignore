@@ -49,8 +49,11 @@ next-env.d.ts
 
 google_merchant_*
 *md
+!docs/reportes-tributarios.md
 backup_prod_*.sql
 /scripts/backup-prod.ts
 /scripts/restore-db.ts
 /test-data/
 *.sql
+!prisma/manual-migrations/
+!prisma/manual-migrations/*.sql

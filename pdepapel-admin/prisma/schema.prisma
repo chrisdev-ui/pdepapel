@@ -63,6 +63,7 @@ model Store {
   whatsappTemplates     WhatsAppTemplate[]     @relation("StoreToWhatsAppTemplate")
   quoteRequests         QuoteRequest[]         @relation("StoreToQuoteRequest")
   invoices              Invoice[]              @relation("StoreToInvoice")
+  taxPurchases          TaxPurchase[]          @relation("StoreToTaxPurchase")
   customerReactivations CustomerReactivation[] @relation("StoreToCustomerReactivation")
 }
 
@@ -1164,6 +1165,23 @@ model Invoice {
   @@index([invoiceNumber])
   @@index([dianStatus])
   @@index([storeId, createdAt])
+}
+
+model TaxPurchase {
+  id            String   @id @default(uuid())
+  storeId       String
+  invoiceNumber String
+  supplierName  String
+  totalAmount   Decimal  @db.Decimal(15, 2)
+  issuedAt      DateTime
+  notes         String?  @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  store Store @relation("StoreToTaxPurchase", fields: [storeId], references: [id])
+
+  @@unique([storeId, supplierName, invoiceNumber])
+  @@index([storeId, issuedAt])
 }
 
 model CustomerReactivation {

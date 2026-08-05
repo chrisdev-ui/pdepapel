@@ -20,6 +20,7 @@ import {
   Calculator,
   ClipboardList,
   CreditCard,
+  FileSpreadsheet,
   History,
   Home,
   Image as ImageIcon,
@@ -172,6 +173,13 @@ export function MainNav({
       active: pathname === dashboardPath("inteligencia-negocio"),
       group: "sales",
       icon: LineChart,
+    },
+    {
+      href: dashboardPath("reportes-tributarios"),
+      label: "Reportes tributarios",
+      active: pathname === dashboardPath("reportes-tributarios"),
+      group: "sales",
+      icon: FileSpreadsheet,
     },
     {
       href: dashboardPath("pedidos"),
