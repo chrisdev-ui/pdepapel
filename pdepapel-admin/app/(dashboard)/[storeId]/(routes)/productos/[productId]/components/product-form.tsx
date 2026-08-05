@@ -746,6 +746,9 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                       />
                     </div>
                   </FormControl>
+                  <FormDescription>
+                    Se usa solo para calcular el precio de venta actual.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -764,6 +767,9 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                       onChange={field.onChange}
                     />
                   </FormControl>
+                  <FormDescription>
+                    Se usa solo para calcular el precio de venta actual.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -776,9 +782,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   <FormLabel>Asignar a Grupo</FormLabel>
                   <Select
                     disabled={loading}
-                    onValueChange={field.onChange}
-                    value={field.value}
-                    defaultValue={field.value}
+                    onValueChange={(value) =>
+                      field.onChange(value === "none" ? "" : value)
+                    }
+                    value={field.value || "none"}
                   >
                     <FormControl>
                       <SelectTrigger>
@@ -815,6 +822,9 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                       onChange={field.onChange}
                     />
                   </FormControl>
+                  <FormDescription>
+                    Se usa solo para calcular el precio de venta actual.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -955,16 +965,22 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                     <Checkbox
                       checked={field.value}
                       disabled={loading}
-                      onCheckedChange={(checked) =>
-                        field.onChange(checked === true)
-                      }
+                      onCheckedChange={(checked) => {
+                        const hasNoIdentifier = checked === true;
+                        field.onChange(hasNoIdentifier);
+
+                        if (hasNoIdentifier) {
+                          form.setValue("gtin", "");
+                          form.setValue("mpn", "");
+                        }
+                      }}
                     />
                   </FormControl>
                   <div className="space-y-1 leading-none">
                     <FormLabel>No tiene identificador global</FormLabel>
                     <FormDescription>
                       Úsalo únicamente para productos sin GTIN ni MPN del
-                      fabricante.
+                      fabricante. Al activarlo se eliminan ambos valores.
                     </FormDescription>
                   </div>
                 </FormItem>
@@ -1188,13 +1204,13 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               name="supplierId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel isRequired>Proveedor</FormLabel>
+                  <FormLabel>Proveedor</FormLabel>
                   <Select
-                    key={field.value}
                     disabled={loading}
-                    onValueChange={field.onChange}
-                    value={field.value}
-                    defaultValue={field.value}
+                    onValueChange={(value) =>
+                      field.onChange(value === "none" ? "" : value)
+                    }
+                    value={field.value || "none"}
                   >
                     <FormControl>
                       <SelectTrigger>
@@ -1202,6 +1218,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
+                      <SelectItem value="none">-- Sin proveedor --</SelectItem>
                       {selectOptions.suppliers?.length === 0 && (
                         <button
                           disabled

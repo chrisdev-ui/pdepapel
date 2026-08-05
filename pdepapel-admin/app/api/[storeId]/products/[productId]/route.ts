@@ -10,6 +10,7 @@ import {
 } from "@/lib/utils";
 import { generateSemanticSKU } from "@/lib/variant-generator";
 import { generateProductSlug } from "@/lib/slugify";
+import { normalizeProductIdentifiers } from "@/lib/product-identifiers";
 import {
   getUniqueProductSlug,
   preserveProductSlugAlias,
@@ -148,6 +149,14 @@ export async function PATCH(
       isKit,
       components,
     } = body;
+    const normalizedSupplierId =
+      typeof supplierId === "string" && supplierId !== "none"
+        ? supplierId || null
+        : null;
+    const normalizedProductGroupId =
+      typeof productGroupId === "string" && productGroupId !== "none"
+        ? productGroupId || null
+        : null;
 
     if (!name)
       throw ErrorFactory.InvalidRequest("El nombre del producto es requerido");
@@ -172,10 +181,16 @@ export async function PATCH(
         "El stock del producto debe ser cero o mayor a cero",
       );
 
-    const normalizedGtin = typeof gtin === "string" ? gtin.trim() : "";
-    if (normalizedGtin && !/^(\d{8}|\d{12,14})$/.test(normalizedGtin)) {
+    let productIdentifiers;
+    try {
+      productIdentifiers = normalizeProductIdentifiers({
+        gtin,
+        mpn,
+        hasNoProductIdentifier,
+      });
+    } catch (error) {
       throw ErrorFactory.InvalidRequest(
-        "El GTIN debe tener 8, 12, 13 o 14 dígitos",
+        error instanceof Error ? error.message : "Identificadores inválidos",
       );
     }
 
@@ -184,6 +199,24 @@ export async function PATCH(
       throw ErrorFactory.InvalidRequest(
         "Un Kit debe tener productos (componentes).",
       );
+    }
+
+    if (normalizedSupplierId) {
+      const supplier = await prismadb.supplier.findFirst({
+        where: { id: normalizedSupplierId, storeId: params.storeId },
+        select: { id: true },
+      });
+      if (!supplier) throw ErrorFactory.NotFound("Proveedor no encontrado");
+    }
+
+    if (normalizedProductGroupId) {
+      const productGroup = await prismadb.productGroup.findFirst({
+        where: { id: normalizedProductGroupId, storeId: params.storeId },
+        select: { id: true },
+      });
+      if (!productGroup) {
+        throw ErrorFactory.NotFound("Grupo de productos no encontrado");
+      }
     }
 
     const productToUpdate = await prismadb.product.findUnique({
@@ -224,7 +257,7 @@ export async function PATCH(
       baseSlug: updatedSlug,
       excludeProductId: params.productId,
     });
-    const targetProductGroupId = productGroupId || null;
+    const targetProductGroupId = normalizedProductGroupId;
     const affectedProductGroupIds = Array.from(
       new Set(
         [productToUpdate.productGroupId, targetProductGroupId].filter(
@@ -274,11 +307,9 @@ export async function PATCH(
           colorId,
           sizeId,
           designId,
-          supplierId,
+          supplierId: normalizedSupplierId,
           brand: typeof brand === "string" ? brand.trim() || null : null,
-          gtin: normalizedGtin || null,
-          mpn: typeof mpn === "string" ? mpn.trim() || null : null,
-          hasNoProductIdentifier: Boolean(hasNoProductIdentifier),
+          ...productIdentifiers,
           isArchived,
           isFeatured,
           productGroupId: targetProductGroupId,
