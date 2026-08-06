@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import {
   Table,
   TableBody,
@@ -42,6 +43,11 @@ import {
 } from "lucide-react";
 import { useParams } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  getCoreRowModel,
+  getPaginationRowModel,
+  useReactTable,
+} from "@tanstack/react-table";
 
 const DEFAULT_START_DATE = "2025-07-01";
 const DEFAULT_END_DATE = "2025-12-31";
@@ -274,6 +280,24 @@ export default function TaxReportsClient() {
     );
   };
 
+  const salesTable = useReactTable<TaxSaleRow>({
+    data: report?.sales ?? [],
+    columns: [],
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+  });
+  const purchasesTable = useReactTable<TaxPurchaseRow>({
+    data: report?.purchases ?? [],
+    columns: [],
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+  });
+
+  useEffect(() => {
+    salesTable.setPageIndex(0);
+    purchasesTable.setPageIndex(0);
+  }, [report, salesTable, purchasesTable]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -430,20 +454,29 @@ export default function TaxReportsClient() {
                   </TableCell>
                 </TableRow>
               )}
-              {report?.sales.map((sale) => (
-                <TableRow key={sale.orderNumber}>
-                  <TableCell className="font-medium">
-                    {sale.orderNumber}
-                  </TableCell>
-                  <TableCell>{sale.customerName}</TableCell>
-                  <TableCell>{formatDate(sale.occurredAt)}</TableCell>
-                  <TableCell className="text-right">
-                    {currencyFormatter.format(sale.totalAmount)}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {salesTable.getRowModel().rows.map((row) => {
+                const sale = row.original;
+
+                return (
+                  <TableRow key={sale.orderNumber}>
+                    <TableCell className="font-medium">
+                      {sale.orderNumber}
+                    </TableCell>
+                    <TableCell>{sale.customerName}</TableCell>
+                    <TableCell>{formatDate(sale.occurredAt)}</TableCell>
+                    <TableCell className="text-right">
+                      {currencyFormatter.format(sale.totalAmount)}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
+          {(report?.sales.length ?? 0) > 0 && (
+            <div className="py-3">
+              <DataTablePagination table={salesTable} />
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -484,42 +517,51 @@ export default function TaxReportsClient() {
                   </TableCell>
                 </TableRow>
               )}
-              {report?.purchases.map((purchase) => (
-                <TableRow key={purchase.id}>
-                  <TableCell className="font-medium">
-                    {purchase.invoiceNumber}
-                  </TableCell>
-                  <TableCell>{purchase.supplierName}</TableCell>
-                  <TableCell>{formatDate(purchase.issuedAt)}</TableCell>
-                  <TableCell className="text-right">
-                    {currencyFormatter.format(purchase.totalAmount)}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Editar factura ${purchase.invoiceNumber}`}
-                        onClick={() => openEditPurchaseDialog(purchase)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Eliminar factura ${purchase.invoiceNumber}`}
-                        onClick={() => void handleDeletePurchase(purchase)}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {purchasesTable.getRowModel().rows.map((row) => {
+                const purchase = row.original;
+
+                return (
+                  <TableRow key={purchase.id}>
+                    <TableCell className="font-medium">
+                      {purchase.invoiceNumber}
+                    </TableCell>
+                    <TableCell>{purchase.supplierName}</TableCell>
+                    <TableCell>{formatDate(purchase.issuedAt)}</TableCell>
+                    <TableCell className="text-right">
+                      {currencyFormatter.format(purchase.totalAmount)}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Editar factura ${purchase.invoiceNumber}`}
+                          onClick={() => openEditPurchaseDialog(purchase)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Eliminar factura ${purchase.invoiceNumber}`}
+                          onClick={() => void handleDeletePurchase(purchase)}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
+          {(report?.purchases.length ?? 0) > 0 && (
+            <div className="py-3">
+              <DataTablePagination table={purchasesTable} />
+            </div>
+          )}
         </CardContent>
       </Card>
 
