@@ -7,6 +7,7 @@ import {
   DEFAULT_TAX_REPORT_PERIOD,
   createTaxReportPeriod,
   getTaxReport,
+  parseTaxSalesDateBasis,
 } from "@/lib/tax-reports";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
@@ -28,15 +29,19 @@ export async function GET(
       searchParams.get("endDate") ?? DEFAULT_TAX_REPORT_PERIOD.endDate;
 
     let period;
+    let salesDateBasis;
     try {
       period = createTaxReportPeriod(startDate, endDate);
+      salesDateBasis = parseTaxSalesDateBasis(
+        searchParams.get("salesDateBasis"),
+      );
     } catch (error) {
       throw ErrorFactory.InvalidRequest(
         error instanceof Error ? error.message : "Período inválido",
       );
     }
 
-    const report = await getTaxReport(params.storeId, period);
+    const report = await getTaxReport(params.storeId, period, salesDateBasis);
     const workbook = await createTaxReportWorkbook(report);
     const filename = `reporte-tributario-${period.startDate}-a-${period.endDate}.xlsx`;
 

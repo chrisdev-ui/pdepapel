@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 
-import type { TaxReport } from "@/lib/tax-reports";
+import { TAX_SALES_DATE_BASIS, type TaxReport } from "@/lib/tax-reports";
 
 const COP_FORMAT = '"$"#,##0';
 const DATE_FORMAT = "dd/mm/yyyy";
@@ -29,7 +29,16 @@ export async function createTaxReportWorkbook(report: TaxReport) {
   workbook.modified = new Date();
 
   const salesSheet = workbook.addWorksheet("Ventas");
-  salesSheet.addRow(["Número de orden", "Nombre de la persona", "Valor", "Fecha"]);
+  const salesDateHeader =
+    report.salesDateBasis === TAX_SALES_DATE_BASIS.PAYMENT_DATE
+      ? "Fecha de pago"
+      : "Fecha de venta";
+  salesSheet.addRow([
+    "Número de orden",
+    "Nombre de la persona",
+    "Valor",
+    salesDateHeader,
+  ]);
   configureSheet(salesSheet, [
     { key: "orderNumber", width: 24 },
     { key: "customerName", width: 32 },

@@ -16,6 +16,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import {
   Table,
@@ -38,6 +45,9 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 
 const DEFAULT_START_DATE = "2025-07-01";
 const DEFAULT_END_DATE = "2025-12-31";
+const DEFAULT_SALES_DATE_BASIS = "saleDate";
+
+type SalesDateBasis = "saleDate" | "paymentDate";
 
 type TaxSaleRow = {
   orderNumber: string;
@@ -56,6 +66,7 @@ type TaxPurchaseRow = {
 };
 
 type TaxReport = {
+  salesDateBasis: SalesDateBasis;
   sales: TaxSaleRow[];
   purchases: TaxPurchaseRow[];
   salesTotal: number;
@@ -104,6 +115,9 @@ export default function TaxReportsClient() {
   const storeId = params.storeId;
   const [startDate, setStartDate] = useState(DEFAULT_START_DATE);
   const [endDate, setEndDate] = useState(DEFAULT_END_DATE);
+  const [salesDateBasis, setSalesDateBasis] = useState<SalesDateBasis>(
+    DEFAULT_SALES_DATE_BASIS,
+  );
   const [report, setReport] = useState<TaxReport | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -113,7 +127,11 @@ export default function TaxReportsClient() {
     useState<PurchaseForm>(emptyPurchaseForm);
 
   const loadReport = useCallback(
-    async (nextStartDate: string, nextEndDate: string) => {
+    async (
+      nextStartDate: string,
+      nextEndDate: string,
+      nextSalesDateBasis: SalesDateBasis,
+    ) => {
       setIsLoading(true);
       setError("");
 
@@ -121,6 +139,7 @@ export default function TaxReportsClient() {
         const searchParams = new URLSearchParams({
           startDate: nextStartDate,
           endDate: nextEndDate,
+          salesDateBasis: nextSalesDateBasis,
         });
         const response = await fetch(
           `/api/${storeId}/tax-reports?${searchParams.toString()}`,
@@ -146,12 +165,16 @@ export default function TaxReportsClient() {
   );
 
   useEffect(() => {
-    void loadReport(DEFAULT_START_DATE, DEFAULT_END_DATE);
+    void loadReport(
+      DEFAULT_START_DATE,
+      DEFAULT_END_DATE,
+      DEFAULT_SALES_DATE_BASIS,
+    );
   }, [loadReport]);
 
   const handlePeriodSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    void loadReport(startDate, endDate);
+    void loadReport(startDate, endDate, salesDateBasis);
   };
 
   const openNewPurchaseDialog = () => {
@@ -199,7 +222,7 @@ export default function TaxReportsClient() {
       }
 
       setIsDialogOpen(false);
-      await loadReport(startDate, endDate);
+      await loadReport(startDate, endDate, salesDateBasis);
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -230,7 +253,7 @@ export default function TaxReportsClient() {
         throw new Error(await getErrorMessage(response));
       }
 
-      await loadReport(startDate, endDate);
+      await loadReport(startDate, endDate, salesDateBasis);
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -241,7 +264,11 @@ export default function TaxReportsClient() {
   };
 
   const handleDownload = () => {
-    const searchParams = new URLSearchParams({ startDate, endDate });
+    const searchParams = new URLSearchParams({
+      startDate,
+      endDate,
+      salesDateBasis,
+    });
     window.location.assign(
       `/api/${storeId}/tax-reports/export?${searchParams.toString()}`,
     );
@@ -268,8 +295,8 @@ export default function TaxReportsClient() {
         <CardHeader>
           <CardTitle>Período del reporte</CardTitle>
           <CardDescription>
-            Por defecto se muestra el segundo semestre de 2025 solicitado para
-            la declaración.
+            Elige cómo se determina la fecha de cada venta. Para recuperar el
+            histórico de 2025, usa la fecha de venta.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -297,6 +324,27 @@ export default function TaxReportsClient() {
                 required
               />
             </div>
+            <div className="grid flex-1 gap-2">
+              <Label htmlFor="report-sales-date-basis">Fecha para ventas</Label>
+              <Select
+                value={salesDateBasis}
+                onValueChange={(value) =>
+                  setSalesDateBasis(value as SalesDateBasis)
+                }
+              >
+                <SelectTrigger id="report-sales-date-basis">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="saleDate">
+                    Fecha de venta (pedido)
+                  </SelectItem>
+                  <SelectItem value="paymentDate">
+                    Confirmación de pago
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <Button type="submit" variant="outline" disabled={isLoading}>
               <RefreshCw className="mr-2 h-4 w-4" />
               Actualizar
@@ -316,11 +364,15 @@ export default function TaxReportsClient() {
           <CardHeader className="pb-2">
             <CardDescription>Ventas incluidas</CardDescription>
             <CardTitle className="text-2xl">
-              {isLoading ? "—" : currencyFormatter.format(report?.salesTotal ?? 0)}
+              {isLoading
+                ? "—"
+                : currencyFormatter.format(report?.salesTotal ?? 0)}
             </CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
-            {isLoading ? "Cargando..." : `${report?.sales.length ?? 0} pedidos pagados o enviados`}
+            {isLoading
+              ? "Cargando..."
+              : `${report?.sales.length ?? 0} pedidos pagados o enviados`}
           </CardContent>
         </Card>
         <Card>
@@ -347,8 +399,10 @@ export default function TaxReportsClient() {
             Ventas
           </CardTitle>
           <CardDescription>
-            Incluye pedidos pagados o enviados. La fecha es el pago confirmado,
-            o la creación para pedidos históricos sin esa marca.
+            Incluye pedidos pagados o enviados. El período usa{" "}
+            {report?.salesDateBasis === "paymentDate"
+              ? "la confirmación de pago."
+              : "la fecha de venta del pedido."}
           </CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto p-0">
@@ -357,21 +411,30 @@ export default function TaxReportsClient() {
               <TableRow>
                 <TableHead>Número de orden</TableHead>
                 <TableHead>Nombre de la persona</TableHead>
-                <TableHead>Fecha</TableHead>
+                <TableHead>
+                  {report?.salesDateBasis === "paymentDate"
+                    ? "Fecha de pago"
+                    : "Fecha de venta"}
+                </TableHead>
                 <TableHead className="text-right">Valor</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {!isLoading && report?.sales.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                  <TableCell
+                    colSpan={4}
+                    className="h-24 text-center text-muted-foreground"
+                  >
                     No hay ventas declarables en este período.
                   </TableCell>
                 </TableRow>
               )}
               {report?.sales.map((sale) => (
                 <TableRow key={sale.orderNumber}>
-                  <TableCell className="font-medium">{sale.orderNumber}</TableCell>
+                  <TableCell className="font-medium">
+                    {sale.orderNumber}
+                  </TableCell>
                   <TableCell>{sale.customerName}</TableCell>
                   <TableCell>{formatDate(sale.occurredAt)}</TableCell>
                   <TableCell className="text-right">
@@ -412,14 +475,20 @@ export default function TaxReportsClient() {
             <TableBody>
               {!isLoading && report?.purchases.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                    Registra las facturas de proveedor para incluirlas en el Excel.
+                  <TableCell
+                    colSpan={5}
+                    className="h-24 text-center text-muted-foreground"
+                  >
+                    Registra las facturas de proveedor para incluirlas en el
+                    Excel.
                   </TableCell>
                 </TableRow>
               )}
               {report?.purchases.map((purchase) => (
                 <TableRow key={purchase.id}>
-                  <TableCell className="font-medium">{purchase.invoiceNumber}</TableCell>
+                  <TableCell className="font-medium">
+                    {purchase.invoiceNumber}
+                  </TableCell>
                   <TableCell>{purchase.supplierName}</TableCell>
                   <TableCell>{formatDate(purchase.issuedAt)}</TableCell>
                   <TableCell className="text-right">

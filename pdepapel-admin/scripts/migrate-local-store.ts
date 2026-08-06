@@ -53,8 +53,7 @@ async function main() {
         UPDATE \`Order\` 
         SET 
           netProfit = ${exactNetProfit}, 
-          gatewayFee = ${exactGatewayFee}, 
-          paidAt = '${(order.paidAt || order.createdAt).toISOString().slice(0, 19).replace("T", " ")}'
+          gatewayFee = ${exactGatewayFee}
         WHERE id = '${order.id}'
       `);
     updatedOrdersCount++;

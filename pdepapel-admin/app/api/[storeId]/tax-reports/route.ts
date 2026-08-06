@@ -6,17 +6,23 @@ import {
   DEFAULT_TAX_REPORT_PERIOD,
   createTaxReportPeriod,
   getTaxReport,
+  parseTaxSalesDateBasis,
 } from "@/lib/tax-reports";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
-function getReportPeriod(searchParams: URLSearchParams) {
+function getReportOptions(searchParams: URLSearchParams) {
   const startDate =
     searchParams.get("startDate") ?? DEFAULT_TAX_REPORT_PERIOD.startDate;
   const endDate =
     searchParams.get("endDate") ?? DEFAULT_TAX_REPORT_PERIOD.endDate;
 
   try {
-    return createTaxReportPeriod(startDate, endDate);
+    return {
+      period: createTaxReportPeriod(startDate, endDate),
+      salesDateBasis: parseTaxSalesDateBasis(
+        searchParams.get("salesDateBasis"),
+      ),
+    };
   } catch (error) {
     throw ErrorFactory.InvalidRequest(
       error instanceof Error ? error.message : "Período inválido",
@@ -35,8 +41,10 @@ export async function GET(
 
     await verifyStoreOwner(userId, params.storeId);
 
-    const period = getReportPeriod(new URL(req.url).searchParams);
-    const report = await getTaxReport(params.storeId, period);
+    const { period, salesDateBasis } = getReportOptions(
+      new URL(req.url).searchParams,
+    );
+    const report = await getTaxReport(params.storeId, period, salesDateBasis);
 
     return NextResponse.json(report, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {

@@ -47,7 +47,6 @@ async function main() {
           shippingCost: financials.shippingCost,
           netProfit: financials.netProfit,
           profitMarginPct: financials.profitMarginPct,
-          paidAt: order.paidAt || order.updatedAt, // Fallback for existing orders
         },
       });
       ordersMigrated++;

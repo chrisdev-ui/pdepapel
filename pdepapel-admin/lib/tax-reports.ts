@@ -10,6 +10,14 @@ export const DEFAULT_TAX_REPORT_PERIOD = {
   endDate: "2025-12-31",
 };
 
+export const TAX_SALES_DATE_BASIS = {
+  SALE_DATE: "saleDate",
+  PAYMENT_DATE: "paymentDate",
+} as const;
+
+export type TaxSalesDateBasis =
+  (typeof TAX_SALES_DATE_BASIS)[keyof typeof TAX_SALES_DATE_BASIS];
+
 export type TaxReportPeriod = {
   startDate: string;
   endDate: string;
@@ -35,6 +43,7 @@ export type TaxPurchaseRow = {
 
 export type TaxReport = {
   period: TaxReportPeriod;
+  salesDateBasis: TaxSalesDateBasis;
   sales: TaxSaleRow[];
   purchases: TaxPurchaseRow[];
   salesTotal: number;
@@ -79,9 +88,38 @@ export function createTaxReportPeriod(
   return { startDate, endDate, start, endExclusive };
 }
 
+export function parseTaxSalesDateBasis(
+  value: string | null | undefined,
+): TaxSalesDateBasis {
+  if (!value || value === TAX_SALES_DATE_BASIS.SALE_DATE) {
+    return TAX_SALES_DATE_BASIS.SALE_DATE;
+  }
+
+  if (value === TAX_SALES_DATE_BASIS.PAYMENT_DATE) {
+    return TAX_SALES_DATE_BASIS.PAYMENT_DATE;
+  }
+
+  throw new Error("El criterio de fecha de ventas no es válido");
+}
+
+export function createTaxSalesDateFilter(
+  period: TaxReportPeriod,
+  salesDateBasis: TaxSalesDateBasis,
+) {
+  const dateRange = {
+    gte: period.start,
+    lt: period.endExclusive,
+  };
+
+  return salesDateBasis === TAX_SALES_DATE_BASIS.PAYMENT_DATE
+    ? { paidAt: dateRange }
+    : { createdAt: dateRange };
+}
+
 export async function getTaxReport(
   storeId: string,
   period: TaxReportPeriod,
+  salesDateBasis: TaxSalesDateBasis = TAX_SALES_DATE_BASIS.SALE_DATE,
 ): Promise<TaxReport> {
   const [orders, purchases] = await Promise.all([
     prismadb.order.findMany({
@@ -90,21 +128,7 @@ export async function getTaxReport(
         status: {
           in: [OrderStatus.PAID, OrderStatus.SENT],
         },
-        OR: [
-          {
-            paidAt: {
-              gte: period.start,
-              lt: period.endExclusive,
-            },
-          },
-          {
-            paidAt: null,
-            createdAt: {
-              gte: period.start,
-              lt: period.endExclusive,
-            },
-          },
-        ],
+        ...createTaxSalesDateFilter(period, salesDateBasis),
       },
       select: {
         orderNumber: true,
@@ -113,7 +137,7 @@ export async function getTaxReport(
         paidAt: true,
         createdAt: true,
       },
-      orderBy: [{ paidAt: "asc" }, { createdAt: "asc" }],
+      orderBy: { createdAt: "asc" },
     }),
     prismadb.taxPurchase.findMany({
       where: {
@@ -135,12 +159,20 @@ export async function getTaxReport(
     }),
   ]);
 
-  const sales = orders.map((order) => ({
-    orderNumber: order.orderNumber,
-    customerName: order.fullName.trim() || "Consumidor final",
-    totalAmount: order.total,
-    occurredAt: order.paidAt ?? order.createdAt,
-  }));
+  const sales = orders
+    .map((order) => ({
+      orderNumber: order.orderNumber,
+      customerName: order.fullName.trim() || "Consumidor final",
+      totalAmount: order.total,
+      occurredAt:
+        salesDateBasis === TAX_SALES_DATE_BASIS.PAYMENT_DATE
+          ? (order.paidAt ?? order.createdAt)
+          : order.createdAt,
+    }))
+    .sort(
+      (first, second) =>
+        first.occurredAt.getTime() - second.occurredAt.getTime(),
+    );
 
   const purchaseRows = purchases.map((purchase) => ({
     ...purchase,
@@ -149,6 +181,7 @@ export async function getTaxReport(
 
   return {
     period,
+    salesDateBasis,
     sales,
     purchases: purchaseRows,
     salesTotal: sales.reduce((total, sale) => total + sale.totalAmount, 0),

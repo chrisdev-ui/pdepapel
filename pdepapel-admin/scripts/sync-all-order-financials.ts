@@ -3,7 +3,9 @@ import { OrderStatus } from "@prisma/client";
 import { calculateOrderFinancials } from "../lib/financial";
 
 async function main() {
-  console.log("Starting full database financial synchronization for ALL paid/sent orders...");
+  console.log(
+    "Starting full database financial synchronization for ALL paid/sent orders...",
+  );
 
   const orders = await prismadb.order.findMany({
     where: {
@@ -43,13 +45,14 @@ async function main() {
           shippingCost: financials.shippingCost,
           netProfit: financials.netProfit,
           profitMarginPct: financials.profitMarginPct,
-          paidAt: order.paidAt || order.createdAt,
         },
       });
 
       updatedCount++;
       if (updatedCount % 50 === 0) {
-        console.log(`Updated financials for ${updatedCount}/${orders.length} orders...`);
+        console.log(
+          `Updated financials for ${updatedCount}/${orders.length} orders...`,
+        );
       }
     } catch (err) {
       console.error(`Failed updating order ${order.orderNumber}:`, err);
@@ -57,7 +60,9 @@ async function main() {
   }
 
   console.log(`\n================ SYNC COMPLETE ================`);
-  console.log(`Successfully updated ${updatedCount}/${orders.length} orders in database.`);
+  console.log(
+    `Successfully updated ${updatedCount}/${orders.length} orders in database.`,
+  );
 }
 
 main()

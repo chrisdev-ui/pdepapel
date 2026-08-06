@@ -12,6 +12,7 @@ describe("createTaxReportWorkbook", () => {
         start: new Date("2025-07-01T05:00:00.000Z"),
         endExclusive: new Date("2026-01-01T05:00:00.000Z"),
       },
+      salesDateBasis: "saleDate",
       sales: [
         {
           orderNumber: "ORD-001",
@@ -56,7 +57,7 @@ describe("createTaxReportWorkbook", () => {
       "Número de orden",
       "Nombre de la persona",
       "Valor",
-      "Fecha",
+      "Fecha de venta",
     ]);
     expect(purchasesSheet.getRow(2).getCell(1).value).toBe("FV-100");
   });
