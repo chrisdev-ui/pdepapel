@@ -69,7 +69,7 @@ async function handleRevalidation(req: NextRequest) {
       revalidatedPaths.push(STOREFRONT_ROUTES.shop);
     }
 
-    Array.from(new Set([...tags, "products"])).forEach((tag) =>
+    Array.from(new Set([...tags, "products", "catalog"])).forEach((tag) =>
       revalidateTag(tag),
     );
 

@@ -11,6 +11,7 @@ import {
 import { generateSemanticSKU } from "@/lib/variant-generator";
 import { generateProductSlug } from "@/lib/slugify";
 import { normalizeProductIdentifiers } from "@/lib/product-identifiers";
+import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import {
   getUniqueProductSlug,
   preserveProductSlugAlias,
@@ -157,6 +158,7 @@ export async function PATCH(
       typeof productGroupId === "string" && productGroupId !== "none"
         ? productGroupId || null
         : null;
+    const sanitizedDescription = sanitizeRichTextHtml(description);
 
     if (!name)
       throw ErrorFactory.InvalidRequest("El nombre del producto es requerido");
@@ -313,7 +315,7 @@ export async function PATCH(
           isArchived,
           isFeatured,
           productGroupId: targetProductGroupId,
-          description,
+          description: sanitizedDescription,
           // [NEW] Update Kit info
           isKit: isKit || false,
           kitComponents: isKit

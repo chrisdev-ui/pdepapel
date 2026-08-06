@@ -120,25 +120,37 @@ import { BannersCtaSection } from "@/components/banners-cta-section";
 import { FeaturedProductsSection } from "@/components/featured-products-section";
 import {
   BannersCtaSkeleton,
+  CategoryLinksSkeleton,
   FeaturedProductsSkeleton,
+  HeroSliderSkeleton,
   MainBannerSkeleton,
   NewArrivalsSkeleton,
 } from "@/components/home-skeletons";
 import { MainBannerSection } from "@/components/main-banner-section";
 import { NewArrivalsSection } from "@/components/new-arrivals-section";
 
-export default async function HomePage() {
-  const [billboards, categories] = await Promise.all([
-    getBillboards(),
-    getCategories(),
-  ]);
+async function HomeHero() {
+  const billboards = await getBillboards();
+
+  return <HeroSlider data={billboards} />;
+}
+
+async function HomeCategoryLinks() {
+  const categories = await getCategories();
   const seoCategories = categories.filter(
     (category) => category.seoEnabled && category.seoFeatured && category.slug,
   );
 
+  return <CategoryLinksSection categories={seoCategories} />;
+}
+
+export default function HomePage() {
+
   return (
     <>
-      <HeroSlider data={billboards} />
+      <Suspense fallback={<HeroSliderSkeleton />}>
+        <HomeHero />
+      </Suspense>
       <section className="bg-kawaii-pink-light/15 py-8 text-center">
         <h1 className="font-serif text-3xl font-extrabold sm:text-4xl">
           Papelería kawaii y creativa con envíos a toda Colombia
@@ -149,7 +161,9 @@ export default async function HomePage() {
         </p>
       </section>
       <Features />
-      <CategoryLinksSection categories={seoCategories} />
+      <Suspense fallback={<CategoryLinksSkeleton />}>
+        <HomeCategoryLinks />
+      </Suspense>
       <Suspense fallback={<FeaturedProductsSkeleton />}>
         <FeaturedProductsSection />
       </Suspense>

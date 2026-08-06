@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { revalidateTag } from "next/cache";
 
 import { POST } from "@/app/api/revalidate/route";
 
@@ -13,6 +14,7 @@ describe("revalidation route", () => {
   afterEach(() => {
     if (originalSecret === undefined) delete process.env.REVALIDATION_SECRET;
     else process.env.REVALIDATION_SECRET = originalSecret;
+    vi.clearAllMocks();
   });
 
   it("accepts the shared secret when Vercel includes a trailing line break", async () => {
@@ -34,5 +36,7 @@ describe("revalidation route", () => {
       revalidated: true,
       paths: expect.arrayContaining(["/tienda"]),
     });
+    expect(revalidateTag).toHaveBeenCalledWith("products");
+    expect(revalidateTag).toHaveBeenCalledWith("catalog");
   });
 });

@@ -25,20 +25,29 @@ import { orderPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import { Order } from "@/types";
 
 export const OrderHistory: React.FC<{}> = () => {
-  const { userId } = useAuth();
+  const { userId, isLoaded } = useAuth();
   const [orders, setOrders] = useState<Order[]>();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const getOrderHistory = async () => {
-      if (userId) {
+      if (!isLoaded) return;
+
+      if (!userId) {
+        setOrders([]);
+        setLoading(false);
+        return;
+      }
+
+      try {
         const orders = await getOrders({ userId });
         setOrders(orders);
+      } finally {
         setLoading(false);
       }
     };
     getOrderHistory();
-  }, [userId]);
+  }, [isLoaded, userId]);
 
   if (loading) {
     return <Loader label="Cargando tus órdenes" />;

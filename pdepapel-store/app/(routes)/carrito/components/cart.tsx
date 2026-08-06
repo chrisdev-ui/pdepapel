@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { getProducts } from "@/actions/get-products";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
+import { Skeleton } from "@/components/ui/skeleton";
 import { KAWAII_FACE_SAD } from "@/constants";
 import { useCart } from "@/hooks/use-cart";
 import { cn } from "@/lib/utils";
@@ -58,7 +59,7 @@ const Cart: React.FC<{}> = () => {
   );
 
   if (!isMounted) {
-    return null;
+    return <CartSkeleton />;
   }
 
   return (
@@ -100,5 +101,32 @@ const Cart: React.FC<{}> = () => {
     </>
   );
 };
+
+const CartSkeleton = () => (
+  <div className="space-y-8" aria-busy="true" aria-live="polite">
+    <span className="sr-only">Cargando carrito</span>
+    <Skeleton className="h-10 w-52" />
+    <div className="mt-12 gap-x-12 lg:grid lg:grid-cols-12">
+      <div className="space-y-4 lg:col-span-7">
+        {Array.from({ length: 2 }, (_, index) => (
+          <div key={index} className="flex gap-4 border-b py-5">
+            <Skeleton className="h-24 w-24 shrink-0" />
+            <div className="flex-1 space-y-3">
+              <Skeleton className="h-5 w-3/4" />
+              <Skeleton className="h-4 w-1/3" />
+              <Skeleton className="h-8 w-24" />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-8 space-y-4 rounded-xl border p-6 lg:col-span-5 lg:mt-0">
+        <Skeleton className="h-7 w-36" />
+        <Skeleton className="h-5 w-full" />
+        <Skeleton className="h-5 w-4/5" />
+        <Skeleton className="h-12 w-full" />
+      </div>
+    </div>
+  </div>
+);
 
 export default Cart;

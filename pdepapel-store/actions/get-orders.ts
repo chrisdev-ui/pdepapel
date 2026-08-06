@@ -15,7 +15,7 @@ export const getOrders = async (query: Query): Promise<Order[]> => {
   if (query.userId) url.searchParams.append("userId", query.userId);
 
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, { cache: "no-store" });
     if (!response.ok) return [];
     return await response.json();
   } catch {

@@ -4,6 +4,7 @@ import { auth } from "@clerk/nextjs";
 import prismadb from "@/lib/prismadb";
 import { generateProductSlug, slugify } from "@/lib/slugify";
 import { synchronizeProductGroupSlugs } from "@/lib/product-slugs";
+import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import { verifyStoreOwner } from "@/lib/utils";
 import { hasDuplicateVariantCombination } from "@/lib/variant-combinations";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
@@ -45,6 +46,7 @@ export async function POST(
 
     const effectiveDefaultPrice = defaultPrice ?? price;
     const effectiveDefaultCost = defaultCost ?? acqPrice;
+    const sanitizedDescription = sanitizeRichTextHtml(description);
 
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
@@ -74,7 +76,7 @@ export async function POST(
           name,
           brand: typeof brand === "string" ? brand.trim() || null : null,
           slug: slugify(name),
-          description: description || "",
+          description: sanitizedDescription,
           images: {
             createMany: {
               data: [
@@ -174,7 +176,9 @@ export async function POST(
             name: variantName,
             slug: variantSlug,
             sku: variant.sku,
-            description: variant.description || description || "",
+            description: sanitizeRichTextHtml(
+              variant.description || sanitizedDescription,
+            ),
             price: finalPrice,
             acqPrice: finalAcqPrice,
             stock: finalStock,

@@ -22,6 +22,20 @@ export const HeroSliderSkeleton: React.FC = () => (
   </section>
 );
 
+export const CategoryLinksSkeleton: React.FC = () => (
+  <Container component="section" className="space-y-4 py-8">
+    <div className="mx-auto space-y-3 text-center">
+      <Skeleton className="mx-auto h-9 w-64" />
+      <Skeleton className="mx-auto h-5 w-full max-w-xl" />
+    </div>
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+      {Array.from({ length: 8 }, (_, index) => (
+        <Skeleton key={index} className="aspect-square rounded-2xl" />
+      ))}
+    </div>
+  </Container>
+);
+
 export const FeaturedProductsSkeleton: React.FC = () => (
   <Container component="section" className="mt-8 flex flex-col gap-y-8">
     <div className="space-y-4 text-center">

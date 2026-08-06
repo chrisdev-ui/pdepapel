@@ -14,6 +14,7 @@ import { useForm } from "react-hook-form";
 import z from "zod";
 
 import { RichTextEditor } from "@/components/editor/rich-text-editor";
+import { PRODUCT_DESCRIPTION_TEMPLATES } from "@/lib/product-description-templates";
 import {
   BatchIntakeModal,
   BatchIntakeVariant,
@@ -1960,6 +1961,8 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                       placeholder="Describe el grupo de productos..."
                       value={field.value || ""}
                       onChange={field.onChange}
+                      templates={PRODUCT_DESCRIPTION_TEMPLATES}
+                      showSeoGuidance
                     />
                   </FormControl>
                   <FormMessage />

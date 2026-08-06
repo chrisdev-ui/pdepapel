@@ -1,13 +1,8 @@
 import { getOrder } from "@/actions/get-order";
+import SingleOrderPage from "./components/single-order-page";
 import { Metadata } from "next";
-import dynamic from "next/dynamic";
 import { notFound } from "next/navigation";
 import { orderPath } from "@/lib/routes";
-
-const SingleOrderPage = dynamic(
-  () => import("./components/single-order-page"),
-  { ssr: false },
-);
 
 export const revalidate = 0;
 

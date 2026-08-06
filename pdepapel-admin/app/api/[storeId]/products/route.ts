@@ -23,6 +23,7 @@ import {
 import { generateSemanticSKU } from "@/lib/variant-generator";
 import { generateProductSlug } from "@/lib/slugify";
 import { normalizeProductIdentifiers } from "@/lib/product-identifiers";
+import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import {
   getUniqueProductSlug,
   synchronizeProductGroupSlugs,
@@ -120,6 +121,7 @@ export async function POST(
       typeof productGroupId === "string" && productGroupId !== "none"
         ? productGroupId || null
         : null;
+    const sanitizedDescription = sanitizeRichTextHtml(description);
 
     if (!name)
       throw ErrorFactory.InvalidRequest(
@@ -207,7 +209,7 @@ export async function POST(
         slug,
         price,
         acqPrice,
-        description,
+        description: sanitizedDescription,
         stock: 0, // Stock is initialized to 0 and set via INITIAL_INTAKE movement below
         isArchived,
         isFeatured,

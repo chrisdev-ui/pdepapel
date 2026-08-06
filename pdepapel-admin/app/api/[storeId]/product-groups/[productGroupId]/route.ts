@@ -4,6 +4,7 @@ import { auth } from "@clerk/nextjs";
 import prismadb from "@/lib/prismadb";
 import { generateProductSlug, slugify } from "@/lib/slugify";
 import { synchronizeProductGroupSlugs } from "@/lib/product-slugs";
+import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import { hasDuplicateVariantCombination } from "@/lib/variant-combinations";
 import {
   CACHE_HEADERS,
@@ -82,6 +83,7 @@ export async function PATCH(
       categoryId,
       variants: variantsPayload,
     } = body;
+    const sanitizedDescription = sanitizeRichTextHtml(description);
 
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
@@ -112,7 +114,7 @@ export async function PATCH(
           name,
           brand: typeof brand === "string" ? brand.trim() || null : null,
           slug: slugify(name),
-          description,
+          description: sanitizedDescription,
         },
       });
 
@@ -235,7 +237,9 @@ export async function PATCH(
             name: variantName,
             slug: variantSlug,
             sku: variant.sku,
-            description: variant.description || description || "",
+            description: sanitizeRichTextHtml(
+              variant.description || sanitizedDescription,
+            ),
             price: finalPrice,
             acqPrice: finalAcqPrice,
             stock: variant.id && payloadIds.has(variant.id) ? undefined : 0,

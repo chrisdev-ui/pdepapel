@@ -9,12 +9,14 @@ import {
 import { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { Suspense } from "react";
 import { AboutPage as AboutPageSchema, WithContext } from "schema-dts";
 
 import { getPosts } from "@/actions/get-posts";
 import { Icons } from "@/components/icons";
 import Newsletter from "@/components/newsletter";
 import { Container } from "@/components/ui/container";
+import { Skeleton } from "@/components/ui/skeleton";
 import { BASE_URL } from "@/constants";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import SocialMedia from "./components/social-media";
@@ -105,8 +107,26 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function AboutPage() {
+async function SocialMediaSection() {
   const posts = await getPosts();
+
+  return <SocialMedia data={posts} />;
+}
+
+function SocialMediaSkeleton() {
+  return (
+    <section className="mx-auto max-w-5xl space-y-4 py-12" aria-busy="true">
+      <Skeleton className="mx-auto h-9 w-60" />
+      <div className="grid gap-4 sm:grid-cols-3">
+        {Array.from({ length: 3 }, (_, index) => (
+          <Skeleton key={index} className="aspect-square rounded-2xl" />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export default function AboutPage() {
   return (
     <div className="bg-[#fffdfd]">
       <Container>
@@ -258,7 +278,9 @@ export default async function AboutPage() {
           <div className="absolute bottom-0 left-0 -mb-16 -ml-16 h-48 w-48 rounded-full bg-pink-200 opacity-30 blur-2xl" />
         </section>
 
-        <SocialMedia data={posts} />
+        <Suspense fallback={<SocialMediaSkeleton />}>
+          <SocialMediaSection />
+        </Suspense>
       </Container>
       <Newsletter />
       <script

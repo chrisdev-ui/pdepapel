@@ -109,12 +109,20 @@ export const MobileFiltersSkeleton: React.FC = () => {
   );
 };
 
-export const ShopContentSkeleton: React.FC = () => {
+interface ShopContentSkeletonProps {
+  heading?: string;
+  fixedCategory?: boolean;
+}
+
+export const ShopContentSkeleton: React.FC<ShopContentSkeletonProps> = ({
+  heading = "Todos los productos",
+  fixedCategory = false,
+}) => {
   return (
     <div className="lg:grid lg:grid-cols-5 lg:gap-x-8">
       <div className="hidden lg:block">
-        <FilterSkeleton name="Categorías" items={3} />
-        <FilterSkeleton name="Sub-Categorías" items={3} />
+        {!fixedCategory && <FilterSkeleton name="Categorías" items={3} />}
+        {!fixedCategory && <FilterSkeleton name="Sub-Categorías" items={3} />}
         <FilterSkeleton name="Tamaños" items={3} />
         <FilterSkeleton name="Colores" items={3} />
         <FilterSkeleton name="Diseños" items={3} />
@@ -122,7 +130,7 @@ export const ShopContentSkeleton: React.FC = () => {
       </div>
       <div className="mt-6 space-y-5 lg:col-span-4 lg:mt-0 lg:space-y-0">
         <div className="mb-4 flex w-full items-center justify-between">
-          <h2 className="font-serif text-3xl font-bold">Todos los productos</h2>
+          <h2 className="font-serif text-3xl font-bold">{heading}</h2>
           <section className="flex w-full items-center gap-4 md:w-auto">
             <SortSelectorSkeleton />
             <SortSelectorSkeleton />

@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import { Container } from "@/components/ui/container";
 import { DataTable } from "@/components/ui/data-table";
+import { Skeleton } from "@/components/ui/skeleton";
 import { KAWAII_FACE_HAPPY, KAWAII_FACE_SAD } from "@/constants";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { WishlistColumn, columns } from "./columns";
@@ -23,7 +24,7 @@ export function Wishlist() {
   }, []);
 
   if (!isMounted) {
-    return null;
+    return <WishlistSkeleton />;
   }
 
   const formattedItems: WishlistColumn[] = items?.map((item) => ({
@@ -67,5 +68,26 @@ export function Wishlist() {
       </Container>
       {items?.length === 0 && <Newsletter />}
     </>
+  );
+}
+
+function WishlistSkeleton() {
+  return (
+    <Container className="space-y-8" aria-busy="true" aria-live="polite">
+      <span className="sr-only">Cargando lista de deseos</span>
+      <Skeleton className="h-10 w-72" />
+      <div className="space-y-4 rounded-xl border p-4">
+        {Array.from({ length: 3 }, (_, index) => (
+          <div key={index} className="flex items-center gap-4 border-b py-3 last:border-0">
+            <Skeleton className="h-16 w-16 shrink-0" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-5 w-2/3" />
+              <Skeleton className="h-4 w-1/3" />
+            </div>
+            <Skeleton className="h-9 w-24" />
+          </div>
+        ))}
+      </div>
+    </Container>
   );
 }

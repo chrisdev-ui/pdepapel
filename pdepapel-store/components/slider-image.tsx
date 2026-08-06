@@ -56,6 +56,7 @@ export const SlideImage: React.FC<SlideImageProps> = ({
         srcSet={srcSet}
         sizes="(max-width: 768px) 100vw, (max-width: 1200px) 90vw, 80vw"
         alt={alt}
+        fetchPriority={current === 0 ? "high" : "auto"}
         className="h-full w-full object-cover"
         animate={isActive ? { scale: [1, 1.05] } : { scale: 1 }}
         transition={{

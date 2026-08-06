@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 import * as z from "zod";
 
 import { RichTextEditor } from "@/components/editor/rich-text-editor";
+import { PRODUCT_DESCRIPTION_TEMPLATES } from "@/lib/product-description-templates";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CurrencyInput } from "@/components/ui/currency-input";
@@ -510,6 +511,8 @@ export const VariantEditModal: React.FC<VariantEditModalProps> = ({
                         placeholder="Descripción específica de esta variante"
                         value={field.value || ""}
                         onChange={field.onChange}
+                        templates={PRODUCT_DESCRIPTION_TEMPLATES}
+                        showSeoGuidance
                       />
                     </FormControl>
                     <FormMessage />

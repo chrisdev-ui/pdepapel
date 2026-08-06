@@ -3,9 +3,7 @@ import { Container } from "@/components/ui/container";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 
 import { Metadata } from "next";
-import dynamic from "next/dynamic";
-
-const Cart = dynamic(() => import("./components/cart"), { ssr: false });
+import Cart from "./components/cart";
 
 export const metadata: Metadata = {
   title: "Tu carrito de compras",

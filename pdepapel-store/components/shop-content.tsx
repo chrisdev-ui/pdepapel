@@ -16,11 +16,15 @@ import { Category, Color, Design, Product, Size, Type } from "@/types";
 
 import Products from "../app/(routes)/tienda/components/products";
 import ShopSearchBar from "../app/(routes)/tienda/components/shop-search-bar";
-import { ProductListSkeleton } from "../app/(routes)/tienda/components/skeletons";
+import {
+  MobileFiltersSkeleton,
+  ProductListSkeleton,
+} from "../app/(routes)/tienda/components/skeletons";
 import SortSelector from "../app/(routes)/tienda/components/sort-selector";
 
 const MobileFilters = dynamic(() => import("@/components/mobile-filters"), {
   ssr: false,
+  loading: () => <MobileFiltersSkeleton />,
 });
 
 interface ShopContentProps {
@@ -109,6 +113,8 @@ export const ShopContent: React.FC<ShopContentProps> = ({
           totalItems: initialTotalItems,
           facets: initialFacets,
         },
+    initialDataUpdatedAt: isMounted ? undefined : Date.now(),
+    staleTime: 60_000,
     refetchOnWindowFocus: false,
     enabled: isMounted,
     placeholderData: keepPreviousData,

@@ -3,10 +3,14 @@ import { notFound, permanentRedirect } from "next/navigation";
 
 import { getProduct } from "@/actions/get-product";
 import { getProducts } from "@/actions/get-products";
+import { RelatedProducts } from "@/components/related-products";
+import { RelatedProductsSkeleton } from "@/components/related-products-skeleton";
 import { SingleProductPage } from "@/components/single-product-page";
 import { BASE_URL } from "@/constants";
+import { createRichTextExcerpt } from "@/lib/rich-text";
 import { categoryPath, productPath } from "@/lib/routes";
 import { Product } from "@/types";
+import { Suspense } from "react";
 
 interface ProductPageProps {
   params: {
@@ -43,12 +47,14 @@ export async function generateMetadata({
   const title = variantAttributes
     ? `${product.name} - ${variantAttributes}`
     : product.name;
+  const description = createRichTextExcerpt(
+    product.description,
+    `Descubre ${product.name} en Papelería P de Papel. Este artículo kawaii/oficina es perfecto para añadir un toque especial a tu espacio. Detalles, especificaciones, y todo lo que necesitas saber para tomar la mejor decisión. Calidad y diseño se unen para ofrecerte lo mejor en papelería.`,
+  );
 
   return {
     title,
-    description:
-      product.description ??
-      `Descubre ${product.name} en Papelería P de Papel. Este artículo kawaii/oficina es perfecto para añadir un toque especial a tu espacio. Detalles, especificaciones, y todo lo que necesitas saber para tomar la mejor decisión. Calidad y diseño se unen para ofrecerte lo mejor en papelería.`,
+    description,
     alternates: {
       canonical: canonicalPath,
     },
@@ -60,14 +66,14 @@ export async function generateMetadata({
       : undefined,
     openGraph: {
       title,
-      description: product.description,
+      description,
       url: `${BASE_URL}${canonicalPath}`,
       siteName: "Papelería P de Papel",
       images,
     },
     twitter: {
       title,
-      description: product.description,
+      description,
       card: "summary_large_image",
       site: "Papelería P de Papel",
       images,
@@ -85,7 +91,10 @@ function buildProductSchema(product: Product, includeGroupReference = true) {
   return {
     "@type": "Product",
     name: product.name,
-    description: product.description,
+    description: createRichTextExcerpt(
+      product.description,
+      `Descubre ${product.name} en Papelería P de Papel.`,
+    ),
     url: `${BASE_URL}${path}`,
     image: product.images?.map((image) => image.url) || [],
     sku: product.sku || product.id,
@@ -138,10 +147,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
     groupBy: "parents",
     limit: 4,
   });
-  const [siblingsResponse, suggestedProductsResponse] = await Promise.all([
-    siblingsPromise,
-    suggestedProductsPromise,
-  ]);
+  const siblingsResponse = await siblingsPromise;
   const siblings = siblingsResponse.products.map((variant) => ({
     id: variant.id,
     slug: variant.slug,
@@ -150,7 +156,6 @@ export default async function ProductPage({ params }: ProductPageProps) {
     design: variant.design,
     stock: variant.stock,
   }));
-  const suggestedProducts = suggestedProductsResponse.products;
   const canonicalPath = productPath(canonicalSlug);
   const seenVariantCombinations = new Set<string>();
   const hasDuplicateVariantCombination = siblingsResponse.products.some(
@@ -178,7 +183,10 @@ export default async function ProductPage({ params }: ProductPageProps) {
         "@context": "https://schema.org",
         "@type": "ProductGroup",
         name: product.productGroup?.name || product.name,
-        description: product.description,
+        description: createRichTextExcerpt(
+          product.description,
+          `Descubre ${product.name} en Papelería P de Papel.`,
+        ),
         productGroupID: product.productGroupId,
         variesBy: [
           "https://schema.org/color",
@@ -243,7 +251,11 @@ export default async function ProductPage({ params }: ProductPageProps) {
       <SingleProductPage
         product={product}
         siblings={siblings}
-        suggestedProducts={suggestedProducts}
+        relatedProducts={
+          <Suspense fallback={<RelatedProductsSkeleton />}>
+            <RelatedProducts productsPromise={suggestedProductsPromise} />
+          </Suspense>
+        }
       />
     </>
   );

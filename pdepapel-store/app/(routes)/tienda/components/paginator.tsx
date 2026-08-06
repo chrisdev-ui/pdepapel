@@ -1,6 +1,6 @@
 "use client";
 import { parseAsInteger, useQueryState } from "nuqs";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 import {
   Pagination,
@@ -18,7 +18,6 @@ interface PaginatorProps {
 }
 
 const Paginator: React.FC<PaginatorProps> = ({ totalPages }) => {
-  const [isMounted, setIsMounted] = useState(false);
   const [page, setPage] = useQueryState("page", parseAsInteger.withDefault(1));
 
   const currentPage = page ?? 1;
@@ -43,15 +42,9 @@ const Paginator: React.FC<PaginatorProps> = ({ totalPages }) => {
   };
 
   useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
-  useEffect(() => {
     // Scroll to top when page changes
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [currentPage]);
-
-  if (!isMounted) return null;
 
   const pagesToShow = getPagesToShow();
 

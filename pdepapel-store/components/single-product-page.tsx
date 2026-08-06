@@ -11,18 +11,18 @@ import { Container } from "@/components/ui/container";
 import { Separator } from "@/components/ui/separator";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { Product, ProductVariant } from "@/types";
-import { useRef } from "react";
+import { ReactNode, useRef } from "react";
 
 interface SingleProductPageProps {
   product: Product;
-  suggestedProducts: Product[];
   siblings?: ProductVariant[];
+  relatedProducts: ReactNode;
 }
 
 export const SingleProductPage: React.FC<SingleProductPageProps> = ({
   product,
-  suggestedProducts,
   siblings,
+  relatedProducts,
 }) => {
   const reviewsRef = useRef<HTMLDivElement>(null);
 
@@ -65,10 +65,7 @@ export const SingleProductPage: React.FC<SingleProductPageProps> = ({
           reviews={product.reviews}
         />
         <Separator className="my-10" />
-        <ProductList
-          title="Productos relacionados"
-          products={suggestedProducts}
-        />
+        {relatedProducts}
       </Container>
       <Newsletter />
     </>

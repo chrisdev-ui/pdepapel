@@ -1,13 +1,8 @@
-import dynamic from "next/dynamic";
-
 import { NoResults } from "@/components/ui/no-results";
 import ProductCard from "@/components/ui/product-card";
 import { KAWAII_FACE_SAD } from "@/constants";
 import { Product } from "@/types";
-
-const Paginator = dynamic(() => import("./paginator"), {
-  ssr: false,
-});
+import Paginator from "./paginator";
 
 interface ProductsProps {
   products: Product[];

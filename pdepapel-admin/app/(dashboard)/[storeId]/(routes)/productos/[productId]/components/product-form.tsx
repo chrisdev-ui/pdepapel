@@ -17,6 +17,7 @@ import { useForm } from "react-hook-form";
 import z from "zod";
 
 import { RichTextEditor } from "@/components/editor/rich-text-editor";
+import { PRODUCT_DESCRIPTION_TEMPLATES } from "@/lib/product-description-templates";
 import { AlertModal } from "@/components/modals/alert-modal";
 import { IntakeModal } from "@/components/modals/intake-modal";
 import { Badge } from "@/components/ui/badge";
@@ -1295,11 +1296,13 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                       placeholder="Describe las características y beneficios del producto 🚀..."
                       value={field.value || ""}
                       onChange={field.onChange}
+                      templates={PRODUCT_DESCRIPTION_TEMPLATES}
+                      showSeoGuidance
                     />
                   </FormControl>
                   <FormDescription>
-                    Utiliza el editor para dar formato al texto con negritas,
-                    cursivas, listas y más.
+                    Usa secciones, listas y plantillas para explicar beneficios,
+                    medidas y cuidados con claridad.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
