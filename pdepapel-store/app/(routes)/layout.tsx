@@ -1,8 +1,11 @@
-"use client";
-
 import { WhatsAppFloatingButton } from "@/components/whatsapp-floating-button";
+import { ReactNode } from "react";
 
-export default function Template({ children }: { children: React.ReactNode }) {
+export default function StorefrontLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
   return (
     <div>
       {children}

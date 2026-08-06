@@ -35,7 +35,7 @@ import {
 import { UnifiedOrder } from "@/types/unified-order";
 import { useAuth } from "@clerk/nextjs";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { isValidPhoneNumber } from "react-phone-number-input";
@@ -225,6 +225,10 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     return useCheckoutStore.getState().currentStep || 1;
   });
   const [isNavigating, setIsNavigating] = useState(false);
+  const [completedOrderPath, setCompletedOrderPath] = useState<string | null>(
+    null,
+  );
+  const hasFinalizedCheckoutRef = useRef(false);
 
   const [couponState, setCouponState] = useState<CouponState>(() => {
     return (
@@ -237,8 +241,10 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
 
   // Update store when coupon state changes
   useEffect(() => {
+    if (completedOrderPath) return;
+
     setStoredCouponState(couponState);
-  }, [couponState, setStoredCouponState]);
+  }, [completedOrderPath, couponState, setStoredCouponState]);
 
   const hasVerifiedStockRef = useRef(false);
 
@@ -391,8 +397,10 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   }, [customOrder, cart.items]);
 
   useEffect(() => {
+    if (completedOrderPath) return;
+
     setStoredFormData(debouncedFormData as Partial<CheckoutFormValue>);
-  }, [debouncedFormData, setStoredFormData]);
+  }, [completedOrderPath, debouncedFormData, setStoredFormData]);
 
   useEffect(() => {
     if (payUformData && payUFormRef.current && !hasSubmittedPayU) {
@@ -620,11 +628,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
           description: `Tu orden #${order.id} ha sido creada exitosamente`,
           variant: "success",
         });
-        router.push(orderPath(order.id));
-        cart.removeAll();
-        form.reset();
-        resetCheckout();
-        if (userId) clearGuestId();
+        setCompletedOrderPath(orderPath(order.id));
       }
     },
   });
@@ -632,11 +636,46 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   const isPendingSubmit = useMemo(() => status === "pending", [status]);
 
   useEffect(() => {
+    if (!completedOrderPath || hasFinalizedCheckoutRef.current) return;
+
+    hasFinalizedCheckoutRef.current = true;
+    cart.removeAll();
+    resetCheckout();
+    if (userId) clearGuestId();
+    router.replace(completedOrderPath);
+  }, [
+    cart,
+    clearGuestId,
+    completedOrderPath,
+    resetCheckout,
+    router,
+    userId,
+  ]);
+
+  useEffect(() => {
     setIsMounted(true);
   }, []);
 
   if (!isMounted) {
     return null;
+  }
+
+  if (completedOrderPath) {
+    return (
+      <div
+        className="flex min-h-[420px] flex-col items-center justify-center gap-4 text-center"
+        aria-busy="true"
+        aria-live="polite"
+      >
+        <Loader2 className="h-10 w-10 animate-spin text-pink-froly" />
+        <div className="space-y-1">
+          <h2 className="font-serif text-2xl font-bold">Pedido creado</h2>
+          <p className="text-muted-foreground">
+            Estamos preparando los detalles de tu pedido.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   const totalQuantity = activeItems.reduce(
