@@ -4,6 +4,7 @@ import { auth } from "@clerk/nextjs";
 import prismadb from "@/lib/prismadb";
 import { verifyStoreOwner } from "@/lib/utils";
 import { createInventoryMovementBatch } from "@/lib/inventory";
+import { invalidateStoreProductsCache } from "@/lib/cache";
 import { InventoryMovementType } from "@prisma/client";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 
@@ -89,6 +90,7 @@ export async function POST(
     await prismadb.$transaction(async (tx) => {
       await createInventoryMovementBatch(tx, movementParams, false);
     });
+    await invalidateStoreProductsCache(params.storeId);
 
     return NextResponse.json(
       {

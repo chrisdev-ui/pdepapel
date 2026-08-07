@@ -50,6 +50,7 @@ next-env.d.ts
 google_merchant_*
 *md
 !docs/reportes-tributarios.md
+!docs/ventas-en-feria.md
 backup_prod_*.sql
 /scripts/backup-prod.ts
 /scripts/restore-db.ts

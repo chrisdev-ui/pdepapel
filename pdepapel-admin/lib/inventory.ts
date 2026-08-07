@@ -19,7 +19,9 @@ export type MovementType =
   | "PURCHASE"
   | "INITIAL_INTAKE"
   | "RESTOCK_RECEIVED"
-  | "STORE_USE";
+  | "STORE_USE"
+  | "FESTIVAL_ALLOCATION"
+  | "FESTIVAL_RETURN";
 
 export const MOVEMENT_TYPE_LABELS: Record<MovementType, string> = {
   ORDER_PLACED: "Venta",
@@ -34,6 +36,8 @@ export const MOVEMENT_TYPE_LABELS: Record<MovementType, string> = {
   INITIAL_INTAKE: "Ingreso Inicial (+)",
   RESTOCK_RECEIVED: "Reabastecimiento",
   STORE_USE: "Uso Interno (-)",
+  FESTIVAL_ALLOCATION: "Asignación a feria (-)",
+  FESTIVAL_RETURN: "Devolución de feria (+)",
 };
 
 export const MANUAL_ADJUSTMENT_OPTIONS: {

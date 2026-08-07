@@ -31,6 +31,7 @@ export interface AsyncProductSelectProps {
   placeholder?: string;
   className?: string;
   modal?: boolean;
+  ariaLabel?: string;
 }
 
 const fetcher = (url: string) => axios.get(url).then((res) => res.data);
@@ -42,6 +43,7 @@ export function AsyncProductSelect({
   placeholder = "Seleccionar producto...",
   className,
   modal = false,
+  ariaLabel,
 }: AsyncProductSelectProps) {
   const params = useParams();
   const [open, setOpen] = React.useState(false);
@@ -157,6 +159,7 @@ export function AsyncProductSelect({
           variant="outline"
           role="combobox"
           aria-expanded={open}
+          aria-label={ariaLabel}
           disabled={disabled}
           onClick={() => setOpen(true)}
           type="button"
@@ -164,7 +167,7 @@ export function AsyncProductSelect({
         >
           {selectedProduct ? (
             <div className="flex items-center gap-2 text-left">
-              <div className="min-w-8 relative h-8 w-8 overflow-hidden rounded-md border">
+              <div className="relative h-8 w-8 min-w-8 overflow-hidden rounded-md border">
                 {getProductImage(selectedProduct) ? (
                   <Image
                     src={getProductImage(selectedProduct)}
@@ -217,7 +220,7 @@ export function AsyncProductSelect({
                     )}
                   />
                   <div className="flex w-full items-center gap-2 overflow-hidden">
-                    <div className="min-w-8 relative h-8 w-8 shrink-0 overflow-hidden rounded-md border">
+                    <div className="relative h-8 w-8 min-w-8 shrink-0 overflow-hidden rounded-md border">
                       {getProductImage(product) ? (
                         <Image
                           src={getProductImage(product)}
@@ -271,13 +274,14 @@ export function AsyncProductSelect({
           variant="outline"
           role="combobox"
           aria-expanded={open}
+          aria-label={ariaLabel}
           disabled={disabled}
           type="button"
           className={cn("h-auto w-full justify-between py-2", className)}
         >
           {selectedProduct ? (
             <div className="flex items-center gap-2 text-left">
-              <div className="min-w-8 relative h-8 w-8 overflow-hidden rounded-md border">
+              <div className="relative h-8 w-8 min-w-8 overflow-hidden rounded-md border">
                 {getProductImage(selectedProduct) ? (
                   <Image
                     src={getProductImage(selectedProduct)}
@@ -336,7 +340,7 @@ export function AsyncProductSelect({
                     )}
                   />
                   <div className="flex items-center gap-2 overflow-hidden">
-                    <div className="min-w-8 relative h-8 w-8 overflow-hidden rounded-md border">
+                    <div className="relative h-8 w-8 min-w-8 overflow-hidden rounded-md border">
                       {getProductImage(product) ? (
                         <Image
                           src={getProductImage(product)}

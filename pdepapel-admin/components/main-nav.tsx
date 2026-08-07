@@ -32,6 +32,7 @@ import {
   MessageSquare,
   Package,
   Palette,
+  PartyPopper,
   Percent,
   Ruler,
   Settings,
@@ -153,9 +154,7 @@ export function MainNav({
     {
       href: dashboardPath("movimientos-inventario"),
       label: ModelLabels[Models.InventoryMovements],
-      active: pathname.includes(
-        dashboardPath("movimientos-inventario"),
-      ),
+      active: pathname.includes(dashboardPath("movimientos-inventario")),
       group: "inventory",
       icon: History,
     },
@@ -187,6 +186,13 @@ export function MainNav({
       active: pathname === dashboardPath("pedidos"),
       group: "sales",
       icon: ShoppingCart,
+    },
+    {
+      href: dashboardPath("ferias"),
+      label: "Ventas en feria",
+      active: pathname.includes(dashboardPath("ferias")),
+      group: "sales",
+      icon: PartyPopper,
     },
     {
       href: dashboardPath("envios"),

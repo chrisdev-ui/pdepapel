@@ -65,6 +65,7 @@ model Store {
   invoices              Invoice[]              @relation("StoreToInvoice")
   taxPurchases          TaxPurchase[]          @relation("StoreToTaxPurchase")
   customerReactivations CustomerReactivation[] @relation("StoreToCustomerReactivation")
+  fairEvents            FairEvent[]
 }
 
 model Billboard {
@@ -253,45 +254,47 @@ model ProductGroup {
 }
 
 model Product {
-  id                     String              @id @default(uuid())
+  id                     String                   @id @default(uuid())
   storeId                String
   categoryId             String
   name                   String
-  slug                   String              @default("")
-  description            String              @db.Text
-  stock                  Int                 @default(0)
-  price                  Float               @default(0)
-  acqPrice               Float?              @default(0)
-  isFeatured             Boolean             @default(false)
-  isArchived             Boolean             @default(false)
+  slug                   String                   @default("")
+  description            String                   @db.Text
+  stock                  Int                      @default(0)
+  price                  Float                    @default(0)
+  acqPrice               Float?                   @default(0)
+  isFeatured             Boolean                  @default(false)
+  isArchived             Boolean                  @default(false)
   sizeId                 String
   colorId                String
   designId               String
-  createdAt              DateTime            @default(now())
-  updatedAt              DateTime            @updatedAt
-  sku                    String              @unique
-  brand                  String?             @db.VarChar(120)
-  gtin                   String?             @db.VarChar(14)
-  mpn                    String?             @db.VarChar(70)
-  hasNoProductIdentifier Boolean             @default(false)
-  store                  Store               @relation("StoreToProduct", fields: [storeId], references: [id])
-  category               Category            @relation("CategoryToProduct", fields: [categoryId], references: [id])
-  size                   Size                @relation(fields: [sizeId], references: [id])
-  color                  Color               @relation(fields: [colorId], references: [id])
-  design                 Design              @relation(fields: [designId], references: [id])
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  sku                    String                   @unique
+  brand                  String?                  @db.VarChar(120)
+  gtin                   String?                  @db.VarChar(14)
+  mpn                    String?                  @db.VarChar(70)
+  hasNoProductIdentifier Boolean                  @default(false)
+  store                  Store                    @relation("StoreToProduct", fields: [storeId], references: [id])
+  category               Category                 @relation("CategoryToProduct", fields: [categoryId], references: [id])
+  size                   Size                     @relation(fields: [sizeId], references: [id])
+  color                  Color                    @relation(fields: [colorId], references: [id])
+  design                 Design                   @relation(fields: [designId], references: [id])
   images                 Image[]
   orderItems             OrderItem[]
   reviews                Review[]
   supplierId             String?
-  supplier               Supplier?           @relation(fields: [supplierId], references: [id])
+  supplier               Supplier?                @relation(fields: [supplierId], references: [id])
   productGroupId         String?
-  productGroup           ProductGroup?       @relation(fields: [productGroupId], references: [id])
+  productGroup           ProductGroup?            @relation(fields: [productGroupId], references: [id])
   offers                 OfferProduct[]
   inventoryMovements     InventoryMovement[]
   restockOrderItems      RestockOrderItem[]
   customOrderItems       CustomOrderItem[]
   quotationItems         QuotationItem[]
   slugAliases            ProductSlugAlias[]
+  fairInventoryItems     FairEventInventoryItem[]
+  fairCapsules           FairCapsule[]
 
   // -- KIT / COMBO FIELDS --
   isKit         Boolean      @default(false)
@@ -445,14 +448,17 @@ model Order {
   profitMarginPct  Float?
 
   // Custom/Manual Order Fields
-  adminNotes    String? @db.Text
-  internalNotes String? @db.Text
+  adminNotes     String? @db.Text
+  internalNotes  String? @db.Text
+  fairEventId    String?
+  idempotencyKey String? @unique
 
   // Sender Info
   createdBy String? // Admin User ID
 
   quoteRequests QuoteRequest[]
   invoices      Invoice[]
+  fairEvent     FairEvent?     @relation(fields: [fairEventId], references: [id])
 
   @@index([storeId])
   @@index([couponId])
@@ -471,6 +477,7 @@ model Order {
   @@index([storeId, guestId, createdAt])
   @@index([token])
   @@index([type])
+  @@index([storeId, fairEventId])
 }
 
 model OrderItem {
@@ -486,8 +493,9 @@ model OrderItem {
   imageUrl String? @default("")
   isCustom Boolean @default(false)
 
-  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product Product? @relation(fields: [productId], references: [id], onDelete: Restrict) // Optional Link
+  order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     Product?     @relation(fields: [productId], references: [id], onDelete: Restrict) // Optional Link
+  fairCapsule FairCapsule?
 
   createdAt DateTime @default(now())
 
@@ -697,6 +705,7 @@ enum OrderType {
   STANDARD
   CUSTOM
   QUOTATION
+  FESTIVAL
 }
 
 enum OrderStatus {
@@ -794,6 +803,74 @@ model InventoryMovement {
   @@index([type])
 }
 
+model FairEvent {
+  id        String          @id @default(uuid())
+  storeId   String
+  name      String
+  location  String?
+  startsAt  DateTime?
+  endsAt    DateTime?
+  status    FairEventStatus @default(DRAFT)
+  notes     String?         @db.Text
+  createdBy String?
+  openedAt  DateTime?
+  closedAt  DateTime?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  store          Store                    @relation(fields: [storeId], references: [id])
+  inventoryItems FairEventInventoryItem[]
+  orders         Order[]
+  capsules       FairCapsule[]
+
+  @@index([storeId, status])
+  @@index([storeId, startsAt])
+}
+
+model FairEventInventoryItem {
+  id                String   @id @default(uuid())
+  fairEventId       String
+  productId         String
+  allocatedQuantity Int      @default(0)
+  soldQuantity      Int      @default(0)
+  packedQuantity    Int      @default(0)
+  returnedQuantity  Int      @default(0)
+  damagedQuantity   Int      @default(0)
+  lostQuantity      Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  fairEvent FairEvent @relation(fields: [fairEventId], references: [id], onDelete: Cascade)
+  product   Product   @relation(fields: [productId], references: [id])
+
+  @@unique([fairEventId, productId])
+  @@index([productId])
+}
+
+model FairCapsule {
+  id               String            @id @default(uuid())
+  fairEventId      String
+  productId        String
+  orderItemId      String?           @unique
+  code             String            @unique
+  salePrice        Float
+  productCost      Float
+  minimumMarginPct Float
+  status           FairCapsuleStatus @default(PACKED)
+  packedAt         DateTime          @default(now())
+  soldAt           DateTime?
+  voidedAt         DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  fairEvent FairEvent  @relation(fields: [fairEventId], references: [id], onDelete: Cascade)
+  product   Product    @relation(fields: [productId], references: [id])
+  orderItem OrderItem? @relation(fields: [orderItemId], references: [id])
+
+  @@index([fairEventId, status])
+  @@index([productId])
+}
+
 enum InventoryMovementType {
   ORDER_PLACED // Decrease
   ORDER_CANCELLED // Increase (Restock)
@@ -807,6 +884,22 @@ enum InventoryMovementType {
   INITIAL_INTAKE // First-time stock entry
   RESTOCK_RECEIVED // Supplier restock
   STORE_USE // Internal store consumption
+  FESTIVAL_ALLOCATION // Removed from online availability
+  FESTIVAL_RETURN // Returned to online availability
+}
+
+enum FairEventStatus {
+  DRAFT
+  OPEN
+  RECONCILING
+  CLOSED
+  CANCELLED
+}
+
+enum FairCapsuleStatus {
+  PACKED
+  SOLD
+  VOID
 }
 
 model RestockOrder {
