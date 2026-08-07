@@ -396,12 +396,27 @@ export function prepareReconciliationPreview(
       };
     }
 
+    if (difference === null || !row.cause) {
+      return {
+        ...row,
+        productId: product?.id ?? null,
+        currentStock: product?.stock ?? null,
+        difference,
+        movementType: null,
+        errors: [
+          ...errors,
+          "La fila no tiene los datos necesarios para aplicar el ajuste.",
+        ],
+        status: "error",
+      };
+    }
+
     return {
       ...row,
       productId: product?.id ?? null,
       currentStock: product?.stock ?? null,
       difference,
-      movementType: getMovementType(row.cause!, difference),
+      movementType: getMovementType(row.cause, difference),
       status: "ready",
     };
   });

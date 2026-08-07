@@ -208,21 +208,23 @@ export async function createFairReconciliationTemplateWorkbook(
 
   const firstDataRow = 7;
   const lastDataRow = Math.max(firstDataRow, products.length + 6);
-  sheet.dataValidations.add(`F${firstDataRow}:F${lastDataRow}`, {
-    type: "list",
-    allowBlank: true,
-    formulae: [`\"${RECONCILIATION_CAUSES.join(",")}\"`],
-  });
-  sheet.dataValidations.add(`K${firstDataRow}:K${lastDataRow}`, {
-    type: "list",
-    allowBlank: true,
-    formulae: ['"Revisado,Pendiente"'],
-  });
-  sheet.dataValidations.add(`M${firstDataRow}:M${lastDataRow}`, {
-    type: "list",
-    allowBlank: true,
-    formulae: ['"Sí,No"'],
-  });
+  for (let rowNumber = firstDataRow; rowNumber <= lastDataRow; rowNumber += 1) {
+    sheet.getCell(`F${rowNumber}`).dataValidation = {
+      type: "list",
+      allowBlank: true,
+      formulae: [`\"${RECONCILIATION_CAUSES.join(",")}\"`],
+    };
+    sheet.getCell(`K${rowNumber}`).dataValidation = {
+      type: "list",
+      allowBlank: true,
+      formulae: ['"Revisado,Pendiente"'],
+    };
+    sheet.getCell(`M${rowNumber}`).dataValidation = {
+      type: "list",
+      allowBlank: true,
+      formulae: ['"Sí,No"'],
+    };
+  }
 
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
