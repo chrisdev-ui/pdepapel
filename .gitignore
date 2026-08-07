@@ -6,3 +6,6 @@
 playwright-report/
 test-results/
 coverage/
+
+# Temporary local artifacts (PDF renders, exports, and scratch files)
+tmp/
