@@ -209,7 +209,9 @@ export async function parseReconciliationWorkbook(
   fileBuffer: Buffer,
 ): Promise<ParsedReconciliationRow[]> {
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(fileBuffer);
+  await workbook.xlsx.load(
+    fileBuffer as unknown as Parameters<typeof workbook.xlsx.load>[0],
+  );
   const sheet = workbook.getWorksheet(RECONCILIATION_SHEET_NAME);
 
   if (!sheet) {
