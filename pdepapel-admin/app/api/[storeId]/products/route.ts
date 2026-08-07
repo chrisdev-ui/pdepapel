@@ -357,7 +357,7 @@ export async function GET(
       groupBy,
       productGroupId,
       isOnSale, // Include in cache key
-      v: "3",
+      v: "4",
     })}`;
 
     // Try to get from Redis cache
@@ -501,6 +501,7 @@ export async function GET(
 
         return {
           id: item.id,
+          slug: item.slug,
           name: item.name,
           price: effectivePrice,
           originalPrice: Number(item.price),
@@ -707,6 +708,7 @@ export async function GET(
       const transformedProducts: UnifiedProduct[] = allStandaloneProducts.map(
         (p: any) => ({
           id: p.id,
+          slug: p.slug,
           productGroupId: null,
           name: p.name,
           description: p.description,
