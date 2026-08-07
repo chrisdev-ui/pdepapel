@@ -34,7 +34,7 @@ export const normalizeOrder = (jsonData: any): UnifiedOrder => {
         quantity: item.quantity,
         unitPrice: Number(item.unitPrice || item.price || 0),
         imageUrl: item.imageUrl,
-        isExternal: true,
+        isExternal: !item.productId,
         size: item.size,
         color: item.color,
         design: item.design,

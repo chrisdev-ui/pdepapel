@@ -45,9 +45,9 @@ export default function QuotePage() {
     if (!quotation) return;
     setIsAccepting(true);
     try {
-      await acceptQuote();
+      const acceptedQuote = await acceptQuote();
 
-      const hasManualItems = quotation.items.some(
+      const hasManualItems = acceptedQuote.items.some(
         (item) => !item.productId || item.isExternal,
       );
 

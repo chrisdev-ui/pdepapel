@@ -130,6 +130,10 @@ export async function POST(
       internalNotes,
       createdBy, // Optional admin user ID
     } = body;
+    const normalizedShippingProvider =
+      shippingProvider === "CUSTOM"
+        ? ShippingProvider.MANUAL
+        : shippingProvider;
 
     if (
       !isStoreOwner &&
@@ -525,12 +529,16 @@ export async function POST(
         };
 
       // Only create shipping record if there's a valid provider (not NONE)
-      if (shipping && shippingProvider && shippingProvider !== "NONE")
+      if (
+        shipping &&
+        normalizedShippingProvider &&
+        normalizedShippingProvider !== ShippingProvider.NONE
+      )
         orderData.shipping = {
           create: {
             ...shipping,
             status: ShippingStatus.Preparing, // Always start with Preparing
-            provider: shippingProvider,
+            provider: normalizedShippingProvider,
             envioClickIdRate: envioClickIdRate || null,
             storeId: params.storeId,
           },

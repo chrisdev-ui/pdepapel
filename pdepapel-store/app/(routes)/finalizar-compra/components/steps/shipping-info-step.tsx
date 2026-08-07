@@ -346,7 +346,7 @@ export const ShippingInfoStep = ({
                     onValueChange={(val) => {
                       field.onChange(val);
                       if (val === "MEDELLIN_LOCAL") {
-                        form.setValue("shippingProvider", "CUSTOM");
+                        form.setValue("shippingProvider", "MANUAL");
                         form.setValue("envioClickIdRate", 0);
                         form.setValue("shipping", {
                           carrierName: "Domicilio Mismo Día (Medellín)",
@@ -357,7 +357,7 @@ export const ShippingInfoStep = ({
                           status: ShippingStatus.Preparing,
                         });
                       } else if (val === "CUSTOM_WHATSAPP") {
-                        form.setValue("shippingProvider", "CUSTOM");
+                        form.setValue("shippingProvider", "MANUAL");
                         form.setValue("envioClickIdRate", 0);
                         form.setValue("shipping", {
                           carrierName: "Acordar por WhatsApp",

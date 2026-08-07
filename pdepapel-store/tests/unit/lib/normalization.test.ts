@@ -58,4 +58,26 @@ describe("normalizeOrder", () => {
       isExternal: true,
     });
   });
+
+  it("keeps flattened order items with a product id as catalog products", () => {
+    const order = normalizeOrder({
+      orderItems: [
+        {
+          id: "item-2",
+          productId: "product-2",
+          name: "Agenda floral",
+          quantity: 1,
+          price: 18000,
+          imageUrl: "https://example.com/agenda-floral.webp",
+        },
+      ],
+    });
+
+    expect(order.items[0]).toMatchObject({
+      productId: "product-2",
+      name: "Agenda floral",
+      unitPrice: 18000,
+      isExternal: false,
+    });
+  });
 });
