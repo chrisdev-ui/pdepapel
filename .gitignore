@@ -9,3 +9,4 @@ coverage/
 
 # Temporary local artifacts (PDF renders, exports, and scratch files)
 tmp/
+outputs/
