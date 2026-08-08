@@ -10,3 +10,8 @@ coverage/
 # Temporary local artifacts (PDF renders, exports, and scratch files)
 tmp/
 outputs/
+
+# Local AI agent instructions. Shared project guidance lives in docs/.
+/AGENTS.md
+/CLAUDE.md
+/pdepapel-store/CLAUDE.md

@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   Clock3,
   ExternalLink,
+  Link2,
   ListOrdered,
   Rocket,
   Store,
@@ -229,7 +230,7 @@ export default function MercadoLibreClient({
                 );
               }}
             >
-              <MercadoLibreLogo className="mr-2 h-4" />
+              <Link2 className="mr-2 h-4" />
               {connection
                 ? "Reconectar Mercado Libre"
                 : "Conectar Mercado Libre"}
@@ -407,7 +408,6 @@ export default function MercadoLibreClient({
         rel="noreferrer"
         className="inline-flex items-center gap-1 text-sm text-primary underline-offset-4 hover:underline"
       >
-        <MercadoLibreLogo className="h-4" />
         Abrir Mercado Libre
         <ExternalLink className="h-3.5 w-3.5" />
       </a>

@@ -37,34 +37,29 @@ export const RAW_ORDER_STATUS_META: Record<string, StatusMeta> = {
   confirmed: { label: "Confirmada", variant: "info" },
   payment_required: { label: "Pago requerido", variant: "warning" },
   payment_in_process: { label: "Pago en proceso", variant: "warning" },
+  payment_review: { label: "Pago en revisión", variant: "warning" },
   partially_paid: { label: "Pago parcial", variant: "warning" },
   cancelled: { label: "Cancelada", variant: "destructive" },
   invalid: { label: "Inválida", variant: "destructive" },
+  refunded: { label: "Reembolsada", variant: "destructive" },
+  partially_refunded: { label: "Reembolso parcial", variant: "warning" },
+  charged_back: { label: "Contracargo", variant: "destructive" },
+  expired: { label: "Vencida", variant: "destructive" },
 };
 
-/** Fallback label for an unknown status: "payment_in_process" → "Payment in process". */
-export function humanizeStatus(status: string): string {
-  const normalized = (status ?? "").replace(/[_-]+/g, " ").trim().toLowerCase();
-  if (!normalized) return "Sin estado";
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
-}
+const UNKNOWN_STATUS_META: StatusMeta = {
+  label: "Estado pendiente de revisión",
+  variant: "secondary",
+};
 
 /** Meta for a stored `MarketplaceOrderStatus`; unknown values degrade gracefully. */
 export function getSaleStatusMeta(status: string): StatusMeta {
-  return (
-    SALE_STATUS_META[status] ?? {
-      label: humanizeStatus(status),
-      variant: "secondary",
-    }
-  );
+  return SALE_STATUS_META[status] ?? UNKNOWN_STATUS_META;
 }
 
 /** Meta for a raw Mercado Libre order status; unknown values degrade gracefully. */
 export function getRawOrderStatusMeta(status: string): StatusMeta {
   return (
-    RAW_ORDER_STATUS_META[(status ?? "").toLowerCase()] ?? {
-      label: humanizeStatus(status),
-      variant: "secondary",
-    }
+    RAW_ORDER_STATUS_META[(status ?? "").toLowerCase()] ?? UNKNOWN_STATUS_META
   );
 }

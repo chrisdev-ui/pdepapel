@@ -2,7 +2,6 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MercadoLibreLogo } from "@/components/mercadolibre-logo";
 import {
   Card,
   CardContent,
@@ -20,7 +19,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Download, Loader2, Pencil, Plus, UploadCloud } from "lucide-react";
+import {
+  Download,
+  Loader2,
+  PackageOpen,
+  Pencil,
+  Plus,
+  UploadCloud,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 type ProductOption = {
@@ -499,7 +505,7 @@ export function MercadoLibreListingManager({
       <CardHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <CardTitle className="flex items-center gap-2">
-            <MercadoLibreLogo className="h-5" />
+            <PackageOpen className="h-5 w-5 text-muted-foreground" />
             Publicaciones
           </CardTitle>
           <CardDescription>
@@ -798,7 +804,11 @@ export function MercadoLibreListingManager({
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <MercadoLibreLogo className="h-5" />
+              {editingListing ? (
+                <Pencil className="h-5 w-5 text-muted-foreground" />
+              ) : (
+                <Plus className="h-5 w-5 text-muted-foreground" />
+              )}
               {editingListing ? "Editar borrador" : "Preparar publicación"}
             </DialogTitle>
             <DialogDescription>

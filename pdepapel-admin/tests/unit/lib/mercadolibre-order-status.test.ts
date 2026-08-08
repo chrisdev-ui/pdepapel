@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   getRawOrderStatusMeta,
   getSaleStatusMeta,
-  humanizeStatus,
 } from "@/lib/mercadolibre/order-status";
 
 describe("getSaleStatusMeta", () => {
@@ -40,7 +39,7 @@ describe("getSaleStatusMeta", () => {
 
   it("never renders a raw enum value: unknown statuses degrade gracefully", () => {
     expect(getSaleStatusMeta("SOMETHING_NEW")).toEqual({
-      label: "Something new",
+      label: "Estado pendiente de revisión",
       variant: "secondary",
     });
   });
@@ -56,6 +55,10 @@ describe("getRawOrderStatusMeta", () => {
       label: "Pago en proceso",
       variant: "warning",
     });
+    expect(getRawOrderStatusMeta("payment_review")).toEqual({
+      label: "Pago en revisión",
+      variant: "warning",
+    });
     expect(getRawOrderStatusMeta("cancelled")).toEqual({
       label: "Cancelada",
       variant: "destructive",
@@ -66,21 +69,10 @@ describe("getRawOrderStatusMeta", () => {
     expect(getRawOrderStatusMeta("PAID").label).toBe("Pagada");
   });
 
-  it("falls back to a humanized secondary badge for unknown statuses", () => {
-    expect(getRawOrderStatusMeta("payment_review")).toEqual({
-      label: "Payment review",
+  it("never renders an unknown raw Mercado Libre status", () => {
+    expect(getRawOrderStatusMeta("unrecognized_status")).toEqual({
+      label: "Estado pendiente de revisión",
       variant: "secondary",
     });
-  });
-});
-
-describe("humanizeStatus", () => {
-  it("turns snake/kebab case into a readable label", () => {
-    expect(humanizeStatus("payment_in_process")).toBe("Payment in process");
-    expect(humanizeStatus("return-pending")).toBe("Return pending");
-  });
-
-  it("handles empty input", () => {
-    expect(humanizeStatus("")).toBe("Sin estado");
   });
 });
