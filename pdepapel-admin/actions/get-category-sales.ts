@@ -1,6 +1,10 @@
 import prismadb from "@/lib/prismadb";
 import { OrderStatus } from "@prisma/client";
 import { endOfYear, startOfYear } from "date-fns";
+import {
+  createSettledMarketplaceSalesWhere,
+  getMarketplaceItemNetRevenue,
+} from "@/lib/mercadolibre/reporting";
 
 interface CategoryStats {
   sales: number;
@@ -13,39 +17,56 @@ export async function getCategorySales(storeId: string, year: number) {
   const startDate = startOfYear(yearDate);
   const endDate = endOfYear(yearDate);
 
-  const sales = await prismadb.order.findMany({
-    where: {
-      storeId: storeId,
-      createdAt: {
-        gte: startDate,
-        lte: endDate,
+  const [sales, marketplaceOrders] = await Promise.all([
+    prismadb.order.findMany({
+      where: {
+        storeId: storeId,
+        createdAt: {
+          gte: startDate,
+          lte: endDate,
+        },
+        status: {
+          in: [OrderStatus.PAID, OrderStatus.SENT],
+        },
       },
-      status: {
-        in: [OrderStatus.PAID, OrderStatus.SENT],
-      },
-    },
-    select: {
-      subtotal: true,
-      total: true,
-      discount: true,
-      couponDiscount: true,
-      orderItems: {
-        select: {
-          quantity: true,
-          product: {
-            select: {
-              price: true,
-              category: {
-                select: {
-                  name: true,
+      select: {
+        subtotal: true,
+        total: true,
+        discount: true,
+        couponDiscount: true,
+        orderItems: {
+          select: {
+            quantity: true,
+            product: {
+              select: {
+                price: true,
+                category: {
+                  select: {
+                    name: true,
+                  },
                 },
               },
             },
           },
         },
       },
-    },
-  });
+    }),
+    prismadb.marketplaceOrder.findMany({
+      where: createSettledMarketplaceSalesWhere(storeId, {
+        start: startDate,
+        end: endDate,
+      }),
+      include: {
+        items: {
+          include: {
+            product: {
+              include: { category: true },
+            },
+          },
+        },
+      },
+    }),
+  ]);
 
   const categorySales = sales.reduce(
     (acc, order) => {
@@ -80,6 +101,26 @@ export async function getCategorySales(storeId: string, year: number) {
     {} as Record<string, CategoryStats>,
   );
 
+  marketplaceOrders.forEach((order) => {
+    order.items.forEach((item) => {
+      if (!item.product) return;
+
+      const category = item.product.category.name;
+      if (!categorySales[category]) {
+        categorySales[category] = {
+          sales: 0,
+          orders: 0,
+          discountedSales: 0,
+        };
+      }
+
+      const itemNetRevenue = getMarketplaceItemNetRevenue(order, item);
+      categorySales[category].sales += itemNetRevenue;
+      categorySales[category].discountedSales += itemNetRevenue;
+      categorySales[category].orders += item.quantity;
+    });
+  });
+
   const round2 = (n: number) => Math.round(n * 100) / 100;
 
   return Object.entries(categorySales)
@@ -90,7 +131,9 @@ export async function getCategorySales(storeId: string, year: number) {
       orders: stats.orders,
       discountImpact: round2(stats.sales - stats.discountedSales),
       discountPercentage: round2(
-        ((stats.sales - stats.discountedSales) / stats.sales) * 100,
+        stats.sales > 0
+          ? ((stats.sales - stats.discountedSales) / stats.sales) * 100
+          : 0,
       ),
     }))
     .sort((a, b) => {

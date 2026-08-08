@@ -21,12 +21,25 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useDebounce } from "@/hooks/use-debounce";
-import { cn } from "@/lib/utils";
+import { cn, currencyFormatter } from "@/lib/utils";
 import axios from "axios";
 
+export type AsyncProductOption = {
+  id: string;
+  name: string;
+  sku: string;
+  stock: number;
+  price?: number | null;
+  acqPrice?: number | null;
+  isArchived?: boolean;
+  category?: { name: string } | null;
+  images?: { url: string }[];
+};
+
 export interface AsyncProductSelectProps {
+  id?: string;
   value?: string;
-  onChange: (value: string, product?: any) => void;
+  onChange: (value: string, product?: AsyncProductOption | null) => void;
   disabled?: boolean;
   placeholder?: string;
   className?: string;
@@ -36,7 +49,29 @@ export interface AsyncProductSelectProps {
 
 const fetcher = (url: string) => axios.get(url).then((res) => res.data);
 
+function ProductThumbnail({ product }: { product: AsyncProductOption }) {
+  const imageUrl = product.images?.[0]?.url;
+
+  return (
+    <div className="relative h-8 w-8 min-w-8 shrink-0 overflow-hidden rounded-md border">
+      {imageUrl ? (
+        <Image
+          src={imageUrl}
+          alt={product.name}
+          fill
+          className="object-cover"
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-muted">
+          <Package className="h-4 w-4 text-muted-foreground" />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AsyncProductSelect({
+  id,
   value,
   onChange,
   disabled,
@@ -54,7 +89,7 @@ export function AsyncProductSelect({
   // Local state to cache the selected product object for instant display
   // This avoids waiting for SWR or search results to resolve the selected item
   const [cachedSelectedProduct, setCachedSelectedProduct] =
-    React.useState<any>(null);
+    React.useState<AsyncProductOption | null>(null);
 
   // Define getKey for useSWRInfinite
   const getKey = (pageIndex: number, previousPageData: any) => {
@@ -116,7 +151,9 @@ export function AsyncProductSelect({
 
   // Fetch selected product detail if strictly needed (e.g. initial load without search)
   // Check if selected product is already in the loaded list
-  const selectedInList = products.find((p: any) => p.id === value);
+  const selectedInList = products.find(
+    (product: AsyncProductOption) => product.id === value,
+  );
 
   // If we have a cached product that matches the current value, use it to avoid fetching
   const shouldUseCache =
@@ -135,7 +172,9 @@ export function AsyncProductSelect({
     selectedProductDetail;
 
   const handleSelect = (currentValue: string) => {
-    const product = products.find((p: any) => p.id === currentValue);
+    const product = products.find(
+      (item: AsyncProductOption) => item.id === currentValue,
+    );
     // If selecting the already selected one which might be from detail fetch
     const finalProduct =
       product || (currentValue === value ? selectedProduct : null);
@@ -145,17 +184,23 @@ export function AsyncProductSelect({
     setOpen(false);
   };
 
-  const getProductImage = (product: any) => {
-    if (product.images && product.images.length > 0) {
-      return product.images[0].url;
-    }
-    return null;
-  };
+  const getProductDetails = (product: AsyncProductOption) =>
+    [
+      `SKU: ${product.sku}`,
+      product.category?.name,
+      `Stock: ${product.stock}`,
+      product.price !== undefined && product.price !== null
+        ? currencyFormatter(product.price)
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
 
   if (modal) {
     return (
       <>
         <Button
+          id={id}
           variant="outline"
           role="combobox"
           aria-expanded={open}
@@ -167,26 +212,13 @@ export function AsyncProductSelect({
         >
           {selectedProduct ? (
             <div className="flex items-center gap-2 text-left">
-              <div className="relative h-8 w-8 min-w-8 overflow-hidden rounded-md border">
-                {getProductImage(selectedProduct) ? (
-                  <Image
-                    src={getProductImage(selectedProduct)}
-                    alt={selectedProduct.name}
-                    fill
-                    className="object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-muted">
-                    <Package className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                )}
-              </div>
+              <ProductThumbnail product={selectedProduct} />
               <div className="flex flex-col overflow-hidden">
                 <span className="truncate text-sm font-medium leading-none">
                   {selectedProduct.name}
                 </span>
                 <span className="truncate text-xs text-muted-foreground">
-                  {selectedProduct.sku ? `SKU: ${selectedProduct.sku}` : "N/A"}
+                  {getProductDetails(selectedProduct)}
                 </span>
               </div>
             </div>
@@ -207,7 +239,7 @@ export function AsyncProductSelect({
             )}
 
             <CommandGroup>
-              {products.map((product: any) => (
+              {products.map((product: AsyncProductOption) => (
                 <CommandItem
                   key={product.id}
                   value={product.id}
@@ -220,20 +252,7 @@ export function AsyncProductSelect({
                     )}
                   />
                   <div className="flex w-full items-center gap-2 overflow-hidden">
-                    <div className="relative h-8 w-8 min-w-8 shrink-0 overflow-hidden rounded-md border">
-                      {getProductImage(product) ? (
-                        <Image
-                          src={getProductImage(product)}
-                          alt={product.name}
-                          fill
-                          className="object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center bg-muted">
-                          <Package className="h-4 w-4 text-muted-foreground" />
-                        </div>
-                      )}
-                    </div>
+                    <ProductThumbnail product={product} />
                     <div className="flex flex-col overflow-hidden">
                       <span className="truncate font-medium">
                         {product.name}
@@ -244,7 +263,7 @@ export function AsyncProductSelect({
                         )}
                       </span>
                       <span className="truncate text-xs text-muted-foreground">
-                        SKU: {product.sku || "N/A"} | Stock: {product.stock}
+                        {getProductDetails(product)}
                       </span>
                     </div>
                   </div>
@@ -271,6 +290,7 @@ export function AsyncProductSelect({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
+          id={id}
           variant="outline"
           role="combobox"
           aria-expanded={open}
@@ -281,26 +301,13 @@ export function AsyncProductSelect({
         >
           {selectedProduct ? (
             <div className="flex items-center gap-2 text-left">
-              <div className="relative h-8 w-8 min-w-8 overflow-hidden rounded-md border">
-                {getProductImage(selectedProduct) ? (
-                  <Image
-                    src={getProductImage(selectedProduct)}
-                    alt={selectedProduct.name}
-                    fill
-                    className="object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-muted">
-                    <Package className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                )}
-              </div>
+              <ProductThumbnail product={selectedProduct} />
               <div className="flex flex-col overflow-hidden">
                 <span className="truncate text-sm font-medium leading-none">
                   {selectedProduct.name}
                 </span>
                 <span className="truncate text-xs text-muted-foreground">
-                  {selectedProduct.sku ? `SKU: ${selectedProduct.sku}` : "N/A"}
+                  {getProductDetails(selectedProduct)}
                 </span>
               </div>
             </div>
@@ -327,7 +334,7 @@ export function AsyncProductSelect({
             )}
 
             <CommandGroup>
-              {products.map((product: any) => (
+              {products.map((product: AsyncProductOption) => (
                 <CommandItem
                   key={product.id}
                   value={product.id}
@@ -340,20 +347,7 @@ export function AsyncProductSelect({
                     )}
                   />
                   <div className="flex items-center gap-2 overflow-hidden">
-                    <div className="relative h-8 w-8 min-w-8 overflow-hidden rounded-md border">
-                      {getProductImage(product) ? (
-                        <Image
-                          src={getProductImage(product)}
-                          alt={product.name}
-                          fill
-                          className="object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center bg-muted">
-                          <Package className="h-4 w-4 text-muted-foreground" />
-                        </div>
-                      )}
-                    </div>
+                    <ProductThumbnail product={product} />
                     <div className="flex flex-col">
                       <span className="truncate font-medium">
                         {product.name}
@@ -364,7 +358,7 @@ export function AsyncProductSelect({
                         )}
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        SKU: {product.sku || "N/A"} | Stock: {product.stock}
+                        {getProductDetails(product)}
                       </span>
                     </div>
                   </div>

@@ -60,6 +60,9 @@ export const Overview: React.FC<OverviewProps> = ({ data, year }) => {
       (p) => p.dataKey === "couponDiscounts",
     );
     const totalPayload = payload.find((p) => p.dataKey === "total");
+    const marketplacePayload = payload.find(
+      (p) => p.dataKey === "marketplaceRevenue",
+    );
 
     return (
       <div className="custom-tooltip rounded-lg border bg-white p-4 shadow-lg">
@@ -77,8 +80,13 @@ export const Overview: React.FC<OverviewProps> = ({ data, year }) => {
             {`Cupones: -${currencyFormatter(couponDiscountsPayload.value)}`}
           </p>
         ) : null}
+        {marketplacePayload?.value && marketplacePayload.value > 0 ? (
+          <p className="text-sm text-blue-600">
+            {`Mercado Libre (neto): ${currencyFormatter(marketplacePayload.value)}`}
+          </p>
+        ) : null}
         <p className="mt-2 border-t pt-2 text-sm font-semibold text-green-600">
-          {`Total Final: ${currencyFormatter(totalPayload?.value ?? 0)}`}
+          {`Total recibido: ${currencyFormatter(totalPayload?.value ?? 0)}`}
         </p>
       </div>
     );
@@ -88,7 +96,7 @@ export const Overview: React.FC<OverviewProps> = ({ data, year }) => {
     () => [
       {
         dataKey: "subtotal",
-        name: "Ingresos Brutos",
+        name: "Tienda en línea antes de descuentos",
         fill: "#fea4c3",
         radius: [4, 4, 0, 0],
       },
@@ -105,8 +113,14 @@ export const Overview: React.FC<OverviewProps> = ({ data, year }) => {
         radius: [4, 4, 0, 0],
       },
       {
+        dataKey: "marketplaceRevenue",
+        name: "Mercado Libre (neto)",
+        fill: "#3b82f6",
+        radius: [4, 4, 0, 0],
+      },
+      {
         dataKey: "total",
-        name: "Total Final",
+        name: "Total recibido",
         fill: barColor,
         radius: [4, 4, 0, 0],
       },

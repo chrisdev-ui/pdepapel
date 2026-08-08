@@ -1,6 +1,10 @@
 import prisma from "@/lib/prismadb";
 import { OrderStatus } from "@prisma/client";
 import { endOfYear, startOfYear } from "date-fns";
+import {
+  createSettledMarketplaceSalesWhere,
+  getMarketplaceNetRevenue,
+} from "@/lib/mercadolibre/reporting";
 
 export const getAverageOrderValue = async (
   storeId: string,
@@ -10,26 +14,41 @@ export const getAverageOrderValue = async (
   const firstDayOfYear = startOfYear(yearDate);
   const lastDayOfYear = endOfYear(yearDate);
 
-  const orders = await prisma.order.findMany({
-    where: {
-      storeId,
-      status: {
-        in: [OrderStatus.PAID, OrderStatus.SENT],
+  const [orders, marketplaceOrders] = await Promise.all([
+    prisma.order.findMany({
+      where: {
+        storeId,
+        status: {
+          in: [OrderStatus.PAID, OrderStatus.SENT],
+        },
+        createdAt: {
+          gte: firstDayOfYear,
+          lte: lastDayOfYear,
+        },
       },
-      createdAt: {
-        gte: firstDayOfYear,
-        lte: lastDayOfYear,
+      select: {
+        total: true,
       },
-    },
-    select: {
-      total: true,
-    },
-  });
+    }),
+    prisma.marketplaceOrder.findMany({
+      where: createSettledMarketplaceSalesWhere(storeId, {
+        start: firstDayOfYear,
+        end: lastDayOfYear,
+      }),
+      select: { netAmount: true },
+    }),
+  ]);
 
-  if (orders.length === 0) {
+  const salesCount = orders.length + marketplaceOrders.length;
+  if (salesCount === 0) {
     return 0;
   }
 
-  const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0);
-  return Math.round((totalRevenue / orders.length) * 100) / 100;
+  const totalRevenue =
+    orders.reduce((sum, order) => sum + order.total, 0) +
+    marketplaceOrders.reduce(
+      (sum, order) => sum + getMarketplaceNetRevenue(order),
+      0,
+    );
+  return Math.round((totalRevenue / salesCount) * 100) / 100;
 };

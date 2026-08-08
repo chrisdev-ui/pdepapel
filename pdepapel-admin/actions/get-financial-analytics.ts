@@ -1,4 +1,10 @@
 import { getOrderNetProfit } from "@/lib/financial";
+import {
+  createSettledMarketplaceSalesWhere,
+  getMarketplaceNetRevenue,
+  getMarketplaceOrderNetProfit,
+  getMarketplaceSaleDate,
+} from "@/lib/mercadolibre/reporting";
 import prismadb from "@/lib/prismadb";
 import { OrderStatus } from "@prisma/client";
 import {
@@ -8,7 +14,6 @@ import {
   format,
   subMonths,
 } from "date-fns";
-import { getColombiaDate } from "@/lib/date-utils";
 
 export interface MonthlySummary {
   total_revenue: number;
@@ -46,50 +51,71 @@ export async function getMonthlyFinancialSummary(
   const start = startOfMonth(targetDate);
   const end = endOfMonth(targetDate);
 
-  const orders = await prismadb.order.findMany({
-    where: {
-      storeId,
-      status: { in: [OrderStatus.PAID, OrderStatus.SENT] },
-      OR: [
-        {
-          paidAt: {
-            gte: start,
-            lte: end,
+  const [orders, marketplaceOrders] = await Promise.all([
+    prismadb.order.findMany({
+      where: {
+        storeId,
+        status: { in: [OrderStatus.PAID, OrderStatus.SENT] },
+        OR: [
+          {
+            paidAt: {
+              gte: start,
+              lte: end,
+            },
+          },
+          {
+            paidAt: null,
+            createdAt: {
+              gte: start,
+              lte: end,
+            },
+          },
+        ],
+      } as any,
+      include: {
+        orderItems: {
+          include: {
+            product: {
+              select: {
+                acqPrice: true,
+              },
+            },
           },
         },
-        {
-          paidAt: null,
-          createdAt: {
-            gte: start,
-            lte: end,
-          },
-        },
-      ],
-    } as any,
-    include: {
-      orderItems: {
-        include: {
-          product: {
-            select: {
-              acqPrice: true,
+        payment: true,
+        shipping: true,
+      },
+    }),
+    prismadb.marketplaceOrder.findMany({
+      where: createSettledMarketplaceSalesWhere(storeId, { start, end }),
+      include: {
+        items: {
+          include: {
+            product: {
+              select: { acqPrice: true },
             },
           },
         },
       },
-      payment: true,
-      shipping: true,
-    },
-  });
+    }),
+  ]);
 
-  const total_revenue = orders.reduce(
-    (sum, order) => sum + (order.total || order.subtotal || 0),
-    0,
-  );
-  const total_net_profit = orders.reduce(
-    (sum, order) => sum + getOrderNetProfit(order),
-    0,
-  );
-  const total_orders = orders.length;
+  const total_revenue =
+    orders.reduce(
+      (sum, order) => sum + (order.total || order.subtotal || 0),
+      0,
+    ) +
+    marketplaceOrders.reduce(
+      (sum, order) => sum + getMarketplaceNetRevenue(order),
+      0,
+    );
+  const total_net_profit =
+    orders.reduce((sum, order) => sum + getOrderNetProfit(order), 0) +
+    marketplaceOrders.reduce(
+      (sum, order) => sum + getMarketplaceOrderNetProfit(order),
+      0,
+    );
+  const total_orders = orders.length + marketplaceOrders.length;
 
   const average_margin =
     total_revenue > 0 ? (total_net_profit / total_revenue) * 100 : 0;
@@ -114,40 +140,54 @@ export async function getDailyFinancialBreakdown(
   const start = startOfMonth(targetDate);
   const end = endOfMonth(targetDate);
 
-  const orders = await prismadb.order.findMany({
-    where: {
-      storeId,
-      status: { in: [OrderStatus.PAID, OrderStatus.SENT] },
-      OR: [
-        {
-          paidAt: {
-            gte: start,
-            lte: end,
+  const [orders, marketplaceOrders] = await Promise.all([
+    prismadb.order.findMany({
+      where: {
+        storeId,
+        status: { in: [OrderStatus.PAID, OrderStatus.SENT] },
+        OR: [
+          {
+            paidAt: {
+              gte: start,
+              lte: end,
+            },
+          },
+          {
+            paidAt: null,
+            createdAt: {
+              gte: start,
+              lte: end,
+            },
+          },
+        ],
+      } as any,
+      include: {
+        orderItems: {
+          include: {
+            product: {
+              select: {
+                acqPrice: true,
+              },
+            },
           },
         },
-        {
-          paidAt: null,
-          createdAt: {
-            gte: start,
-            lte: end,
-          },
-        },
-      ],
-    } as any,
-    include: {
-      orderItems: {
-        include: {
-          product: {
-            select: {
-              acqPrice: true,
+        payment: true,
+        shipping: true,
+      },
+    }),
+    prismadb.marketplaceOrder.findMany({
+      where: createSettledMarketplaceSalesWhere(storeId, { start, end }),
+      include: {
+        items: {
+          include: {
+            product: {
+              select: { acqPrice: true },
             },
           },
         },
       },
-      payment: true,
-      shipping: true,
-    },
-  });
+    }),
+  ]);
 
   const daysInMonth = eachDayOfInterval({ start, end });
 
@@ -169,6 +209,16 @@ export async function getDailyFinancialBreakdown(
     dailyMap.set(dateStr, {
       revenue: existing.revenue + (order.total || order.subtotal || 0),
       profit: existing.profit + getOrderNetProfit(order),
+    });
+  }
+
+  for (const order of marketplaceOrders) {
+    const dateStr = format(getMarketplaceSaleDate(order), "yyyy-MM-dd");
+    const existing = dailyMap.get(dateStr) || { revenue: 0, profit: 0 };
+
+    dailyMap.set(dateStr, {
+      revenue: existing.revenue + getMarketplaceNetRevenue(order),
+      profit: existing.profit + getMarketplaceOrderNetProfit(order),
     });
   }
 

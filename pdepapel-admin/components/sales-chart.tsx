@@ -50,7 +50,8 @@ export const SalesChart: React.FC<SalesChartProps> = ({ data }) => {
         {/* Revenue Section */}
         <div className="space-y-1">
           <p className="text-sm text-gray-600">
-            Ingresos Brutos: {currencyFormatter(dataPoint.grossRevenue)}
+            Tienda en línea antes de descuentos:{" "}
+            {currencyFormatter(dataPoint.grossRevenue)}
           </p>
           <div className="pl-2 text-sm">
             <p className="text-red-600">
@@ -60,8 +61,14 @@ export const SalesChart: React.FC<SalesChartProps> = ({ data }) => {
               Cupones: -{currencyFormatter(dataPoint.couponDiscounts)}
             </p>
           </div>
+          {dataPoint.marketplaceRevenue > 0 ? (
+            <p className="text-sm text-blue-600">
+              Mercado Libre (neto):{" "}
+              {currencyFormatter(dataPoint.marketplaceRevenue)}
+            </p>
+          ) : null}
           <p className="font-semibold text-[#a5c3ff]">
-            Ingresos Netos: {currencyFormatter(dataPoint.revenue)}
+            Ingresos recibidos: {currencyFormatter(dataPoint.revenue)}
           </p>
         </div>
 
@@ -116,7 +123,7 @@ export const SalesChart: React.FC<SalesChartProps> = ({ data }) => {
             dataKey="revenue"
             fill="#a5c3ff"
             yAxisId="revenue"
-            name="Ganancia"
+            name="Ingresos recibidos"
             radius={[4, 4, 0, 0]}
             className="opacity-80"
           />

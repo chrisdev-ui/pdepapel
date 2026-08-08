@@ -58,9 +58,11 @@ export const Analytics: React.FC<AnalyticsProps> = async ({
           <CardTitle>Métricas de ventas para el año {year}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-3 md:grid-cols-5">
+          <div className="grid gap-3 md:grid-cols-4">
             <div>
-              <h3 className="text-lg font-semibold">Ganancias brutas</h3>
+              <h3 className="text-lg font-semibold">
+                Tienda antes de descuentos
+              </h3>
               <p className="text-3xl font-bold">
                 {currencyFormatter(sales.totalGrossRevenue, {
                   decimalScale: 0,
@@ -68,9 +70,17 @@ export const Analytics: React.FC<AnalyticsProps> = async ({
               </p>
             </div>
             <div>
-              <h3 className="text-lg font-semibold">Ganancias netas</h3>
+              <h3 className="text-lg font-semibold">Ingresos recibidos</h3>
               <p className="text-3xl font-bold">
                 {currencyFormatter(sales.totalNetRevenue, { decimalScale: 0 })}
+              </p>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold">Mercado Libre neto</h3>
+              <p className="text-3xl font-bold">
+                {currencyFormatter(sales.marketplaceRevenue, {
+                  decimalScale: 0,
+                })}
               </p>
             </div>
             <div>
@@ -108,7 +118,7 @@ export const Analytics: React.FC<AnalyticsProps> = async ({
             </div>
             <div>
               <h3 className="text-lg font-semibold">
-                Valor promedio de una órden
+                Valor promedio de una orden
               </h3>
               <p className="text-3xl font-bold">
                 {currencyFormatter(sales.averageOrderValue, {

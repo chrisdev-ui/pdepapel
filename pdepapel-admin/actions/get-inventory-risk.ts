@@ -1,6 +1,7 @@
 import prismadb from "@/lib/prismadb";
 import { OrderStatus } from "@prisma/client";
 import { subDays } from "date-fns";
+import { createSettledMarketplaceSalesWhere } from "@/lib/mercadolibre/reporting";
 
 export type RiskState = "CRITICAL" | "WARNING" | "SAFE" | "NO_DATA";
 
@@ -43,26 +44,48 @@ export async function getInventoryRisk(
 
   // Calculate sales velocity for all products in a single pass using aggregations if possible,
   // or by fetching recent order items.
-  const recentSales = await prismadb.orderItem.groupBy({
-    by: ["productId"],
-    where: {
-      order: {
-        storeId,
-        status: { in: [OrderStatus.PAID, OrderStatus.SENT] },
-        createdAt: { gte: thirtyDaysAgo },
+  const [recentSales, marketplaceSales] = await Promise.all([
+    prismadb.orderItem.groupBy({
+      by: ["productId"],
+      where: {
+        order: {
+          storeId,
+          status: { in: [OrderStatus.PAID, OrderStatus.SENT] },
+          createdAt: { gte: thirtyDaysAgo },
+        },
+        productId: { in: products.map((product) => product.id) },
       },
-      productId: { in: products.map((p: any) => p.id) },
-    },
-    _sum: {
-      quantity: true,
-    },
-  });
+      _sum: {
+        quantity: true,
+      },
+    }),
+    prismadb.marketplaceOrderItem.groupBy({
+      by: ["productId"],
+      where: {
+        productId: { in: products.map((product) => product.id) },
+        marketplaceOrder: createSettledMarketplaceSalesWhere(storeId, {
+          start: thirtyDaysAgo,
+          end: new Date(),
+        }),
+      },
+      _sum: {
+        quantity: true,
+      },
+    }),
+  ]);
 
   const salesMap = new Map(
-    recentSales.map((sale: any) => [sale.productId, sale._sum.quantity || 0]),
+    recentSales.map((sale) => [sale.productId, sale._sum.quantity || 0]),
   );
+  marketplaceSales.forEach((sale) => {
+    if (!sale.productId) return;
+    salesMap.set(
+      sale.productId,
+      (salesMap.get(sale.productId) ?? 0) + (sale._sum.quantity ?? 0),
+    );
+  });
 
-  const riskAssessment: InventoryRiskItem[] = products.map((product: any) => {
+  const riskAssessment: InventoryRiskItem[] = products.map((product) => {
     const thirtyDaySales = salesMap.get(product.id) || 0;
     const averageDailySales = thirtyDaySales / 30;
 

@@ -1,5 +1,6 @@
-import { OrderStatus } from "@prisma/client";
+import { MarketplaceOrderStatus, OrderStatus } from "@prisma/client";
 
+import { getMarketplaceSaleDate } from "@/lib/mercadolibre/reporting";
 import prismadb from "@/lib/prismadb";
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -28,6 +29,7 @@ export type TaxReportPeriod = {
 export type TaxSaleRow = {
   orderNumber: string;
   customerName: string;
+  channel: "Tienda en línea" | "Mercado Libre";
   totalAmount: number;
   occurredAt: Date;
 };
@@ -48,6 +50,7 @@ export type TaxReport = {
   purchases: TaxPurchaseRow[];
   salesTotal: number;
   purchasesTotal: number;
+  pendingMarketplaceSalesCount: number;
 };
 
 function toColombiaStartOfDay(date: string) {
@@ -121,58 +124,103 @@ export async function getTaxReport(
   period: TaxReportPeriod,
   salesDateBasis: TaxSalesDateBasis = TAX_SALES_DATE_BASIS.SALE_DATE,
 ): Promise<TaxReport> {
-  const [orders, purchases] = await Promise.all([
-    prismadb.order.findMany({
-      where: {
-        storeId,
-        status: {
-          in: [OrderStatus.PAID, OrderStatus.SENT],
-        },
-        ...createTaxSalesDateFilter(period, salesDateBasis),
-      },
-      select: {
-        orderNumber: true,
-        fullName: true,
-        total: true,
-        paidAt: true,
-        createdAt: true,
-      },
-      orderBy: { createdAt: "asc" },
-    }),
-    prismadb.taxPurchase.findMany({
-      where: {
-        storeId,
-        issuedAt: {
-          gte: period.start,
-          lt: period.endExclusive,
-        },
-      },
-      select: {
-        id: true,
-        invoiceNumber: true,
-        supplierName: true,
-        totalAmount: true,
-        issuedAt: true,
-        notes: true,
-      },
-      orderBy: [{ issuedAt: "asc" }, { createdAt: "asc" }],
-    }),
-  ]);
+  const marketplaceDateFilter =
+    salesDateBasis === TAX_SALES_DATE_BASIS.PAYMENT_DATE
+      ? { paidAt: { gte: period.start, lt: period.endExclusive } }
+      : {
+          OR: [
+            { paidAt: { gte: period.start, lt: period.endExclusive } },
+            {
+              paidAt: null,
+              createdAt: { gte: period.start, lt: period.endExclusive },
+            },
+          ],
+        };
 
-  const sales = orders
-    .map((order) => ({
+  const [orders, marketplaceOrders, pendingMarketplaceSalesCount, purchases] =
+    await Promise.all([
+      prismadb.order.findMany({
+        where: {
+          storeId,
+          status: {
+            in: [OrderStatus.PAID, OrderStatus.SENT],
+          },
+          ...createTaxSalesDateFilter(period, salesDateBasis),
+        },
+        select: {
+          orderNumber: true,
+          fullName: true,
+          total: true,
+          paidAt: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "asc" },
+      }),
+      prismadb.marketplaceOrder.findMany({
+        where: {
+          connection: { storeId },
+          status: MarketplaceOrderStatus.PAID,
+          netAmount: { not: null },
+          ...marketplaceDateFilter,
+        },
+        select: {
+          externalOrderId: true,
+          buyerName: true,
+          netAmount: true,
+          paidAt: true,
+          createdAt: true,
+        },
+        orderBy: { paidAt: "asc" },
+      }),
+      prismadb.marketplaceOrder.count({
+        where: {
+          connection: { storeId },
+          status: MarketplaceOrderStatus.PAID,
+          netAmount: null,
+          ...marketplaceDateFilter,
+        },
+      }),
+      prismadb.taxPurchase.findMany({
+        where: {
+          storeId,
+          issuedAt: {
+            gte: period.start,
+            lt: period.endExclusive,
+          },
+        },
+        select: {
+          id: true,
+          invoiceNumber: true,
+          supplierName: true,
+          totalAmount: true,
+          issuedAt: true,
+          notes: true,
+        },
+        orderBy: [{ issuedAt: "asc" }, { createdAt: "asc" }],
+      }),
+    ]);
+
+  const sales = [
+    ...orders.map((order) => ({
       orderNumber: order.orderNumber,
       customerName: order.fullName.trim() || "Consumidor final",
+      channel: "Tienda en línea" as const,
       totalAmount: order.total,
       occurredAt:
         salesDateBasis === TAX_SALES_DATE_BASIS.PAYMENT_DATE
           ? (order.paidAt ?? order.createdAt)
           : order.createdAt,
-    }))
-    .sort(
-      (first, second) =>
-        first.occurredAt.getTime() - second.occurredAt.getTime(),
-    );
+    })),
+    ...marketplaceOrders.map((order) => ({
+      orderNumber: `ML-${order.externalOrderId}`,
+      customerName: order.buyerName?.trim() || "Consumidor final",
+      channel: "Mercado Libre" as const,
+      totalAmount: Number(order.netAmount ?? 0),
+      occurredAt: getMarketplaceSaleDate(order),
+    })),
+  ].sort(
+    (first, second) => first.occurredAt.getTime() - second.occurredAt.getTime(),
+  );
 
   const purchaseRows = purchases.map((purchase) => ({
     ...purchase,
@@ -189,5 +237,6 @@ export async function getTaxReport(
       (total, purchase) => total + purchase.totalAmount,
       0,
     ),
+    pendingMarketplaceSalesCount,
   };
 }

@@ -3,6 +3,10 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  AsyncProductSelect,
+  type AsyncProductOption,
+} from "@/components/ui/async-product-select";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -19,6 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { getListingStatusMeta } from "@/lib/mercadolibre/listing-status";
 import {
   Download,
   Loader2,
@@ -27,15 +32,30 @@ import {
   Plus,
   UploadCloud,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-type ProductOption = {
+type ProductReference = {
   id: string;
   name: string;
   sku: string;
-  price: number;
   stock: number;
 };
+
+type SelectedProduct = ProductReference & { price: number };
+
+function toSelectedProduct(
+  product: AsyncProductOption | null | undefined,
+): SelectedProduct | null {
+  if (!product) return null;
+
+  return {
+    id: product.id,
+    name: product.name,
+    sku: product.sku ?? "",
+    stock: product.stock,
+    price: Number(product.price ?? 0),
+  };
+}
 
 type Listing = {
   id: string;
@@ -48,12 +68,7 @@ type Listing = {
   externalItemId: string | null;
   lastError: string | null;
   metadata: { attributes?: MarketplaceAttribute[] } | null;
-  product: {
-    id: string;
-    name: string;
-    sku: string;
-    stock: number;
-  };
+  product: ProductReference;
 };
 
 type MarketplaceAttribute = {
@@ -87,8 +102,8 @@ type ImportCandidate = {
   sellerSku: string | null;
   availableQuantity: number | null;
   existingListingId: string | null;
-  linkedProduct: ProductOption | null;
-  suggestedProduct: ProductOption | null;
+  linkedProduct: ProductReference | null;
+  suggestedProduct: ProductReference | null;
   issue: string | null;
 };
 
@@ -113,15 +128,6 @@ const emptyForm: ListingForm = {
   categoryId: "",
   stockSafetyBuffer: "1",
   attributes: "",
-};
-
-const listingLabels: Record<Listing["status"], string> = {
-  DRAFT: "Borrador",
-  ACTIVE: "Activa",
-  PAUSED: "Pausada",
-  CLOSED: "Cerrada",
-  ERROR: "Requiere revisión",
-  UNLINKED: "Sin vínculo",
 };
 
 const currencyFormatter = new Intl.NumberFormat("es-CO", {
@@ -170,11 +176,9 @@ function getErrorMessage(response: Response) {
 
 export function MercadoLibreListingManager({
   storeId,
-  products,
   canPublish,
 }: {
   storeId: string;
-  products: ProductOption[];
   canPublish: boolean;
 }) {
   const [listings, setListings] = useState<Listing[]>([]);
@@ -186,6 +190,8 @@ export function MercadoLibreListingManager({
   const [suggestions, setSuggestions] = useState<CategorySuggestion[]>([]);
   const [isSearchingCategories, setIsSearchingCategories] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [selectedProduct, setSelectedProduct] =
+    useState<SelectedProduct | null>(null);
   const [publishingId, setPublishingId] = useState<string | null>(null);
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(
     null,
@@ -195,11 +201,6 @@ export function MercadoLibreListingManager({
   >({});
   const [isLoadingImportPreview, setIsLoadingImportPreview] = useState(false);
   const [isImportingListings, setIsImportingListings] = useState(false);
-
-  const selectedProduct = useMemo(
-    () => products.find((product) => product.id === form.productId) ?? null,
-    [form.productId, products],
-  );
 
   const loadListings = useCallback(async () => {
     setIsLoading(true);
@@ -232,6 +233,7 @@ export function MercadoLibreListingManager({
     setEditingListing(null);
     setForm(emptyForm);
     setSuggestions([]);
+    setSelectedProduct(null);
     setError(null);
     setIsDialogOpen(true);
   };
@@ -244,6 +246,10 @@ export function MercadoLibreListingManager({
       categoryId: listing.categoryId ?? "",
       stockSafetyBuffer: String(listing.stockSafetyBuffer),
       attributes: attributesToText(listing.metadata?.attributes),
+    });
+    setSelectedProduct({
+      ...listing.product,
+      price: listing.marketplacePrice ?? 0,
     });
     setSuggestions([]);
     setError(null);
@@ -594,7 +600,7 @@ export function MercadoLibreListingManager({
                 </span>
               </p>
             </div>
-            <div className="max-h-[32rem] space-y-3 overflow-y-auto pr-1">
+            <div className="max-h-[32rem] space-y-3 overflow-y-auto pr-4 [scrollbar-gutter:stable]">
               {importPreview.listings.map((listing) => {
                 const selection = importSelections[listing.key] ?? {
                   productId: "",
@@ -624,13 +630,9 @@ export function MercadoLibreListingManager({
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="truncate font-medium">{listing.title}</p>
                         <Badge
-                          variant={
-                            listing.status === "ACTIVE"
-                              ? "success"
-                              : "secondary"
-                          }
+                          variant={getListingStatusMeta(listing.status).variant}
                         >
-                          {listing.status}
+                          {getListingStatusMeta(listing.status).label}
                         </Badge>
                         {isAlreadyLinked ? (
                           <Badge variant="secondary">Ya vinculada</Badge>
@@ -673,26 +675,21 @@ export function MercadoLibreListingManager({
                         >
                           Producto local
                         </label>
-                        <select
+                        <AsyncProductSelect
                           id={`mercadolibre-import-${listing.key}`}
                           value={selection.productId}
+                          modal
+                          ariaLabel={`Producto local para ${listing.title}`}
+                          placeholder="Buscar producto local..."
+                          className="min-h-10"
                           disabled={listing.status === "ERROR"}
-                          onChange={(event) =>
+                          onChange={(productId) =>
                             updateImportSelection(listing.key, {
-                              productId: event.target.value,
-                              selected: Boolean(event.target.value),
+                              productId,
+                              selected: Boolean(productId),
                             })
                           }
-                          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                        >
-                          <option value="">Selecciona manualmente</option>
-                          {products.map((product) => (
-                            <option key={product.id} value={product.id}>
-                              {product.name} · {product.sku} · Stock{" "}
-                              {product.stock}
-                            </option>
-                          ))}
-                        </select>
+                        />
                       </div>
                     )}
                   </div>
@@ -736,11 +733,9 @@ export function MercadoLibreListingManager({
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-semibold">{listing.product.name}</p>
                     <Badge
-                      variant={
-                        listing.status === "ACTIVE" ? "success" : "secondary"
-                      }
+                      variant={getListingStatusMeta(listing.status).variant}
                     >
-                      {listingLabels[listing.status]}
+                      {getListingStatusMeta(listing.status).label}
                     </Badge>
                   </div>
                   <p className="text-sm text-muted-foreground">
@@ -821,31 +816,25 @@ export function MercadoLibreListingManager({
               <Label htmlFor="mercadolibre-product">
                 Producto de P de Papel
               </Label>
-              <select
-                id="mercadolibre-product"
+              <AsyncProductSelect
                 value={form.productId}
+                id="mercadolibre-product"
+                modal
                 disabled={Boolean(editingListing)}
-                onChange={(event) => {
-                  const product = products.find(
-                    (item) => item.id === event.target.value,
-                  );
+                ariaLabel="Producto local para la publicación"
+                placeholder="Buscar por nombre o SKU..."
+                onChange={(productId, product) => {
+                  const selected = toSelectedProduct(product);
+                  setSelectedProduct(selected);
                   setForm((current) => ({
                     ...current,
-                    productId: event.target.value,
+                    productId,
                     marketplacePrice: current.marketplacePrice
                       ? current.marketplacePrice
-                      : String(product?.price ?? ""),
+                      : String(selected?.price ?? ""),
                   }));
                 }}
-                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="">Selecciona un producto</option>
-                {products.map((product) => (
-                  <option key={product.id} value={product.id}>
-                    {product.name} · {product.sku} · Stock {product.stock}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="grid gap-2">

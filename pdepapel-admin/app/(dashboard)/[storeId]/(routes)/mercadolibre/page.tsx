@@ -42,19 +42,6 @@ export default async function MercadoLibrePage({
       updatedAt: true,
     },
   });
-  const products = await prismadb.product.findMany({
-    where: { storeId: params.storeId, isArchived: false },
-    select: {
-      id: true,
-      name: true,
-      sku: true,
-      price: true,
-      stock: true,
-    },
-    orderBy: { name: "asc" },
-    take: 500,
-  });
-
   return (
     <div className="flex-col">
       <div className="flex-1 space-y-6 p-6 md:p-8">
@@ -62,7 +49,6 @@ export default async function MercadoLibrePage({
           configuration={getMercadoLibreConfigurationStatus()}
           queueConfiguration={getMercadoLibreQueueConfigurationStatus()}
           connection={connection}
-          products={products}
         />
       </div>
     </div>

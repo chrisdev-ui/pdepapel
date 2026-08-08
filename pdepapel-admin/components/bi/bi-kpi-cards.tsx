@@ -52,15 +52,15 @@ export const BiKpiCards: React.FC<BiKpiCardsProps> = ({ data }) => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="flex items-center text-sm font-medium">
-              Ingresos por Productos (Ventas Netas)
+              Ingresos recibidos
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Info className="ml-2 h-4 w-4 cursor-help text-muted-foreground transition-colors hover:text-foreground" />
                 </TooltipTrigger>
                 <TooltipContent>
                   <p className="max-w-xs text-sm">
-                    Monto facturado exclusivamente por la venta de mercancía,
-                    excluyendo el dinero de envíos pagado por el cliente.
+                    Incluye pedidos pagados de P de Papel y ventas de Mercado
+                    Libre solo cuando la liquidación neta está confirmada.
                   </p>
                 </TooltipContent>
               </Tooltip>
@@ -88,7 +88,7 @@ export const BiKpiCards: React.FC<BiKpiCardsProps> = ({ data }) => {
                   <p className="min-w-xs text-sm">
                     Dinero real ganado. Se calcula restando los costos del
                     producto, la tarifa de envío y la comisión del pago en línea
-                    al total facturado.
+                    al ingreso recibido.
                   </p>
                 </TooltipContent>
               </Tooltip>
@@ -128,7 +128,7 @@ export const BiKpiCards: React.FC<BiKpiCardsProps> = ({ data }) => {
             </div>
             {/* We don't have MoM margin change mapped directly, so just showing status */}
             <p className="mt-1 text-xs text-muted-foreground">
-              Basado en ventas netas (sin envío)
+              Basado en ingresos recibidos
             </p>
           </CardContent>
         </Card>
@@ -137,15 +137,15 @@ export const BiKpiCards: React.FC<BiKpiCardsProps> = ({ data }) => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="flex items-center text-sm font-medium">
-              Pedidos Pagados
+              Ventas pagadas
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Info className="ml-2 h-4 w-4 cursor-help text-muted-foreground transition-colors hover:text-foreground" />
                 </TooltipTrigger>
                 <TooltipContent>
                   <p className="max-w-xs text-sm">
-                    Cantidad total de pedidos completados, pagados o enviados
-                    por los clientes durante el mes actual.
+                    Cantidad de pedidos de P de Papel y ventas de Mercado Libre
+                    con liquidación neta confirmada durante el mes.
                   </p>
                 </TooltipContent>
               </Tooltip>

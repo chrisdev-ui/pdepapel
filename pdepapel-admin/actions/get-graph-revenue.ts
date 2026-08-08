@@ -1,6 +1,11 @@
 import prismadb from "@/lib/prismadb";
 import { OrderStatus } from "@prisma/client";
 import { endOfYear, getMonth, startOfYear } from "date-fns";
+import {
+  createSettledMarketplaceSalesWhere,
+  getMarketplaceNetRevenue,
+  getMarketplaceSaleDate,
+} from "@/lib/mercadolibre/reporting";
 
 interface GraphData {
   name: string;
@@ -8,6 +13,7 @@ interface GraphData {
   subtotal: number;
   discounts: number;
   couponDiscounts: number;
+  marketplaceRevenue: number;
 }
 
 export const getGraphRevenue = async (
@@ -18,25 +24,34 @@ export const getGraphRevenue = async (
   const startDate = startOfYear(yearDate);
   const endDate = endOfYear(yearDate);
 
-  const paidOrders = await prismadb.order.findMany({
-    where: {
-      storeId,
-      status: {
-        in: [OrderStatus.PAID, OrderStatus.SENT],
+  const [paidOrders, marketplaceOrders] = await Promise.all([
+    prismadb.order.findMany({
+      where: {
+        storeId,
+        status: {
+          in: [OrderStatus.PAID, OrderStatus.SENT],
+        },
+        createdAt: {
+          gte: startDate,
+          lte: endDate,
+        },
       },
-      createdAt: {
-        gte: startDate,
-        lt: endDate,
+      select: {
+        createdAt: true,
+        total: true,
+        subtotal: true,
+        discount: true,
+        couponDiscount: true,
       },
-    },
-    select: {
-      createdAt: true,
-      total: true,
-      subtotal: true,
-      discount: true,
-      couponDiscount: true,
-    },
-  });
+    }),
+    prismadb.marketplaceOrder.findMany({
+      where: createSettledMarketplaceSalesWhere(storeId, {
+        start: startDate,
+        end: endDate,
+      }),
+      select: { netAmount: true, paidAt: true, createdAt: true },
+    }),
+  ]);
 
   const monthlyRevenue: { [key: number]: GraphData } = {};
   const months = [
@@ -61,6 +76,7 @@ export const getGraphRevenue = async (
       subtotal: 0,
       discounts: 0,
       couponDiscounts: 0,
+      marketplaceRevenue: 0,
     };
   });
 
@@ -70,6 +86,13 @@ export const getGraphRevenue = async (
     monthlyRevenue[month].subtotal += order.subtotal;
     monthlyRevenue[month].discounts += order.discount;
     monthlyRevenue[month].couponDiscounts += order.couponDiscount;
+  }
+
+  for (const order of marketplaceOrders) {
+    const month = getMonth(getMarketplaceSaleDate(order));
+    const netRevenue = getMarketplaceNetRevenue(order);
+    monthlyRevenue[month].total += netRevenue;
+    monthlyRevenue[month].marketplaceRevenue += netRevenue;
   }
 
   return Object.values(monthlyRevenue);

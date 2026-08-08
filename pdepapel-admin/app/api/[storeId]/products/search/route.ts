@@ -75,9 +75,14 @@ export async function GET(
         name: true,
         sku: true,
         stock: true,
+        price: true,
         acqPrice: true,
+        category: {
+          select: { name: true },
+        },
         images: {
           take: 1,
+          orderBy: { isMain: "desc" },
           select: { url: true },
         },
       },

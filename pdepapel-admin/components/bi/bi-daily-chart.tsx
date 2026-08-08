@@ -112,7 +112,7 @@ export const BiDailyChart: React.FC<BiDailyChartProps> = ({ data }) => {
               <Area
                 type="monotone"
                 dataKey="revenue"
-                name="Ingreso Bruto"
+                name="Ingresos recibidos"
                 stroke="#3b82f6"
                 strokeWidth={2}
                 fillOpacity={1}

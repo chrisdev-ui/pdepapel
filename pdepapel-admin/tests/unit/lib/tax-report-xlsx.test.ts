@@ -17,6 +17,7 @@ describe("createTaxReportWorkbook", () => {
         {
           orderNumber: "ORD-001",
           customerName: "Ana Pérez",
+          channel: "Tienda en línea",
           totalAmount: 18500,
           occurredAt: new Date("2025-07-02T05:00:00.000Z"),
         },
@@ -33,6 +34,7 @@ describe("createTaxReportWorkbook", () => {
       ],
       salesTotal: 18500,
       purchasesTotal: 42000,
+      pendingMarketplaceSalesCount: 0,
     });
 
     const workbook = new ExcelJS.Workbook();
@@ -53,10 +55,12 @@ describe("createTaxReportWorkbook", () => {
       salesSheet.getRow(1).getCell(2).value,
       salesSheet.getRow(1).getCell(3).value,
       salesSheet.getRow(1).getCell(4).value,
+      salesSheet.getRow(1).getCell(5).value,
     ]).toEqual([
       "Número de orden",
       "Nombre de la persona",
-      "Valor",
+      "Canal",
+      "Valor recibido",
       "Fecha de venta",
     ]);
     expect(purchasesSheet.getRow(2).getCell(1).value).toBe("FV-100");

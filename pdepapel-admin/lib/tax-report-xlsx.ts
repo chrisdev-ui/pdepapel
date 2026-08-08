@@ -36,12 +36,14 @@ export async function createTaxReportWorkbook(report: TaxReport) {
   salesSheet.addRow([
     "Número de orden",
     "Nombre de la persona",
-    "Valor",
+    "Canal",
+    "Valor recibido",
     salesDateHeader,
   ]);
   configureSheet(salesSheet, [
     { key: "orderNumber", width: 24 },
     { key: "customerName", width: 32 },
+    { key: "channel", width: 20 },
     { key: "totalAmount", width: 18 },
     { key: "occurredAt", width: 16 },
   ]);
@@ -51,7 +53,7 @@ export async function createTaxReportWorkbook(report: TaxReport) {
     row.getCell("totalAmount").numFmt = COP_FORMAT;
     row.getCell("occurredAt").numFmt = DATE_FORMAT;
   });
-  salesSheet.autoFilter = "A1:D1";
+  salesSheet.autoFilter = "A1:E1";
 
   const purchasesSheet = workbook.addWorksheet("Compras");
   purchasesSheet.addRow([

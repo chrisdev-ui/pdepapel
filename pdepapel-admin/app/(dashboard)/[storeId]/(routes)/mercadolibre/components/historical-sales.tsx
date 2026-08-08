@@ -398,7 +398,7 @@ export function MercadoLibreHistoricalSales({
                   <Badge
                     variant={selectedOrderStatusMeta?.variant ?? "secondary"}
                   >
-                    {selectedOrderStatusMeta?.label ?? selectedOrder.status}
+                    {selectedOrderStatusMeta?.label}
                   </Badge>
                   {selectedOrder.alreadyImported ? (
                     <Badge variant="secondary">Ya conciliada</Badge>

@@ -1,4 +1,5 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { normalizeCouponCode } from "@/lib/coupon-code";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
@@ -27,10 +28,11 @@ export async function POST(
       minOrderValue,
       isActive,
     } = body;
+    const normalizedCode = normalizeCouponCode(code ?? "");
 
     await verifyStoreOwner(userId, params.storeId);
 
-    if (!code) throw ErrorFactory.InvalidRequest("Código requerido");
+    if (!normalizedCode) throw ErrorFactory.InvalidRequest("Código requerido");
     if (!type) throw ErrorFactory.InvalidRequest("Tipo de descuento requerido");
     if (!amount) throw ErrorFactory.InvalidRequest("Monto requerido");
     if (!startDate)
@@ -56,7 +58,7 @@ export async function POST(
     const existingCoupon = await prismadb.coupon.findFirst({
       where: {
         storeId: params.storeId,
-        code: code.toUpperCase(),
+        code: normalizedCode,
       },
       select: {
         id: true,
@@ -70,7 +72,7 @@ export async function POST(
     const coupon = await prismadb.coupon.create({
       data: {
         storeId: params.storeId,
-        code: code.toUpperCase(),
+        code: normalizedCode,
         type,
         amount,
         startDate: new Date(startDate),

@@ -391,7 +391,7 @@ Operational docs:
 The **Reportes tributarios** module supports any operating year, not just 2025.
 
 - Exported `.xlsx` has **Ventas** and **Compras** sheets.
-- Sales include orders in `PAID` or `SENT`, with order number, customer, value, and selected date basis.
+- Sales include orders in `PAID` or `SENT` plus Mercado Libre sales in `PAID` with a settled `netAmount`. The report identifies each sale channel and records the net amount actually received from Mercado Libre; paid sales without settlement remain visibly pending and are not totalled or exported.
 - Admin chooses whether sales are filtered by sale/creation date or actual payment-confirmation date (`paidAt`). The exported column indicates the selected basis.
 - Purchases are manually recorded supplier invoices (`TaxPurchase`), with invoice number, company/supplier name, value, and invoice date. A restock order number is not a fiscal invoice number.
 - The UI uses pagination for tax tables; preserve it to avoid unbounded slow tables.
@@ -492,6 +492,13 @@ For every paid Marketplace Order, record **net collected by P de Papel**, not gr
 - Historical manually reconciled sales are protected from automatic financial overwrite with `metadata.source === "HISTORICAL_RECONCILIATION"`.
 
 Known real reconciliation reference: a previous Mercado Libre sale had gross COP 69,000, commission COP 13,110, shipping COP 8,500, taxes COP 933, and net COP 46,457. Tests protect this calculation pattern. Do not hard-code this example into live financial logic.
+
+### Reporting treatment
+
+- Settled Mercado Libre sales contribute their `netAmount` to revenue totals, tax export, daily/monthly financial summaries, average ticket, product/category rankings, and stockout velocity. Product profitability subtracts the actual local acquisition cost from the allocated net settlement.
+- Do not create a duplicate internal `Order` for a marketplace sale. Marketplace records remain separate for idempotent stock and settlement handling.
+- Never add a paid-but-unsettled marketplace sale as gross revenue. Surface it as pending until the billing endpoint supplies the settlement.
+- Customer intelligence, CRM/re-engagement, and P de Papel shipping-guide workflows intentionally use direct shop orders only, because Mercado Libre does not supply a customer relationship suitable for those flows.
 
 ### Historical Mercado Libre reconciliation
 
@@ -737,4 +744,3 @@ Do not call a task complete merely because code compiles locally. For a producti
 6. Local servers/test containers are stopped to release resources.
 7. The user has explicitly approved any production push.
 8. After deployment, any required webhook/OAuth/cache/production smoke verification is completed or clearly handed to the owner.
-

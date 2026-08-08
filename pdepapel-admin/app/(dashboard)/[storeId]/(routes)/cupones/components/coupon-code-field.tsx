@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { FormLabel } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { normalizeCouponCode } from "@/lib/coupon-code";
 import { Copy, Dice6, RefreshCw } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useState } from "react";
@@ -83,6 +84,7 @@ export const CouponCodeField: React.FC<CouponCodeFieldProps> = ({
   };
 
   const currentValue = form.watch(fieldName);
+  const inputRegistration = form.register(fieldName);
 
   return (
     <div className="space-y-2">
@@ -95,9 +97,12 @@ export const CouponCodeField: React.FC<CouponCodeFieldProps> = ({
             id={fieldName}
             placeholder={placeholder}
             disabled={disabled}
-            {...form.register(fieldName)}
+            {...inputRegistration}
+            onChange={(event) => {
+              event.target.value = normalizeCouponCode(event.target.value);
+              inputRegistration.onChange(event);
+            }}
             className="uppercase"
-            style={{ textTransform: "uppercase" }}
           />
         </div>
         <Button

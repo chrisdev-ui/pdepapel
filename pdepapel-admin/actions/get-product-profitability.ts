@@ -1,4 +1,8 @@
 import { getOrderNetProfit } from "@/lib/financial";
+import {
+  createSettledMarketplaceSalesWhere,
+  getMarketplaceItemNetRevenue,
+} from "@/lib/mercadolibre/reporting";
 import prismadb from "@/lib/prismadb";
 import { OrderStatus } from "@prisma/client";
 import { startOfMonth, endOfMonth, subDays } from "date-fns";
@@ -49,32 +53,45 @@ export async function getProductProfitRanking(
     endDate = new Date();
   }
 
-  const orders = await prismadb.order.findMany({
-    where: {
-      storeId,
-      status: { in: [OrderStatus.PAID, OrderStatus.SENT] },
-      OR: [
-        {
-          paidAt: {
-            gte: startDate,
-            lte: endDate,
+  const [orders, marketplaceOrders] = await Promise.all([
+    prismadb.order.findMany({
+      where: {
+        storeId,
+        status: { in: [OrderStatus.PAID, OrderStatus.SENT] },
+        OR: [
+          {
+            paidAt: {
+              gte: startDate,
+              lte: endDate,
+            },
           },
-        },
-        {
-          paidAt: null,
-          createdAt: {
-            gte: startDate,
-            lte: endDate,
+          {
+            paidAt: null,
+            createdAt: {
+              gte: startDate,
+              lte: endDate,
+            },
           },
-        },
-      ],
-    },
-    include: {
-      orderItems: {
-        include: { product: { include: { category: true } } },
+        ],
       },
-    },
-  });
+      include: {
+        orderItems: {
+          include: { product: { include: { category: true } } },
+        },
+      },
+    }),
+    prismadb.marketplaceOrder.findMany({
+      where: createSettledMarketplaceSalesWhere(storeId, {
+        start: startDate,
+        end: endDate,
+      }),
+      include: {
+        items: {
+          include: { product: { include: { category: true } } },
+        },
+      },
+    }),
+  ]);
 
   const productStats = new Map<string, ProductProfitRanking>();
 
@@ -110,6 +127,36 @@ export async function getProductProfitRanking(
       existing.totalQuantitySold += item.quantity;
       existing.totalRevenue += itemRevenue;
       existing.totalProfit += itemProfitShare;
+      existing.profitMarginPct =
+        existing.totalRevenue > 0
+          ? (existing.totalProfit / existing.totalRevenue) * 100
+          : 0;
+
+      productStats.set(item.productId, existing);
+    }
+  }
+
+  for (const order of marketplaceOrders) {
+    for (const item of order.items) {
+      if (!item.productId || !item.product) continue;
+
+      const itemRevenue = getMarketplaceItemNetRevenue(order, item);
+      const itemProfit =
+        itemRevenue - Number(item.product.acqPrice ?? 0) * item.quantity;
+      const existing = productStats.get(item.productId) || {
+        productId: item.productId,
+        name: item.product.name,
+        category: item.product.category?.name || "Sin categoría",
+        totalQuantitySold: 0,
+        totalRevenue: 0,
+        totalProfit: 0,
+        profitMarginPct: 0,
+        currentStock: item.product.stock,
+      };
+
+      existing.totalQuantitySold += item.quantity;
+      existing.totalRevenue += itemRevenue;
+      existing.totalProfit += itemProfit;
       existing.profitMarginPct =
         existing.totalRevenue > 0
           ? (existing.totalProfit / existing.totalRevenue) * 100

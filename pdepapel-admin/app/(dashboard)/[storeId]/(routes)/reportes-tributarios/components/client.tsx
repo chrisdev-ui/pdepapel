@@ -58,6 +58,7 @@ type SalesDateBasis = "saleDate" | "paymentDate";
 type TaxSaleRow = {
   orderNumber: string;
   customerName: string;
+  channel: "Tienda en línea" | "Mercado Libre";
   totalAmount: number;
   occurredAt: string;
 };
@@ -77,6 +78,7 @@ type TaxReport = {
   purchases: TaxPurchaseRow[];
   salesTotal: number;
   purchasesTotal: number;
+  pendingMarketplaceSalesCount: number;
 };
 
 type PurchaseForm = {
@@ -396,7 +398,7 @@ export default function TaxReportsClient() {
           <CardContent className="text-sm text-muted-foreground">
             {isLoading
               ? "Cargando..."
-              : `${report?.sales.length ?? 0} pedidos pagados o enviados`}
+              : `${report?.sales.length ?? 0} ventas con pago o liquidación confirmada`}
           </CardContent>
         </Card>
         <Card>
@@ -416,6 +418,14 @@ export default function TaxReportsClient() {
         </Card>
       </div>
 
+      {!isLoading && (report?.pendingMarketplaceSalesCount ?? 0) > 0 ? (
+        <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          {report?.pendingMarketplaceSalesCount === 1
+            ? "Una venta pagada en Mercado Libre aún no se incluye porque falta su liquidación neta."
+            : `${report?.pendingMarketplaceSalesCount} ventas pagadas en Mercado Libre aún no se incluyen porque falta su liquidación neta.`}
+        </p>
+      ) : null}
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -423,7 +433,8 @@ export default function TaxReportsClient() {
             Ventas
           </CardTitle>
           <CardDescription>
-            Incluye pedidos pagados o enviados. El período usa{" "}
+            Incluye pedidos pagados o enviados y ventas de Mercado Libre con
+            liquidación neta confirmada. El período usa{" "}
             {report?.salesDateBasis === "paymentDate"
               ? "la confirmación de pago."
               : "la fecha de venta del pedido."}
@@ -435,6 +446,7 @@ export default function TaxReportsClient() {
               <TableRow>
                 <TableHead>Número de orden</TableHead>
                 <TableHead>Nombre de la persona</TableHead>
+                <TableHead>Canal</TableHead>
                 <TableHead>
                   {report?.salesDateBasis === "paymentDate"
                     ? "Fecha de pago"
@@ -447,7 +459,7 @@ export default function TaxReportsClient() {
               {!isLoading && report?.sales.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={4}
+                    colSpan={5}
                     className="h-24 text-center text-muted-foreground"
                   >
                     No hay ventas declarables en este período.
@@ -463,6 +475,7 @@ export default function TaxReportsClient() {
                       {sale.orderNumber}
                     </TableCell>
                     <TableCell>{sale.customerName}</TableCell>
+                    <TableCell>{sale.channel}</TableCell>
                     <TableCell>{formatDate(sale.occurredAt)}</TableCell>
                     <TableCell className="text-right">
                       {currencyFormatter.format(sale.totalAmount)}

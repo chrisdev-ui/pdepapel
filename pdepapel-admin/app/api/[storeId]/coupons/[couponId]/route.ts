@@ -1,4 +1,5 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { normalizeCouponCode } from "@/lib/coupon-code";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
@@ -81,7 +82,7 @@ export async function PATCH(
         id: params.couponId,
       },
       data: {
-        code: code?.toUpperCase(),
+        code: code ? normalizeCouponCode(code) : undefined,
         type,
         amount,
         startDate: startDate ? new Date(startDate) : undefined,

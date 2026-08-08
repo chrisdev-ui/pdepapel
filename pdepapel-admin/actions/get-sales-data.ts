@@ -1,5 +1,10 @@
 import prismadb from "@/lib/prismadb";
 import { compareAsc, endOfYear, format, parseISO, startOfYear } from "date-fns";
+import {
+  createSettledMarketplaceSalesWhere,
+  getMarketplaceNetRevenue,
+  getMarketplaceSaleDate,
+} from "@/lib/mercadolibre/reporting";
 
 interface SalesByDate {
   revenue: number;
@@ -8,6 +13,7 @@ interface SalesByDate {
   discounts: number;
   couponDiscounts: number;
   grossRevenue: number;
+  marketplaceRevenue: number;
   averageOrderValue: number;
 }
 
@@ -16,31 +22,45 @@ export async function getSalesData(storeId: string, year: number) {
   const startDate = startOfYear(yearDate);
   const endDate = endOfYear(yearDate);
 
-  const sales = await prismadb.order.findMany({
-    where: {
-      storeId: storeId,
-      createdAt: {
-        gte: startDate,
-        lte: endDate,
+  const [sales, marketplaceOrders] = await Promise.all([
+    prismadb.order.findMany({
+      where: {
+        storeId: storeId,
+        createdAt: {
+          gte: startDate,
+          lte: endDate,
+        },
+        status: { in: ["PAID", "SENT"] },
       },
-      status: { in: ["PAID", "SENT"] },
-    },
-    select: {
-      createdAt: true,
-      total: true,
-      subtotal: true,
-      discount: true,
-      couponDiscount: true,
-      orderItems: {
-        select: {
-          quantity: true,
+      select: {
+        createdAt: true,
+        total: true,
+        subtotal: true,
+        discount: true,
+        couponDiscount: true,
+        orderItems: {
+          select: {
+            quantity: true,
+          },
         },
       },
-    },
-    orderBy: {
-      createdAt: "asc",
-    },
-  });
+      orderBy: {
+        createdAt: "asc",
+      },
+    }),
+    prismadb.marketplaceOrder.findMany({
+      where: createSettledMarketplaceSalesWhere(storeId, {
+        start: startDate,
+        end: endDate,
+      }),
+      select: {
+        netAmount: true,
+        paidAt: true,
+        createdAt: true,
+        items: { select: { quantity: true } },
+      },
+    }),
+  ]);
 
   const salesByDate = sales.reduce(
     (acc, sale) => {
@@ -53,6 +73,7 @@ export async function getSalesData(storeId: string, year: number) {
           discounts: 0,
           couponDiscounts: 0,
           grossRevenue: 0,
+          marketplaceRevenue: 0,
           averageOrderValue: 0,
         };
       }
@@ -78,6 +99,33 @@ export async function getSalesData(storeId: string, year: number) {
     {} as Record<string, SalesByDate>,
   );
 
+  marketplaceOrders.forEach((sale) => {
+    const date = format(getMarketplaceSaleDate(sale), "yyyy-MM-dd");
+    if (!salesByDate[date]) {
+      salesByDate[date] = {
+        revenue: 0,
+        orders: 0,
+        items: 0,
+        discounts: 0,
+        couponDiscounts: 0,
+        grossRevenue: 0,
+        marketplaceRevenue: 0,
+        averageOrderValue: 0,
+      };
+    }
+
+    const netRevenue = getMarketplaceNetRevenue(sale);
+    salesByDate[date].orders += 1;
+    salesByDate[date].items += sale.items.reduce(
+      (sum, item) => sum + item.quantity,
+      0,
+    );
+    salesByDate[date].revenue += netRevenue;
+    salesByDate[date].marketplaceRevenue += netRevenue;
+    salesByDate[date].averageOrderValue =
+      salesByDate[date].revenue / salesByDate[date].orders;
+  });
+
   const round2 = (n: number) => Math.round(n * 100) / 100;
 
   return Object.entries(salesByDate)
@@ -87,6 +135,7 @@ export async function getSalesData(storeId: string, year: number) {
       ...data,
       revenue: round2(data.revenue),
       grossRevenue: round2(data.grossRevenue),
+      marketplaceRevenue: round2(data.marketplaceRevenue),
       discounts: round2(data.discounts),
       couponDiscounts: round2(data.couponDiscounts),
       averageOrderValue: round2(data.averageOrderValue),

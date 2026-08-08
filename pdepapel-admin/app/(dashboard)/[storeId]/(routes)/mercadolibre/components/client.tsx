@@ -45,13 +45,6 @@ type MercadoLibreClientProps = {
   configuration: { configured: boolean; missing: readonly string[] };
   queueConfiguration: { configured: boolean; missing: readonly string[] };
   connection: MarketplaceConnection;
-  products: {
-    id: string;
-    name: string;
-    sku: string;
-    price: number;
-    stock: number;
-  }[];
 };
 
 type QueueFeedback = {
@@ -80,7 +73,6 @@ export default function MercadoLibreClient({
   configuration,
   queueConfiguration,
   connection,
-  products,
 }: MercadoLibreClientProps) {
   const { storeId } = useParams<{ storeId: string }>();
   const searchParams = useSearchParams();
@@ -360,7 +352,6 @@ export default function MercadoLibreClient({
 
       <MercadoLibreListingManager
         storeId={storeId}
-        products={products}
         canPublish={
           connection?.status === "CONNECTED" &&
           queueConfiguration.configured &&
