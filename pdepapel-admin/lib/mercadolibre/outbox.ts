@@ -13,6 +13,7 @@ import {
   MercadoLibreFinancialsPendingError,
   type MercadoLibreOrderFinancials,
 } from "./order-financials";
+import { syncMercadoLibreListingContent } from "./listings";
 import { enqueueMercadoLibreOutboxEvent } from "./queue";
 
 const RETRY_DELAY_MS = 5 * 60 * 1000;
@@ -30,6 +31,11 @@ type MarketplaceNotificationTransaction = Pick<
 >;
 
 type MarketplaceFinancialsTransaction = Pick<
+  Prisma.TransactionClient,
+  "marketplaceOutboxEvent"
+>;
+
+type MarketplaceListingSyncTransaction = Pick<
   Prisma.TransactionClient,
   "marketplaceOutboxEvent"
 >;
@@ -60,6 +66,17 @@ function getTargetQuantity(payload: Prisma.JsonValue) {
     );
   }
   return targetQuantity;
+}
+
+function getTargetPrice(payload: Prisma.JsonValue) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error("La tarea de sincronización no contiene un precio válido");
+  }
+  const targetPrice = Number((payload as Record<string, unknown>).targetPrice);
+  if (!Number.isFinite(targetPrice) || targetPrice <= 0) {
+    throw new Error("La tarea de sincronización no contiene un precio válido");
+  }
+  return targetPrice;
 }
 
 export async function queueMarketplaceStockSyncEvents(
@@ -115,6 +132,72 @@ export async function queueMarketplaceStockSyncEvents(
       });
     }),
   );
+}
+
+export async function queueMarketplacePriceSyncEvent(
+  transaction: MarketplaceListingSyncTransaction,
+  {
+    connectionId,
+    listingId,
+    productId,
+    targetPrice,
+  }: {
+    connectionId: string;
+    listingId: string;
+    productId: string;
+    targetPrice: number;
+  },
+) {
+  const deduplicationKey = `${connectionId}:price:${listingId}`;
+  await transaction.marketplaceOutboxEvent.upsert({
+    where: { deduplicationKey },
+    update: {
+      payload: { targetPrice },
+      status: MarketplaceOutboxStatus.PENDING,
+      availableAt: new Date(),
+      lastError: null,
+    },
+    create: {
+      connectionId,
+      listingId,
+      productId,
+      action: MarketplaceOutboxAction.SYNC_PRICE,
+      deduplicationKey,
+      payload: { targetPrice },
+    },
+  });
+}
+
+export async function queueMarketplaceListingContentSyncEvent(
+  transaction: MarketplaceListingSyncTransaction,
+  {
+    connectionId,
+    listingId,
+    productId,
+  }: {
+    connectionId: string;
+    listingId: string;
+    productId: string;
+  },
+) {
+  const deduplicationKey = `${connectionId}:content:${listingId}`;
+  await transaction.marketplaceOutboxEvent.upsert({
+    where: { deduplicationKey },
+    update: {
+      payload: {},
+      status: MarketplaceOutboxStatus.PENDING,
+      availableAt: new Date(),
+      lastError: null,
+    },
+    create: {
+      connectionId,
+      listingId,
+      productId,
+      action: MarketplaceOutboxAction.SYNC_LISTING_CONTENT,
+      deduplicationKey,
+      payload: {},
+    },
+  });
 }
 
 export async function queueMarketplaceOrderNotification(
@@ -268,6 +351,31 @@ async function updateMercadoLibreStock(
   }
 }
 
+async function updateMercadoLibrePrice(
+  connectionId: string,
+  externalItemId: string,
+  targetPrice: number,
+) {
+  const accessToken = await getMercadoLibreAccessToken(connectionId);
+  const response = await fetch(
+    `https://api.mercadolibre.com/items/${encodeURIComponent(externalItemId)}`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ price: targetPrice }),
+      cache: "no-store",
+    },
+  );
+  if (!response.ok) {
+    throw new Error(
+      `Mercado Libre rechazó la sincronización de precio (${response.status})`,
+    );
+  }
+}
+
 export async function processMarketplaceOutboxEvent(eventId: string) {
   const event = await prismadb.marketplaceOutboxEvent.findUnique({
     where: { id: eventId },
@@ -280,8 +388,32 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
       listing: {
         select: {
           id: true,
+          connectionId: true,
           externalItemId: true,
           externalVariationId: true,
+          categoryId: true,
+          listingType: true,
+          marketplacePrice: true,
+          stockSafetyBuffer: true,
+          metadata: true,
+          product: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              stock: true,
+              sku: true,
+              brand: true,
+              gtin: true,
+              mpn: true,
+              isArchived: true,
+              images: {
+                select: { url: true, isMain: true },
+                orderBy: { isMain: "desc" },
+                take: 10,
+              },
+            },
+          },
         },
       },
     },
@@ -324,6 +456,8 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
 
   try {
     let syncedQuantity: number | null = null;
+    let syncedPrice: number | null = null;
+    let syncedListingContent = false;
     let financialsUpdate: MarketplaceOrderFinancialsUpdate | null = null;
     if (event.action === MarketplaceOutboxAction.SYNC_ORDER_FINANCIALS) {
       const payload = event.payload as Record<string, unknown> | null;
@@ -458,6 +592,27 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
         targetQuantity,
       );
       syncedQuantity = targetQuantity;
+    } else if (event.action === MarketplaceOutboxAction.SYNC_PRICE) {
+      const targetPrice = getTargetPrice(event.payload);
+      await updateMercadoLibrePrice(
+        event.connectionId,
+        event.listing!.externalItemId!,
+        targetPrice,
+      );
+      syncedPrice = targetPrice;
+    } else if (event.action === MarketplaceOutboxAction.SYNC_LISTING_CONTENT) {
+      await syncMercadoLibreListingContent({
+        id: event.listing!.id,
+        connectionId: event.listing!.connectionId,
+        externalItemId: event.listing!.externalItemId!,
+        categoryId: event.listing!.categoryId,
+        listingType: event.listing!.listingType,
+        marketplacePrice: event.listing!.marketplacePrice,
+        stockSafetyBuffer: event.listing!.stockSafetyBuffer,
+        metadata: event.listing!.metadata,
+        product: event.listing!.product,
+      });
+      syncedListingContent = true;
     } else {
       throw new Error(
         "La acción de sincronización todavía no está implementada",
@@ -484,11 +639,22 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
           lastError: null,
         },
       });
-      if (syncedQuantity !== null && event.listing) {
+      if (
+        event.listing &&
+        (syncedQuantity !== null ||
+          syncedPrice !== null ||
+          syncedListingContent)
+      ) {
         await transaction.marketplaceListing.update({
           where: { id: event.listing.id },
           data: {
-            lastSyncedStock: syncedQuantity,
+            ...(syncedQuantity !== null
+              ? { lastSyncedStock: syncedQuantity }
+              : {}),
+            ...(syncedPrice !== null ? { lastSyncedPrice: syncedPrice } : {}),
+            ...(syncedPrice !== null || syncedListingContent
+              ? { lastRemoteUpdateAt: new Date() }
+              : {}),
             lastError: null,
           },
         });

@@ -3,14 +3,13 @@ import { Prisma } from "@prisma/client";
 import { richTextToPlainText } from "@/lib/rich-text";
 
 import { getMercadoLibreAccessToken } from "./client";
+import {
+  getMercadoLibreAttributes,
+  getMercadoLibreListingImageUrls,
+  type MercadoLibreAttribute,
+} from "./listing-metadata";
 
-export type MercadoLibreAttribute = {
-  id: string;
-  value_id?: string | null;
-  value_name?: string | null;
-};
-
-type ListingForPublication = {
+export type ListingForPublication = {
   id: string;
   connectionId: string;
   categoryId: string | null;
@@ -68,40 +67,7 @@ async function readJson(response: Response) {
 }
 
 function getConfiguredAttributes(metadata: Prisma.JsonValue | null) {
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
-    return [] as MercadoLibreAttribute[];
-  }
-  const attributes = (metadata as Record<string, unknown>).attributes;
-  if (!Array.isArray(attributes)) return [];
-
-  return attributes.flatMap((attribute) => {
-    if (
-      !attribute ||
-      typeof attribute !== "object" ||
-      Array.isArray(attribute)
-    ) {
-      return [];
-    }
-    const value = attribute as Record<string, unknown>;
-    if (typeof value.id !== "string" || !value.id.trim()) return [];
-    const valueId =
-      typeof value.value_id === "string" && value.value_id.trim()
-        ? value.value_id.trim()
-        : null;
-    const valueName =
-      typeof value.value_name === "string" && value.value_name.trim()
-        ? value.value_name.trim()
-        : null;
-    if (!valueId && !valueName) return [];
-
-    return [
-      {
-        id: value.id.trim(),
-        ...(valueId ? { value_id: valueId } : {}),
-        ...(valueName ? { value_name: valueName } : {}),
-      },
-    ];
-  });
+  return getMercadoLibreAttributes(metadata);
 }
 
 function addProductIdentifiers(
@@ -160,12 +126,20 @@ function buildItemPayload(listing: ListingForPublication) {
     listing_type_id: listing.listingType || "gold_special",
     condition: "new",
     seller_custom_field: listing.product.sku,
-    pictures: listing.product.images.map((image) => ({ source: image.url })),
+    pictures: getMercadoLibreListingImageUrls(
+      listing.product.images,
+      listing.metadata,
+    ).map((source) => ({ source })),
     attributes: addProductIdentifiers(
       getConfiguredAttributes(listing.metadata),
       listing.product,
     ),
   };
+}
+
+function getApiError(payload: unknown) {
+  const message = getApiErrorMessage(payload);
+  return new MercadoLibrePublicationError(message);
 }
 
 async function createItemDescription(
@@ -192,6 +166,123 @@ async function createItemDescription(
   if (response.ok) return null;
 
   return getApiErrorMessage(await readJson(response));
+}
+
+async function updateItemDescription(
+  accessToken: string,
+  itemId: string,
+  description: string,
+  request: typeof fetch,
+) {
+  const plainText = richTextToPlainText(description).trim();
+  if (!plainText) return;
+
+  const currentDescription = await request(
+    `https://api.mercadolibre.com/items/${encodeURIComponent(itemId)}/description`,
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+    },
+  );
+  const method = currentDescription.status === 404 ? "POST" : "PUT";
+  if (!currentDescription.ok && method !== "POST") {
+    throw getApiError(await readJson(currentDescription));
+  }
+
+  const response = await request(
+    `https://api.mercadolibre.com/items/${encodeURIComponent(itemId)}/description`,
+    {
+      method,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ plain_text: plainText }),
+      cache: "no-store",
+    },
+  );
+  if (!response.ok) throw getApiError(await readJson(response));
+}
+
+type ListingForContentSync = ListingForPublication & {
+  externalItemId: string;
+};
+
+function mergeRemoteAttributes(
+  remoteAttributes: MercadoLibreAttribute[],
+  listing: ListingForPublication,
+) {
+  const merged = new Map(
+    remoteAttributes.map((attribute) => [attribute.id, attribute]),
+  );
+  for (const attribute of addProductIdentifiers(
+    getConfiguredAttributes(listing.metadata),
+    listing.product,
+  )) {
+    merged.set(attribute.id, attribute);
+  }
+  return Array.from(merged.values());
+}
+
+function getRemoteAttributes(payload: unknown) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return [] as MercadoLibreAttribute[];
+  }
+  const attributes = (payload as Record<string, unknown>).attributes;
+  return getMercadoLibreAttributes({ attributes } as Prisma.JsonValue);
+}
+
+export async function syncMercadoLibreListingContent(
+  listing: ListingForContentSync,
+  request: typeof fetch = fetch,
+) {
+  if (listing.product.isArchived) {
+    throw new MercadoLibrePublicationError(
+      "No puedes sincronizar el contenido de un producto archivado",
+    );
+  }
+  const imageUrls = getMercadoLibreListingImageUrls(
+    listing.product.images,
+    listing.metadata,
+  );
+  if (imageUrls.length === 0) {
+    throw new MercadoLibrePublicationError(
+      "El producto necesita al menos una imagen para sincronizarse",
+    );
+  }
+
+  const accessToken = await getMercadoLibreAccessToken(listing.connectionId);
+  const itemUrl = `https://api.mercadolibre.com/items/${encodeURIComponent(listing.externalItemId)}`;
+  const existingItem = await request(itemUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+  });
+  const existingPayload = await readJson(existingItem);
+  if (!existingItem.ok) throw getApiError(existingPayload);
+
+  const response = await request(itemUrl, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      pictures: imageUrls.map((source) => ({ source })),
+      attributes: mergeRemoteAttributes(
+        getRemoteAttributes(existingPayload),
+        listing,
+      ),
+    }),
+    cache: "no-store",
+  });
+  if (!response.ok) throw getApiError(await readJson(response));
+
+  await updateItemDescription(
+    accessToken,
+    listing.externalItemId,
+    listing.product.description,
+    request,
+  );
 }
 
 export async function publishMercadoLibreListing(

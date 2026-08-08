@@ -1567,6 +1567,7 @@ enum MarketplaceWebhookEventStatus {
 enum MarketplaceOutboxAction {
   SYNC_STOCK
   SYNC_PRICE
+  SYNC_LISTING_CONTENT
   PAUSE_LISTING
   ACTIVATE_LISTING
   SYNC_ORDER_FINANCIALS

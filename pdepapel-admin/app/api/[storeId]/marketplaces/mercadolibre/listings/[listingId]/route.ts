@@ -3,6 +3,11 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { buildMercadoLibreListingMetadata } from "@/lib/mercadolibre/listing-metadata";
+import {
+  enqueuePendingMarketplaceOutboxEvents,
+  queueMarketplacePriceSyncEvent,
+} from "@/lib/mercadolibre/outbox";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
@@ -51,6 +56,28 @@ function parseAttributes(value: unknown): MercadoLibreAttributeInput[] {
   });
 }
 
+function parseImageUrls(value: unknown) {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length === 0 || value.length > 10) {
+    throw ErrorFactory.InvalidRequest(
+      "Selecciona entre una y diez imágenes para Mercado Libre",
+    );
+  }
+  const imageUrls = Array.from(
+    new Set(
+      value.flatMap((url) =>
+        typeof url === "string" && url.trim() ? [url.trim()] : [],
+      ),
+    ),
+  );
+  if (imageUrls.length === 0) {
+    throw ErrorFactory.InvalidRequest(
+      "Selecciona al menos una imagen para Mercado Libre",
+    );
+  }
+  return imageUrls;
+}
+
 export async function PATCH(
   request: Request,
   { params }: { params: { storeId: string; listingId: string } },
@@ -65,12 +92,33 @@ export async function PATCH(
         id: params.listingId,
         connection: { storeId: params.storeId },
       },
-      select: { id: true },
+      select: {
+        id: true,
+        connectionId: true,
+        productId: true,
+        externalItemId: true,
+        marketplacePrice: true,
+        syncPrice: true,
+        metadata: true,
+        product: { select: { images: { select: { url: true } } } },
+      },
     });
     if (!listing) throw ErrorFactory.NotFound("Publicación no encontrada");
 
     const body = (await request.json()) as Record<string, unknown>;
     const data: Prisma.MarketplaceListingUpdateInput = {};
+    const imageUrls = parseImageUrls(body.imageUrls);
+    if (imageUrls) {
+      const productImageUrls = new Set(
+        listing.product.images.map((image) => image.url),
+      );
+      if (imageUrls.some((url) => !productImageUrls.has(url))) {
+        throw ErrorFactory.InvalidRequest(
+          "Las imágenes de Mercado Libre deben pertenecer al producto seleccionado",
+        );
+      }
+    }
+
     if (body.marketplacePrice !== undefined) {
       const price = Number(body.marketplacePrice);
       if (!Number.isFinite(price) || price <= 0) {
@@ -111,20 +159,53 @@ export async function PATCH(
       }
       data.syncStock = body.syncStock;
     }
-    if (body.attributes !== undefined) {
-      data.metadata = {
-        attributes: parseAttributes(body.attributes),
-      } as Prisma.InputJsonValue;
+    if (body.syncPrice !== undefined) {
+      if (typeof body.syncPrice !== "boolean") {
+        throw ErrorFactory.InvalidRequest(
+          "La sincronización de precio no es válida",
+        );
+      }
+      data.syncPrice = body.syncPrice;
+    }
+    if (body.attributes !== undefined || imageUrls !== undefined) {
+      data.metadata = buildMercadoLibreListingMetadata({
+        current: listing.metadata,
+        ...(body.attributes !== undefined
+          ? { attributes: parseAttributes(body.attributes) }
+          : {}),
+        ...(imageUrls !== undefined ? { imageUrls } : {}),
+      });
     }
     if (Object.keys(data).length === 0) {
       throw ErrorFactory.InvalidRequest("No hay cambios para guardar");
     }
 
-    const updatedListing = await prismadb.marketplaceListing.update({
-      where: { id: listing.id },
-      data,
+    const result = await prismadb.$transaction(async (transaction) => {
+      const updated = await transaction.marketplaceListing.update({
+        where: { id: listing.id },
+        data,
+      });
+      const shouldSyncPrice =
+        Boolean(updated.externalItemId) &&
+        updated.syncPrice &&
+        updated.marketplacePrice !== null &&
+        (listing.marketplacePrice !== updated.marketplacePrice ||
+          body.syncPrice === true);
+      if (shouldSyncPrice) {
+        await queueMarketplacePriceSyncEvent(transaction, {
+          connectionId: listing.connectionId,
+          listingId: listing.id,
+          productId: listing.productId,
+          targetPrice: updated.marketplacePrice!,
+        });
+      }
+      return { updated, shouldSyncPrice };
     });
-    return NextResponse.json(updatedListing, {
+    if (result.shouldSyncPrice) {
+      await enqueuePendingMarketplaceOutboxEvents(listing.connectionId);
+    }
+
+    return NextResponse.json(result.updated, {
       headers: CACHE_HEADERS.NO_CACHE,
     });
   } catch (error) {

@@ -7,6 +7,10 @@ import {
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import {
+  buildMercadoLibreListingMetadata,
+  type MercadoLibreAttribute,
+} from "@/lib/mercadolibre/listing-metadata";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
@@ -42,6 +46,78 @@ function parseSafetyBuffer(value: unknown) {
   return buffer;
 }
 
+function parseAttributes(value: unknown): MercadoLibreAttribute[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 50) {
+    throw ErrorFactory.InvalidRequest("Las características no son válidas");
+  }
+
+  return value.map((attribute) => {
+    if (
+      !attribute ||
+      typeof attribute !== "object" ||
+      Array.isArray(attribute)
+    ) {
+      throw ErrorFactory.InvalidRequest("Una característica no es válida");
+    }
+    const input = attribute as Record<string, unknown>;
+    const id = typeof input.id === "string" ? input.id.trim() : "";
+    const valueId =
+      typeof input.value_id === "string" && input.value_id.trim()
+        ? input.value_id.trim()
+        : null;
+    const valueName =
+      typeof input.value_name === "string" && input.value_name.trim()
+        ? input.value_name.trim()
+        : null;
+    if (!id || (!valueId && !valueName)) {
+      throw ErrorFactory.InvalidRequest(
+        "Cada característica debe tener código y valor",
+      );
+    }
+    return {
+      id,
+      ...(valueId ? { value_id: valueId } : {}),
+      ...(valueName ? { value_name: valueName } : {}),
+    };
+  });
+}
+
+function parseImageUrls(value: unknown) {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length === 0 || value.length > 10) {
+    throw ErrorFactory.InvalidRequest(
+      "Selecciona entre una y diez imágenes para Mercado Libre",
+    );
+  }
+  const imageUrls = Array.from(
+    new Set(
+      value.flatMap((url) =>
+        typeof url === "string" && url.trim() ? [url.trim()] : [],
+      ),
+    ),
+  );
+  if (imageUrls.length === 0) {
+    throw ErrorFactory.InvalidRequest(
+      "Selecciona al menos una imagen para Mercado Libre",
+    );
+  }
+  return imageUrls;
+}
+
+function validateProductImageUrls(
+  imageUrls: string[] | undefined,
+  productImages: { url: string }[],
+) {
+  if (!imageUrls) return;
+  const availableUrls = new Set(productImages.map((image) => image.url));
+  if (imageUrls.some((url) => !availableUrls.has(url))) {
+    throw ErrorFactory.InvalidRequest(
+      "Las imágenes de Mercado Libre deben pertenecer al producto seleccionado",
+    );
+  }
+}
+
 export async function GET(
   _request: Request,
   { params }: { params: { storeId: string } },
@@ -72,10 +148,11 @@ export async function GET(
             name: true,
             sku: true,
             stock: true,
+            acqPrice: true,
             images: {
               select: { url: true, isMain: true },
               orderBy: { isMain: "desc" },
-              take: 1,
+              take: 10,
             },
           },
         },
@@ -124,9 +201,13 @@ export async function POST(
 
     const product = await prismadb.product.findFirst({
       where: { id: productId, storeId: params.storeId },
-      select: { id: true },
+      select: { id: true, images: { select: { url: true } } },
     });
     if (!product) throw ErrorFactory.NotFound("Producto no encontrado");
+
+    const attributes = parseAttributes(body.attributes);
+    const imageUrls = parseImageUrls(body.imageUrls);
+    validateProductImageUrls(imageUrls, product.images);
 
     const listing = await prismadb.marketplaceListing.create({
       data: {
@@ -140,8 +221,12 @@ export async function POST(
             : "gold_special",
         stockSafetyBuffer: parseSafetyBuffer(body.stockSafetyBuffer),
         syncStock: body.syncStock !== false,
-        syncPrice: false,
-        metadata: { attributes: [] } as Prisma.InputJsonValue,
+        syncPrice: body.syncPrice !== false,
+        metadata: buildMercadoLibreListingMetadata({
+          current: null,
+          attributes,
+          imageUrls,
+        }),
       },
     });
 

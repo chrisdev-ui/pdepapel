@@ -71,6 +71,7 @@ This section records the important recent decisions and must be updated after fu
 - The production manual enum migration `pdepapel-admin/prisma/manual-migrations/20260807_add_marketplace_order_notification_action.sql` has already been applied to Railway. It added the outbox actions `SYNC_ORDER_FINANCIALS` and `SEND_ORDER_NOTIFICATION`.
 - Mercado Libre was configured with the billing-read permission. After any permission change, token rotation, or client-secret rotation, the store owner must use **Reconectar Mercado Libre** in the admin panel so Mercado Libre issues a token with the correct scopes.
 - QStash is used for Mercado Libre background processing and recovery. The UI should clearly distinguish “configured/active” from a real processing failure. QStash delay values must use explicit units such as `"30s"` or `"5m"`, never a bare number such as `"30"`.
+- Marketplace listing content and prices are synchronized only after an explicit admin action. `SYNC_PRICE` updates the independent Mercado Libre price; `SYNC_LISTING_CONTENT` updates only the selected local photos, plain-text description, and configured attributes through QStash. Never make content synchronization automatic after a product edit.
 - A Mercado Libre Client Secret was previously shared outside the intended secret store. Treat it as compromised: rotate it in Mercado Libre, update the Vercel production environment variable, redeploy, then reconnect Mercado Libre. Never record the value in Git, this file, terminal history, screenshots, email, or chat.
 
 ### Previously completed product decisions
@@ -308,6 +309,7 @@ Known manual migration references:
 
 - `20260805_add_tax_purchases.sql` — tax supplier-purchase table.
 - `20260807_add_marketplace_order_notification_action.sql` — Mercado Libre outbox enum expansion; already applied to Railway.
+- `20260808_add_marketplace_listing_content_sync.sql` — adds the `SYNC_LISTING_CONTENT` outbox action. Apply to Railway before deploying the related code.
 
 ## 8. Catalog, SEO, and revalidation
 
@@ -471,6 +473,12 @@ Relevant implementation areas:
 ### Listing publication and imports
 
 For a new publication, an admin selects a local product, marketplace-specific price, safety buffer, suggested/reviewable Mercado Libre category, properties, images, and publication state. Publish only after human review; never bulk-publish catalog items automatically.
+
+- An admin chooses the exact local product photos that are sent to Mercado Libre. The first selected image is the intended cover. Only use public images belonging to that local product; do not insert arbitrary remote URLs.
+- The pre-publication fee calculator uses Mercado Libre's `listing_prices` response. It is an estimate for decision-making only: shipping debits, taxes, refunds, campaigns, and the final settlement can change the actual net amount.
+- The category attributes endpoint drives the admin form's required fields. Keep the advanced `CODE=Value` area for exceptional attributes, but do not make admins discover standard requirements manually.
+- Mercado Libre performance is informative: show its quality score and pending actions, but never auto-change titles, photos, category, attributes, logistics, or promotions from those suggestions.
+- Marketplace video policy requires real product footage. Do **not** integrate an image-to-video animation service as a publishing source: Mercado Libre can reject animations/static-image videos. The administrator uses Mercado Libre's own free AI-assisted script/voice tool and then records/uploads the actual vertical clip in Mercado Libre.
 
 For existing publications:
 

@@ -148,10 +148,30 @@ La notificación no descuenta inventario por sí misma. P de Papel consulta la o
 
 1. Abre **Ventas** → **Mercado Libre** y pulsa **Nuevo borrador**.
 2. Escoge el producto local. El precio de la tienda es una referencia: define un precio de Mercado Libre que cubra comisión, envío y margen.
-3. Define un colchón de seguridad. Ejemplo: con stock local de 5 y colchón de 1, Mercado Libre mostrará máximo 4 unidades.
-4. Pulsa **Sugerir categoría** y elige una propuesta. La selección siempre requiere revisión humana; nunca se publica automáticamente en catálogo.
-5. Si Mercado Libre solicita características, agrégalas una por línea como `CODIGO=Valor`. Marca, MPN y GTIN se agregan si ya existen en el producto.
-6. Revisa precio, fotos, categoría y stock. Pulsa **Publicar** y confirma la acción.
+3. Pulsa **Calcular comisión**. Es una estimación oficial de Mercado Libre según precio, categoría y tipo de publicación; no incluye el envío, impuestos o descuentos posteriores. Usa el margen mostrado solo para decidir el precio, no como valor contable.
+4. Define un colchón de seguridad. Ejemplo: con stock local de 5 y colchón de 1, Mercado Libre mostrará máximo 4 unidades.
+5. Pulsa **Sugerir categoría** y elige una propuesta. La selección siempre requiere revisión humana; nunca se publica automáticamente en catálogo.
+6. En **Fotos para Mercado Libre**, marca solo las fotos que correspondan al artículo. La primera seleccionada será la portada. Las fotos se toman del producto local; si falta una, agrégala primero desde **Productos**.
+7. Pulsa **Cargar campos** en la ficha técnica y completa los obligatorios. El área de características adicionales sigue disponible para casos especiales con el formato `CODIGO=Valor`. Marca, MPN y GTIN se agregan si ya existen en el producto.
+8. Deja marcada **Sincronizar este precio** si deseas que los próximos cambios de este precio se envíen a Mercado Libre. Esta opción nunca modifica el precio de `papeleriapdepapel.com`.
+9. Revisa precio, fotos, categoría y stock. Pulsa **Publicar** y confirma la acción.
+
+## Actualizar una publicación activa
+
+1. Pulsa **Editar** para modificar el precio, el colchón, las fotos elegidas o la ficha técnica guardada en P de Papel.
+2. Guarda los cambios. Si la casilla de sincronización de precio está activa, el nuevo precio se envía de manera segura a Mercado Libre. No cambies esta casilla si el precio se gestiona manualmente allá.
+3. Para actualizar fotos, descripción y características en Mercado Libre, pulsa **Sincronizar contenido** y confirma. Esta acción reemplaza esos tres elementos en Mercado Libre con la selección y los datos locales; nunca se ejecuta sola.
+4. Pulsa **Revisar calidad** para ver oportunidades y advertencias que Mercado Libre reporta sobre fotos, atributos, título o condiciones de venta. No corrige información automáticamente: el administrador decide cada ajuste.
+
+## Videos de Mercado Libre
+
+No uses un generador que convierta fotos estáticas en una animación. Mercado Libre exige un video real del producto y puede rechazar animaciones o composiciones de imágenes.
+
+1. En Mercado Libre, abre **Videos** o la publicación activa y selecciona **Crear con ayuda de IA**.
+2. Usa su herramienta gratuita para elegir o editar el guion y la voz.
+3. Graba el producto real en vertical (9:16), con buena luz y sin texto en las zonas seguras.
+4. No muestres precios, promociones, teléfonos, redes sociales, direcciones, sorteos ni material de terceros.
+5. Publica el clip desde Mercado Libre y espera su revisión. El video se administra allí porque Mercado Libre no ofrece en esta integración un flujo público confiable para crear y cargar Clips desde P de Papel.
 
 ## Importar publicaciones existentes
 
