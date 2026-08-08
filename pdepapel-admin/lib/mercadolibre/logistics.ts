@@ -2,6 +2,8 @@ import { Prisma } from "@prisma/client";
 
 import prismadb from "@/lib/prismadb";
 
+import { getMercadoLibreJson } from "./client";
+
 type MercadoLibreShipment = {
   externalShipmentId: string;
   status: string;
@@ -9,7 +11,7 @@ type MercadoLibreShipment = {
   logisticsType: string | null;
   trackingNumber: string | null;
   lastRemoteUpdateAt: Date | null;
-  metadata: Prisma.InputJsonValue;
+  metadata: Record<string, unknown>;
 };
 
 type MercadoLibreClaim = {
@@ -53,6 +55,60 @@ function toJsonValue(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value ?? null)) as Prisma.InputJsonValue;
 }
 
+export function getMercadoLibreShipmentOrderIds(payload: unknown) {
+  const items = Array.isArray(payload)
+    ? payload
+    : (() => {
+        const record = getRecord(payload);
+        return Array.isArray(record?.items) ? record.items : [];
+      })();
+
+  return Array.from(
+    new Set(
+      items.flatMap((item) => {
+        const orderId = getString(getRecord(item)?.order_id);
+        return orderId ? [orderId] : [];
+      }),
+    ),
+  );
+}
+
+async function resolveMercadoLibreShipmentOrder(
+  connectionId: string,
+  externalShipmentId: string,
+) {
+  try {
+    const items = await getMercadoLibreJson(
+      connectionId,
+      `/shipments/${encodeURIComponent(externalShipmentId)}/items`,
+    );
+    const externalOrderIds = getMercadoLibreShipmentOrderIds(items);
+
+    if (externalOrderIds.length !== 1) {
+      return { externalOrderIds, marketplaceOrderId: null };
+    }
+
+    const marketplaceOrder = await prismadb.marketplaceOrder.findFirst({
+      where: {
+        connectionId,
+        externalOrderId: externalOrderIds[0],
+      },
+      select: { id: true },
+    });
+
+    return {
+      externalOrderIds,
+      marketplaceOrderId: marketplaceOrder?.id ?? null,
+    };
+  } catch (error) {
+    console.warn("Mercado Libre shipment order lookup failed", {
+      externalShipmentId,
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return { externalOrderIds: [], marketplaceOrderId: null };
+  }
+}
+
 export function parseMercadoLibreShipment(
   payload: Record<string, unknown>,
 ): MercadoLibreShipment {
@@ -83,9 +139,16 @@ export async function synchronizeMercadoLibreShipment(
   payload: Record<string, unknown>,
 ) {
   const shipment = parseMercadoLibreShipment(payload);
-  const marketplaceOrder = await prismadb.marketplaceOrder.findFirst({
-    where: { connectionId, shipmentId: shipment.externalShipmentId },
-    select: { id: true },
+  const orderLink = await resolveMercadoLibreShipmentOrder(
+    connectionId,
+    shipment.externalShipmentId,
+  );
+  const marketplaceOrderData = orderLink.marketplaceOrderId
+    ? { marketplaceOrderId: orderLink.marketplaceOrderId }
+    : {};
+  const metadata = toJsonValue({
+    ...shipment.metadata,
+    externalOrderIds: orderLink.externalOrderIds,
   });
 
   return prismadb.marketplaceShipment.upsert({
@@ -96,24 +159,24 @@ export async function synchronizeMercadoLibreShipment(
       },
     },
     update: {
-      marketplaceOrderId: marketplaceOrder?.id ?? null,
+      ...marketplaceOrderData,
       status: shipment.status,
       substatus: shipment.substatus,
       logisticsType: shipment.logisticsType,
       trackingNumber: shipment.trackingNumber,
       lastRemoteUpdateAt: shipment.lastRemoteUpdateAt,
-      metadata: shipment.metadata,
+      metadata,
     },
     create: {
       connectionId,
-      marketplaceOrderId: marketplaceOrder?.id ?? null,
+      marketplaceOrderId: orderLink.marketplaceOrderId,
       externalShipmentId: shipment.externalShipmentId,
       status: shipment.status,
       substatus: shipment.substatus,
       logisticsType: shipment.logisticsType,
       trackingNumber: shipment.trackingNumber,
       lastRemoteUpdateAt: shipment.lastRemoteUpdateAt,
-      metadata: shipment.metadata,
+      metadata,
     },
   });
 }

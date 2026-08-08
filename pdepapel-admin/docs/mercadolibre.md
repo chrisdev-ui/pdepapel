@@ -194,7 +194,7 @@ No uses un generador que convierta fotos estáticas en una animación. Mercado L
 Después de reconectar Mercado Libre y activar los tópicos, abre **Ventas → Mercado Libre → Centro de operaciones**:
 
 1. **Preguntas:** pulsa **Actualizar preguntas**, revisa el borrador sugerido, edítalo y pulsa **Enviar respuesta**. Nunca se responde solo.
-2. **Envíos y despachos:** revisa los envíos que Mercado Libre marca como listos. Prepara o despacha desde Mercado Libre; este panel no compra guías ni cambia la logística.
+2. **Envíos y despachos:** revisa los envíos que Mercado Libre marca como listos. P de Papel los vincula con su venta usando los ítems que Mercado Libre reporta para cada paquete; nunca descuenta existencias al recibir este aviso. Prepara o despacha desde Mercado Libre; este panel no compra guías ni cambia la logística.
 3. **Reclamos:** abre el caso en Mercado Libre y toma la decisión allí. P de Papel no devuelve dinero ni suma stock por un reclamo o una devolución sin confirmar el retorno físico.
 4. **Ganancia real:** muestra por publicación el neto que Mercado Libre liquidó, menos el costo de compra registrado en P de Papel. Una venta sin liquidación sigue como pendiente y no se usa como ingreso real.
 5. Recibirás un correo diario si hay publicaciones con error, poco stock frente al colchón, preguntas, envíos por despachar, reclamos o alertas de margen. La revisión se ejecuta desde un flujo programado de GitHub, separado de los dos cron de Vercel. Es un recordatorio para revisar; no ejecuta cambios automáticos ni puede interrumpir la actualización de ofertas.
