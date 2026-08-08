@@ -81,6 +81,7 @@
     "@tiptap/react": "^3.12.1",
     "@tiptap/starter-kit": "^3.12.1",
     "@types/node-cron": "^3.0.11",
+    "@upstash/qstash": "^2.11.3",
     "@upstash/redis": "^1.35.6",
     "@zxing/browser": "^0.2.1",
     "axios": "^1.5.1",

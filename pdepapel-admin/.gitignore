@@ -52,6 +52,7 @@ google_merchant_*
 !docs/reportes-tributarios.md
 !docs/ventas-en-feria.md
 !docs/conciliar-inventario-feria-anterior.md
+!docs/mercadolibre.md
 backup_prod_*.sql
 /scripts/backup-prod.ts
 /scripts/restore-db.ts

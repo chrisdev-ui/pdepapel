@@ -39,6 +39,7 @@ import {
   ShoppingBag,
   ShoppingCart,
   Star,
+  Store,
   Tag,
   Truck,
   Type,
@@ -193,6 +194,13 @@ export function MainNav({
       active: pathname.includes(dashboardPath("ferias")),
       group: "sales",
       icon: PartyPopper,
+    },
+    {
+      href: dashboardPath("mercadolibre"),
+      label: "Mercado Libre",
+      active: pathname.includes(dashboardPath("mercadolibre")),
+      group: "sales",
+      icon: Store,
     },
     {
       href: dashboardPath("envios"),

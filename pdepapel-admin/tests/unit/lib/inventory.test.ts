@@ -7,6 +7,10 @@ import {
 } from "@/lib/inventory";
 import { describe, expect, it, vi } from "vitest";
 
+vi.mock("@/lib/mercadolibre/outbox", () => ({
+  queueMarketplaceStockSyncEvents: vi.fn(),
+}));
+
 describe("inventory movements", () => {
   it("creates an auditable movement and applies an atomic stock decrement", async () => {
     const movement = { id: "movement-id" };

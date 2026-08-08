@@ -30,7 +30,7 @@ import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import { Textarea } from "@/components/ui/textarea";
 
 import { AsyncProductSelect } from "@/components/ui/async-product-select";
-import { MANUAL_ADJUSTMENT_OPTIONS } from "@/lib/inventory";
+import { MANUAL_ADJUSTMENT_OPTIONS } from "@/lib/inventory-constants";
 
 const formSchema = z.object({
   productId: z.string().min(1, "Producto es requerido"),

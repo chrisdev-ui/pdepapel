@@ -1,4 +1,5 @@
 import { Redis } from "@upstash/redis";
+import { enqueuePendingMarketplaceOutboxEventsForStore } from "./mercadolibre/outbox";
 import { triggerStorefrontRevalidation } from "./revalidate-store";
 
 // Initialize Redis client (lazy - only when needed)
@@ -50,6 +51,8 @@ export async function invalidateStoreProductsCache(
     } else {
       console.log(`Cache invalidated for store ${storeId}`);
     }
+
+    await enqueuePendingMarketplaceOutboxEventsForStore(storeId);
   } catch (error) {
     console.error("Redis cache invalidation error:", error);
   }
