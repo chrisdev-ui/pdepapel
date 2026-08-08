@@ -36,6 +36,11 @@ const REQUIRED_QUEUE_VARIABLES = [
   "ADMIN_WEB_URL",
 ] as const;
 
+export const MERCADOLIBRE_FAILURE_CALLBACK_HEADERS = {
+  "Upstash-Failure-Callback-Retries": "3",
+  "Upstash-Failure-Callback-Timeout": "30s",
+} as const;
+
 export function getMercadoLibreQueueConfigurationStatus(
   environment: QueueEnvironment = process.env,
 ) {
@@ -109,8 +114,7 @@ export async function enqueueMercadoLibreWebhookEvent(
     },
     label: ["mercadolibre", "webhook"],
     headers: {
-      "Upstash-Failure-Callback-Retries": "3",
-      "Upstash-Failure-Callback-Timeout": "30",
+      ...MERCADOLIBRE_FAILURE_CALLBACK_HEADERS,
     },
     redact: { body: true },
   });
@@ -226,8 +230,7 @@ export async function enqueueMercadoLibreOutboxEvent(
     },
     label: ["mercadolibre", "stock-sync"],
     headers: {
-      "Upstash-Failure-Callback-Retries": "3",
-      "Upstash-Failure-Callback-Timeout": "30",
+      ...MERCADOLIBRE_FAILURE_CALLBACK_HEADERS,
     },
     redact: { body: true },
   });
@@ -278,8 +281,7 @@ export async function ensureMercadoLibreRecoverySchedule(
     body: JSON.stringify({ connectionId }),
     headers: {
       "Content-Type": "application/json",
-      "Upstash-Failure-Callback-Retries": "3",
-      "Upstash-Failure-Callback-Timeout": "30",
+      ...MERCADOLIBRE_FAILURE_CALLBACK_HEADERS,
     },
     retries: 3,
     timeout: 50,

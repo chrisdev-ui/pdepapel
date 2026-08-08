@@ -9,7 +9,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { AlertCircle, CheckCircle2, ExternalLink, Store } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Clock3,
+  ExternalLink,
+  Store,
+} from "lucide-react";
 import { useParams, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
@@ -43,6 +49,11 @@ type MercadoLibreClientProps = {
   }[];
 };
 
+type QueueFeedback = {
+  message: string;
+  type: "error" | "success";
+};
+
 const connectionLabels = {
   PENDING: "Pendiente",
   CONNECTED: "Conectada",
@@ -71,7 +82,17 @@ export default function MercadoLibreClient({
   const result = searchParams.get("mercadolibre");
   const reason = searchParams.get("reason");
   const [isActivatingQueue, setIsActivatingQueue] = useState(false);
-  const [queueMessage, setQueueMessage] = useState<string | null>(null);
+  const [queueFeedback, setQueueFeedback] = useState<QueueFeedback | null>(
+    null,
+  );
+
+  const queueState = !queueConfiguration.configured
+    ? "configuration"
+    : connection?.recoveryScheduleId || queueFeedback?.type === "success"
+      ? "active"
+      : queueFeedback?.type === "error"
+        ? "error"
+        : "ready";
 
   const resultMessage =
     result === "connected"
@@ -84,7 +105,7 @@ export default function MercadoLibreClient({
 
   const activateQueue = async () => {
     setIsActivatingQueue(true);
-    setQueueMessage(null);
+    setQueueFeedback(null);
     try {
       const response = await fetch(
         `/api/${storeId}/marketplaces/mercadolibre/queue`,
@@ -94,15 +115,19 @@ export default function MercadoLibreClient({
         const body = (await response.json()) as { error?: string };
         throw new Error(body.error ?? "No fue posible activar la cola");
       }
-      setQueueMessage(
-        "La recuperación automática quedó activada. Actualiza esta página para ver su estado.",
-      );
+      setQueueFeedback({
+        type: "success",
+        message:
+          "La recuperación automática quedó activada. Actualiza esta página para confirmar el estado.",
+      });
     } catch (error) {
-      setQueueMessage(
-        error instanceof Error
-          ? error.message
-          : "No fue posible activar la cola",
-      );
+      setQueueFeedback({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "No fue posible activar el procesamiento seguro.",
+      });
     } finally {
       setIsActivatingQueue(false);
     }
@@ -207,20 +232,47 @@ export default function MercadoLibreClient({
       {connection ? (
         <Card
           className={
-            queueConfiguration.configured
-              ? "border-success/30"
-              : "border-amber-300"
+            queueState === "active"
+              ? "border-success/30 bg-success/[0.02]"
+              : queueState === "error"
+                ? "border-destructive/50 bg-destructive/[0.03]"
+                : queueState === "configuration"
+                  ? "border-amber-300 bg-amber-50/40"
+                  : "border-border"
           }
         >
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              {queueConfiguration.configured ? (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <CardTitle className="flex items-center gap-2">
+                {queueState === "active" ? (
                 <CheckCircle2 className="h-5 w-5 text-success" />
-              ) : (
+                ) : queueState === "error" ? (
+                  <AlertCircle className="h-5 w-5 text-destructive" />
+                ) : queueState === "configuration" ? (
                 <AlertCircle className="h-5 w-5 text-amber-600" />
-              )}
-              Procesamiento seguro de ventas
-            </CardTitle>
+                ) : (
+                  <Clock3 className="h-5 w-5 text-muted-foreground" />
+                )}
+                Procesamiento seguro de ventas
+              </CardTitle>
+              <Badge
+                variant={
+                  queueState === "active"
+                    ? "success"
+                    : queueState === "error"
+                      ? "destructive"
+                      : "secondary"
+                }
+              >
+                {queueState === "active"
+                  ? "Activo"
+                  : queueState === "error"
+                    ? "No se activó"
+                    : queueState === "configuration"
+                      ? "Configuración pendiente"
+                      : "Listo para activar"}
+              </Badge>
+            </div>
             <CardDescription>
               QStash procesa los avisos y reintentos sin dejar ventas o stock a
               medio camino.
@@ -239,24 +291,47 @@ export default function MercadoLibreClient({
                   ))}
                 </ul>
               </>
-            ) : connection.recoveryScheduleId ? (
+            ) : queueState === "active" ? (
               <p className="text-success">
                 La recuperación automática está activa cada cinco minutos.
               </p>
             ) : (
               <Button
                 type="button"
-                variant="outline"
+                variant={queueState === "error" ? "default" : "outline"}
                 onClick={() => void activateQueue()}
                 disabled={isActivatingQueue}
               >
                 {isActivatingQueue
                   ? "Activando…"
-                  : "Activar procesamiento seguro"}
+                  : queueState === "error"
+                    ? "Reintentar activación"
+                    : "Activar procesamiento seguro"}
               </Button>
             )}
-            {queueMessage ? (
-              <p className="text-muted-foreground">{queueMessage}</p>
+            {queueFeedback ? (
+              <div
+                className={
+                  queueFeedback.type === "error"
+                    ? "flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-destructive"
+                    : "flex items-start gap-2 rounded-md border border-success/30 bg-success/10 p-3 text-success"
+                }
+                role={queueFeedback.type === "error" ? "alert" : "status"}
+              >
+                {queueFeedback.type === "error" ? (
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                ) : (
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                )}
+                <div className="space-y-1">
+                  <p className="font-medium">
+                    {queueFeedback.type === "error"
+                      ? "No se activó el procesamiento seguro"
+                      : "Procesamiento seguro activado"}
+                  </p>
+                  <p>{queueFeedback.message}</p>
+                </div>
+              </div>
             ) : null}
           </CardContent>
         </Card>

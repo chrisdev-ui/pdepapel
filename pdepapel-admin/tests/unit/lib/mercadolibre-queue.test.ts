@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  MERCADOLIBRE_FAILURE_CALLBACK_HEADERS,
   getMercadoLibreFailureUrl,
   getMercadoLibreProcessorUrl,
   getMercadoLibreQueueConfigurationStatus,
@@ -17,6 +18,13 @@ const queueEnvironment = {
 };
 
 describe("Mercado Libre durable queue", () => {
+  it("uses an explicit duration for failure callback timeouts", () => {
+    expect(MERCADOLIBRE_FAILURE_CALLBACK_HEADERS).toEqual({
+      "Upstash-Failure-Callback-Retries": "3",
+      "Upstash-Failure-Callback-Timeout": "30s",
+    });
+  });
+
   it("requires QStash credentials before activating processing", () => {
     expect(getMercadoLibreQueueConfigurationStatus({})).toEqual({
       configured: false,
