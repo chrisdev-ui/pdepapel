@@ -2,6 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { MercadoLibreLogo } from "@/components/mercadolibre-logo";
 import {
   Card,
   CardContent,
@@ -19,7 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Pencil, Plus, UploadCloud } from "lucide-react";
+import { Download, Loader2, Pencil, Plus, UploadCloud } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 type ProductOption = {
@@ -68,6 +69,36 @@ type ListingForm = {
   categoryId: string;
   stockSafetyBuffer: string;
   attributes: string;
+};
+
+type ImportCandidate = {
+  key: string;
+  externalItemId: string;
+  externalVariationId: string | null;
+  title: string;
+  status: Listing["status"];
+  marketplacePrice: number | null;
+  sellerSku: string | null;
+  availableQuantity: number | null;
+  existingListingId: string | null;
+  linkedProduct: ProductOption | null;
+  suggestedProduct: ProductOption | null;
+  issue: string | null;
+};
+
+type ImportPreview = {
+  listings: ImportCandidate[];
+  summary: {
+    total: number;
+    alreadyLinked: number;
+    readyToImport: number;
+    needsReview: number;
+  };
+};
+
+type ImportSelection = {
+  productId: string;
+  selected: boolean;
 };
 
 const emptyForm: ListingForm = {
@@ -150,6 +181,14 @@ export function MercadoLibreListingManager({
   const [isSearchingCategories, setIsSearchingCategories] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [publishingId, setPublishingId] = useState<string | null>(null);
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(
+    null,
+  );
+  const [importSelections, setImportSelections] = useState<
+    Record<string, ImportSelection>
+  >({});
+  const [isLoadingImportPreview, setIsLoadingImportPreview] = useState(false);
+  const [isImportingListings, setIsImportingListings] = useState(false);
 
   const selectedProduct = useMemo(
     () => products.find((product) => product.id === form.productId) ?? null,
@@ -204,6 +243,127 @@ export function MercadoLibreListingManager({
     setError(null);
     setIsDialogOpen(true);
   };
+
+  const loadImportPreview = async () => {
+    setIsLoadingImportPreview(true);
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/${storeId}/marketplaces/mercadolibre/listings/import/preview`,
+        { method: "POST" },
+      );
+      if (!response.ok) throw new Error(await getErrorMessage(response));
+      const preview = (await response.json()) as ImportPreview;
+      setImportPreview(preview);
+      setImportSelections(
+        Object.fromEntries(
+          preview.listings.map((listing) => [
+            listing.key,
+            {
+              productId: listing.suggestedProduct?.id ?? "",
+              selected: Boolean(
+                !listing.existingListingId &&
+                listing.suggestedProduct &&
+                listing.status !== "ERROR",
+              ),
+            },
+          ]),
+        ),
+      );
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "No fue posible revisar las publicaciones existentes",
+      );
+    } finally {
+      setIsLoadingImportPreview(false);
+    }
+  };
+
+  const updateImportSelection = (
+    key: string,
+    update: Partial<ImportSelection>,
+  ) => {
+    setImportSelections((current) => ({
+      ...current,
+      [key]: {
+        productId: current[key]?.productId ?? "",
+        selected: current[key]?.selected ?? false,
+        ...update,
+      },
+    }));
+  };
+
+  const importExistingListings = async () => {
+    if (!importPreview) return;
+    const selections = importPreview.listings.flatMap((listing) => {
+      const selection = importSelections[listing.key];
+      if (
+        listing.existingListingId ||
+        listing.status === "ERROR" ||
+        !selection?.selected ||
+        !selection.productId
+      ) {
+        return [];
+      }
+      return [
+        {
+          externalItemId: listing.externalItemId,
+          externalVariationId: listing.externalVariationId,
+          productId: selection.productId,
+        },
+      ];
+    });
+    if (selections.length === 0) {
+      setError("Selecciona al menos una publicación con producto local");
+      return;
+    }
+    if (
+      !window.confirm(
+        `¿Vincular ${selections.length} publicación${selections.length === 1 ? "" : "es"} y sincronizar su stock con P de Papel?`,
+      )
+    ) {
+      return;
+    }
+
+    setIsImportingListings(true);
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/${storeId}/marketplaces/mercadolibre/listings/import`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ selections }),
+        },
+      );
+      if (!response.ok) throw new Error(await getErrorMessage(response));
+      setImportPreview(null);
+      setImportSelections({});
+      await loadListings();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "No fue posible importar las publicaciones seleccionadas",
+      );
+    } finally {
+      setIsImportingListings(false);
+    }
+  };
+
+  const selectedImportCount = importPreview
+    ? importPreview.listings.filter((listing) => {
+        const selection = importSelections[listing.key];
+        return (
+          !listing.existingListingId &&
+          listing.status !== "ERROR" &&
+          selection?.selected &&
+          Boolean(selection.productId)
+        );
+      }).length
+    : 0;
 
   const searchCategories = async () => {
     const query = selectedProduct?.name ?? "";
@@ -338,16 +498,34 @@ export function MercadoLibreListingManager({
     <Card>
       <CardHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <CardTitle>Publicaciones</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <MercadoLibreLogo className="h-5" />
+            Publicaciones
+          </CardTitle>
           <CardDescription>
             Define un precio exclusivo de Mercado Libre. Nunca se copiarán
             descuentos ni precios de la tienda.
           </CardDescription>
         </div>
-        <Button type="button" onClick={openNewListing} disabled={!canPublish}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nuevo borrador
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void loadImportPreview()}
+            disabled={!canPublish || isLoadingImportPreview}
+          >
+            {isLoadingImportPreview ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="mr-2 h-4 w-4" />
+            )}
+            Importar existentes
+          </Button>
+          <Button type="button" onClick={openNewListing} disabled={!canPublish}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nuevo borrador
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {!canPublish ? (
@@ -360,6 +538,177 @@ export function MercadoLibreListingManager({
           <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
             {error}
           </p>
+        ) : null}
+        {importPreview ? (
+          <div className="space-y-4 rounded-md border bg-muted/20 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="font-medium">Revisar publicaciones existentes</p>
+                <p className="text-sm text-muted-foreground">
+                  Se encontraron {importPreview.summary.total}. Las que tienen
+                  SKU se proponen automáticamente; si falta, elige el producto
+                  local manualmente antes de vincularla.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setImportPreview(null);
+                  setImportSelections({});
+                }}
+              >
+                Cerrar
+              </Button>
+            </div>
+            <div className="grid gap-2 text-sm sm:grid-cols-3">
+              <p className="rounded-md bg-background p-3">
+                <span className="block text-muted-foreground">
+                  Ya vinculadas
+                </span>
+                <span className="font-semibold">
+                  {importPreview.summary.alreadyLinked}
+                </span>
+              </p>
+              <p className="rounded-md bg-background p-3">
+                <span className="block text-muted-foreground">
+                  Con vínculo sugerido
+                </span>
+                <span className="font-semibold">
+                  {importPreview.summary.readyToImport}
+                </span>
+              </p>
+              <p className="rounded-md bg-background p-3">
+                <span className="block text-muted-foreground">
+                  Para revisar
+                </span>
+                <span className="font-semibold">
+                  {importPreview.summary.needsReview}
+                </span>
+              </p>
+            </div>
+            <div className="max-h-[32rem] space-y-3 overflow-y-auto pr-1">
+              {importPreview.listings.map((listing) => {
+                const selection = importSelections[listing.key] ?? {
+                  productId: "",
+                  selected: false,
+                };
+                const isAlreadyLinked = Boolean(listing.existingListingId);
+                const cannotImport =
+                  isAlreadyLinked || listing.status === "ERROR";
+                return (
+                  <div
+                    key={listing.key}
+                    className="grid gap-3 rounded-md border bg-background p-3 lg:grid-cols-[auto_minmax(0,1fr)_minmax(14rem,0.8fr)] lg:items-center"
+                  >
+                    <input
+                      type="checkbox"
+                      aria-label={`Importar ${listing.title}`}
+                      checked={selection.selected}
+                      disabled={cannotImport || !selection.productId}
+                      onChange={(event) =>
+                        updateImportSelection(listing.key, {
+                          selected: event.target.checked,
+                        })
+                      }
+                      className="h-4 w-4 rounded border-input"
+                    />
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="truncate font-medium">{listing.title}</p>
+                        <Badge
+                          variant={
+                            listing.status === "ACTIVE"
+                              ? "success"
+                              : "secondary"
+                          }
+                        >
+                          {listing.status}
+                        </Badge>
+                        {isAlreadyLinked ? (
+                          <Badge variant="secondary">Ya vinculada</Badge>
+                        ) : null}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {listing.externalItemId}
+                        {listing.externalVariationId
+                          ? ` · Variación ${listing.externalVariationId}`
+                          : ""}
+                        {listing.sellerSku
+                          ? ` · SKU ${listing.sellerSku}`
+                          : " · Sin SKU"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Precio Mercado Libre:{" "}
+                        {currencyFormatter.format(
+                          listing.marketplacePrice ?? 0,
+                        )}
+                        {listing.availableQuantity !== null
+                          ? ` · Stock publicado: ${listing.availableQuantity}`
+                          : ""}
+                      </p>
+                      {listing.issue ? (
+                        <p className="text-xs text-amber-700">
+                          {listing.issue}
+                        </p>
+                      ) : null}
+                    </div>
+                    {isAlreadyLinked ? (
+                      <p className="text-sm text-success">
+                        Vinculada a:{" "}
+                        {listing.linkedProduct?.name ?? "Producto local"}
+                      </p>
+                    ) : (
+                      <div className="grid gap-1">
+                        <label
+                          className="text-xs font-medium"
+                          htmlFor={`mercadolibre-import-${listing.key}`}
+                        >
+                          Producto local
+                        </label>
+                        <select
+                          id={`mercadolibre-import-${listing.key}`}
+                          value={selection.productId}
+                          disabled={listing.status === "ERROR"}
+                          onChange={(event) =>
+                            updateImportSelection(listing.key, {
+                              productId: event.target.value,
+                              selected: Boolean(event.target.value),
+                            })
+                          }
+                          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                        >
+                          <option value="">Selecciona manualmente</option>
+                          {products.map((product) => (
+                            <option key={product.id} value={product.id}>
+                              {product.name} · {product.sku} · Stock{" "}
+                              {product.stock}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex flex-col gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-muted-foreground">
+                {selectedImportCount} publicación
+                {selectedImportCount === 1
+                  ? " seleccionada"
+                  : "es seleccionadas"}
+              </p>
+              <Button
+                type="button"
+                onClick={() => void importExistingListings()}
+                disabled={isImportingListings || selectedImportCount === 0}
+              >
+                {isImportingListings ? "Vinculando…" : "Vincular y sincronizar"}
+              </Button>
+            </div>
+          </div>
         ) : null}
         {isLoading ? (
           <p className="text-sm text-muted-foreground">
@@ -448,7 +797,8 @@ export function MercadoLibreListingManager({
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <MercadoLibreLogo className="h-5" />
               {editingListing ? "Editar borrador" : "Preparar publicación"}
             </DialogTitle>
             <DialogDescription>

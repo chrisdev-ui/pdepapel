@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  enqueue: vi.fn(),
   findFirst: vi.fn(),
   upsert: vi.fn(),
 }));
@@ -10,6 +11,9 @@ vi.mock("@/lib/prismadb", () => ({
     marketplaceConnection: { findFirst: mocks.findFirst },
     marketplaceWebhookEvent: { upsert: mocks.upsert },
   },
+}));
+vi.mock("@/lib/mercadolibre/queue", () => ({
+  enqueueMercadoLibreWebhookEvent: mocks.enqueue,
 }));
 
 import { POST } from "@/app/api/webhook/mercadolibre/route";
@@ -21,6 +25,7 @@ describe("Mercado Libre webhook route", () => {
       id: "event-id",
       connectionId: "connection-id",
     });
+    mocks.enqueue.mockResolvedValue(false);
 
     const response = await POST(
       new Request("https://admin.example.com/api/webhook/mercadolibre", {
@@ -51,5 +56,6 @@ describe("Mercado Libre webhook route", () => {
         }),
       }),
     );
+    expect(mocks.enqueue).toHaveBeenCalledWith("event-id", "connection-id");
   });
 });

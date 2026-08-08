@@ -7,7 +7,12 @@ import {
 import { recalculateKitStock } from "@/lib/inventory";
 import prismadb from "@/lib/prismadb";
 
-import { queueMarketplaceStockSyncEvents } from "./outbox";
+import {
+  enqueuePendingMarketplaceOutboxEvents,
+  queueMarketplaceOrderFinancials,
+  queueMarketplaceOrderNotification,
+  queueMarketplaceStockSyncEvents,
+} from "./outbox";
 
 type MercadoLibreOrderItem = {
   externalItemId: string;
@@ -323,6 +328,34 @@ async function applyMarketplaceInventory(
   });
 }
 
+async function queuePaidOrderNotification(
+  connectionId: string,
+  externalOrderId: string,
+  marketplaceOrderId: string,
+  needsFinancialReconciliation: boolean,
+) {
+  if (needsFinancialReconciliation) {
+    await queueMarketplaceOrderFinancials(prismadb, {
+      connectionId,
+      externalOrderId,
+      marketplaceOrderId,
+    });
+  }
+  await queueMarketplaceOrderNotification(prismadb, {
+    connectionId,
+    externalOrderId,
+    marketplaceOrderId,
+  });
+
+  try {
+    await enqueuePendingMarketplaceOutboxEvents(connectionId);
+  } catch (error) {
+    console.error("Mercado Libre order notification dispatch deferred", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+  }
+}
+
 export async function synchronizeMercadoLibreOrder(
   connectionId: string,
   storeId: string,
@@ -384,7 +417,7 @@ export async function synchronizeMercadoLibreOrder(
         })),
       },
     },
-    select: { id: true, inventoryStatus: true },
+    select: { id: true, inventoryStatus: true, netAmount: true },
   });
 
   if (order.status === MarketplaceOrderStatus.CANCELLED) {
@@ -419,6 +452,12 @@ export async function synchronizeMercadoLibreOrder(
           .join(", ")}`,
       },
     });
+    await queuePaidOrderNotification(
+      connectionId,
+      order.externalOrderId,
+      marketplaceOrder.id,
+      marketplaceOrder.netAmount === null,
+    );
     return { inventoryChanged: false, needsAttention: true };
   }
 
@@ -428,6 +467,12 @@ export async function synchronizeMercadoLibreOrder(
       storeId,
       resolvedItems,
       order.externalOrderId,
+    );
+    await queuePaidOrderNotification(
+      connectionId,
+      order.externalOrderId,
+      marketplaceOrder.id,
+      marketplaceOrder.netAmount === null,
     );
     return { inventoryChanged, needsAttention: false };
   } catch (error) {
@@ -439,6 +484,12 @@ export async function synchronizeMercadoLibreOrder(
           inventoryError: error.message,
         },
       });
+      await queuePaidOrderNotification(
+        connectionId,
+        order.externalOrderId,
+        marketplaceOrder.id,
+        marketplaceOrder.netAmount === null,
+      );
       return { inventoryChanged: false, needsAttention: true };
     }
     throw error;

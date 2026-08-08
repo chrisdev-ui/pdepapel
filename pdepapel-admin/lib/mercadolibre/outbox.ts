@@ -1,21 +1,44 @@
 import {
   MarketplaceOutboxAction,
   MarketplaceOutboxStatus,
+  MarketplaceOrderStatus,
   Prisma,
 } from "@prisma/client";
 
 import prismadb from "@/lib/prismadb";
 
 import { getMercadoLibreAccessToken } from "./client";
+import {
+  getMercadoLibreOrderFinancials,
+  MercadoLibreFinancialsPendingError,
+  type MercadoLibreOrderFinancials,
+} from "./order-financials";
 import { enqueueMercadoLibreOutboxEvent } from "./queue";
 
 const RETRY_DELAY_MS = 5 * 60 * 1000;
+const FINANCIALS_PENDING_RETRY_DELAY_MS = 6 * 60 * 60 * 1000;
 const MAX_OUTBOX_EVENTS_PER_DISPATCH = 50;
 
 type StockSyncTransaction = Pick<
   Prisma.TransactionClient,
   "product" | "marketplaceListing" | "marketplaceOutboxEvent"
 >;
+
+type MarketplaceNotificationTransaction = Pick<
+  Prisma.TransactionClient,
+  "marketplaceOutboxEvent"
+>;
+
+type MarketplaceFinancialsTransaction = Pick<
+  Prisma.TransactionClient,
+  "marketplaceOutboxEvent"
+>;
+
+type MarketplaceOrderFinancialsUpdate = {
+  marketplaceOrderId: string;
+  financials: MercadoLibreOrderFinancials;
+  metadata: Prisma.InputJsonValue;
+};
 
 function getSafeErrorMessage(error: unknown) {
   const message = error instanceof Error ? error.message : "Error desconocido";
@@ -94,9 +117,85 @@ export async function queueMarketplaceStockSyncEvents(
   );
 }
 
+export async function queueMarketplaceOrderNotification(
+  transaction: MarketplaceNotificationTransaction,
+  {
+    connectionId,
+    externalOrderId,
+    marketplaceOrderId,
+  }: {
+    connectionId: string;
+    externalOrderId: string;
+    marketplaceOrderId: string;
+  },
+) {
+  await transaction.marketplaceOutboxEvent.upsert({
+    where: {
+      deduplicationKey: `${connectionId}:order-notification:${externalOrderId}`,
+    },
+    update: {},
+    create: {
+      connectionId,
+      action: MarketplaceOutboxAction.SEND_ORDER_NOTIFICATION,
+      deduplicationKey: `${connectionId}:order-notification:${externalOrderId}`,
+      payload: { marketplaceOrderId },
+    },
+  });
+}
+
+export async function queueMarketplaceOrderFinancials(
+  transaction: MarketplaceFinancialsTransaction,
+  {
+    connectionId,
+    externalOrderId,
+    marketplaceOrderId,
+  }: {
+    connectionId: string;
+    externalOrderId: string;
+    marketplaceOrderId: string;
+  },
+) {
+  await transaction.marketplaceOutboxEvent.upsert({
+    where: {
+      deduplicationKey: `${connectionId}:order-financials:${externalOrderId}`,
+    },
+    update: {},
+    create: {
+      connectionId,
+      action: MarketplaceOutboxAction.SYNC_ORDER_FINANCIALS,
+      deduplicationKey: `${connectionId}:order-financials:${externalOrderId}`,
+      payload: { marketplaceOrderId },
+    },
+  });
+}
+
+async function queuePendingMarketplaceOrderFinancials(connectionId: string) {
+  const orders = await prismadb.marketplaceOrder.findMany({
+    where: {
+      connectionId,
+      status: MarketplaceOrderStatus.PAID,
+      netAmount: null,
+    },
+    select: { id: true, externalOrderId: true },
+    take: MAX_OUTBOX_EVENTS_PER_DISPATCH,
+  });
+
+  await Promise.all(
+    orders.map((order) =>
+      queueMarketplaceOrderFinancials(prismadb, {
+        connectionId,
+        externalOrderId: order.externalOrderId,
+        marketplaceOrderId: order.id,
+      }),
+    ),
+  );
+}
+
 export async function enqueuePendingMarketplaceOutboxEvents(
   connectionId: string,
 ) {
+  await queuePendingMarketplaceOrderFinancials(connectionId);
+
   const events = await prismadb.marketplaceOutboxEvent.findMany({
     where: {
       connectionId,
@@ -191,7 +290,11 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
   if (event.status === MarketplaceOutboxStatus.COMPLETED) {
     return { processed: false, reason: "already_processed" as const };
   }
-  if (!event.listing?.externalItemId) {
+  if (
+    event.action !== MarketplaceOutboxAction.SEND_ORDER_NOTIFICATION &&
+    event.action !== MarketplaceOutboxAction.SYNC_ORDER_FINANCIALS &&
+    !event.listing?.externalItemId
+  ) {
     await prismadb.marketplaceOutboxEvent.update({
       where: { id: event.id },
       data: {
@@ -220,50 +323,201 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
   }
 
   try {
-    if (event.action !== MarketplaceOutboxAction.SYNC_STOCK) {
+    let syncedQuantity: number | null = null;
+    let financialsUpdate: MarketplaceOrderFinancialsUpdate | null = null;
+    if (event.action === MarketplaceOutboxAction.SYNC_ORDER_FINANCIALS) {
+      const payload = event.payload as Record<string, unknown> | null;
+      const marketplaceOrderId =
+        payload && typeof payload.marketplaceOrderId === "string"
+          ? payload.marketplaceOrderId
+          : null;
+      if (!marketplaceOrderId) {
+        throw new Error(
+          "La liquidación de venta no contiene un identificador de orden válido",
+        );
+      }
+      const marketplaceOrder = await prismadb.marketplaceOrder.findUnique({
+        where: { id: marketplaceOrderId },
+        select: {
+          id: true,
+          connectionId: true,
+          externalOrderId: true,
+          totalAmount: true,
+          metadata: true,
+        },
+      });
+      if (
+        !marketplaceOrder ||
+        marketplaceOrder.connectionId !== event.connectionId
+      ) {
+        throw new Error("No fue posible encontrar la venta de Mercado Libre");
+      }
+
+      const metadata = marketplaceOrder.metadata;
+      const isHistoricalReconciliation =
+        metadata &&
+        typeof metadata === "object" &&
+        !Array.isArray(metadata) &&
+        (metadata as Record<string, unknown>).source ===
+          "HISTORICAL_RECONCILIATION";
+      if (!isHistoricalReconciliation) {
+        if (marketplaceOrder.totalAmount === null) {
+          throw new MercadoLibreFinancialsPendingError(
+            "La venta no tiene un total válido para calcular el neto",
+          );
+        }
+        const financials = await getMercadoLibreOrderFinancials(
+          event.connectionId,
+          marketplaceOrder.externalOrderId,
+          marketplaceOrder.totalAmount,
+        );
+        financialsUpdate = {
+          marketplaceOrderId: marketplaceOrder.id,
+          financials,
+          metadata: {
+            ...(metadata &&
+            typeof metadata === "object" &&
+            !Array.isArray(metadata)
+              ? metadata
+              : {}),
+            taxesAmount: financials.taxesAmount,
+            financials: {
+              source: "MERCADOLIBRE_BILLING",
+              status: "READY",
+              updatedAt: new Date().toISOString(),
+              moneyReleaseDate: financials.moneyReleaseDate,
+              moneyReleaseStatus: financials.moneyReleaseStatus,
+            },
+          },
+        };
+      }
+    } else if (
+      event.action === MarketplaceOutboxAction.SEND_ORDER_NOTIFICATION
+    ) {
+      const payload = event.payload as Record<string, unknown> | null;
+      const marketplaceOrderId =
+        payload && typeof payload.marketplaceOrderId === "string"
+          ? payload.marketplaceOrderId
+          : null;
+      if (!marketplaceOrderId) {
+        throw new Error(
+          "La notificación de venta no contiene un identificador de orden válido",
+        );
+      }
+      const marketplaceOrder = await prismadb.marketplaceOrder.findUnique({
+        where: { id: marketplaceOrderId },
+        select: {
+          id: true,
+          connectionId: true,
+          externalOrderId: true,
+          buyerName: true,
+          netAmount: true,
+          inventoryStatus: true,
+          connection: { select: { storeId: true } },
+          items: {
+            select: {
+              title: true,
+              quantity: true,
+              product: { select: { name: true, sku: true } },
+            },
+          },
+        },
+      });
+      if (
+        !marketplaceOrder ||
+        marketplaceOrder.connectionId !== event.connectionId
+      ) {
+        throw new Error("No fue posible encontrar la venta de Mercado Libre");
+      }
+      if (marketplaceOrder.netAmount === null) {
+        throw new MercadoLibreFinancialsPendingError();
+      }
+
+      const { sendMercadoLibreOrderNotification } =
+        await import("./order-notification");
+      await sendMercadoLibreOrderNotification({
+        buyerName: marketplaceOrder.buyerName,
+        inventoryStatus: marketplaceOrder.inventoryStatus,
+        marketplaceOrderId: marketplaceOrder.id,
+        orderNumber: marketplaceOrder.externalOrderId,
+        orderSummary: marketplaceOrder.items
+          .map(
+            (item) =>
+              `• ${item.quantity} × ${item.product?.name ?? item.title}${item.product?.sku ? ` (${item.product.sku})` : ""}`,
+          )
+          .join("\n"),
+        storeId: marketplaceOrder.connection.storeId,
+        netAmount: marketplaceOrder.netAmount,
+      });
+    } else if (event.action === MarketplaceOutboxAction.SYNC_STOCK) {
+      const targetQuantity = getTargetQuantity(event.payload);
+      await updateMercadoLibreStock(
+        event.connectionId,
+        event.listing!.externalItemId!,
+        event.listing!.externalVariationId,
+        targetQuantity,
+      );
+      syncedQuantity = targetQuantity;
+    } else {
       throw new Error(
         "La acción de sincronización todavía no está implementada",
       );
     }
-    const targetQuantity = getTargetQuantity(event.payload);
-    await updateMercadoLibreStock(
-      event.connectionId,
-      event.listing.externalItemId,
-      event.listing.externalVariationId,
-      targetQuantity,
-    );
 
-    await prismadb.$transaction([
-      prismadb.marketplaceOutboxEvent.update({
+    await prismadb.$transaction(async (transaction) => {
+      if (financialsUpdate) {
+        await transaction.marketplaceOrder.update({
+          where: { id: financialsUpdate.marketplaceOrderId },
+          data: {
+            marketplaceFee: financialsUpdate.financials.marketplaceFee,
+            shippingCost: financialsUpdate.financials.shippingCost,
+            netAmount: financialsUpdate.financials.netAmount,
+            metadata: financialsUpdate.metadata,
+          },
+        });
+      }
+      await transaction.marketplaceOutboxEvent.update({
         where: { id: event.id },
         data: {
           status: MarketplaceOutboxStatus.COMPLETED,
           processedAt: new Date(),
           lastError: null,
         },
-      }),
-      prismadb.marketplaceListing.update({
-        where: { id: event.listing.id },
-        data: {
-          lastSyncedStock: targetQuantity,
-          lastError: null,
-        },
-      }),
-      prismadb.marketplaceConnection.update({
+      });
+      if (syncedQuantity !== null && event.listing) {
+        await transaction.marketplaceListing.update({
+          where: { id: event.listing.id },
+          data: {
+            lastSyncedStock: syncedQuantity,
+            lastError: null,
+          },
+        });
+      }
+      await transaction.marketplaceConnection.update({
         where: { id: event.connectionId },
         data: { lastSyncedAt: new Date(), lastError: null },
-      }),
-    ]);
+      });
+    });
     return { processed: true, reason: "processed" as const };
   } catch (error) {
+    const financialsPending =
+      error instanceof MercadoLibreFinancialsPendingError;
     await prismadb.marketplaceOutboxEvent.update({
       where: { id: event.id },
       data: {
         status: MarketplaceOutboxStatus.RETRY,
-        availableAt: new Date(Date.now() + RETRY_DELAY_MS),
+        availableAt: new Date(
+          Date.now() +
+            (financialsPending
+              ? FINANCIALS_PENDING_RETRY_DELAY_MS
+              : RETRY_DELAY_MS),
+        ),
         lastError: getSafeErrorMessage(error),
       },
     });
+    if (financialsPending) {
+      return { processed: false, reason: "financials_pending" as const };
+    }
     throw error;
   }
 }

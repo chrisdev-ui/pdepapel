@@ -83,7 +83,7 @@ export async function getMercadoLibreAccessToken(connectionId: string) {
   return getMercadoLibreAccessToken(connectionId);
 }
 
-export async function getMercadoLibreResource(
+export async function requestMercadoLibreJson(
   connectionId: string,
   resource: string,
   request: typeof fetch = fetch,
@@ -102,20 +102,68 @@ export async function getMercadoLibreResource(
     payload = null;
   }
 
-  if (!response.ok || !payload || typeof payload !== "object") {
+  return {
+    ok: response.ok && payload !== null,
+    status: response.status,
+    payload,
+  };
+}
+
+export async function requestMercadoLibreResource(
+  connectionId: string,
+  resource: string,
+  request: typeof fetch = fetch,
+) {
+  const result = await requestMercadoLibreJson(connectionId, resource, request);
+  const payload =
+    result.payload &&
+    typeof result.payload === "object" &&
+    !Array.isArray(result.payload)
+      ? (result.payload as Record<string, unknown>)
+      : null;
+
+  return { ...result, ok: result.ok && Boolean(payload), payload };
+}
+
+export async function getMercadoLibreJson(
+  connectionId: string,
+  resource: string,
+  request: typeof fetch = fetch,
+) {
+  const result = await requestMercadoLibreJson(connectionId, resource, request);
+
+  if (!result.ok) {
     await prismadb.marketplaceConnection.update({
       where: { id: connectionId },
       data: {
-        lastError: `Mercado Libre rechazó la consulta del recurso (${response.status})`,
-        ...(response.status === 401
+        lastError: `Mercado Libre rechazó la consulta del recurso (${result.status})`,
+        ...(result.status === 401
           ? { status: MarketplaceConnectionStatus.REAUTH_REQUIRED }
           : {}),
       },
     });
     throw new Error(
-      `No fue posible consultar Mercado Libre (${response.status})`,
+      `No fue posible consultar Mercado Libre (${result.status})`,
     );
   }
 
-  return payload as Record<string, unknown>;
+  return result.payload;
+}
+
+export async function getMercadoLibreResource(
+  connectionId: string,
+  resource: string,
+  request: typeof fetch = fetch,
+) {
+  const payload = await getMercadoLibreJson(connectionId, resource, request);
+  const result =
+    payload && typeof payload === "object" && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : null;
+
+  if (!result) {
+    throw new Error("Mercado Libre devolvió una respuesta inválida");
+  }
+
+  return result;
 }

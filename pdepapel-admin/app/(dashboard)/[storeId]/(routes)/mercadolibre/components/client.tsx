@@ -2,6 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { MercadoLibreLogo } from "@/components/mercadolibre-logo";
 import {
   Card,
   CardContent,
@@ -9,17 +10,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  AlertCircle,
-  CheckCircle2,
-  Clock3,
-  ExternalLink,
-  Store,
-} from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock3, ExternalLink } from "lucide-react";
 import { useParams, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { MercadoLibreListingManager } from "./listing-manager";
+import { MercadoLibreHistoricalSales } from "./historical-sales";
 
 type MarketplaceConnection = {
   sellerId: string | null;
@@ -137,7 +133,10 @@ export default function MercadoLibreClient({
     <>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Mercado Libre</h1>
+          <div className="flex items-center gap-3">
+            <MercadoLibreLogo variant="full" className="h-8" />
+            <h1 className="text-3xl font-bold tracking-tight">Mercado Libre</h1>
+          </div>
           <p className="text-sm text-muted-foreground">
             Un canal adicional con precios e inventario controlados desde P de
             Papel.
@@ -172,6 +171,7 @@ export default function MercadoLibreClient({
         <Card className="border-amber-300">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
+              <MercadoLibreLogo className="h-5" />
               <AlertCircle className="h-5 w-5 text-amber-600" />
               Configuración pendiente
             </CardTitle>
@@ -192,7 +192,10 @@ export default function MercadoLibreClient({
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle>Cuenta vendedora</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <MercadoLibreLogo className="h-5" />
+              Cuenta vendedora
+            </CardTitle>
             <CardDescription>
               Autoriza solo la cuenta principal de P de Papel con permisos de
               administrador.
@@ -220,7 +223,7 @@ export default function MercadoLibreClient({
                 );
               }}
             >
-              <Store className="mr-2 h-4 w-4" />
+              <MercadoLibreLogo className="mr-2 h-4" />
               {connection
                 ? "Reconectar Mercado Libre"
                 : "Conectar Mercado Libre"}
@@ -244,12 +247,13 @@ export default function MercadoLibreClient({
           <CardHeader>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <CardTitle className="flex items-center gap-2">
+                <MercadoLibreLogo className="h-5" />
                 {queueState === "active" ? (
-                <CheckCircle2 className="h-5 w-5 text-success" />
+                  <CheckCircle2 className="h-5 w-5 text-success" />
                 ) : queueState === "error" ? (
                   <AlertCircle className="h-5 w-5 text-destructive" />
                 ) : queueState === "configuration" ? (
-                <AlertCircle className="h-5 w-5 text-amber-600" />
+                  <AlertCircle className="h-5 w-5 text-amber-600" />
                 ) : (
                   <Clock3 className="h-5 w-5 text-muted-foreground" />
                 )}
@@ -337,6 +341,16 @@ export default function MercadoLibreClient({
         </Card>
       ) : null}
 
+      <MercadoLibreHistoricalSales
+        storeId={storeId}
+        highlightedOrderId={searchParams.get("order")}
+        canReconcile={
+          connection?.status === "CONNECTED" &&
+          queueConfiguration.configured &&
+          Boolean(connection.recoveryScheduleId)
+        }
+      />
+
       <MercadoLibreListingManager
         storeId={storeId}
         products={products}
@@ -349,7 +363,10 @@ export default function MercadoLibreClient({
 
       <Card>
         <CardHeader>
-          <CardTitle>Próximos pasos</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <MercadoLibreLogo className="h-5" />
+            Próximos pasos
+          </CardTitle>
           <CardDescription>
             La integración se activa por etapas para proteger el inventario y
             las ventas actuales.
@@ -384,6 +401,7 @@ export default function MercadoLibreClient({
         rel="noreferrer"
         className="inline-flex items-center gap-1 text-sm text-primary underline-offset-4 hover:underline"
       >
+        <MercadoLibreLogo className="h-4" />
         Abrir Mercado Libre
         <ExternalLink className="h-3.5 w-3.5" />
       </a>

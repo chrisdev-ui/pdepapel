@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { MercadoLibreLogo } from "@/components/mercadolibre-logo";
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -39,7 +40,6 @@ import {
   ShoppingBag,
   ShoppingCart,
   Star,
-  Store,
   Tag,
   Truck,
   Type,
@@ -200,7 +200,7 @@ export function MainNav({
       label: "Mercado Libre",
       active: pathname.includes(dashboardPath("mercadolibre")),
       group: "sales",
-      icon: Store,
+      icon: MercadoLibreLogo,
     },
     {
       href: dashboardPath("envios"),

@@ -4,6 +4,8 @@ Esta guía se ejecuta en orden. P de Papel conserva el inventario como fuente de
 
 No compartas en chat, correo ni capturas el `Client Secret`, los tokens de QStash ni la llave de cifrado.
 
+Antes de desplegar la sincronización financiera y la notificación de nuevas ventas, aplica `prisma/manual-migrations/20260807_add_marketplace_order_notification_action.sql` a la base de datos de Railway. Es un cambio aditivo que permite calcular el neto y enviar el correo de forma durable y con reintentos.
+
 ## 1. Crear la aplicación de Mercado Libre
 
 1. Abre [Mis aplicaciones de Mercado Libre](https://applications.mercadolibre.com/) e inicia sesión con la **cuenta vendedora principal de P de Papel**. No uses una cuenta personal de desarrollador, un colaborador u operador.
@@ -11,13 +13,13 @@ No compartas en chat, correo ni capturas el `Client Secret`, los tokens de QStas
 3. En **Mis aplicaciones**, pulsa **Crear nueva aplicación**.
 4. Completa el formulario así:
 
-   | Campo | Valor que debes usar |
-   | --- | --- |
-   | Nombre | `P de Papel Mercado Libre` |
-   | Nombre corto, si aparece | `pdepapel-ml` |
-   | Descripción | `Conecta el catálogo de P de Papel con Mercado Libre Colombia para publicar productos y sincronizar ventas e inventario.` |
-   | Logo | Escoge el logo oficial de P de Papel en versión cuadrada. Usa PNG o JPG nítido y sigue el tamaño que indique el formulario. |
-   | Sitio web, si aparece | `https://papeleriapdepapel.com` |
+   | Campo                    | Valor que debes usar                                                                                                        |
+   | ------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+   | Nombre                   | `P de Papel Mercado Libre`                                                                                                  |
+   | Nombre corto, si aparece | `pdepapel-ml`                                                                                                               |
+   | Descripción              | `Conecta el catálogo de P de Papel con Mercado Libre Colombia para publicar productos y sincronizar ventas e inventario.`   |
+   | Logo                     | Escoge el logo oficial de P de Papel en versión cuadrada. Usa PNG o JPG nítido y sigue el tamaño que indique el formulario. |
+   | Sitio web, si aparece    | `https://papeleriapdepapel.com`                                                                                             |
 
    Si Mercado Libre avisa que el nombre o nombre corto ya existe, conserva el texto y añade `Colombia` al final.
 
@@ -34,27 +36,29 @@ No compartas en chat, correo ni capturas el `Client Secret`, los tokens de QStas
    - **Acceso offline / offline_access**, si aparece como opción separada
 
    El acceso offline es necesario para renovar el acceso de manera automática y mantener sincronizadas ventas y existencias.
+
 8. En la sección detallada de **Permisos**, selecciona solo lo necesario:
 
-   | Permiso | Nivel |
-   | --- | --- |
-   | Usuarios | **Lectura** |
-   | Comunicaciones pre y post ventas | **Sin acceso** |
-   | Publicación y sincronización | **Lectura y escritura** |
-   | Publicidad de un producto | **Sin acceso** |
-   | Facturación de una venta | **Sin acceso** |
-   | Métricas del negocio | **Sin acceso** |
-   | Promociones, cupones y descuentos de una venta | **Sin acceso** |
-   | Venta y envíos de un producto | **Lectura** |
+   | Permiso                                        | Nivel                   |
+   | ---------------------------------------------- | ----------------------- |
+   | Usuarios                                       | **Lectura**             |
+   | Comunicaciones pre y post ventas               | **Sin acceso**          |
+   | Publicación y sincronización                   | **Lectura y escritura** |
+   | Publicidad de un producto                      | **Sin acceso**          |
+   | Facturación de una venta                       | **Lectura**             |
+   | Métricas del negocio                           | **Sin acceso**          |
+   | Promociones, cupones y descuentos de una venta | **Sin acceso**          |
+   | Venta y envíos de un producto                  | **Lectura**             |
 
-   No selecciones lectura y escritura para todo: la integración solo publica y actualiza productos, y consulta órdenes confirmadas.
+   No selecciones lectura y escritura para todo: la integración solo publica y actualiza productos, consulta órdenes confirmadas y lee los cargos de cada venta para registrar el neto real.
+
 9. Si el formulario muestra **Notificaciones**, déjalo sin temas seleccionados por ahora. Si ya marcaste `orders_v2`, vuelve a **Tópicos** y desmárcalo: Mercado Libre exige una Callback URL al seleccionar un tema. No registres todavía la URL de producción porque el endpoint aún no está desplegado; una venta existente podría recibir intentos fallidos y Mercado Libre podría desactivar las notificaciones.
 10. Pulsa **Guardar** o **Crear aplicación**.
 11. En la pantalla de la aplicación, copia en el administrador de contraseñas de la empresa:
     - **APP ID / Client ID**
     - **Client Secret / Secret Key**
 
-   No los pegues en este documento, Git, mensajes ni capturas. No renueves el Client Secret sin actualizar Vercel primero: las nuevas autorizaciones fallarán hasta que el valor nuevo esté desplegado.
+No los pegues en este documento, Git, mensajes ni capturas. No renueves el Client Secret sin actualizar Vercel primero: las nuevas autorizaciones fallarán hasta que el valor nuevo esté desplegado.
 
 ## 2. Crear la cuenta de QStash
 
@@ -89,16 +93,16 @@ Haz este paso solo cuando el código y el esquema de base de datos hayan sido ap
 2. Abre **Settings** → **Environment Variables** → **Add New**.
 3. Agrega cada valor al entorno **Production**. Marca como sensible los secretos.
 
-   | Nombre | Valor | Sensible |
-   | --- | --- | --- |
-   | `MERCADOLIBRE_CLIENT_ID` | APP ID de Mercado Libre | Sí |
-   | `MERCADOLIBRE_CLIENT_SECRET` | Client Secret de Mercado Libre | Sí |
-   | `MERCADOLIBRE_OAUTH_REDIRECT_URI` | `https://admin.papeleriapdepapel.com/api/integrations/mercadolibre/callback` | No |
-   | `MERCADOLIBRE_TOKEN_ENCRYPTION_KEY` | Resultado del comando `openssl` | Sí |
-   | `QSTASH_TOKEN` | Token de Quickstart de QStash | Sí |
-   | `QSTASH_CURRENT_SIGNING_KEY` | Clave actual de QStash | Sí |
-   | `QSTASH_NEXT_SIGNING_KEY` | Clave siguiente de QStash | Sí |
-   | `ADMIN_WEB_URL` | `https://admin.papeleriapdepapel.com` | No |
+   | Nombre                              | Valor                                                                        | Sensible |
+   | ----------------------------------- | ---------------------------------------------------------------------------- | -------- |
+   | `MERCADOLIBRE_CLIENT_ID`            | APP ID de Mercado Libre                                                      | Sí       |
+   | `MERCADOLIBRE_CLIENT_SECRET`        | Client Secret de Mercado Libre                                               | Sí       |
+   | `MERCADOLIBRE_OAUTH_REDIRECT_URI`   | `https://admin.papeleriapdepapel.com/api/integrations/mercadolibre/callback` | No       |
+   | `MERCADOLIBRE_TOKEN_ENCRYPTION_KEY` | Resultado del comando `openssl`                                              | Sí       |
+   | `QSTASH_TOKEN`                      | Token de Quickstart de QStash                                                | Sí       |
+   | `QSTASH_CURRENT_SIGNING_KEY`        | Clave actual de QStash                                                       | Sí       |
+   | `QSTASH_NEXT_SIGNING_KEY`           | Clave siguiente de QStash                                                    | Sí       |
+   | `ADMIN_WEB_URL`                     | `https://admin.papeleriapdepapel.com`                                        | No       |
 
 4. Si `ADMIN_WEB_URL` ya existe, verifica que sea exactamente `https://admin.papeleriapdepapel.com`.
 5. Guarda cada variable. Los cambios de variables solo se aplican en un despliegue nuevo.
@@ -111,7 +115,7 @@ Haz este paso solo cuando el código y el esquema de base de datos hayan sido ap
 4. Comprueba que no aparezca el aviso de variables faltantes.
 5. Pulsa **Conectar Mercado Libre**.
 6. Inicia sesión con la cuenta vendedora principal de P de Papel, no con un operador o colaborador, y acepta los permisos solicitados.
-7. Al volver al panel, confirma que el estado diga **Conectada**.
+7. Al volver al panel, confirma que el estado diga **Conectada**. Si cambiaste un permiso después de haber conectado la cuenta, pulsa **Reconectar Mercado Libre** para emitir un token con el nuevo alcance.
 8. Pulsa **Activar procesamiento seguro** y espera el mensaje de confirmación. Esto crea una recuperación automática cada cinco minutos.
 
 ## 6. Activar notificaciones de ventas
@@ -149,10 +153,46 @@ La notificación no descuenta inventario por sí misma. P de Papel consulta la o
 5. Si Mercado Libre solicita características, agrégalas una por línea como `CODIGO=Valor`. Marca, MPN y GTIN se agregan si ya existen en el producto.
 6. Revisa precio, fotos, categoría y stock. Pulsa **Publicar** y confirma la acción.
 
+## Importar publicaciones existentes
+
+Usa este proceso para publicaciones que ya existían en Mercado Libre antes de activar la integración. No crea productos, no cambia precios y no modifica inventario hasta la confirmación final.
+
+1. Abre **Ventas** → **Mercado Libre** → **Publicaciones**.
+2. Pulsa **Importar existentes**. La revisión solo consulta Mercado Libre; todavía no cambia nada.
+3. Revisa cada publicación:
+   - Si tiene el mismo SKU que un producto local, P de Papel propone el vínculo automáticamente.
+   - Si aparece **Sin SKU** o no reconoce el SKU, usa el selector **Producto local** para elegir manualmente el producto correcto.
+   - Si ya está vinculada, no la selecciones otra vez.
+4. Marca solo las publicaciones correctas y pulsa **Vincular y sincronizar**. Confirma la acción.
+5. Las publicaciones activas o pausadas recibirán el stock local de P de Papel. Las cerradas quedan registradas, pero no se actualiza su stock.
+6. Revisa el precio y el colchón de seguridad de cada publicación importada. El precio importado se conserva como referencia exclusiva de Mercado Libre y nunca altera el de la tienda.
+
+## Conciliar ventas anteriores
+
+Usa este proceso para ventas hechas en Mercado Libre antes de activar esta integración. No es necesario crear un pedido manual en P de Papel.
+
+1. En Mercado Libre abre el detalle de la venta y confirma que figure como **Pagada**.
+2. Copia el número que aparece como **Venta #...**. Puede ser un pack que contiene una o más órdenes; P de Papel identificará las órdenes reales automáticamente.
+3. En Administración abre **Ventas** → **Mercado Libre** → **Ventas de Mercado Libre**.
+4. Pega el número y pulsa **Revisar venta**. Esta acción no cambia inventario ni crea registros.
+5. Revisa que cada producto local sugerido sea el correcto y que el stock mostrado aún incluya las unidades vendidas. Si ya descontaste esa venta manualmente, no la concilies: evita descontar dos veces.
+6. Copia del resumen de Mercado Libre los valores de **Cargos por venta**, **Envíos** e **Impuestos**. El sistema calcula el neto recibido automáticamente.
+7. Pulsa **Conciliar venta pagada** y confirma. P de Papel hará una sola vez lo siguiente:
+   - registra la orden real, el pack y los valores financieros;
+   - descuenta las unidades con un movimiento auditable;
+   - vincula la publicación existente de Mercado Libre con el producto local;
+   - programa la actualización del stock publicado en Mercado Libre.
+8. Revisa la sección **Ventas registradas**. Una venta ya conciliada no puede descontarse otra vez.
+
+Si aparece **Sin vínculo local**, el SKU de la publicación de Mercado Libre no coincide con el SKU del producto en P de Papel. Corrige el SKU en Mercado Libre o solicita soporte antes de conciliar; nunca adivines el producto.
+
 ## Reglas de inventario
 
 - Los precios de Mercado Libre no modifican el precio ni las ofertas de `papeleriapdepapel.com`.
 - Una venta confirmada descuenta inventario una sola vez y deja un movimiento auditable.
+- Cada venta pagada nueva consulta el detalle de liquidación de Mercado Libre. P de Papel registra como ingreso el **neto para P de Papel**: valor cobrado al cliente menos cargos de Mercado Libre, envío subsidiado e impuestos aplicados.
+- Si Mercado Libre todavía no publicó ese detalle, la venta muestra **Liquidación pendiente** y se reintenta de forma diferida. Nunca se presenta el valor bruto como ingreso de P de Papel.
+- Cada venta pagada nueva genera un correo administrativo con un enlace directo a su registro en **Ventas de Mercado Libre** solo después de confirmar el neto. El enlace resalta la venta y sus productos locales vinculados.
 - Si falta un vínculo del producto, falta stock o existe una condición insegura, la venta queda como excepción y no se descuenta parcialmente.
 - Una cancelación de Mercado Libre no repone automáticamente las unidades. El administrador debe confirmar el retorno físico antes de registrar un movimiento de devolución.
 - No publiques productos archivados, sin fotos, sin categoría o sin precio de Mercado Libre configurado.

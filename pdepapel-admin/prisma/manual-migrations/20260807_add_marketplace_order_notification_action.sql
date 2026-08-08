@@ -1,0 +1,9 @@
+ALTER TABLE `MarketplaceOutboxEvent`
+  MODIFY `action` ENUM(
+    'SYNC_STOCK',
+    'SYNC_PRICE',
+    'PAUSE_LISTING',
+    'ACTIVATE_LISTING',
+    'SYNC_ORDER_FINANCIALS',
+    'SEND_ORDER_NOTIFICATION'
+  ) NOT NULL;
