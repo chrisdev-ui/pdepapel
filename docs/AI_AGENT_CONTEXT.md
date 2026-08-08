@@ -67,11 +67,12 @@ This section records the important recent decisions and must be updated after fu
 
 ### Current baseline
 
-- Latest Mercado Libre expansion was committed as `5967e5f` (`feat(admin): complete Mercado Libre sales sync`).
+- Latest deployed Mercado Libre listing-content expansion was committed as `f9a88d6` (`feat(admin): enhance Mercado Libre listing management`) and its matching manual migration was applied to Railway.
 - The production manual enum migration `pdepapel-admin/prisma/manual-migrations/20260807_add_marketplace_order_notification_action.sql` has already been applied to Railway. It added the outbox actions `SYNC_ORDER_FINANCIALS` and `SEND_ORDER_NOTIFICATION`.
 - Mercado Libre was configured with the billing-read permission. After any permission change, token rotation, or client-secret rotation, the store owner must use **Reconectar Mercado Libre** in the admin panel so Mercado Libre issues a token with the correct scopes.
 - QStash is used for Mercado Libre background processing and recovery. The UI should clearly distinguish “configured/active” from a real processing failure. QStash delay values must use explicit units such as `"30s"` or `"5m"`, never a bare number such as `"30"`.
 - Marketplace listing content and prices are synchronized only after an explicit admin action. `SYNC_PRICE` updates the independent Mercado Libre price; `SYNC_LISTING_CONTENT` updates only the selected local photos, plain-text description, and configured attributes through QStash. Never make content synchronization automatic after a product edit.
+- The operations expansion is accompanied by `pdepapel-admin/prisma/manual-migrations/20260808_add_marketplace_operations.sql`, applied to Railway on 2026-08-08 after explicit approval. It adds marketplace question/shipment/claim records, reusable category templates, a local product-video library, minimum-margin guardrails, and the `SYNC_LISTING_STATUS`/`PUBLISH_LISTING` outbox actions.
 - A Mercado Libre Client Secret was previously shared outside the intended secret store. Treat it as compromised: rotate it in Mercado Libre, update the Vercel production environment variable, redeploy, then reconnect Mercado Libre. Never record the value in Git, this file, terminal history, screenshots, email, or chat.
 
 ### Previously completed product decisions
@@ -192,7 +193,7 @@ Current externally significant handlers include:
 - `/api/webhook/envioclick`
 - `/api/webhook/dian`
 - `/api/integrations/mercadolibre/callback`
-- `/api/cron/update-coupons` and `/api/cron/update-offers` (daily at `00:00`, defined in `pdepapel-admin/vercel.json`)
+- `/api/cron/update-coupons` and `/api/cron/update-offers` (daily at `00:00`, defined in `pdepapel-admin/vercel.json`). Mercado Libre health checks run daily at `13:00 UTC` through `.github/workflows/admin-scheduled-tasks.yml`, keeping the project within Vercel's two-cron limit and separate from offer updates.
 
 The Vercel config gives API handlers up to 60 seconds. Orders and checkout have 1024 MB memory and the same max duration. Do not make request handlers rely on long synchronous external workflows; enqueue durable work when appropriate.
 
@@ -417,7 +418,7 @@ For historic second-half 2025 reporting, use the fiscal guidance in `pdepapel-ad
 - OAuth redirect URL: `https://admin.papeleriapdepapel.com/api/integrations/mercadolibre/callback`
 - Production webhook URL: `https://admin.papeleriapdepapel.com/api/webhook/mercadolibre`
 - OAuth should use Authorization Code / server-side Client Secret as implemented. Do not enable PKCE until the implementation is deliberately updated for it.
-- Required granular scopes: user read, publication/synchronization read-write, sale billing read, and sale/shipping read. Do not request broad unrelated permissions for messages, advertising, business metrics, promotions, or VIS.
+- Required granular scopes: user read, publication/synchronization read-write, **pre/post-sale communications read-write**, sale billing read, and sale/shipping read. Do not request broad unrelated permissions for advertising, business metrics, promotions, or VIS.
 - After changing scopes, Client Secret, or other authorization-sensitive config, reconnect from the admin UI to obtain a fresh token.
 
 ### Required environment configuration
@@ -435,6 +436,8 @@ Configure only in the **admin Vercel project**, never in the public-shop project
 
 `QSTASH_URL` is not required by the current code path; the QStash SDK uses its configured service defaults plus `QSTASH_TOKEN`. Do not add unnecessary variables without also validating/documenting their use.
 
+The GitHub Actions repository secret `PDEPAPEL_ADMIN_CRON_SECRET` must equal the admin Vercel `CRON_SECRET`. It authorizes only the protected Mercado Libre health endpoint; never place it in workflow files, repository variables, or logs.
+
 ### Architecture
 
 ```mermaid
@@ -446,7 +449,7 @@ sequenceDiagram
   participant Worker as Internal queue handlers
   participant Email as Resend
 
-  ML->>WH: orders_v2 notification
+  ML->>WH: orders_v2 / questions / shipments / claims notification
   WH->>DB: deduplicate MarketplaceWebhookEvent
   WH->>QS: enqueue signed durable processing
   QS->>Worker: process order
@@ -478,7 +481,11 @@ For a new publication, an admin selects a local product, marketplace-specific pr
 - The pre-publication fee calculator uses Mercado Libre's `listing_prices` response. It is an estimate for decision-making only: shipping debits, taxes, refunds, campaigns, and the final settlement can change the actual net amount.
 - The category attributes endpoint drives the admin form's required fields. Keep the advanced `CODE=Value` area for exceptional attributes, but do not make admins discover standard requirements manually.
 - Mercado Libre performance is informative: show its quality score and pending actions, but never auto-change titles, photos, category, attributes, logistics, or promotions from those suggestions.
-- Marketplace video policy requires real product footage. Do **not** integrate an image-to-video animation service as a publishing source: Mercado Libre can reject animations/static-image videos. The administrator uses Mercado Libre's own free AI-assisted script/voice tool and then records/uploads the actual vertical clip in Mercado Libre.
+- Category templates are reusable only for the selected Mercado Libre category and save the approved technical attributes, safety buffer, and minimum margin. Applying one still requires an admin to review the draft before publication.
+- The operations panel has reviewable question-response suggestions. An admin must read/edit and explicitly send every buyer answer; no automatic messages are sent.
+- Bulk publication, pause/activate, and content/price/stock updates are capped at 20 selected listings and run through the idempotent QStash outbox after an explicit confirmation. Never bulk-publish the entire catalog automatically.
+- The minimum-margin field is an early warning before variable marketplace costs; actual profitability uses settled net collected minus recorded acquisition cost.
+- Marketplace video policy requires real product footage. Do **not** integrate an image-to-video animation service as a publishing source: Mercado Libre can reject animations/static-image videos. The local product-video library accepts a vertical 10–61 second clip (minimum 360 px wide, max 280 MB) for human review; an administrator uploads it manually in Mercado Libre because an ordinary MCO Clips API flow is not publicly verified for this integration.
 
 For existing publications:
 
@@ -524,6 +531,7 @@ Use the historical sale feature only for paid sales that occurred before webhook
 1. Confirm admin Vercel deployment includes all required variables.
 2. Confirm Mercado Libre connection status in admin. Reconnect after scope/token/secret change.
 3. Verify the `orders_v2` topic uses the exact production webhook URL.
+   Once the operations expansion is deployed and the token is reconnected, also enable `questions`, `shipments`, `claims`, and `claims_actions` on that same URL.
 4. Confirm the QStash schedule is active and queue signing keys match Vercel.
 5. Inspect `MarketplaceWebhookEvent` and `MarketplaceOutboxEvent` status/attempts/errors before manually retrying anything.
 6. For 401/403 financial errors, verify the **Facturación de una venta → Lectura** scope, then reconnect.
@@ -576,7 +584,7 @@ Full configuration runbook: `pdepapel-admin/docs/mercadolibre.md`.
 - **Unit/component (Vitest):** pure domain logic, route behavior, payment signatures, slug logic, dates, inventory, QStash/marketplace handling, UI behavior.
 - **Integration (admin):** real Prisma against isolated local MySQL Docker DB only.
 - **E2E (Playwright):** public navigation/SEO and authenticated admin smoke/fair flows. Public production checks are read-only after deployment.
-- **CI:** GitHub Actions runs quality checks on pull requests and pushes to `main`; public health checks run after successful production deployments and weekly.
+- **CI:** GitHub Actions runs quality checks on pull requests and pushes to `main`; public health checks run after successful production deployments and weekly; the protected Mercado Libre health review runs daily from `admin-scheduled-tasks.yml`.
 
 ### Commands
 
@@ -722,6 +730,8 @@ When user approval is granted:
 - [ ] Net settlement is exact or marked pending—never gross revenue by default.
 - [ ] Email waits for known net settlement.
 - [ ] Required Vercel variables, scopes, webhook topic, and reconnect step documented.
+- [ ] Question responses, listing status changes, and publication actions require explicit human confirmation.
+- [ ] Claim/return notifications remain review-only; no automatic refund or physical stock restock occurs.
 
 ### Fair/in-person inventory change
 

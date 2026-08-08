@@ -25,6 +25,7 @@ import { useState } from "react";
 
 import { MercadoLibreHistoricalSales } from "./historical-sales";
 import { MercadoLibreListingManager } from "./listing-manager";
+import { MercadoLibreOperationsCenter } from "./operations-center";
 
 type MarketplaceConnection = {
   sellerId: string | null;
@@ -338,6 +339,10 @@ export default function MercadoLibreClient({
             ) : null}
           </CardContent>
         </Card>
+      ) : null}
+
+      {connection?.status === "CONNECTED" ? (
+        <MercadoLibreOperationsCenter storeId={storeId} />
       ) : null}
 
       <MercadoLibreHistoricalSales

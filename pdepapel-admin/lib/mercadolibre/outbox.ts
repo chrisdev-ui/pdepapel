@@ -1,4 +1,5 @@
 import {
+  MarketplaceListingStatus,
   MarketplaceOutboxAction,
   MarketplaceOutboxStatus,
   MarketplaceOrderStatus,
@@ -14,6 +15,7 @@ import {
   type MercadoLibreOrderFinancials,
 } from "./order-financials";
 import { syncMercadoLibreListingContent } from "./listings";
+import { publishMercadoLibreListing } from "./listings";
 import { enqueueMercadoLibreOutboxEvent } from "./queue";
 
 const RETRY_DELAY_MS = 5 * 60 * 1000;
@@ -77,6 +79,23 @@ function getTargetPrice(payload: Prisma.JsonValue) {
     throw new Error("La tarea de sincronización no contiene un precio válido");
   }
   return targetPrice;
+}
+
+function getTargetListingStatus(payload: Prisma.JsonValue) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error("La tarea de sincronización no contiene un estado válido");
+  }
+  const targetStatus = (payload as Record<string, unknown>).targetStatus;
+  if (targetStatus !== "active" && targetStatus !== "paused") {
+    throw new Error("La tarea de sincronización no contiene un estado válido");
+  }
+  return targetStatus;
+}
+
+function toMarketplaceListingStatus(status: string) {
+  return status === "active"
+    ? MarketplaceListingStatus.ACTIVE
+    : MarketplaceListingStatus.PAUSED;
 }
 
 export async function queueMarketplaceStockSyncEvents(
@@ -194,6 +213,72 @@ export async function queueMarketplaceListingContentSyncEvent(
       listingId,
       productId,
       action: MarketplaceOutboxAction.SYNC_LISTING_CONTENT,
+      deduplicationKey,
+      payload: {},
+    },
+  });
+}
+
+export async function queueMarketplaceListingStatusSyncEvent(
+  transaction: MarketplaceListingSyncTransaction,
+  {
+    connectionId,
+    listingId,
+    productId,
+    targetStatus,
+  }: {
+    connectionId: string;
+    listingId: string;
+    productId: string;
+    targetStatus: "active" | "paused";
+  },
+) {
+  const deduplicationKey = `${connectionId}:status:${listingId}`;
+  await transaction.marketplaceOutboxEvent.upsert({
+    where: { deduplicationKey },
+    update: {
+      payload: { targetStatus },
+      status: MarketplaceOutboxStatus.PENDING,
+      availableAt: new Date(),
+      lastError: null,
+    },
+    create: {
+      connectionId,
+      listingId,
+      productId,
+      action: MarketplaceOutboxAction.SYNC_LISTING_STATUS,
+      deduplicationKey,
+      payload: { targetStatus },
+    },
+  });
+}
+
+export async function queueMarketplaceListingPublicationEvent(
+  transaction: MarketplaceListingSyncTransaction,
+  {
+    connectionId,
+    listingId,
+    productId,
+  }: {
+    connectionId: string;
+    listingId: string;
+    productId: string;
+  },
+) {
+  const deduplicationKey = `${connectionId}:publish:${listingId}`;
+  await transaction.marketplaceOutboxEvent.upsert({
+    where: { deduplicationKey },
+    update: {
+      payload: {},
+      status: MarketplaceOutboxStatus.PENDING,
+      availableAt: new Date(),
+      lastError: null,
+    },
+    create: {
+      connectionId,
+      listingId,
+      productId,
+      action: MarketplaceOutboxAction.PUBLISH_LISTING,
       deduplicationKey,
       payload: {},
     },
@@ -376,6 +461,31 @@ async function updateMercadoLibrePrice(
   }
 }
 
+async function updateMercadoLibreListingStatus(
+  connectionId: string,
+  externalItemId: string,
+  targetStatus: "active" | "paused",
+) {
+  const accessToken = await getMercadoLibreAccessToken(connectionId);
+  const response = await fetch(
+    `https://api.mercadolibre.com/items/${encodeURIComponent(externalItemId)}`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ status: targetStatus }),
+      cache: "no-store",
+    },
+  );
+  if (!response.ok) {
+    throw new Error(
+      `Mercado Libre rechazó la actualización de estado (${response.status})`,
+    );
+  }
+}
+
 export async function processMarketplaceOutboxEvent(eventId: string) {
   const event = await prismadb.marketplaceOutboxEvent.findUnique({
     where: { id: eventId },
@@ -425,6 +535,7 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
   if (
     event.action !== MarketplaceOutboxAction.SEND_ORDER_NOTIFICATION &&
     event.action !== MarketplaceOutboxAction.SYNC_ORDER_FINANCIALS &&
+    event.action !== MarketplaceOutboxAction.PUBLISH_LISTING &&
     !event.listing?.externalItemId
   ) {
     await prismadb.marketplaceOutboxEvent.update({
@@ -458,6 +569,13 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
     let syncedQuantity: number | null = null;
     let syncedPrice: number | null = null;
     let syncedListingContent = false;
+    let syncedListingStatus: MarketplaceListingStatus | null = null;
+    let publishedItem: {
+      id: string;
+      permalink: string | null;
+      status: string | null;
+      descriptionWarning: string | null;
+    } | null = null;
     let financialsUpdate: MarketplaceOrderFinancialsUpdate | null = null;
     if (event.action === MarketplaceOutboxAction.SYNC_ORDER_FINANCIALS) {
       const payload = event.payload as Record<string, unknown> | null;
@@ -613,6 +731,30 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
         product: event.listing!.product,
       });
       syncedListingContent = true;
+    } else if (event.action === MarketplaceOutboxAction.SYNC_LISTING_STATUS) {
+      const targetStatus = getTargetListingStatus(event.payload);
+      await updateMercadoLibreListingStatus(
+        event.connectionId,
+        event.listing!.externalItemId!,
+        targetStatus,
+      );
+      syncedListingStatus = toMarketplaceListingStatus(targetStatus);
+    } else if (event.action === MarketplaceOutboxAction.PUBLISH_LISTING) {
+      if (event.listing!.externalItemId) {
+        throw new Error(
+          "La publicación ya tiene un identificador de Mercado Libre",
+        );
+      }
+      publishedItem = await publishMercadoLibreListing({
+        id: event.listing!.id,
+        connectionId: event.listing!.connectionId,
+        categoryId: event.listing!.categoryId,
+        listingType: event.listing!.listingType,
+        marketplacePrice: event.listing!.marketplacePrice,
+        stockSafetyBuffer: event.listing!.stockSafetyBuffer,
+        metadata: event.listing!.metadata,
+        product: event.listing!.product,
+      });
     } else {
       throw new Error(
         "La acción de sincronización todavía no está implementada",
@@ -643,7 +785,9 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
         event.listing &&
         (syncedQuantity !== null ||
           syncedPrice !== null ||
-          syncedListingContent)
+          syncedListingContent ||
+          syncedListingStatus !== null ||
+          publishedItem)
       ) {
         await transaction.marketplaceListing.update({
           where: { id: event.listing.id },
@@ -652,10 +796,32 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
               ? { lastSyncedStock: syncedQuantity }
               : {}),
             ...(syncedPrice !== null ? { lastSyncedPrice: syncedPrice } : {}),
-            ...(syncedPrice !== null || syncedListingContent
+            ...(syncedPrice !== null ||
+            syncedListingContent ||
+            syncedListingStatus !== null ||
+            publishedItem
               ? { lastRemoteUpdateAt: new Date() }
               : {}),
-            lastError: null,
+            ...(syncedListingStatus !== null
+              ? { status: syncedListingStatus }
+              : {}),
+            ...(publishedItem
+              ? {
+                  externalItemId: publishedItem.id,
+                  externalPermalink: publishedItem.permalink,
+                  status:
+                    publishedItem.status === "active"
+                      ? MarketplaceListingStatus.ACTIVE
+                      : MarketplaceListingStatus.PAUSED,
+                  lastSyncedStock: Math.max(
+                    0,
+                    event.listing.product.stock -
+                      event.listing.stockSafetyBuffer,
+                  ),
+                  lastSyncedPrice: event.listing.marketplacePrice,
+                }
+              : {}),
+            lastError: publishedItem?.descriptionWarning ?? null,
           },
         });
       }
@@ -668,6 +834,19 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
   } catch (error) {
     const financialsPending =
       error instanceof MercadoLibreFinancialsPendingError;
+    const errorMessage = getSafeErrorMessage(error);
+    if (
+      event.action === MarketplaceOutboxAction.PUBLISH_LISTING &&
+      event.listing?.id
+    ) {
+      await prismadb.marketplaceListing.update({
+        where: { id: event.listing.id },
+        data: {
+          status: MarketplaceListingStatus.ERROR,
+          lastError: errorMessage,
+        },
+      });
+    }
     await prismadb.marketplaceOutboxEvent.update({
       where: { id: event.id },
       data: {
@@ -678,7 +857,7 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
               ? FINANCIALS_PENDING_RETRY_DELAY_MS
               : RETRY_DELAY_MS),
         ),
-        lastError: getSafeErrorMessage(error),
+        lastError: errorMessage,
       },
     });
     if (financialsPending) {

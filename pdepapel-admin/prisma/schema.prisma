@@ -9,65 +9,66 @@ datasource db {
 }
 
 model Store {
-  id                     String                  @id @default(uuid())
-  name                   String
-  userId                 String
-  logoUrl                String?
-  phone                  String?                 @default("")
-  email                  String?                 @default("")
-  address                String?                 @default("")
-  instagram              String?                 @default("")
-  tiktok                 String?                 @default("")
-  youtube                String?                 @default("")
-  facebook               String?                 @default("")
-  twitter                String?                 @default("")
-  pinterest              String?                 @default("")
-  policies               Json?                   @default("{}")
-  daneCode               String?                 @default("")
-  neighborhood           String?                 @default("")
-  addressReference       String?                 @default("")
-  contactName            String?                 @default("")
-  defaultPackageWeight   Float?                  @default(1.0) // Peso por defecto (kg)
-  defaultPackageHeight   Float?                  @default(10.0) // Alto por defecto (cm)
-  defaultPackageWidth    Float?                  @default(10.0) // Ancho por defecto (cm)
-  defaultPackageLength   Float?                  @default(10.0) // Largo por defecto (cm)
-  createdAt              DateTime                @default(now())
-  updatedAt              DateTime                @updatedAt
-  types                  Type[]                  @relation("StoreToType")
-  billboards             Billboard[]             @relation("StoreToBillboard")
-  posts                  Post[]                  @relation("StoreToPost")
-  categories             Category[]              @relation("StoreToCategory")
-  sizes                  Size[]                  @relation("StoreToSize")
-  colors                 Color[]                 @relation("StoreToColor")
-  designs                Design[]                @relation("StoreToDesign")
-  products               Product[]               @relation("StoreToProduct")
-  productSlugAliases     ProductSlugAlias[]
-  categorySlugAliases    CategorySlugAlias[]
-  orders                 Order[]                 @relation("StoreToOrder")
-  mainBanner             MainBanner?             @relation("StoreToMainBanner")
-  banners                Banner[]                @relation("StoreToBanner")
-  reviews                Review[]                @relation("StoreToReview")
-  shippings              Shipping[]              @relation("StoreToShipping")
-  payments               PaymentDetails[]        @relation("StoreToPaymentDetails")
-  suppliers              Supplier[]              @relation("StoreToSupplier")
-  coupons                Coupon[]                @relation("StoreToCoupons")
-  shippingQuotes         ShippingQuote[]         @relation("StoreToShippingQuotes")
-  offers                 Offer[]                 @relation("StoreToOffer")
-  boxes                  Box[]                   @relation("StoreToBox")
-  productGroups          ProductGroup[]          @relation("StoreToProductGroup")
-  inventoryMovements     InventoryMovement[]     @relation("StoreToInventoryMovement")
-  restockOrders          RestockOrder[]          @relation("StoreToRestockOrder")
-  customOrders           CustomOrder[]           @relation("StoreToCustomOrder")
-  quotations             Quotation[]             @relation("StoreToQuotation")
-  whatsappMessages       WhatsAppMessage[]       @relation("StoreToWhatsAppMessage")
-  whatsappTemplates      WhatsAppTemplate[]      @relation("StoreToWhatsAppTemplate")
-  quoteRequests          QuoteRequest[]          @relation("StoreToQuoteRequest")
-  invoices               Invoice[]               @relation("StoreToInvoice")
-  taxPurchases           TaxPurchase[]           @relation("StoreToTaxPurchase")
-  customerReactivations  CustomerReactivation[]  @relation("StoreToCustomerReactivation")
-  fairEvents             FairEvent[]
-  marketplaceConnections MarketplaceConnection[]
-  marketplaceOAuthStates MarketplaceOAuthState[]
+  id                           String                        @id @default(uuid())
+  name                         String
+  userId                       String
+  logoUrl                      String?
+  phone                        String?                       @default("")
+  email                        String?                       @default("")
+  address                      String?                       @default("")
+  instagram                    String?                       @default("")
+  tiktok                       String?                       @default("")
+  youtube                      String?                       @default("")
+  facebook                     String?                       @default("")
+  twitter                      String?                       @default("")
+  pinterest                    String?                       @default("")
+  policies                     Json?                         @default("{}")
+  daneCode                     String?                       @default("")
+  neighborhood                 String?                       @default("")
+  addressReference             String?                       @default("")
+  contactName                  String?                       @default("")
+  defaultPackageWeight         Float?                        @default(1.0) // Peso por defecto (kg)
+  defaultPackageHeight         Float?                        @default(10.0) // Alto por defecto (cm)
+  defaultPackageWidth          Float?                        @default(10.0) // Ancho por defecto (cm)
+  defaultPackageLength         Float?                        @default(10.0) // Largo por defecto (cm)
+  createdAt                    DateTime                      @default(now())
+  updatedAt                    DateTime                      @updatedAt
+  types                        Type[]                        @relation("StoreToType")
+  billboards                   Billboard[]                   @relation("StoreToBillboard")
+  posts                        Post[]                        @relation("StoreToPost")
+  categories                   Category[]                    @relation("StoreToCategory")
+  sizes                        Size[]                        @relation("StoreToSize")
+  colors                       Color[]                       @relation("StoreToColor")
+  designs                      Design[]                      @relation("StoreToDesign")
+  products                     Product[]                     @relation("StoreToProduct")
+  productSlugAliases           ProductSlugAlias[]
+  categorySlugAliases          CategorySlugAlias[]
+  orders                       Order[]                       @relation("StoreToOrder")
+  mainBanner                   MainBanner?                   @relation("StoreToMainBanner")
+  banners                      Banner[]                      @relation("StoreToBanner")
+  reviews                      Review[]                      @relation("StoreToReview")
+  shippings                    Shipping[]                    @relation("StoreToShipping")
+  payments                     PaymentDetails[]              @relation("StoreToPaymentDetails")
+  suppliers                    Supplier[]                    @relation("StoreToSupplier")
+  coupons                      Coupon[]                      @relation("StoreToCoupons")
+  shippingQuotes               ShippingQuote[]               @relation("StoreToShippingQuotes")
+  offers                       Offer[]                       @relation("StoreToOffer")
+  boxes                        Box[]                         @relation("StoreToBox")
+  productGroups                ProductGroup[]                @relation("StoreToProductGroup")
+  inventoryMovements           InventoryMovement[]           @relation("StoreToInventoryMovement")
+  restockOrders                RestockOrder[]                @relation("StoreToRestockOrder")
+  customOrders                 CustomOrder[]                 @relation("StoreToCustomOrder")
+  quotations                   Quotation[]                   @relation("StoreToQuotation")
+  whatsappMessages             WhatsAppMessage[]             @relation("StoreToWhatsAppMessage")
+  whatsappTemplates            WhatsAppTemplate[]            @relation("StoreToWhatsAppTemplate")
+  quoteRequests                QuoteRequest[]                @relation("StoreToQuoteRequest")
+  invoices                     Invoice[]                     @relation("StoreToInvoice")
+  taxPurchases                 TaxPurchase[]                 @relation("StoreToTaxPurchase")
+  customerReactivations        CustomerReactivation[]        @relation("StoreToCustomerReactivation")
+  fairEvents                   FairEvent[]
+  marketplaceConnections       MarketplaceConnection[]
+  marketplaceOAuthStates       MarketplaceOAuthState[]
+  marketplaceCategoryTemplates MarketplaceCategoryTemplate[]
 }
 
 model Billboard {
@@ -300,6 +301,8 @@ model Product {
   marketplaceListings     MarketplaceListing[]
   marketplaceOrderItems   MarketplaceOrderItem[]
   marketplaceOutboxEvents MarketplaceOutboxEvent[]
+  marketplaceQuestions    MarketplaceQuestion[]
+  videos                  ProductVideo[]
 
   // -- KIT / COMBO FIELDS --
   isKit         Boolean      @default(false)
@@ -1304,6 +1307,9 @@ model MarketplaceConnection {
   orders        MarketplaceOrder[]
   webhookEvents MarketplaceWebhookEvent[]
   outboxEvents  MarketplaceOutboxEvent[]
+  questions     MarketplaceQuestion[]
+  shipments     MarketplaceShipment[]
+  claims        MarketplaceClaim[]
 
   @@unique([storeId, provider])
   @@index([provider, sellerId])
@@ -1340,6 +1346,7 @@ model MarketplaceListing {
   stockSafetyBuffer     Int                      @default(0)
   syncStock             Boolean                  @default(true)
   syncPrice             Boolean                  @default(false)
+  minimumMarginAmount   Float?
   status                MarketplaceListingStatus @default(DRAFT)
   lastSyncedStock       Int?
   lastSyncedPrice       Float?
@@ -1353,12 +1360,30 @@ model MarketplaceListing {
   product      Product                  @relation(fields: [productId], references: [id])
   orderItems   MarketplaceOrderItem[]
   outboxEvents MarketplaceOutboxEvent[]
+  questions    MarketplaceQuestion[]
 
   @@unique([connectionId, productId])
   @@unique([connectionId, externalItemId, externalVariationId])
   @@index([productId])
   @@index([connectionId, status])
   @@index([externalUserProductId])
+}
+
+model MarketplaceCategoryTemplate {
+  id                  String   @id @default(uuid())
+  storeId             String
+  categoryId          String
+  name                String
+  attributes          Json
+  stockSafetyBuffer   Int?
+  minimumMarginAmount Float?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, categoryId])
+  @@index([storeId, updatedAt])
 }
 
 model MarketplaceOrder {
@@ -1386,6 +1411,8 @@ model MarketplaceOrder {
 
   connection MarketplaceConnection  @relation(fields: [connectionId], references: [id], onDelete: Cascade)
   items      MarketplaceOrderItem[]
+  shipments  MarketplaceShipment[]
+  claims     MarketplaceClaim[]
 
   @@unique([connectionId, externalOrderId])
   @@index([connectionId, status, paidAt])
@@ -1464,6 +1491,101 @@ model MarketplaceOutboxEvent {
   @@index([connectionId, status, availableAt])
   @@index([listingId])
   @@index([productId])
+}
+
+model MarketplaceQuestion {
+  id                 String    @id @default(uuid())
+  connectionId       String
+  listingId          String?
+  productId          String?
+  externalQuestionId String
+  externalItemId     String
+  status             String
+  question           String    @db.Text
+  answer             String?   @db.Text
+  askedAt            DateTime?
+  answeredAt         DateTime?
+  lastRemoteUpdateAt DateTime?
+  metadata           Json?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  connection MarketplaceConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  listing    MarketplaceListing?   @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  product    Product?              @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@unique([connectionId, externalQuestionId])
+  @@index([connectionId, status, askedAt])
+  @@index([listingId])
+  @@index([productId])
+  @@index([externalItemId])
+}
+
+model MarketplaceShipment {
+  id                 String    @id @default(uuid())
+  connectionId       String
+  marketplaceOrderId String?
+  externalShipmentId String
+  status             String
+  substatus          String?
+  logisticsType      String?
+  trackingNumber     String?
+  lastRemoteUpdateAt DateTime?
+  metadata           Json?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  connection       MarketplaceConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  marketplaceOrder MarketplaceOrder?     @relation(fields: [marketplaceOrderId], references: [id], onDelete: SetNull)
+
+  @@unique([connectionId, externalShipmentId])
+  @@index([connectionId, status, updatedAt])
+  @@index([marketplaceOrderId])
+}
+
+model MarketplaceClaim {
+  id                 String    @id @default(uuid())
+  connectionId       String
+  marketplaceOrderId String?
+  externalClaimId    String
+  externalOrderId    String?
+  status             String
+  stage              String?
+  type               String?
+  reasonId           String?
+  title              String?   @db.Text
+  dueAt              DateTime?
+  lastRemoteUpdateAt DateTime?
+  metadata           Json?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  connection       MarketplaceConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  marketplaceOrder MarketplaceOrder?     @relation(fields: [marketplaceOrderId], references: [id], onDelete: SetNull)
+
+  @@unique([connectionId, externalClaimId])
+  @@index([connectionId, status, dueAt])
+  @@index([marketplaceOrderId])
+  @@index([externalOrderId])
+}
+
+model ProductVideo {
+  id              String   @id @default(uuid())
+  productId       String
+  url             String   @db.Text
+  cloudinaryId    String?  @db.VarChar(255)
+  format          String?  @db.VarChar(24)
+  durationSeconds Float?
+  width           Int?
+  height          Int?
+  bytes           Int?
+  isPrimary       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, isPrimary])
 }
 
 model CustomerReactivation {
@@ -1568,6 +1690,8 @@ enum MarketplaceOutboxAction {
   SYNC_STOCK
   SYNC_PRICE
   SYNC_LISTING_CONTENT
+  SYNC_LISTING_STATUS
+  PUBLISH_LISTING
   PAUSE_LISTING
   ACTIVATE_LISTING
   SYNC_ORDER_FINANCIALS

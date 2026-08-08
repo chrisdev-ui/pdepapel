@@ -40,6 +40,8 @@ import {
 import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
 
+import { ProductVideoLibrary } from "./product-video-library";
+
 type ProductReference = {
   id: string;
   name: string;
@@ -74,6 +76,7 @@ type Listing = {
   stockSafetyBuffer: number;
   syncStock: boolean;
   syncPrice: boolean;
+  minimumMarginAmount: number | null;
   status: "DRAFT" | "ACTIVE" | "PAUSED" | "CLOSED" | "ERROR" | "UNLINKED";
   externalPermalink: string | null;
   externalItemId: string | null;
@@ -103,6 +106,7 @@ type ListingForm = {
   marketplacePrice: string;
   categoryId: string;
   stockSafetyBuffer: string;
+  minimumMarginAmount: string;
   syncPrice: boolean;
   imageUrls: string[];
   attributes: string;
@@ -114,6 +118,15 @@ type CategoryAttribute = {
   required: boolean;
   valueType: string;
   values: { id: string; name: string }[];
+};
+
+type CategoryTemplate = {
+  id: string;
+  categoryId: string;
+  name: string;
+  attributes: MarketplaceAttribute[];
+  stockSafetyBuffer: number | null;
+  minimumMarginAmount: number | null;
 };
 
 type PriceEstimate = {
@@ -133,6 +146,13 @@ type ListingQuality = {
     label: string | null;
     mode: "OPPORTUNITY" | "WARNING" | null;
   }[];
+};
+
+type ContentReview = {
+  title: string;
+  titleLength: number;
+  descriptionPreview: string;
+  checks: { label: string; ready: boolean; detail: string }[];
 };
 
 type ImportCandidate = {
@@ -170,6 +190,7 @@ const emptyForm: ListingForm = {
   marketplacePrice: "",
   categoryId: "",
   stockSafetyBuffer: "1",
+  minimumMarginAmount: "",
   syncPrice: true,
   imageUrls: [],
   attributes: "",
@@ -180,6 +201,17 @@ const currencyFormatter = new Intl.NumberFormat("es-CO", {
   currency: "COP",
   maximumFractionDigits: 0,
 });
+
+const bulkActionLabels = {
+  publish: "Publicar borradores",
+  sync_stock: "Sincronizar stock",
+  sync_price: "Sincronizar precios",
+  sync_content: "Sincronizar contenido",
+  pause: "Pausar publicaciones",
+  activate: "Activar publicaciones",
+} as const;
+
+type BulkAction = keyof typeof bulkActionLabels;
 
 function attributesToText(attributes: MarketplaceAttribute[] | undefined) {
   return (attributes ?? [])
@@ -274,6 +306,12 @@ export function MercadoLibreListingManager({
     Record<string, ListingQuality>
   >({});
   const [loadingQualityId, setLoadingQualityId] = useState<string | null>(null);
+  const [contentReviewByListingId, setContentReviewByListingId] = useState<
+    Record<string, ContentReview>
+  >({});
+  const [reviewingContentId, setReviewingContentId] = useState<string | null>(
+    null,
+  );
   const [syncingContentId, setSyncingContentId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [selectedProduct, setSelectedProduct] =
@@ -287,6 +325,13 @@ export function MercadoLibreListingManager({
   >({});
   const [isLoadingImportPreview, setIsLoadingImportPreview] = useState(false);
   const [isImportingListings, setIsImportingListings] = useState(false);
+  const [selectedListingIds, setSelectedListingIds] = useState<string[]>([]);
+  const [bulkAction, setBulkAction] = useState<BulkAction>("sync_stock");
+  const [isRunningBulkAction, setIsRunningBulkAction] = useState(false);
+  const [categoryTemplates, setCategoryTemplates] = useState<
+    CategoryTemplate[]
+  >([]);
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
 
   const loadListings = useCallback(async () => {
     setIsLoading(true);
@@ -296,6 +341,7 @@ export function MercadoLibreListingManager({
       );
       if (!response.ok) throw new Error(await getErrorMessage(response));
       setListings((await response.json()) as Listing[]);
+      setSelectedListingIds([]);
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -310,6 +356,26 @@ export function MercadoLibreListingManager({
   useEffect(() => {
     void loadListings();
   }, [loadListings]);
+
+  const loadCategoryTemplates = useCallback(async () => {
+    try {
+      const response = await fetch(
+        `/api/${storeId}/marketplaces/mercadolibre/templates`,
+      );
+      if (!response.ok) throw new Error(await getErrorMessage(response));
+      setCategoryTemplates((await response.json()) as CategoryTemplate[]);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "No fue posible cargar las plantillas de categorías",
+      );
+    }
+  }, [storeId]);
+
+  useEffect(() => {
+    void loadCategoryTemplates();
+  }, [loadCategoryTemplates]);
 
   const updateForm = (key: keyof ListingForm, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -333,6 +399,7 @@ export function MercadoLibreListingManager({
       marketplacePrice: String(listing.marketplacePrice ?? ""),
       categoryId: listing.categoryId ?? "",
       stockSafetyBuffer: String(listing.stockSafetyBuffer),
+      minimumMarginAmount: String(listing.minimumMarginAmount ?? ""),
       syncPrice: listing.syncPrice,
       imageUrls: listing.metadata?.media?.imageUrls?.length
         ? listing.metadata.media.imageUrls
@@ -607,6 +674,30 @@ export function MercadoLibreListingManager({
     }
   };
 
+  const reviewListingContent = async (listing: Listing) => {
+    setReviewingContentId(listing.id);
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/${storeId}/marketplaces/mercadolibre/listings/${listing.id}/content-review`,
+      );
+      if (!response.ok) throw new Error(await getErrorMessage(response));
+      const review = (await response.json()) as ContentReview;
+      setContentReviewByListingId((current) => ({
+        ...current,
+        [listing.id]: review,
+      }));
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "No fue posible revisar el contenido de la publicación",
+      );
+    } finally {
+      setReviewingContentId(null);
+    }
+  };
+
   const saveListing = async () => {
     if (!form.productId || !form.marketplacePrice || !form.categoryId) {
       setError(
@@ -623,6 +714,7 @@ export function MercadoLibreListingManager({
         marketplacePrice: form.marketplacePrice,
         categoryId: form.categoryId,
         stockSafetyBuffer: form.stockSafetyBuffer,
+        minimumMarginAmount: form.minimumMarginAmount,
         syncStock: true,
         syncPrice: form.syncPrice,
         imageUrls: form.imageUrls,
@@ -695,6 +787,126 @@ export function MercadoLibreListingManager({
       );
     } finally {
       setPublishingId(null);
+    }
+  };
+
+  const toggleListingSelection = (listingId: string) => {
+    setSelectedListingIds((current) =>
+      current.includes(listingId)
+        ? current.filter((id) => id !== listingId)
+        : [...current, listingId],
+    );
+  };
+
+  const runBulkAction = async () => {
+    if (selectedListingIds.length === 0) {
+      setError("Selecciona al menos una publicación para continuar");
+      return;
+    }
+    const actionLabel = bulkActionLabels[bulkAction].toLowerCase();
+    if (
+      !window.confirm(
+        `¿Confirmas ${actionLabel} para ${selectedListingIds.length} publicación${selectedListingIds.length === 1 ? "" : "es"}? Las acciones se procesarán de forma segura en segundo plano.`,
+      )
+    ) {
+      return;
+    }
+
+    setIsRunningBulkAction(true);
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/${storeId}/marketplaces/mercadolibre/listings/bulk`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: bulkAction,
+            listingIds: selectedListingIds,
+          }),
+        },
+      );
+      if (!response.ok) throw new Error(await getErrorMessage(response));
+      await loadListings();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "No fue posible programar la acción masiva",
+      );
+    } finally {
+      setIsRunningBulkAction(false);
+    }
+  };
+
+  const applyCategoryTemplate = (template: CategoryTemplate) => {
+    setForm((current) => ({
+      ...current,
+      attributes: attributesToText(template.attributes),
+      stockSafetyBuffer:
+        template.stockSafetyBuffer === null
+          ? current.stockSafetyBuffer
+          : String(template.stockSafetyBuffer),
+      minimumMarginAmount:
+        template.minimumMarginAmount === null
+          ? current.minimumMarginAmount
+          : String(template.minimumMarginAmount),
+    }));
+    setError(null);
+  };
+
+  const saveCategoryTemplate = async () => {
+    if (!form.categoryId) {
+      setError("Selecciona una categoría antes de guardar una plantilla");
+      return;
+    }
+    let attributes: MarketplaceAttribute[];
+    try {
+      attributes = parseAttributes(form.attributes);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Revisa las características antes de guardar la plantilla",
+      );
+      return;
+    }
+    if (attributes.length === 0) {
+      setError(
+        "Agrega al menos una característica antes de guardar la plantilla",
+      );
+      return;
+    }
+    const name = window.prompt("Nombre para la plantilla de esta categoría:");
+    if (!name?.trim()) return;
+
+    setIsSavingTemplate(true);
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/${storeId}/marketplaces/mercadolibre/templates`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            categoryId: form.categoryId,
+            name: name.trim(),
+            attributes,
+            stockSafetyBuffer: form.stockSafetyBuffer,
+            minimumMarginAmount: form.minimumMarginAmount,
+          }),
+        },
+      );
+      if (!response.ok) throw new Error(await getErrorMessage(response));
+      await loadCategoryTemplates();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "No fue posible guardar la plantilla",
+      );
+    } finally {
+      setIsSavingTemplate(false);
     }
   };
 
@@ -916,74 +1128,170 @@ export function MercadoLibreListingManager({
           </p>
         ) : (
           <div className="grid gap-3">
+            <div className="flex flex-col gap-3 rounded-md border bg-muted/20 p-3 lg:flex-row lg:items-center lg:justify-between">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input
+                  type="checkbox"
+                  checked={
+                    listings.length > 0 &&
+                    selectedListingIds.length === listings.length
+                  }
+                  onChange={(event) =>
+                    setSelectedListingIds(
+                      event.target.checked
+                        ? listings.map((listing) => listing.id)
+                        : [],
+                    )
+                  }
+                  className="h-4 w-4 rounded border-input"
+                />
+                Seleccionar todas ({selectedListingIds.length})
+              </label>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <select
+                  aria-label="Acción masiva para publicaciones"
+                  value={bulkAction}
+                  onChange={(event) =>
+                    setBulkAction(event.target.value as BulkAction)
+                  }
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  {Object.entries(bulkActionLabels).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  type="button"
+                  onClick={() => void runBulkAction()}
+                  disabled={
+                    isRunningBulkAction || selectedListingIds.length === 0
+                  }
+                >
+                  {isRunningBulkAction ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : null}
+                  Aplicar de forma segura
+                </Button>
+              </div>
+            </div>
             {listings.map((listing) => {
               const quality = qualityByListingId[listing.id];
+              const contentReview = contentReviewByListingId[listing.id];
               return (
                 <div
                   key={listing.id}
                   className="flex flex-col gap-4 rounded-md border p-4 lg:flex-row lg:items-center lg:justify-between"
                 >
-                  <div className="min-w-0 space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-semibold">{listing.product.name}</p>
-                      <Badge
-                        variant={getListingStatusMeta(listing.status).variant}
-                      >
-                        {getListingStatusMeta(listing.status).label}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      SKU {listing.product.sku} · Stock local{" "}
-                      {listing.product.stock} · Seguridad{" "}
-                      {listing.stockSafetyBuffer}
-                    </p>
-                    <p className="text-sm">
-                      Mercado Libre:{" "}
-                      {currencyFormatter.format(listing.marketplacePrice ?? 0)}{" "}
-                      · {listing.categoryId ?? "Sin categoría"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {listing.externalItemId
-                        ? `Precio publicado: ${listing.syncPrice ? "se actualiza desde este panel" : "se mantiene manualmente en Mercado Libre"}`
-                        : "El precio se enviará al publicar este borrador."}
-                    </p>
-                    {listing.lastError ? (
-                      <p className="text-sm text-destructive">
-                        {listing.lastError}
+                  <div className="flex min-w-0 gap-3">
+                    <input
+                      type="checkbox"
+                      aria-label={`Seleccionar ${listing.product.name}`}
+                      checked={selectedListingIds.includes(listing.id)}
+                      onChange={() => toggleListingSelection(listing.id)}
+                      className="mt-1 h-4 w-4 shrink-0 rounded border-input"
+                    />
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold">{listing.product.name}</p>
+                        <Badge
+                          variant={getListingStatusMeta(listing.status).variant}
+                        >
+                          {getListingStatusMeta(listing.status).label}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        SKU {listing.product.sku} · Stock local{" "}
+                        {listing.product.stock} · Seguridad{" "}
+                        {listing.stockSafetyBuffer}
                       </p>
-                    ) : null}
-                    {quality ? (
-                      <div className="mt-3 space-y-2 rounded-md bg-muted/50 p-3 text-sm">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-medium">
-                            Calidad de Mercado Libre
-                          </span>
-                          {quality.score !== null ? (
-                            <Badge variant="secondary">
-                              {Math.round(quality.score)} / 100
-                            </Badge>
-                          ) : null}
-                          {(quality.levelWording ?? quality.level) ? (
-                            <Badge variant="outline">
-                              {quality.levelWording ?? quality.level}
-                            </Badge>
-                          ) : null}
+                      <p className="text-sm">
+                        Mercado Libre:{" "}
+                        {currencyFormatter.format(
+                          listing.marketplacePrice ?? 0,
+                        )}{" "}
+                        · {listing.categoryId ?? "Sin categoría"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {listing.externalItemId
+                          ? `Precio publicado: ${listing.syncPrice ? "se actualiza desde este panel" : "se mantiene manualmente en Mercado Libre"}`
+                          : "El precio se enviará al publicar este borrador."}
+                      </p>
+                      {listing.lastError ? (
+                        <p className="text-sm text-destructive">
+                          {listing.lastError}
+                        </p>
+                      ) : null}
+                      {listing.minimumMarginAmount !== null ? (
+                        <p className="text-xs text-muted-foreground">
+                          Margen mínimo antes de costos variables:{" "}
+                          {currencyFormatter.format(
+                            listing.minimumMarginAmount,
+                          )}
+                        </p>
+                      ) : null}
+                      {quality ? (
+                        <div className="mt-3 space-y-2 rounded-md bg-muted/50 p-3 text-sm">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-medium">
+                              Calidad de Mercado Libre
+                            </span>
+                            {quality.score !== null ? (
+                              <Badge variant="secondary">
+                                {Math.round(quality.score)} / 100
+                              </Badge>
+                            ) : null}
+                            {(quality.levelWording ?? quality.level) ? (
+                              <Badge variant="outline">
+                                {quality.levelWording ?? quality.level}
+                              </Badge>
+                            ) : null}
+                          </div>
+                          {quality.pendingRules.length ? (
+                            <ul className="space-y-1 text-xs text-muted-foreground">
+                              {quality.pendingRules.slice(0, 3).map((rule) => (
+                                <li key={`${rule.mode}-${rule.title}`}>
+                                  • {rule.title}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-xs text-success">
+                              No hay acciones pendientes reportadas.
+                            </p>
+                          )}
                         </div>
-                        {quality.pendingRules.length ? (
-                          <ul className="space-y-1 text-xs text-muted-foreground">
-                            {quality.pendingRules.slice(0, 3).map((rule) => (
-                              <li key={`${rule.mode}-${rule.title}`}>
-                                • {rule.title}
+                      ) : null}
+                      {contentReview ? (
+                        <div className="mt-3 space-y-2 rounded-md border border-primary/20 bg-primary/[0.03] p-3 text-sm">
+                          <p className="flex items-center gap-2 font-medium">
+                            <Sparkles className="h-4 w-4 text-primary" />
+                            Revisión de contenido
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Título: {contentReview.titleLength} caracteres ·{" "}
+                            {contentReview.descriptionPreview ||
+                              "Sin descripción visible"}
+                          </p>
+                          <ul className="space-y-1 text-xs">
+                            {contentReview.checks.map((check) => (
+                              <li
+                                key={check.label}
+                                className={
+                                  check.ready
+                                    ? "text-success"
+                                    : "text-amber-700"
+                                }
+                              >
+                                {check.ready ? "✓" : "•"} {check.label}:{" "}
+                                {check.detail}
                               </li>
                             ))}
                           </ul>
-                        ) : (
-                          <p className="text-xs text-success">
-                            No hay acciones pendientes reportadas.
-                          </p>
-                        )}
-                      </div>
-                    ) : null}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {listing.externalPermalink ? (
@@ -1004,6 +1312,19 @@ export function MercadoLibreListingManager({
                     >
                       <Pencil className="mr-2 h-4 w-4" />
                       Editar
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => void reviewListingContent(listing)}
+                      disabled={reviewingContentId === listing.id}
+                    >
+                      {reviewingContentId === listing.id ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="mr-2 h-4 w-4" />
+                      )}
+                      Revisar contenido
                     </Button>
                     {listing.externalItemId ? (
                       <>
@@ -1126,6 +1447,24 @@ export function MercadoLibreListingManager({
                     updateForm("stockSafetyBuffer", event.target.value)
                   }
                 />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="mercadolibre-minimum-margin">
+                  Margen mínimo antes de costos variables (opcional)
+                </Label>
+                <Input
+                  id="mercadolibre-minimum-margin"
+                  inputMode="numeric"
+                  value={form.minimumMarginAmount}
+                  onChange={(event) =>
+                    updateForm("minimumMarginAmount", event.target.value)
+                  }
+                  placeholder="Ej. 12000"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Recibirás una alerta si el precio publicado no deja este valor
+                  antes de comisión, envío e impuestos.
+                </p>
               </div>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/20 p-3 text-sm">
@@ -1352,6 +1691,12 @@ export function MercadoLibreListingManager({
                 </p>
               )}
             </div>
+            {selectedProduct ? (
+              <ProductVideoLibrary
+                storeId={storeId}
+                productId={selectedProduct.id}
+              />
+            ) : null}
             <div className="grid gap-3 rounded-md border bg-muted/20 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
@@ -1378,6 +1723,45 @@ export function MercadoLibreListingManager({
                   Cargar campos
                 </Button>
               </div>
+              {form.categoryId ? (
+                <div className="flex flex-col gap-2 rounded-md border border-dashed bg-background/60 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="font-medium">Plantilla de esta categoría</p>
+                    <p className="text-xs text-muted-foreground">
+                      Reutiliza la ficha técnica y reglas que ya aprobaste para{" "}
+                      {form.categoryId}.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {categoryTemplates
+                      .filter(
+                        (template) => template.categoryId === form.categoryId,
+                      )
+                      .map((template) => (
+                        <Button
+                          key={template.id}
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => applyCategoryTemplate(template)}
+                        >
+                          Usar {template.name}
+                        </Button>
+                      ))}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void saveCategoryTemplate()}
+                      disabled={isSavingTemplate}
+                    >
+                      {isSavingTemplate
+                        ? "Guardando…"
+                        : "Guardar como plantilla"}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
               {categoryAttributes.length > 0 ? (
                 <div className="grid gap-3 sm:grid-cols-2">
                   {categoryAttributes

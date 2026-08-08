@@ -4,7 +4,7 @@ Esta guía se ejecuta en orden. P de Papel conserva el inventario como fuente de
 
 No compartas en chat, correo ni capturas el `Client Secret`, los tokens de QStash ni la llave de cifrado.
 
-Antes de desplegar la sincronización financiera y la notificación de nuevas ventas, aplica `prisma/manual-migrations/20260807_add_marketplace_order_notification_action.sql` a la base de datos de Railway. Es un cambio aditivo que permite calcular el neto y enviar el correo de forma durable y con reintentos.
+La migración `prisma/manual-migrations/20260808_add_marketplace_operations.sql` fue aplicada en Railway el 2026-08-08. Es un cambio aditivo: agrega preguntas, envíos, reclamos, plantillas, videos y acciones seguras en cola; no altera ventas ni existencias existentes.
 
 ## 1. Crear la aplicación de Mercado Libre
 
@@ -42,7 +42,7 @@ Antes de desplegar la sincronización financiera y la notificación de nuevas ve
    | Permiso                                        | Nivel                   |
    | ---------------------------------------------- | ----------------------- |
    | Usuarios                                       | **Lectura**             |
-   | Comunicaciones pre y post ventas               | **Sin acceso**          |
+   | Comunicaciones pre y post ventas               | **Lectura y escritura** |
    | Publicación y sincronización                   | **Lectura y escritura** |
    | Publicidad de un producto                      | **Sin acceso**          |
    | Facturación de una venta                       | **Lectura**             |
@@ -130,8 +130,8 @@ Haz este paso únicamente después de terminar la sección anterior.
    https://admin.papeleriapdepapel.com/api/webhook/mercadolibre
    ```
 
-4. En tópicos, abre **Orders / Órdenes** y activa solo **`orders_v2`**.
-5. No actives por ahora `payments`, `items`, `shipments`, `messages`, `questions` ni otros temas: todavía no forman parte del flujo automático.
+4. En tópicos, abre las secciones necesarias y activa: **`orders_v2`**, **`questions`**, **`shipments`**, **`claims`** y **`claims_actions`**.
+5. No actives `payments`, `items`, `messages` u otros temas. P de Papel no toma decisiones automáticas de reembolso, devolución ni reclamo: solo muestra el caso para revisión.
 6. Guarda los cambios.
 
 La notificación no descuenta inventario por sí misma. P de Papel consulta la orden autenticada en Mercado Libre y solo descuenta una vez cuando el estado real es `paid`.
@@ -156,6 +156,20 @@ La notificación no descuenta inventario por sí misma. P de Papel consulta la o
 8. Deja marcada **Sincronizar este precio** si deseas que los próximos cambios de este precio se envíen a Mercado Libre. Esta opción nunca modifica el precio de `papeleriapdepapel.com`.
 9. Revisa precio, fotos, categoría y stock. Pulsa **Publicar** y confirma la acción.
 
+### Reutilizar una plantilla y revisar rentabilidad
+
+1. Después de completar una ficha técnica correcta, pulsa **Guardar como plantilla** en esa categoría. La plantilla conserva los atributos, el colchón de seguridad y el margen mínimo que aprobaste.
+2. En un producto futuro de la misma categoría, pulsa **Usar [nombre de plantilla]**. Revisa los valores porque un producto puede necesitar una característica distinta.
+3. Define el **Margen mínimo antes de costos variables** si quieres recibir una alerta cuando el precio no cubra ni siquiera el costo local y ese margen. No reemplaza la liquidación real: envío, impuestos y comisión pueden cambiar el resultado.
+4. Pulsa **Revisar contenido** para recibir una lista de verificación. No cambia el producto ni publica nada; corrige lo necesario desde **Editar**.
+
+### Acciones masivas de publicaciones
+
+1. Marca máximo 20 publicaciones en la lista.
+2. Elige la acción: publicar borradores, sincronizar stock/precios/contenido, pausar o activar.
+3. Pulsa **Aplicar de forma segura** y confirma. P de Papel la envía a una cola con reintentos para no dejar acciones a medio camino.
+4. Espera la actualización de la lista. Si una publicación no cumplía la acción elegida, el panel la mantiene sin cambios y muestra el motivo.
+
 ## Actualizar una publicación activa
 
 1. Pulsa **Editar** para modificar el precio, el colchón, las fotos elegidas o la ficha técnica guardada en P de Papel.
@@ -171,7 +185,18 @@ No uses un generador que convierta fotos estáticas en una animación. Mercado L
 2. Usa su herramienta gratuita para elegir o editar el guion y la voz.
 3. Graba el producto real en vertical (9:16), con buena luz y sin texto en las zonas seguras.
 4. No muestres precios, promociones, teléfonos, redes sociales, direcciones, sorteos ni material de terceros.
-5. Publica el clip desde Mercado Libre y espera su revisión. El video se administra allí porque Mercado Libre no ofrece en esta integración un flujo público confiable para crear y cargar Clips desde P de Papel.
+5. En el borrador de la publicación de P de Papel puedes guardar el archivo en **Biblioteca de videos** antes de subirlo. Solo acepta videos verticales de 10–61 segundos, mínimo 360 px de ancho y máximo 280 MB. Es una biblioteca privada: no publica ni sube el clip automáticamente.
+6. Sube el clip manualmente desde Mercado Libre y espera su revisión. Mercado Libre no ofrece en esta integración un flujo público confiable para cargar Clips MCO desde P de Papel.
+
+## Centro de operaciones
+
+Después de reconectar Mercado Libre y activar los tópicos, abre **Ventas → Mercado Libre → Centro de operaciones**:
+
+1. **Preguntas:** pulsa **Actualizar preguntas**, revisa el borrador sugerido, edítalo y pulsa **Enviar respuesta**. Nunca se responde solo.
+2. **Envíos y despachos:** revisa los envíos que Mercado Libre marca como listos. Prepara o despacha desde Mercado Libre; este panel no compra guías ni cambia la logística.
+3. **Reclamos:** abre el caso en Mercado Libre y toma la decisión allí. P de Papel no devuelve dinero ni suma stock por un reclamo o una devolución sin confirmar el retorno físico.
+4. **Ganancia real:** muestra por publicación el neto que Mercado Libre liquidó, menos el costo de compra registrado en P de Papel. Una venta sin liquidación sigue como pendiente y no se usa como ingreso real.
+5. Recibirás un correo diario si hay publicaciones con error, poco stock frente al colchón, preguntas, envíos por despachar, reclamos o alertas de margen. La revisión se ejecuta desde un flujo programado de GitHub, separado de los dos cron de Vercel. Es un recordatorio para revisar; no ejecuta cambios automáticos ni puede interrumpir la actualización de ofertas.
 
 ## Importar publicaciones existentes
 

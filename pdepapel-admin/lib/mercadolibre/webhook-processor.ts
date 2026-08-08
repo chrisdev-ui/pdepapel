@@ -4,7 +4,12 @@ import { invalidateStoreProductsCache } from "@/lib/cache";
 import prismadb from "@/lib/prismadb";
 
 import { getMercadoLibreResource } from "./client";
+import {
+  synchronizeMercadoLibreClaim,
+  synchronizeMercadoLibreShipment,
+} from "./logistics";
 import { synchronizeMercadoLibreOrder } from "./order-sync";
+import { synchronizeMercadoLibreQuestion } from "./questions";
 import { enqueueMercadoLibreWebhookEvent } from "./queue";
 
 const RETRY_DELAY_MS = 5 * 60 * 1000;
@@ -13,6 +18,18 @@ const MAX_EVENTS_PER_RECOVERY = 50;
 
 function isOrderTopic(topic: string) {
   return topic === "orders" || topic === "orders_v2";
+}
+
+function isQuestionTopic(topic: string) {
+  return topic === "questions";
+}
+
+function isShipmentTopic(topic: string) {
+  return topic === "shipments";
+}
+
+function isClaimTopic(topic: string) {
+  return topic === "claims" || topic === "claims_actions";
 }
 
 function getSafeErrorMessage(error: unknown) {
@@ -71,11 +88,15 @@ export async function processMercadoLibreWebhookEvent(eventId: string) {
   }
 
   try {
-    if (isOrderTopic(event.topic)) {
-      const payload = await getMercadoLibreResource(
-        event.connectionId,
-        event.resource,
-      );
+    const isSupportedTopic =
+      isOrderTopic(event.topic) ||
+      isQuestionTopic(event.topic) ||
+      isShipmentTopic(event.topic) ||
+      isClaimTopic(event.topic);
+    const payload = isSupportedTopic
+      ? await getMercadoLibreResource(event.connectionId, event.resource)
+      : null;
+    if (isOrderTopic(event.topic) && payload) {
       const result = await synchronizeMercadoLibreOrder(
         event.connectionId,
         event.connection.storeId,
@@ -84,6 +105,12 @@ export async function processMercadoLibreWebhookEvent(eventId: string) {
       if (result.inventoryChanged) {
         await invalidateStoreProductsCache(event.connection.storeId);
       }
+    } else if (isQuestionTopic(event.topic) && payload) {
+      await synchronizeMercadoLibreQuestion(event.connectionId, payload);
+    } else if (isShipmentTopic(event.topic) && payload) {
+      await synchronizeMercadoLibreShipment(event.connectionId, payload);
+    } else if (isClaimTopic(event.topic) && payload) {
+      await synchronizeMercadoLibreClaim(event.connectionId, payload);
     }
 
     await prismadb.marketplaceWebhookEvent.update({

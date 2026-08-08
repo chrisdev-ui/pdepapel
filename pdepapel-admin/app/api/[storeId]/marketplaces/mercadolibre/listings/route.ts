@@ -46,6 +46,17 @@ function parseSafetyBuffer(value: unknown) {
   return buffer;
 }
 
+function parseMinimumMargin(value: unknown) {
+  if (value === undefined || value === null || value === "") return null;
+  const margin = Number(value);
+  if (!Number.isFinite(margin) || margin < 0) {
+    throw ErrorFactory.InvalidRequest(
+      "El margen mínimo debe ser un número igual o mayor que cero",
+    );
+  }
+  return margin;
+}
+
 function parseAttributes(value: unknown): MercadoLibreAttribute[] {
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.length > 50) {
@@ -222,6 +233,7 @@ export async function POST(
         stockSafetyBuffer: parseSafetyBuffer(body.stockSafetyBuffer),
         syncStock: body.syncStock !== false,
         syncPrice: body.syncPrice !== false,
+        minimumMarginAmount: parseMinimumMargin(body.minimumMarginAmount),
         metadata: buildMercadoLibreListingMetadata({
           current: null,
           attributes,

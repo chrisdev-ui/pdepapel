@@ -151,6 +151,22 @@ export async function PATCH(
       }
       data.stockSafetyBuffer = buffer;
     }
+    if (body.minimumMarginAmount !== undefined) {
+      if (
+        body.minimumMarginAmount === null ||
+        body.minimumMarginAmount === ""
+      ) {
+        data.minimumMarginAmount = null;
+      } else {
+        const minimumMarginAmount = Number(body.minimumMarginAmount);
+        if (!Number.isFinite(minimumMarginAmount) || minimumMarginAmount < 0) {
+          throw ErrorFactory.InvalidRequest(
+            "El margen mínimo debe ser un número igual o mayor que cero",
+          );
+        }
+        data.minimumMarginAmount = minimumMarginAmount;
+      }
+    }
     if (body.syncStock !== undefined) {
       if (typeof body.syncStock !== "boolean") {
         throw ErrorFactory.InvalidRequest(

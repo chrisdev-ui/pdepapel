@@ -109,6 +109,54 @@ export async function requestMercadoLibreJson(
   };
 }
 
+export async function mutateMercadoLibreJson(
+  connectionId: string,
+  resource: string,
+  {
+    method,
+    body,
+  }: {
+    method: "POST" | "PUT" | "DELETE";
+    body?: Record<string, unknown>;
+  },
+  request: typeof fetch = fetch,
+) {
+  const accessToken = await getMercadoLibreAccessToken(connectionId);
+  const response = await request(normalizeMercadoLibreResource(resource), {
+    method,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      ...(body ? { "Content-Type": "application/json; charset=utf-8" } : {}),
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+    cache: "no-store",
+  });
+  const text = await response.text();
+  let payload: unknown = null;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    payload = text || null;
+  }
+
+  if (!response.ok) {
+    await prismadb.marketplaceConnection.update({
+      where: { id: connectionId },
+      data: {
+        lastError: `Mercado Libre rechazó la actualización (${response.status})`,
+        ...(response.status === 401
+          ? { status: MarketplaceConnectionStatus.REAUTH_REQUIRED }
+          : {}),
+      },
+    });
+    throw new Error(
+      `Mercado Libre rechazó la actualización (${response.status})`,
+    );
+  }
+
+  return payload;
+}
+
 export async function requestMercadoLibreResource(
   connectionId: string,
   resource: string,

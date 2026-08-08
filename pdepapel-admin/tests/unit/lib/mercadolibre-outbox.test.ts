@@ -2,7 +2,9 @@ import { MarketplaceOutboxAction } from "@prisma/client";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  queueMarketplaceListingPublicationEvent,
   queueMarketplaceListingContentSyncEvent,
+  queueMarketplaceListingStatusSyncEvent,
   queueMarketplaceOrderFinancials,
   queueMarketplaceOrderNotification,
   queueMarketplacePriceSyncEvent,
@@ -101,6 +103,53 @@ describe("Mercado Libre outbox", () => {
         create: expect.objectContaining({
           action: MarketplaceOutboxAction.SYNC_LISTING_CONTENT,
           payload: {},
+        }),
+      }),
+    );
+  });
+
+  it("queues a publication once and keeps it safe for retry", async () => {
+    const upsert = vi.fn().mockResolvedValue({ id: "event-id" });
+
+    await queueMarketplaceListingPublicationEvent(
+      { marketplaceOutboxEvent: { upsert } } as never,
+      {
+        connectionId: "connection-id",
+        listingId: "listing-id",
+        productId: "product-id",
+      },
+    );
+
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { deduplicationKey: "connection-id:publish:listing-id" },
+        create: expect.objectContaining({
+          action: MarketplaceOutboxAction.PUBLISH_LISTING,
+          payload: {},
+        }),
+      }),
+    );
+  });
+
+  it("queues an explicit pause or activation instead of changing remote status inline", async () => {
+    const upsert = vi.fn().mockResolvedValue({ id: "event-id" });
+
+    await queueMarketplaceListingStatusSyncEvent(
+      { marketplaceOutboxEvent: { upsert } } as never,
+      {
+        connectionId: "connection-id",
+        listingId: "listing-id",
+        productId: "product-id",
+        targetStatus: "paused",
+      },
+    );
+
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { deduplicationKey: "connection-id:status:listing-id" },
+        create: expect.objectContaining({
+          action: MarketplaceOutboxAction.SYNC_LISTING_STATUS,
+          payload: { targetStatus: "paused" },
         }),
       }),
     );
