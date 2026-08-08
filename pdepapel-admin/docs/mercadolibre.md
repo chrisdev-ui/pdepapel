@@ -176,6 +176,7 @@ La notificación no descuenta inventario por sí misma. P de Papel consulta la o
 2. Guarda los cambios. Si la casilla de sincronización de precio está activa, el nuevo precio se envía de manera segura a Mercado Libre. No cambies esta casilla si el precio se gestiona manualmente allá.
 3. Para actualizar fotos, descripción y características en Mercado Libre, pulsa **Sincronizar contenido** y confirma. Esta acción reemplaza esos tres elementos en Mercado Libre con la selección y los datos locales; nunca se ejecuta sola.
 4. Pulsa **Revisar calidad** para ver oportunidades y advertencias que Mercado Libre reporta sobre fotos, atributos, título o condiciones de venta. No corrige información automáticamente: el administrador decide cada ajuste.
+5. Si Mercado Libre recomienda un video, el aviso aparece separado y nunca como error. Pulsa **Preparar video** para abrir la biblioteca local; cuando no sea el momento, usa **Recordarme en 30 días**. Esta recomendación no se incluye en el correo diario ni bloquea la publicación.
 
 ## Videos de Mercado Libre
 

@@ -485,6 +485,7 @@ For a new publication, an admin selects a local product, marketplace-specific pr
 - The operations panel has reviewable question-response suggestions. An admin must read/edit and explicitly send every buyer answer; no automatic messages are sent.
 - Bulk publication, pause/activate, and content/price/stock updates are capped at 20 selected listings and run through the idempotent QStash outbox after an explicit confirmation. Never bulk-publish the entire catalog automatically.
 - The minimum-margin field is an early warning before variable marketplace costs; actual profitability uses settled net collected minus recorded acquisition cost.
+- Mercado Libre performance video recommendations are optional and non-blocking. They are never reported as listing errors or included in the daily health email. The admin can open the local video library, follow a validated Mercado Libre link when the API provides one, or snooze the reminder for 30 days; no video is uploaded automatically.
 - Marketplace video policy requires real product footage. Do **not** integrate an image-to-video animation service as a publishing source: Mercado Libre can reject animations/static-image videos. The local product-video library accepts a vertical 10–61 second clip (minimum 360 px wide, max 280 MB) for human review; an administrator uploads it manually in Mercado Libre because an ordinary MCO Clips API flow is not publicly verified for this integration.
 
 For existing publications:

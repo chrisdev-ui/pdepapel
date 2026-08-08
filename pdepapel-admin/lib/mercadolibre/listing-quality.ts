@@ -1,7 +1,10 @@
 type PerformanceRule = {
+  key: string | null;
+  link: string | null;
   title: string;
   label: string | null;
   mode: "OPPORTUNITY" | "WARNING" | null;
+  isVideoRecommendation: boolean;
 };
 
 export type MercadoLibreListingQuality = {
@@ -19,6 +22,31 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function getString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function getMercadoLibreLink(value: unknown) {
+  const link = getString(value);
+  if (!link) return null;
+
+  try {
+    const url = new URL(link, "https://www.mercadolibre.com.co");
+    const isMercadoLibreHost =
+      /^([a-z0-9-]+\.)*mercadolibre\.com(\.[a-z]{2})?$/i.test(url.hostname);
+
+    return url.protocol === "https:" && isMercadoLibreHost
+      ? url.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function isVideoRecommendation(values: Array<string | null | undefined>) {
+  return values.some((value) => {
+    if (!value) return false;
+
+    return /\b(video|vídeo|clip)\b/i.test(value);
+  });
 }
 
 export function parseMercadoLibreListingQuality(
@@ -45,14 +73,25 @@ export function parseMercadoLibreListingQuality(
         const title =
           getString(wordings?.title) ?? getString(variableData?.title);
         if (!title) continue;
+        const key = getString(ruleData?.key);
+        const label = getString(wordings?.label);
         rules.push({
+          key,
+          link: getMercadoLibreLink(wordings?.link),
           title,
-          label: getString(wordings?.label),
+          label,
           mode:
             getString(ruleData?.mode) === "OPPORTUNITY" ||
             getString(ruleData?.mode) === "WARNING"
               ? (getString(ruleData?.mode) as "OPPORTUNITY" | "WARNING")
               : null,
+          isVideoRecommendation: isVideoRecommendation([
+            key,
+            getString(variableData?.key),
+            getString(variableData?.title),
+            title,
+            label,
+          ]),
         });
       }
     }

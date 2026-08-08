@@ -11,6 +11,9 @@ export type MercadoLibreListingMetadata = {
   media: {
     imageUrls: string[];
   } | null;
+  quality: {
+    videoRecommendationSnoozedUntil: string | null;
+  } | null;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -27,6 +30,13 @@ function getStringArray(value: unknown) {
       ),
     ),
   );
+}
+
+function getIsoDate(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return null;
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 export function getMercadoLibreAttributes(
@@ -63,11 +73,19 @@ export function getMercadoLibreListingMetadata(
   value: Prisma.JsonValue | null,
 ): MercadoLibreListingMetadata {
   const media = isRecord(value) && isRecord(value.media) ? value.media : null;
+  const quality =
+    isRecord(value) && isRecord(value.quality) ? value.quality : null;
   const imageUrls = media ? getStringArray(media.imageUrls) : [];
+  const videoRecommendationSnoozedUntil = quality
+    ? getIsoDate(quality.videoRecommendationSnoozedUntil)
+    : null;
 
   return {
     attributes: getMercadoLibreAttributes(value),
     media: imageUrls.length > 0 ? { imageUrls } : null,
+    quality: videoRecommendationSnoozedUntil
+      ? { videoRecommendationSnoozedUntil }
+      : null,
   };
 }
 
@@ -75,21 +93,34 @@ export function buildMercadoLibreListingMetadata({
   current,
   attributes,
   imageUrls,
+  videoRecommendationSnoozedUntil,
 }: {
   current: Prisma.JsonValue | null;
   attributes?: MercadoLibreAttribute[];
   imageUrls?: string[];
+  videoRecommendationSnoozedUntil?: string | null;
 }): Prisma.InputJsonValue {
   const currentMetadata = getMercadoLibreListingMetadata(current);
   const normalizedImages =
     imageUrls === undefined
       ? currentMetadata.media?.imageUrls
       : getStringArray(imageUrls);
+  const normalizedVideoReminder =
+    videoRecommendationSnoozedUntil === undefined
+      ? currentMetadata.quality?.videoRecommendationSnoozedUntil
+      : getIsoDate(videoRecommendationSnoozedUntil);
 
   return {
     attributes: attributes ?? currentMetadata.attributes,
     ...(normalizedImages?.length
       ? { media: { imageUrls: normalizedImages } }
+      : {}),
+    ...(normalizedVideoReminder
+      ? {
+          quality: {
+            videoRecommendationSnoozedUntil: normalizedVideoReminder,
+          },
+        }
       : {}),
   } as Prisma.InputJsonValue;
 }

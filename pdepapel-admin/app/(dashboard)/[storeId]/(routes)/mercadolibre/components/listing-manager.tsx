@@ -26,6 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { getListingStatusMeta } from "@/lib/mercadolibre/listing-status";
 import {
   BarChart3,
+  BellRing,
   CircleDollarSign,
   Download,
   ImageIcon,
@@ -36,6 +37,7 @@ import {
   RefreshCw,
   Sparkles,
   UploadCloud,
+  Video,
 } from "lucide-react";
 import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
@@ -137,15 +139,26 @@ type PriceEstimate = {
   listingTypeName: string | null;
 };
 
+type ListingQualityRule = {
+  key: string | null;
+  link: string | null;
+  title: string;
+  label: string | null;
+  mode: "OPPORTUNITY" | "WARNING" | null;
+  isVideoRecommendation: boolean;
+};
+
 type ListingQuality = {
   score: number | null;
   level: string | null;
   levelWording: string | null;
-  pendingRules: {
-    title: string;
-    label: string | null;
-    mode: "OPPORTUNITY" | "WARNING" | null;
-  }[];
+  pendingRules: ListingQualityRule[];
+  videoRecommendation:
+    | (ListingQualityRule & {
+        preparedVideoCount: number;
+        snoozedUntil: string | null;
+      })
+    | null;
 };
 
 type ContentReview = {
@@ -200,6 +213,10 @@ const currencyFormatter = new Intl.NumberFormat("es-CO", {
   style: "currency",
   currency: "COP",
   maximumFractionDigits: 0,
+});
+
+const dateFormatter = new Intl.DateTimeFormat("es-CO", {
+  dateStyle: "medium",
 });
 
 const bulkActionLabels = {
@@ -332,6 +349,11 @@ export function MercadoLibreListingManager({
     CategoryTemplate[]
   >([]);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+  const [videoLibraryListing, setVideoLibraryListing] =
+    useState<Listing | null>(null);
+  const [videoReminderActionId, setVideoReminderActionId] = useState<
+    string | null
+  >(null);
 
   const loadListings = useCallback(async () => {
     setIsLoading(true);
@@ -642,6 +664,49 @@ export function MercadoLibreListingManager({
       );
     } finally {
       setLoadingQualityId(null);
+    }
+  };
+
+  const updateVideoReminder = async (
+    listing: Listing,
+    action: "snooze" | "resume",
+  ) => {
+    setVideoReminderActionId(listing.id);
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/${storeId}/marketplaces/mercadolibre/listings/${listing.id}/quality/video-reminder`,
+        { method: action === "snooze" ? "POST" : "DELETE" },
+      );
+      if (!response.ok) throw new Error(await getErrorMessage(response));
+
+      const snoozedUntil =
+        action === "snooze"
+          ? ((await response.json()) as { snoozedUntil: string }).snoozedUntil
+          : null;
+      setQualityByListingId((current) => {
+        const quality = current[listing.id];
+        if (!quality?.videoRecommendation) return current;
+
+        return {
+          ...current,
+          [listing.id]: {
+            ...quality,
+            videoRecommendation: {
+              ...quality.videoRecommendation,
+              snoozedUntil,
+            },
+          },
+        };
+      });
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "No fue posible actualizar el recordatorio del video",
+      );
+    } finally {
+      setVideoReminderActionId(null);
     }
   };
 
@@ -1179,6 +1244,15 @@ export function MercadoLibreListingManager({
             {listings.map((listing) => {
               const quality = qualityByListingId[listing.id];
               const contentReview = contentReviewByListingId[listing.id];
+              const videoRecommendation = quality?.videoRecommendation;
+              const videoReminderIsSnoozed = Boolean(
+                videoRecommendation?.snoozedUntil &&
+                new Date(videoRecommendation.snoozedUntil).getTime() >
+                  Date.now(),
+              );
+              const nonVideoQualityRules = quality?.pendingRules.filter(
+                (rule) => !rule.isVideoRecommendation,
+              );
               return (
                 <div
                   key={listing.id}
@@ -1248,19 +1322,116 @@ export function MercadoLibreListingManager({
                               </Badge>
                             ) : null}
                           </div>
-                          {quality.pendingRules.length ? (
+                          {nonVideoQualityRules?.length ? (
                             <ul className="space-y-1 text-xs text-muted-foreground">
-                              {quality.pendingRules.slice(0, 3).map((rule) => (
+                              {nonVideoQualityRules.slice(0, 3).map((rule) => (
                                 <li key={`${rule.mode}-${rule.title}`}>
                                   • {rule.title}
                                 </li>
                               ))}
                             </ul>
+                          ) : videoRecommendation ? (
+                            <p className="text-xs text-success">
+                              No hay otras acciones pendientes reportadas.
+                            </p>
                           ) : (
                             <p className="text-xs text-success">
                               No hay acciones pendientes reportadas.
                             </p>
                           )}
+                          {videoRecommendation ? (
+                            videoReminderIsSnoozed ? (
+                              <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed bg-background/70 p-2 text-xs text-muted-foreground">
+                                <BellRing className="h-4 w-4 shrink-0" />
+                                <span>
+                                  Video recomendado: recordatorio el{" "}
+                                  {dateFormatter.format(
+                                    new Date(videoRecommendation.snoozedUntil!),
+                                  )}
+                                  .
+                                </span>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() =>
+                                    void updateVideoReminder(listing, "resume")
+                                  }
+                                  disabled={
+                                    videoReminderActionId === listing.id
+                                  }
+                                >
+                                  Mostrar ahora
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="space-y-2 rounded-md border border-primary/20 bg-primary/[0.03] p-3 text-xs">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Video className="h-4 w-4 text-primary" />
+                                  <span className="font-medium text-foreground">
+                                    Video recomendado por Mercado Libre
+                                  </span>
+                                  <Badge variant="secondary">
+                                    No bloquea la publicación
+                                  </Badge>
+                                </div>
+                                <p className="text-muted-foreground">
+                                  {videoRecommendation.title}.{" "}
+                                  {videoRecommendation.preparedVideoCount > 0
+                                    ? `${videoRecommendation.preparedVideoCount} video${videoRecommendation.preparedVideoCount === 1 ? "" : "s"} listo${videoRecommendation.preparedVideoCount === 1 ? "" : "s"} en P de Papel.`
+                                    : "Aún no hay un video preparado en P de Papel."}
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      setVideoLibraryListing(listing)
+                                    }
+                                  >
+                                    <Video className="mr-2 h-4 w-4" />
+                                    {videoRecommendation.preparedVideoCount > 0
+                                      ? "Abrir biblioteca"
+                                      : "Preparar video"}
+                                  </Button>
+                                  {videoRecommendation.link ? (
+                                    <Button
+                                      asChild
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                    >
+                                      <a
+                                        href={videoRecommendation.link}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                      >
+                                        Ver en Mercado Libre
+                                      </a>
+                                    </Button>
+                                  ) : null}
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() =>
+                                      void updateVideoReminder(
+                                        listing,
+                                        "snooze",
+                                      )
+                                    }
+                                    disabled={
+                                      videoReminderActionId === listing.id
+                                    }
+                                  >
+                                    <BellRing className="mr-2 h-4 w-4" />
+                                    Recordarme en 30 días
+                                  </Button>
+                                </div>
+                              </div>
+                            )
+                          ) : null}
                         </div>
                       ) : null}
                       {contentReview ? (
@@ -1871,6 +2042,30 @@ export function MercadoLibreListingManager({
               {isSaving ? "Guardando…" : "Guardar borrador"}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(videoLibraryListing)}
+        onOpenChange={(open) => {
+          if (!open) setVideoLibraryListing(null);
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Video para Mercado Libre</DialogTitle>
+            <DialogDescription>
+              Guarda un clip real y vertical para{" "}
+              {videoLibraryListing?.product.name}. La subida a Mercado Libre
+              sigue siendo manual.
+            </DialogDescription>
+          </DialogHeader>
+          {videoLibraryListing ? (
+            <ProductVideoLibrary
+              storeId={storeId}
+              productId={videoLibraryListing.product.id}
+            />
+          ) : null}
         </DialogContent>
       </Dialog>
     </Card>
