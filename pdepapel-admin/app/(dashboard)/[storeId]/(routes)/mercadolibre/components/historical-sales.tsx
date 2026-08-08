@@ -2,7 +2,6 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MercadoLibreLogo } from "@/components/mercadolibre-logo";
 import {
   Card,
   CardContent,
@@ -11,7 +10,17 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { AlertCircle, CheckCircle2, Loader2, Search } from "lucide-react";
+import {
+  getRawOrderStatusMeta,
+  getSaleStatusMeta,
+} from "@/lib/mercadolibre/order-status";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
+  Receipt,
+  Search,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 type HistoricalSaleItem = {
@@ -196,6 +205,9 @@ export function MercadoLibreHistoricalSales({
       ) ?? null,
     [inspection, selectedOrderId],
   );
+  const selectedOrderStatusMeta = selectedOrder
+    ? getRawOrderStatusMeta(selectedOrder.status)
+    : null;
   const calculatedNet = selectedOrder
     ? selectedOrder.totalAmount -
       Number(marketplaceFee || 0) -
@@ -313,7 +325,7 @@ export function MercadoLibreHistoricalSales({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <MercadoLibreLogo className="h-5" />
+          <Receipt className="h-5 w-5 text-muted-foreground" />
           Ventas de Mercado Libre
         </CardTitle>
         <CardDescription>
@@ -373,7 +385,8 @@ export function MercadoLibreHistoricalSales({
                     key={order.externalOrderId}
                     value={order.externalOrderId}
                   >
-                    {order.externalOrderId} · {order.status} ·{" "}
+                    {order.externalOrderId} ·{" "}
+                    {getRawOrderStatusMeta(order.status).label} ·{" "}
                     {formatCurrency(order.totalAmount)}
                   </option>
                 ))}
@@ -383,13 +396,9 @@ export function MercadoLibreHistoricalSales({
               <div className="space-y-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge
-                    variant={
-                      selectedOrder.status === "paid" ? "success" : "secondary"
-                    }
+                    variant={selectedOrderStatusMeta?.variant ?? "secondary"}
                   >
-                    {selectedOrder.status === "paid"
-                      ? "Pagada"
-                      : selectedOrder.status}
+                    {selectedOrderStatusMeta?.label ?? selectedOrder.status}
                   </Badge>
                   {selectedOrder.alreadyImported ? (
                     <Badge variant="secondary">Ya conciliada</Badge>
@@ -531,85 +540,84 @@ export function MercadoLibreHistoricalSales({
           </div>
           {sales?.data.length ? (
             <div className="space-y-2">
-              {sales.data.map((sale) => (
-                <div
-                  key={sale.id}
-                  id={`mercadolibre-order-${sale.id}`}
-                  className={
-                    sale.id === highlightedOrderId
-                      ? "scroll-mt-6 rounded-md border border-amber-400 bg-amber-50/40 p-3 text-sm"
-                      : "scroll-mt-6 rounded-md border p-3 text-sm"
-                  }
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <Badge
-                        variant={
-                          sale.status === "PAID" ? "success" : "secondary"
-                        }
-                      >
-                        {sale.status}
-                      </Badge>
-                      <span className="font-medium">
-                        Orden {sale.externalOrderId}
-                      </span>
+              {sales.data.map((sale) => {
+                const statusMeta = getSaleStatusMeta(sale.status);
+                return (
+                  <div
+                    key={sale.id}
+                    id={`mercadolibre-order-${sale.id}`}
+                    className={
+                      sale.id === highlightedOrderId
+                        ? "scroll-mt-6 rounded-md border border-amber-400 bg-amber-50/40 p-3 text-sm"
+                        : "scroll-mt-6 rounded-md border p-3 text-sm"
+                    }
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Badge variant={statusMeta.variant}>
+                          {statusMeta.label}
+                        </Badge>
+                        <span className="font-medium">
+                          Orden {sale.externalOrderId}
+                        </span>
+                      </div>
+                      <span>{formatDate(sale.paidAt)}</span>
                     </div>
-                    <span>{formatDate(sale.paidAt)}</span>
+                    <p className="mt-2 text-muted-foreground">
+                      {sale.items
+                        .map(
+                          (item) =>
+                            `${item.quantity} × ${item.product?.name ?? item.title}`,
+                        )
+                        .join(" · ")}
+                    </p>
+                    <div className="mt-3 grid gap-2 rounded-md bg-muted/50 p-2.5 text-xs sm:grid-cols-4">
+                      <div className="sm:order-4">
+                        <span className="block text-muted-foreground">
+                          Cobrado al cliente
+                        </span>
+                        <span>{formatCurrency(sale.totalAmount)}</span>
+                      </div>
+                      <div className="sm:order-2">
+                        <span className="block text-muted-foreground">
+                          Cargos Mercado Libre
+                        </span>
+                        <span>{formatCurrency(sale.marketplaceFee)}</span>
+                      </div>
+                      <div className="sm:order-3">
+                        <span className="block text-muted-foreground">
+                          Envíos e impuestos
+                        </span>
+                        <span>
+                          {formatCurrency(
+                            (sale.shippingCost ?? 0) +
+                              (getTaxesAmount(sale.metadata) ?? 0),
+                          )}
+                        </span>
+                      </div>
+                      <div className="sm:order-1">
+                        <span className="block text-muted-foreground">
+                          Neto para P de Papel
+                        </span>
+                        <span
+                          className={
+                            sale.netAmount === null
+                              ? "font-medium text-amber-700"
+                              : "font-semibold text-success"
+                          }
+                        >
+                          {sale.netAmount === null
+                            ? "Pendiente"
+                            : formatCurrency(sale.netAmount)}
+                        </span>
+                      </div>
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {getSettlementLabel(sale)}
+                    </p>
                   </div>
-                  <p className="mt-2 text-muted-foreground">
-                    {sale.items
-                      .map(
-                        (item) =>
-                          `${item.quantity} × ${item.product?.name ?? item.title}`,
-                      )
-                      .join(" · ")}
-                  </p>
-                  <div className="mt-3 grid gap-2 rounded-md bg-muted/50 p-2.5 text-xs sm:grid-cols-4">
-                    <div className="sm:order-4">
-                      <span className="block text-muted-foreground">
-                        Cobrado al cliente
-                      </span>
-                      <span>{formatCurrency(sale.totalAmount)}</span>
-                    </div>
-                    <div className="sm:order-2">
-                      <span className="block text-muted-foreground">
-                        Cargos Mercado Libre
-                      </span>
-                      <span>{formatCurrency(sale.marketplaceFee)}</span>
-                    </div>
-                    <div className="sm:order-3">
-                      <span className="block text-muted-foreground">
-                        Envíos e impuestos
-                      </span>
-                      <span>
-                        {formatCurrency(
-                          (sale.shippingCost ?? 0) +
-                            (getTaxesAmount(sale.metadata) ?? 0),
-                        )}
-                      </span>
-                    </div>
-                    <div className="sm:order-1">
-                      <span className="block text-muted-foreground">
-                        Neto para P de Papel
-                      </span>
-                      <span
-                        className={
-                          sale.netAmount === null
-                            ? "font-medium text-amber-700"
-                            : "font-semibold text-success"
-                        }
-                      >
-                        {sale.netAmount === null
-                          ? "Pendiente"
-                          : formatCurrency(sale.netAmount)}
-                      </span>
-                    </div>
-                  </div>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {getSettlementLabel(sale)}
-                  </p>
-                </div>
-              ))}
+                );
+              })}
               {sales.pageCount > 1 ? (
                 <div className="flex items-center justify-end gap-2 pt-2">
                   <Button

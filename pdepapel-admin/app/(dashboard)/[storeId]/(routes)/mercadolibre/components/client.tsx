@@ -1,8 +1,8 @@
 "use client";
 
+import { MercadoLibreLogo } from "@/components/mercadolibre-logo";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MercadoLibreLogo } from "@/components/mercadolibre-logo";
 import {
   Card,
   CardContent,
@@ -10,12 +10,20 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { AlertCircle, CheckCircle2, Clock3, ExternalLink } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Clock3,
+  ExternalLink,
+  ListOrdered,
+  Rocket,
+  Store,
+} from "lucide-react";
 import { useParams, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
-import { MercadoLibreListingManager } from "./listing-manager";
 import { MercadoLibreHistoricalSales } from "./historical-sales";
+import { MercadoLibreListingManager } from "./listing-manager";
 
 type MarketplaceConnection = {
   sellerId: string | null;
@@ -135,7 +143,6 @@ export default function MercadoLibreClient({
         <div>
           <div className="flex items-center gap-3">
             <MercadoLibreLogo variant="full" className="h-8" />
-            <h1 className="text-3xl font-bold tracking-tight">Mercado Libre</h1>
           </div>
           <p className="text-sm text-muted-foreground">
             Un canal adicional con precios e inventario controlados desde P de
@@ -171,7 +178,6 @@ export default function MercadoLibreClient({
         <Card className="border-amber-300">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <MercadoLibreLogo className="h-5" />
               <AlertCircle className="h-5 w-5 text-amber-600" />
               Configuración pendiente
             </CardTitle>
@@ -193,7 +199,7 @@ export default function MercadoLibreClient({
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <MercadoLibreLogo className="h-5" />
+              <Store className="h-5 w-5 text-muted-foreground" />
               Cuenta vendedora
             </CardTitle>
             <CardDescription>
@@ -247,7 +253,7 @@ export default function MercadoLibreClient({
           <CardHeader>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <CardTitle className="flex items-center gap-2">
-                <MercadoLibreLogo className="h-5" />
+                <ListOrdered className="h-5 w-5 text-muted-foreground" />
                 {queueState === "active" ? (
                   <CheckCircle2 className="h-5 w-5 text-success" />
                 ) : queueState === "error" ? (
@@ -364,7 +370,7 @@ export default function MercadoLibreClient({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <MercadoLibreLogo className="h-5" />
+            <Rocket className="h-5 w-5 text-muted-foreground" />
             Próximos pasos
           </CardTitle>
           <CardDescription>
