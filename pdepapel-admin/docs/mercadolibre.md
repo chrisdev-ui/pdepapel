@@ -4,7 +4,7 @@ Esta guía se ejecuta en orden. P de Papel conserva el inventario como fuente de
 
 No compartas en chat, correo ni capturas el `Client Secret`, los tokens de QStash ni la llave de cifrado.
 
-La migración `prisma/manual-migrations/20260808_add_marketplace_operations.sql` fue aplicada en Railway el 2026-08-08. Es un cambio aditivo: agrega preguntas, envíos, reclamos, plantillas, videos y acciones seguras en cola; no altera ventas ni existencias existentes.
+La migración `prisma/manual-migrations/20260808_add_marketplace_operations.sql` fue aplicada en Railway el 2026-08-08. Es un cambio aditivo: agrega preguntas, envíos, reclamos, plantillas, biblioteca multimedia y acciones seguras en cola; no altera ventas ni existencias existentes.
 
 ## 1. Crear la aplicación de Mercado Libre
 
@@ -142,19 +142,17 @@ La notificación no descuenta inventario por sí misma. P de Papel consulta la o
 2. Verifica que Mercado Libre muestre la cuenta como conectada y que QStash muestre el schedule creado por P de Papel.
 3. No hagas una venta entre usuarios de prueba conectada a la tienda de producción: una orden de prueba vinculada a un producto real descontaría el stock real por diseño.
 4. Para una prueba de compra completa, usa una tienda y base de datos de pruebas separadas, conectadas a un vendedor y comprador de prueba de Mercado Libre. Mercado Libre indica que las pruebas se hacen exclusivamente entre usuarios de prueba, no con cuentas personales.
-5. Cuando se apruebe la primera publicación real, crea primero un **borrador** en Administración y revísalo manualmente antes de pulsar **Publicar**.
+5. Cuando se apruebe la primera publicación real, usa el último paso del asistente para guardarla como **borrador** o publicarla desde Administración después de revisarla.
 
 ## Preparar una publicación real
 
-1. Abre **Ventas** → **Mercado Libre** y pulsa **Nuevo borrador**.
-2. Escoge el producto local. El precio de la tienda es una referencia: define un precio de Mercado Libre que cubra comisión, envío y margen.
-3. Pulsa **Calcular comisión**. Es una estimación oficial de Mercado Libre según precio, categoría y tipo de publicación; no incluye el envío, impuestos o descuentos posteriores. Usa el margen mostrado solo para decidir el precio, no como valor contable.
-4. Define un colchón de seguridad. Ejemplo: con stock local de 5 y colchón de 1, Mercado Libre mostrará máximo 4 unidades.
-5. Pulsa **Sugerir categoría** y elige una propuesta. La selección siempre requiere revisión humana; nunca se publica automáticamente en catálogo.
-6. En **Fotos para Mercado Libre**, marca solo las fotos que correspondan al artículo. La primera seleccionada será la portada. Las fotos se toman del producto local; si falta una, agrégala primero desde **Productos**.
-7. Pulsa **Cargar campos** en la ficha técnica y completa los obligatorios. El área de características adicionales sigue disponible para casos especiales con el formato `CODIGO=Valor`. Marca, MPN y GTIN se agregan si ya existen en el producto.
-8. Deja marcada **Sincronizar este precio** si deseas que los próximos cambios de este precio se envíen a Mercado Libre. Esta opción nunca modifica el precio de `papeleriapdepapel.com`.
-9. Revisa precio, fotos, categoría y stock. Pulsa **Publicar** y confirma la acción.
+1. Abre **Ventas** → **Mercado Libre** y pulsa **Preparar publicación**.
+2. En **Producto**, escoge el producto local y define un precio de Mercado Libre que cubra comisión, envío y margen. El precio de la tienda es solo una referencia.
+3. Si lo necesitas, abre **Ajustes de stock y precio**. Ejemplo: con stock local de 5 y seguridad de 1, Mercado Libre mostrará máximo 4 unidades. Deja activa la sincronización de precio solo si Administración debe mantener el precio de Mercado Libre.
+4. En **Categoría y fotos**, pulsa **Sugerir categoría** y elige una propuesta. Marca solo las fotos que correspondan al artículo: la primera será la portada. Si falta una foto, agrégala primero desde **Productos**.
+5. En **Ficha técnica**, el asistente carga los campos obligatorios de la categoría. Complétalos y usa una plantilla solo si aplica a este producto. Las características adicionales quedan disponibles para casos especiales con el formato `CODIGO=Valor`. Marca, MPN y GTIN se agregan si ya existen en el producto.
+6. En **Revisar y publicar**, confirma producto, precio, categoría, fotos y stock disponible. Pulsa **Calcular comisión** para una estimación: no incluye envío, impuestos o descuentos posteriores y no reemplaza el valor contable real.
+7. Elige **Guardar borrador** si quieres revisarlo después o **Publicar ahora** para enviarlo a Mercado Libre desde Administración. La publicación siempre pide confirmación antes de salir.
 
 ### Reutilizar una plantilla y revisar rentabilidad
 
@@ -176,18 +174,6 @@ La notificación no descuenta inventario por sí misma. P de Papel consulta la o
 2. Guarda los cambios. Si la casilla de sincronización de precio está activa, el nuevo precio se envía de manera segura a Mercado Libre. No cambies esta casilla si el precio se gestiona manualmente allá.
 3. Para actualizar fotos, descripción y características en Mercado Libre, pulsa **Sincronizar contenido** y confirma. Esta acción reemplaza esos tres elementos en Mercado Libre con la selección y los datos locales; nunca se ejecuta sola.
 4. Pulsa **Revisar calidad** para ver oportunidades y advertencias que Mercado Libre reporta sobre fotos, atributos, título o condiciones de venta. No corrige información automáticamente: el administrador decide cada ajuste.
-5. Si Mercado Libre recomienda un video, el aviso aparece separado y nunca como error. Pulsa **Preparar video** para abrir la biblioteca local; cuando no sea el momento, usa **Recordarme en 30 días**. Esta recomendación no se incluye en el correo diario ni bloquea la publicación.
-
-## Videos de Mercado Libre
-
-No uses un generador que convierta fotos estáticas en una animación. Mercado Libre exige un video real del producto y puede rechazar animaciones o composiciones de imágenes.
-
-1. En Mercado Libre, abre **Videos** o la publicación activa y selecciona **Crear con ayuda de IA**.
-2. Usa su herramienta gratuita para elegir o editar el guion y la voz.
-3. Graba el producto real en vertical (9:16), con buena luz y sin texto en las zonas seguras.
-4. No muestres precios, promociones, teléfonos, redes sociales, direcciones, sorteos ni material de terceros.
-5. En el borrador de la publicación de P de Papel puedes guardar el archivo en **Biblioteca de videos** antes de subirlo. Solo acepta videos verticales de 10–61 segundos, mínimo 360 px de ancho y máximo 280 MB. Es una biblioteca privada: no publica ni sube el clip automáticamente.
-6. Sube el clip manualmente desde Mercado Libre y espera su revisión. Mercado Libre no ofrece en esta integración un flujo público confiable para cargar Clips MCO desde P de Papel.
 
 ## Centro de operaciones
 

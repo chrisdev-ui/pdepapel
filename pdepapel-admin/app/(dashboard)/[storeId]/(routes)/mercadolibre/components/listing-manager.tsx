@@ -20,29 +20,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { getListingStatusMeta } from "@/lib/mercadolibre/listing-status";
 import {
   BarChart3,
-  BellRing,
-  CircleDollarSign,
   Download,
   ImageIcon,
   Loader2,
   PackageOpen,
   Pencil,
   Plus,
-  RefreshCw,
   Sparkles,
   UploadCloud,
-  Video,
 } from "lucide-react";
-import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
 
-import { ProductVideoLibrary } from "./product-video-library";
+import { ListingPublicationWizard } from "./listing-publication-wizard";
 
 type ProductReference = {
   id: string;
@@ -88,6 +80,10 @@ type Listing = {
     media?: { imageUrls?: string[] };
   } | null;
   product: ProductReference;
+};
+
+type PublishableListing = Pick<Listing, "id" | "marketplacePrice"> & {
+  product: Pick<ProductReference, "name">;
 };
 
 type MarketplaceAttribute = {
@@ -153,12 +149,6 @@ type ListingQuality = {
   level: string | null;
   levelWording: string | null;
   pendingRules: ListingQualityRule[];
-  videoRecommendation:
-    | (ListingQualityRule & {
-        preparedVideoCount: number;
-        snoozedUntil: string | null;
-      })
-    | null;
 };
 
 type ContentReview = {
@@ -215,10 +205,6 @@ const currencyFormatter = new Intl.NumberFormat("es-CO", {
   maximumFractionDigits: 0,
 });
 
-const dateFormatter = new Intl.DateTimeFormat("es-CO", {
-  dateStyle: "medium",
-});
-
 const bulkActionLabels = {
   publish: "Publicar borradores",
   sync_stock: "Sincronizar stock",
@@ -256,33 +242,6 @@ function parseAttributes(value: string) {
         value_name: line.slice(separatorIndex + 1).trim(),
       };
     });
-}
-
-function getAttributeValues(value: string) {
-  try {
-    return new Map(
-      parseAttributes(value).map((attribute) => [
-        attribute.id,
-        attribute.value_name,
-      ]),
-    );
-  } catch {
-    return new Map<string, string>();
-  }
-}
-
-function updateAttributeValue(
-  value: string,
-  attributeId: string,
-  attributeValue: string,
-) {
-  const values = getAttributeValues(value);
-  if (attributeValue.trim()) {
-    values.set(attributeId, attributeValue.trim());
-  } else {
-    values.delete(attributeId);
-  }
-  return Array.from(values, ([id, name]) => `${id}=${name}`).join("\n");
 }
 
 function getErrorMessage(response: Response) {
@@ -349,11 +308,6 @@ export function MercadoLibreListingManager({
     CategoryTemplate[]
   >([]);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
-  const [videoLibraryListing, setVideoLibraryListing] =
-    useState<Listing | null>(null);
-  const [videoReminderActionId, setVideoReminderActionId] = useState<
-    string | null
-  >(null);
 
   const loadListings = useCallback(async () => {
     setIsLoading(true);
@@ -400,7 +354,37 @@ export function MercadoLibreListingManager({
   }, [loadCategoryTemplates]);
 
   const updateForm = (key: keyof ListingForm, value: string) => {
+    setError(null);
     setForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const updateSelectedProduct = (
+    productId: string,
+    product?: AsyncProductOption | null,
+  ) => {
+    const selected = toSelectedProduct(product);
+    setSelectedProduct(selected);
+    setSuggestions([]);
+    setCategoryAttributes([]);
+    setPriceEstimate(null);
+    setError(null);
+    setForm((current) => ({
+      ...current,
+      productId,
+      marketplacePrice: current.marketplacePrice
+        ? current.marketplacePrice
+        : String(selected?.price ?? ""),
+      categoryId: "",
+      imageUrls: selected?.images.map((image) => image.url) ?? [],
+      attributes: "",
+    }));
+  };
+
+  const updateCategory = (categoryId: string) => {
+    updateForm("categoryId", categoryId);
+    setSuggestions([]);
+    setCategoryAttributes([]);
+    setPriceEstimate(null);
   };
 
   const openNewListing = () => {
@@ -586,10 +570,10 @@ export function MercadoLibreListingManager({
     }
   };
 
-  const loadCategoryAttributes = async () => {
+  const loadCategoryAttributes = async (): Promise<boolean> => {
     if (!form.categoryId) {
       setError("Selecciona una categoría antes de cargar sus características");
-      return;
+      return false;
     }
 
     setIsLoadingCategoryAttributes(true);
@@ -600,12 +584,14 @@ export function MercadoLibreListingManager({
       );
       if (!response.ok) throw new Error(await getErrorMessage(response));
       setCategoryAttributes((await response.json()) as CategoryAttribute[]);
+      return true;
     } catch (requestError) {
       setError(
         requestError instanceof Error
           ? requestError.message
           : "No fue posible cargar las características de la categoría",
       );
+      return false;
     } finally {
       setIsLoadingCategoryAttributes(false);
     }
@@ -667,49 +653,6 @@ export function MercadoLibreListingManager({
     }
   };
 
-  const updateVideoReminder = async (
-    listing: Listing,
-    action: "snooze" | "resume",
-  ) => {
-    setVideoReminderActionId(listing.id);
-    setError(null);
-    try {
-      const response = await fetch(
-        `/api/${storeId}/marketplaces/mercadolibre/listings/${listing.id}/quality/video-reminder`,
-        { method: action === "snooze" ? "POST" : "DELETE" },
-      );
-      if (!response.ok) throw new Error(await getErrorMessage(response));
-
-      const snoozedUntil =
-        action === "snooze"
-          ? ((await response.json()) as { snoozedUntil: string }).snoozedUntil
-          : null;
-      setQualityByListingId((current) => {
-        const quality = current[listing.id];
-        if (!quality?.videoRecommendation) return current;
-
-        return {
-          ...current,
-          [listing.id]: {
-            ...quality,
-            videoRecommendation: {
-              ...quality.videoRecommendation,
-              snoozedUntil,
-            },
-          },
-        };
-      });
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "No fue posible actualizar el recordatorio del video",
-      );
-    } finally {
-      setVideoReminderActionId(null);
-    }
-  };
-
   const syncListingContent = async (listing: Listing) => {
     if (
       !window.confirm(
@@ -763,12 +706,12 @@ export function MercadoLibreListingManager({
     }
   };
 
-  const saveListing = async () => {
+  const saveListing = async (): Promise<PublishableListing | null> => {
     if (!form.productId || !form.marketplacePrice || !form.categoryId) {
       setError(
         "Producto, precio de Mercado Libre y categoría son obligatorios",
       );
-      return;
+      return null;
     }
 
     setIsSaving(true);
@@ -785,6 +728,7 @@ export function MercadoLibreListingManager({
         imageUrls: form.imageUrls,
         attributes,
       };
+      let savedListingId = editingListing?.id;
       if (editingListing) {
         const response = await fetch(
           `/api/${storeId}/marketplaces/mercadolibre/listings/${editingListing.id}`,
@@ -795,6 +739,7 @@ export function MercadoLibreListingManager({
           },
         );
         if (!response.ok) throw new Error(await getErrorMessage(response));
+        savedListingId = ((await response.json()) as { id: string }).id;
       } else {
         const response = await fetch(
           `/api/${storeId}/marketplaces/mercadolibre/listings`,
@@ -805,22 +750,42 @@ export function MercadoLibreListingManager({
           },
         );
         if (!response.ok) throw new Error(await getErrorMessage(response));
+        savedListingId = ((await response.json()) as { id: string }).id;
       }
+      if (!savedListingId) {
+        throw new Error("No fue posible identificar la publicación guardada");
+      }
+
+      const savedListing: PublishableListing = {
+        id: savedListingId,
+        marketplacePrice: Number(form.marketplacePrice),
+        product: {
+          name:
+            selectedProduct?.name ??
+            editingListing?.product.name ??
+            "Producto seleccionado",
+        },
+      };
 
       setIsDialogOpen(false);
       await loadListings();
+      return savedListing;
     } catch (requestError) {
       setError(
         requestError instanceof Error
           ? requestError.message
           : "No fue posible guardar la publicación",
       );
+      return null;
     } finally {
       setIsSaving(false);
     }
   };
 
-  const publishListing = async (listing: Listing) => {
+  const publishListing = async (
+    listing: PublishableListing,
+    skipConfirmation = false,
+  ) => {
     if (!canPublish) {
       setError(
         "Activa primero el procesamiento seguro para evitar desajustes de inventario",
@@ -828,6 +793,7 @@ export function MercadoLibreListingManager({
       return;
     }
     if (
+      !skipConfirmation &&
       !window.confirm(
         `¿Publicar “${listing.product.name}” en Mercado Libre por ${currencyFormatter.format(listing.marketplacePrice ?? 0)}?`,
       )
@@ -853,6 +819,29 @@ export function MercadoLibreListingManager({
     } finally {
       setPublishingId(null);
     }
+  };
+
+  const saveAndPublishListing = async () => {
+    if (!canPublish) {
+      setError(
+        "Activa primero el procesamiento seguro para evitar desajustes de inventario",
+      );
+      return;
+    }
+
+    const productName =
+      selectedProduct?.name ?? editingListing?.product.name ?? "este producto";
+    if (
+      !window.confirm(
+        `¿Guardar y publicar “${productName}” en Mercado Libre por ${currencyFormatter.format(Number(form.marketplacePrice) || 0)}?`,
+      )
+    ) {
+      return;
+    }
+
+    const savedListing = await saveListing();
+    if (!savedListing) return;
+    await publishListing(savedListing, true);
   };
 
   const toggleListingSelection = (listingId: string) => {
@@ -1004,7 +993,7 @@ export function MercadoLibreListingManager({
           </Button>
           <Button type="button" onClick={openNewListing} disabled={!canPublish}>
             <Plus className="mr-2 h-4 w-4" />
-            Nuevo borrador
+            Preparar publicación
           </Button>
         </div>
       </CardHeader>
@@ -1244,12 +1233,6 @@ export function MercadoLibreListingManager({
             {listings.map((listing) => {
               const quality = qualityByListingId[listing.id];
               const contentReview = contentReviewByListingId[listing.id];
-              const videoRecommendation = quality?.videoRecommendation;
-              const videoReminderIsSnoozed = Boolean(
-                videoRecommendation?.snoozedUntil &&
-                new Date(videoRecommendation.snoozedUntil).getTime() >
-                  Date.now(),
-              );
               const nonVideoQualityRules = quality?.pendingRules.filter(
                 (rule) => !rule.isVideoRecommendation,
               );
@@ -1330,108 +1313,11 @@ export function MercadoLibreListingManager({
                                 </li>
                               ))}
                             </ul>
-                          ) : videoRecommendation ? (
-                            <p className="text-xs text-success">
-                              No hay otras acciones pendientes reportadas.
-                            </p>
                           ) : (
                             <p className="text-xs text-success">
                               No hay acciones pendientes reportadas.
                             </p>
                           )}
-                          {videoRecommendation ? (
-                            videoReminderIsSnoozed ? (
-                              <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed bg-background/70 p-2 text-xs text-muted-foreground">
-                                <BellRing className="h-4 w-4 shrink-0" />
-                                <span>
-                                  Video recomendado: recordatorio el{" "}
-                                  {dateFormatter.format(
-                                    new Date(videoRecommendation.snoozedUntil!),
-                                  )}
-                                  .
-                                </span>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() =>
-                                    void updateVideoReminder(listing, "resume")
-                                  }
-                                  disabled={
-                                    videoReminderActionId === listing.id
-                                  }
-                                >
-                                  Mostrar ahora
-                                </Button>
-                              </div>
-                            ) : (
-                              <div className="space-y-2 rounded-md border border-primary/20 bg-primary/[0.03] p-3 text-xs">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <Video className="h-4 w-4 text-primary" />
-                                  <span className="font-medium text-foreground">
-                                    Video recomendado por Mercado Libre
-                                  </span>
-                                  <Badge variant="secondary">
-                                    No bloquea la publicación
-                                  </Badge>
-                                </div>
-                                <p className="text-muted-foreground">
-                                  {videoRecommendation.title}.{" "}
-                                  {videoRecommendation.preparedVideoCount > 0
-                                    ? `${videoRecommendation.preparedVideoCount} video${videoRecommendation.preparedVideoCount === 1 ? "" : "s"} listo${videoRecommendation.preparedVideoCount === 1 ? "" : "s"} en P de Papel.`
-                                    : "Aún no hay un video preparado en P de Papel."}
-                                </p>
-                                <div className="flex flex-wrap gap-2">
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() =>
-                                      setVideoLibraryListing(listing)
-                                    }
-                                  >
-                                    <Video className="mr-2 h-4 w-4" />
-                                    {videoRecommendation.preparedVideoCount > 0
-                                      ? "Abrir biblioteca"
-                                      : "Preparar video"}
-                                  </Button>
-                                  {videoRecommendation.link ? (
-                                    <Button
-                                      asChild
-                                      type="button"
-                                      size="sm"
-                                      variant="outline"
-                                    >
-                                      <a
-                                        href={videoRecommendation.link}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                      >
-                                        Ver en Mercado Libre
-                                      </a>
-                                    </Button>
-                                  ) : null}
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() =>
-                                      void updateVideoReminder(
-                                        listing,
-                                        "snooze",
-                                      )
-                                    }
-                                    disabled={
-                                      videoReminderActionId === listing.id
-                                    }
-                                  >
-                                    <BellRing className="mr-2 h-4 w-4" />
-                                    Recordarme en 30 días
-                                  </Button>
-                                </div>
-                              </div>
-                            )
-                          ) : null}
                         </div>
                       ) : null}
                       {contentReview ? (
@@ -1565,507 +1451,41 @@ export function MercadoLibreListingManager({
               antes de guardar.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-2">
-            <div className="grid gap-2">
-              <Label htmlFor="mercadolibre-product">
-                Producto de P de Papel
-              </Label>
-              <AsyncProductSelect
-                value={form.productId}
-                id="mercadolibre-product"
-                modal
-                disabled={Boolean(editingListing)}
-                ariaLabel="Producto local para la publicación"
-                placeholder="Buscar por nombre o SKU..."
-                onChange={(productId, product) => {
-                  const selected = toSelectedProduct(product);
-                  setSelectedProduct(selected);
-                  setForm((current) => ({
-                    ...current,
-                    productId,
-                    marketplacePrice: current.marketplacePrice
-                      ? current.marketplacePrice
-                      : String(selected?.price ?? ""),
-                    imageUrls: selected?.images.map((image) => image.url) ?? [],
-                  }));
-                }}
-              />
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <Label htmlFor="mercadolibre-price">
-                  Precio de Mercado Libre
-                </Label>
-                <Input
-                  id="mercadolibre-price"
-                  inputMode="numeric"
-                  value={form.marketplacePrice}
-                  onChange={(event) =>
-                    updateForm("marketplacePrice", event.target.value)
-                  }
-                  placeholder="Ej. 18500"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="mercadolibre-buffer">
-                  Unidades de seguridad
-                </Label>
-                <Input
-                  id="mercadolibre-buffer"
-                  inputMode="numeric"
-                  value={form.stockSafetyBuffer}
-                  onChange={(event) =>
-                    updateForm("stockSafetyBuffer", event.target.value)
-                  }
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="mercadolibre-minimum-margin">
-                  Margen mínimo antes de costos variables (opcional)
-                </Label>
-                <Input
-                  id="mercadolibre-minimum-margin"
-                  inputMode="numeric"
-                  value={form.minimumMarginAmount}
-                  onChange={(event) =>
-                    updateForm("minimumMarginAmount", event.target.value)
-                  }
-                  placeholder="Ej. 12000"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Recibirás una alerta si el precio publicado no deja este valor
-                  antes de comisión, envío e impuestos.
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/20 p-3 text-sm">
-              <label className="flex cursor-pointer items-start gap-2">
-                <input
-                  type="checkbox"
-                  checked={form.syncPrice}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      syncPrice: event.target.checked,
-                    }))
-                  }
-                  className="mt-0.5 h-4 w-4 rounded border-input"
-                />
-                <span>
-                  <span className="block font-medium">
-                    Sincronizar este precio con Mercado Libre
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    Solo actualiza el precio de esta publicación; nunca el de la
-                    tienda.
-                  </span>
-                </span>
-              </label>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => void loadPriceEstimate()}
-                disabled={isLoadingPriceEstimate}
-              >
-                {isLoadingPriceEstimate ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <CircleDollarSign className="mr-2 h-4 w-4" />
-                )}
-                Calcular comisión
-              </Button>
-            </div>
-            {priceEstimate ? (
-              <div className="grid gap-2 rounded-md border border-primary/20 bg-primary/[0.03] p-3 text-sm sm:grid-cols-3">
-                <p>
-                  <span className="block text-xs text-muted-foreground">
-                    Comisión estimada
-                  </span>
-                  <span className="font-semibold">
-                    {currencyFormatter.format(priceEstimate.saleFeeAmount)}
-                  </span>
-                </p>
-                <p>
-                  <span className="block text-xs text-muted-foreground">
-                    Neto antes de envío e impuestos
-                  </span>
-                  <span className="font-semibold">
-                    {currencyFormatter.format(
-                      Number(form.marketplacePrice) -
-                        priceEstimate.saleFeeAmount,
-                    )}
-                  </span>
-                </p>
-                <p>
-                  <span className="block text-xs text-muted-foreground">
-                    Margen antes de envío e impuestos
-                  </span>
-                  <span className="font-semibold">
-                    {currencyFormatter.format(
-                      Number(form.marketplacePrice) -
-                        priceEstimate.saleFeeAmount -
-                        (selectedProduct?.acqPrice ?? 0),
-                    )}
-                  </span>
-                </p>
-                <p className="text-xs text-muted-foreground sm:col-span-3">
-                  Mercado Libre calcula esta comisión según la categoría y el
-                  tipo de publicación. El envío, impuestos y descuentos
-                  posteriores pueden cambiar el neto real.
-                </p>
-              </div>
-            ) : null}
-            <div className="grid gap-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <Label htmlFor="mercadolibre-category">
-                  Categoría de Mercado Libre
-                </Label>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => void searchCategories()}
-                  disabled={isSearchingCategories || !selectedProduct}
-                >
-                  {isSearchingCategories ? "Buscando…" : "Sugerir categoría"}
-                </Button>
-              </div>
-              <Input
-                id="mercadolibre-category"
-                value={form.categoryId}
-                onChange={(event) => {
-                  updateForm("categoryId", event.target.value);
-                  setCategoryAttributes([]);
-                  setPriceEstimate(null);
-                }}
-                placeholder="Ej. MCO..."
-              />
-              {suggestions.length > 0 ? (
-                <div className="grid gap-2 rounded-md border p-2">
-                  {suggestions.map((suggestion) => (
-                    <Button
-                      key={`${suggestion.domainId}-${suggestion.categoryId}`}
-                      type="button"
-                      variant="ghost"
-                      className="h-auto justify-start whitespace-normal px-2 py-2 text-left"
-                      onClick={() => {
-                        updateForm("categoryId", suggestion.categoryId);
-                        setSuggestions([]);
-                        setCategoryAttributes([]);
-                        setPriceEstimate(null);
-                      }}
-                    >
-                      <span>
-                        <span className="block font-medium">
-                          {suggestion.categoryName}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {suggestion.categoryId}
-                        </span>
-                      </span>
-                    </Button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-            <div className="grid gap-3 rounded-md border bg-muted/20 p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <p className="text-sm font-medium">
-                    Fotos para Mercado Libre
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Elige qué fotos del producto se enviarán. La primera
-                    seleccionada será la portada.
-                  </p>
-                </div>
-                <Badge variant="secondary">
-                  {form.imageUrls.length} seleccionada
-                  {form.imageUrls.length === 1 ? "" : "s"}
-                </Badge>
-              </div>
-              {selectedProduct?.images.length ? (
-                <>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    {selectedProduct.images.map((image) => {
-                      const selected = form.imageUrls.includes(image.url);
-                      return (
-                        <button
-                          key={image.url}
-                          type="button"
-                          onClick={() =>
-                            setForm((current) => ({
-                              ...current,
-                              imageUrls: selected
-                                ? current.imageUrls.filter(
-                                    (url) => url !== image.url,
-                                  )
-                                : [...current.imageUrls, image.url],
-                            }))
-                          }
-                          className={`relative aspect-square overflow-hidden rounded-md border-2 text-left transition ${selected ? "border-primary" : "border-transparent opacity-60 hover:opacity-100"}`}
-                          aria-pressed={selected}
-                        >
-                          <Image
-                            src={image.url}
-                            alt="Foto disponible del producto"
-                            fill
-                            sizes="(max-width: 640px) 45vw, 9rem"
-                            className="object-cover"
-                          />
-                          <span className="absolute inset-x-1 bottom-1 rounded bg-background/90 px-1 py-0.5 text-center text-[10px] font-medium shadow-sm">
-                            {selected
-                              ? form.imageUrls[0] === image.url
-                                ? "Portada"
-                                : "Incluida"
-                              : "No usar"}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {form.imageUrls.length > 1 ? (
-                    <div className="grid gap-1 sm:max-w-sm">
-                      <Label htmlFor="mercadolibre-cover-image">
-                        Foto de portada
-                      </Label>
-                      <select
-                        id="mercadolibre-cover-image"
-                        value={form.imageUrls[0]}
-                        onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            imageUrls: [
-                              event.target.value,
-                              ...current.imageUrls.filter(
-                                (url) => url !== event.target.value,
-                              ),
-                            ],
-                          }))
-                        }
-                        className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                      >
-                        {form.imageUrls.map((url, index) => (
-                          <option key={url} value={url}>
-                            Foto {index + 1}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : null}
-                </>
-              ) : (
-                <p className="text-sm text-destructive">
-                  Este producto no tiene imágenes. Agrégalas desde Productos
-                  antes de publicar.
-                </p>
-              )}
-            </div>
-            {selectedProduct ? (
-              <ProductVideoLibrary
-                storeId={storeId}
-                productId={selectedProduct.id}
-              />
-            ) : null}
-            <div className="grid gap-3 rounded-md border bg-muted/20 p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <p className="text-sm font-medium">
-                    Ficha técnica de la categoría
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Carga los campos que Mercado Libre exige para reducir
-                    rechazos y mejorar visibilidad.
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => void loadCategoryAttributes()}
-                  disabled={isLoadingCategoryAttributes || !form.categoryId}
-                >
-                  {isLoadingCategoryAttributes ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                  )}
-                  Cargar campos
-                </Button>
-              </div>
-              {form.categoryId ? (
-                <div className="flex flex-col gap-2 rounded-md border border-dashed bg-background/60 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="font-medium">Plantilla de esta categoría</p>
-                    <p className="text-xs text-muted-foreground">
-                      Reutiliza la ficha técnica y reglas que ya aprobaste para{" "}
-                      {form.categoryId}.
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {categoryTemplates
-                      .filter(
-                        (template) => template.categoryId === form.categoryId,
-                      )
-                      .map((template) => (
-                        <Button
-                          key={template.id}
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => applyCategoryTemplate(template)}
-                        >
-                          Usar {template.name}
-                        </Button>
-                      ))}
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => void saveCategoryTemplate()}
-                      disabled={isSavingTemplate}
-                    >
-                      {isSavingTemplate
-                        ? "Guardando…"
-                        : "Guardar como plantilla"}
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
-              {categoryAttributes.length > 0 ? (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {categoryAttributes
-                    .filter((attribute) => attribute.required)
-                    .slice(0, 20)
-                    .map((attribute) => {
-                      const currentValue =
-                        getAttributeValues(form.attributes).get(attribute.id) ??
-                        "";
-                      return (
-                        <div key={attribute.id} className="grid gap-1">
-                          <Label
-                            htmlFor={`mercadolibre-attribute-${attribute.id}`}
-                          >
-                            {attribute.name}{" "}
-                            <span className="text-destructive">*</span>
-                          </Label>
-                          {attribute.values.length > 0 ? (
-                            <select
-                              id={`mercadolibre-attribute-${attribute.id}`}
-                              value={currentValue}
-                              onChange={(event) =>
-                                updateForm(
-                                  "attributes",
-                                  updateAttributeValue(
-                                    form.attributes,
-                                    attribute.id,
-                                    event.target.value,
-                                  ),
-                                )
-                              }
-                              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                            >
-                              <option value="">Selecciona una opción</option>
-                              {attribute.values.map((option) => (
-                                <option key={option.id} value={option.name}>
-                                  {option.name}
-                                </option>
-                              ))}
-                            </select>
-                          ) : (
-                            <Input
-                              id={`mercadolibre-attribute-${attribute.id}`}
-                              value={currentValue}
-                              onChange={(event) =>
-                                updateForm(
-                                  "attributes",
-                                  updateAttributeValue(
-                                    form.attributes,
-                                    attribute.id,
-                                    event.target.value,
-                                  ),
-                                )
-                              }
-                              placeholder={
-                                attribute.valueType === "number"
-                                  ? "Ej. 12"
-                                  : `Escribe ${attribute.name.toLowerCase()}`
-                              }
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
-                </div>
-              ) : null}
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="mercadolibre-attributes">
-                Características adicionales (opcional)
-              </Label>
-              <Textarea
-                id="mercadolibre-attributes"
-                value={form.attributes}
-                onChange={(event) =>
-                  updateForm("attributes", event.target.value)
-                }
-                placeholder={
-                  "Una por línea, por ejemplo:\nCOLOR=Rosado\nMATERIAL=Plástico"
-                }
-                className="min-h-28 font-mono text-xs"
-              />
-              <p className="text-xs text-muted-foreground">
-                Se agregan automáticamente marca, MPN y GTIN cuando el producto
-                los tiene. Completa aquí los requisitos específicos que Mercado
-                Libre indique.
-              </p>
-            </div>
-            <div className="flex gap-3 rounded-md border border-amber-300 bg-amber-50/50 p-3 text-sm dark:bg-amber-950/10">
-              <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
-              <div className="space-y-1">
-                <p className="font-medium">Videos de la publicación</p>
-                <p className="text-xs text-muted-foreground">
-                  Crea el guion y la voz con la herramienta gratuita de Mercado
-                  Libre, pero graba el producto real en vertical. No uses
-                  animaciones creadas desde fotos: Mercado Libre puede
-                  rechazarlas. Después de publicar, carga el clip desde Mercado
-                  Libre en la sección Videos.
-                </p>
-              </div>
-            </div>
-            <Button
-              type="button"
-              onClick={() => void saveListing()}
-              disabled={isSaving}
-            >
-              {isSaving ? "Guardando…" : "Guardar borrador"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={Boolean(videoLibraryListing)}
-        onOpenChange={(open) => {
-          if (!open) setVideoLibraryListing(null);
-        }}
-      >
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Video para Mercado Libre</DialogTitle>
-            <DialogDescription>
-              Guarda un clip real y vertical para{" "}
-              {videoLibraryListing?.product.name}. La subida a Mercado Libre
-              sigue siendo manual.
-            </DialogDescription>
-          </DialogHeader>
-          {videoLibraryListing ? (
-            <ProductVideoLibrary
-              storeId={storeId}
-              productId={videoLibraryListing.product.id}
-            />
-          ) : null}
+          <ListingPublicationWizard
+            key={editingListing?.id ?? "new-listing"}
+            editing={Boolean(editingListing)}
+            canPublishDirectly={canPublish && !editingListing?.externalItemId}
+            form={form}
+            setForm={setForm}
+            selectedProduct={selectedProduct}
+            suggestions={suggestions}
+            categoryAttributes={categoryAttributes}
+            categoryTemplates={categoryTemplates.filter(
+              (template) => template.categoryId === form.categoryId,
+            )}
+            priceEstimate={priceEstimate}
+            isSearchingCategories={isSearchingCategories}
+            isLoadingCategoryAttributes={isLoadingCategoryAttributes}
+            isLoadingPriceEstimate={isLoadingPriceEstimate}
+            isSaving={isSaving}
+            isSavingTemplate={isSavingTemplate}
+            onError={setError}
+            onFormChange={updateForm}
+            onProductChange={updateSelectedProduct}
+            onSearchCategories={searchCategories}
+            onCategoryChange={updateCategory}
+            onLoadCategoryAttributes={loadCategoryAttributes}
+            onLoadPriceEstimate={loadPriceEstimate}
+            onApplyCategoryTemplate={(templateId) => {
+              const template = categoryTemplates.find(
+                (item) => item.id === templateId,
+              );
+              if (template) applyCategoryTemplate(template);
+            }}
+            onSaveCategoryTemplate={saveCategoryTemplate}
+            onSave={saveListing}
+            onSaveAndPublish={saveAndPublishListing}
+          />
         </DialogContent>
       </Dialog>
     </Card>

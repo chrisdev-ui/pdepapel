@@ -483,11 +483,11 @@ For a new publication, an admin selects a local product, marketplace-specific pr
 - The category attributes endpoint drives the admin form's required fields. Keep the advanced `CODE=Value` area for exceptional attributes, but do not make admins discover standard requirements manually.
 - Mercado Libre performance is informative: show its quality score and pending actions, but never auto-change titles, photos, category, attributes, logistics, or promotions from those suggestions.
 - Category templates are reusable only for the selected Mercado Libre category and save the approved technical attributes, safety buffer, and minimum margin. Applying one still requires an admin to review the draft before publication.
+- The listing form is a concise four-step wizard: product/price, category/photos, technical attributes, and final review. It validates each step, loads required attributes before the technical step, and can save a draft or publish directly after a single explicit confirmation.
 - The operations panel has reviewable question-response suggestions. An admin must read/edit and explicitly send every buyer answer; no automatic messages are sent.
 - Bulk publication, pause/activate, and content/price/stock updates are capped at 20 selected listings and run through the idempotent QStash outbox after an explicit confirmation. Never bulk-publish the entire catalog automatically.
 - The minimum-margin field is an early warning before variable marketplace costs; actual profitability uses settled net collected minus recorded acquisition cost.
-- Mercado Libre performance video recommendations are optional and non-blocking. They are never reported as listing errors or included in the daily health email. The admin can open the local video library, follow a validated Mercado Libre link when the API provides one, or snooze the reminder for 30 days; no video is uploaded automatically.
-- Marketplace video policy requires real product footage. Do **not** integrate an image-to-video animation service as a publishing source: Mercado Libre can reject animations/static-image videos. The local product-video library accepts a vertical 10–61 second clip (minimum 360 px wide, max 280 MB) for human review; an administrator uploads it manually in Mercado Libre because an ordinary MCO Clips API flow is not publicly verified for this integration.
+- Do not surface a video or Clips step in the publication workflow until Mercado Libre offers a supported, verified MCO API capable of uploading it from P de Papel. The current public listing flow remains limited to product data, selected images, price, inventory, category, and technical attributes.
 
 For existing publications:
 
