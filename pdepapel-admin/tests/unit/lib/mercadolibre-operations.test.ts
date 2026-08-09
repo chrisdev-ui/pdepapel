@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { createMercadoLibreContentReview } from "@/lib/mercadolibre/content-assistant";
 import {
+  getShipmentStatusMeta,
   parseMercadoLibreClaim,
   parseMercadoLibreShipment,
 } from "@/lib/mercadolibre/logistics";
@@ -27,6 +28,13 @@ describe("Mercado Libre operations", () => {
         destinationCity: "Medellín",
         destinationState: "Antioquia",
       },
+    });
+  });
+
+  it("translates shipment statuses for the administration panel", () => {
+    expect(getShipmentStatusMeta("ready_to_ship")).toEqual({
+      label: "Listo para despachar",
+      variant: "warning",
     });
   });
 

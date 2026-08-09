@@ -4,6 +4,10 @@ import { MercadoLibreLogo } from "@/components/mercadolibre-logo";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  getClaimStatusMeta,
+  getShipmentStatusMeta,
+} from "@/lib/mercadolibre/logistics";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -436,50 +440,58 @@ export function MercadoLibreOperationsCenter({ storeId }: { storeId: string }) {
             icon={<Truck className="h-4 w-4" />}
             empty="No hay envíos recibidos todavía."
           >
-            {shipments.slice(0, 10).map((shipment) => (
-              <div
-                key={shipment.id}
-                className="rounded-md bg-muted/40 p-3 text-sm"
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">
-                    Envío {shipment.externalShipmentId}
-                  </span>
-                  <Badge variant="secondary">{shipment.status}</Badge>
+            {shipments.slice(0, 10).map((shipment) => {
+              const status = getShipmentStatusMeta(shipment.status);
+
+              return (
+                <div
+                  key={shipment.id}
+                  className="rounded-md bg-muted/40 p-3 text-sm"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">
+                      Envío {shipment.externalShipmentId}
+                    </span>
+                    <Badge variant={status.variant}>{status.label}</Badge>
+                  </div>
+                  <p className="mt-1 text-muted-foreground">
+                    Pedido{" "}
+                    {shipment.marketplaceOrder?.externalOrderId ?? "sin vincular"}
+                    {shipment.trackingNumber
+                      ? ` · Guía ${shipment.trackingNumber}`
+                      : ""}
+                  </p>
                 </div>
-                <p className="mt-1 text-muted-foreground">
-                  Pedido{" "}
-                  {shipment.marketplaceOrder?.externalOrderId ?? "sin vincular"}
-                  {shipment.trackingNumber
-                    ? ` · Guía ${shipment.trackingNumber}`
-                    : ""}
-                </p>
-              </div>
-            ))}
+              );
+            })}
           </OperationsList>
           <OperationsList
             title="Reclamos"
             icon={<ShieldAlert className="h-4 w-4" />}
             empty="No hay reclamos recibidos todavía."
           >
-            {claims.slice(0, 10).map((claim) => (
-              <div
-                key={claim.id}
-                className="rounded-md bg-muted/40 p-3 text-sm"
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">
-                    {claim.title ?? `Reclamo ${claim.externalClaimId}`}
-                  </span>
-                  <Badge variant="destructive">{claim.status}</Badge>
+            {claims.slice(0, 10).map((claim) => {
+              const status = getClaimStatusMeta(claim.status);
+
+              return (
+                <div
+                  key={claim.id}
+                  className="rounded-md bg-muted/40 p-3 text-sm"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">
+                      {claim.title ?? `Reclamo ${claim.externalClaimId}`}
+                    </span>
+                    <Badge variant={status.variant}>{status.label}</Badge>
+                  </div>
+                  <p className="mt-1 text-muted-foreground">
+                    Pedido{" "}
+                    {claim.marketplaceOrder?.externalOrderId ?? "sin vincular"} ·
+                    Fecha límite {formatDate(claim.dueAt)}
+                  </p>
                 </div>
-                <p className="mt-1 text-muted-foreground">
-                  Pedido{" "}
-                  {claim.marketplaceOrder?.externalOrderId ?? "sin vincular"} ·
-                  Fecha límite {formatDate(claim.dueAt)}
-                </p>
-              </div>
-            ))}
+              );
+            })}
           </OperationsList>
         </section>
 
