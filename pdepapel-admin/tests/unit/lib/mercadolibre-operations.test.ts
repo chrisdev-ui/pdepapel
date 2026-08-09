@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import { createMercadoLibreContentReview } from "@/lib/mercadolibre/content-assistant";
 import {
-  getShipmentStatusMeta,
   parseMercadoLibreClaim,
   parseMercadoLibreShipment,
 } from "@/lib/mercadolibre/logistics";
+import { getShipmentStatusMeta } from "@/lib/mercadolibre/logistics-status";
 import { createMercadoLibreQuestionSuggestion } from "@/lib/mercadolibre/questions";
 
 describe("Mercado Libre operations", () => {

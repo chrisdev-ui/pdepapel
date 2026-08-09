@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   getClaimStatusMeta,
   getShipmentStatusMeta,
-} from "@/lib/mercadolibre/logistics";
+} from "@/lib/mercadolibre/logistics-status";
 import {
   Card,
   CardContent,
