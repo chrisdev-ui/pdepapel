@@ -165,6 +165,9 @@ export async function GET(
               orderBy: { isMain: "desc" },
               take: 10,
             },
+            category: {
+              select: { id: true, name: true },
+            },
           },
         },
       },

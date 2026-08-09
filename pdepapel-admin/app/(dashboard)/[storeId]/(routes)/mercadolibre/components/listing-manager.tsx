@@ -21,6 +21,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { getListingStatusMeta } from "@/lib/mercadolibre/listing-status";
+import { recommendMercadoLibreListingPrice } from "@/lib/mercadolibre/listing-price-recommendation";
 import {
   BarChart3,
   Download,
@@ -43,6 +44,7 @@ type ProductReference = {
   stock: number;
   acqPrice: number | null;
   images: { url: string; isMain?: boolean }[];
+  category?: { id: string; name: string } | null;
 };
 
 type SelectedProduct = ProductReference & { price: number };
@@ -60,6 +62,9 @@ function toSelectedProduct(
     acqPrice: product.acqPrice ?? null,
     images: product.images ?? [],
     price: Number(product.price ?? 0),
+    category: product.category?.id
+      ? { id: product.category.id, name: product.category.name }
+      : null,
   };
 }
 
@@ -125,6 +130,17 @@ type CategoryTemplate = {
   attributes: MarketplaceAttribute[];
   stockSafetyBuffer: number | null;
   minimumMarginAmount: number | null;
+};
+
+type PublicationProfile = {
+  id: string;
+  localCategoryId: string;
+  categoryId: string;
+  name: string;
+  attributes: MarketplaceAttribute[];
+  stockSafetyBuffer: number;
+  minimumMarginAmount: number | null;
+  localCategory: { id: string; name: string };
 };
 
 type PriceEstimate = {
@@ -308,6 +324,14 @@ export function MercadoLibreListingManager({
     CategoryTemplate[]
   >([]);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+  const [publicationProfiles, setPublicationProfiles] = useState<
+    PublicationProfile[]
+  >([]);
+  const [quickProfile, setQuickProfile] = useState<PublicationProfile | null>(
+    null,
+  );
+  const [isSavingQuickProfile, setIsSavingQuickProfile] = useState(false);
+  const [isSuggestingPrice, setIsSuggestingPrice] = useState(false);
 
   const loadListings = useCallback(async () => {
     setIsLoading(true);
@@ -353,31 +377,29 @@ export function MercadoLibreListingManager({
     void loadCategoryTemplates();
   }, [loadCategoryTemplates]);
 
+  const loadPublicationProfiles = useCallback(async () => {
+    try {
+      const response = await fetch(
+        `/api/${storeId}/marketplaces/mercadolibre/profiles`,
+      );
+      if (!response.ok) throw new Error(await getErrorMessage(response));
+      setPublicationProfiles((await response.json()) as PublicationProfile[]);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "No fue posible cargar los perfiles rápidos",
+      );
+    }
+  }, [storeId]);
+
+  useEffect(() => {
+    void loadPublicationProfiles();
+  }, [loadPublicationProfiles]);
+
   const updateForm = (key: keyof ListingForm, value: string) => {
     setError(null);
     setForm((current) => ({ ...current, [key]: value }));
-  };
-
-  const updateSelectedProduct = (
-    productId: string,
-    product?: AsyncProductOption | null,
-  ) => {
-    const selected = toSelectedProduct(product);
-    setSelectedProduct(selected);
-    setSuggestions([]);
-    setCategoryAttributes([]);
-    setPriceEstimate(null);
-    setError(null);
-    setForm((current) => ({
-      ...current,
-      productId,
-      marketplacePrice: current.marketplacePrice
-        ? current.marketplacePrice
-        : String(selected?.price ?? ""),
-      categoryId: "",
-      imageUrls: selected?.images.map((image) => image.url) ?? [],
-      attributes: "",
-    }));
   };
 
   const updateCategory = (categoryId: string) => {
@@ -385,6 +407,7 @@ export function MercadoLibreListingManager({
     setSuggestions([]);
     setCategoryAttributes([]);
     setPriceEstimate(null);
+    setQuickProfile(null);
   };
 
   const openNewListing = () => {
@@ -394,6 +417,7 @@ export function MercadoLibreListingManager({
     setCategoryAttributes([]);
     setPriceEstimate(null);
     setSelectedProduct(null);
+    setQuickProfile(null);
     setError(null);
     setIsDialogOpen(true);
   };
@@ -419,6 +443,7 @@ export function MercadoLibreListingManager({
     setSuggestions([]);
     setCategoryAttributes([]);
     setPriceEstimate(null);
+    setQuickProfile(null);
     setError(null);
     setIsDialogOpen(true);
   };
@@ -624,6 +649,88 @@ export function MercadoLibreListingManager({
       );
     } finally {
       setIsLoadingPriceEstimate(false);
+    }
+  };
+
+  const getPriceEstimate = async (
+    price: number,
+    categoryId: string,
+  ): Promise<PriceEstimate> => {
+    const query = new URLSearchParams({
+      price: String(price),
+      categoryId,
+      listingType: "gold_special",
+    });
+    const response = await fetch(
+      `/api/${storeId}/marketplaces/mercadolibre/listings/pricing?${query.toString()}`,
+    );
+    if (!response.ok) throw new Error(await getErrorMessage(response));
+    return (await response.json()) as PriceEstimate;
+  };
+
+  const suggestPriceFromProfile = async (
+    product: SelectedProduct,
+    profile: PublicationProfile,
+    initialMarketplacePrice: string,
+  ) => {
+    if (product.acqPrice === null || profile.minimumMarginAmount === null) {
+      return;
+    }
+
+    setIsSuggestingPrice(true);
+    try {
+      const recommendation = await recommendMercadoLibreListingPrice({
+        acquisitionCost: product.acqPrice,
+        targetProfit: profile.minimumMarginAmount,
+        initialPrice: product.price,
+        getFeeQuote: (price) => getPriceEstimate(price, profile.categoryId),
+      });
+      if (!recommendation) return;
+      setForm((current) =>
+        current.productId === product.id &&
+        current.categoryId === profile.categoryId &&
+        current.marketplacePrice === initialMarketplacePrice
+          ? { ...current, marketplacePrice: String(recommendation.price) }
+          : current,
+      );
+    } catch {
+      setPriceEstimate(null);
+    } finally {
+      setIsSuggestingPrice(false);
+    }
+  };
+
+  const updateSelectedProduct = (
+    productId: string,
+    product?: AsyncProductOption | null,
+  ) => {
+    const selected = toSelectedProduct(product);
+    const initialMarketplacePrice = String(selected?.price ?? "");
+    const profile = publicationProfiles.find(
+      (item) => item.localCategoryId === selected?.category?.id,
+    );
+    setSelectedProduct(selected);
+    setQuickProfile(profile ?? null);
+    setSuggestions([]);
+    setCategoryAttributes([]);
+    setPriceEstimate(null);
+    setError(null);
+    setForm((current) => ({
+      ...current,
+      productId,
+      marketplacePrice: initialMarketplacePrice,
+      categoryId: profile?.categoryId ?? "",
+      stockSafetyBuffer: String(profile?.stockSafetyBuffer ?? 1),
+      minimumMarginAmount:
+        profile?.minimumMarginAmount === null ||
+        profile?.minimumMarginAmount === undefined
+          ? ""
+          : String(profile.minimumMarginAmount),
+      imageUrls: selected?.images.map((image) => image.url) ?? [],
+      attributes: profile ? attributesToText(profile.attributes) : "",
+    }));
+    if (selected && profile) {
+      void suggestPriceFromProfile(selected, profile, initialMarketplacePrice);
     }
   };
 
@@ -964,6 +1071,68 @@ export function MercadoLibreListingManager({
     }
   };
 
+  const saveQuickProfile = async () => {
+    if (!selectedProduct?.category) {
+      setError(
+        "Selecciona un producto con categoría antes de guardar el perfil",
+      );
+      return;
+    }
+    if (!form.categoryId) {
+      setError(
+        "Selecciona una categoría de Mercado Libre antes de guardar el perfil",
+      );
+      return;
+    }
+
+    let attributes: MarketplaceAttribute[];
+    try {
+      attributes = parseAttributes(form.attributes);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Revisa las características antes de guardar el perfil",
+      );
+      return;
+    }
+
+    setIsSavingQuickProfile(true);
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/${storeId}/marketplaces/mercadolibre/profiles`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            localCategoryId: selectedProduct.category.id,
+            categoryId: form.categoryId,
+            name: `${selectedProduct.category.name} · Mercado Libre`,
+            attributes,
+            stockSafetyBuffer: form.stockSafetyBuffer,
+            minimumMarginAmount: form.minimumMarginAmount,
+          }),
+        },
+      );
+      if (!response.ok) throw new Error(await getErrorMessage(response));
+      const profile = (await response.json()) as PublicationProfile;
+      setPublicationProfiles((current) => [
+        profile,
+        ...current.filter((item) => item.id !== profile.id),
+      ]);
+      setQuickProfile(profile);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "No fue posible guardar el perfil rápido",
+      );
+    } finally {
+      setIsSavingQuickProfile(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -1282,7 +1451,7 @@ export function MercadoLibreListingManager({
                       ) : null}
                       {listing.minimumMarginAmount !== null ? (
                         <p className="text-xs text-muted-foreground">
-                          Margen mínimo antes de costos variables:{" "}
+                          Utilidad objetivo configurada:{" "}
                           {currencyFormatter.format(
                             listing.minimumMarginAmount,
                           )}
@@ -1463,12 +1632,15 @@ export function MercadoLibreListingManager({
             categoryTemplates={categoryTemplates.filter(
               (template) => template.categoryId === form.categoryId,
             )}
+            quickProfile={quickProfile}
             priceEstimate={priceEstimate}
             isSearchingCategories={isSearchingCategories}
             isLoadingCategoryAttributes={isLoadingCategoryAttributes}
             isLoadingPriceEstimate={isLoadingPriceEstimate}
+            isSuggestingPrice={isSuggestingPrice}
             isSaving={isSaving}
             isSavingTemplate={isSavingTemplate}
+            isSavingQuickProfile={isSavingQuickProfile}
             onError={setError}
             onFormChange={updateForm}
             onProductChange={updateSelectedProduct}
@@ -1483,6 +1655,7 @@ export function MercadoLibreListingManager({
               if (template) applyCategoryTemplate(template);
             }}
             onSaveCategoryTemplate={saveCategoryTemplate}
+            onSaveQuickProfile={saveQuickProfile}
             onSave={saveListing}
             onSaveAndPublish={saveAndPublishListing}
           />

@@ -2,9 +2,11 @@
 
 Esta guía se ejecuta en orden. P de Papel conserva el inventario como fuente de verdad: Mercado Libre recibe el stock local menos el colchón de seguridad definido para cada publicación.
 
+Para el uso diario del equipo consulta la [guía práctica de Mercado Libre](guia-uso-mercadolibre.md) o su [PDF listo para compartir](../../output/pdf/guia-practica-mercadolibre-p-de-papel.pdf). Este documento conserva la configuración técnica y operativa de la integración.
+
 No compartas en chat, correo ni capturas el `Client Secret`, los tokens de QStash ni la llave de cifrado.
 
-La migración `prisma/manual-migrations/20260808_add_marketplace_operations.sql` fue aplicada en Railway el 2026-08-08. Es un cambio aditivo: agrega preguntas, envíos, reclamos, plantillas, biblioteca multimedia y acciones seguras en cola; no altera ventas ni existencias existentes.
+La migración `prisma/manual-migrations/20260808_add_marketplace_operations.sql` fue aplicada en Railway el 2026-08-08. Es un cambio aditivo: agrega preguntas, envíos, reclamos, plantillas, biblioteca multimedia y acciones seguras en cola; no altera ventas ni existencias existentes. La migración posterior `prisma/manual-migrations/20260808_add_marketplace_publication_profiles.sql` fue aplicada en Railway el 2026-08-09 y habilita perfiles rápidos por categoría local.
 
 ## 1. Crear la aplicación de Mercado Libre
 
@@ -147,19 +149,22 @@ La notificación no descuenta inventario por sí misma. P de Papel consulta la o
 ## Preparar una publicación real
 
 1. Abre **Ventas** → **Mercado Libre** y pulsa **Preparar publicación**.
-2. En **Producto**, escoge el producto local y define un precio de Mercado Libre que cubra comisión, envío y margen. El precio de la tienda es solo una referencia.
-3. Si lo necesitas, abre **Ajustes de stock y precio**. Ejemplo: con stock local de 5 y seguridad de 1, Mercado Libre mostrará máximo 4 unidades. Deja activa la sincronización de precio solo si Administración debe mantener el precio de Mercado Libre.
-4. En **Categoría y fotos**, pulsa **Sugerir categoría** y elige una propuesta. Marca solo las fotos que correspondan al artículo: la primera será la portada. Si falta una foto, agrégala primero desde **Productos**.
-5. En **Ficha técnica**, el asistente carga los campos obligatorios de la categoría. Complétalos y usa una plantilla solo si aplica a este producto. Las características adicionales quedan disponibles para casos especiales con el formato `CODIGO=Valor`. Marca, MPN y GTIN se agregan si ya existen en el producto.
-6. En **Revisar y publicar**, confirma producto, precio, categoría, fotos y stock disponible. Pulsa **Calcular comisión** para una estimación: no incluye envío, impuestos o descuentos posteriores y no reemplaza el valor contable real.
-7. Elige **Guardar borrador** si quieres revisarlo después o **Publicar ahora** para enviarlo a Mercado Libre desde Administración. La publicación siempre pide confirmación antes de salir.
+2. En **Producto**, escoge el producto local. Si ya existe un perfil rápido para su categoría, el panel propone la categoría de Mercado Libre, la ficha técnica, las fotos del producto, el colchón de seguridad y un precio sugerido. Nada se publica ni queda bloqueado: revisa y edita cualquier valor.
+3. Define o ajusta el precio de Mercado Libre. Cuando el perfil tiene costo de compra y utilidad objetivo, el valor sugerido busca cubrir el costo y esa utilidad después de la comisión estimada; envío, impuestos y descuentos posteriores pueden cambiar el neto real. El precio de la tienda es solo una referencia.
+4. Si lo necesitas, abre **Ajustes de stock y precio**. Ejemplo: con stock local de 5 y seguridad de 1, Mercado Libre mostrará máximo 4 unidades. Deja activa la sincronización de precio solo si Administración debe mantener el precio de Mercado Libre.
+5. En **Categoría y fotos**, pulsa **Sugerir categoría** y elige una propuesta. Marca solo las fotos que correspondan al artículo: la primera será la portada. Si falta una foto, agrégala primero desde **Productos**.
+6. En **Ficha técnica**, el asistente carga los campos obligatorios de la categoría. Complétalos y usa una plantilla solo si aplica a este producto. Las características adicionales quedan disponibles para casos especiales con el formato `CODIGO=Valor`. Marca, MPN y GTIN se agregan si ya existen en el producto.
+7. En **Revisar y publicar**, confirma producto, precio, categoría, fotos y stock disponible. Pulsa **Calcular comisión** para una estimación: no incluye envío, impuestos o descuentos posteriores y no reemplaza el valor contable real.
+8. Elige **Guardar borrador** si quieres revisarlo después o **Publicar ahora** para enviarlo a Mercado Libre desde Administración. La publicación siempre pide confirmación antes de salir.
 
-### Reutilizar una plantilla y revisar rentabilidad
+### Perfiles rápidos, plantillas y rentabilidad
 
-1. Después de completar una ficha técnica correcta, pulsa **Guardar como plantilla** en esa categoría. La plantilla conserva los atributos, el colchón de seguridad y el margen mínimo que aprobaste.
-2. En un producto futuro de la misma categoría, pulsa **Usar [nombre de plantilla]**. Revisa los valores porque un producto puede necesitar una característica distinta.
-3. Define el **Margen mínimo antes de costos variables** si quieres recibir una alerta cuando el precio no cubra ni siquiera el costo local y ese margen. No reemplaza la liquidación real: envío, impuestos y comisión pueden cambiar el resultado.
-4. Pulsa **Revisar contenido** para recibir una lista de verificación. No cambia el producto ni publica nada; corrige lo necesario desde **Editar**.
+1. Cuando una publicación de una categoría local ya quedó correcta, en **Ficha técnica** pulsa **Crear perfil rápido**. Guarda la categoría de Mercado Libre, características, unidades de seguridad y utilidad objetivo para próximos productos de esa categoría local.
+2. En un producto futuro de la misma categoría, el perfil se aplica como propuesta automáticamente. Revisa cada valor: un producto puede necesitar otra categoría, foto de portada, característica o precio.
+3. Si el perfil ya no sirve, modifica los valores y pulsa **Actualizar perfil rápido**. El cambio solo afecta propuestas futuras; no cambia publicaciones existentes.
+4. **Guardar ficha técnica** conserva una plantilla para la categoría exacta de Mercado Libre. Úsala cuando necesites repetir una ficha, incluso si no quieres que se aplique automáticamente por categoría local.
+5. La **utilidad objetivo** es una guía antes de envío e impuestos. El cálculo usa la comisión estimada actual de Mercado Libre y el costo de compra registrado; no sustituye la liquidación real de una venta.
+6. Pulsa **Revisar contenido** para recibir una lista de verificación. No cambia el producto ni publica nada; corrige lo necesario desde **Editar**.
 
 ### Acciones masivas de publicaciones
 

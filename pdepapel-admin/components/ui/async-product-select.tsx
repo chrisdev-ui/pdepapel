@@ -32,7 +32,7 @@ export type AsyncProductOption = {
   price?: number | null;
   acqPrice?: number | null;
   isArchived?: boolean;
-  category?: { name: string } | null;
+  category?: { id?: string; name: string } | null;
   images?: { url: string }[];
 };
 

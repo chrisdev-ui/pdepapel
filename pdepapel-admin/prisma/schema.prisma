@@ -69,6 +69,7 @@ model Store {
   marketplaceConnections       MarketplaceConnection[]
   marketplaceOAuthStates       MarketplaceOAuthState[]
   marketplaceCategoryTemplates MarketplaceCategoryTemplate[]
+  marketplacePublicationProfiles MarketplacePublicationProfile[]
 }
 
 model Billboard {
@@ -190,6 +191,7 @@ model Category {
   products       Product[]           @relation("CategoryToProduct")
   offers         OfferCategory[]
   slugAliases    CategorySlugAlias[]
+  marketplacePublicationProfiles MarketplacePublicationProfile[]
 
   @@unique([storeId, slug])
   @@index([storeId])
@@ -1383,6 +1385,26 @@ model MarketplaceCategoryTemplate {
   store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@unique([storeId, categoryId])
+  @@index([storeId, updatedAt])
+}
+
+model MarketplacePublicationProfile {
+  id                  String   @id @default(uuid())
+  storeId             String
+  localCategoryId     String
+  categoryId          String
+  name                String
+  attributes          Json
+  stockSafetyBuffer   Int      @default(1)
+  minimumMarginAmount Float?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  store         Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  localCategory Category @relation(fields: [localCategoryId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, localCategoryId])
+  @@index([localCategoryId])
   @@index([storeId, updatedAt])
 }
 

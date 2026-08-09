@@ -78,7 +78,7 @@ export async function GET(
         price: true,
         acqPrice: true,
         category: {
-          select: { name: true },
+          select: { id: true, name: true },
         },
         images: {
           take: 1,

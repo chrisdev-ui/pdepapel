@@ -42,6 +42,7 @@ export type ListingPublicationProduct = {
   acqPrice: number | null;
   images: { url: string; isMain?: boolean }[];
   price: number;
+  category?: { id: string; name: string } | null;
 };
 
 export type ListingPublicationCategorySuggestion = {
@@ -65,6 +66,15 @@ export type ListingPublicationCategoryTemplate = {
   name: string;
 };
 
+export type ListingPublicationQuickProfile = {
+  id: string;
+  name: string;
+  categoryId: string;
+  stockSafetyBuffer: number;
+  minimumMarginAmount: number | null;
+  localCategory: { id: string; name: string };
+};
+
 export type ListingPublicationPriceEstimate = {
   saleFeeAmount: number;
   percentageFee: number | null;
@@ -82,12 +92,15 @@ type ListingPublicationWizardProps = {
   suggestions: ListingPublicationCategorySuggestion[];
   categoryAttributes: ListingPublicationCategoryAttribute[];
   categoryTemplates: ListingPublicationCategoryTemplate[];
+  quickProfile: ListingPublicationQuickProfile | null;
   priceEstimate: ListingPublicationPriceEstimate | null;
   isSearchingCategories: boolean;
   isLoadingCategoryAttributes: boolean;
   isLoadingPriceEstimate: boolean;
+  isSuggestingPrice: boolean;
   isSaving: boolean;
   isSavingTemplate: boolean;
+  isSavingQuickProfile: boolean;
   onError: (message: string) => void;
   onFormChange: (key: keyof ListingPublicationForm, value: string) => void;
   onProductChange: (
@@ -100,6 +113,7 @@ type ListingPublicationWizardProps = {
   onLoadPriceEstimate: () => Promise<void>;
   onApplyCategoryTemplate: (templateId: string) => void;
   onSaveCategoryTemplate: () => Promise<void>;
+  onSaveQuickProfile: () => Promise<void>;
   onSave: () => Promise<unknown>;
   onSaveAndPublish: () => Promise<void>;
 };
@@ -155,12 +169,15 @@ export function ListingPublicationWizard({
   suggestions,
   categoryAttributes,
   categoryTemplates,
+  quickProfile,
   priceEstimate,
   isSearchingCategories,
   isLoadingCategoryAttributes,
   isLoadingPriceEstimate,
+  isSuggestingPrice,
   isSaving,
   isSavingTemplate,
+  isSavingQuickProfile,
   onError,
   onFormChange,
   onProductChange,
@@ -170,6 +187,7 @@ export function ListingPublicationWizard({
   onLoadPriceEstimate,
   onApplyCategoryTemplate,
   onSaveCategoryTemplate,
+  onSaveQuickProfile,
   onSave,
   onSaveAndPublish,
 }: ListingPublicationWizardProps) {
@@ -258,6 +276,18 @@ export function ListingPublicationWizard({
                 {selectedProduct.stock}
               </p>
             ) : null}
+            {quickProfile ? (
+              <div className="rounded-md border border-primary/20 bg-primary/[0.03] p-3 text-sm">
+                <p className="font-medium">
+                  Perfil rápido aplicado: {quickProfile.name}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Propone categoría, ficha técnica, fotos del producto, unidades
+                  de seguridad y utilidad objetivo. Puedes modificar cada valor
+                  antes de publicar.
+                </p>
+              </div>
+            ) : null}
           </div>
           <div className="grid gap-2">
             <Label htmlFor="mercadolibre-price">Precio de Mercado Libre</Label>
@@ -273,6 +303,17 @@ export function ListingPublicationWizard({
             <p className="text-xs text-muted-foreground">
               Este precio es independiente del precio de la tienda en línea.
             </p>
+            {isSuggestingPrice ? (
+              <p className="text-xs text-muted-foreground">
+                Calculando un precio sugerido según la comisión estimada…
+              </p>
+            ) : quickProfile && quickProfile.minimumMarginAmount !== null ? (
+              <p className="text-xs text-muted-foreground">
+                El precio sugerido busca dejar una utilidad de al menos{" "}
+                {currencyFormatter.format(quickProfile.minimumMarginAmount)}{" "}
+                después de la comisión estimada y antes de envío e impuestos.
+              </p>
+            ) : null}
           </div>
           <details className="rounded-md border bg-muted/20 p-3">
             <summary className="cursor-pointer text-sm font-medium">
@@ -298,7 +339,7 @@ export function ListingPublicationWizard({
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="mercadolibre-minimum-margin">
-                  Margen mínimo antes de costos variables (opcional)
+                  Utilidad objetivo tras comisión (opcional)
                 </Label>
                 <Input
                   id="mercadolibre-minimum-margin"
@@ -309,6 +350,10 @@ export function ListingPublicationWizard({
                   }
                   placeholder="Ej. 12000"
                 />
+                <p className="text-xs text-muted-foreground">
+                  El precio sugerido no contempla envío, impuestos ni descuentos
+                  posteriores.
+                </p>
               </div>
               <label className="flex cursor-pointer items-start gap-2 text-sm">
                 <input
@@ -530,9 +575,35 @@ export function ListingPublicationWizard({
                   onClick={() => void onSaveCategoryTemplate()}
                   disabled={isSavingTemplate}
                 >
-                  {isSavingTemplate ? "Guardando…" : "Guardar como plantilla"}
+                  {isSavingTemplate ? "Guardando…" : "Guardar ficha técnica"}
                 </Button>
               </div>
+            </div>
+          ) : null}
+          {selectedProduct?.category ? (
+            <div className="flex flex-col gap-2 rounded-md border border-dashed bg-background/60 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-medium">
+                  Perfil rápido para {selectedProduct.category.name}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Guarda estos valores como propuesta para los próximos
+                  productos de esta categoría local. Siempre se podrán editar.
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void onSaveQuickProfile()}
+                disabled={isSavingQuickProfile}
+              >
+                {isSavingQuickProfile
+                  ? "Guardando…"
+                  : quickProfile
+                    ? "Actualizar perfil rápido"
+                    : "Crear perfil rápido"}
+              </Button>
             </div>
           ) : null}
           {requiredAttributes.length > 0 ? (

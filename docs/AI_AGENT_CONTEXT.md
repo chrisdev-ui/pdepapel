@@ -74,6 +74,7 @@ This section records the important recent decisions and must be updated after fu
 - Marketplace listing content and prices are synchronized only after an explicit admin action. `SYNC_PRICE` updates the independent Mercado Libre price; `SYNC_LISTING_CONTENT` updates only the selected local photos, plain-text description, and configured attributes through QStash. Never make content synchronization automatic after a product edit.
 - Shipment notifications are persisted independently of sales and use Mercado Libre's `/shipments/{id}/items` response to link a package to a single local sale. Do not rely on the order JSON containing `shipping`, and never guess a link for packages that contain multiple orders or an incomplete items response.
 - The operations expansion is accompanied by `pdepapel-admin/prisma/manual-migrations/20260808_add_marketplace_operations.sql`, applied to Railway on 2026-08-08 after explicit approval. It adds marketplace question/shipment/claim records, reusable category templates, a local product-video library, minimum-margin guardrails, and the `SYNC_LISTING_STATUS`/`PUBLISH_LISTING` outbox actions.
+- `pdepapel-admin/prisma/manual-migrations/20260808_add_marketplace_publication_profiles.sql` adds one editable quick-publication profile per local category. It was applied to Railway on 2026-08-09. Its matching code may now be deployed; every profile proposal remains manually editable and never auto-publishes.
 - A Mercado Libre Client Secret was previously shared outside the intended secret store. Treat it as compromised: rotate it in Mercado Libre, update the Vercel production environment variable, redeploy, then reconnect Mercado Libre. Never record the value in Git, this file, terminal history, screenshots, email, or chat.
 
 ### Previously completed product decisions
@@ -483,6 +484,8 @@ For a new publication, an admin selects a local product, marketplace-specific pr
 - The category attributes endpoint drives the admin form's required fields. Keep the advanced `CODE=Value` area for exceptional attributes, but do not make admins discover standard requirements manually.
 - Mercado Libre performance is informative: show its quality score and pending actions, but never auto-change titles, photos, category, attributes, logistics, or promotions from those suggestions.
 - Category templates are reusable only for the selected Mercado Libre category and save the approved technical attributes, safety buffer, and minimum margin. Applying one still requires an admin to review the draft before publication.
+- Quick-publication profiles are explicitly linked to one local product category and propose the Mercado Libre category, technical attributes, product photos, safety buffer, target profit, and independent marketplace price for future products in that local category. Every proposed value remains manually editable; a profile must never publish automatically or modify an existing listing.
+- The price proposal may target acquisition cost plus the configured profit after Mercado Libre's current estimated sale fee. It excludes shipping debit, taxes, refunds, campaigns, and the final settlement; label it as an estimate, not net income or a guaranteed margin.
 - The listing form is a concise four-step wizard: product/price, category/photos, technical attributes, and final review. It validates each step, loads required attributes before the technical step, and can save a draft or publish directly after a single explicit confirmation.
 - The operations panel has reviewable question-response suggestions. An admin must read/edit and explicitly send every buyer answer; no automatic messages are sent.
 - Bulk publication, pause/activate, and content/price/stock updates are capped at 20 selected listings and run through the idempotent QStash outbox after an explicit confirmation. Never bulk-publish the entire catalog automatically.
@@ -748,6 +751,7 @@ When user approval is granted:
 - `docs/revalidacion-catalogo.md` — public catalog cache-refresh configuration.
 - `docs/seguimiento-seo.md` — post-migration Search Console/SEO monitoring.
 - `pdepapel-admin/docs/mercadolibre.md` — Mercado Libre application, OAuth, QStash, webhook, listing, and reconciliation runbook.
+- `pdepapel-admin/docs/guia-uso-mercadolibre.md` — nontechnical daily Mercado Libre guide for publishing, profiles, sales, dispatches, and historical reconciliation; its printable PDF is in `output/pdf/guia-practica-mercadolibre-p-de-papel.pdf`.
 - `pdepapel-admin/docs/ventas-en-feria.md` — nontechnical fair/event operation guide.
 - `pdepapel-admin/docs/conciliar-inventario-feria-anterior.md` — previous-fair inventory reconciliation guide.
 - `pdepapel-admin/docs/reportes-tributarios.md` — tax export and supplier-invoice rules.
