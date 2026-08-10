@@ -260,7 +260,7 @@ When creating a new customer-navigable route:
 - Treat mobile LCP as a release requirement. The critical first view must render without an entrance animation; animate only after the visitor changes a carousel slide or explicitly opens an interactive element.
 - Keep global client bundles lean: preview modals, cart details, chat, review forms, and newsletter form libraries must load only when the visitor opens or approaches them. Preserve their existing behavior once loaded.
 - Use only the fonts and font weights that are actually used. Critical brand fonts may preload; decorative and secondary fonts must not compete with initial page content.
-- Do not mark below-the-fold assets as `priority`. The floating WhatsApp avatar must stay optimized through the Next image endpoint instead of downloading the full source asset.
+- Do not mark below-the-fold assets as `priority`. The floating WhatsApp library accepts only an image URL, so it must use its dedicated `96×96` local WebP avatar instead of a manually constructed `/_next/image` URL or the full source asset.
 
 ### SEO and discovery rules
 
