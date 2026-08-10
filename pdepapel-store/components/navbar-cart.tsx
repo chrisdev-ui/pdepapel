@@ -1,27 +1,21 @@
 "use client";
 
-import { CreditCard, ShoppingBag, ShoppingCart, X } from "lucide-react";
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { track } from "@vercel/analytics/react";
+import { ShoppingBag } from "lucide-react";
+import dynamic from "next/dynamic";
+import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { CldImage } from "@/components/ui/CldImage";
-import { Currency } from "@/components/ui/currency";
-import { NoResults } from "@/components/ui/no-results";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import { KAWAII_FACE_SAD } from "@/constants";
+import { Sheet, SheetTrigger } from "@/components/ui/sheet";
 import { useCart } from "@/hooks/use-cart";
-import { productPath, STOREFRONT_ROUTES } from "@/lib/routes";
-import { calculateTotals, cn } from "@/lib/utils";
-import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
+
+const NavbarCartContent = dynamic(
+  () =>
+    import("@/components/navbar-cart-content").then(
+      (module) => module.NavbarCartContent,
+    ),
+  { ssr: false },
+);
 
 interface NavbarCartProps {
   className?: string;
@@ -29,14 +23,8 @@ interface NavbarCartProps {
 
 export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
   const cart = useCart();
-  const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
-
-  const { total } = useMemo(
-    () => calculateTotals(cart.items, null),
-    [cart.items],
-  );
 
   useEffect(() => {
     setIsMounted(true);
@@ -45,24 +33,6 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
   if (!isMounted) {
     return null;
   }
-
-  const onRemove = (productId: string) => {
-    cart.removeItem(productId);
-  };
-
-  const onGoToCart = () => {
-    setIsSheetOpen(false);
-    router.push(STOREFRONT_ROUTES.cart);
-  };
-
-  const onCheckout = () => {
-    track("begin_checkout", {
-      items: cart.items.length,
-      total: Number(total),
-    });
-    setIsSheetOpen(false);
-    router.push(STOREFRONT_ROUTES.checkout);
-  };
 
   const totalQuantity = cart.items.reduce(
     (total, item) => total + Number(item.quantity ?? 1),
@@ -84,115 +54,9 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
           </span>
         </Button>
       </SheetTrigger>
-      <SheetContent
-        variant="cart"
-        className="flex w-full max-w-full flex-col p-0 sm:max-w-sm lg:max-w-md"
-      >
-        <SheetTitle className="flex w-full items-center justify-center bg-blue-baby p-5 font-sans font-bold">
-          Carrito de compras
-        </SheetTitle>
-        <SheetDescription className="sr-only">
-          Resumen de tu carrito de compras
-        </SheetDescription>
-        <div className="flex grow flex-col justify-between overflow-y-auto overflow-x-hidden px-6 py-0">
-          <div className="flex w-full flex-col gap-4">
-            {cart.items.length === 0 && (
-              <NoResults
-                message={`No hay productos en el carrito ${KAWAII_FACE_SAD}`}
-              />
-            )}
-            {cart.items.length > 0 &&
-              cart.items.map((item) => (
-                <div
-                  key={item.id}
-                  className="grid grid-cols-[80px_1fr] gap-2.5"
-                >
-                  <Link
-                    href={productPath(item.slug || item.id)}
-                    className="relative block h-20 w-20"
-                  >
-                    <CldImage
-                      src={
-                        item.images.find((image) => image.isMain)?.url ??
-                        item.images[0].url
-                      }
-                      alt={item.name ?? "Imagen del producto"}
-                      fill
-                      sizes="(max-width: 640px) 80px, 120px"
-                      className="rounded-md object-cover"
-                    />
-                    <span className="absolute right-0 top-0 flex h-4 w-4 items-center justify-center rounded-full bg-blue-yankees font-serif text-xs text-white">
-                      {item.quantity}
-                    </span>
-                  </Link>
-                  <div className="flex max-h-20 items-center justify-between">
-                    <div className="flex h-full flex-col items-start justify-between">
-                      <div className="flex flex-col text-left font-serif text-sm font-medium tracking-tight">
-                        <span className="line-clamp-1">{item.name}</span>
-                        {item.design && (
-                          <span className="text-xs text-gray-400">{`Diseño: ${item.design.name}`}</span>
-                        )}
-                        {item.color && (
-                          <span className="text-xs text-gray-400">{`Color: ${item.color.name}`}</span>
-                        )}
-                        {item.size && (
-                          <span className="text-xs text-gray-400">{`Talla: ${item.size.name}`}</span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <Currency className="text-lg" value={item.price} />
-                        {(item.hasDiscount ||
-                          (item.originalPrice &&
-                            item.originalPrice > Number(item.price))) && (
-                          <span className="animate-pulse rounded bg-pink-froly px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                            Oferta
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <button
-                      className="group h-8 w-8 rounded-full bg-gray-200 text-blue-yankees/50 hover:bg-blue-baby hover:text-blue-yankees"
-                      onClick={() => onRemove(item.id)}
-                    >
-                      <X className="m-auto h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-          </div>
-          {cart.items.length > 0 && (
-            <Button
-              className="w-fit self-center bg-gray-400/30 p-2 text-gray-500/60 hover:bg-gray-400 hover:text-gray-500"
-              onClick={() => cart.removeAll()}
-            >
-              Limpiar carrito
-            </Button>
-          )}
-        </div>
-        <SheetFooter className="grid w-full grid-cols-1 grid-rows-2 gap-6 border-t border-blue-purple p-6 sm:space-x-0">
-          <div className="flex w-full items-center justify-between text-2xl">
-            <span>Subtotal</span>
-            <Currency value={total} />
-          </div>
-          <div className="flex w-full flex-col gap-3 lg:flex-row">
-            <Button
-              className="group relative w-full overflow-hidden bg-blue-purple font-sans text-base font-bold uppercase text-white hover:bg-blue-purple lg:w-1/2"
-              onClick={onGoToCart}
-            >
-              <ShoppingCart className="absolute left-0 h-5 w-5 -translate-x-full transform transition-transform duration-500 ease-out group-hover:translate-x-20" />
-              <span className="group-hover:hidden">Ver Carrito</span>
-            </Button>
-            <Button
-              className="group relative w-full overflow-hidden bg-pink-shell font-sans text-base font-bold uppercase text-white hover:bg-pink-shell lg:w-1/2"
-              disabled={cart.items.length === 0}
-              onClick={onCheckout}
-            >
-              <CreditCard className="absolute left-0 h-5 w-5 -translate-x-full transform transition-transform duration-500 ease-out group-hover:translate-x-20" />
-              <span className="group-hover:hidden">Finalizar compra</span>
-            </Button>
-          </div>
-        </SheetFooter>
-      </SheetContent>
+      {isSheetOpen && (
+        <NavbarCartContent onClose={() => setIsSheetOpen(false)} />
+      )}
     </Sheet>
   );
 };

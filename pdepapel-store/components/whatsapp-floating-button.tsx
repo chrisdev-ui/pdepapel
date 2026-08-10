@@ -8,7 +8,7 @@ export function WhatsAppFloatingButton() {
       <FloatingWhatsApp
         phoneNumber="573132582293"
         accountName="Papelería P de Papel"
-        avatar="/images/text-below-transparent-bg.webp"
+        avatar="/_next/image?url=%2Fimages%2Ftext-below-transparent-bg.webp&w=96&q=75"
         initialMessageByServer="¡Hola! 👋 Bienvenido a Papelería P de Papel. ¿En qué podemos ayudarte hoy?"
         initialMessageByClient="¡Hola! Encontré su contacto en la página web. Me gustaría consultar sobre..."
         statusMessage="En línea"

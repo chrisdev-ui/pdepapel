@@ -3,9 +3,11 @@ import { notFound, permanentRedirect } from "next/navigation";
 
 import { getProduct } from "@/actions/get-product";
 import { getProducts } from "@/actions/get-products";
+import Newsletter from "@/components/newsletter";
 import { RelatedProducts } from "@/components/related-products";
 import { RelatedProductsSkeleton } from "@/components/related-products-skeleton";
 import { SingleProductPage } from "@/components/single-product-page";
+import { Container } from "@/components/ui/container";
 import { BASE_URL } from "@/constants";
 import { createRichTextExcerpt } from "@/lib/rich-text";
 import { categoryPath, productPath } from "@/lib/routes";
@@ -248,15 +250,13 @@ export default async function ProductPage({ params }: ProductPageProps) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
-      <SingleProductPage
-        product={product}
-        siblings={siblings}
-        relatedProducts={
-          <Suspense fallback={<RelatedProductsSkeleton />}>
-            <RelatedProducts productsPromise={suggestedProductsPromise} />
-          </Suspense>
-        }
-      />
+      <SingleProductPage product={product} siblings={siblings} />
+      <Container className="max-w-7xl px-4 pb-10 sm:px-6 lg:px-8">
+        <Suspense fallback={<RelatedProductsSkeleton />}>
+          <RelatedProducts productsPromise={suggestedProductsPromise} />
+        </Suspense>
+      </Container>
+      <Newsletter />
     </>
   );
 }

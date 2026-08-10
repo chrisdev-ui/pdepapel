@@ -75,7 +75,6 @@ const Navbar: React.FC<NavbarProps> = ({ season = Season.Default }) => {
               alt="Logo Papelería P de Papel con nombre al lado"
               fill
               sizes="(max-width: 768px) 1px, 200px"
-              priority
               quality="100"
             />
           </Link>
@@ -101,13 +100,19 @@ const Navbar: React.FC<NavbarProps> = ({ season = Season.Default }) => {
               <NavigationLink href="/">Inicio</NavigationLink>
             </li>
             <li>
-              <NavigationLink href={STOREFRONT_ROUTES.shop}>Tienda</NavigationLink>
+              <NavigationLink href={STOREFRONT_ROUTES.shop}>
+                Tienda
+              </NavigationLink>
             </li>
             <li>
-              <NavigationLink href={STOREFRONT_ROUTES.about}>Nosotros</NavigationLink>
+              <NavigationLink href={STOREFRONT_ROUTES.about}>
+                Nosotros
+              </NavigationLink>
             </li>
             <li>
-              <NavigationLink href={STOREFRONT_ROUTES.contact}>Contacto</NavigationLink>
+              <NavigationLink href={STOREFRONT_ROUTES.contact}>
+                Contacto
+              </NavigationLink>
             </li>
           </ul>
           <div className="hidden items-center space-x-5 lg:flex">

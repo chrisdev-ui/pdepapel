@@ -1,4 +1,4 @@
-import { WhatsAppFloatingButton } from "@/components/whatsapp-floating-button";
+import { DeferredWhatsAppFloatingButton } from "@/components/deferred-whatsapp-floating-button";
 import { ReactNode } from "react";
 
 export default function StorefrontLayout({
@@ -9,7 +9,7 @@ export default function StorefrontLayout({
   return (
     <div>
       {children}
-      <WhatsAppFloatingButton />
+      <DeferredWhatsAppFloatingButton />
     </div>
   );
 }

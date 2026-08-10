@@ -257,6 +257,10 @@ When creating a new customer-navigable route:
 - Preserve responsive behavior. Header additions, category cards, drawers, dialogs, and tables must be checked at mobile, tablet, and desktop breakpoints.
 - Category cards need strong readable contrast independent of the image content.
 - Keep product description HTML sanitized; never render unsanitized external HTML with `dangerouslySetInnerHTML`.
+- Treat mobile LCP as a release requirement. The critical first view must render without an entrance animation; animate only after the visitor changes a carousel slide or explicitly opens an interactive element.
+- Keep global client bundles lean: preview modals, cart details, chat, review forms, and newsletter form libraries must load only when the visitor opens or approaches them. Preserve their existing behavior once loaded.
+- Use only the fonts and font weights that are actually used. Critical brand fonts may preload; decorative and secondary fonts must not compete with initial page content.
+- Do not mark below-the-fold assets as `priority`. The floating WhatsApp avatar must stay optimized through the Next image endpoint instead of downloading the full source asset.
 
 ### SEO and discovery rules
 

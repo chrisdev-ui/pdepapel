@@ -9,6 +9,7 @@ interface SlideContentProps {
   buttonLabel?: string;
   redirectUrl?: string | null;
   onNavigate: (url: string) => void;
+  shouldAnimate: boolean;
 }
 
 const containerVariants: Variants = {
@@ -73,6 +74,7 @@ export const SlideContent: React.FC<SlideContentProps> = ({
   redirectUrl,
   buttonLabel = "¡Explorar!",
   onNavigate,
+  shouldAnimate,
 }) => {
   if (!title && !subtitle) return null;
 
@@ -80,7 +82,7 @@ export const SlideContent: React.FC<SlideContentProps> = ({
     <motion.div
       className="absolute inset-0 z-20 flex items-center justify-center"
       variants={containerVariants}
-      initial="hidden"
+      initial={shouldAnimate ? "hidden" : "visible"}
       animate="visible"
       exit="exit"
     >

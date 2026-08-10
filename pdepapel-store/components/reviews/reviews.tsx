@@ -3,7 +3,7 @@
 import { SignedIn, SignedOut, useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useParams, usePathname, useRouter } from "next/navigation";
-import { RefObject, useState } from "react";
+import { useState } from "react";
 
 import { ReviewItem } from "@/components/reviews/review-item";
 import { Button } from "@/components/ui/button";
@@ -22,14 +22,9 @@ import axios from "axios";
 interface ReviewsProps {
   title: string;
   reviews: Review[];
-  reviewsRef: RefObject<HTMLDivElement>;
 }
 
-export const Reviews: React.FC<ReviewsProps> = ({
-  title,
-  reviews = [],
-  reviewsRef,
-}) => {
+export const Reviews: React.FC<ReviewsProps> = ({ title, reviews = [] }) => {
   const params = useParams();
   const { userId } = useAuth();
   const pathname = usePathname();
@@ -83,7 +78,7 @@ export const Reviews: React.FC<ReviewsProps> = ({
   };
 
   return (
-    <div ref={reviewsRef} className="space-y-4">
+    <div className="space-y-4">
       <h3 className="font-serif text-3xl font-bold">{title}</h3>
       {reviews?.length === 0 ? (
         <NoResults

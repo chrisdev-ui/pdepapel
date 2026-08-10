@@ -27,7 +27,7 @@ interface ProductInfoProps {
   showDescription?: boolean;
   onAddedToCart?: () => void;
   showReviews?: boolean;
-  reviewsRef?: RefObject<HTMLDivElement>;
+  reviewsRef?: RefObject<HTMLDivElement | null>;
   onVariantChange?: (variant: Product | ProductVariant) => void;
   isLoading?: boolean;
 }

@@ -1,30 +1,50 @@
 "use client";
 
 import { Gallery } from "@/components/gallery";
-import Newsletter from "@/components/newsletter";
 import { ProductInfo } from "@/components/product-info";
-import { ProductList } from "@/components/product-list";
-import { Reviews } from "@/components/reviews/reviews";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { categoryPath } from "@/lib/routes";
 import { Container } from "@/components/ui/container";
 import { Separator } from "@/components/ui/separator";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { Product, ProductVariant } from "@/types";
-import { ReactNode, useRef } from "react";
+import dynamic from "next/dynamic";
+import { useCallback, useRef } from "react";
+import { useInView } from "react-intersection-observer";
+
+const Reviews = dynamic(
+  () => import("@/components/reviews/reviews").then((module) => module.Reviews),
+  { ssr: false },
+);
 
 interface SingleProductPageProps {
   product: Product;
   siblings?: ProductVariant[];
-  relatedProducts: ReactNode;
 }
+
+const ReviewsPlaceholder = () => (
+  <div className="space-y-4" aria-hidden="true">
+    <div className="h-9 w-48 animate-pulse rounded bg-muted" />
+    <div className="h-24 animate-pulse rounded bg-muted" />
+  </div>
+);
 
 export const SingleProductPage: React.FC<SingleProductPageProps> = ({
   product,
   siblings,
-  relatedProducts,
 }) => {
-  const reviewsRef = useRef<HTMLDivElement>(null);
+  const reviewsRef = useRef<HTMLDivElement | null>(null);
+  const { ref: reviewsViewportRef, inView: isReviewsInView } = useInView({
+    rootMargin: "400px",
+    triggerOnce: true,
+  });
+  const setReviewsRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      reviewsRef.current = node;
+      reviewsViewportRef(node);
+    },
+    [reviewsViewportRef],
+  );
 
   const breadcrumbItems: BreadcrumbItem[] = [
     { label: "Tienda", href: STOREFRONT_ROUTES.shop },
@@ -59,15 +79,15 @@ export const SingleProductPage: React.FC<SingleProductPageProps> = ({
           </div>
         </div>
         <Separator className="my-10" />
-        <Reviews
-          reviewsRef={reviewsRef}
-          title="Comentarios"
-          reviews={product.reviews}
-        />
+        <div ref={setReviewsRef}>
+          {isReviewsInView ? (
+            <Reviews title="Comentarios" reviews={product.reviews} />
+          ) : (
+            <ReviewsPlaceholder />
+          )}
+        </div>
         <Separator className="my-10" />
-        {relatedProducts}
       </Container>
-      <Newsletter />
     </>
   );
 };

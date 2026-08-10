@@ -8,6 +8,7 @@ interface SlideImageProps {
   alt: string;
   isActive: boolean;
   current: number;
+  shouldAnimate: boolean;
 }
 
 export const SlideImage: React.FC<SlideImageProps> = ({
@@ -15,6 +16,7 @@ export const SlideImage: React.FC<SlideImageProps> = ({
   alt,
   isActive,
   current,
+  shouldAnimate,
 }) => {
   // Generate optimized URL for the main src
   const optimizedSrc = getCldImageUrl({
@@ -40,16 +42,20 @@ export const SlideImage: React.FC<SlideImageProps> = ({
   return (
     <motion.div
       className="absolute inset-0"
-      initial={{ scale: 1.2, opacity: 0 }}
+      initial={shouldAnimate ? { scale: 1.2, opacity: 0 } : false}
       animate={{
         scale: isActive ? 1 : 1.2,
         opacity: isActive ? 1 : 0,
       }}
       exit={{ scale: 1.1, opacity: 0 }}
-      transition={{
-        duration: 1.2,
-        ease: [0.25, 0.46, 0.45, 0.94],
-      }}
+      transition={
+        shouldAnimate
+          ? {
+              duration: 1.2,
+              ease: [0.25, 0.46, 0.45, 0.94],
+            }
+          : { duration: 0 }
+      }
     >
       <motion.img
         src={optimizedSrc}
@@ -58,9 +64,11 @@ export const SlideImage: React.FC<SlideImageProps> = ({
         alt={alt}
         fetchPriority={current === 0 ? "high" : "auto"}
         className="h-full w-full object-cover"
-        animate={isActive ? { scale: [1, 1.05] } : { scale: 1 }}
+        animate={
+          shouldAnimate && isActive ? { scale: [1, 1.05] } : { scale: 1 }
+        }
         transition={{
-          duration: 8,
+          duration: shouldAnimate ? 8 : 0,
           ease: "easeOut",
         }}
       />

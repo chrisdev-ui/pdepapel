@@ -1,4 +1,4 @@
-import { Caudex, Comfortaa, Fredoka, Nunito, Quicksand, Roboto } from "next/font/google";
+import { Caudex, Fredoka, Quicksand } from "next/font/google";
 import localFont from "next/font/local";
 
 export const caudex = Caudex({
@@ -12,20 +12,7 @@ export const beautifulEveryTime = localFont({
   src: "../../public/fonts/BeautifulEveryTime-Dg4m.woff2",
   variable: "--font-beautiful-every-time-regular",
   display: "swap",
-});
-export const nunito = Nunito({
-  subsets: ["latin"],
-  display: "swap",
-  weight: ["200", "300", "400", "500", "600", "700", "800", "900", "1000"],
-  style: "normal",
-  variable: "--font-nunito",
-});
-export const roboto = Roboto({
-  style: ["normal", "italic"],
-  weight: ["100", "300", "400", "500", "700", "900"],
-  subsets: ["latin", "latin-ext"],
-  display: "swap",
-  variable: "--font-roboto",
+  preload: false,
 });
 export const fredoka = Fredoka({
   subsets: ["latin"],
@@ -38,5 +25,5 @@ export const quicksand = Quicksand({
   weight: ["300", "400", "500", "600", "700"],
   display: "swap",
   variable: "--font-quicksand",
+  preload: false,
 });
-

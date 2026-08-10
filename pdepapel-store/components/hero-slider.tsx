@@ -22,6 +22,7 @@ const HeroSlider: React.FC<HeroSliderProps> = ({
   autoPlayDelay = DELAY,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [hasNavigated, setHasNavigated] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const router = useRouter();
@@ -33,10 +34,12 @@ const HeroSlider: React.FC<HeroSliderProps> = ({
   }, []);
 
   const goToNext = useCallback(() => {
+    setHasNavigated(true);
     setCurrentIndex((prev) => (prev === data.length - 1 ? 0 : prev + 1));
   }, [data.length]);
 
   const goToPrevious = useCallback(() => {
+    setHasNavigated(true);
     setCurrentIndex((prev) => (prev === 0 ? data.length - 1 : prev - 1));
   }, [data.length]);
 
@@ -119,10 +122,14 @@ const HeroSlider: React.FC<HeroSliderProps> = ({
           <motion.div
             key={currentIndex}
             className="absolute inset-0 touch-pan-y" // touch-pan-y allows vertical scrolling while dragging horizontally
-            initial={{ opacity: 0, scale: 1.05 }}
+            initial={hasNavigated ? { opacity: 0, scale: 1.05 } : false}
             animate={{ opacity: 1, scale: 1, x: 0 }}
             exit={{ opacity: 0, scale: 0.98 }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
+            transition={
+              hasNavigated
+                ? { duration: 0.5, ease: "easeOut" }
+                : { duration: 0 }
+            }
             drag="x"
             dragConstraints={{ left: 0, right: 0 }}
             dragElastic={1}
@@ -141,12 +148,14 @@ const HeroSlider: React.FC<HeroSliderProps> = ({
               alt={currentSlide.title ?? "Hero image"}
               isActive={true}
               current={currentIndex}
+              shouldAnimate={hasNavigated}
             />
             <SlideContent
               title={currentSlide.title || ""}
               subtitle={currentSlide.label || ""}
               redirectUrl={currentSlide.redirectUrl}
               onNavigate={handleNavigate}
+              shouldAnimate={hasNavigated}
             />
           </motion.div>
         </AnimatePresence>
@@ -192,7 +201,10 @@ const HeroSlider: React.FC<HeroSliderProps> = ({
         <SlideIndicators
           total={data.length}
           current={currentIndex}
-          onSelect={setCurrentIndex}
+          onSelect={(index) => {
+            setHasNavigated(true);
+            setCurrentIndex(index);
+          }}
         />
 
         {/* Progress bar */}

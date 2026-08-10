@@ -28,7 +28,6 @@ export const Footer: React.FC<FooterProps> = ({ season = Season.Default }) => {
                 alt="Logo Papelería P de Papel con nombre al lado"
                 sizes="(max-width: 640px) 300px, 256px"
                 className="object-contain" // Changed to contain to preserve aspect ratio of logo
-                priority
                 fill
                 quality="100"
               />
