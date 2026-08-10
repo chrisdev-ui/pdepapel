@@ -26,7 +26,6 @@ import {
   Link2,
   Loader2,
   Package,
-  Percent,
   Plus,
   RefreshCw,
   RotateCcw,
@@ -93,6 +92,7 @@ import {
   CommandItem,
 } from "@/components/ui/command";
 import { CurrencyInput } from "@/components/ui/currency-input";
+import { CountInput } from "@/components/ui/count-input";
 import { DatePicker } from "@/components/ui/date-picker";
 import {
   DropdownMenu,
@@ -113,6 +113,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PercentageInput } from "@/components/ui/percentage-input";
 import {
   LocationCombobox,
   type LocationOption,
@@ -2204,6 +2205,12 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                       <SelectItem value={OrderType.CUSTOM}>
                         Personalizada
                       </SelectItem>
+                      <SelectItem value={OrderType.FESTIVAL} disabled>
+                        Venta en feria
+                      </SelectItem>
+                      <SelectItem value={OrderType.POINT_OF_SALE} disabled>
+                        Venta presencial
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -2349,23 +2356,12 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   <FormLabel>Monto del descuento</FormLabel>
                   <FormControl>
                     {form.watch("discount.type") === DiscountType.PERCENTAGE ? (
-                      <div className="relative">
-                        <Percent className="absolute left-3 top-3 h-4 w-4" />
-                        <Input
-                          type="number"
-                          disabled={loading || !form.watch("discount.type")}
-                          className="pl-8"
-                          placeholder="10"
-                          {...field}
-                          onChange={(e) =>
-                            field.onChange(
-                              e.target.value === ""
-                                ? undefined
-                                : Number(e.target.value),
-                            )
-                          }
-                        />
-                      </div>
+                      <PercentageInput
+                        disabled={loading || !form.watch("discount.type")}
+                        placeholder="10"
+                        value={field.value}
+                        onChange={field.onChange}
+                      />
                     ) : (
                       <CurrencyInput
                         placeholder="$ 10.000"
@@ -3271,16 +3267,12 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                       <FormItem>
                         <FormLabel>Días de entrega</FormLabel>
                         <FormControl>
-                          <Input
-                            type="number"
-                            min="0"
-                            placeholder="Ej: 3"
+                          <CountInput
+                            min={0}
                             disabled={loading}
-                            {...field}
-                            value={field.value || ""}
-                            onChange={(e) =>
-                              field.onChange(parseInt(e.target.value) || 0)
-                            }
+                            value={Number(field.value || 0)}
+                            onChange={field.onChange}
+                            ariaLabel="Días de entrega"
                           />
                         </FormControl>
                         <FormMessage />

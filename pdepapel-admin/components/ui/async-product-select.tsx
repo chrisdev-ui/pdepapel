@@ -28,10 +28,12 @@ export type AsyncProductOption = {
   id: string;
   name: string;
   sku: string;
+  gtin?: string | null;
   stock: number;
   price?: number | null;
   acqPrice?: number | null;
   isArchived?: boolean;
+  isKit?: boolean;
   category?: { id?: string; name: string } | null;
   images?: { url: string }[];
 };
@@ -187,6 +189,8 @@ export function AsyncProductSelect({
   const getProductDetails = (product: AsyncProductOption) =>
     [
       `SKU: ${product.sku}`,
+      product.gtin ? `GTIN: ${product.gtin}` : null,
+      product.isKit ? "Kit" : null,
       product.category?.name,
       `Stock: ${product.stock}`,
       product.price !== undefined && product.price !== null
@@ -229,7 +233,7 @@ export function AsyncProductSelect({
         </Button>
         <CommandDialog open={open} onOpenChange={setOpen} shouldFilter={false}>
           <CommandInput
-            placeholder="Buscar por nombre o SKU..."
+            placeholder="Buscar por nombre, SKU o código..."
             value={searchQuery}
             onValueChange={setSearchQuery}
           />
@@ -324,7 +328,7 @@ export function AsyncProductSelect({
       >
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder="Buscar por nombre o SKU..."
+            placeholder="Buscar por nombre, SKU o código..."
             value={searchQuery}
             onValueChange={setSearchQuery}
           />

@@ -68,15 +68,21 @@ export async function GET(
       where: {
         storeId: params.storeId,
         isArchived: false,
-        OR: [{ name: { contains: query } }, { sku: { contains: query } }],
+        OR: [
+          { name: { contains: query } },
+          { sku: { contains: query } },
+          { gtin: { contains: query } },
+        ],
       },
       select: {
         id: true,
         name: true,
         sku: true,
+        gtin: true,
         stock: true,
         price: true,
         acqPrice: true,
+        isKit: true,
         category: {
           select: { id: true, name: true },
         },

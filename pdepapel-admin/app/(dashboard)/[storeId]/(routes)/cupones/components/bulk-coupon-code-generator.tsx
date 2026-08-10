@@ -9,7 +9,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { CountInput } from "@/components/ui/count-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -138,26 +138,24 @@ export const BulkCouponCodeGenerator = () => {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="count">Cantidad</Label>
-              <Input
+              <CountInput
                 id="count"
-                type="number"
-                min="1"
-                max="50"
+                min={1}
+                max={50}
                 value={count}
-                onChange={(e) => setCount(parseInt(e.target.value) || 10)}
-                placeholder="10"
+                onChange={setCount}
+                ariaLabel="Cantidad de cupones"
               />
             </div>
             <div>
               <Label htmlFor="length">Longitud</Label>
-              <Input
+              <CountInput
                 id="length"
-                type="number"
-                min="4"
-                max="12"
+                min={4}
+                max={12}
                 value={length}
-                onChange={(e) => setLength(parseInt(e.target.value) || 8)}
-                placeholder="8"
+                onChange={setLength}
+                ariaLabel="Longitud de los códigos"
               />
             </div>
           </div>

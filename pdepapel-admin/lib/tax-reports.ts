@@ -1,4 +1,4 @@
-import { MarketplaceOrderStatus, OrderStatus } from "@prisma/client";
+import { MarketplaceOrderStatus, OrderStatus, OrderType } from "@prisma/client";
 
 import { getMarketplaceSaleDate } from "@/lib/mercadolibre/reporting";
 import prismadb from "@/lib/prismadb";
@@ -29,7 +29,7 @@ export type TaxReportPeriod = {
 export type TaxSaleRow = {
   orderNumber: string;
   customerName: string;
-  channel: "Tienda en línea" | "Mercado Libre";
+  channel: "Tienda en línea" | "Venta presencial" | "Mercado Libre";
   totalAmount: number;
   occurredAt: Date;
 };
@@ -151,6 +151,7 @@ export async function getTaxReport(
           orderNumber: true,
           fullName: true,
           total: true,
+          type: true,
           paidAt: true,
           createdAt: true,
         },
@@ -204,7 +205,11 @@ export async function getTaxReport(
     ...orders.map((order) => ({
       orderNumber: order.orderNumber,
       customerName: order.fullName.trim() || "Consumidor final",
-      channel: "Tienda en línea" as const,
+      channel:
+        order.type === OrderType.FESTIVAL ||
+        order.type === OrderType.POINT_OF_SALE
+          ? ("Venta presencial" as const)
+          : ("Tienda en línea" as const),
       totalAmount: order.total,
       occurredAt:
         salesDateBasis === TAX_SALES_DATE_BASIS.PAYMENT_DATE

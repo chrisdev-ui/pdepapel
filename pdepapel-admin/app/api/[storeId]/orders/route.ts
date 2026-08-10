@@ -135,6 +135,12 @@ export async function POST(
         ? ShippingProvider.MANUAL
         : shippingProvider;
 
+    if (type === OrderType.POINT_OF_SALE) {
+      throw ErrorFactory.InvalidRequest(
+        "Las ventas presenciales deben registrarse desde Punto de venta para proteger el inventario.",
+      );
+    }
+
     if (
       !isStoreOwner &&
       status &&

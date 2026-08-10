@@ -3,6 +3,7 @@ import { Minus, Plus } from "lucide-react";
 import React, { useCallback, useState } from "react";
 
 export interface StockQuantityInputProps {
+  id?: string;
   value?: number;
   onChange?: (value: number) => void;
   min?: number;
@@ -11,9 +12,12 @@ export interface StockQuantityInputProps {
   disabled?: boolean;
   className?: string;
   size?: "sm" | "md" | "lg" | "default";
+  ariaLabel?: string;
+  ariaDescribedBy?: string;
 }
 
 export const StockQuantityInput: React.FC<StockQuantityInputProps> = ({
+  id,
   value: controlledValue,
   onChange,
   min = 0,
@@ -22,6 +26,8 @@ export const StockQuantityInput: React.FC<StockQuantityInputProps> = ({
   disabled = false,
   className,
   size = "default",
+  ariaLabel = "Cantidad",
+  ariaDescribedBy,
 }) => {
   const [internalValue, setInternalValue] = useState(min);
   const [isPressed, setIsPressed] = useState<"minus" | "plus" | null>(null);
@@ -141,6 +147,7 @@ export const StockQuantityInput: React.FC<StockQuantityInputProps> = ({
       {/* Input Field */}
       <div className="relative flex items-center justify-center">
         <input
+          id={id}
           type="text"
           inputMode="numeric"
           pattern="[0-9]*"
@@ -158,7 +165,8 @@ export const StockQuantityInput: React.FC<StockQuantityInputProps> = ({
             "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
             sizes.input,
           )}
-          aria-label="Cantidad"
+          aria-label={ariaLabel}
+          aria-describedby={ariaDescribedBy}
           aria-valuemin={min}
           aria-valuemax={max}
           aria-valuenow={value}

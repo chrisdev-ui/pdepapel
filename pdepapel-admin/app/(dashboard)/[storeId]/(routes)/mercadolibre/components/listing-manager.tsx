@@ -2,6 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   AsyncProductSelect,
   type AsyncProductOption,
@@ -20,6 +21,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { getListingStatusMeta } from "@/lib/mercadolibre/listing-status";
 import { recommendMercadoLibreListingPrice } from "@/lib/mercadolibre/listing-price-recommendation";
 import {
@@ -1241,17 +1251,15 @@ export function MercadoLibreListingManager({
                     key={listing.key}
                     className="grid gap-3 rounded-md border bg-background p-3 lg:grid-cols-[auto_minmax(0,1fr)_minmax(14rem,0.8fr)] lg:items-center"
                   >
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       aria-label={`Importar ${listing.title}`}
                       checked={selection.selected}
                       disabled={cannotImport || !selection.productId}
-                      onChange={(event) =>
+                      onCheckedChange={(checked) =>
                         updateImportSelection(listing.key, {
-                          selected: event.target.checked,
+                          selected: checked === true,
                         })
                       }
-                      className="h-4 w-4 rounded border-input"
                     />
                     <div className="min-w-0 space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
@@ -1296,12 +1304,12 @@ export function MercadoLibreListingManager({
                       </p>
                     ) : (
                       <div className="grid gap-1">
-                        <label
+                        <Label
                           className="text-xs font-medium"
                           htmlFor={`mercadolibre-import-${listing.key}`}
                         >
                           Producto local
-                        </label>
+                        </Label>
                         <AsyncProductSelect
                           id={`mercadolibre-import-${listing.key}`}
                           value={selection.productId}
@@ -1352,39 +1360,45 @@ export function MercadoLibreListingManager({
         ) : (
           <div className="grid gap-3">
             <div className="flex flex-col gap-3 rounded-md border bg-muted/20 p-3 lg:flex-row lg:items-center lg:justify-between">
-              <label className="flex items-center gap-2 text-sm font-medium">
-                <input
-                  type="checkbox"
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Checkbox
+                  id="mercadolibre-select-all-listings"
                   checked={
                     listings.length > 0 &&
                     selectedListingIds.length === listings.length
                   }
-                  onChange={(event) =>
+                  onCheckedChange={(checked) =>
                     setSelectedListingIds(
-                      event.target.checked
+                      checked === true
                         ? listings.map((listing) => listing.id)
                         : [],
                     )
                   }
-                  className="h-4 w-4 rounded border-input"
                 />
-                Seleccionar todas ({selectedListingIds.length})
-              </label>
+                <Label htmlFor="mercadolibre-select-all-listings">
+                  Seleccionar todas ({selectedListingIds.length})
+                </Label>
+              </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <select
-                  aria-label="Acción masiva para publicaciones"
+                <Select
                   value={bulkAction}
-                  onChange={(event) =>
-                    setBulkAction(event.target.value as BulkAction)
-                  }
-                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  onValueChange={(value) => setBulkAction(value as BulkAction)}
                 >
-                  {Object.entries(bulkActionLabels).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger aria-label="Acción masiva para publicaciones">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {Object.entries(bulkActionLabels).map(
+                        ([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ),
+                      )}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
                 <Button
                   type="button"
                   onClick={() => void runBulkAction()}
@@ -1411,12 +1425,11 @@ export function MercadoLibreListingManager({
                   className="flex flex-col gap-4 rounded-md border p-4 lg:flex-row lg:items-center lg:justify-between"
                 >
                   <div className="flex min-w-0 gap-3">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       aria-label={`Seleccionar ${listing.product.name}`}
                       checked={selectedListingIds.includes(listing.id)}
-                      onChange={() => toggleListingSelection(listing.id)}
-                      className="mt-1 h-4 w-4 shrink-0 rounded border-input"
+                      onCheckedChange={() => toggleListingSelection(listing.id)}
+                      className="mt-1 shrink-0"
                     />
                     <div className="min-w-0 space-y-1">
                       <div className="flex flex-wrap items-center gap-2">

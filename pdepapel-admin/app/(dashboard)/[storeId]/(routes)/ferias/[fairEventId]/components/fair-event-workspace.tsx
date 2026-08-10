@@ -41,9 +41,20 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PercentageInput } from "@/components/ui/percentage-input";
+import { QuantitySelector } from "@/components/ui/quantity-selector";
 import { Separator } from "@/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import { useToast } from "@/hooks/use-toast";
 
 import { BarcodeScanner } from "./barcode-scanner";
@@ -109,7 +120,9 @@ export type FairEventDetail = {
 };
 
 type PendingAllocation = {
-  product: Pick<FairProduct, "id" | "name" | "sku" | "stock">;
+  product: Pick<FairProduct, "id" | "name" | "sku" | "stock"> & {
+    isKit?: boolean;
+  };
   quantity: number;
 };
 
@@ -193,16 +206,6 @@ function createIdempotencyKey() {
   return `fair-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function asNonNegativeInteger(value: string) {
-  const parsed = Number.parseInt(value, 10);
-  return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
-}
-
-function asPositiveInteger(value: string) {
-  const parsed = Number.parseInt(value, 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
-}
-
 export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
   const params = useParams();
   const router = useRouter();
@@ -217,6 +220,7 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
   const [isAllocating, setIsAllocating] = useState(false);
   const [isOpening, setIsOpening] = useState(false);
   const [saleCart, setSaleCart] = useState<SaleCartItem[]>([]);
+  const [selectedSaleProductId, setSelectedSaleProductId] = useState("");
   const [manualCode, setManualCode] = useState("");
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [isSelling, setIsSelling] = useState(false);
@@ -617,13 +621,13 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
   function updateReconciliation(
     productId: string,
     field: keyof ReconciliationInput,
-    value: string,
+    value: number,
   ) {
     setReconciliation((current) => ({
       ...current,
       [productId]: {
         ...current[productId],
-        [field]: asNonNegativeInteger(value),
+        [field]: value,
       },
     }));
   }
@@ -773,11 +777,21 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
                   value={pendingProduct?.id}
                   onChange={(_value, product) => {
                     if (!product) return;
+                    if (product.isKit) {
+                      toast({
+                        title: "Reserva los productos físicos del kit",
+                        description:
+                          "Los kits calculan su inventario desde sus componentes y no se reservan directamente para una feria.",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
                     setPendingProduct({
                       id: product.id,
                       name: product.name,
                       sku: product.sku,
                       stock: product.stock,
+                      isKit: product.isKit,
                     });
                   }}
                   placeholder="Busca por nombre, SKU o código"
@@ -787,14 +801,12 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="allocation-quantity">Cantidad</Label>
-                <Input
+                <StockQuantityInput
                   id="allocation-quantity"
                   min={1}
-                  type="number"
                   value={pendingQuantity}
-                  onChange={(input) =>
-                    setPendingQuantity(asPositiveInteger(input.target.value))
-                  }
+                  onChange={setPendingQuantity}
+                  ariaLabel="Cantidad para reservar"
                 />
               </div>
               <Button
@@ -879,43 +891,40 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
             <div className="grid gap-3 md:grid-cols-4">
               <div className="grid gap-2 md:col-span-2">
                 <Label htmlFor="capsule-product">Producto reservado</Label>
-                <select
-                  id="capsule-product"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                <Select
                   value={capsuleProductId}
-                  onChange={(input) => setCapsuleProductId(input.target.value)}
+                  onValueChange={setCapsuleProductId}
                 >
-                  <option value="">Seleccionar producto</option>
-                  {availableItems.map((item) => (
-                    <option key={item.id} value={item.productId}>
-                      {item.product.name} ({getAvailableFairStock(item)}{" "}
-                      disponibles)
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger id="capsule-product">
+                    <SelectValue placeholder="Seleccionar producto" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableItems.map((item) => (
+                      <SelectItem key={item.id} value={item.productId}>
+                        {item.product.name} ({getAvailableFairStock(item)}{" "}
+                        disponibles)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="capsule-quantity">Cantidad</Label>
-                <Input
+                <StockQuantityInput
                   id="capsule-quantity"
                   min={1}
-                  type="number"
                   value={capsuleQuantity}
-                  onChange={(input) =>
-                    setCapsuleQuantity(asPositiveInteger(input.target.value))
-                  }
+                  onChange={setCapsuleQuantity}
+                  ariaLabel="Cantidad de cápsulas"
                 />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="capsule-price">Precio de venta</Label>
-                <Input
+                <CurrencyInput
                   id="capsule-price"
                   min={0}
-                  type="number"
-                  value={capsulePrice || ""}
-                  onChange={(input) =>
-                    setCapsulePrice(Number(input.target.value) || 0)
-                  }
+                  value={capsulePrice || undefined}
+                  onChange={(value) => setCapsulePrice(value || 0)}
                   placeholder="0"
                 />
               </div>
@@ -939,16 +948,13 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="capsule-margin">Margen mínimo (%)</Label>
-                <Input
+                <PercentageInput
                   id="capsule-margin"
                   min={0}
                   max={99.99}
                   step="0.01"
-                  type="number"
-                  value={minimumMarginPct}
-                  onChange={(input) =>
-                    setMinimumMarginPct(Number(input.target.value) || 0)
-                  }
+                  value={minimumMarginPct || undefined}
+                  onChange={(value) => setMinimumMarginPct(value || 0)}
                 />
               </div>
               <Button
@@ -1052,28 +1058,30 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
             <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
               <div className="grid gap-2">
                 <Label htmlFor="fair-product">Producto reservado</Label>
-                <select
-                  id="fair-product"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                  defaultValue=""
-                  onChange={(input) => {
+                <Select
+                  value={selectedSaleProductId}
+                  onValueChange={(productId) => {
                     const selected = eventItemsByProduct.get(
-                      input.target.value,
+                      productId,
                     );
-                    if (selected) addDirectProduct(selected.product);
-                    input.currentTarget.value = "";
+                    if (selected) {
+                      addDirectProduct(selected.product);
+                      setSelectedSaleProductId("");
+                    }
                   }}
                 >
-                  <option value="" disabled>
-                    Seleccionar producto
-                  </option>
-                  {availableItems.map((item) => (
-                    <option key={item.id} value={item.productId}>
-                      {item.product.name} ({getAvailableFairStock(item)}{" "}
-                      disponibles)
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger id="fair-product">
+                    <SelectValue placeholder="Seleccionar producto" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableItems.map((item) => (
+                      <SelectItem key={item.id} value={item.productId}>
+                        {item.product.name} ({getAvailableFairStock(item)}{" "}
+                        disponibles)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <p className="pb-2 text-sm text-muted-foreground">
                 Solo se muestran unidades reservadas para esta feria.
@@ -1097,18 +1105,16 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
                       </p>
                     </div>
                     {!item.capsuleCode && (
-                      <Input
-                        className="h-9 w-20"
+                      <QuantitySelector
                         min={1}
-                        type="number"
                         value={item.quantity}
-                        onChange={(input) =>
+                        onChange={(quantity) =>
                           updateCartQuantity(
                             item.key,
-                            asPositiveInteger(input.target.value),
+                            quantity,
                           )
                         }
-                        aria-label={`Cantidad de ${item.name}`}
+                        className="h-9 w-14"
                       />
                     )}
                     <span className="w-24 text-right text-sm font-semibold">
@@ -1225,47 +1231,47 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
                   </p>
                   <div className="grid gap-1">
                     <Label className="text-xs md:sr-only">Devuelto</Label>
-                    <Input
+                    <StockQuantityInput
                       min={0}
-                      type="number"
                       value={values.returnedQuantity}
-                      onChange={(input) =>
+                      onChange={(quantity) =>
                         updateReconciliation(
                           item.productId,
                           "returnedQuantity",
-                          input.target.value,
+                          quantity,
                         )
                       }
+                      ariaLabel={`Cantidad devuelta de ${item.product.name}`}
                     />
                   </div>
                   <div className="grid gap-1">
                     <Label className="text-xs md:sr-only">Daño</Label>
-                    <Input
+                    <StockQuantityInput
                       min={0}
-                      type="number"
                       value={values.damagedQuantity}
-                      onChange={(input) =>
+                      onChange={(quantity) =>
                         updateReconciliation(
                           item.productId,
                           "damagedQuantity",
-                          input.target.value,
+                          quantity,
                         )
                       }
+                      ariaLabel={`Cantidad dañada de ${item.product.name}`}
                     />
                   </div>
                   <div className="grid gap-1">
                     <Label className="text-xs md:sr-only">Pérdida</Label>
-                    <Input
+                    <StockQuantityInput
                       min={0}
-                      type="number"
                       value={values.lostQuantity}
-                      onChange={(input) =>
+                      onChange={(quantity) =>
                         updateReconciliation(
                           item.productId,
                           "lostQuantity",
-                          input.target.value,
+                          quantity,
                         )
                       }
+                      ariaLabel={`Cantidad perdida de ${item.product.name}`}
                     />
                   </div>
                   {entered !== expected && (

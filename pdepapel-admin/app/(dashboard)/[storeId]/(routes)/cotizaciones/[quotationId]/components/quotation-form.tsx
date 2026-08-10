@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/form";
 import { Heading } from "@/components/ui/heading";
 import { Input } from "@/components/ui/input";
+import { PercentageInput } from "@/components/ui/percentage-input";
 import { QuantitySelector } from "@/components/ui/quantity-selector";
 import {
   Select,
@@ -702,12 +703,21 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                     render={({ field }) => (
                       <FormItem>
                         <FormControl>
-                          <Input
-                            type="number"
-                            disabled={loading}
-                            min={0}
-                            {...field}
-                          />
+                          {form.watch("defaultDiscountType") ===
+                          "PERCENTAGE" ? (
+                            <PercentageInput
+                              disabled={loading}
+                              min={0}
+                              value={field.value}
+                              onChange={field.onChange}
+                            />
+                          ) : (
+                            <CurrencyInput
+                              disabled={loading}
+                              value={field.value}
+                              onChange={field.onChange}
+                            />
+                          )}
                         </FormControl>
                       </FormItem>
                     )}

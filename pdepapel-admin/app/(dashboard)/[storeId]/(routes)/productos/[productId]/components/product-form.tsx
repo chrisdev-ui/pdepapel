@@ -8,7 +8,6 @@ import {
   Loader2,
   Package,
   PackageCheckIcon,
-  Percent,
   Plus,
   Trash,
 } from "lucide-react";
@@ -37,6 +36,7 @@ import {
 import { Heading } from "@/components/ui/heading";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { Input } from "@/components/ui/input";
+import { PercentageInput } from "@/components/ui/percentage-input";
 import {
   Select,
   SelectContent,
@@ -736,16 +736,12 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 <FormItem>
                   <FormLabel isRequired>Porcentaje de incremento</FormLabel>
                   <FormControl>
-                    <div className="relative">
-                      <Percent className="absolute left-3 top-3 h-4 w-4" />
-                      <Input
-                        type="number"
-                        disabled={loading}
-                        placeholder="30"
-                        className="pl-8"
-                        {...field}
-                      />
-                    </div>
+                    <PercentageInput
+                      disabled={loading}
+                      placeholder="30"
+                      value={field.value}
+                      onChange={field.onChange}
+                    />
                   </FormControl>
                   <FormDescription>
                     Se usa solo para calcular el precio de venta actual.

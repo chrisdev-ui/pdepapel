@@ -9,7 +9,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   getRawOrderStatusMeta,
   getSaleStatusMeta,
@@ -120,6 +129,12 @@ function getErrorMessage(response: Response) {
 function getTaxesAmount(metadata: MarketplaceSale["metadata"]) {
   const amount = Number(metadata?.taxesAmount);
   return Number.isFinite(amount) ? amount : null;
+}
+
+function toCurrencyInputValue(value: string) {
+  if (!value.trim()) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function getSettlementLabel(sale: MarketplaceSale) {
@@ -374,23 +389,28 @@ export function MercadoLibreHistoricalSales({
               </span>
             </div>
             {inspection.orders.length > 1 ? (
-              <select
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              <Select
                 value={selectedOrderId}
-                onChange={(event) => setSelectedOrderId(event.target.value)}
+                onValueChange={setSelectedOrderId}
               >
-                <option value="">Selecciona una orden pagada</option>
-                {inspection.orders.map((order) => (
-                  <option
-                    key={order.externalOrderId}
-                    value={order.externalOrderId}
-                  >
-                    {order.externalOrderId} ·{" "}
-                    {getRawOrderStatusMeta(order.status).label} ·{" "}
-                    {formatCurrency(order.totalAmount)}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger aria-label="Orden de Mercado Libre">
+                  <SelectValue placeholder="Selecciona una orden pagada" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {inspection.orders.map((order) => (
+                      <SelectItem
+                        key={order.externalOrderId}
+                        value={order.externalOrderId}
+                      >
+                        {order.externalOrderId} ·{" "}
+                        {getRawOrderStatusMeta(order.status).label} ·{" "}
+                        {formatCurrency(order.totalAmount)}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
             ) : null}
             {selectedOrder ? (
               <div className="space-y-4">
@@ -447,26 +467,37 @@ export function MercadoLibreHistoricalSales({
                       calcula automáticamente.
                     </p>
                     <div className="grid gap-3 sm:grid-cols-3">
-                      <Input
-                        value={marketplaceFee}
-                        onChange={(event) =>
-                          setMarketplaceFee(event.target.value)
+                      <CurrencyInput
+                        aria-label="Cargo por venta"
+                        value={toCurrencyInputValue(marketplaceFee)}
+                        onChange={(value) =>
+                          setMarketplaceFee(
+                            value === undefined ? "" : String(value),
+                          )
                         }
-                        inputMode="decimal"
+                        inputMode="numeric"
                         placeholder="Cargo por venta"
                       />
-                      <Input
-                        value={shippingCost}
-                        onChange={(event) =>
-                          setShippingCost(event.target.value)
+                      <CurrencyInput
+                        aria-label="Envíos"
+                        value={toCurrencyInputValue(shippingCost)}
+                        onChange={(value) =>
+                          setShippingCost(
+                            value === undefined ? "" : String(value),
+                          )
                         }
-                        inputMode="decimal"
+                        inputMode="numeric"
                         placeholder="Envíos"
                       />
-                      <Input
-                        value={taxesAmount}
-                        onChange={(event) => setTaxesAmount(event.target.value)}
-                        inputMode="decimal"
+                      <CurrencyInput
+                        aria-label="Impuestos"
+                        value={toCurrencyInputValue(taxesAmount)}
+                        onChange={(value) =>
+                          setTaxesAmount(
+                            value === undefined ? "" : String(value),
+                          )
+                        }
+                        inputMode="numeric"
                         placeholder="Impuestos"
                       />
                     </div>

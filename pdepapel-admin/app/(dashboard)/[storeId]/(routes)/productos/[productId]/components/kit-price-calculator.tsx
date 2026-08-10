@@ -3,10 +3,10 @@
 import { Button } from "@/components/ui/button";
 import { FormLabel } from "@/components/ui/form";
 import { Heading } from "@/components/ui/heading";
-import { Input } from "@/components/ui/input";
+import { PercentageInput } from "@/components/ui/percentage-input";
 import { Separator } from "@/components/ui/separator";
 import { currencyFormatter } from "@/lib/utils";
-import { Calculator, Percent } from "lucide-react";
+import { Calculator } from "lucide-react";
 import { useMemo, useState } from "react";
 import { UseFormReturn } from "react-hook-form";
 
@@ -22,7 +22,7 @@ export const KitPriceCalculator: React.FC<KitPriceCalculatorProps> = ({
     () => watchedComponents || [],
     [watchedComponents],
   );
-  const [discountPercent, setDiscountPercent] = useState<number | string>(0);
+  const [discountPercent, setDiscountPercent] = useState(0);
 
   const sumOfComponents = useMemo(() => {
     return components.reduce((acc: number, item: any) => {
@@ -63,18 +63,13 @@ export const KitPriceCalculator: React.FC<KitPriceCalculatorProps> = ({
         {/* Discount Input */}
         <div className="space-y-2">
           <FormLabel isRequired>Descuento Sugerido (%)</FormLabel>
-          <div className="relative">
-            <Percent className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="number"
-              min="0"
-              max="100"
-              placeholder="0"
-              className="pl-9"
-              value={discountPercent}
-              onChange={(e) => setDiscountPercent(e.target.value)}
-            />
-          </div>
+          <PercentageInput
+            min={0}
+            max={100}
+            placeholder="0"
+            value={discountPercent}
+            onChange={(value) => setDiscountPercent(value || 0)}
+          />
           <p className="text-xs text-muted-foreground">
             Ingresa un porcentaje para calcular el precio final sugerido.
           </p>

@@ -36,6 +36,7 @@ import {
   PartyPopper,
   Percent,
   Ruler,
+  ScanLine,
   Settings,
   ShoppingBag,
   ShoppingCart,
@@ -187,6 +188,13 @@ export function MainNav({
       active: pathname === dashboardPath("pedidos"),
       group: "sales",
       icon: ShoppingCart,
+    },
+    {
+      href: dashboardPath("ventas-rapidas"),
+      label: "Punto de venta",
+      active: pathname === dashboardPath("ventas-rapidas"),
+      group: "sales",
+      icon: ScanLine,
     },
     {
       href: dashboardPath("ferias"),

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/form";
 import { Heading } from "@/components/ui/heading";
 import { Input } from "@/components/ui/input";
+import { PercentageInput } from "@/components/ui/percentage-input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
@@ -47,7 +48,6 @@ import {
   CheckSquare,
   Eraser,
   Loader2,
-  Percent,
   Square,
   Trash,
 } from "lucide-react";
@@ -403,16 +403,12 @@ export const OfferForm: React.FC<OfferFormProps> = ({
                   <FormLabel isRequired>Monto del descuento</FormLabel>
                   <FormControl>
                     {form.watch("type") === DiscountType.PERCENTAGE ? (
-                      <div className="relative">
-                        <Percent className="absolute left-3 top-3 h-4 w-4" />
-                        <Input
-                          type="number"
-                          disabled={loading}
-                          className="pl-8"
-                          placeholder="10"
-                          {...field}
-                        />
-                      </div>
+                      <PercentageInput
+                        disabled={loading}
+                        placeholder="10"
+                        value={field.value}
+                        onChange={field.onChange}
+                      />
                     ) : (
                       <CurrencyInput
                         placeholder="$ 10.000"

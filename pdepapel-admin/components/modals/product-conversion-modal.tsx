@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
+import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import {
   Select,
   SelectContent,
@@ -198,11 +199,12 @@ export const ProductConversionModal: React.FC<ProductConversionModalProps> = ({
                 <FormItem>
                   <FormLabel isRequired>Stock Inicial</FormLabel>
                   <FormControl>
-                    <Input
-                      type="number"
+                    <StockQuantityInput
                       disabled={loading}
-                      placeholder="0"
-                      {...field}
+                      min={0}
+                      value={field.value}
+                      onChange={field.onChange}
+                      ariaLabel="Stock inicial"
                     />
                   </FormControl>
                   <FormMessage />

@@ -151,4 +151,33 @@ describe("fair event flow with MySQL", () => {
       ]),
     );
   });
+
+  it("does not reserve a derived kit as independent fair inventory", async () => {
+    fixture = await createInventoryFixture();
+    const fairEvent = await testPrisma.fairEvent.create({
+      data: {
+        storeId: fixture.store.id,
+        name: "Feria de kits de prueba",
+        createdBy: fixture.store.userId,
+      },
+    });
+
+    await expect(
+      allocateFairInventory({
+        storeId: fixture.store.id,
+        fairEventId: fairEvent.id,
+        allocations: [{ productId: fixture.kit.id, quantity: 1 }],
+        userId: fixture.store.userId,
+      }),
+    ).rejects.toMatchObject({ statusCode: 400 });
+
+    await expect(
+      testPrisma.fairEventInventoryItem.count({
+        where: { fairEventId: fairEvent.id },
+      }),
+    ).resolves.toBe(0);
+    await expect(
+      testPrisma.product.findUniqueOrThrow({ where: { id: fixture.kit.id } }),
+    ).resolves.toMatchObject({ stock: 0 });
+  });
 });

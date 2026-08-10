@@ -90,13 +90,11 @@ export async function deleteInventoryFixture(fixture: InventoryFixture) {
     select: { id: true },
   });
   const fairEventIds = fairEvents.map((fairEvent) => fairEvent.id);
-  const fairOrders = fairEventIds.length
-    ? await testPrisma.order.findMany({
-        where: { fairEventId: { in: fairEventIds } },
-        select: { id: true },
-      })
-    : [];
-  const fairOrderIds = fairOrders.map((order) => order.id);
+  const storeOrders = await testPrisma.order.findMany({
+    where: { storeId: fixture.store.id },
+    select: { id: true },
+  });
+  const storeOrderIds = storeOrders.map((order) => order.id);
 
   if (fairEventIds.length > 0) {
     await testPrisma.fairCapsule.deleteMany({
@@ -106,15 +104,15 @@ export async function deleteInventoryFixture(fixture: InventoryFixture) {
       where: { fairEventId: { in: fairEventIds } },
     });
   }
-  if (fairOrderIds.length > 0) {
+  if (storeOrderIds.length > 0) {
     await testPrisma.orderItem.deleteMany({
-      where: { orderId: { in: fairOrderIds } },
+      where: { orderId: { in: storeOrderIds } },
     });
     await testPrisma.paymentDetails.deleteMany({
-      where: { orderId: { in: fairOrderIds } },
+      where: { orderId: { in: storeOrderIds } },
     });
     await testPrisma.order.deleteMany({
-      where: { id: { in: fairOrderIds } },
+      where: { id: { in: storeOrderIds } },
     });
   }
   if (fairEventIds.length > 0) {

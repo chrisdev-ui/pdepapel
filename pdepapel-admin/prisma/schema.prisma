@@ -327,6 +327,7 @@ model Product {
   @@index([storeId, createdAt, isArchived])
   @@index([storeId, price, isArchived])
   @@index([storeId, stock, isArchived])
+  @@index([storeId, gtin])
   @@index([id, storeId, stock, price])
   @@index([storeId, id, isArchived])
   @@index([id, stock])
@@ -716,6 +717,7 @@ enum OrderType {
   CUSTOM
   QUOTATION
   FESTIVAL
+  POINT_OF_SALE
 }
 
 enum OrderStatus {
@@ -896,6 +898,7 @@ enum InventoryMovementType {
   STORE_USE // Internal store consumption
   FESTIVAL_ALLOCATION // Removed from online availability
   FESTIVAL_RETURN // Returned to online availability
+  IN_PERSON_SALE // Decrease from a confirmed in-person sale
 }
 
 enum FairEventStatus {

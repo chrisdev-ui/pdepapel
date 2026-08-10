@@ -28,6 +28,9 @@ export const typeLabels: Record<string, string> = {
   INITIAL_MIGRATION: "Migración",
   PROMOTION: "Promoción",
   STORE_USE: "Uso Interno",
+  FESTIVAL_ALLOCATION: "Asignación a feria",
+  FESTIVAL_RETURN: "Devolución de feria",
+  IN_PERSON_SALE: "Venta presencial",
 };
 
 export const columns: ColumnDef<InventoryMovementColumn>[] = [
@@ -84,14 +87,9 @@ export const columns: ColumnDef<InventoryMovementColumn>[] = [
       let variant: "default" | "secondary" | "destructive" | "outline" =
         "default";
 
-      if (type === "ORDER_PLACED" || type === "DAMAGE" || type === "LOST") {
+      if (row.original.quantity < 0) {
         variant = "destructive";
-      } else if (
-        type === "ORDER_CANCELLED" ||
-        type === "RETURN" ||
-        type === "PURCHASE" ||
-        type === "RESTOCK_RECEIVED"
-      ) {
+      } else if (row.original.quantity > 0) {
         variant = "default";
       } else {
         variant = "secondary";

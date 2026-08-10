@@ -42,6 +42,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
 
   const isClosedOrder =
     data.status === OrderStatus.PAID || data.status === OrderStatus.SENT;
+  const isPointOfSale = data.type === "POINT_OF_SALE";
 
   const isOfflinePayment =
     Boolean(data.payment?.method) &&
@@ -196,21 +197,25 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
             <Copy className="mr-2 h-4 w-4" />
             Copiar ID
           </DropdownMenuItem>
+          {!isPointOfSale && (
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={() =>
+                onCopy(
+                  `https://papeleriapdepapel.com/pedido/${data.id}`,
+                  "URL de la orden copiada la portapapeles",
+                )
+              }
+            >
+              <Copy className="mr-2 h-4 w-4" />
+              Copiar URL de la orden
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
             className="cursor-pointer"
-            onClick={() =>
-              onCopy(
-                `https://papeleriapdepapel.com/pedido/${data.id}`,
-                "URL de la orden copiada la portapapeles",
-              )
+            disabled={
+              isPointOfSale || copyingWompi || isClosedOrder || isOfflinePayment
             }
-          >
-            <Copy className="mr-2 h-4 w-4" />
-            Copiar URL de la orden
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            className="cursor-pointer"
-            disabled={copyingWompi || isClosedOrder || isOfflinePayment}
             onClick={onCopyWompiLink}
           >
             <CreditCard className="mr-2 h-4 w-4" />
@@ -220,21 +225,23 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
                 ? "Link de Pago (Transferencia Directa)"
                 : "Copiar enlace de pago"}
           </DropdownMenuItem>
+          {!isPointOfSale && (
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={() =>
+                onCopy(
+                  `https://papeleriapdepapel.com/pedido/${data.id}?autoPay=true`,
+                  "Enlace de pago copiado al portapapeles",
+                )
+              }
+            >
+              <CreditCard className="mr-2 h-4 w-4 text-emerald-600" />
+              Copiar enlace de pago
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
             className="cursor-pointer"
-            onClick={() =>
-              onCopy(
-                `https://papeleriapdepapel.com/pedido/${data.id}?autoPay=true`,
-                "Enlace de pago copiado al portapapeles",
-              )
-            }
-          >
-            <CreditCard className="mr-2 h-4 w-4 text-emerald-600" />
-            Copiar enlace de pago
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            className="cursor-pointer"
-            disabled={pushingBold || isClosedOrder}
+            disabled={isPointOfSale || pushingBold || isClosedOrder}
             onClick={onPushBoldDatafono}
           >
             <CreditCard className="mr-2 h-4 w-4 text-emerald-600" />
@@ -242,13 +249,15 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
               ? "Datáfono (Orden completada)"
               : "Cobrar en datáfono"}
           </DropdownMenuItem>
-          <DropdownMenuItem
-            className="cursor-pointer"
-            onClick={onSendWhatsAppStatus}
-          >
-            <MessageSquare className="mr-2 h-4 w-4 text-emerald-600" />
-            Enviar WhatsApp al cliente
-          </DropdownMenuItem>
+          {!isPointOfSale && (
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={onSendWhatsAppStatus}
+            >
+              <MessageSquare className="mr-2 h-4 w-4 text-emerald-600" />
+              Enviar WhatsApp al cliente
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
             className="cursor-pointer"
             onClick={() =>
@@ -268,10 +277,11 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
             }
           >
             <Edit className="mr-2 h-4 w-4" />
-            Actualizar
+            {isPointOfSale ? "Ver detalle" : "Actualizar"}
           </DropdownMenuItem>
           <DropdownMenuItem
             className="cursor-pointer"
+            disabled={isPointOfSale}
             onClick={() => setOpen(true)}
           >
             <Trash className="mr-2 h-4 w-4" />

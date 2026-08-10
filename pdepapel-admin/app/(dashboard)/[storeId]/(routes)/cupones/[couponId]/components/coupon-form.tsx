@@ -3,6 +3,7 @@
 import { AlertModal } from "@/components/modals/alert-modal";
 import { Button } from "@/components/ui/button";
 import { CurrencyInput } from "@/components/ui/currency-input";
+import { CountInput } from "@/components/ui/count-input";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import {
   Form,
@@ -15,6 +16,7 @@ import {
 } from "@/components/ui/form";
 import { Heading } from "@/components/ui/heading";
 import { Input } from "@/components/ui/input";
+import { PercentageInput } from "@/components/ui/percentage-input";
 import {
   Select,
   SelectContent,
@@ -33,7 +35,7 @@ import { getDatePresets } from "@/lib/date-presets";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Coupon, DiscountType } from "@prisma/client";
 import axios from "axios";
-import { ArrowLeft, Eraser, Loader2, Percent, Trash } from "lucide-react";
+import { ArrowLeft, Eraser, Loader2, Trash } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -290,16 +292,12 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData }) => {
                   <FormLabel isRequired>Monto del descuento</FormLabel>
                   <FormControl>
                     {form.watch("type") === DiscountType.PERCENTAGE ? (
-                      <div className="relative">
-                        <Percent className="absolute left-3 top-3 h-4 w-4" />
-                        <Input
-                          type="number"
-                          disabled={loading}
-                          className="pl-8"
-                          placeholder="10"
-                          {...field}
-                        />
-                      </div>
+                      <PercentageInput
+                        disabled={loading}
+                        placeholder="10"
+                        value={field.value}
+                        onChange={field.onChange}
+                      />
                     ) : (
                       <CurrencyInput
                         placeholder="$ 10.000"
@@ -339,11 +337,12 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData }) => {
                 <FormItem>
                   <FormLabel>Máximo de usos</FormLabel>
                   <FormControl>
-                    <Input
-                      type="number"
+                    <CountInput
                       disabled={loading}
-                      placeholder="Límite de usos"
-                      {...field}
+                      min={1}
+                      value={Number(field.value ?? 1)}
+                      onChange={field.onChange}
+                      ariaLabel="Máximo de usos del cupón"
                     />
                   </FormControl>
                   <FormMessage />

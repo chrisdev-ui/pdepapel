@@ -208,6 +208,7 @@ export async function allocateFairInventory({
         stock: true,
         price: true,
         acqPrice: true,
+        isKit: true,
       },
     });
     const productsById = new Map(
@@ -219,6 +220,11 @@ export async function allocateFairInventory({
     )) {
       const product = productsById.get(productId);
       if (!product) throw ErrorFactory.NotFound("Producto no encontrado");
+      if (product.isKit) {
+        throw ErrorFactory.InvalidRequest(
+          `“${product.name}” es un kit y no se puede reservar directamente para una feria. Reserva sus productos físicos por separado.`,
+        );
+      }
 
       const stockUpdate = await tx.product.updateMany({
         where: { id: productId, storeId, stock: { gte: quantity } },

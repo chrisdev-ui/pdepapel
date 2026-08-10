@@ -66,7 +66,6 @@ export async function GET(
     });
     if (!order)
       throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
-
     return NextResponse.json(order, {
       headers: { ...corsHeaders, ...CACHE_HEADERS.DYNAMIC },
     });
@@ -142,6 +141,16 @@ export async function PATCH(
     });
     if (!order)
       throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
+    if (order.type === OrderType.POINT_OF_SALE) {
+      throw ErrorFactory.Conflict(
+        "Las ventas presenciales se conservan como comprobantes. Registra una devolución o ajuste de inventario en lugar de editar esta orden.",
+      );
+    }
+    if (type === OrderType.POINT_OF_SALE) {
+      throw ErrorFactory.InvalidRequest(
+        "No puedes convertir una orden existente en venta presencial. Regístrala desde Punto de venta.",
+      );
+    }
 
     let wasPaid = order.status === OrderStatus.PAID;
     let isNowPaid = status === OrderStatus.PAID;
@@ -833,6 +842,11 @@ export async function DELETE(
       });
       if (!order)
         throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
+      if (order.type === OrderType.POINT_OF_SALE) {
+        throw ErrorFactory.Conflict(
+          "Las ventas presenciales no se eliminan. Registra una devolución o ajuste de inventario para conservar la trazabilidad.",
+        );
+      }
 
       // REMOVED: Order status and shipping validations for deletion
       // Now any order can be deleted regardless of status

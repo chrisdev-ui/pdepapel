@@ -50,7 +50,9 @@ export const getInventoryMovements = async (storeId: string) => {
   const orderIds = new Set<string>();
   movements.forEach((item) => {
     if (
-      (item.type === "ORDER_PLACED" || item.type === "ORDER_CANCELLED") &&
+      (item.type === "ORDER_PLACED" ||
+        item.type === "ORDER_CANCELLED" ||
+        item.type === "IN_PERSON_SALE") &&
       item.referenceId
     ) {
       orderIds.add(item.referenceId);

@@ -16,7 +16,7 @@ import { paymentNames } from "@/constants";
 import { currencyFormatter } from "@/lib/utils";
 import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
 import { ColumnDef } from "@tanstack/react-table";
-import { Check, Edit, Receipt, Sparkles } from "lucide-react";
+import { Check, Edit, PartyPopper, Receipt, ScanLine, Sparkles } from "lucide-react";
 import { getOrders } from "../server/get-orders";
 import { CellAction } from "./cell-action";
 import { ProductList } from "./product-list";
@@ -70,6 +70,18 @@ export const columns: ColumnDef<OrderColumn>[] = [
           label: "Manual",
           variant: "secondary",
           className: "border-orange-200 bg-orange-50 text-orange-700",
+        },
+        FESTIVAL: {
+          icon: <PartyPopper className="mr-2 h-4 w-4" />,
+          label: "Feria",
+          variant: "secondary",
+          className: "border-pink-200 bg-pink-50 text-pink-700",
+        },
+        POINT_OF_SALE: {
+          icon: <ScanLine className="mr-2 h-4 w-4" />,
+          label: "Presencial",
+          variant: "secondary",
+          className: "border-emerald-200 bg-emerald-50 text-emerald-700",
         },
       } as const;
 

@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/form";
 import { Heading } from "@/components/ui/heading";
 import { Input } from "@/components/ui/input";
+import { MeasurementInput } from "@/components/ui/measurement-input";
 import {
   Select,
   SelectContent,
@@ -249,11 +250,12 @@ export const BoxForm: React.FC<BoxFormProps> = ({
                     <FormItem>
                       <FormLabel isRequired>Ancho (cm)</FormLabel>
                       <FormControl>
-                        <Input
-                          type="number"
+                        <MeasurementInput
                           disabled={loading}
                           placeholder="20"
-                          {...field}
+                          unit="cm"
+                          value={field.value}
+                          onChange={field.onChange}
                         />
                       </FormControl>
                       <FormMessage />
@@ -267,11 +269,12 @@ export const BoxForm: React.FC<BoxFormProps> = ({
                     <FormItem>
                       <FormLabel isRequired>Alto (cm)</FormLabel>
                       <FormControl>
-                        <Input
-                          type="number"
+                        <MeasurementInput
                           disabled={loading}
                           placeholder="10"
-                          {...field}
+                          unit="cm"
+                          value={field.value}
+                          onChange={field.onChange}
                         />
                       </FormControl>
                       <FormMessage />
@@ -285,11 +288,12 @@ export const BoxForm: React.FC<BoxFormProps> = ({
                     <FormItem>
                       <FormLabel isRequired>Largo (cm)</FormLabel>
                       <FormControl>
-                        <Input
-                          type="number"
+                        <MeasurementInput
                           disabled={loading}
                           placeholder="30"
-                          {...field}
+                          unit="cm"
+                          value={field.value}
+                          onChange={field.onChange}
                         />
                       </FormControl>
                       <FormMessage />

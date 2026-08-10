@@ -6,8 +6,19 @@ import {
 } from "@/components/ui/async-product-select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   getListingWizardStepError,
@@ -130,6 +141,17 @@ const currencyFormatter = new Intl.NumberFormat("es-CO", {
   currency: "COP",
   maximumFractionDigits: 0,
 });
+
+function toCurrencyInputValue(value: string) {
+  if (!value.trim()) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function toStockQuantityValue(value: string) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : 1;
+}
 
 function getAttributeValues(value: string) {
   const values = new Map<string, string>();
@@ -291,12 +313,15 @@ export function ListingPublicationWizard({
           </div>
           <div className="grid gap-2">
             <Label htmlFor="mercadolibre-price">Precio de Mercado Libre</Label>
-            <Input
+            <CurrencyInput
               id="mercadolibre-price"
               inputMode="numeric"
-              value={form.marketplacePrice}
-              onChange={(event) =>
-                onFormChange("marketplacePrice", event.target.value)
+              value={toCurrencyInputValue(form.marketplacePrice)}
+              onChange={(value) =>
+                onFormChange(
+                  "marketplacePrice",
+                  value === undefined ? "" : String(value),
+                )
               }
               placeholder="Ej. 18500"
             />
@@ -324,15 +349,21 @@ export function ListingPublicationWizard({
                 <Label htmlFor="mercadolibre-buffer">
                   Unidades de seguridad
                 </Label>
-                <Input
+                <StockQuantityInput
                   id="mercadolibre-buffer"
-                  inputMode="numeric"
-                  value={form.stockSafetyBuffer}
-                  onChange={(event) =>
-                    onFormChange("stockSafetyBuffer", event.target.value)
+                  ariaLabel="Unidades de seguridad"
+                  ariaDescribedBy="mercadolibre-buffer-description"
+                  value={toStockQuantityValue(form.stockSafetyBuffer)}
+                  onChange={(value) =>
+                    onFormChange("stockSafetyBuffer", String(value))
                   }
+                  min={0}
+                  max={10_000}
                 />
-                <p className="text-xs text-muted-foreground">
+                <p
+                  id="mercadolibre-buffer-description"
+                  className="text-xs text-muted-foreground"
+                >
                   Se reservan para evitar vender más unidades de las
                   disponibles.
                 </p>
@@ -341,12 +372,15 @@ export function ListingPublicationWizard({
                 <Label htmlFor="mercadolibre-minimum-margin">
                   Utilidad objetivo tras comisión (opcional)
                 </Label>
-                <Input
+                <CurrencyInput
                   id="mercadolibre-minimum-margin"
                   inputMode="numeric"
-                  value={form.minimumMarginAmount}
-                  onChange={(event) =>
-                    onFormChange("minimumMarginAmount", event.target.value)
+                  value={toCurrencyInputValue(form.minimumMarginAmount)}
+                  onChange={(value) =>
+                    onFormChange(
+                      "minimumMarginAmount",
+                      value === undefined ? "" : String(value),
+                    )
                   }
                   placeholder="Ej. 12000"
                 />
@@ -355,27 +389,30 @@ export function ListingPublicationWizard({
                   posteriores.
                 </p>
               </div>
-              <label className="flex cursor-pointer items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
+              <div className="flex items-start gap-2 text-sm">
+                <Checkbox
+                  id="mercadolibre-sync-price"
+                  className="mt-0.5"
                   checked={form.syncPrice}
-                  onChange={(event) =>
+                  onCheckedChange={(checked) =>
                     setForm((current) => ({
                       ...current,
-                      syncPrice: event.target.checked,
+                      syncPrice: checked === true,
                     }))
                   }
-                  className="mt-0.5 h-4 w-4 rounded border-input"
                 />
-                <span>
+                <Label
+                  htmlFor="mercadolibre-sync-price"
+                  className="cursor-pointer"
+                >
                   <span className="block font-medium">
                     Mantener este precio desde Administración
                   </span>
                   <span className="text-xs text-muted-foreground">
                     Actualiza solo Mercado Libre, nunca el precio de la tienda.
                   </span>
-                </span>
-              </label>
+                </Label>
+              </div>
             </div>
           </details>
         </div>
@@ -490,28 +527,33 @@ export function ListingPublicationWizard({
                     <Label htmlFor="mercadolibre-cover-image">
                       Foto de portada
                     </Label>
-                    <select
-                      id="mercadolibre-cover-image"
+                    <Select
                       value={form.imageUrls[0]}
-                      onChange={(event) =>
+                      onValueChange={(value) =>
                         setForm((current) => ({
                           ...current,
                           imageUrls: [
-                            event.target.value,
+                            value,
                             ...current.imageUrls.filter(
-                              (url) => url !== event.target.value,
+                              (url) => url !== value,
                             ),
                           ],
                         }))
                       }
-                      className="h-10 rounded-md border border-input bg-background px-3 text-sm"
                     >
-                      {form.imageUrls.map((url, index) => (
-                        <option key={url} value={url}>
-                          Foto {index + 1}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger id="mercadolibre-cover-image">
+                        <SelectValue placeholder="Selecciona la portada" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {form.imageUrls.map((url, index) => (
+                            <SelectItem key={url} value={url}>
+                              Foto {index + 1}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
                   </div>
                 ) : null}
               </>
@@ -618,32 +660,43 @@ export function ListingPublicationWizard({
                       <span className="text-destructive">*</span>
                     </Label>
                     {attribute.values.length > 0 ? (
-                      <select
-                        id={`mercadolibre-attribute-${attribute.id}`}
+                      <Select
                         value={currentValue}
-                        onChange={(event) =>
+                        onValueChange={(value) =>
                           onFormChange(
                             "attributes",
                             updateAttributeValue(
                               form.attributes,
                               attribute.id,
-                              event.target.value,
+                              value,
                             ),
                           )
                         }
-                        className="h-10 rounded-md border border-input bg-background px-3 text-sm"
                       >
-                        <option value="">Selecciona una opción</option>
-                        {attribute.values.map((option) => (
-                          <option key={option.id} value={option.name}>
-                            {option.name}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger
+                          id={`mercadolibre-attribute-${attribute.id}`}
+                        >
+                          <SelectValue placeholder="Selecciona una opción" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            {attribute.values.map((option) => (
+                              <SelectItem key={option.id} value={option.name}>
+                                {option.name}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
                     ) : (
                       <Input
                         id={`mercadolibre-attribute-${attribute.id}`}
                         value={currentValue}
+                        inputMode={
+                          attribute.valueType === "number"
+                            ? "decimal"
+                            : undefined
+                        }
                         onChange={(event) =>
                           onFormChange(
                             "attributes",

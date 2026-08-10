@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -58,7 +59,7 @@ type SalesDateBasis = "saleDate" | "paymentDate";
 type TaxSaleRow = {
   orderNumber: string;
   customerName: string;
-  channel: "Tienda en línea" | "Mercado Libre";
+  channel: "Tienda en línea" | "Venta presencial" | "Mercado Libre";
   totalAmount: number;
   occurredAt: string;
 };
@@ -618,16 +619,18 @@ export default function TaxReportsClient() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="grid gap-2">
                 <Label htmlFor="purchase-total">Valor</Label>
-                <Input
+                <CurrencyInput
                   id="purchase-total"
-                  type="number"
                   min="0"
-                  step="1"
-                  value={purchaseForm.totalAmount}
-                  onChange={(event) =>
+                  value={
+                    purchaseForm.totalAmount === ""
+                      ? undefined
+                      : Number(purchaseForm.totalAmount)
+                  }
+                  onChange={(value) =>
                     setPurchaseForm((current) => ({
                       ...current,
-                      totalAmount: event.target.value,
+                      totalAmount: value === undefined ? "" : String(value),
                     }))
                   }
                   required

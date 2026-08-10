@@ -23,6 +23,7 @@ Terminology used by the business:
 - **Tienda en línea:** the public storefront (`papeleriapdepapel.com`). Do not call it “storefront” in Spanish customer-facing/admin copy.
 - **Administración / panel:** the private dashboard and API (`admin.papeleriapdepapel.com`).
 - **Feria:** an in-person selling event. It reserves stock before the event and records in-person sales.
+- **Punto de venta:** the private mobile-friendly admin workflow for everyday in-person sales. It creates a paid `POINT_OF_SALE` order and strict physical-stock movements only after payment confirmation.
 - **Cápsula sorpresa:** a random product sold at a fair. It must still be tracked by the actual packed product internally.
 - **Publicación:** a Mercado Libre listing. A publication is not necessarily a sale.
 - **Venta de Mercado Libre:** a paid Mercado Libre order/pack. It must record the amount actually collected by P de Papel, not merely the buyer-facing gross price.
@@ -156,7 +157,7 @@ pdepapel-admin/
 
 ### Dashboard resources
 
-Dashboard route names are Spanish and include: `productos`, `categorias`, `pedidos`, `inventario`, `movimientos-inventario`, `ferias`, `mercadolibre`, `reportes-tributarios`, `ofertas`, `cupones`, `aprovisionamiento`, `proveedores`, `clientes`, `envios`, `cotizaciones`, `configuracion`, and supporting catalog/BI resources.
+Dashboard route names are Spanish and include: `productos`, `categorias`, `pedidos`, `ventas-rapidas`, `inventario`, `movimientos-inventario`, `ferias`, `mercadolibre`, `reportes-tributarios`, `ofertas`, `cupones`, `aprovisionamiento`, `proveedores`, `clientes`, `envios`, `cotizaciones`, `configuracion`, and supporting catalog/BI resources.
 
 Follow the established route shape when adding a resource:
 
@@ -177,7 +178,7 @@ Large forms require particularly careful, scoped changes: product forms, product
 
 - Payments and finance: `lib/bold.ts`, `lib/bold-terminal.ts`, `lib/financial.ts`, `lib/order-totals.ts`, `lib/discount-engine.ts`.
 - Shipping: `lib/envioclick.ts`, `lib/shipping-helpers.ts`, `lib/package-calculator.ts`, `lib/dane-api.ts`, `lib/shipment-export.ts`.
-- Inventory: `lib/inventory.ts`, `lib/inventory-constants.ts`, `lib/variant-generator.ts`, `lib/variant-combinations.ts`.
+- Inventory: `lib/inventory.ts`, `lib/inventory-constants.ts`, `lib/point-of-sale.ts`, `lib/variant-generator.ts`, `lib/variant-combinations.ts`.
 - SEO/catalog: `lib/slugify.ts`, `lib/product-slugs.ts`, `lib/category-slugs.ts`, `lib/product-identifiers.ts`, `lib/rich-text.ts`, `lib/product-description-templates.ts`.
 - Store cache sync: `lib/revalidate-store.ts`, `lib/revalidation-alert.ts`, `lib/cache.ts`.
 - Mercado Libre: `lib/mercadolibre/`.
@@ -250,6 +251,7 @@ When creating a new customer-navigable route:
 ### UX and rendering rules
 
 - Prefer server data and route-level `loading.tsx`/skeleton UI over client-only fetches that leave a blank content area.
+- Reuse the existing specialized admin form controls before adding a generic input: `CurrencyInput` for COP amounts, `PercentageInput` for percentages, `StockQuantityInput` for inventory, `CountInput` for bounded counts, `MeasurementInput` for dimensions, `QuantitySelector` for cart lines, `ImageUpload` for images, rich-text editor for product descriptions, and calendar/date controls for dates. If a domain-specific input does not exist, create one reusable component using the installed shadcn/Radix primitives instead of styling a one-off control inside a route.
 - A first navigation from `/tienda` to a product must immediately display a coherent product skeleton/content frame—not just the persistent header and footer.
 - Checkout-to-order-detail navigation must not flash a reset checkout state before the order page appears.
 - Preserve responsive behavior. Header additions, category cards, drawers, dialogs, and tables must be checked at mobile, tablet, and desktop breakpoints.
@@ -281,7 +283,7 @@ The Prisma schema is `pdepapel-admin/prisma/schema.prisma`.
 - `Store` is the tenant root.
 - `Product` belongs to a `Category`, size, color, and design; it has `sku`, optional `gtin`, optional `mpn`, brand, acquisition cost, images, variants/grouping, supplier, kits, offers, movements, fairs, and marketplace links.
 - `ProductSlugAlias` and `CategorySlugAlias` protect old public URLs.
-- `Order` plus `OrderItem` is the unified sales record. Order types: `STANDARD`, `CUSTOM`, `QUOTATION`, and `FESTIVAL`.
+- `Order` plus `OrderItem` is the unified sales record. Order types: `STANDARD`, `CUSTOM`, `QUOTATION`, `FESTIVAL`, and `POINT_OF_SALE`.
 - Order statuses include draft/quotation states and active `PENDING`, `PAID`, `SENT`, and `CANCELLED` states. `paidAt` must be written when an order truly becomes paid, not during unrelated updates.
 - `InventoryMovement` is the auditable stock ledger.
 - Supplier/restock data supports purchases, inventory cost, and tax records.
@@ -313,6 +315,7 @@ Known manual migration references:
 - `20260805_add_tax_purchases.sql` — tax supplier-purchase table.
 - `20260807_add_marketplace_order_notification_action.sql` — Mercado Libre outbox enum expansion; already applied to Railway.
 - `20260808_add_marketplace_listing_content_sync.sql` — adds the `SYNC_LISTING_CONTENT` outbox action. Apply to Railway before deploying the related code.
+- `20260809_add_point_of_sale.sql` — adds `POINT_OF_SALE`, `IN_PERSON_SALE`, and the `(storeId, gtin)` product lookup index. Apply to Railway before using the feature in production.
 
 ## 8. Catalog, SEO, and revalidation
 
@@ -355,6 +358,8 @@ See `docs/revalidacion-catalogo.md` and `docs/seguimiento-seo.md`.
 - Handle concurrent availability checks atomically/defensively; never let delayed payment confirmation or a marketplace retry subtract stock twice.
 - Kits/combos use component stock; do not treat a kit as unrelated independent stock without understanding existing kit logic.
 - Every external/in-person sales workflow must either reserve stock before sale or reconcile with auditable movement entries afterward.
+- Point-of-sale sales must use `lib/point-of-sale.ts`, which expands kits into physical components, atomically decrements every required product with `stock >= required`, creates the paid order and movements in one transaction, recalculates kits, and queues marketplace stock sync. Never replace it with resilient/partial inventory updates.
+- Product QR labels use `PDP:<productId>` and are reusable for ordinary products. They are intentionally different from fair-capsule QR codes, which remain one unique code per sealed capsule.
 
 ### Shipping
 
@@ -365,6 +370,14 @@ See `docs/revalidacion-catalogo.md` and `docs/seguimiento-seo.md`.
 ## 10. Fairs, in-person sales, and stock reconciliation
 
 The fair module exists because in-person events otherwise create serious online-stock drift. It is a core inventory feature, not a side experiment.
+
+### Everyday point-of-sale workflow
+
+1. Use **Ventas → Punto de venta** for ordinary cash or already-confirmed transfer sales.
+2. Print reusable product labels from the same page. Search by name/SKU/GTIN, choose the number of copies, and scan `PDP:<productId>` labels later with a phone or Bluetooth scanner.
+3. Confirm cash/transfer only after the money was received. The service creates a paid `POINT_OF_SALE` order, a matching `IN_PERSON_SALE` movement for every physical product, and immediately refreshes online/marketplace availability.
+4. Point-of-sale orders are audit records and cannot be edited or deleted in the generic Orders API. Use an auditable return/manual adjustment for a correction.
+5. Point-of-sale sales are included in tax exports as **Venta presencial**. See `pdepapel-admin/docs/punto-de-venta.md` for the nontechnical guide.
 
 ### Normal fair workflow
 
@@ -396,7 +409,7 @@ Operational docs:
 The **Reportes tributarios** module supports any operating year, not just 2025.
 
 - Exported `.xlsx` has **Ventas** and **Compras** sheets.
-- Sales include orders in `PAID` or `SENT` plus Mercado Libre sales in `PAID` with a settled `netAmount`. The report identifies each sale channel and records the net amount actually received from Mercado Libre; paid sales without settlement remain visibly pending and are not totalled or exported.
+- Sales include orders in `PAID` or `SENT` (including fair and point-of-sale sales as **Venta presencial**) plus Mercado Libre sales in `PAID` with a settled `netAmount`. The report identifies each sale channel and records the net amount actually received from Mercado Libre; paid sales without settlement remain visibly pending and are not totalled or exported.
 - Admin chooses whether sales are filtered by sale/creation date or actual payment-confirmation date (`paidAt`). The exported column indicates the selected basis.
 - Purchases are manually recorded supplier invoices (`TaxPurchase`), with invoice number, company/supplier name, value, and invoice date. A restock order number is not a fiscal invoice number.
 - The UI uses pagination for tax tables; preserve it to avoid unbounded slow tables.
@@ -753,6 +766,7 @@ When user approval is granted:
 - `pdepapel-admin/docs/mercadolibre.md` — Mercado Libre application, OAuth, QStash, webhook, listing, and reconciliation runbook.
 - `pdepapel-admin/docs/guia-uso-mercadolibre.md` — nontechnical daily Mercado Libre guide for publishing, profiles, sales, dispatches, and historical reconciliation; its printable PDF is in `output/pdf/guia-practica-mercadolibre-p-de-papel.pdf`.
 - `pdepapel-admin/docs/ventas-en-feria.md` — nontechnical fair/event operation guide.
+- `pdepapel-admin/docs/punto-de-venta.md` — nontechnical guide for reusable product labels and ordinary in-person sales.
 - `pdepapel-admin/docs/conciliar-inventario-feria-anterior.md` — previous-fair inventory reconciliation guide.
 - `pdepapel-admin/docs/reportes-tributarios.md` — tax export and supplier-invoice rules.
 
