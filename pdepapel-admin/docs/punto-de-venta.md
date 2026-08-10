@@ -1,21 +1,23 @@
 # Guía rápida: ventas presenciales y etiquetas
 
-Usa **Punto de venta** cuando vendas en una feria, en el local, por una visita o en cualquier momento en que cobres en persona. La venta queda guardada de inmediato y el inventario baja solo cuando confirmas el pago.
+Usa **Punto de venta** cuando vendas en el local, por una visita o en cualquier momento fuera de una feria en que cobres en persona. La venta queda guardada de inmediato y el inventario baja solo cuando confirmas el pago.
+
+> **No uses Punto de venta dentro de una feria.** Para esas ventas usa siempre **Ventas en feria**, porque allí ya existe stock reservado, cápsulas y un cierre propio.
 
 ## Antes de empezar: preparar etiquetas
 
 1. Entra a **Ventas → Punto de venta**.
 2. Baja a **Imprimir etiquetas de productos**.
 3. Busca un producto por nombre, SKU o código.
-4. Escribe cuántas etiquetas quieres imprimir. Por ejemplo, si tienes 12 lapiceros iguales, imprime 12 etiquetas.
+4. Escribe cuántas etiquetas quieres imprimir. Para un producto idéntico basta **una sola etiqueta**.
 5. Pulsa **Agregar** y luego **Imprimir etiquetas**.
-6. Pega una etiqueta en cada producto o en una tarjeta junto al producto. Si varios productos son exactamente iguales, puedes usar la misma etiqueta para todos.
+6. Pega la etiqueta en la caja, bandeja o exhibidor donde guardas ese producto. Imprime más solo si quieres tener la misma etiqueta en varios lugares.
 
-Cada etiqueta de producto se puede reutilizar. No necesitas crear una etiqueta nueva después de cada venta.
+Cada etiqueta de producto se puede reutilizar. No necesitas crear una etiqueta nueva después de cada venta ni una por cada unidad. Si cambia el color, tamaño, diseño o SKU, usa la etiqueta correspondiente a esa variante.
 
 ### Ejemplo
 
-Tienes 8 resaltadores pastel iguales. Imprime 8 etiquetas del producto **Resaltador pastel**. En una venta escaneas cualquiera de esas etiquetas dos veces si la persona lleva dos resaltadores. El sistema descuenta 2 unidades.
+Tienes 8 resaltadores pastel iguales. Imprime una etiqueta del producto **Resaltador pastel** y pégala en su caja. Si una persona lleva dos resaltadores, escanea esa misma etiqueta dos veces o ajusta la cantidad a 2. El sistema descuenta 2 unidades.
 
 ## Registrar una venta
 
@@ -57,4 +59,4 @@ No borres una venta presencial desde **Pedidos**. Para que las cuentas y el inve
 
 ## Recomendación para el día a día
 
-Antes de una feria, imprime etiquetas de los productos que llevarás. Durante la venta usa el celular con cámara o un lector Bluetooth. Al terminar, compara las unidades físicas con el inventario y registra cualquier devolución, daño o pérdida el mismo día.
+Imprime etiquetas para los productos que vendas habitualmente fuera de ferias. Durante la venta usa el celular con cámara o un lector Bluetooth. Si vas a una feria, prepara y registra todo desde **Ventas en feria**.
