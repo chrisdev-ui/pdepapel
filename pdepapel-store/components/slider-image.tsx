@@ -1,7 +1,8 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { getCldImageUrl } from "next-cloudinary";
+
+import { CldImage } from "@/components/ui/CldImage";
 
 interface SlideImageProps {
   src: string;
@@ -18,27 +19,6 @@ export const SlideImage: React.FC<SlideImageProps> = ({
   current,
   shouldAnimate,
 }) => {
-  // Generate optimized URL for the main src
-  const optimizedSrc = getCldImageUrl({
-    src,
-    format: "auto",
-    quality: "auto",
-  });
-
-  // Generate srcSet manually for responsive loading
-  const widths = [640, 768, 1024, 1280, 1536];
-  const srcSet = widths
-    .map((width) => {
-      const url = getCldImageUrl({
-        src,
-        width,
-        format: "auto",
-        quality: "auto",
-      });
-      return `${url} ${width}w`;
-    })
-    .join(", ");
-
   return (
     <motion.div
       className="absolute inset-0"
@@ -57,13 +37,8 @@ export const SlideImage: React.FC<SlideImageProps> = ({
           : { duration: 0 }
       }
     >
-      <motion.img
-        src={optimizedSrc}
-        srcSet={srcSet}
-        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 90vw, 80vw"
-        alt={alt}
-        fetchPriority={current === 0 ? "high" : "auto"}
-        className="h-full w-full object-cover"
+      <motion.div
+        className="absolute inset-0"
         animate={
           shouldAnimate && isActive ? { scale: [1, 1.05] } : { scale: 1 }
         }
@@ -71,7 +46,17 @@ export const SlideImage: React.FC<SlideImageProps> = ({
           duration: shouldAnimate ? 8 : 0,
           ease: "easeOut",
         }}
-      />
+      >
+        <CldImage
+          src={src}
+          alt={alt}
+          fill
+          priority={current === 0}
+          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 90vw, 80vw"
+          format="auto"
+          className="object-cover"
+        />
+      </motion.div>
       {/* Gradient overlay */}
       <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent" />
       <div className="absolute inset-0 bg-gradient-to-r from-background/50 via-transparent to-background/50" />
