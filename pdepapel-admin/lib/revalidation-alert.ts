@@ -44,7 +44,7 @@ export async function sendRevalidationFailureAlert({
       from: "Papelería P de Papel <orders@papeleriapdepapel.com>",
       to: RECIPIENTS,
       subject: "[Alerta] Falló la actualización de la tienda en línea",
-      text: `La revalidación de la tienda en línea falló el ${now}.\n\nEndpoints:\n${endpointList}\n\nDetalles:\n${detailList}\n\nLa alerta se limita a una por hora. Revisa los registros de Vercel para identificar y resolver la causa.`,
+      text: `La revalidación de la tienda en línea falló el ${now}.\nOrigen del aviso: una actualización del catálogo solicitó refrescar la tienda en línea.\n\nEndpoints:\n${endpointList}\n\nDetalles:\n${detailList}\n\nLa alerta se limita a una por hora. Revisa los registros de Vercel para identificar y resolver la causa.`,
     });
   } catch (error) {
     console.error("Unable to send revalidation failure alert:", error);

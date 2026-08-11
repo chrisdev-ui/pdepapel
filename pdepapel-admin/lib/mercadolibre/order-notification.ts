@@ -8,11 +8,22 @@ const ADMIN_NOTIFICATION_RECIPIENTS = [
   "papeleria.pdepapel@gmail.com",
 ];
 
+function formatPaidAt(paidAt: Date | null) {
+  if (!paidAt) return null;
+
+  return new Intl.DateTimeFormat("es-CO", {
+    dateStyle: "long",
+    timeStyle: "short",
+    timeZone: "America/Bogota",
+  }).format(paidAt);
+}
+
 export async function sendMercadoLibreOrderNotification({
   buyerName,
   inventoryStatus,
   marketplaceOrderId,
   orderNumber,
+  paidAt,
   orderSummary,
   storeId,
   netAmount,
@@ -21,6 +32,7 @@ export async function sendMercadoLibreOrderNotification({
   inventoryStatus: string;
   marketplaceOrderId: string;
   orderNumber: string;
+  paidAt: Date | null;
   orderSummary: string;
   storeId: string;
   netAmount: number;
@@ -38,11 +50,12 @@ export async function sendMercadoLibreOrderNotification({
   );
   orderUrl.searchParams.set("order", marketplaceOrderId);
   orderUrl.hash = "mercadolibre-orders";
+  const paidAtLabel = formatPaidAt(paidAt);
 
   const response = await resend.emails.send({
     from: "Papelería P de Papel <orders@papeleriapdepapel.com>",
     to: ADMIN_NOTIFICATION_RECIPIENTS,
-    subject: `[Mercado Libre] Nueva venta pagada #${orderNumber}`,
+    subject: `[Mercado Libre] Venta pagada y registrada #${orderNumber}`,
     headers: {
       "Idempotency-Key": `mercadolibre-order-${marketplaceOrderId}`,
     },
@@ -53,8 +66,9 @@ export async function sendMercadoLibreOrderNotification({
       orderSummary,
       orderUrl: orderUrl.toString(),
       netAmount: currencyFormatter(netAmount),
+      paidAt: paidAtLabel,
     }) as React.ReactElement,
-    text: `Nueva venta pagada de Mercado Libre #${orderNumber}\nNeto de la venta: ${currencyFormatter(netAmount)}\n\n${orderSummary}\n\nEstado: ${inventoryStatus}\nVer venta en Administración: ${orderUrl}`,
+    text: `Venta pagada y registrada de Mercado Libre #${orderNumber}\n${paidAtLabel ? `Pago confirmado: ${paidAtLabel}\n` : ""}Neto de la venta: ${currencyFormatter(netAmount)}\n\n${orderSummary}\n\nEstado: ${inventoryStatus}\nVer venta en Administración: ${orderUrl}`,
   });
   if (response.error) {
     throw new Error(

@@ -28,6 +28,16 @@ function getOrderLink(orderId: string) {
   return `https://papeleriapdepapel.com/pedido/${orderId}`;
 }
 
+function getOrderNotificationSource(status: OrderStatus | ShippingStatus) {
+  if (status === OrderStatus.PAID) {
+    return "Confirmación de pago recibida en P de Papel.";
+  }
+  if (status === OrderStatus.PENDING) {
+    return "Pedido creado o actualizado en P de Papel.";
+  }
+  return "Actualización del estado del pedido en P de Papel.";
+}
+
 export const sendOrderEmail = async (
   order: Order & {
     payment?: PaymentMethod | null;
@@ -104,8 +114,9 @@ export const sendOrderEmail = async (
           orderSummary,
           orderLink,
           thanksParagraph,
+          notificationSource: getOrderNotificationSource(status),
         }) as React.ReactElement,
-        text: `Pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\n\n${orderSummary}\n\nVer detalles: ${orderLink}`,
+        text: `Pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\nOrigen del aviso: ${getOrderNotificationSource(status)}\n\n${orderSummary}\n\nVer detalles: ${orderLink}`,
       });
     }
 
@@ -217,8 +228,9 @@ export const sendShippingEmail = async (
         orderSummary,
         orderLink,
         thanksParagraph,
+        notificationSource: "Actualización de envío recibida desde EnvíoClick.",
       }) as React.ReactElement,
-      text: `Pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\n\n${orderSummary}\n\nVer detalles: ${orderLink}`,
+      text: `Pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\nOrigen del aviso: Actualización de envío recibida desde EnvíoClick.\n\n${orderSummary}\n\nVer detalles: ${orderLink}`,
     });
 
     // Send to customer if email exists

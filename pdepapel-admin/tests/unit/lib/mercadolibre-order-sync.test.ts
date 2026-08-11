@@ -1,6 +1,10 @@
+import { MarketplaceOrderStatus } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 
-import { parseMercadoLibreOrder } from "@/lib/mercadolibre/order-sync";
+import {
+  isMercadoLibreOrderNewlyPaid,
+  parseMercadoLibreOrder,
+} from "@/lib/mercadolibre/order-sync";
 
 describe("Mercado Libre order parsing", () => {
   it("normalizes a confirmed sale without trusting the webhook payload", () => {
@@ -63,5 +67,29 @@ describe("Mercado Libre order parsing", () => {
 
     expect(order.status).toBe("CANCELLED");
     expect(order.paidAt).toBeNull();
+  });
+
+  it("notifies only when an order first becomes paid", () => {
+    expect(
+      isMercadoLibreOrderNewlyPaid(null, MarketplaceOrderStatus.PAID),
+    ).toBe(true);
+    expect(
+      isMercadoLibreOrderNewlyPaid(
+        MarketplaceOrderStatus.PENDING,
+        MarketplaceOrderStatus.PAID,
+      ),
+    ).toBe(true);
+    expect(
+      isMercadoLibreOrderNewlyPaid(
+        MarketplaceOrderStatus.PAID,
+        MarketplaceOrderStatus.PAID,
+      ),
+    ).toBe(false);
+    expect(
+      isMercadoLibreOrderNewlyPaid(
+        MarketplaceOrderStatus.PAID,
+        MarketplaceOrderStatus.CANCELLED,
+      ),
+    ).toBe(false);
   });
 });

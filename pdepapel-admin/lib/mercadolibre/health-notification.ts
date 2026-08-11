@@ -32,7 +32,7 @@ export async function sendMercadoLibreHealthNotification({
     headers: {
       "Idempotency-Key": `mercadolibre-health-${storeId}-${new Date().toISOString().slice(0, 10)}`,
     },
-    text: `Resumen diario de Mercado Libre\n\nPreguntas sin responder: ${summary.unansweredQuestions}\nEnvíos por despachar: ${summary.shipmentsToDispatch}\nReclamos por revisar: ${summary.claimsRequiringAttention}\n\n${issueList}\n\nAbrir Administración: ${dashboardUrl}`,
+    text: `Resumen diario de Mercado Libre\nOrigen del aviso: revisión automática diaria de la conexión; no es una venta nueva.\n\nPreguntas sin responder: ${summary.unansweredQuestions}\nEnvíos por despachar: ${summary.shipmentsToDispatch}\nReclamos por revisar: ${summary.claimsRequiringAttention}\n\n${issueList}\n\nAbrir Administración: ${dashboardUrl}`,
   });
   if (response.error) {
     throw new Error(

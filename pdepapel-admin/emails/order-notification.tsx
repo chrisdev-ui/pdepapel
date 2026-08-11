@@ -27,6 +27,7 @@ interface OrderNotificationProps {
   orderLink?: string;
   thanksParagraph?: string;
   city?: string;
+  notificationSource?: string;
 }
 
 export const OrderNotification = ({
@@ -44,6 +45,7 @@ export const OrderNotification = ({
   orderLink = "https://papeleriapdepapel.com",
   thanksParagraph = "¡Gracias por tu compra!",
   city = "Bogotá",
+  notificationSource,
 }: OrderNotificationProps) => {
   const getStatusMessage = () => {
     switch (status) {
@@ -205,6 +207,11 @@ export const OrderNotification = ({
                 {total && (
                   <Text style={adminDetailsText}>
                     <strong>Total:</strong> {total}
+                  </Text>
+                )}
+                {notificationSource && (
+                  <Text style={adminDetailsText}>
+                    <strong>Origen del aviso:</strong> {notificationSource}
                   </Text>
                 )}
               </Container>

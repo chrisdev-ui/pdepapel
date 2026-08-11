@@ -663,6 +663,7 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
           connectionId: true,
           externalOrderId: true,
           buyerName: true,
+          paidAt: true,
           netAmount: true,
           inventoryStatus: true,
           connection: { select: { storeId: true } },
@@ -692,6 +693,7 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
         inventoryStatus: marketplaceOrder.inventoryStatus,
         marketplaceOrderId: marketplaceOrder.id,
         orderNumber: marketplaceOrder.externalOrderId,
+        paidAt: marketplaceOrder.paidAt,
         orderSummary: marketplaceOrder.items
           .map(
             (item) =>

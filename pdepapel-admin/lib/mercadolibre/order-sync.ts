@@ -333,19 +333,26 @@ async function queuePaidOrderNotification(
   externalOrderId: string,
   marketplaceOrderId: string,
   needsFinancialReconciliation: boolean,
+  shouldSendNotification: boolean,
 ) {
+  let hasQueuedWork = false;
   if (needsFinancialReconciliation) {
     await queueMarketplaceOrderFinancials(prismadb, {
       connectionId,
       externalOrderId,
       marketplaceOrderId,
     });
+    hasQueuedWork = true;
   }
-  await queueMarketplaceOrderNotification(prismadb, {
-    connectionId,
-    externalOrderId,
-    marketplaceOrderId,
-  });
+  if (shouldSendNotification) {
+    await queueMarketplaceOrderNotification(prismadb, {
+      connectionId,
+      externalOrderId,
+      marketplaceOrderId,
+    });
+    hasQueuedWork = true;
+  }
+  if (!hasQueuedWork) return;
 
   try {
     await enqueuePendingMarketplaceOutboxEvents(connectionId);
@@ -356,6 +363,16 @@ async function queuePaidOrderNotification(
   }
 }
 
+export function isMercadoLibreOrderNewlyPaid(
+  previousStatus: MarketplaceOrderStatus | null,
+  nextStatus: MarketplaceOrderStatus,
+) {
+  return (
+    nextStatus === MarketplaceOrderStatus.PAID &&
+    previousStatus !== MarketplaceOrderStatus.PAID
+  );
+}
+
 export async function synchronizeMercadoLibreOrder(
   connectionId: string,
   storeId: string,
@@ -363,6 +380,19 @@ export async function synchronizeMercadoLibreOrder(
 ) {
   const order = parseMercadoLibreOrder(payload);
   const resolvedItems = await resolveOrderItems(connectionId, order.items);
+  const existingMarketplaceOrder = await prismadb.marketplaceOrder.findUnique({
+    where: {
+      connectionId_externalOrderId: {
+        connectionId,
+        externalOrderId: order.externalOrderId,
+      },
+    },
+    select: { status: true },
+  });
+  const shouldSendNotification = isMercadoLibreOrderNewlyPaid(
+    existingMarketplaceOrder?.status ?? null,
+    order.status,
+  );
   const marketplaceOrder = await prismadb.marketplaceOrder.upsert({
     where: {
       connectionId_externalOrderId: {
@@ -457,6 +487,7 @@ export async function synchronizeMercadoLibreOrder(
       order.externalOrderId,
       marketplaceOrder.id,
       marketplaceOrder.netAmount === null,
+      shouldSendNotification,
     );
     return { inventoryChanged: false, needsAttention: true };
   }
@@ -473,6 +504,7 @@ export async function synchronizeMercadoLibreOrder(
       order.externalOrderId,
       marketplaceOrder.id,
       marketplaceOrder.netAmount === null,
+      shouldSendNotification,
     );
     return { inventoryChanged, needsAttention: false };
   } catch (error) {
@@ -489,6 +521,7 @@ export async function synchronizeMercadoLibreOrder(
         order.externalOrderId,
         marketplaceOrder.id,
         marketplaceOrder.netAmount === null,
+        shouldSendNotification,
       );
       return { inventoryChanged: false, needsAttention: true };
     }

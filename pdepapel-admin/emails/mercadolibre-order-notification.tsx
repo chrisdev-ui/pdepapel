@@ -18,6 +18,7 @@ type MercadoLibreOrderNotificationProps = {
   orderSummary: string;
   orderUrl: string;
   netAmount: string;
+  paidAt: string | null;
 };
 
 const inventoryLabels: Record<string, string> = {
@@ -34,6 +35,7 @@ export function MercadoLibreOrderNotification({
   orderSummary,
   orderUrl,
   netAmount,
+  paidAt,
 }: MercadoLibreOrderNotificationProps) {
   const inventoryLabel =
     inventoryLabels[inventoryStatus] ?? "Venta registrada en el panel";
@@ -41,7 +43,9 @@ export function MercadoLibreOrderNotification({
   return (
     <Html>
       <Head />
-      <Preview>Nueva venta pagada de Mercado Libre #{orderNumber}</Preview>
+      <Preview>
+        Venta pagada y registrada de Mercado Libre #{orderNumber}
+      </Preview>
       <Body style={main}>
         <Container style={container}>
           <Section style={header}>
@@ -53,7 +57,7 @@ export function MercadoLibreOrderNotification({
               style={mercadoLibreLogo}
             />
             <Text style={eyebrow}>Notificación administrativa</Text>
-            <Heading style={heading}>Nueva venta pagada</Heading>
+            <Heading style={heading}>Venta pagada y registrada</Heading>
           </Section>
 
           <Section style={content}>
@@ -64,6 +68,15 @@ export function MercadoLibreOrderNotification({
 
             <Text style={paragraph}>
               <strong>Comprador:</strong> {buyerName ?? "No disponible"}
+            </Text>
+            {paidAt ? (
+              <Text style={paragraph}>
+                <strong>Pago confirmado:</strong> {paidAt}
+              </Text>
+            ) : null}
+            <Text style={paragraph}>
+              <strong>Origen del aviso:</strong> Mercado Libre confirmó el pago
+              de esta venta. Los cambios de envío no generan este correo.
             </Text>
             <Text style={paragraph}>
               <strong>Vínculo en P de Papel:</strong> {inventoryLabel}
