@@ -100,6 +100,10 @@ const ProductCard: React.FC<ProductCardProps> = ({
     }
 
     // 2. Offer
+    if (product.isGroup && product.hasDiscount) {
+      return <OfferBadge text="Opciones en oferta" />;
+    }
+
     if (product.offerLabel) {
       return <OfferBadge text={product.offerLabel} />;
     }

@@ -8,6 +8,7 @@ import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import { verifyStoreOwner } from "@/lib/utils";
 import { hasDuplicateVariantCombination } from "@/lib/variant-combinations";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { invalidateStoreProductsCache } from "@/lib/cache";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -265,6 +266,8 @@ export async function POST(
 
       return group;
     });
+
+    await invalidateStoreProductsCache(params.storeId);
 
     return NextResponse.json(productGroup, { headers: corsHeaders });
   } catch (error) {

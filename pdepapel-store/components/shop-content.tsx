@@ -268,29 +268,29 @@ export const ShopContent: React.FC<ShopContentProps> = ({
             <div className="flex flex-wrap items-center gap-3">
               <OnSaleFilter />
               {hasActiveFilters && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={clearFilters}
-              >
-                Limpiar filtros
-                <X className="ml-1 h-4 w-4" />
-              </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearFilters}
+                >
+                  Limpiar filtros
+                  <X className="ml-1 h-4 w-4" />
+                </Button>
               )}
             </div>
             <div className="flex w-full items-center gap-2 md:w-auto md:gap-4">
-            <ShopSearchBar
-              className="hidden md:flex"
-              placeholder={searchPlaceholder}
-            />
-            <SortSelector options={SORT_OPTIONS} />
+              <ShopSearchBar
+                className="hidden md:flex"
+                placeholder={searchPlaceholder}
+              />
+              <SortSelector options={SORT_OPTIONS} />
             </div>
           </section>
         </div>
         <MobileFilters
           types={types}
-          categories={categories}
+          categories={categoriesWithCounts}
           sizes={sizesWithCounts}
           colors={colorsWithCounts}
           designs={designsWithCounts}
@@ -304,7 +304,7 @@ export const ShopContent: React.FC<ShopContentProps> = ({
           ) : isCatalogUnavailable ? (
             <div
               role="alert"
-              className="flex min-h-96 flex-col items-center justify-center gap-4 text-center text-muted-foreground"
+              className="min-h-96 flex flex-col items-center justify-center gap-4 text-center text-muted-foreground"
             >
               <p>No pudimos cargar los productos en este momento.</p>
               <Button type="button" variant="outline" onClick={() => refetch()}>

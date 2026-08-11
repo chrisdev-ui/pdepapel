@@ -363,7 +363,7 @@ export async function GET(
       groupBy,
       productGroupId,
       isOnSale, // Include in cache key
-      v: "5",
+      v: "6",
     })}`;
 
     // Try to get from Redis cache
@@ -637,7 +637,7 @@ export async function GET(
           include: {
             images: true,
             products: {
-              where: shouldScopeGroupVariants ? productFilters : undefined,
+              where: productFilters,
               select: {
                 price: true,
                 stock: true,
@@ -648,6 +648,10 @@ export async function GET(
                 colorId: true,
                 sizeId: true,
                 designId: true,
+                images: true,
+                color: true,
+                size: true,
+                design: true,
                 isFeatured: true,
                 reviews: {
                   select: {
@@ -734,6 +738,7 @@ export async function GET(
         id: string;
         categoryId: string;
         price: number;
+        stock: number;
         productGroupId: string | null;
       }> = [];
 
@@ -743,6 +748,7 @@ export async function GET(
             id: p.id,
             categoryId: p.categoryId,
             price: Number(p.price),
+            stock: p.stock,
             productGroupId: g.id,
           })),
         );
@@ -753,9 +759,14 @@ export async function GET(
           id: p.id,
           categoryId: p.categoryId,
           price: Number(p.price),
+          stock: p.stock,
           productGroupId: null,
         });
       });
+
+      const variantsByGroupId = new Map(
+        allGroups.map((group: any) => [group.id, group.products]),
+      );
 
       // Batch calculate prices
       const allPricesMap = await getProductsPrices(
@@ -765,39 +776,83 @@ export async function GET(
 
       const pricedItems = merged.map((item) => {
         if (item.isGroup) {
-          // Find variants for this group
-          const groupVariants = allVariantProducts.filter(
-            (p) => p.productGroupId === item.productGroupId,
-          );
+          const productVariants =
+            variantsByGroupId.get(item.productGroupId ?? "") ?? [];
+          const groupVariants = productVariants.map((variant: any) => ({
+            id: variant.id,
+            categoryId: variant.categoryId,
+            price: Number(variant.price),
+            stock: variant.stock,
+            productGroupId: item.productGroupId,
+            product: variant,
+          }));
 
           if (groupVariants.length > 0) {
-            const variantPrices = groupVariants.map((v) => {
-              const pricing = allPricesMap.get(v.id);
-              return pricing?.price ?? v.price;
+            const pricedVariants = groupVariants.map((variant) => {
+              const pricing = allPricesMap.get(variant.id);
+              return {
+                product: variant.product,
+                basePrice: variant.price,
+                effectivePrice: pricing?.price ?? variant.price,
+                hasDiscount: Boolean(pricing && pricing.discount > 0),
+                offerLabel: pricing?.offerLabel ?? null,
+              };
             });
 
-            const hasDiscount = groupVariants.some((v) => {
-              const pricing = allPricesMap.get(v.id);
-              return pricing && pricing.discount > 0;
-            });
+            const discountedVariants = pricedVariants.filter(
+              (variant) => variant.hasDiscount,
+            );
+            const representativeVariant = [...pricedVariants].sort(
+              (first, second) => {
+                const priceDifference =
+                  first.effectivePrice - second.effectivePrice;
+                if (priceDifference !== 0) return priceDifference;
 
-            const offerLabel =
-              groupVariants
-                .map((v) => allPricesMap.get(v.id)?.offerLabel)
-                .find((l) => l) || null;
-
-            const minP = Math.min(...variantPrices);
-            const maxP = Math.max(...variantPrices);
-            const variantBasePrices = groupVariants.map((v) => v.price);
-            const minBaseP = Math.min(...variantBasePrices);
+                return (
+                  first.product?.slug ??
+                  first.product?.id ??
+                  ""
+                ).localeCompare(
+                  second.product?.slug ?? second.product?.id ?? "",
+                );
+              },
+            )[0];
+            const minP = Math.min(
+              ...pricedVariants.map((variant) => variant.effectivePrice),
+            );
+            const maxP = Math.max(
+              ...pricedVariants.map((variant) => variant.effectivePrice),
+            );
+            const minBaseP = Math.min(
+              ...pricedVariants.map((variant) => variant.basePrice),
+            );
+            const hasDiscount = discountedVariants.length > 0;
 
             return {
               ...item,
+              id: representativeVariant.product?.id ?? item.id,
+              slug: representativeVariant.product?.slug ?? item.slug,
+              images:
+                item.images?.length > 0
+                  ? item.images
+                  : (representativeVariant.product?.images ?? []),
+              category:
+                representativeVariant.product?.category ?? item.category,
+              categoryId:
+                representativeVariant.product?.categoryId ?? item.categoryId,
+              color: representativeVariant.product?.color ?? item.color,
+              size: representativeVariant.product?.size ?? item.size,
+              design: representativeVariant.product?.design ?? item.design,
+              stock: groupVariants.reduce(
+                (total, variant) => total + variant.stock,
+                0,
+              ),
+              variantCount: groupVariants.length,
               price: minP,
               originalPrice: minBaseP,
               minPrice: minP,
               maxPrice: maxP,
-              offerLabel: hasDiscount ? offerLabel : null,
+              offerLabel: representativeVariant.offerLabel,
               hasDiscount,
             };
           }

@@ -21,7 +21,9 @@ vi.mock("@/constants", () => ({
 }));
 vi.mock("@/lib/api-errors", () => ({
   ErrorFactory: { MissingStoreId: vi.fn() },
-  handleErrorResponse: vi.fn(),
+  handleErrorResponse: (error: unknown) => {
+    throw error;
+  },
 }));
 vi.mock("@/lib/cloudinary", () => ({ default: {} }));
 vi.mock("@/lib/prismadb", () => ({
@@ -259,6 +261,70 @@ describe("GET /api/[storeId]/products", () => {
     });
   });
 
+  it("keeps grouped card data aligned with the matching lowest-price variant", async () => {
+    const lowestPriceVariant = {
+      ...standaloneProduct,
+      id: "lowest-price-variant",
+      slug: "lapicero-azul",
+      price: 10000,
+      stock: 2,
+      categoryId: "blue-category",
+      category: { id: "blue-category", name: "Azul" },
+      images: [{ id: "blue-image", url: "blue.jpg", isMain: true }],
+      isFeatured: false,
+      reviews: [],
+    };
+    mocks.findProductGroups.mockResolvedValue([
+      {
+        id: "group-id",
+        name: "Lapiceros de colores",
+        description: null,
+        images: [],
+        createdAt: lowestPriceVariant.createdAt,
+        products: [lowestPriceVariant],
+      },
+    ]);
+    mocks.findProducts.mockResolvedValue([]);
+    mocks.getProductsPrices.mockResolvedValue(
+      new Map([
+        [
+          lowestPriceVariant.id,
+          { price: 10000, discount: 0, offerLabel: null },
+        ],
+      ]),
+    );
+
+    const response = await GET(
+      new Request(
+        "https://admin.example.com/api/store-id/products?groupBy=parents&colorId=blue&skipCache=true",
+      ),
+      { params: { storeId: "store-id" } },
+    );
+
+    await expect(response.json()).resolves.toMatchObject({
+      products: [
+        {
+          id: lowestPriceVariant.id,
+          slug: lowestPriceVariant.slug,
+          categoryId: lowestPriceVariant.categoryId,
+          images: lowestPriceVariant.images,
+          stock: 2,
+          minPrice: 10000,
+          hasDiscount: false,
+        },
+      ],
+    });
+    expect(mocks.findProductGroups).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: expect.objectContaining({
+          products: expect.objectContaining({
+            where: expect.objectContaining({ colorId: { in: ["blue"] } }),
+          }),
+        }),
+      }),
+    );
+  });
+
   it("sorts grouped catalog results by effective price", async () => {
     const groupVariant = {
       ...standaloneProduct,
@@ -368,14 +434,8 @@ describe("GET /api/[storeId]/products", () => {
     mocks.findProducts.mockResolvedValue([featuredProduct, saleProduct]);
     mocks.getProductsPrices.mockResolvedValue(
       new Map([
-        [
-          groupVariant.id,
-          { price: 30000, discount: 0, offerLabel: null },
-        ],
-        [
-          featuredProduct.id,
-          { price: 15000, discount: 0, offerLabel: null },
-        ],
+        [groupVariant.id, { price: 30000, discount: 0, offerLabel: null }],
+        [featuredProduct.id, { price: 15000, discount: 0, offerLabel: null }],
         [
           saleProduct.id,
           { price: 10000, discount: 10000, offerLabel: "Oferta especial" },

@@ -106,15 +106,6 @@ export const Footer: React.FC<FooterProps> = ({ season = Season.Default }) => {
               <Link
                 rel="noopener noreferrer"
                 href="https://instagram.com/papeleria.pdepapel?igshid=OGQ5ZDc2ODk2ZA=="
-                title="Facebook"
-                className="flex items-center p-1 text-blue-yankees hover:text-pink-shell focus-visible:text-pink-shell"
-                target="_blank"
-              >
-                <Icons.facebook className="h-5 w-5" />
-              </Link>
-              <Link
-                rel="noopener noreferrer"
-                href="https://instagram.com/papeleria.pdepapel?igshid=OGQ5ZDc2ODk2ZA=="
                 title="Instagram"
                 className="flex items-center p-1 text-blue-yankees hover:text-pink-shell focus-visible:text-pink-shell"
                 target="_blank"

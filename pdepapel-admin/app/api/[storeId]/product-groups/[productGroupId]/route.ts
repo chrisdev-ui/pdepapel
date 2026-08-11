@@ -14,6 +14,7 @@ import {
 } from "@/lib/utils";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import cloudinaryInstance from "@/lib/cloudinary";
+import { invalidateStoreProductsCache } from "@/lib/cache";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -322,18 +323,7 @@ export async function PATCH(
       return group;
     });
 
-    // Invalidate Cache
-    try {
-      const { Redis } = await import("@upstash/redis");
-      const redis = Redis.fromEnv();
-      const pattern = `store:${params.storeId}:products:*`;
-      const keys = await redis.keys(pattern);
-      if (keys.length > 0) {
-        await redis.del(...keys);
-      }
-    } catch (error) {
-      console.error("Redis cache invalidation error:", error);
-    }
+    await invalidateStoreProductsCache(params.storeId);
 
     return NextResponse.json(updatedGroup, { headers: corsHeaders });
   } catch (error) {
@@ -405,18 +395,7 @@ export async function DELETE(
       });
     });
 
-    // Invalidate Cache
-    try {
-      const { Redis } = await import("@upstash/redis");
-      const redis = Redis.fromEnv();
-      const pattern = `store:${params.storeId}:products:*`;
-      const keys = await redis.keys(pattern);
-      if (keys.length > 0) {
-        await redis.del(...keys);
-      }
-    } catch (error) {
-      console.error("Redis cache invalidation error:", error);
-    }
+    await invalidateStoreProductsCache(params.storeId);
 
     return NextResponse.json(deletedGroup, { headers: corsHeaders });
   } catch (error) {
