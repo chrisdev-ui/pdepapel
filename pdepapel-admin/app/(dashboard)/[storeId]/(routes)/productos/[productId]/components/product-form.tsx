@@ -993,6 +993,9 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 defaultCost={form.watch("acqPrice") || 0}
                 defaultSupplierId={initialData.supplierId || ""}
                 suppliers={suppliers}
+                onSuccess={({ newStock }) => {
+                  form.setValue("stock", newStock);
+                }}
               />
             )}
             <FormField

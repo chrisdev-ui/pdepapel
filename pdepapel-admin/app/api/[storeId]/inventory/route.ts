@@ -5,6 +5,7 @@ import prismadb from "@/lib/prismadb";
 import { verifyStoreOwner } from "@/lib/utils";
 import { createInventoryMovement } from "@/lib/inventory";
 import { invalidateStoreProductsCache } from "@/lib/cache";
+import { resolveInventoryMovementQuantity } from "@/lib/inventory-request";
 import { InventoryMovementType } from "@prisma/client";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 
@@ -26,8 +27,16 @@ export async function POST(
     const { userId } = auth();
     const body = await req.json();
 
-    const { productId, variantId, type, quantity, reason, description, cost } =
-      body;
+    const {
+      productId,
+      variantId,
+      type,
+      action,
+      quantity,
+      reason,
+      description,
+      cost,
+    } = body;
 
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
@@ -36,7 +45,8 @@ export async function POST(
     // Validate request
     if (!productId && !variantId)
       throw ErrorFactory.InvalidRequest("Product or Variant ID required");
-    if (quantity === undefined || quantity === null || quantity === 0)
+    const parsedQuantity = Number(quantity);
+    if (!Number.isFinite(parsedQuantity) || parsedQuantity === 0)
       throw ErrorFactory.InvalidRequest("Create quantity required (non-zero)");
 
     // Define allowed types for this endpoint
@@ -57,26 +67,18 @@ export async function POST(
       );
     }
 
+    if (action !== undefined && action !== "add" && action !== "subtract") {
+      throw ErrorFactory.InvalidRequest("Invalid inventory action");
+    }
+
     // Strict reason requirement
     if (!reason) throw ErrorFactory.InvalidRequest("Reason is required");
 
-    // Logic to ensure correct sign based on type
-    let finalQuantity = quantity;
-
-    // These types are strictly decrements (subtract stock)
-    const decrementTypes = ["DAMAGE", "LOST", "STORE_USE", "PROMOTION"];
-    if (decrementTypes.includes(type)) {
-      finalQuantity = -Math.abs(quantity); // Always negative
-    }
-
-    // These types are strictly increments (add stock)
-    const incrementTypes = ["RETURN", "PURCHASE", "INITIAL_INTAKE"];
-    if (incrementTypes.includes(type)) {
-      finalQuantity = Math.abs(quantity); // Always positive
-    }
-
-    // MANUAL_ADJUSTMENT trusts the sign sent by user (can be + or -)
-    // This allows full flexibility for manual corrections.
+    const finalQuantity = resolveInventoryMovementQuantity({
+      action,
+      quantity: parsedQuantity,
+      type,
+    });
 
     // Use helper to create movement
     const movement = await createInventoryMovement(prismadb, {

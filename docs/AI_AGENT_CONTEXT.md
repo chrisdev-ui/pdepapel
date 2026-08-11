@@ -362,6 +362,7 @@ See `docs/revalidacion-catalogo.md` and `docs/seguimiento-seo.md`.
 ### Inventory policy
 
 - Apply inventory changes through centralized inventory helpers and write an `InventoryMovement` for every meaningful adjustment.
+- Product and product-group forms may set initial stock only for a new variant. A save for an existing product or variant must never derive an inventory movement from submitted form stock; use the dedicated inventory movement flow instead.
 - Keep products available/blocked based on actual current stock, but show paid-order details from order snapshots rather than declaring a past purchase unavailable because current stock is zero.
 - Handle concurrent availability checks atomically/defensively; never let delayed payment confirmation or a marketplace retry subtract stock twice.
 - Kits/combos use component stock; do not treat a kit as unrelated independent stock without understanding existing kit logic.

@@ -50,6 +50,7 @@ interface IntakeModalProps {
   defaultCost?: number;
   defaultSupplierId?: string;
   suppliers?: Supplier[];
+  onSuccess?: (movement: { newStock: number }) => void;
 }
 
 export const IntakeModal: React.FC<IntakeModalProps> = ({
@@ -61,6 +62,7 @@ export const IntakeModal: React.FC<IntakeModalProps> = ({
   defaultCost = 0,
   defaultSupplierId = "",
   suppliers = [],
+  onSuccess,
 }) => {
   const params = useParams();
   const router = useRouter();
@@ -102,19 +104,19 @@ export const IntakeModal: React.FC<IntakeModalProps> = ({
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       setLoading(true);
-      // Determine sign based on action
-      const signedQuantity =
-        values.action === "subtract" ? -values.quantity : values.quantity;
-
       const payload = {
         productId,
         variantId,
         ...values,
         type: values.type === "ADJUSTMENT" ? "MANUAL_ADJUSTMENT" : values.type,
-        quantity: signedQuantity,
+        quantity: values.quantity,
       };
 
-      await axios.post(`/api/${params.storeId}/inventory`, payload);
+      const response = await axios.post(
+        `/api/${params.storeId}/inventory`,
+        payload,
+      );
+      onSuccess?.(response.data);
       toast({
         title: "Stock actualizado correctamente",
       });

@@ -6,6 +6,7 @@ import { generateProductSlug, slugify } from "@/lib/slugify";
 import { synchronizeProductGroupSlugs } from "@/lib/product-slugs";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import { hasDuplicateVariantCombination } from "@/lib/variant-combinations";
+import { resolveProductGroupVariantStock } from "@/lib/product-group-variant-stock";
 import {
   CACHE_HEADERS,
   getPublicIdFromCloudinaryUrl,
@@ -106,7 +107,6 @@ export async function PATCH(
 
     const updatedGroup = await prismadb.$transaction(async (tx) => {
       const initialMovements: any[] = [];
-      const stockAdjustments: any[] = [];
       // 1. Update Group Details
       const group = await tx.productGroup.update({
         where: { id: params.productGroupId },
@@ -135,11 +135,6 @@ export async function PATCH(
         where: { productGroupId: params.productGroupId },
         include: { orderItems: true },
       });
-
-      // Create a map of current stock values to detect changes
-      const existingStockMap = new Map(
-        existingProducts.map((p) => [p.id, p.stock]),
-      );
 
       // 3. Identify Variants to Update, Create, and Delete
       const payloadIds = new Set(
@@ -226,6 +221,13 @@ export async function PATCH(
               ? parseInt(variant.stock)
               : parseInt(defaultStock || "0");
           const finalSupplierId = variant.supplierId || defaultSupplier || null;
+          const isExistingVariant = Boolean(
+            variant.id && payloadIds.has(variant.id),
+          );
+          const stockResolution = resolveProductGroupVariantStock({
+            isExistingVariant,
+            submittedStock: finalStock,
+          });
 
           const dataToUpsert = {
             storeId: params.storeId,
@@ -242,7 +244,7 @@ export async function PATCH(
             ),
             price: finalPrice,
             acqPrice: finalAcqPrice,
-            stock: variant.id && payloadIds.has(variant.id) ? undefined : 0,
+            stock: stockResolution.productStock,
             supplierId: finalSupplierId,
             isFeatured: variant.isFeatured ?? isFeatured ?? false,
             isArchived: variant.isArchived || false,
@@ -255,7 +257,7 @@ export async function PATCH(
             }),
           );
 
-          if (variant.id && payloadIds.has(variant.id)) {
+          if (isExistingVariant) {
             // UPDATE Existing
             await tx.product.update({
               where: { id: variant.id },
@@ -272,24 +274,6 @@ export async function PATCH(
                 productId: variant.id,
               })),
             });
-
-            // Detect stock change and create adjustment movement
-            const currentStock = existingStockMap.get(variant.id) || 0;
-            const newStock = finalStock;
-
-            if (newStock !== currentStock) {
-              const difference = newStock - currentStock;
-              stockAdjustments.push({
-                storeId: params.storeId,
-                productId: variant.id,
-                type: "MANUAL_ADJUSTMENT",
-                quantity: difference,
-                cost: finalAcqPrice,
-                price: finalPrice,
-                createdBy: userId,
-                reason: `Ajuste de stock vía formulario de Grupo de Productos (${difference > 0 ? "+" : ""}${difference})`,
-              });
-            }
           } else {
             // CREATE New
             const newProduct = await tx.product.create({
@@ -303,12 +287,15 @@ export async function PATCH(
               },
             });
 
-            if (finalStock > 0 && !dataToUpsert.stock) {
+            if (
+              stockResolution.initialMovementQuantity &&
+              !dataToUpsert.stock
+            ) {
               initialMovements.push({
                 storeId: params.storeId,
                 productId: newProduct.id,
                 type: "INITIAL_INTAKE",
-                quantity: finalStock,
+                quantity: stockResolution.initialMovementQuantity,
                 cost: finalAcqPrice,
                 price: finalPrice,
                 createdBy: userId,
@@ -330,14 +317,6 @@ export async function PATCH(
         const { createInventoryMovementBatch } =
           await import("@/lib/inventory");
         await createInventoryMovementBatch(tx, initialMovements);
-      }
-
-      // Execute Stock Adjustments for existing variants
-      if (stockAdjustments.length > 0) {
-        const { createInventoryMovementBatch } =
-          await import("@/lib/inventory");
-        // Skip validation since adjustments can be positive or negative
-        await createInventoryMovementBatch(tx, stockAdjustments, false);
       }
 
       return group;
