@@ -1,6 +1,6 @@
 "use client";
 import { parseAsInteger, useQueryState } from "nuqs";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import {
   Pagination,
@@ -11,7 +11,8 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-import { DOTS, MAX_PAGES } from "@/constants";
+import { DOTS } from "@/constants";
+import { getPaginationPages } from "@/lib/pagination";
 
 interface PaginatorProps {
   totalPages: number;
@@ -21,32 +22,16 @@ const Paginator: React.FC<PaginatorProps> = ({ totalPages }) => {
   const [page, setPage] = useQueryState("page", parseAsInteger.withDefault(1));
 
   const currentPage = page ?? 1;
-
-  const getPagesToShow = () => {
-    if (totalPages <= MAX_PAGES) {
-      return Array.from({ length: totalPages }, (_, i) => i + 1);
-    } else if (currentPage <= 2) {
-      return [1, 2, DOTS, totalPages - 1, totalPages];
-    } else if (currentPage >= totalPages) {
-      return [1, 2, DOTS, totalPages - 1, totalPages];
-    } else {
-      const pages = [
-        currentPage - 1,
-        currentPage,
-        DOTS,
-        totalPages - 1,
-        totalPages,
-      ];
-      return pages.filter((page, index, self) => self.indexOf(page) === index);
-    }
-  };
+  const previousPageRef = useRef(currentPage);
 
   useEffect(() => {
-    // Scroll to top when page changes
+    if (previousPageRef.current === currentPage) return;
+
     window.scrollTo({ top: 0, behavior: "smooth" });
+    previousPageRef.current = currentPage;
   }, [currentPage]);
 
-  const pagesToShow = getPagesToShow();
+  const pagesToShow = getPaginationPages(currentPage, totalPages);
 
   const goToPreviousPage = () => {
     if (currentPage > 1) {
@@ -66,15 +51,16 @@ const Paginator: React.FC<PaginatorProps> = ({ totalPages }) => {
 
   return (
     <Pagination>
-      <PaginationContent>
+      <PaginationContent className="max-w-full gap-0.5 sm:gap-1">
         <PaginationPrevious
           onClick={goToPreviousPage}
           disabled={currentPage === 1}
+          className="h-9 w-9 p-0 sm:h-10 sm:w-auto sm:px-2.5 [&>span]:hidden sm:[&>span]:inline"
         />
-        {pagesToShow.map((page) => {
+        {pagesToShow.map((page, index) => {
           if (page === DOTS) {
             return (
-              <PaginationItem key={page}>
+              <PaginationItem key={`${page}-${index}`}>
                 <PaginationEllipsis />
               </PaginationItem>
             );
@@ -92,6 +78,7 @@ const Paginator: React.FC<PaginatorProps> = ({ totalPages }) => {
         <PaginationNext
           onClick={goToNextPage}
           disabled={currentPage === totalPages}
+          className="h-9 w-9 p-0 sm:h-10 sm:w-auto sm:px-2.5 [&>span]:hidden sm:[&>span]:inline"
         />
       </PaginationContent>
     </Pagination>

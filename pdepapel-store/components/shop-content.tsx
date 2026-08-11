@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { getProducts } from "@/actions/get-products";
 import Filter from "@/components/filter";
+import { OnSaleFilter } from "@/components/on-sale-filter";
 import PriceFilter from "@/components/price-filter";
 import { Button } from "@/components/ui/button";
 import { LIMIT_SHOP_ITEMS, SORT_OPTIONS } from "@/constants";
@@ -78,7 +79,7 @@ export const ShopContent: React.FC<ShopContentProps> = ({
     setIsMounted(true);
   }, []);
 
-  const { data, isLoading, isPlaceholderData, isFetching } = useQuery({
+  const { data, isLoading, isPlaceholderData, isFetching, refetch } = useQuery({
     queryKey: ["products", fixedCategoryId, effectiveFilters],
     queryFn: () =>
       getProducts({
@@ -157,7 +158,7 @@ export const ShopContent: React.FC<ShopContentProps> = ({
   const designsWithCounts = onlyAvailableInCategory(
     mergeCounts(designs, data?.facets?.designs),
   );
-  const hasActiveCategoryFilters = Boolean(
+  const hasActiveFilters = Boolean(
     filters.typeId.length ||
     filters.categoryId.length ||
     filters.colorId.length ||
@@ -170,6 +171,7 @@ export const ShopContent: React.FC<ShopContentProps> = ({
     filters.isOnSale,
   );
   const totalItems = data?.totalItems ?? initialTotalItems;
+  const isCatalogUnavailable = Boolean(data?.isUnavailable);
 
   useEffect(() => {
     if (!isMounted || isFetching || !data || data.products.length > 0) return;
@@ -188,7 +190,7 @@ export const ShopContent: React.FC<ShopContentProps> = ({
     });
   }, [data, effectiveFilters, isFetching, isMounted]);
 
-  const clearCategoryFilters = () => {
+  const clearFilters = () => {
     setFilters({
       typeId: null,
       categoryId: null,
@@ -262,23 +264,28 @@ export const ShopContent: React.FC<ShopContentProps> = ({
               </p>
             )}
           </div>
-          <section className="flex w-full items-center gap-2 md:w-auto md:gap-4">
-            {fixedCategoryId && hasActiveCategoryFilters && (
+          <section className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-center md:gap-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <OnSaleFilter />
+              {hasActiveFilters && (
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={clearCategoryFilters}
+                onClick={clearFilters}
               >
                 Limpiar filtros
                 <X className="ml-1 h-4 w-4" />
               </Button>
-            )}
+              )}
+            </div>
+            <div className="flex w-full items-center gap-2 md:w-auto md:gap-4">
             <ShopSearchBar
               className="hidden md:flex"
               placeholder={searchPlaceholder}
             />
             <SortSelector options={SORT_OPTIONS} />
+            </div>
           </section>
         </div>
         <MobileFilters
@@ -294,6 +301,16 @@ export const ShopContent: React.FC<ShopContentProps> = ({
         <div className="relative min-h-[400px]">
           {isLoading ? (
             <ProductListSkeleton />
+          ) : isCatalogUnavailable ? (
+            <div
+              role="alert"
+              className="flex min-h-96 flex-col items-center justify-center gap-4 text-center text-muted-foreground"
+            >
+              <p>No pudimos cargar los productos en este momento.</p>
+              <Button type="button" variant="outline" onClick={() => refetch()}>
+                Intentar de nuevo
+              </Button>
+            </div>
           ) : (
             <div
               className={`transition-opacity duration-300 ease-in-out ${

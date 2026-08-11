@@ -66,6 +66,7 @@ interface UnifiedProduct {
   reviews?: { rating: number }[];
   supplier?: Supplier | null;
   stock: number;
+  isFeatured?: boolean;
 }
 
 const corsHeaders = {
@@ -320,7 +321,12 @@ export async function GET(
     const onlyNew = searchParams.get("onlyNew") || undefined;
     const fromShop = searchParams.get("fromShop") || undefined;
     const search = searchParams.get("search") || "";
-    const sortOption = searchParams.get("sortOption") || "default";
+    const requestedSortOption = searchParams.get("sortOption") || "default";
+    const sortOption =
+      requestedSortOption === "isOnSale" ||
+      Object.prototype.hasOwnProperty.call(SORT_OPTIONS, requestedSortOption)
+        ? requestedSortOption
+        : "default";
     const excludeProducts = searchParams.get("excludeProducts") || undefined;
     const groupBy = searchParams.get("groupBy"); // "parents"
     const skipCache = searchParams.get("skipCache") === "true";
@@ -357,7 +363,7 @@ export async function GET(
       groupBy,
       productGroupId,
       isOnSale, // Include in cache key
-      v: "4",
+      v: "5",
     })}`;
 
     // Try to get from Redis cache
@@ -599,18 +605,6 @@ export async function GET(
       const baseGroupWhere: Prisma.ProductGroupWhereInput = {
         storeId: params.storeId,
         products: { some: productFilters },
-        ...(isOnSale && onSaleFilter?.OR?.[2]
-          ? {
-              OR: [
-                { products: { some: productFilters } },
-                {
-                  id: (
-                    onSaleFilter.OR[2] as { productGroupId: { in: string[] } }
-                  ).productGroupId,
-                },
-              ],
-            }
-          : {}),
         ...(search
           ? {
               OR: [
@@ -654,6 +648,7 @@ export async function GET(
                 colorId: true,
                 sizeId: true,
                 designId: true,
+                isFeatured: true,
                 reviews: {
                   select: {
                     rating: true,
@@ -701,6 +696,7 @@ export async function GET(
           sku: "GROUP",
           createdAt: g.createdAt,
           stock: g.products.reduce((acc: number, p: any) => acc + p.stock, 0),
+          isFeatured: g.products.some((p: any) => p.isFeatured),
         };
       });
 
@@ -724,20 +720,11 @@ export async function GET(
           sku: p.sku,
           createdAt: p.createdAt,
           stock: p.stock,
+          isFeatured: p.isFeatured,
         }),
       );
 
-      // Merge and sort by createdAt descending (newest first)
-      const merged = [...transformedGroups, ...transformedProducts].sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
-
-      // Apply pagination on the merged list
-      const totalItems = merged.length;
-      const totalPages = Math.ceil(totalItems / itemsPerPage);
-      const offset = (page - 1) * itemsPerPage;
-      const paginatedItems = merged.slice(offset, offset + itemsPerPage);
+      const merged = [...transformedGroups, ...transformedProducts];
 
       // ---------------------------------------------------------
       // CALCULATE DISCOUNTS (Batched)
@@ -776,8 +763,7 @@ export async function GET(
         params.storeId,
       );
 
-      // Apply discounts to paginated items
-      const finalResponse = paginatedItems.map((item) => {
+      const pricedItems = merged.map((item) => {
         if (item.isGroup) {
           // Find variants for this group
           const groupVariants = allVariantProducts.filter(
@@ -830,6 +816,42 @@ export async function GET(
           };
         }
       });
+
+      const itemsMatchingSaleFilter = isOnSale
+        ? pricedItems.filter((item) => item.hasDiscount)
+        : pricedItems;
+
+      const sortedItems = [...itemsMatchingSaleFilter].sort((first, second) => {
+        if (sortOption === "isOnSale") {
+          const discountDifference =
+            Number(Boolean(second.hasDiscount)) -
+            Number(Boolean(first.hasDiscount));
+          if (discountDifference !== 0) return discountDifference;
+        }
+
+        if (sortOption === "priceLowToHigh") return first.price - second.price;
+        if (sortOption === "priceHighToLow") return second.price - first.price;
+        if (sortOption === "name")
+          return first.name.localeCompare(second.name, "es", {
+            sensitivity: "base",
+          });
+        if (sortOption === "featuredFirst") {
+          const featuredDifference =
+            Number(Boolean(second.isFeatured)) -
+            Number(Boolean(first.isFeatured));
+          if (featuredDifference !== 0) return featuredDifference;
+        }
+
+        return (
+          new Date(second.createdAt).getTime() -
+          new Date(first.createdAt).getTime()
+        );
+      });
+
+      totalItems = sortedItems.length;
+      totalPages = Math.ceil(totalItems / itemsPerPage);
+      const offset = (page - 1) * itemsPerPage;
+      const finalResponse = sortedItems.slice(offset, offset + itemsPerPage);
 
       let groupFacets: ProductFacets | undefined;
       if (shouldScopeGroupVariants) {

@@ -37,6 +37,11 @@ const EMPTY_RESPONSE: ProductsResponse = {
   totalItems: 0,
 };
 
+const UNAVAILABLE_RESPONSE: ProductsResponse = {
+  ...EMPTY_RESPONSE,
+  isUnavailable: true,
+};
+
 export const getProducts = async (query: Query): Promise<ProductsResponse> => {
   const url = new URL(API_URL);
 
@@ -71,9 +76,9 @@ export const getProducts = async (query: Query): Promise<ProductsResponse> => {
 
   try {
     const response = await fetch(url, CATALOG_CACHE);
-    if (!response.ok) return EMPTY_RESPONSE;
+    if (!response.ok) return UNAVAILABLE_RESPONSE;
     return await response.json();
   } catch {
-    return EMPTY_RESPONSE;
+    return UNAVAILABLE_RESPONSE;
   }
 };

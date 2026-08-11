@@ -16,9 +16,10 @@ import { toast } from "@/hooks/use-toast";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { productPath } from "@/lib/routes";
 import { calculateAverageRating, cn } from "@/lib/utils";
+import { getStableProductVariants } from "@/lib/product-variants";
 import { Color, Design, Product, ProductVariant, Size } from "@/types";
 import { useRouter } from "next/navigation";
-import { RefObject, useMemo, useState } from "react";
+import { RefObject, useEffect, useMemo, useState } from "react";
 import { RichTextDisplay } from "./ui/rich-text-display";
 
 interface ProductInfoProps {
@@ -54,10 +55,14 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
 
   // --- Variant Logic ---
   const allVariants = useMemo(
-    () => [data, ...(siblings ?? [])],
+    () => getStableProductVariants(data, siblings),
     [data, siblings],
   );
   const hasVariants = allVariants.length > 1;
+
+  useEffect(() => {
+    setQuantity(undefined);
+  }, [data.id]);
 
   // 1. Unique Designs
   const uniqueDesigns = useMemo(() => {
@@ -99,6 +104,8 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
     type: "design" | "color" | "size",
     id: string,
   ) => {
+    if (isLoading) return;
+
     let targetVariant: Product | ProductVariant | undefined;
 
     if (type === "design") {
@@ -137,6 +144,11 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
     }
 
     if (targetVariant) {
+      track("select_item_variant", {
+        product_slug: targetVariant.slug || targetVariant.id,
+        variant_type: type,
+      });
+
       if (onVariantChange) {
         onVariantChange(targetVariant);
         return;
@@ -256,8 +268,11 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
 
                     return (
                       <Button
+                        type="button"
                         key={design.id}
                         variant={isActive ? "default" : "outline"}
+                        disabled={isLoading}
+                        aria-pressed={isActive}
                         onClick={() => handleVariantChange("design", design.id)}
                         className={cn(
                           "rounded-full border-2 px-4 py-2 text-sm font-medium transition-all",
@@ -290,26 +305,21 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
                     );
 
                     return (
-                      <div
+                      <button
+                        type="button"
                         key={color.id}
-                        role="button"
-                        tabIndex={0}
                         aria-label={`Seleccionar color ${color.name}${
                           isOutOfStock ? " (Agotado)" : ""
                         }`}
+                        aria-pressed={isActive}
+                        disabled={isLoading}
                         onClick={() => handleVariantChange("color", color.id)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            handleVariantChange("color", color.id);
-                          }
-                        }}
                         className={cn(
-                          "relative h-8 w-8 cursor-pointer rounded-full border-2 transition-all focus:outline-none focus:ring-2 focus:ring-blue-yankees focus:ring-offset-2",
+                          "relative h-8 w-8 cursor-pointer rounded-full border-2 transition-all focus:outline-none focus:ring-2 focus:ring-blue-yankees focus:ring-offset-2 disabled:cursor-not-allowed",
                           isActive
                             ? "border-blue-yankees ring-2 ring-blue-yankees ring-offset-2"
                             : "border-gray-200 hover:scale-110",
-                          isOutOfStock && "cursor-not-allowed opacity-50",
+                          (isOutOfStock || isLoading) && "opacity-50",
                         )}
                         style={{ backgroundColor: color.value }}
                         title={`${color.name}${
@@ -322,7 +332,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
                             <div className="h-0.5 w-full -rotate-45 bg-red-500" />
                           </div>
                         )}
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -346,8 +356,11 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
 
                     return (
                       <Button
+                        type="button"
                         key={size.id}
                         variant={isActive ? "default" : "outline"}
+                        disabled={isLoading}
+                        aria-pressed={isActive}
                         onClick={() => handleVariantChange("size", size.id)}
                         className={cn(
                           "min-w-[3rem] rounded-md border-2 px-3 py-1 text-sm font-medium transition-all",
@@ -393,11 +406,18 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
           </>
         )}
 
+        {isLoading && hasVariants && (
+          <p className="text-sm text-muted-foreground" role="status">
+            Actualizando opción seleccionada...
+          </p>
+        )}
+
         {!data.isArchived && (
           <div className="flex items-center gap-x-4">
             <h3 className="font-sans font-semibold">Cantidad:</h3>
             <div>
               <QuantitySelector
+                key={data.id}
                 max={data.stock}
                 initialValue={productInCart?.quantity || 1}
                 size="medium"
@@ -411,12 +431,12 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
       </div>
       <div className="mt-10 flex flex-wrap items-center gap-x-3 gap-y-4 sm:gap-y-0">
         <Button
-          disabled={isUnavailable || (isLoading && !!data.isGroup)}
+          disabled={isUnavailable || isLoading}
           className="flex gap-2 rounded-full border-none bg-blue-yankees px-8 py-4 font-sans text-sm font-semibold text-white outline-none [transition:0.2s]"
           onClick={handleAddToCart}
         >
-          {isLoading && data.isGroup
-            ? "Cargando opciones..."
+          {isLoading
+            ? "Actualizando opción..."
             : data.isArchived
               ? "No disponible"
               : "Agregar al carrito"}

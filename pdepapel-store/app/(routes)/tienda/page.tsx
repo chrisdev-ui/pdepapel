@@ -133,6 +133,7 @@ interface ShopPageProps {
     categoryId: string;
     designId: string;
     sortOption: string;
+    isOnSale: string;
     minPrice: string;
     maxPrice: string;
     page: number;
@@ -159,6 +160,7 @@ async function ShopContentWrapper({
     page: searchParams.page,
     itemsPerPage: LIMIT_SHOP_ITEMS,
     search: searchParams.search,
+    isOnSale: searchParams.isOnSale === "true",
     groupBy: "parents",
   });
 
@@ -207,6 +209,7 @@ async function ShopContentWrapper({
 
   return (
     <>
+      <h1 className="sr-only">Tienda en línea de Papelería P de Papel</h1>
       <Breadcrumb items={breadcrumbItems} className="mt-6" />
       <ShopContent
         initialProducts={products}

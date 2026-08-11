@@ -268,6 +268,7 @@ export interface ProductsResponse {
   products: Product[];
   totalPages: number;
   totalItems: number;
+  isUnavailable?: boolean;
   facets?: {
     colors: { id: string; count: number }[];
     formattedSizes: { id: string; count: number }[];

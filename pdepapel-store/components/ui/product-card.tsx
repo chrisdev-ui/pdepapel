@@ -240,7 +240,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
         {renderBadge()}
       </Link>
       <div className="pointer-events-none absolute inset-x-3 top-2.5 aspect-square">
-        <div className="pointer-events-auto absolute bottom-5 w-full px-6 opacity-0 transition group-focus-within:opacity-100 group-hover:opacity-100">
+        <div className="pointer-events-none absolute bottom-5 w-full px-6 opacity-0 transition group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100">
           <div className="flex justify-center gap-x-6">
             <IconButton
               onClick={onAddToWishlist}

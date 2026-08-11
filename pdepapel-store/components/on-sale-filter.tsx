@@ -1,22 +1,18 @@
 "use client";
 
-import { parseAsBoolean, useQueryState } from "nuqs";
-
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { useProductFilters } from "@/hooks/use-product-filters";
 
 export const OnSaleFilter = () => {
-  const [isOnSale, setIsOnSale] = useQueryState(
-    "isOnSale",
-    parseAsBoolean.withDefault(false).withOptions({ shallow: true }),
-  );
+  const { filters, setFilter } = useProductFilters();
 
   return (
-    <div className="flex items-center space-x-2 py-4">
+    <div className="flex items-center space-x-2">
       <Checkbox
         id="on-sale-filter"
-        checked={isOnSale}
-        onCheckedChange={(checked) => setIsOnSale(checked as boolean)}
+        checked={filters.isOnSale}
+        onCheckedChange={(checked) => setFilter("isOnSale", checked === true)}
         className="data-[state=checked]:border-pink-froly data-[state=checked]:bg-pink-froly"
       />
       <Label

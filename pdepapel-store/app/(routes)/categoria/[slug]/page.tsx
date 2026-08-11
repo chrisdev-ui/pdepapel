@@ -19,12 +19,24 @@ interface CategoryPageProps {
   params: {
     slug: string;
   };
+  searchParams: {
+    colorId?: string;
+    sizeId?: string;
+    designId?: string;
+    sortOption?: string;
+    minPrice?: string;
+    maxPrice?: string;
+    page?: string;
+    search?: string;
+    isOnSale?: string;
+  };
 }
 
 export const revalidate = 60;
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: CategoryPageProps): Promise<Metadata> {
   const category = await getCategory(params.slug);
 
@@ -43,15 +55,19 @@ export async function generateMetadata({
   const socialImages = category.imageUrl
     ? [{ url: category.imageUrl, alt: category.name }]
     : undefined;
+  const hasActiveFilters = Object.values(searchParams).some(
+    (value) => value !== undefined && value !== "",
+  );
+  const shouldIndex = Boolean(category.seoEnabled) && !hasActiveFilters;
 
   return {
     title,
     description,
     robots: {
-      index: Boolean(category.seoEnabled),
+      index: shouldIndex,
       follow: true,
       googleBot: {
-        index: Boolean(category.seoEnabled),
+        index: shouldIndex,
         follow: true,
         "max-image-preview": "large",
         "max-snippet": -1,
@@ -79,7 +95,10 @@ export async function generateMetadata({
   };
 }
 
-export default async function CategoryPage({ params }: CategoryPageProps) {
+export default async function CategoryPage({
+  params,
+  searchParams,
+}: CategoryPageProps) {
   const [category, categories] = await Promise.all([
     getCategory(params.slug),
     getCategories(),
@@ -95,8 +114,21 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
     await Promise.all([
       getProducts({
         categoryId: category.id,
+        colorId: searchParams.colorId,
+        sizeId: searchParams.sizeId,
+        designId: searchParams.designId,
+        sortOption: searchParams.sortOption,
+        minPrice: searchParams.minPrice
+          ? parseInt(searchParams.minPrice, 10)
+          : null,
+        maxPrice: searchParams.maxPrice
+          ? parseInt(searchParams.maxPrice, 10)
+          : null,
         fromShop: true,
+        page: searchParams.page ? parseInt(searchParams.page, 10) : undefined,
         itemsPerPage: LIMIT_SHOP_ITEMS,
+        search: searchParams.search,
+        isOnSale: searchParams.isOnSale === "true",
         groupBy: "parents",
       }),
       getSizes(),
