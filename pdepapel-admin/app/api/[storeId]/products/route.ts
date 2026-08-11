@@ -69,6 +69,27 @@ interface UnifiedProduct {
   isFeatured?: boolean;
 }
 
+interface GroupVariantProduct {
+  id: string;
+  slug: string;
+  price: number | Prisma.Decimal;
+  stock: number;
+  categoryId: string;
+  images: Image[];
+  category: Category;
+  color: Color;
+  size: Size;
+  design: Design;
+}
+
+interface GroupVariant {
+  id: string;
+  categoryId: string;
+  price: number;
+  stock: number;
+  product: GroupVariantProduct;
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
@@ -764,7 +785,7 @@ export async function GET(
         });
       });
 
-      const variantsByGroupId = new Map(
+      const variantsByGroupId = new Map<string, GroupVariantProduct[]>(
         allGroups.map((group: any) => [group.id, group.products]),
       );
 
@@ -778,14 +799,15 @@ export async function GET(
         if (item.isGroup) {
           const productVariants =
             variantsByGroupId.get(item.productGroupId ?? "") ?? [];
-          const groupVariants = productVariants.map((variant: any) => ({
-            id: variant.id,
-            categoryId: variant.categoryId,
-            price: Number(variant.price),
-            stock: variant.stock,
-            productGroupId: item.productGroupId,
-            product: variant,
-          }));
+          const groupVariants: GroupVariant[] = productVariants.map(
+            (variant) => ({
+              id: variant.id,
+              categoryId: variant.categoryId,
+              price: Number(variant.price),
+              stock: variant.stock,
+              product: variant,
+            }),
+          );
 
           if (groupVariants.length > 0) {
             const pricedVariants = groupVariants.map((variant) => {
@@ -833,7 +855,7 @@ export async function GET(
               id: representativeVariant.product?.id ?? item.id,
               slug: representativeVariant.product?.slug ?? item.slug,
               images:
-                item.images?.length > 0
+                item.images && item.images.length > 0
                   ? item.images
                   : (representativeVariant.product?.images ?? []),
               category:
