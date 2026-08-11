@@ -44,6 +44,12 @@ export async function GET(
       (rule) => rule.isVideoRecommendation,
     );
     const metadata = getMercadoLibreListingMetadata(listing.metadata);
+    const storedSnoozedUntil =
+      metadata.quality?.videoRecommendationSnoozedUntil ?? null;
+    const snoozedUntil =
+      storedSnoozedUntil && new Date(storedSnoozedUntil).getTime() > Date.now()
+        ? storedSnoozedUntil
+        : null;
 
     return NextResponse.json(
       {
@@ -52,8 +58,7 @@ export async function GET(
           ? {
               ...videoRule,
               preparedVideoCount: listing.product.videos.length,
-              snoozedUntil:
-                metadata.quality?.videoRecommendationSnoozedUntil ?? null,
+              snoozedUntil,
             }
           : null,
       },

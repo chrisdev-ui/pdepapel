@@ -440,7 +440,7 @@ For historic second-half 2025 reporting, use the fiscal guidance in `pdepapel-ad
 - OAuth redirect URL: `https://admin.papeleriapdepapel.com/api/integrations/mercadolibre/callback`
 - Production webhook URL: `https://admin.papeleriapdepapel.com/api/webhook/mercadolibre`
 - OAuth should use Authorization Code / server-side Client Secret as implemented. Do not enable PKCE until the implementation is deliberately updated for it.
-- Required granular scopes: user read, publication/synchronization read-write, **pre/post-sale communications read-write**, sale billing read, and sale/shipping read. Do not request broad unrelated permissions for advertising, business metrics, promotions, or VIS.
+- Required granular scopes: user read, publication/synchronization read-write, **pre/post-sale communications read-write**, sale billing read, and sale/shipping read. **Product Ads metrics are opt-in:** Mercado Libre exposes its advertising permission as read-write, but P de Papel currently makes only read requests and never creates, pauses, or changes campaigns or budgets. Do not request unrelated business-metrics, promotions, or VIS permissions.
 - After changing scopes, Client Secret, or other authorization-sensitive config, reconnect from the admin UI to obtain a fresh token.
 
 ### Required environment configuration
@@ -490,6 +490,7 @@ Relevant implementation areas:
 
 - OAuth/config/encryption: `lib/mercadolibre/config.ts`, `oauth.ts`, `oauth-state.ts`, `crypto.ts`, `client.ts`.
 - Listing draft/publish/import: `listings.ts`, `import-listings.ts`, and `app/api/[storeId]/marketplaces/mercadolibre/listings/**`.
+- Product Ads read-only metrics: `lib/mercadolibre/product-ads.ts` and `app/api/[storeId]/marketplaces/mercadolibre/advertising/overview/route.ts`. It uses Mercado Libre's current MCO advertiser/campaign-search endpoints with API versions 1 and 2 respectively; do not use the retired legacy campaign endpoints.
 - Webhook/order processing: `webhook.ts`, `webhook-processor.ts`, `order-sync.ts`, and `app/api/webhook/mercadolibre/route.ts`.
 - Outbox/QStash: `outbox.ts`, `queue.ts`, and signed routes under `app/api/internal/marketplaces/mercadolibre/**`.
 - Finance/email: `order-financials.ts`, `order-notification.ts`, and `emails/mercadolibre-order-notification.tsx`.
@@ -510,7 +511,8 @@ For a new publication, an admin selects a local product, marketplace-specific pr
 - The operations panel has reviewable question-response suggestions. An admin must read/edit and explicitly send every buyer answer; no automatic messages are sent.
 - Bulk publication, pause/activate, and content/price/stock updates are capped at 20 selected listings and run through the idempotent QStash outbox after an explicit confirmation. Never bulk-publish the entire catalog automatically.
 - The minimum-margin field is an early warning before variable marketplace costs; actual profitability uses settled net collected minus recorded acquisition cost.
-- Do not surface a video or Clips step in the publication workflow until Mercado Libre offers a supported, verified MCO API capable of uploading it from P de Papel. The current public listing flow remains limited to product data, selected images, price, inventory, category, and technical attributes.
+- Do not add a video or Clips step to the publication wizard until Mercado Libre offers a supported, verified MCO API capable of uploading it from P de Papel. When Mercado Libre quality returns a clip recommendation, the listing manager may open the local product-video library and the trusted Mercado Libre upload link. The final Mercado Libre upload stays manual and must never be reported as automatic or successful until Mercado Libre itself confirms it.
+- Product Ads is read-only in P de Papel: the dashboard performs an explicit on-demand 30-day query, so it does not add polling, QStash jobs, Vercel cron executions, campaign writes, or automatic advertising spend. Product Ads metrics are attribution data only and must not replace the exact settled `netAmount` used by financial/tax reports.
 
 For existing publications:
 

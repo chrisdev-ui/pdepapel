@@ -3,7 +3,13 @@
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { env } from "@/lib/env.mjs";
-import { Loader2, Trash2, UploadCloud, Video } from "lucide-react";
+import {
+  ExternalLink,
+  Loader2,
+  Trash2,
+  UploadCloud,
+  Video,
+} from "lucide-react";
 import { CldUploadWidget } from "next-cloudinary";
 import { useCallback, useEffect, useState } from "react";
 
@@ -39,9 +45,11 @@ function getErrorMessage(response: Response) {
 export function ProductVideoLibrary({
   storeId,
   productId,
+  marketplaceUploadUrl,
 }: {
   storeId: string;
   productId: string;
+  marketplaceUploadUrl?: string | null;
 }) {
   const { toast } = useToast();
   const [videos, setVideos] = useState<ProductVideo[]>([]);
@@ -149,41 +157,57 @@ export function ProductVideoLibrary({
             Mercado Libre. No se publica automáticamente.
           </p>
         </div>
-        <CldUploadWidget
-          uploadPreset="u0dp1v1y"
-          onSuccess={saveUploadedVideo}
-          options={{
-            resourceType: "video",
-            sources: ["local", "camera"],
-            clientAllowedFormats: ["mp4", "mov", "mpeg", "avi"],
-            maxVideoFileSize: 280 * 1024 * 1024,
-            ...(env.NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME
-              ? { folder: env.NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME }
-              : {}),
-          }}
-        >
-          {({ open }) => (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={isSaving || !open}
-              onClick={() => open()}
-            >
-              {isSaving ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <UploadCloud className="mr-2 h-4 w-4" />
-              )}
-              Cargar video
+        <div className="flex flex-wrap gap-2">
+          <CldUploadWidget
+            uploadPreset="u0dp1v1y"
+            onSuccess={saveUploadedVideo}
+            options={{
+              resourceType: "video",
+              sources: ["local", "camera"],
+              clientAllowedFormats: ["mp4", "mov", "mpeg", "avi"],
+              maxVideoFileSize: 280 * 1024 * 1024,
+              ...(env.NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME
+                ? { folder: env.NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME }
+                : {}),
+            }}
+          >
+            {({ open }) => (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={isSaving || !open}
+                onClick={() => open()}
+              >
+                {isSaving ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <UploadCloud className="mr-2 h-4 w-4" />
+                )}
+                Cargar video
+              </Button>
+            )}
+          </CldUploadWidget>
+          {marketplaceUploadUrl ? (
+            <Button asChild type="button" size="sm">
+              <a href={marketplaceUploadUrl} target="_blank" rel="noreferrer">
+                Abrir cargador de Mercado Libre
+                <ExternalLink className="ml-2 h-4 w-4" />
+              </a>
             </Button>
-          )}
-        </CldUploadWidget>
+          ) : null}
+        </div>
       </div>
       <p className="text-xs text-muted-foreground">
         Requisitos para esta biblioteca: vertical, 10–61 segundos, mínimo 360 px
         de ancho y máximo 280 MB.
       </p>
+      {marketplaceUploadUrl ? (
+        <p className="text-xs text-muted-foreground">
+          Después de guardar el clip, ábrelo en Mercado Libre y termina la carga
+          allí. P de Papel no lo publica automáticamente.
+        </p>
+      ) : null}
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Cargando videos…</p>
       ) : videos.length === 0 ? (

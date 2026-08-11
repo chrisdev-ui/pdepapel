@@ -87,10 +87,11 @@ export async function requestMercadoLibreJson(
   connectionId: string,
   resource: string,
   request: typeof fetch = fetch,
+  headers: Record<string, string> = {},
 ) {
   const accessToken = await getMercadoLibreAccessToken(connectionId);
   const response = await request(normalizeMercadoLibreResource(resource), {
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers: { Authorization: `Bearer ${accessToken}`, ...headers },
     cache: "no-store",
   });
   const body = await response.text();
@@ -177,8 +178,14 @@ export async function getMercadoLibreJson(
   connectionId: string,
   resource: string,
   request: typeof fetch = fetch,
+  headers: Record<string, string> = {},
 ) {
-  const result = await requestMercadoLibreJson(connectionId, resource, request);
+  const result = await requestMercadoLibreJson(
+    connectionId,
+    resource,
+    request,
+    headers,
+  );
 
   if (!result.ok) {
     await prismadb.marketplaceConnection.update({

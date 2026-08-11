@@ -46,13 +46,15 @@ La migración `prisma/manual-migrations/20260808_add_marketplace_operations.sql`
    | Usuarios                                       | **Lectura**             |
    | Comunicaciones pre y post ventas               | **Lectura y escritura** |
    | Publicación y sincronización                   | **Lectura y escritura** |
-   | Publicidad de un producto                      | **Sin acceso**          |
+   | Publicidad de un producto                      | **Lectura y escritura\*** |
    | Facturación de una venta                       | **Lectura**             |
    | Métricas del negocio                           | **Sin acceso**          |
    | Promociones, cupones y descuentos de una venta | **Sin acceso**          |
    | Venta y envíos de un producto                  | **Lectura**             |
 
    No selecciones lectura y escritura para todo: la integración solo publica y actualiza productos, consulta órdenes confirmadas y lee los cargos de cada venta para registrar el neto real.
+
+   \*Este permiso se usa únicamente para consultar las métricas de **Product Ads** en P de Papel. El panel no crea, pausa ni modifica campañas o presupuestos. Mercado Libre presenta este permiso como lectura y escritura; el código actual usa solo consultas.
 
 9. Si el formulario muestra **Notificaciones**, déjalo sin temas seleccionados por ahora. Si ya marcaste `orders_v2`, vuelve a **Tópicos** y desmárcalo: Mercado Libre exige una Callback URL al seleccionar un tema. No registres todavía la URL de producción porque el endpoint aún no está desplegado; una venta existente podría recibir intentos fallidos y Mercado Libre podría desactivar las notificaciones.
 10. Pulsa **Guardar** o **Crear aplicación**.
@@ -119,6 +121,18 @@ Haz este paso solo cuando el código y el esquema de base de datos hayan sido ap
 6. Inicia sesión con la cuenta vendedora principal de P de Papel, no con un operador o colaborador, y acepta los permisos solicitados.
 7. Al volver al panel, confirma que el estado diga **Conectada**. Si cambiaste un permiso después de haber conectado la cuenta, pulsa **Reconectar Mercado Libre** para emitir un token con el nuevo alcance.
 8. Pulsa **Activar procesamiento seguro** y espera el mensaje de confirmación. Esto crea una recuperación automática cada cinco minutos.
+
+### Activar métricas de Product Ads (opcional)
+
+Hazlo solo si quieres consultar desde P de Papel el resultado de la publicidad que ya manejas en Mercado Libre. Esta función no crea campañas ni genera cobros.
+
+1. En **Mis aplicaciones**, confirma que **Publicidad de un producto** esté en **Lectura y escritura**.
+2. Guarda el cambio y vuelve a **Ventas** → **Mercado Libre** en P de Papel.
+3. Pulsa **Reconectar Mercado Libre** y acepta los permisos. Sin este paso el token anterior no recibe el permiso nuevo.
+4. En la cuenta vendedora, abre **Mi perfil** → **Publicidad** y activa Product Ads si Mercado Libre todavía no lo ofrece como activo.
+5. Regresa al panel y, en **Product Ads**, pulsa **Consultar métricas**.
+
+Mercado Libre puede no habilitar Product Ads hasta que la cuenta cumpla sus propias condiciones comerciales. Ese caso no afecta ventas, publicaciones, existencias ni el webhook.
 
 ## 6. Activar notificaciones de ventas
 

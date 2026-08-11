@@ -93,6 +93,28 @@ En la lista de publicaciones puedes:
 
 **Regla de oro:** una publicación de Mercado Libre no se actualiza sola por cambiar una foto o una descripción en P de Papel. Usa **Sincronizar contenido** cuando realmente quieras enviar ese cambio.
 
+### Cuando Mercado Libre recomienda un clip
+
+1. En la publicación, pulsa **Revisar calidad**.
+2. Si aparece **Clip recomendado**, pulsa **Preparar clip**. Si ya habías guardado uno, el botón dirá **Revisar clip**.
+3. Pulsa **Cargar video** y elige el clip vertical del producto. Debe durar entre 10 y 61 segundos, medir al menos 360 px de ancho y pesar máximo 280 MB.
+4. Revísalo en la biblioteca. Guardarlo aquí no cambia la publicación ni cobra nada.
+5. Pulsa **Abrir cargador de Mercado Libre** o **Subir en Mercado Libre** y termina la carga en la pantalla oficial de Mercado Libre.
+6. Vuelve a P de Papel y pulsa **Revisar calidad** de nuevo para confirmar que Mercado Libre ya no lo pide.
+
+**Ejemplo:** para unos marcadores pastel, graba un video vertical corto mostrando los colores sobre una hoja. Primero guárdalo en P de Papel y después súbelo en la pantalla de Mercado Libre que se abre con el botón. No se sube automáticamente porque Mercado Libre no ofrece una carga directa y verificada para este flujo.
+
+Si no puedes hacerlo ahora, pulsa **Recordar en 30 días**. Eso solo oculta el aviso temporalmente; no modifica el producto ni la publicación.
+
+### Ver resultados de Product Ads
+
+1. En **Ventas** → **Mercado Libre**, baja hasta **Product Ads**.
+2. Pulsa **Consultar métricas**. Solo consulta información: no crea campañas y no gasta dinero.
+3. Si ves el aviso de activación, entra a la configuración de la aplicación de Mercado Libre, deja **Publicidad de un producto** en **Lectura y escritura**, guarda y usa **Reconectar Mercado Libre** en P de Papel.
+4. Si Mercado Libre todavía no habilita publicidad para tu cuenta, actívala primero desde **Mi perfil** → **Publicidad** en Mercado Libre.
+
+El valor de **Ventas atribuidas**, ROAS y ACOS es una medición de publicidad de Mercado Libre. No reemplaza el **Neto recibido** de cada venta ni modifica los reportes tributarios.
+
 ## 5. Vincular publicaciones que ya existían en Mercado Libre
 
 Si una publicación fue creada directamente en Mercado Libre antes de usar esta herramienta:

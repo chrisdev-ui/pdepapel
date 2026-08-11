@@ -42,10 +42,12 @@ import {
   Plus,
   Sparkles,
   UploadCloud,
+  Video,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { ListingPublicationWizard } from "./listing-publication-wizard";
+import { ProductVideoLibrary } from "./product-video-library";
 
 type ProductReference = {
   id: string;
@@ -175,6 +177,12 @@ type ListingQuality = {
   level: string | null;
   levelWording: string | null;
   pendingRules: ListingQualityRule[];
+  videoRecommendation:
+    | (ListingQualityRule & {
+        preparedVideoCount: number;
+        snoozedUntil: string | null;
+      })
+    | null;
 };
 
 type ContentReview = {
@@ -308,6 +316,13 @@ export function MercadoLibreListingManager({
     Record<string, ListingQuality>
   >({});
   const [loadingQualityId, setLoadingQualityId] = useState<string | null>(null);
+  const [videoLibraryTarget, setVideoLibraryTarget] = useState<{
+    listing: Listing;
+    uploadUrl: string | null;
+  } | null>(null);
+  const [updatingVideoReminderId, setUpdatingVideoReminderId] = useState<
+    string | null
+  >(null);
   const [contentReviewByListingId, setContentReviewByListingId] = useState<
     Record<string, ContentReview>
   >({});
@@ -767,6 +782,53 @@ export function MercadoLibreListingManager({
       );
     } finally {
       setLoadingQualityId(null);
+    }
+  };
+
+  const updateVideoReminder = async (
+    listing: Listing,
+    action: "snooze" | "show",
+  ) => {
+    setUpdatingVideoReminderId(listing.id);
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/${storeId}/marketplaces/mercadolibre/listings/${listing.id}/quality/video-reminder`,
+        { method: action === "snooze" ? "POST" : "DELETE" },
+      );
+      if (!response.ok) throw new Error(await getErrorMessage(response));
+      const responseBody =
+        action === "snooze"
+          ? ((await response.json()) as { snoozedUntil?: unknown })
+          : null;
+      const snoozedUntil =
+        typeof responseBody?.snoozedUntil === "string"
+          ? responseBody.snoozedUntil
+          : null;
+
+      setQualityByListingId((current) => {
+        const quality = current[listing.id];
+        if (!quality?.videoRecommendation) return current;
+
+        return {
+          ...current,
+          [listing.id]: {
+            ...quality,
+            videoRecommendation: {
+              ...quality.videoRecommendation,
+              snoozedUntil,
+            },
+          },
+        };
+      });
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "No fue posible actualizar el recordatorio del clip",
+      );
+    } finally {
+      setUpdatingVideoReminderId(null);
     }
   };
 
@@ -1419,6 +1481,10 @@ export function MercadoLibreListingManager({
               const nonVideoQualityRules = quality?.pendingRules.filter(
                 (rule) => !rule.isVideoRecommendation,
               );
+              const videoRecommendation = quality?.videoRecommendation;
+              const isVideoReminderSnoozed = Boolean(
+                videoRecommendation?.snoozedUntil,
+              );
               return (
                 <div
                   key={listing.id}
@@ -1495,11 +1561,101 @@ export function MercadoLibreListingManager({
                                 </li>
                               ))}
                             </ul>
-                          ) : (
+                          ) : !videoRecommendation ? (
                             <p className="text-xs text-success">
                               No hay acciones pendientes reportadas.
                             </p>
-                          )}
+                          ) : null}
+                          {videoRecommendation ? (
+                            <div className="flex flex-col gap-2 rounded-md border border-primary/20 bg-primary/[0.03] p-3 text-xs">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Video className="h-4 w-4 text-primary" />
+                                <p className="font-medium">Clip recomendado</p>
+                                <Badge variant="outline">
+                                  {videoRecommendation.preparedVideoCount} listo
+                                  {videoRecommendation.preparedVideoCount === 1
+                                    ? ""
+                                    : "s"}
+                                </Badge>
+                              </div>
+                              <p className="text-muted-foreground">
+                                {videoRecommendation.title}. P de Papel prepara
+                                el video y la carga final se confirma en Mercado
+                                Libre.
+                              </p>
+                              {isVideoReminderSnoozed ? (
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="text-muted-foreground">
+                                    El recordatorio está pospuesto.
+                                  </p>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() =>
+                                      void updateVideoReminder(listing, "show")
+                                    }
+                                    disabled={
+                                      updatingVideoReminderId === listing.id
+                                    }
+                                  >
+                                    Mostrar ahora
+                                  </Button>
+                                </div>
+                              ) : (
+                                <div className="flex flex-wrap gap-2">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      setVideoLibraryTarget({
+                                        listing,
+                                        uploadUrl: videoRecommendation.link,
+                                      })
+                                    }
+                                  >
+                                    <Video className="mr-2 h-4 w-4" />
+                                    {videoRecommendation.preparedVideoCount > 0
+                                      ? "Revisar clip"
+                                      : "Preparar clip"}
+                                  </Button>
+                                  {videoRecommendation.link ? (
+                                    <Button
+                                      asChild
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                    >
+                                      <a
+                                        href={videoRecommendation.link}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                      >
+                                        Subir en Mercado Libre
+                                      </a>
+                                    </Button>
+                                  ) : null}
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() =>
+                                      void updateVideoReminder(
+                                        listing,
+                                        "snooze",
+                                      )
+                                    }
+                                    disabled={
+                                      updatingVideoReminderId === listing.id
+                                    }
+                                  >
+                                    Recordar en 30 días
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          ) : null}
                         </div>
                       ) : null}
                       {contentReview ? (
@@ -1672,6 +1828,37 @@ export function MercadoLibreListingManager({
             onSave={saveListing}
             onSaveAndPublish={saveAndPublishListing}
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(videoLibraryTarget)}
+        onOpenChange={(open) => {
+          if (open || !videoLibraryTarget) return;
+
+          void loadListingQuality(videoLibraryTarget.listing);
+          setVideoLibraryTarget(null);
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Video className="h-5 w-5 text-muted-foreground" />
+              Clip para {videoLibraryTarget?.listing.product.name}
+            </DialogTitle>
+            <DialogDescription>
+              Guarda y revisa el clip aquí. La publicación final se hace en el
+              cargador oficial de Mercado Libre; P de Papel nunca la ejecuta
+              automáticamente.
+            </DialogDescription>
+          </DialogHeader>
+          {videoLibraryTarget ? (
+            <ProductVideoLibrary
+              storeId={storeId}
+              productId={videoLibraryTarget.listing.product.id}
+              marketplaceUploadUrl={videoLibraryTarget.uploadUrl}
+            />
+          ) : null}
         </DialogContent>
       </Dialog>
     </Card>
