@@ -826,7 +826,7 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
                 getAllOptions().length
               } opciones seleccionadas. ${placeholder}`}
               className={cn(
-                "flex h-auto min-h-10 items-center justify-between rounded-md border bg-inherit p-1 hover:bg-inherit [&_svg]:pointer-events-auto",
+                "flex h-auto min-h-10 min-w-0 items-center justify-between rounded-md border bg-inherit p-1 hover:bg-inherit [&_svg]:pointer-events-auto",
                 autoSize ? "w-auto" : "w-full",
                 responsiveSettings.compactMode && "min-h-8 text-sm",
                 screenSize === "mobile" && "min-h-12 text-base",
@@ -839,10 +839,10 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
               }}
             >
               {selectedValues.length > 0 ? (
-                <div className="flex w-full items-center justify-between">
+                <div className="flex w-full min-w-0 items-center justify-between">
                   <div
                     className={cn(
-                      "flex items-center gap-1",
+                      "flex min-w-0 items-center gap-1",
                       singleLine
                         ? "multiselect-singleline-scroll overflow-x-auto"
                         : "flex-wrap",
@@ -884,6 +884,7 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
                             className={cn(
                               getBadgeAnimationClass(),
                               multiSelectVariants({ variant }),
+                              "max-w-full",
                               customStyle?.gradient &&
                                 "border-transparent text-white",
                               responsiveSettings.compactMode &&
@@ -914,11 +915,7 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
                                 })}
                               />
                             )}
-                            <span
-                              className={cn(
-                                screenSize === "mobile" && "truncate",
-                              )}
-                            >
+                            <span className="min-w-0 truncate">
                               {option.label}
                             </span>
                             <div
@@ -1018,8 +1015,8 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
                   </div>
                 </div>
               ) : (
-                <div className="mx-auto flex w-full items-center justify-between">
-                  <span className="mx-3 text-sm font-normal text-muted-foreground">
+                <div className="mx-auto flex w-full min-w-0 items-center justify-between">
+                  <span className="mx-3 min-w-0 flex-1 truncate text-sm font-normal text-muted-foreground">
                     {placeholder}
                   </span>
                   <ChevronDown className="mx-2 h-4 cursor-pointer text-muted-foreground" />

@@ -114,7 +114,10 @@ export const AdjustInventoryModal: React.FC<AdjustInventoryModalProps> = ({
       onClose={onClose}
     >
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <form
+          onSubmit={form.handleSubmit(onSubmit)}
+          className="min-w-0 space-y-4"
+        >
           <FormField
             control={form.control}
             name="productId"
@@ -135,7 +138,7 @@ export const AdjustInventoryModal: React.FC<AdjustInventoryModalProps> = ({
             )}
           />
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField
               control={form.control}
               name="type"
@@ -290,16 +293,21 @@ export const AdjustInventoryModal: React.FC<AdjustInventoryModalProps> = ({
             )}
           />
 
-          <div className="flex w-full items-center justify-end space-x-2 pt-6">
+          <div className="flex w-full flex-col-reverse gap-2 pt-6 sm:flex-row sm:justify-end">
             <Button
               disabled={loading}
               variant="outline"
               onClick={onClose}
               type="button"
+              className="w-full sm:w-auto"
             >
               Cancelar
             </Button>
-            <Button disabled={loading} type="submit">
+            <Button
+              disabled={loading}
+              type="submit"
+              className="w-full sm:w-auto"
+            >
               Confirmar Ajuste
             </Button>
           </div>

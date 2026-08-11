@@ -775,7 +775,7 @@ When user approval is granted:
 - `docs/revalidacion-catalogo.md` — public catalog cache-refresh configuration.
 - `docs/seguimiento-seo.md` — post-migration Search Console/SEO monitoring.
 - `pdepapel-admin/docs/mercadolibre.md` — Mercado Libre application, OAuth, QStash, webhook, listing, and reconciliation runbook.
-- `pdepapel-admin/docs/guia-uso-mercadolibre.md` — nontechnical daily Mercado Libre guide for publishing, profiles, sales, dispatches, and historical reconciliation; its printable PDF is in `output/pdf/guia-practica-mercadolibre-p-de-papel.pdf`.
+- `pdepapel-admin/docs/guia-uso-mercadolibre.md` — nontechnical daily Mercado Libre guide for publishing, profiles, sales, dispatches, historical reconciliation, and Product Ads decisions. Its printable PDF is `output/pdf/guia-practica-mercadolibre-p-de-papel.pdf`; regenerate it with `pdepapel-admin/scripts/generate-mercadolibre-guide-pdf.py` using the bundled Python runtime when that guide changes.
 - `pdepapel-admin/docs/ventas-en-feria.md` — nontechnical fair/event operation guide.
 - `pdepapel-admin/docs/punto-de-venta.md` — nontechnical guide for reusable product labels and ordinary in-person sales.
 - `pdepapel-admin/docs/conciliar-inventario-feria-anterior.md` — previous-fair inventory reconciliation guide.

@@ -40,7 +40,7 @@ export const Modal: React.FC<ModalProps> = ({ open, onClose, children }) => {
           <DrawerDescription className="sr-only">
             Detalles del producto seleccionado
           </DrawerDescription>
-          <div className="flex-1 overflow-y-auto overscroll-contain px-4 pb-6 pt-2">
+          <div className="min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-6 pt-2">
             {children}
           </div>
         </DrawerContent>
@@ -55,7 +55,7 @@ export const Modal: React.FC<ModalProps> = ({ open, onClose, children }) => {
         <DialogDescription className="sr-only">
           Detalles del producto seleccionado
         </DialogDescription>
-        <div className="relative flex w-full items-center overflow-hidden px-4 pb-8 pt-14 sm:px-6 sm:pt-8 md:p-6 lg:p-8">
+        <div className="relative flex w-full min-w-0 items-center overflow-hidden px-4 pb-8 pt-14 sm:px-6 sm:pt-8 md:p-6 lg:p-8">
           {children}
         </div>
       </DialogContent>

@@ -158,25 +158,25 @@ export const UserCombobox: React.FC<UserComboboxProps> = ({
   }, [debouncedQuery]);
 
   return (
-    <div className="relative">
+    <div className="relative min-w-0">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            className="w-full justify-between"
+            className="w-full min-w-0 justify-between"
             disabled={disabled}
           >
             {selectedUser ? (
-              <div className="flex items-center gap-2 overflow-hidden">
-                <Avatar className="h-6 w-6">
+              <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+                <Avatar className="h-6 w-6 shrink-0">
                   <AvatarImage src={selectedUser.image} />
                   <AvatarFallback>
                     <UserCircle2 className="h-4 w-4" />
                   </AvatarFallback>
                 </Avatar>
-                <span className="truncate">{selectedUser.label}</span>
+                <span className="min-w-0 truncate">{selectedUser.label}</span>
               </div>
             ) : (
               "Seleccionar usuario..."
@@ -223,14 +223,14 @@ export const UserCombobox: React.FC<UserComboboxProps> = ({
                           setOpen(false);
                         }}
                       >
-                        <div className="flex w-full items-center gap-2 overflow-hidden">
+                        <div className="flex w-full min-w-0 items-center gap-2 overflow-hidden">
                           <Avatar className="h-6 w-6 shrink-0">
                             <AvatarImage src={user.image} />
                             <AvatarFallback>
                               <UserCircle2 className="h-4 w-4" />
                             </AvatarFallback>
                           </Avatar>
-                          <div className="flex flex-col truncate">
+                          <div className="flex min-w-0 flex-1 flex-col">
                             <span className="truncate text-sm font-medium">
                               {user.label}
                             </span>

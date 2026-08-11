@@ -93,17 +93,17 @@ export function DatePicker<T extends FieldValues>({
           disabled={disabled}
           variant={"outline"}
           className={cn(
-            "w-[280px] items-center justify-between text-left font-normal",
+            "w-full min-w-0 max-w-[280px] items-center justify-between text-left font-normal",
             !value && "text-muted-foreground",
             className,
           )}
         >
-          {dateValue && isValid(dateValue) ? (
-            format(dateValue, "PPP", { locale: es })
-          ) : (
-            <span>{placeholder}</span>
-          )}
-          <CalendarDays className="h-4 w-4" />
+          <span className="min-w-0 flex-1 truncate">
+            {dateValue && isValid(dateValue)
+              ? format(dateValue, "PPP", { locale: es })
+              : placeholder}
+          </span>
+          <CalendarDays className="ml-2 h-4 w-4 shrink-0" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">

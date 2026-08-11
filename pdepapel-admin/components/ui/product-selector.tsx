@@ -66,15 +66,20 @@ export function ProductSelector({
           role="combobox"
           aria-expanded={open}
           disabled={disabled}
-          className="w-full justify-between"
+          className="w-full min-w-0 justify-between"
         >
-          {value
-            ? formattedProducts.find((product) => product.id === value)?.label
-            : "Buscar producto..."}
+          <span className="min-w-0 flex-1 truncate text-left">
+            {value
+              ? formattedProducts.find((product) => product.id === value)?.label
+              : "Buscar producto..."}
+          </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[500px] p-0" align="start">
+      <PopoverContent
+        className="w-[min(500px,calc(100vw-2rem))] max-w-[500px] p-0"
+        align="start"
+      >
         <Command>
           <CommandInput placeholder="Buscar producto por nombre..." />
           <CommandList>
@@ -90,8 +95,8 @@ export function ProductSelector({
                     setOpen(false);
                   }}
                 >
-                  <div className="flex w-full items-center gap-2">
-                    <div className="relative h-8 w-8 overflow-hidden rounded-md border">
+                  <div className="flex w-full min-w-0 items-center gap-2">
+                    <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-md border">
                       <Image
                         fill
                         src={product.images?.[0]?.url || "/placeholder.png"}
@@ -99,14 +104,22 @@ export function ProductSelector({
                         className="object-cover"
                       />
                     </div>
-                    <div className="flex flex-1 flex-col">
-                      <span className="font-medium">{product.name}</span>
-                      <div className="flex gap-2 text-xs text-muted-foreground">
-                        <span>{product.category?.name}</span>
-                        {product.size && <span>• {product.size.name}</span>}
+                    <div className="flex min-w-0 flex-1 flex-col">
+                      <span className="truncate font-medium">
+                        {product.name}
+                      </span>
+                      <div className="flex min-w-0 gap-2 text-xs text-muted-foreground">
+                        <span className="truncate">
+                          {product.category?.name}
+                        </span>
+                        {product.size && (
+                          <span className="shrink-0">
+                            • {product.size.name}
+                          </span>
+                        )}
                       </div>
                     </div>
-                    <div className="flex flex-col items-end">
+                    <div className="flex shrink-0 flex-col items-end">
                       <span
                         className={cn(
                           "font-medium",

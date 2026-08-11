@@ -133,28 +133,32 @@ export function DateRangePicker<T extends FieldValues>({
   };
 
   return (
-    <div className={cn("grid gap-2", className)} {...props}>
+    <div className={cn("grid min-w-0 gap-2", className)} {...props}>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
             type="button"
             disabled={disabled}
             variant={"outline"}
-            className={cn("justify-between bg-white px-3.5 py-2.5")}
-          >
-            {selectedDateRange?.from ? (
-              selectedDateRange.to ? (
-                <>
-                  {format(selectedDateRange.from, "PPPP", { locale: es })} -{" "}
-                  {format(selectedDateRange.to, "PPPP", { locale: es })}
-                </>
-              ) : (
-                format(selectedDateRange.from, "PPPP", { locale: es })
-              )
-            ) : (
-              <span>{placeholder}</span>
+            className={cn(
+              "w-full min-w-0 justify-between bg-white px-3.5 py-2.5",
             )}
-            <CalendarDays className="h-4 w-4" />
+          >
+            <span className="min-w-0 flex-1 truncate text-left">
+              {selectedDateRange?.from ? (
+                selectedDateRange.to ? (
+                  <>
+                    {format(selectedDateRange.from, "PPPP", { locale: es })} -{" "}
+                    {format(selectedDateRange.to, "PPPP", { locale: es })}
+                  </>
+                ) : (
+                  format(selectedDateRange.from, "PPPP", { locale: es })
+                )
+              ) : (
+                placeholder
+              )}
+            </span>
+            <CalendarDays className="ml-2 h-4 w-4 shrink-0" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="start">

@@ -109,7 +109,7 @@ export const StockQuantityInput: React.FC<StockQuantityInputProps> = ({
   return (
     <div
       className={cn(
-        "stock-quantity-container inline-flex w-full items-center justify-between rounded-xl border border-input bg-background p-1",
+        "stock-quantity-container inline-flex w-full min-w-0 items-center justify-between rounded-xl border border-input bg-background p-1",
         disabled && "cursor-not-allowed opacity-50",
         className,
       )}

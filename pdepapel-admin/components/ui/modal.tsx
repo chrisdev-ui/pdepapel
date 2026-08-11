@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 interface ModalProps {
   title: string;
@@ -33,12 +34,17 @@ export const Modal: React.FC<ModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onChange}>
-      <DialogContent className={className}>
+      <DialogContent
+        className={cn(
+          "max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] overflow-y-auto",
+          className,
+        )}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
-        <div>{children}</div>
+        <div className="min-w-0">{children}</div>
       </DialogContent>
     </Dialog>
   );

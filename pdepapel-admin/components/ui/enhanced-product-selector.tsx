@@ -164,7 +164,7 @@ export function EnhancedProductSelector({
           role="combobox"
           aria-expanded={open}
           disabled={disabled}
-          className="w-full justify-between"
+          className="w-full min-w-0 justify-between"
         >
           <span>
             {Object.keys(selectedItems).length > 0
@@ -177,11 +177,11 @@ export function EnhancedProductSelector({
       {/* Maximized Dialog */}
       <DialogContent className="max-w-[95vw] gap-0 p-0 lg:max-w-7xl">
         <DialogTitle className="sr-only">Buscar productos</DialogTitle>
-        <div className="flex items-center justify-between border-b pl-4 pr-14 py-2">
-          <div className="flex flex-1 items-center gap-2">
+        <div className="flex min-w-0 items-center justify-between border-b pl-4 pr-14 py-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             <Search className="h-5 w-5 text-muted-foreground" />
             <input
-              className="flex h-12 w-full bg-transparent text-lg outline-none placeholder:text-muted-foreground"
+              className="flex h-12 w-full min-w-0 bg-transparent text-lg outline-none placeholder:text-muted-foreground"
               placeholder="Buscar productos..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}

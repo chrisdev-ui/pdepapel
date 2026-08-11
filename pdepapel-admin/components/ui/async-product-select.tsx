@@ -51,6 +51,20 @@ export interface AsyncProductSelectProps {
 
 const fetcher = (url: string) => axios.get(url).then((res) => res.data);
 
+const getProductDetails = (product: AsyncProductOption) =>
+  [
+    `SKU: ${product.sku}`,
+    product.gtin ? `GTIN: ${product.gtin}` : null,
+    product.isKit ? "Kit" : null,
+    product.category?.name,
+    `Stock: ${product.stock}`,
+    product.price !== undefined && product.price !== null
+      ? currencyFormatter(product.price)
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
 function ProductThumbnail({ product }: { product: AsyncProductOption }) {
   const imageUrl = product.images?.[0]?.url;
 
@@ -68,6 +82,30 @@ function ProductThumbnail({ product }: { product: AsyncProductOption }) {
           <Package className="h-4 w-4 text-muted-foreground" />
         </div>
       )}
+    </div>
+  );
+}
+
+function SelectedProductValue({ product }: { product: AsyncProductOption }) {
+  const details = getProductDetails(product);
+
+  return (
+    <div className="flex min-w-0 flex-1 items-center gap-2 text-left">
+      <ProductThumbnail product={product} />
+      <div className="min-w-0 flex-1">
+        <span
+          className="block truncate text-sm font-medium leading-none"
+          title={product.name}
+        >
+          {product.name}
+        </span>
+        <span
+          className="mt-1 block truncate text-xs text-muted-foreground"
+          title={details}
+        >
+          {details}
+        </span>
+      </div>
     </div>
   );
 }
@@ -186,20 +224,6 @@ export function AsyncProductSelect({
     setOpen(false);
   };
 
-  const getProductDetails = (product: AsyncProductOption) =>
-    [
-      `SKU: ${product.sku}`,
-      product.gtin ? `GTIN: ${product.gtin}` : null,
-      product.isKit ? "Kit" : null,
-      product.category?.name,
-      `Stock: ${product.stock}`,
-      product.price !== undefined && product.price !== null
-        ? currencyFormatter(product.price)
-        : null,
-    ]
-      .filter(Boolean)
-      .join(" · ");
-
   if (modal) {
     return (
       <>
@@ -212,20 +236,13 @@ export function AsyncProductSelect({
           disabled={disabled}
           onClick={() => setOpen(true)}
           type="button"
-          className={cn("h-auto w-full justify-between py-2", className)}
+          className={cn(
+            "h-auto w-full min-w-0 justify-between py-2",
+            className,
+          )}
         >
           {selectedProduct ? (
-            <div className="flex items-center gap-2 text-left">
-              <ProductThumbnail product={selectedProduct} />
-              <div className="flex flex-col overflow-hidden">
-                <span className="truncate text-sm font-medium leading-none">
-                  {selectedProduct.name}
-                </span>
-                <span className="truncate text-xs text-muted-foreground">
-                  {getProductDetails(selectedProduct)}
-                </span>
-              </div>
-            </div>
+            <SelectedProductValue product={selectedProduct} />
           ) : (
             <span className="text-muted-foreground">{placeholder}</span>
           )}
@@ -255,10 +272,13 @@ export function AsyncProductSelect({
                       value === product.id ? "opacity-100" : "opacity-0",
                     )}
                   />
-                  <div className="flex w-full items-center gap-2 overflow-hidden">
+                  <div className="flex w-full min-w-0 items-center gap-2 overflow-hidden">
                     <ProductThumbnail product={product} />
-                    <div className="flex flex-col overflow-hidden">
-                      <span className="truncate font-medium">
+                    <div className="min-w-0 flex-1">
+                      <span
+                        className="block truncate font-medium"
+                        title={product.name}
+                      >
                         {product.name}
                         {product.isArchived && (
                           <span className="ml-2 text-xs text-red-500">
@@ -266,7 +286,10 @@ export function AsyncProductSelect({
                           </span>
                         )}
                       </span>
-                      <span className="truncate text-xs text-muted-foreground">
+                      <span
+                        className="block truncate text-xs text-muted-foreground"
+                        title={getProductDetails(product)}
+                      >
                         {getProductDetails(product)}
                       </span>
                     </div>
@@ -301,20 +324,13 @@ export function AsyncProductSelect({
           aria-label={ariaLabel}
           disabled={disabled}
           type="button"
-          className={cn("h-auto w-full justify-between py-2", className)}
+          className={cn(
+            "h-auto w-full min-w-0 justify-between py-2",
+            className,
+          )}
         >
           {selectedProduct ? (
-            <div className="flex items-center gap-2 text-left">
-              <ProductThumbnail product={selectedProduct} />
-              <div className="flex flex-col overflow-hidden">
-                <span className="truncate text-sm font-medium leading-none">
-                  {selectedProduct.name}
-                </span>
-                <span className="truncate text-xs text-muted-foreground">
-                  {getProductDetails(selectedProduct)}
-                </span>
-              </div>
-            </div>
+            <SelectedProductValue product={selectedProduct} />
           ) : (
             <span className="text-muted-foreground">{placeholder}</span>
           )}
@@ -350,10 +366,13 @@ export function AsyncProductSelect({
                       value === product.id ? "opacity-100" : "opacity-0",
                     )}
                   />
-                  <div className="flex items-center gap-2 overflow-hidden">
+                  <div className="flex w-full min-w-0 items-center gap-2 overflow-hidden">
                     <ProductThumbnail product={product} />
-                    <div className="flex flex-col">
-                      <span className="truncate font-medium">
+                    <div className="min-w-0 flex-1">
+                      <span
+                        className="block truncate font-medium"
+                        title={product.name}
+                      >
                         {product.name}
                         {product.isArchived && (
                           <span className="ml-2 text-xs text-red-500">
@@ -361,7 +380,10 @@ export function AsyncProductSelect({
                           </span>
                         )}
                       </span>
-                      <span className="text-xs text-muted-foreground">
+                      <span
+                        className="block truncate text-xs text-muted-foreground"
+                        title={getProductDetails(product)}
+                      >
                         {getProductDetails(product)}
                       </span>
                     </div>

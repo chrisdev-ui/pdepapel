@@ -197,7 +197,7 @@ export const ComponentSelector: React.FC<ComponentSelectorProps> = ({
             role="combobox"
             aria-expanded={open}
             disabled={disabled}
-            className="w-full justify-between"
+            className="w-full min-w-0 justify-between"
           >
             <span>Agregar productos al kit...</span>
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -208,11 +208,11 @@ export const ComponentSelector: React.FC<ComponentSelectorProps> = ({
           <DialogTitle className="sr-only">
             Buscar productos para el kit
           </DialogTitle>
-          <div className="flex items-center justify-between border-b pl-4 pr-12 py-2">
-            <div className="flex flex-1 items-center gap-2">
+          <div className="flex min-w-0 items-center justify-between border-b pl-4 pr-12 py-2">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
               <Search className="h-5 w-5 text-muted-foreground" />
               <input
-                className="flex h-12 w-full bg-transparent text-lg outline-none placeholder:text-muted-foreground"
+                className="flex h-12 w-full min-w-0 bg-transparent text-lg outline-none placeholder:text-muted-foreground"
                 placeholder="Buscar productos..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}

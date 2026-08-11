@@ -38,7 +38,7 @@ export function Login() {
     <Dialog open={open} onOpenChange={handleCloseModal}>
       <DialogPortal>
         <DialogOverlay>
-          <DialogPrimitive.Content className="relative flex h-full w-full items-center justify-center">
+          <DialogPrimitive.Content className="relative flex h-full w-full min-w-0 items-center justify-center">
             <SignIn
               afterSignInUrl={redirectUrl || "/"}
               afterSignUpUrl={redirectUrl || "/"}

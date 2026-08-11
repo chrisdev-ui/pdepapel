@@ -12,21 +12,16 @@ export interface PercentageInputProps extends Omit<
   max?: number;
 }
 
-const PercentageInput = React.forwardRef<HTMLInputElement, PercentageInputProps>(
+const PercentageInput = React.forwardRef<
+  HTMLInputElement,
+  PercentageInputProps
+>(
   (
-    {
-      className,
-      value,
-      onChange,
-      min = 0,
-      max = 100,
-      step = "0.01",
-      ...props
-    },
+    { className, value, onChange, min = 0, max = 100, step = "0.01", ...props },
     ref,
   ) => {
     return (
-      <div className="relative">
+      <div className="relative min-w-0">
         <input
           ref={ref}
           type="number"
@@ -40,7 +35,7 @@ const PercentageInput = React.forwardRef<HTMLInputElement, PercentageInputProps>
             onChange?.(nextValue === "" ? undefined : Number(nextValue));
           }}
           className={cn(
-            "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 pr-9 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+            "flex h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 pr-9 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
             "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
             className,
           )}
