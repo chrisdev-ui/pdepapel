@@ -30,23 +30,22 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
     setIsMounted(true);
   }, []);
 
-  if (!isMounted) {
-    return null;
-  }
-
-  const totalQuantity = cart.items.reduce(
-    (total, item) => total + Number(item.quantity ?? 1),
-    0,
-  );
+  const totalQuantity = isMounted
+    ? cart.items.reduce(
+        (total, item) => total + Number(item.quantity ?? 1),
+        0,
+      )
+    : 0;
 
   return (
     <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
       <SheetTrigger asChild>
         <Button
           className={cn(
-            "flex w-auto items-center rounded-full border-transparent bg-blue-yankees px-4 py-2 font-semibold text-white transition hover:opacity-75 disabled:cursor-not-allowed disabled:opacity-50",
+            "flex min-w-[5.5rem] items-center justify-center rounded-full border-transparent bg-blue-yankees px-4 py-2 font-semibold tabular-nums text-white transition hover:opacity-75 disabled:cursor-not-allowed disabled:opacity-50",
             className,
           )}
+          disabled={!isMounted}
         >
           <ShoppingBag className="h-5 w-5" />
           <span className="ml-2 flex font-sans text-base font-medium">
@@ -54,7 +53,7 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
           </span>
         </Button>
       </SheetTrigger>
-      {isSheetOpen && (
+      {isMounted && isSheetOpen && (
         <NavbarCartContent onClose={() => setIsSheetOpen(false)} />
       )}
     </Sheet>

@@ -12,6 +12,7 @@ import { Currency } from "@/components/ui/currency";
 import { Form } from "@/components/ui/form";
 import { NoResults } from "@/components/ui/no-results";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { KAWAII_FACE_SAD, PaymentMethod } from "@/constants";
 import { useCart } from "@/hooks/use-cart";
 import useCheckout from "@/hooks/use-checkout";
@@ -657,7 +658,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   }, []);
 
   if (!isMounted) {
-    return null;
+    return <CheckoutFormSkeleton />;
   }
 
   if (completedOrderPath) {
@@ -981,3 +982,39 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     </>
   );
 };
+
+const CheckoutFormSkeleton = () => (
+  <div
+    className="mt-4 space-y-8 lg:mt-12 lg:grid lg:grid-cols-12 lg:items-start lg:gap-6 lg:space-y-0"
+    aria-busy="true"
+    aria-live="polite"
+  >
+    <span className="sr-only">Cargando formulario de compra</span>
+    <div className="space-y-8 rounded-md border p-5 lg:col-span-8">
+      <Skeleton className="h-8 w-3/5" />
+      <div className="space-y-5">
+        <Skeleton className="h-11 w-full" />
+        <Skeleton className="h-11 w-full" />
+        <Skeleton className="h-11 w-full" />
+      </div>
+      <div className="flex justify-between pt-6">
+        <Skeleton className="h-10 w-24" />
+        <Skeleton className="h-10 w-28" />
+      </div>
+    </div>
+    <div className="space-y-6 rounded-md border p-5 lg:col-span-4">
+      <Skeleton className="h-7 w-40" />
+      {Array.from({ length: 2 }, (_, index) => (
+        <div key={index} className="flex gap-3">
+          <Skeleton className="h-20 w-20 shrink-0" />
+          <div className="flex-1 space-y-3">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-2/3" />
+          </div>
+        </div>
+      ))}
+      <Skeleton className="h-px w-full" />
+      <Skeleton className="h-7 w-full" />
+    </div>
+  </div>
+);

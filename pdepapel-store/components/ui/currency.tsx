@@ -1,6 +1,4 @@
-"use client";
 import { cn, currencyFormatter } from "@/lib/utils";
-import { useEffect, useState } from "react";
 
 interface CurrencyProps {
   value?: number | string;
@@ -13,15 +11,6 @@ export const Currency: React.FC<CurrencyProps> = ({
   isNegative = false,
   className,
 }) => {
-  const [isMounted, setIsMounted] = useState(false);
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
-  if (!isMounted) {
-    return null;
-  }
   return (
     <div className={cn("font-quicksand font-semibold tracking-tight text-2xl", className)}>
       {isNegative ? "-" : ""}

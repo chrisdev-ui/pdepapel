@@ -7,7 +7,7 @@ import { FileSearch } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 
 import { HamburgerMenu } from "@/components/hamburger-menu";
 import { Icons } from "@/components/icons";
@@ -28,7 +28,6 @@ const Navbar: React.FC<NavbarProps> = ({ season = Season.Default }) => {
   const scrollPosition = useScrollPosition();
   const pathname = usePathname();
 
-  const navBarRef = useRef<HTMLElement>(null);
   const [displaySearchbox, setDisplaySearchbox] = useState<boolean>(false);
 
   const seasonConfig = SEASON_CONFIG[season];
@@ -37,20 +36,8 @@ const Navbar: React.FC<NavbarProps> = ({ season = Season.Default }) => {
     setDisplaySearchbox(open);
   }, []);
 
-  useEffect(() => {
-    if (typeof window !== undefined && scrollPosition > 120) {
-      const navbarHeight = navBarRef.current
-        ? navBarRef.current.offsetHeight
-        : 0;
-      document.body.style.paddingTop = `${navbarHeight}px`;
-    }
-    return () => {
-      document.body.style.paddingTop = "144px";
-    };
-  }, [scrollPosition]);
-
   return (
-    <header className="fixed left-0 top-0 z-50 mx-auto" ref={navBarRef}>
+    <header className="fixed left-0 top-0 z-50 mx-auto">
       <nav className="flex w-screen items-center justify-between gap-4 bg-blue-baby">
         <div
           className={cn(

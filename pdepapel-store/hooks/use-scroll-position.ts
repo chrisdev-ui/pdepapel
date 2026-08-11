@@ -4,22 +4,33 @@ export const useScrollPosition = (threshold = 1) => {
   const [scrollPosition, setScrollPosition] = useState(0);
 
   useEffect(() => {
+    let frameId: number | null = null;
+
     const updatePosition = () => {
-      const newScrollPosition = window.scrollY;
-      const distanceScrolled = Math.abs(newScrollPosition - scrollPosition);
+      if (frameId !== null) return;
 
-      if (distanceScrolled >= threshold) {
-        setScrollPosition(newScrollPosition);
-      }
-      setScrollPosition(window.scrollY);
+      frameId = window.requestAnimationFrame(() => {
+        const newScrollPosition = window.scrollY;
+        setScrollPosition((previousPosition) =>
+          Math.abs(newScrollPosition - previousPosition) >= threshold
+            ? newScrollPosition
+            : previousPosition,
+        );
+        frameId = null;
+      });
     };
-
-    window.addEventListener("scroll", updatePosition);
 
     updatePosition();
 
-    return () => window.removeEventListener("scroll", updatePosition);
-  }, [scrollPosition, threshold]);
+    window.addEventListener("scroll", updatePosition, { passive: true });
+
+    return () => {
+      window.removeEventListener("scroll", updatePosition);
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+    };
+  }, [threshold]);
 
   return scrollPosition;
 };
