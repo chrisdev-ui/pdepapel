@@ -1315,6 +1315,7 @@ model MarketplaceConnection {
   questions     MarketplaceQuestion[]
   shipments     MarketplaceShipment[]
   claims        MarketplaceClaim[]
+  campaignActions MarketplaceCampaignAction[]
 
   @@unique([storeId, provider])
   @@index([provider, sellerId])
@@ -1409,6 +1410,26 @@ model MarketplacePublicationProfile {
   @@unique([storeId, localCategoryId])
   @@index([localCategoryId])
   @@index([storeId, updatedAt])
+}
+
+model MarketplaceCampaignAction {
+  id                 String                         @id @default(uuid())
+  connectionId       String
+  externalCampaignId String
+  action             MarketplaceCampaignActionType
+  status             MarketplaceCampaignActionStatus @default(PENDING)
+  requestedBy        String
+  before             Json
+  requested          Json
+  result             Json?
+  error              String?                        @db.Text
+  createdAt          DateTime                       @default(now())
+  updatedAt          DateTime                       @updatedAt
+
+  connection MarketplaceConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([connectionId, externalCampaignId, createdAt], map: "MktCampaignAction_conn_campaign_created_idx")
+  @@index([connectionId, status, createdAt], map: "MktCampaignAction_conn_status_created_idx")
 }
 
 model MarketplaceOrder {
@@ -1728,5 +1749,17 @@ enum MarketplaceOutboxStatus {
   PROCESSING
   COMPLETED
   RETRY
+  FAILED
+}
+
+enum MarketplaceCampaignActionType {
+  PAUSE
+  ACTIVATE
+  UPDATE_SETTINGS
+}
+
+enum MarketplaceCampaignActionStatus {
+  PENDING
+  SUCCEEDED
   FAILED
 }

@@ -1,4 +1,4 @@
-import { requestMercadoLibreJson } from "./client";
+import { mutateMercadoLibreJson, requestMercadoLibreJson } from "./client";
 
 const PRODUCT_ADS_METRICS = [
   "clicks",
@@ -44,6 +44,22 @@ type ProductAdsMetrics = {
   unitsQuantity: number;
 };
 
+export const PRODUCT_ADS_STRATEGIES = [
+  "profitability",
+  "increase",
+  "visibility",
+] as const;
+
+export type MercadoLibreProductAdsStrategy =
+  (typeof PRODUCT_ADS_STRATEGIES)[number];
+
+export type MercadoLibreProductAdsCampaignUpdate = {
+  status?: "active" | "paused";
+  budget?: number;
+  roasTarget?: number;
+  strategy?: MercadoLibreProductAdsStrategy;
+};
+
 export type MercadoLibreProductAdsOverview =
   | {
       state: "READY";
@@ -57,6 +73,10 @@ export type MercadoLibreProductAdsOverview =
         status: string | null;
         budget: number | null;
         dailyBudget: number | null;
+        roasTarget: number | null;
+        strategy: MercadoLibreProductAdsStrategy | null;
+        automaticBudget: boolean | null;
+        lastUpdated: string | null;
         metrics: ProductAdsMetrics;
       }>;
       summary: ProductAdsMetrics;
@@ -91,6 +111,15 @@ function getNumber(value: unknown) {
 
 function getNumberOrZero(value: unknown) {
   return getNumber(value) ?? 0;
+}
+
+function getProductAdsStrategy(
+  value: unknown,
+): MercadoLibreProductAdsStrategy | null {
+  const strategy = getString(value)?.toLowerCase();
+  return strategy && PRODUCT_ADS_STRATEGIES.includes(strategy as never)
+    ? (strategy as MercadoLibreProductAdsStrategy)
+    : null;
 }
 
 function formatBogotaDate(date: Date) {
@@ -280,6 +309,13 @@ export async function getMercadoLibreProductAdsOverview({
             status: getString(campaign?.status),
             budget: getNumber(campaign?.budget),
             dailyBudget: getNumber(campaign?.daily_budget),
+            roasTarget: getNumber(campaign?.roas_target),
+            strategy: getProductAdsStrategy(campaign?.strategy),
+            automaticBudget:
+              typeof campaign?.automatic_budget === "boolean"
+                ? campaign.automatic_budget
+                : null,
+            lastUpdated: getString(campaign?.last_updated),
             metrics: parseMetrics(campaign?.metrics),
           },
         ];
@@ -310,4 +346,31 @@ export async function getMercadoLibreProductAdsOverview({
     campaigns,
     summary,
   };
+}
+
+export async function updateMercadoLibreProductAdsCampaign({
+  connectionId,
+  siteId,
+  campaignId,
+  update,
+}: {
+  connectionId: string;
+  siteId: string;
+  campaignId: string;
+  update: MercadoLibreProductAdsCampaignUpdate;
+}) {
+  const body: Record<string, unknown> = {};
+  if (update.status) body.status = update.status;
+  if (update.budget !== undefined) body.budget = update.budget;
+  if (update.roasTarget !== undefined) body.roas_target = update.roasTarget;
+  if (update.strategy) body.strategy = update.strategy;
+  if (Object.keys(body).length === 0) {
+    throw new Error("Define al menos un cambio para la campaña");
+  }
+
+  return mutateMercadoLibreJson(
+    connectionId,
+    `/marketplace/advertising/${encodeURIComponent(siteId)}/product_ads/campaigns/${encodeURIComponent(campaignId)}`,
+    { method: "PUT", body, headers: PRODUCT_ADS_HEADERS },
+  );
 }

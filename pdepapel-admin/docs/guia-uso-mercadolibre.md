@@ -106,14 +106,18 @@ En la lista de publicaciones puedes:
 
 Si no puedes hacerlo ahora, pulsa **Recordar en 30 días**. Eso solo oculta el aviso temporalmente; no modifica el producto ni la publicación.
 
-### Ver resultados de Product Ads
+### Revisar y decidir sobre Product Ads
 
 1. En **Ventas** → **Mercado Libre**, baja hasta **Product Ads**.
 2. Pulsa **Consultar métricas**. Solo consulta información: no crea campañas y no gasta dinero.
 3. Si ves el aviso de activación, entra a la configuración de la aplicación de Mercado Libre, deja **Publicidad de un producto** en **Lectura y escritura**, guarda y usa **Reconectar Mercado Libre** en P de Papel.
 4. Si Mercado Libre todavía no habilita publicidad para tu cuenta, actívala primero desde **Mi perfil** → **Publicidad** en Mercado Libre.
 
-El valor de **Ventas atribuidas**, ROAS y ACOS es una medición de publicidad de Mercado Libre. No reemplaza el **Neto recibido** de cada venta ni modifica los reportes tributarios.
+5. Para dejar de gastar en una campaña, pulsa **Pausar** y confirma. La publicación seguirá a la venta normalmente, pero dejará de aparecer como anuncio pagado.
+6. Para volver a usar publicidad, pulsa **Activar**. Revisa primero el presupuesto diario: activar puede generar nuevos cobros por clic, pero no garantiza ventas.
+7. En **Ajustar** puedes cambiar presupuesto, ROAS objetivo y estrategia. El panel explica cuánto podría consumirse y qué sacrificio esperas entre alcance y margen antes de confirmar.
+
+El valor de **Ventas atribuidas**, ROAS y ACOS es una medición de publicidad de Mercado Libre, no una utilidad. No descuenta comisiones, envíos, impuestos, devoluciones ni costo de compra; el **Neto recibido** de cada venta sigue siendo el dato real para dinero y reportes tributarios.
 
 ## 5. Vincular publicaciones que ya existían en Mercado Libre
 

@@ -116,9 +116,11 @@ export async function mutateMercadoLibreJson(
   {
     method,
     body,
+    headers = {},
   }: {
     method: "POST" | "PUT" | "DELETE";
     body?: Record<string, unknown>;
+    headers?: Record<string, string>;
   },
   request: typeof fetch = fetch,
 ) {
@@ -128,6 +130,7 @@ export async function mutateMercadoLibreJson(
     headers: {
       Authorization: `Bearer ${accessToken}`,
       ...(body ? { "Content-Type": "application/json; charset=utf-8" } : {}),
+      ...headers,
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
     cache: "no-store",

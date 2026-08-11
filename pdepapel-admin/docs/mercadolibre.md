@@ -54,7 +54,7 @@ La migración `prisma/manual-migrations/20260808_add_marketplace_operations.sql`
 
    No selecciones lectura y escritura para todo: la integración solo publica y actualiza productos, consulta órdenes confirmadas y lee los cargos de cada venta para registrar el neto real.
 
-   \*Este permiso se usa únicamente para consultar las métricas de **Product Ads** en P de Papel. El panel no crea, pausa ni modifica campañas o presupuestos. Mercado Libre presenta este permiso como lectura y escritura; el código actual usa solo consultas.
+   \*Este permiso permite consultar y, únicamente después de una confirmación explícita del administrador, pausar, activar o ajustar una campaña existente de **Product Ads**. P de Papel no crea campañas, no agrega anuncios y no modifica presupuestos automáticamente.
 
 9. Si el formulario muestra **Notificaciones**, déjalo sin temas seleccionados por ahora. Si ya marcaste `orders_v2`, vuelve a **Tópicos** y desmárcalo: Mercado Libre exige una Callback URL al seleccionar un tema. No registres todavía la URL de producción porque el endpoint aún no está desplegado; una venta existente podría recibir intentos fallidos y Mercado Libre podría desactivar las notificaciones.
 10. Pulsa **Guardar** o **Crear aplicación**.
@@ -122,9 +122,9 @@ Haz este paso solo cuando el código y el esquema de base de datos hayan sido ap
 7. Al volver al panel, confirma que el estado diga **Conectada**. Si cambiaste un permiso después de haber conectado la cuenta, pulsa **Reconectar Mercado Libre** para emitir un token con el nuevo alcance.
 8. Pulsa **Activar procesamiento seguro** y espera el mensaje de confirmación. Esto crea una recuperación automática cada cinco minutos.
 
-### Activar métricas de Product Ads (opcional)
+### Activar y gestionar Product Ads (opcional)
 
-Hazlo solo si quieres consultar desde P de Papel el resultado de la publicidad que ya manejas en Mercado Libre. Esta función no crea campañas ni genera cobros.
+Hazlo solo si quieres administrar desde P de Papel una campaña que ya existe en Mercado Libre. Consultar métricas no genera cobros; activar una campaña sí puede volver a producir gasto por clic según el presupuesto confirmado.
 
 1. En **Mis aplicaciones**, confirma que **Publicidad de un producto** esté en **Lectura y escritura**.
 2. Guarda el cambio y vuelve a **Ventas** → **Mercado Libre** en P de Papel.
@@ -133,6 +133,15 @@ Hazlo solo si quieres consultar desde P de Papel el resultado de la publicidad q
 5. Regresa al panel y, en **Product Ads**, pulsa **Consultar métricas**.
 
 Mercado Libre puede no habilitar Product Ads hasta que la cuenta cumpla sus propias condiciones comerciales. Ese caso no afecta ventas, publicaciones, existencias ni el webhook.
+
+### Decidir sobre una campaña sin confundir ventas con utilidad
+
+1. En **Ventas** → **Mercado Libre** → **Product Ads**, pulsa **Consultar métricas**. La consulta muestra los últimos 30 días y no cambia nada.
+2. Revisa **Gasto publicitario real** y **Ventas atribuidas por Mercado Libre**. Las ventas atribuidas son valor bruto: no incluyen comisión, envío, impuestos, devoluciones ni costo de compra. El dinero realmente recibido se consulta en la liquidación neta de cada venta.
+3. Para dejar de invertir, pulsa **Pausar** junto a la campaña y confirma. La publicación sigue activa para ventas orgánicas; no se devuelven clics cobrados antes de pausar.
+4. Para reanudarla, pulsa **Activar** y revisa el presupuesto mostrado antes de confirmar. La acción no garantiza ventas y puede volver a generar cobros por clic.
+5. En **Ajustar**, revisa el presupuesto promedio diario, el ROAS objetivo y la estrategia antes de guardar. El panel calcula una referencia de 30 días y advierte que Mercado Libre puede usar hasta el doble del promedio en un día para compensar días previos con menor consumo.
+6. Cada cambio queda registrado con la configuración anterior, el cambio solicitado, la persona que lo confirmó y la respuesta de Mercado Libre. Nunca se ejecutan cambios automáticos ni se crean campañas desde P de Papel.
 
 ## 6. Activar notificaciones de ventas
 
