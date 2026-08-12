@@ -41,16 +41,16 @@ La migración `prisma/manual-migrations/20260808_add_marketplace_operations.sql`
 
 8. En la sección detallada de **Permisos**, selecciona solo lo necesario:
 
-   | Permiso                                        | Nivel                   |
-   | ---------------------------------------------- | ----------------------- |
-   | Usuarios                                       | **Lectura**             |
-   | Comunicaciones pre y post ventas               | **Lectura y escritura** |
-   | Publicación y sincronización                   | **Lectura y escritura** |
+   | Permiso                                        | Nivel                     |
+   | ---------------------------------------------- | ------------------------- |
+   | Usuarios                                       | **Lectura**               |
+   | Comunicaciones pre y post ventas               | **Lectura y escritura**   |
+   | Publicación y sincronización                   | **Lectura y escritura**   |
    | Publicidad de un producto                      | **Lectura y escritura\*** |
-   | Facturación de una venta                       | **Lectura**             |
-   | Métricas del negocio                           | **Sin acceso**          |
-   | Promociones, cupones y descuentos de una venta | **Sin acceso**          |
-   | Venta y envíos de un producto                  | **Lectura**             |
+   | Facturación de una venta                       | **Lectura**               |
+   | Métricas del negocio                           | **Sin acceso**            |
+   | Promociones, cupones y descuentos de una venta | **Sin acceso**            |
+   | Venta y envíos de un producto                  | **Lectura**               |
 
    No selecciones lectura y escritura para todo: la integración solo publica y actualiza productos, consulta órdenes confirmadas y lee los cargos de cada venta para registrar el neto real.
 
@@ -148,13 +148,12 @@ Mercado Libre puede no habilitar Product Ads hasta que la cuenta cumpla sus prop
 Este panel sirve para entender el dinero de Mercado Libre sin confundir una venta con dinero que ya puede retirarse. No crea retiros, no guarda cuentas bancarias y no cambia campañas, publicaciones, inventario ni ventas.
 
 1. En **Ventas** → **Mercado Libre**, busca **Dinero de Mercado Libre** y pulsa **Consultar dinero**. La consulta es manual para no hacer llamadas innecesarias a Mercado Libre.
-2. Lee **Saldo disponible** solo como el valor que Mercado Pago informó en ese momento. Puede incluir otros movimientos de la cuenta y no sustituye el detalle de cada venta.
-3. Revisa **Por liberar**: suma los netos ya liquidados por Mercado Libre que todavía no aparecen liberados. Ejemplo: si una venta dejó un neto de `$46.457`, ese es el valor que puede aparecer aquí; no se usa el precio total que pagó el comprador.
-4. Revisa **Liquidación pendiente**: son ventas pagadas cuyo valor neto aún no fue publicado por Mercado Libre. No las cuentes como dinero disponible ni como ingreso definitivo.
-5. En **Próximas liberaciones**, compara las fechas con Mercado Pago. Un reclamo, devolución u otra retención puede mover la disponibilidad real.
-6. Para retirar, pulsa **Abrir Mercado Pago para retirar**, elige la cuenta bancaria y confirma allí. P de Papel no puede iniciar un retiro por seguridad y porque Mercado Pago debe mostrar la confirmación final.
+2. Revisa **Por liberar**: suma los netos ya liquidados por Mercado Libre que todavía no aparecen liberados. Ejemplo: si una venta dejó un neto de `$46.457`, ese es el valor que puede aparecer aquí; no se usa el precio total que pagó el comprador.
+3. Revisa **Liquidación pendiente**: son ventas pagadas cuyo valor neto aún no fue publicado por Mercado Libre. No las cuentes como dinero disponible ni como ingreso definitivo.
+4. En **Próximas liberaciones**, compara las fechas con Mercado Pago. Un reclamo, devolución u otra retención puede mover la disponibilidad real.
+5. Mercado Libre no entrega el saldo disponible de la cuenta de Mercado Pago con esta conexión. Para ver el saldo exacto y retirar, pulsa **Abrir Mercado Pago para retirar**, elige la cuenta bancaria y confirma allí. P de Papel no puede iniciar un retiro por seguridad y porque Mercado Pago debe mostrar la confirmación final.
 
-Si el saldo muestra **Sin dato**, la conexión no entregó ese valor en esta consulta. Las fechas y netos registrados de ventas siguen siendo útiles; actualiza más tarde o verifica directamente en Mercado Pago.
+Si una venta sigue sin fecha después de actualizar, verifica el permiso **Facturación de una venta → Lectura**, reconecta Mercado Libre y revisa la venta directamente en Mercado Pago. La actualización conserva el neto, los cargos y el inventario existentes.
 
 ## 6. Activar notificaciones de ventas
 

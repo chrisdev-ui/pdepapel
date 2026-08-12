@@ -146,10 +146,9 @@ P de Papel recibe la venta pagada, la muestra en la sección de Mercado Libre y 
 ### Consultar cuándo se puede retirar el dinero
 
 1. En **Ventas → Mercado Libre**, busca la tarjeta **Dinero de Mercado Libre** y pulsa **Consultar dinero**.
-2. Mira **Saldo disponible** para conocer el valor que Mercado Pago muestra en ese momento.
-3. Mira **Por liberar** y las **Próximas liberaciones**. Son ventas cuyo neto ya se conoce, pero que todavía pueden estar retenidas o pendientes de la fecha que Mercado Libre informó.
-4. Si una venta dice **Liquidación pendiente**, espera: Mercado Libre todavía no indicó cuánto dinero queda realmente para P de Papel. No uses el precio total pagado por el cliente como si fuera el dinero recibido.
-5. Cuando decidas retirar, pulsa **Abrir Mercado Pago para retirar**. Allí escoges la cuenta y confirmas el retiro. P de Papel nunca mueve dinero por sí solo.
+2. Mira **Por liberar** y las **Próximas liberaciones**. Son ventas cuyo neto ya se conoce, pero que todavía pueden estar retenidas o pendientes de la fecha que Mercado Libre informó.
+3. Si una venta dice **Liquidación pendiente**, espera: Mercado Libre todavía no indicó cuánto dinero queda realmente para P de Papel. No uses el precio total pagado por el cliente como si fuera el dinero recibido.
+4. Cuando decidas retirar, pulsa **Abrir Mercado Pago para retirar**. Allí ves el saldo exacto, escoges la cuenta y confirmas el retiro. P de Papel nunca mueve dinero por sí solo.
 
 Ejemplo: una venta de `$69.000` puede dejar `$46.457` después de cargos, envío e impuestos. Ese neto puede aparecer **por liberar** primero; solo considéralo disponible cuando Mercado Pago lo muestre como saldo disponible.
 
@@ -189,14 +188,14 @@ No concilies una venta antigua si ya creaste una venta manual o ya ajustaste el 
 
 ## 9. Problemas comunes
 
-| Situación | Qué hacer |
-| --- | --- |
-| No aparece el botón para publicar | Guarda el producto, revisa que tenga fotos y vuelve a entrar. Si continúa, avisa a la persona responsable de la administración. |
-| El precio sugerido no me convence | Cámbialo. Es una ayuda, no una obligación. |
-| El producto no tiene una categoría adecuada | Busca una categoría más específica en el selector; no publiques hasta estar conforme. |
-| Una venta no aparece al instante | Espera unos minutos y actualiza la sección. No crees una venta manual mientras revisas. |
-| No puedo relacionar una publicación vieja | Elige el producto local manualmente o déjala sin vincular hasta confirmar cuál es. |
-| Una publicación muestra poco stock | Revisa el inventario real y la reserva de seguridad. Nunca aumentes la cantidad solo para que vuelva a estar activa. |
+| Situación                                   | Qué hacer                                                                                                                       |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| No aparece el botón para publicar           | Guarda el producto, revisa que tenga fotos y vuelve a entrar. Si continúa, avisa a la persona responsable de la administración. |
+| El precio sugerido no me convence           | Cámbialo. Es una ayuda, no una obligación.                                                                                      |
+| El producto no tiene una categoría adecuada | Busca una categoría más específica en el selector; no publiques hasta estar conforme.                                           |
+| Una venta no aparece al instante            | Espera unos minutos y actualiza la sección. No crees una venta manual mientras revisas.                                         |
+| No puedo relacionar una publicación vieja   | Elige el producto local manualmente o déjala sin vincular hasta confirmar cuál es.                                              |
+| Una publicación muestra poco stock          | Revisa el inventario real y la reserva de seguridad. Nunca aumentes la cantidad solo para que vuelva a estar activa.            |
 
 ## 10. Reglas para trabajar tranquila
 

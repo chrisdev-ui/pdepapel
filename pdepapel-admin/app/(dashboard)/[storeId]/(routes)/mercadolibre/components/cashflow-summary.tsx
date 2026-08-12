@@ -21,17 +21,6 @@ import {
 import { useCallback, useState } from "react";
 
 type MercadoLibreCashflowSummary = {
-  accountBalance:
-    | {
-        state: "AVAILABLE";
-        availableBalance: number;
-        totalAmount: number | null;
-        unavailableBalance: number | null;
-      }
-    | {
-        state: "UNAVAILABLE";
-        reason: "UNSUPPORTED" | "TEMPORARY" | "INVALID_RESPONSE";
-      };
   awaitingRelease: { amount: number; orders: number };
   settlementPending: { orders: number };
   releaseStatusUnknown: { orders: number };
@@ -42,6 +31,12 @@ type MercadoLibreCashflowSummary = {
     paidAt: string | null;
     releaseDate: string;
   }[];
+  refresh?: {
+    checkedOrders: number;
+    refreshedOrders: number;
+    pendingOrders: number;
+    failedOrders: number;
+  };
   updatedAt: string;
 };
 
@@ -117,6 +112,7 @@ export function MercadoLibreCashflowSummary({ storeId }: { storeId: string }) {
     try {
       const response = await fetch(
         `/api/${storeId}/marketplaces/mercadolibre/cashflow`,
+        { method: "POST" },
       );
       if (!response.ok) throw new Error(await getErrorMessage(response));
       setSummary((await response.json()) as MercadoLibreCashflowSummary);
@@ -131,9 +127,6 @@ export function MercadoLibreCashflowSummary({ storeId }: { storeId: string }) {
     }
   }, [storeId]);
 
-  const accountBalance = summary?.accountBalance;
-  const balanceIsAvailable = accountBalance?.state === "AVAILABLE";
-
   return (
     <Card>
       <CardHeader>
@@ -144,8 +137,8 @@ export function MercadoLibreCashflowSummary({ storeId }: { storeId: string }) {
               Dinero de Mercado Libre
             </CardTitle>
             <CardDescription>
-              Consulta manualmente el saldo y las fechas de liberación. P de
-              Papel no mueve dinero ni guarda cuentas bancarias.
+              Actualiza las fechas de liberación de tus ventas. P de Papel no
+              mueve dinero ni guarda cuentas bancarias.
             </CardDescription>
           </div>
           <Button
@@ -160,7 +153,7 @@ export function MercadoLibreCashflowSummary({ storeId }: { storeId: string }) {
             ) : (
               <RefreshCw className="mr-2 h-4 w-4" />
             )}
-            {summary ? "Actualizar saldo" : "Consultar dinero"}
+            {summary ? "Actualizar liberaciones" : "Consultar dinero"}
           </Button>
         </div>
       </CardHeader>
@@ -186,31 +179,7 @@ export function MercadoLibreCashflowSummary({ storeId }: { storeId: string }) {
           </div>
         ) : summary ? (
           <>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <SummaryMetric
-                label="Saldo disponible"
-                value={
-                  balanceIsAvailable
-                    ? formatCurrency(accountBalance.availableBalance)
-                    : "Sin dato"
-                }
-                detail={
-                  balanceIsAvailable
-                    ? "Saldo actual informado por Mercado Pago."
-                    : "Mercado Pago no devolvió el saldo para esta conexión."
-                }
-                tone={balanceIsAvailable ? "success" : "warning"}
-              />
-              <SummaryMetric
-                label="Saldo retenido"
-                value={
-                  balanceIsAvailable
-                    ? formatCurrency(accountBalance.unavailableBalance)
-                    : "—"
-                }
-                detail="Valor retenido o aún no disponible según Mercado Pago."
-                tone="warning"
-              />
+            <div className="grid gap-3 sm:grid-cols-2">
               <SummaryMetric
                 label="Por liberar"
                 value={formatCurrency(summary.awaitingRelease.amount)}
@@ -307,18 +276,25 @@ export function MercadoLibreCashflowSummary({ storeId }: { storeId: string }) {
                 <p className="mt-3 text-xs text-muted-foreground">
                   {summary.releaseStatusUnknown.orders}{" "}
                   {summary.releaseStatusUnknown.orders === 1
-                    ? "venta histórica no tiene"
-                    : "ventas históricas no tienen"}{" "}
+                    ? "venta no tiene"
+                    : "ventas no tienen"}{" "}
                   fecha de liberación registrada. Revísalas en Mercado Pago
                   antes de considerarlas disponibles.
                 </p>
               ) : null}
             </div>
 
+            {summary.refresh && summary.refresh.checkedOrders ? (
+              <p className="text-xs text-muted-foreground">
+                {summary.refresh.failedOrders
+                  ? `No fue posible actualizar ${summary.refresh.failedOrders} ${summary.refresh.failedOrders === 1 ? "venta" : "ventas"}. Verifica la conexión y el permiso Facturación de una venta en Mercado Libre antes de reintentar.`
+                  : `Se revisaron ${summary.refresh.checkedOrders} ${summary.refresh.checkedOrders === 1 ? "venta" : "ventas"} en Mercado Libre. ${summary.refresh.refreshedOrders ? `Se actualizaron ${summary.refresh.refreshedOrders} ${summary.refresh.refreshedOrders === 1 ? "fecha" : "fechas"} de liberación.` : "Mercado Libre todavía no informó una fecha nueva."}`}
+              </p>
+            ) : null}
+
             <p className="text-xs text-muted-foreground">
-              Última consulta: {formatDate(summary.updatedAt)}. El saldo de
-              Mercado Pago puede incluir movimientos distintos a las ventas
-              registradas en P de Papel.
+              Última consulta: {formatDate(summary.updatedAt)}. Mercado Pago es
+              la fuente final del saldo disponible y del retiro.
             </p>
           </>
         ) : (
@@ -330,10 +306,9 @@ export function MercadoLibreCashflowSummary({ storeId }: { storeId: string }) {
                   Consulta el dinero cuando lo necesites
                 </p>
                 <p>
-                  Pulsa <strong>Consultar dinero</strong> para ver el saldo que
-                  Mercado Pago informa, las ventas por liberar y las que aún
-                  esperan liquidación. La consulta no mueve dinero ni crea
-                  retiros.
+                  Pulsa <strong>Consultar dinero</strong> para actualizar las
+                  ventas por liberar y las que aún esperan liquidación. La
+                  consulta no mueve dinero ni crea retiros.
                 </p>
               </div>
             </div>

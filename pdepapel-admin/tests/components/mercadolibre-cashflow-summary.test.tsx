@@ -13,16 +13,18 @@ describe("MercadoLibreCashflowSummary", () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
-          accountBalance: {
-            state: "AVAILABLE",
-            availableBalance: 46_457,
-            totalAmount: 46_457,
-            unavailableBalance: 0,
-          },
-          awaitingRelease: { amount: 0, orders: 0 },
+          awaitingRelease: { amount: 46_457, orders: 1 },
           settlementPending: { orders: 0 },
           releaseStatusUnknown: { orders: 0 },
-          upcomingReleases: [],
+          upcomingReleases: [
+            {
+              marketplaceOrderId: "marketplace-order-id",
+              externalOrderId: "2000017813937484",
+              netAmount: 46_457,
+              paidAt: "2026-08-08T12:00:00.000Z",
+              releaseDate: "2026-08-14T12:00:00.000Z",
+            },
+          ],
           updatedAt: "2026-08-11T12:00:00.000Z",
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
@@ -38,8 +40,9 @@ describe("MercadoLibreCashflowSummary", () => {
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
         "/api/store-id/marketplaces/mercadolibre/cashflow",
+        { method: "POST" },
       ),
     );
-    expect(await screen.findByText(/46\.457/)).toBeVisible();
+    expect((await screen.findAllByText(/46\.457/)).length).toBeGreaterThan(0);
   });
 });

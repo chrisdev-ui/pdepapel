@@ -2,32 +2,25 @@ import { MarketplaceOrderStatus, type Prisma } from "@prisma/client";
 
 import prismadb from "@/lib/prismadb";
 
-import { requestMercadoLibreJson } from "./client";
+import {
+  getMercadoLibreOrderFinancials,
+  MercadoLibreFinancialsPendingError,
+} from "./order-financials";
 
 type UnknownRecord = Record<string, unknown>;
+const RELEASE_STATUS_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const MAX_RELEASE_STATUS_REFRESHES = 10;
 
 type CashflowOrder = {
   id: string;
   externalOrderId: string;
   paidAt: Date | null;
+  totalAmount: number | null;
   netAmount: number | null;
   metadata: Prisma.JsonValue | null;
 };
 
-export type MercadoLibreAccountBalance =
-  | {
-      state: "AVAILABLE";
-      availableBalance: number;
-      totalAmount: number | null;
-      unavailableBalance: number | null;
-    }
-  | {
-      state: "UNAVAILABLE";
-      reason: "UNSUPPORTED" | "TEMPORARY" | "INVALID_RESPONSE";
-    };
-
 export type MercadoLibreCashflowSummary = {
-  accountBalance: MercadoLibreAccountBalance;
   awaitingRelease: {
     amount: number;
     orders: number;
@@ -48,13 +41,15 @@ export type MercadoLibreCashflowSummary = {
   updatedAt: Date;
 };
 
+export type MercadoLibreCashflowRefreshResult = {
+  checkedOrders: number;
+  refreshedOrders: number;
+  pendingOrders: number;
+  failedOrders: number;
+};
+
 function isRecord(value: unknown): value is UnknownRecord {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function getFiniteNumber(value: unknown) {
-  const numberValue = Number(value);
-  return Number.isFinite(numberValue) ? numberValue : null;
 }
 
 function getString(value: unknown) {
@@ -81,9 +76,58 @@ export function getMercadoLibreMoneyRelease(metadata: Prisma.JsonValue | null) {
   };
 }
 
+function getReleaseStatusCheckedAt(metadata: Prisma.JsonValue | null) {
+  if (!isRecord(metadata) || !isRecord(metadata.financials)) return null;
+
+  return parseReleaseDate(metadata.financials.releaseStatusCheckedAt);
+}
+
+export function needsMercadoLibreReleaseStatusRefresh(
+  metadata: Prisma.JsonValue | null,
+  now = new Date(),
+) {
+  const release = getMercadoLibreMoneyRelease(metadata);
+  if (release.status === "released") return false;
+
+  const checkedAt = getReleaseStatusCheckedAt(metadata);
+  return (
+    !checkedAt ||
+    checkedAt.getTime() <= now.getTime() - RELEASE_STATUS_REFRESH_INTERVAL_MS
+  );
+}
+
+export function mergeMercadoLibreReleaseStatus({
+  metadata,
+  moneyReleaseDate,
+  moneyReleaseStatus,
+  checkedAt = new Date(),
+}: {
+  metadata: Prisma.JsonValue | null;
+  moneyReleaseDate: string | null;
+  moneyReleaseStatus: string | null;
+  checkedAt?: Date;
+}): Prisma.InputJsonValue {
+  const currentMetadata = isRecord(metadata) ? metadata : {};
+  const currentFinancials = isRecord(currentMetadata.financials)
+    ? currentMetadata.financials
+    : {};
+
+  return {
+    ...currentMetadata,
+    financials: {
+      ...currentFinancials,
+      source:
+        getString(currentFinancials.source) ?? "MERCADOLIBRE_BILLING_STATUS",
+      status: getString(currentFinancials.status) ?? "READY",
+      moneyReleaseDate,
+      moneyReleaseStatus,
+      releaseStatusCheckedAt: checkedAt.toISOString(),
+    },
+  } as Prisma.InputJsonValue;
+}
+
 export function buildMercadoLibreCashflowSummary(
   orders: CashflowOrder[],
-  accountBalance: MercadoLibreAccountBalance,
   now = new Date(),
 ): MercadoLibreCashflowSummary {
   let awaitingReleaseAmount = 0;
@@ -121,7 +165,6 @@ export function buildMercadoLibreCashflowSummary(
   }
 
   return {
-    accountBalance,
     awaitingRelease: {
       amount: awaitingReleaseAmount,
       orders: awaitingReleaseOrders,
@@ -138,83 +181,80 @@ export function buildMercadoLibreCashflowSummary(
   };
 }
 
-export function parseMercadoLibreAccountBalance(
-  payload: unknown,
-): MercadoLibreAccountBalance {
-  if (!isRecord(payload)) {
-    return { state: "UNAVAILABLE", reason: "INVALID_RESPONSE" };
-  }
+async function getMercadoLibreCashflowOrders(connectionId: string) {
+  return prismadb.marketplaceOrder.findMany({
+    where: {
+      connectionId,
+      status: MarketplaceOrderStatus.PAID,
+    },
+    select: {
+      id: true,
+      externalOrderId: true,
+      paidAt: true,
+      totalAmount: true,
+      netAmount: true,
+      metadata: true,
+    },
+  });
+}
 
-  const availableBalance = getFiniteNumber(payload.available_balance);
-  if (availableBalance === null) {
-    return { state: "UNAVAILABLE", reason: "INVALID_RESPONSE" };
-  }
+export async function refreshMercadoLibreCashflowReleaseStatuses(
+  connectionId: string,
+  now = new Date(),
+): Promise<MercadoLibreCashflowRefreshResult> {
+  const orders = await getMercadoLibreCashflowOrders(connectionId);
+  const candidates = orders
+    .filter(
+      (order) =>
+        order.netAmount !== null &&
+        order.totalAmount !== null &&
+        needsMercadoLibreReleaseStatusRefresh(order.metadata, now),
+    )
+    .sort(
+      (first, second) =>
+        (first.paidAt?.getTime() ?? 0) - (second.paidAt?.getTime() ?? 0),
+    )
+    .slice(0, MAX_RELEASE_STATUS_REFRESHES);
 
-  return {
-    state: "AVAILABLE",
-    availableBalance,
-    totalAmount: getFiniteNumber(payload.total_amount),
-    unavailableBalance: getFiniteNumber(payload.unavailable_balance),
+  const result: MercadoLibreCashflowRefreshResult = {
+    checkedOrders: candidates.length,
+    refreshedOrders: 0,
+    pendingOrders: 0,
+    failedOrders: 0,
   };
-}
 
-export async function getMercadoLibreAccountBalance({
-  connectionId,
-  sellerId,
-}: {
-  connectionId: string;
-  sellerId: string | null;
-}): Promise<MercadoLibreAccountBalance> {
-  if (!sellerId) {
-    return { state: "UNAVAILABLE", reason: "INVALID_RESPONSE" };
-  }
-
-  const response = await requestMercadoLibreJson(
-    connectionId,
-    `/users/${encodeURIComponent(sellerId)}/mercadopago_account/balance`,
-  );
-
-  if (!response.ok) {
-    return {
-      state: "UNAVAILABLE",
-      reason:
-        response.status === 400 ||
-        response.status === 403 ||
-        response.status === 404
-          ? "UNSUPPORTED"
-          : "TEMPORARY",
-    };
-  }
-
-  return parseMercadoLibreAccountBalance(response.payload);
-}
-
-export async function getMercadoLibreCashflowSummary({
-  connectionId,
-  sellerId,
-}: {
-  connectionId: string;
-  sellerId: string | null;
-}) {
-  const [orders, accountBalance] = await Promise.all([
-    prismadb.marketplaceOrder.findMany({
-      where: {
+  for (const order of candidates) {
+    try {
+      const financials = await getMercadoLibreOrderFinancials(
         connectionId,
-        status: MarketplaceOrderStatus.PAID,
-      },
-      select: {
-        id: true,
-        externalOrderId: true,
-        paidAt: true,
-        netAmount: true,
-        metadata: true,
-      },
-    }),
-    getMercadoLibreAccountBalance({ connectionId, sellerId }).catch(() => ({
-      state: "UNAVAILABLE" as const,
-      reason: "TEMPORARY" as const,
-    })),
-  ]);
+        order.externalOrderId,
+        order.totalAmount!,
+      );
+      await prismadb.marketplaceOrder.update({
+        where: { id: order.id },
+        data: {
+          metadata: mergeMercadoLibreReleaseStatus({
+            metadata: order.metadata,
+            moneyReleaseDate: financials.moneyReleaseDate,
+            moneyReleaseStatus: financials.moneyReleaseStatus,
+            checkedAt: now,
+          }),
+        },
+      });
+      result.refreshedOrders += 1;
+    } catch (error) {
+      if (error instanceof MercadoLibreFinancialsPendingError) {
+        result.pendingOrders += 1;
+      } else {
+        result.failedOrders += 1;
+      }
+    }
+  }
 
-  return buildMercadoLibreCashflowSummary(orders, accountBalance);
+  return result;
+}
+
+export async function getMercadoLibreCashflowSummary(connectionId: string) {
+  const orders = await getMercadoLibreCashflowOrders(connectionId);
+  return buildMercadoLibreCashflowSummary(orders);
 }

@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildMercadoLibreCashflowSummary,
-  parseMercadoLibreAccountBalance,
+  mergeMercadoLibreReleaseStatus,
+  needsMercadoLibreReleaseStatusRefresh,
 } from "@/lib/mercadolibre/cashflow";
 
 describe("Mercado Libre cashflow", () => {
@@ -14,6 +15,7 @@ describe("Mercado Libre cashflow", () => {
           id: "upcoming-order",
           externalOrderId: "2000017813937484",
           paidAt: new Date("2026-08-08T12:00:00.000Z"),
+          totalAmount: 69_000,
           netAmount: 46_457,
           metadata: {
             financials: {
@@ -26,6 +28,7 @@ describe("Mercado Libre cashflow", () => {
           id: "released-order",
           externalOrderId: "2000017813937485",
           paidAt: now,
+          totalAmount: 18_000,
           netAmount: 18_000,
           metadata: {
             financials: { moneyReleaseStatus: "released" },
@@ -35,6 +38,7 @@ describe("Mercado Libre cashflow", () => {
           id: "pending-settlement",
           externalOrderId: "2000017813937486",
           paidAt: now,
+          totalAmount: 18_000,
           netAmount: null,
           metadata: null,
         },
@@ -42,16 +46,11 @@ describe("Mercado Libre cashflow", () => {
           id: "unknown-release",
           externalOrderId: "2000017813937487",
           paidAt: now,
+          totalAmount: 9_000,
           netAmount: 9_000,
           metadata: null,
         },
       ],
-      {
-        state: "AVAILABLE",
-        availableBalance: 46_457,
-        totalAmount: 55_457,
-        unavailableBalance: 9_000,
-      },
       now,
     );
 
@@ -66,23 +65,31 @@ describe("Mercado Libre cashflow", () => {
     ]);
   });
 
-  it("accepts only a valid Mercado Pago balance response", () => {
-    expect(
-      parseMercadoLibreAccountBalance({
-        available_balance: 46_457.73,
-        total_amount: 55_457.73,
-        unavailable_balance: 9_000,
-      }),
-    ).toEqual({
-      state: "AVAILABLE",
-      availableBalance: 46_457.73,
-      totalAmount: 55_457.73,
-      unavailableBalance: 9_000,
+  it("updates release details without replacing historical reconciliation data", () => {
+    const checkedAt = new Date("2026-08-11T12:00:00.000Z");
+    const metadata = mergeMercadoLibreReleaseStatus({
+      metadata: {
+        source: "HISTORICAL_RECONCILIATION",
+        taxesAmount: 933,
+        reconciledFromPackId: "2000014415856007",
+      },
+      moneyReleaseDate: "2026-08-14T12:00:00.000Z",
+      moneyReleaseStatus: "pending",
+      checkedAt,
     });
 
-    expect(parseMercadoLibreAccountBalance({ total_amount: 46_457 })).toEqual({
-      state: "UNAVAILABLE",
-      reason: "INVALID_RESPONSE",
+    expect(metadata).toMatchObject({
+      source: "HISTORICAL_RECONCILIATION",
+      taxesAmount: 933,
+      reconciledFromPackId: "2000014415856007",
+      financials: {
+        moneyReleaseDate: "2026-08-14T12:00:00.000Z",
+        moneyReleaseStatus: "pending",
+        releaseStatusCheckedAt: checkedAt.toISOString(),
+      },
     });
+    expect(needsMercadoLibreReleaseStatusRefresh(metadata, checkedAt)).toBe(
+      false,
+    );
   });
 });
