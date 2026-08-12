@@ -143,6 +143,19 @@ Mercado Libre puede no habilitar Product Ads hasta que la cuenta cumpla sus prop
 5. En **Ajustar**, revisa el presupuesto promedio diario, el ROAS objetivo y la estrategia antes de guardar. El panel calcula una referencia de 30 días y advierte que Mercado Libre puede usar hasta el doble del promedio en un día para compensar días previos con menor consumo.
 6. Cada cambio queda registrado con la configuración anterior, el cambio solicitado, la persona que lo confirmó y la respuesta de Mercado Libre. Nunca se ejecutan cambios automáticos ni se crean campañas desde P de Papel.
 
+### Consultar dinero por retirar
+
+Este panel sirve para entender el dinero de Mercado Libre sin confundir una venta con dinero que ya puede retirarse. No crea retiros, no guarda cuentas bancarias y no cambia campañas, publicaciones, inventario ni ventas.
+
+1. En **Ventas** → **Mercado Libre**, busca **Dinero de Mercado Libre** y pulsa **Consultar dinero**. La consulta es manual para no hacer llamadas innecesarias a Mercado Libre.
+2. Lee **Saldo disponible** solo como el valor que Mercado Pago informó en ese momento. Puede incluir otros movimientos de la cuenta y no sustituye el detalle de cada venta.
+3. Revisa **Por liberar**: suma los netos ya liquidados por Mercado Libre que todavía no aparecen liberados. Ejemplo: si una venta dejó un neto de `$46.457`, ese es el valor que puede aparecer aquí; no se usa el precio total que pagó el comprador.
+4. Revisa **Liquidación pendiente**: son ventas pagadas cuyo valor neto aún no fue publicado por Mercado Libre. No las cuentes como dinero disponible ni como ingreso definitivo.
+5. En **Próximas liberaciones**, compara las fechas con Mercado Pago. Un reclamo, devolución u otra retención puede mover la disponibilidad real.
+6. Para retirar, pulsa **Abrir Mercado Pago para retirar**, elige la cuenta bancaria y confirma allí. P de Papel no puede iniciar un retiro por seguridad y porque Mercado Pago debe mostrar la confirmación final.
+
+Si el saldo muestra **Sin dato**, la conexión no entregó ese valor en esta consulta. Las fechas y netos registrados de ventas siguen siendo útiles; actualiza más tarde o verifica directamente en Mercado Pago.
+
 ## 6. Activar notificaciones de ventas
 
 Haz este paso únicamente después de terminar la sección anterior.

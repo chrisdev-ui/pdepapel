@@ -24,6 +24,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { MercadoLibreHistoricalSales } from "./historical-sales";
+import { MercadoLibreCashflowSummary } from "./cashflow-summary";
 import { MercadoLibreListingManager } from "./listing-manager";
 import { MercadoLibreOperationsCenter } from "./operations-center";
 import { MercadoLibreProductAdsOverview } from "./product-ads-overview";
@@ -348,6 +349,10 @@ export default function MercadoLibreClient({
 
       {connection?.status === "CONNECTED" ? (
         <MercadoLibreProductAdsOverview storeId={storeId} />
+      ) : null}
+
+      {connection?.status === "CONNECTED" ? (
+        <MercadoLibreCashflowSummary storeId={storeId} />
       ) : null}
 
       <MercadoLibreHistoricalSales

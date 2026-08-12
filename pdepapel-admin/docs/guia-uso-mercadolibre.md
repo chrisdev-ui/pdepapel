@@ -143,6 +143,16 @@ P de Papel recibe la venta pagada, la muestra en la sección de Mercado Libre y 
 
 **Importante:** no crees otra venta manual en P de Papel por una venta que ya aparece como pagada desde Mercado Libre. Eso duplicaría los ingresos y puede descontar stock dos veces.
 
+### Consultar cuándo se puede retirar el dinero
+
+1. En **Ventas → Mercado Libre**, busca la tarjeta **Dinero de Mercado Libre** y pulsa **Consultar dinero**.
+2. Mira **Saldo disponible** para conocer el valor que Mercado Pago muestra en ese momento.
+3. Mira **Por liberar** y las **Próximas liberaciones**. Son ventas cuyo neto ya se conoce, pero que todavía pueden estar retenidas o pendientes de la fecha que Mercado Libre informó.
+4. Si una venta dice **Liquidación pendiente**, espera: Mercado Libre todavía no indicó cuánto dinero queda realmente para P de Papel. No uses el precio total pagado por el cliente como si fuera el dinero recibido.
+5. Cuando decidas retirar, pulsa **Abrir Mercado Pago para retirar**. Allí escoges la cuenta y confirmas el retiro. P de Papel nunca mueve dinero por sí solo.
+
+Ejemplo: una venta de `$69.000` puede dejar `$46.457` después de cargos, envío e impuestos. Ese neto puede aparecer **por liberar** primero; solo considéralo disponible cuando Mercado Pago lo muestre como saldo disponible.
+
 ## 7. Preguntas, envíos y reclamos
 
 ### Preguntas
