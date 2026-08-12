@@ -3,6 +3,7 @@ import { Client, Receiver } from "@upstash/qstash";
 import prismadb from "@/lib/prismadb";
 
 type QueueEnvironment = Record<string, string | undefined>;
+export type MercadoLibreOutboxQueueLane = "notification" | "operation";
 
 type QueueFailureCallbackPayload = {
   maxRetries?: unknown;
@@ -208,6 +209,7 @@ export function parseMercadoLibreQueueFailureCallback(
 export async function enqueueMercadoLibreOutboxEvent(
   eventId: string,
   connectionId: string,
+  lane: MercadoLibreOutboxQueueLane = "operation",
   environment: QueueEnvironment = process.env,
 ) {
   if (!getMercadoLibreQueueConfigurationStatus(environment).configured) {
@@ -225,10 +227,10 @@ export async function enqueueMercadoLibreOutboxEvent(
     timeout: 50,
     failureCallback: getMercadoLibreFailureUrl(environment),
     flowControl: {
-      key: `mercadolibre-connection-${connectionId}`,
+      key: getMercadoLibreOutboxFlowControlKey(connectionId, lane),
       parallelism: 1,
     },
-    label: ["mercadolibre", "stock-sync"],
+    label: getMercadoLibreOutboxQueueLabel(lane),
     headers: {
       ...MERCADOLIBRE_FAILURE_CALLBACK_HEADERS,
     },
@@ -236,6 +238,22 @@ export async function enqueueMercadoLibreOutboxEvent(
   });
 
   return true;
+}
+
+export function getMercadoLibreOutboxFlowControlKey(
+  connectionId: string,
+  lane: MercadoLibreOutboxQueueLane,
+) {
+  return `mercadolibre-${lane}-${connectionId}`;
+}
+
+export function getMercadoLibreOutboxQueueLabel(
+  lane: MercadoLibreOutboxQueueLane,
+) {
+  return [
+    "mercadolibre",
+    lane === "notification" ? "sale-notification" : "operation",
+  ];
 }
 
 export function getMercadoLibreSyncUrl(

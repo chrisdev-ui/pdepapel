@@ -35,7 +35,7 @@ export async function sendMercadoLibreOrderNotification({
   paidAt: Date | null;
   orderSummary: string;
   storeId: string;
-  netAmount: number;
+  netAmount: number | null;
 }) {
   if (env.NODE_ENV === "development") {
     console.log(
@@ -65,10 +65,10 @@ export async function sendMercadoLibreOrderNotification({
       orderNumber,
       orderSummary,
       orderUrl: orderUrl.toString(),
-      netAmount: currencyFormatter(netAmount),
+      netAmount: netAmount === null ? null : currencyFormatter(netAmount),
       paidAt: paidAtLabel,
     }) as React.ReactElement,
-    text: `Venta pagada y registrada de Mercado Libre #${orderNumber}\n${paidAtLabel ? `Pago confirmado: ${paidAtLabel}\n` : ""}Neto de la venta: ${currencyFormatter(netAmount)}\n\n${orderSummary}\n\nEstado: ${inventoryStatus}\nVer venta en Administración: ${orderUrl}`,
+    text: `Venta pagada y registrada de Mercado Libre #${orderNumber}\n${paidAtLabel ? `Pago confirmado: ${paidAtLabel}\n` : ""}${netAmount === null ? "Liquidación neta: pendiente de publicación por Mercado Libre\n" : `Neto de la venta: ${currencyFormatter(netAmount)}\n`}\n${orderSummary}\n\nEstado: ${inventoryStatus}\nVer venta en Administración: ${orderUrl}`,
   });
   if (response.error) {
     throw new Error(

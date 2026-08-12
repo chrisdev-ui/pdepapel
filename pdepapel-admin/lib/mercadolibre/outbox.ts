@@ -372,13 +372,19 @@ export async function enqueuePendingMarketplaceOutboxEvents(
       },
       availableAt: { lte: new Date() },
     },
-    select: { id: true, connectionId: true },
+    select: { id: true, connectionId: true, action: true },
     orderBy: { createdAt: "asc" },
     take: MAX_OUTBOX_EVENTS_PER_DISPATCH,
   });
 
   for (const event of events) {
-    await enqueueMercadoLibreOutboxEvent(event.id, event.connectionId);
+    await enqueueMercadoLibreOutboxEvent(
+      event.id,
+      event.connectionId,
+      event.action === MarketplaceOutboxAction.SEND_ORDER_NOTIFICATION
+        ? "notification"
+        : "operation",
+    );
   }
 
   return events.length;
@@ -682,10 +688,6 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
       ) {
         throw new Error("No fue posible encontrar la venta de Mercado Libre");
       }
-      if (marketplaceOrder.netAmount === null) {
-        throw new MercadoLibreFinancialsPendingError();
-      }
-
       const { sendMercadoLibreOrderNotification } =
         await import("./order-notification");
       await sendMercadoLibreOrderNotification({

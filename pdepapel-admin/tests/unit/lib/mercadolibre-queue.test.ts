@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   MERCADOLIBRE_FAILURE_CALLBACK_HEADERS,
   getMercadoLibreFailureUrl,
+  getMercadoLibreOutboxFlowControlKey,
+  getMercadoLibreOutboxQueueLabel,
   getMercadoLibreProcessorUrl,
   getMercadoLibreQueueConfigurationStatus,
   getMercadoLibreRecoveryUrl,
@@ -51,6 +53,26 @@ describe("Mercado Libre durable queue", () => {
     expect(getMercadoLibreFailureUrl(queueEnvironment)).toBe(
       "https://admin.papeleriapdepapel.com/api/internal/marketplaces/mercadolibre/failure",
     );
+  });
+
+  it("uses a separate queue lane for sale notifications", () => {
+    expect(
+      getMercadoLibreOutboxFlowControlKey("connection-id", "notification"),
+    ).toBe("mercadolibre-notification-connection-id");
+    expect(
+      getMercadoLibreOutboxFlowControlKey("connection-id", "operation"),
+    ).toBe("mercadolibre-operation-connection-id");
+  });
+
+  it("labels a sale notification separately from marketplace operations", () => {
+    expect(getMercadoLibreOutboxQueueLabel("notification")).toEqual([
+      "mercadolibre",
+      "sale-notification",
+    ]);
+    expect(getMercadoLibreOutboxQueueLabel("operation")).toEqual([
+      "mercadolibre",
+      "operation",
+    ]);
   });
 
   it("identifies the failed source task without trusting arbitrary destinations", () => {

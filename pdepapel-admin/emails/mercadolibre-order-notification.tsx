@@ -17,7 +17,7 @@ type MercadoLibreOrderNotificationProps = {
   orderNumber: string;
   orderSummary: string;
   orderUrl: string;
-  netAmount: string;
+  netAmount: string | null;
   paidAt: string | null;
 };
 
@@ -63,7 +63,11 @@ export function MercadoLibreOrderNotification({
           <Section style={content}>
             <Container style={orderBox}>
               <Text style={orderNumberText}>Venta #{orderNumber}</Text>
-              <Text style={orderTotal}>Neto de la venta: {netAmount}</Text>
+              <Text style={orderTotal}>
+                {netAmount
+                  ? `Neto de la venta: ${netAmount}`
+                  : "Liquidación neta: pendiente de Mercado Libre"}
+              </Text>
             </Container>
 
             <Text style={paragraph}>
@@ -78,6 +82,13 @@ export function MercadoLibreOrderNotification({
               <strong>Origen del aviso:</strong> Mercado Libre confirmó el pago
               de esta venta. Los cambios de envío no generan este correo.
             </Text>
+            {netAmount === null ? (
+              <Text style={paragraph}>
+                <strong>Liquidación:</strong> Mercado Libre todavía no publicó
+                el valor neto. P de Papel lo actualizará automáticamente sin
+                modificar el inventario ni esta venta.
+              </Text>
+            ) : null}
             <Text style={paragraph}>
               <strong>Vínculo en P de Papel:</strong> {inventoryLabel}
             </Text>

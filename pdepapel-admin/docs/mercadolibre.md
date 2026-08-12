@@ -171,7 +171,7 @@ Haz este paso únicamente después de terminar la sección anterior.
 5. No actives `payments`, `items`, `messages` u otros temas. P de Papel no toma decisiones automáticas de reembolso, devolución ni reclamo: solo muestra el caso para revisión.
 6. Guarda los cambios.
 
-La notificación no descuenta inventario por sí misma. P de Papel consulta la orden autenticada en Mercado Libre y solo descuenta una vez cuando el estado real es `paid`.
+La notificación no descuenta inventario por sí misma. P de Papel consulta la orden autenticada en Mercado Libre y solo descuenta una vez cuando el estado real es `paid`. El correo administrativo se envía al registrarse el pago; si Mercado Libre aún no publica la liquidación, indicará que el neto está pendiente y se actualizará después.
 
 ## 7. Validación inicial sin afectar ventas ni existencias
 
