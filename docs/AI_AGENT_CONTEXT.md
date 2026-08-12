@@ -131,6 +131,7 @@ The admin application is both the private dashboard and the backend. It owns:
 - Catalog, inventory, orders, payments, shipping, taxes, fairs, DIAN invoicing, marketplace, and business-intelligence logic.
 - Incoming webhooks and admin-side cron tasks.
 - Catalog revalidation requests to the public shop.
+- Cross-origin API support is centralized in `pdepapel-admin/middleware.ts`: every `/api/*` response and preflight carries the public CORS policy. Do not rely on per-handler CORS declarations for browser-facing flows, and do not remove the middleware coverage when adding an endpoint. CORS is not authentication; private routes must still enforce their existing authorization checks.
 
 ### Important directories
 

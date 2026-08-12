@@ -20,6 +20,17 @@ import {
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  ...CACHE_HEADERS.DYNAMIC,
+};
+
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders });
+}
+
 export async function GET(
   _req: Request,
   { params }: { params: { storeId: string; productId: string } },
@@ -103,12 +114,12 @@ export async function GET(
         hasDiscount: productWithDiscount.discount > 0,
       },
       {
-        headers: CACHE_HEADERS.DYNAMIC,
+        headers: corsHeaders,
       },
     );
   } catch (error) {
     return handleErrorResponse(error, "PRODUCT_GET", {
-      headers: CACHE_HEADERS.DYNAMIC,
+      headers: corsHeaders,
     });
   }
 }
