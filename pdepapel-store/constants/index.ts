@@ -107,7 +107,7 @@ export const SORT_OPTIONS = [
   { value: SortOptions.priceHighToLow, label: "Mayor precio" },
   { value: SortOptions.name, label: "Nombre de producto" },
   { value: SortOptions.featuredFirst, label: "Destacados" },
-  { value: SortOptions.isOnSale, label: "En oferta" },
+  { value: SortOptions.isOnSale, label: "Ofertas primero" },
 ];
 
 export const ADMIN_USER_IDS = [
