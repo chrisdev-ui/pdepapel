@@ -11,10 +11,42 @@ interface StarRatingProps {
   onRatingChange?: (rating: number) => void;
 }
 
-export const StarRating: React.FC<StarRatingProps> = ({
+const RATING_STEPS = [1, 2, 3, 4, 5];
+
+interface ReadOnlyStarRatingProps {
+  className?: string;
+  currentRating: number;
+}
+
+const ReadOnlyStarRating: React.FC<ReadOnlyStarRatingProps> = ({
   className,
-  isDisabled = false,
-  currentRating = 0,
+  currentRating,
+}) => {
+  const rating = Math.min(5, Math.max(0, Math.round(currentRating)));
+
+  return (
+    <div role="img" aria-label={`Calificación: ${rating} de 5 estrellas`}>
+      {RATING_STEPS.map((step) => (
+        <Star
+          key={step}
+          aria-hidden="true"
+          fill={step <= rating ? "hsl(var(--yellow-star))" : "none"}
+          className={cn("h-5 w-5 text-yellow-star", className)}
+        />
+      ))}
+    </div>
+  );
+};
+
+interface InteractiveStarRatingProps {
+  className?: string;
+  currentRating: number;
+  onRatingChange?: (rating: number) => void;
+}
+
+const InteractiveStarRating: React.FC<InteractiveStarRatingProps> = ({
+  className,
+  currentRating,
   onRatingChange,
 }) => {
   const [rating, setRating] = useState<number>(currentRating);
@@ -27,17 +59,13 @@ export const StarRating: React.FC<StarRatingProps> = ({
 
   return (
     <div>
-      {[...Array(5)].map((_, index) => {
-        index += 1;
+      {RATING_STEPS.map((index) => {
         return (
           <button
             key={index}
             type="button"
             className={cn(
               "h-5 w-5 cursor-pointer",
-              {
-                "cursor-default": isDisabled,
-              },
               className,
             )}
             onClick={() => {
@@ -51,7 +79,6 @@ export const StarRating: React.FC<StarRatingProps> = ({
               onRatingChange?.(0);
               setHover(0);
             }}
-            disabled={isDisabled}
             aria-label={`${index} estrella${index > 1 ? "s" : ""}`}
           >
             <Star
@@ -66,5 +93,29 @@ export const StarRating: React.FC<StarRatingProps> = ({
         );
       })}
     </div>
+  );
+};
+
+export const StarRating: React.FC<StarRatingProps> = ({
+  className,
+  isDisabled = false,
+  currentRating = 0,
+  onRatingChange,
+}) => {
+  if (isDisabled) {
+    return (
+      <ReadOnlyStarRating
+        className={className}
+        currentRating={currentRating}
+      />
+    );
+  }
+
+  return (
+    <InteractiveStarRating
+      className={className}
+      currentRating={currentRating}
+      onRatingChange={onRatingChange}
+    />
   );
 };

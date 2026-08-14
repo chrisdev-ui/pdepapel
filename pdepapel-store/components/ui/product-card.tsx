@@ -3,7 +3,7 @@
 import { Expand, Heart, ShoppingCart } from "lucide-react";
 import { track } from "@vercel/analytics/react";
 import Link from "next/link";
-import { MouseEventHandler, useEffect, useState } from "react";
+import { MouseEventHandler, useCallback, useEffect, useState } from "react";
 
 import { CldImage } from "@/components/ui/CldImage";
 import { Currency } from "@/components/ui/currency";
@@ -16,7 +16,7 @@ import { useCart } from "@/hooks/use-cart";
 import { usePreviewModal } from "@/hooks/use-preview-modal";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { productPath } from "@/lib/routes";
-import { calculateAverageRating, cn } from "@/lib/utils";
+import { calculateAverageRating, cn, currencyFormatter } from "@/lib/utils";
 import { Product } from "@/types";
 
 interface ProductCardProps {
@@ -31,9 +31,15 @@ const ProductCard: React.FC<ProductCardProps> = ({
   priority = false,
 }) => {
   const [isMounted, setIsMounted] = useState(false);
-  const previewModal = usePreviewModal();
-  const cart = useCart();
-  const wishlist = useWishlist();
+  const openPreview = usePreviewModal((state) => state.onOpen);
+  const addToCart = useCart((state) => state.addItem);
+  const addToWishlist = useWishlist((state) => state.addItem);
+  const isWishlistProduct = useWishlist((state) =>
+    isMounted && state.items.some((item) => item.id === product.id),
+  );
+  const isCartProduct = useCart((state) =>
+    isMounted && state.items.some((item) => item.id === product.id),
+  );
 
   useEffect(() => {
     setIsMounted(true);
@@ -42,44 +48,46 @@ const ProductCard: React.FC<ProductCardProps> = ({
   const mainImage =
     product?.images.find((image) => image.isMain) ?? product?.images[0];
 
-  const onPreview: MouseEventHandler<HTMLButtonElement> = (event) => {
-    event.stopPropagation();
+  const onPreview = useCallback<MouseEventHandler<HTMLButtonElement>>(
+    (event) => {
+      event.stopPropagation();
+      openPreview(product);
+    },
+    [openPreview, product],
+  );
 
-    previewModal.onOpen(product);
-  };
+  const onAddToCart = useCallback<MouseEventHandler<HTMLButtonElement>>(
+    (event) => {
+      event.stopPropagation();
 
-  const onAddToCart: MouseEventHandler<HTMLButtonElement> = (event) => {
-    event.stopPropagation();
+      if (product.isGroup) {
+        openPreview(product);
+        return;
+      }
 
-    if (product.isGroup) {
-      previewModal.onOpen(product);
-      return;
-    }
+      addToCart(product);
+      track("add_to_cart", {
+        source: "product_card",
+        product_slug: product.slug || product.id,
+        quantity: 1,
+      });
+    },
+    [addToCart, openPreview, product],
+  );
 
-    cart.addItem(product);
-    track("add_to_cart", {
-      source: "product_card",
-      product_slug: product.slug || product.id,
-      quantity: 1,
-    });
-  };
+  const onAddToWishlist = useCallback<MouseEventHandler<HTMLButtonElement>>(
+    (event) => {
+      event.stopPropagation();
 
-  const onAddToWishlist: MouseEventHandler<HTMLButtonElement> = (event) => {
-    event.stopPropagation();
+      if (product.isGroup) {
+        openPreview(product);
+        return;
+      }
 
-    if (product.isGroup) {
-      previewModal.onOpen(product);
-      return;
-    }
-
-    wishlist.addItem(product);
-  };
-
-  const isWishlistProduct =
-    isMounted && wishlist.items.some((item) => item.id === product.id);
-
-  const isCartProduct =
-    isMounted && cart.items.some((item) => item.id === product.id);
+      addToWishlist(product);
+    },
+    [addToWishlist, openPreview, product],
+  );
 
   /**
    * Smart Badge Priority Hierarchy:
@@ -183,12 +191,9 @@ const ProductCard: React.FC<ProductCardProps> = ({
                   </div>
                   <span className="font-quicksand text-xs font-semibold text-green-600">
                     Ahorra{" "}
-                    {new Intl.NumberFormat("es-CO", {
-                      style: "currency",
-                      currency: "COP",
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 0,
-                    }).format(product.originalPrice - product.minPrice)}{" "}
+                    {currencyFormatter.format(
+                      product.originalPrice - product.minPrice,
+                    )}{" "}
                     (
                     {Math.round(
                       ((product.originalPrice - product.minPrice) /
@@ -220,12 +225,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
               </div>
               <span className="font-quicksand text-xs font-semibold text-green-600">
                 Ahorra{" "}
-                {new Intl.NumberFormat("es-CO", {
-                  style: "currency",
-                  currency: "COP",
-                  minimumFractionDigits: 0,
-                  maximumFractionDigits: 0,
-                }).format(
+                {currencyFormatter.format(
                   Number(product.originalPrice) - Number(product.price),
                 )}{" "}
                 (

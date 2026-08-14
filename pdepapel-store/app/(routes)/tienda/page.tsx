@@ -147,24 +147,30 @@ async function ShopContentWrapper({
 }: {
   searchParams: ShopPageProps["searchParams"];
 }) {
-  const { products, totalPages, totalItems, facets } = await getProducts({
-    typeId: searchParams.typeId,
-    categoryId: searchParams.categoryId,
-    colorId: searchParams.colorId,
-    sizeId: searchParams.sizeId,
-    designId: searchParams.designId,
-    sortOption: searchParams.sortOption,
-    minPrice: searchParams.minPrice ? parseInt(searchParams.minPrice) : null,
-    maxPrice: searchParams.maxPrice ? parseInt(searchParams.maxPrice) : null,
-    fromShop: true,
-    page: searchParams.page,
-    itemsPerPage: LIMIT_SHOP_ITEMS,
-    search: searchParams.search,
-    isOnSale: searchParams.isOnSale === "true",
-    groupBy: "parents",
-  });
-
-  const [types, sizes, colors, designs, categories] = await Promise.all([
+  const [
+    { products, totalPages, totalItems, facets },
+    types,
+    sizes,
+    colors,
+    designs,
+    categories,
+  ] = await Promise.all([
+    getProducts({
+      typeId: searchParams.typeId,
+      categoryId: searchParams.categoryId,
+      colorId: searchParams.colorId,
+      sizeId: searchParams.sizeId,
+      designId: searchParams.designId,
+      sortOption: searchParams.sortOption,
+      minPrice: searchParams.minPrice ? parseInt(searchParams.minPrice) : null,
+      maxPrice: searchParams.maxPrice ? parseInt(searchParams.maxPrice) : null,
+      fromShop: true,
+      page: searchParams.page,
+      itemsPerPage: LIMIT_SHOP_ITEMS,
+      search: searchParams.search,
+      isOnSale: searchParams.isOnSale === "true",
+      groupBy: "parents",
+    }),
     getTypes(),
     getSizes(),
     getColors(),
