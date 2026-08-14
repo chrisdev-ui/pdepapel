@@ -39,6 +39,8 @@ This is a two-application repository, **not** an npm workspace. There is no root
 
 Each application has its own `package.json`, `package-lock.json`, `node_modules`, Next config, test configuration, and Vercel project. Run npm commands from the application folder, never from the repository root.
 
+Node.js 24 is the runtime baseline for local development, GitHub Actions, and Vercel. Both application `package.json` files declare `"engines": { "node": "24.x" }`; the root `.nvmrc` is the local convenience pin. Do not lower this version without a reviewed compatibility plan.
+
 Both Vercel projects auto-deploy when `main` receives a push. A push to `main` is a production deployment action.
 
 ### High-level request flow

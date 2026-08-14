@@ -2,6 +2,9 @@
   "name": "pdepapel-store",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "dev": "next dev",
     "email:dev": "email dev -p 3002 -d ./emails",
