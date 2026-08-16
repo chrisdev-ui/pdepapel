@@ -7,6 +7,7 @@ import type { Metadata } from "next";
 import { Footer } from "@/components/footer";
 import { getCurrentSeason } from "@/lib/date-utils";
 import { beautifulEveryTime, caudex, fredoka, quicksand } from "@/lib/fonts";
+import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { ModalProvider } from "@/providers/modal-provider";
 import { ReactQueryProvider } from "@/providers/query-client-provider";
 import { CustomerAnalyticsProvider } from "@/providers/customer-analytics-provider";
@@ -106,7 +107,13 @@ export default async function RootLayout({
   const currentSeason = getCurrentSeason();
 
   return (
-    <ClerkProvider localization={esES}>
+    <ClerkProvider
+      localization={esES}
+      signInUrl={STOREFRONT_ROUTES.signIn}
+      signUpUrl={STOREFRONT_ROUTES.signUp}
+      afterSignInUrl={STOREFRONT_ROUTES.home}
+      afterSignUpUrl={STOREFRONT_ROUTES.home}
+    >
       <html lang="es" suppressHydrationWarning>
         <body
           className={`${beautifulEveryTime.variable} ${caudex.variable} ${fredoka.variable} ${quicksand.variable}`}
