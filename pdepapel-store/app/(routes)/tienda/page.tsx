@@ -58,24 +58,7 @@ export async function generateMetadata({
     description += ` Filtro de precio activo: ${min} - ${max}.`;
   }
 
-  // Fetch one product to get a relevant image
-  const { products } = await getProducts({
-    typeId,
-    categoryId,
-    colorId: searchParams.colorId,
-    sizeId: searchParams.sizeId,
-    designId: searchParams.designId,
-    minPrice: minPrice ? parseInt(minPrice, 10) : null,
-    maxPrice: maxPrice ? parseInt(maxPrice, 10) : null,
-    search,
-    limit: 1,
-  });
-
-  const previousImages = [`/opengraph-image.png`];
-  const images =
-    products.length > 0 && products[0].images.length > 0
-      ? [products[0].images[0].url, ...previousImages]
-      : previousImages;
+  const images = ["/opengraph-image.png"];
 
   const keywords = [
     "papelería",

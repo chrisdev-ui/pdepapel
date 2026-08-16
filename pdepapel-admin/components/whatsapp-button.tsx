@@ -212,7 +212,7 @@ export const WhatsappButton: React.FC<WhatsappButtonProps> = ({
         asChild
         title={`Contactar a ${firstName} por WhatsApp`}
       >
-        <Link href={whatsappUrl} target="_blank">
+        <Link href={whatsappUrl} target="_blank" rel="noopener noreferrer">
           <Icons.whatsapp className="h-4 w-4 text-[#25D366]" />
           <span className="sr-only">Abrir WhatsApp Web</span>
         </Link>
@@ -227,7 +227,7 @@ export const WhatsappButton: React.FC<WhatsappButtonProps> = ({
       className={cn("px-1", className)}
       asChild
     >
-      <Link href={whatsappUrl} target="_blank">
+      <Link href={whatsappUrl} target="_blank" rel="noopener noreferrer">
         <Icons.whatsapp
           className={cn("text-[#25D366]", {
             "h-5 w-5": size === "sm",

@@ -1,4 +1,5 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { createCorsHeaders } from "@/lib/cors";
 import {
   generateBoldIntegritySignature,
   getBoldConfig,
@@ -9,21 +10,20 @@ import { CACHE_HEADERS } from "@/lib/utils";
 import { OrderStatus, PaymentMethod } from "@prisma/client";
 import { NextResponse } from "next/server";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+const getCorsHeaders = (request: Request) => ({
+  ...createCorsHeaders(request, { methods: "POST, OPTIONS" }),
   ...CACHE_HEADERS.NO_CACHE,
-};
+});
 
-export async function OPTIONS() {
-  return NextResponse.json({}, { headers: corsHeaders });
+export async function OPTIONS(req: Request) {
+  return NextResponse.json({}, { headers: getCorsHeaders(req) });
 }
 
 export async function POST(
   req: Request,
   { params }: { params: { storeId: string; orderId: string } },
 ) {
+  const corsHeaders = getCorsHeaders(req);
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.orderId)

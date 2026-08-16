@@ -10,6 +10,7 @@ import {
 import { NextResponse } from "next/server";
 import { env } from "@/lib/env.mjs";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { createCorsHeaders } from "@/lib/cors";
 import { normalizeGoogleAnalyticsClientId } from "@/lib/google-analytics";
 import { generateBoldCheckoutData } from "@/lib/bold";
 import { getColombiaDate } from "@/lib/date-utils";
@@ -31,12 +32,10 @@ import { sendOrderEmail } from "@/lib/email";
 import { BATCH_SIZE } from "@/constants";
 import { ENVIOCLICK_DEFAULTS } from "@/constants/shipping";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+const getCorsHeaders = (request: Request) => ({
+  ...createCorsHeaders(request, { methods: "POST, OPTIONS" }),
   ...CACHE_HEADERS.NO_CACHE,
-};
+});
 
 const parseOptionalInt = (val: any): number | null => {
   if (val === null || val === undefined || val === "") return null;
@@ -73,14 +72,15 @@ const buildShippingPayload = (storeId: string, quote: any) => ({
   quotationData: quote,
 });
 
-export async function OPTIONS() {
-  return NextResponse.json({}, { headers: corsHeaders });
+export async function OPTIONS(req: Request) {
+  return NextResponse.json({}, { headers: getCorsHeaders(req) });
 }
 
 export async function POST(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
+  const corsHeaders = getCorsHeaders(req);
   const { userId: userLogged, user } = auth();
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();

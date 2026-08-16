@@ -78,7 +78,9 @@ describe("public product detail CORS", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
+      "https://papeleriapdepapel.com",
+    );
     await expect(response.json()).resolves.toMatchObject({
       id: "product-id",
       price: 10000,
@@ -90,20 +92,42 @@ describe("public product detail CORS", () => {
     mocks.findProductSlugAlias.mockResolvedValue(null);
 
     const response = await GET(
-      new Request("https://admin.example.com/api/store-id/products/missing"),
+      new Request("https://admin.example.com/api/store-id/products/missing", {
+        headers: { Origin: "https://papeleriapdepapel.com" },
+      }),
       { params: { storeId: "store-id", productId: "missing" } },
     );
 
     expect(response.status).toBe(500);
-    expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
+      "https://papeleriapdepapel.com",
+    );
   });
 
   it("supports a browser CORS preflight request", async () => {
-    const response = await OPTIONS();
+    const response = await OPTIONS(
+      new Request("https://admin.example.com/api/store-id/products/product", {
+        method: "OPTIONS",
+        headers: { Origin: "https://papeleriapdepapel.com" },
+      }),
+    );
 
-    expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
+      "https://papeleriapdepapel.com",
+    );
     expect(response.headers.get("Access-Control-Allow-Methods")).toBe(
       "GET, OPTIONS",
     );
+  });
+
+  it("does not grant browser access to untrusted origins", async () => {
+    const response = await OPTIONS(
+      new Request("https://admin.example.com/api/store-id/products/product", {
+        method: "OPTIONS",
+        headers: { Origin: "https://example-attacker.com" },
+      }),
+    );
+
+    expect(response.headers.has("Access-Control-Allow-Origin")).toBe(false);
   });
 });

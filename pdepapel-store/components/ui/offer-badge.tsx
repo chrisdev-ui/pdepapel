@@ -60,7 +60,7 @@ export const OfferBadge: React.FC<OfferBadgeProps> = ({
   return (
     <div
       className={cn(
-        "absolute -right-2 -top-6 z-10 flex flex-col items-center",
+        "pointer-events-none absolute right-2 -top-6 z-10 flex flex-col items-center",
         className,
       )}
     >

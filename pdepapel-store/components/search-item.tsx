@@ -45,7 +45,6 @@ export const SearchItem: React.FC<SearchItemProps> = ({
           alt={name ?? "Imagen del producto"}
           fill
           sizes="(max-width: 640px) 40px, 120px"
-          priority
           className="rounded-md"
         />
       </div>

@@ -1,16 +1,15 @@
 import { NextResponse } from "next/server";
+import { createCorsHeaders } from "@/lib/cors";
 import prismadb from "@/lib/prismadb";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
+const getCorsHeaders = (request: Request) =>
+  createCorsHeaders(request, { methods: "POST, OPTIONS" });
 
 export async function POST(
   req: Request,
   { params }: { params: { storeId: string; token: string } },
 ) {
+  const corsHeaders = getCorsHeaders(req);
   try {
     const body = await req.json();
     const { message } = body;
@@ -67,6 +66,6 @@ export async function POST(
   }
 }
 
-export async function OPTIONS() {
-  return NextResponse.json({}, { headers: corsHeaders });
+export async function OPTIONS(req: Request) {
+  return NextResponse.json({}, { headers: getCorsHeaders(req) });
 }

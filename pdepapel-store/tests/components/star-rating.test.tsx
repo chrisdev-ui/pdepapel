@@ -10,11 +10,12 @@ describe("StarRating", () => {
   it("renders product-card ratings as a static accessible summary", () => {
     render(<StarRating currentRating={4} isDisabled />);
 
-    expect(
-      screen.getByRole("img", {
-        name: "Calificación: 4 de 5 estrellas",
-      }),
-    ).toBeInTheDocument();
+    const rating = screen.getByRole("img", {
+      name: "Calificación: 4 de 5 estrellas",
+    });
+
+    expect(rating).toBeInTheDocument();
+    expect(rating).toHaveClass("inline-flex", "items-center");
     expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
 

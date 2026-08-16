@@ -47,6 +47,7 @@ interface QuantitySelectorProps {
   step?: number;
   onValueChange: (value: number) => void;
   size?: Sizes;
+  label?: string;
 }
 
 const QuantitySelector = React.forwardRef<
@@ -62,6 +63,7 @@ const QuantitySelector = React.forwardRef<
       max,
       onValueChange,
       size = "default",
+      label = "Cantidad",
       ...props
     },
     ref,
@@ -88,6 +90,8 @@ const QuantitySelector = React.forwardRef<
     return (
       <div
         ref={ref}
+        role="group"
+        aria-label={label}
         className={cn(
           "flex rounded-md border border-blue-purple bg-white shadow-sm",
           className,
@@ -95,6 +99,8 @@ const QuantitySelector = React.forwardRef<
         {...props}
       >
         <button
+          type="button"
+          aria-label={`Disminuir ${label}`}
           className={cn(buttonLeftVariants({ size }))}
           onClick={decrement}
           disabled={disableDec}
@@ -108,10 +114,13 @@ const QuantitySelector = React.forwardRef<
         <input
           className="w-12 text-center text-sm"
           type="text"
+          aria-label={label}
           value={value}
           readOnly
         />
         <button
+          type="button"
+          aria-label={`Aumentar ${label}`}
           className={cn(buttonRightVariants({ size }))}
           onClick={increment}
           disabled={disableInc}

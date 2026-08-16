@@ -42,9 +42,11 @@ export const GroupBadge: React.FC<GroupBadgeProps> = ({
   const colors = variantStyles[variant];
 
   return (
-    <div className={cn("absolute -right-3 -top-3 z-10", className)}>
+    <div
+      className={cn("pointer-events-none absolute right-2 -top-3 z-10", className)}
+    >
       {/* Stacked cards container */}
-      <div className="group relative h-14 w-14 cursor-pointer md:h-16 md:w-16">
+      <div className="group relative h-14 w-14 md:h-16 md:w-16">
         {/* Back cards (stacked effect) */}
         <div
           className={cn(

@@ -1,26 +1,27 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { createCorsHeaders } from "@/lib/cors";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
-import { auth, clerkClient } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "PATCH, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-  ...CACHE_HEADERS.NO_CACHE,
-};
-
-export async function OPTIONS() {
-  return NextResponse.json({}, { headers: corsHeaders });
+export async function OPTIONS(req: Request) {
+  return NextResponse.json({}, {
+    headers: createCorsHeaders(req, { methods: "GET, PATCH, DELETE, OPTIONS" }),
+  });
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   {
     params,
   }: { params: { storeId: string; productId: string; reviewId: string } },
 ) {
+  const corsHeaders = {
+    ...createCorsHeaders(req, { methods: "GET, PATCH, DELETE, OPTIONS" }),
+    ...CACHE_HEADERS.DYNAMIC,
+  };
+
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.productId)
@@ -39,11 +40,11 @@ export async function GET(
     if (!review) throw ErrorFactory.NotFound("Reseña no encontrada");
 
     return NextResponse.json(review, {
-      headers: CACHE_HEADERS.DYNAMIC,
+      headers: corsHeaders,
     });
   } catch (error) {
     return handleErrorResponse(error, "REVIEW_GET", {
-      headers: CACHE_HEADERS.DYNAMIC,
+      headers: corsHeaders,
     });
   }
 }
@@ -54,7 +55,14 @@ export async function PATCH(
     params,
   }: { params: { storeId: string; productId: string; reviewId: string } },
 ) {
+  const corsHeaders = {
+    ...createCorsHeaders(req, { methods: "GET, PATCH, DELETE, OPTIONS" }),
+    ...CACHE_HEADERS.NO_CACHE,
+  };
+
   try {
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.productId) {
       throw ErrorFactory.InvalidRequest("El ID del producto es requerido");
@@ -64,10 +72,7 @@ export async function PATCH(
     }
 
     const body = await req.json();
-    const { rating, comment, userId } = body;
-    const user = await clerkClient.users.getUser(userId);
-
-    if (!user) throw ErrorFactory.Unauthenticated();
+    const { rating, comment } = body;
 
     // Validate rating if provided
     if (rating !== undefined && (rating < 1 || rating > 5)) {
@@ -110,11 +115,16 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   {
     params,
   }: { params: { storeId: string; reviewId: string; productId: string } },
 ) {
+  const corsHeaders = {
+    ...createCorsHeaders(req, { methods: "GET, PATCH, DELETE, OPTIONS" }),
+    ...CACHE_HEADERS.NO_CACHE,
+  };
+
   try {
     const { userId } = auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
@@ -152,11 +162,11 @@ export async function DELETE(
     });
 
     return NextResponse.json("La reseña ha sido eliminada correctamente", {
-      headers: CACHE_HEADERS.NO_CACHE,
+      headers: corsHeaders,
     });
   } catch (error) {
     return handleErrorResponse(error, "REVIEW_DELETE", {
-      headers: CACHE_HEADERS.NO_CACHE,
+      headers: corsHeaders,
     });
   }
 }

@@ -1,5 +1,6 @@
 import { BATCH_SIZE } from "@/constants";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { createCorsHeaders } from "@/lib/cors";
 import { getProductsPrices } from "@/lib/discount-engine";
 import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
@@ -29,20 +30,18 @@ import {
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
-
-export async function OPTIONS() {
-  return NextResponse.json({}, { headers: corsHeaders });
+export async function OPTIONS(req: Request) {
+  return NextResponse.json({}, {
+    headers: createCorsHeaders(req, { methods: "GET, OPTIONS" }),
+  });
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: { orderId: string } },
 ) {
+  const corsHeaders = createCorsHeaders(req, { methods: "GET, OPTIONS" });
+
   try {
     if (!params.orderId)
       throw ErrorFactory.InvalidRequest("Se requiere el ID de la orden");
@@ -81,6 +80,9 @@ export async function PATCH(
   req: Request,
   { params }: { params: { storeId: string; orderId: string } },
 ) {
+  const corsHeaders = createCorsHeaders(req, {
+    methods: "GET, PATCH, DELETE, OPTIONS",
+  });
   const { userId } = auth();
 
   try {
@@ -830,9 +832,12 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: { storeId: string; orderId: string } },
 ) {
+  const corsHeaders = createCorsHeaders(req, {
+    methods: "GET, PATCH, DELETE, OPTIONS",
+  });
   const { userId } = auth();
 
   try {

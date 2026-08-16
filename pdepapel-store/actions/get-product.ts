@@ -1,4 +1,5 @@
 import { env } from "@/lib/env.mjs";
+import { UpstreamServiceError } from "@/lib/upstream-service-error";
 import { Product } from "@/types";
 import { cache } from "react";
 
@@ -13,9 +14,13 @@ export const getProduct = cache(async (id: string): Promise<Product | null> => {
       `${API_URL}/${id}?include=kitComponents`,
       CATALOG_CACHE,
     );
-    if (!response.ok) return null;
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      throw new UpstreamServiceError("el catálogo", response.status);
+    }
     return await response.json();
-  } catch {
-    return null;
+  } catch (error) {
+    if (error instanceof UpstreamServiceError) throw error;
+    throw new UpstreamServiceError("el catálogo");
   }
 });

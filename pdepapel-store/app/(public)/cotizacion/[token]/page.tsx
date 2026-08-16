@@ -26,6 +26,7 @@ export default function QuotePage() {
     data: quotation,
     isLoading,
     isError,
+    errorKind,
     markAsViewed,
     acceptQuote,
     requestChange,
@@ -90,7 +91,15 @@ export default function QuotePage() {
   }
 
   // Error state
-  if (isError || !quotation) {
+  if (errorKind === "not-found") {
+    return <QuoteStatusMessage type="not-found" onGoHome={handleGoHome} />;
+  }
+
+  if (isError || errorKind === "unavailable") {
+    return <QuoteStatusMessage type="unavailable" onRetry={refresh} />;
+  }
+
+  if (!quotation) {
     return <QuoteStatusMessage type="not-found" onGoHome={handleGoHome} />;
   }
 

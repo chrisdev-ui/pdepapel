@@ -63,7 +63,7 @@ export function NewsletterForm() {
               <FormControl>
                 <Input
                   disabled={loading}
-                  className="h-10 w-full rounded rounded-br-none rounded-tr-none border border-solid border-transparent bg-white px-5 py-0 text-sm outline-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-transparent focus-visible:ring-offset-0 focus-visible:ring-offset-0"
+                  className="h-10 w-full rounded rounded-br-none rounded-tr-none border border-solid border-transparent bg-white px-5 py-0 text-sm"
                   placeholder="Tu dirección de correo electrónico"
                   {...field}
                 />

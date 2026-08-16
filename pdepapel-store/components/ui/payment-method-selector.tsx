@@ -67,6 +67,7 @@ const BankTransferSteps = () => (
         <Link
           href="https://wa.me/573132582293"
           target="_blank"
+          rel="noopener noreferrer"
           className="inline-flex items-center gap-2 font-bold text-green-600 hover:underline"
         >
           <Icons.whatsapp className="h-4 w-4" />

@@ -11,22 +11,24 @@ export interface TrackShipmentResponse {
 
 export interface TrackShipmentVariables {
   shippingId: string;
-  userId?: string | null;
   guestId?: string | null;
+  sessionToken?: string | null;
 }
 
 const API_URL = `${env.NEXT_PUBLIC_API_URL}/shipment/track`;
 
 export const postTrackShipment = async ({
   shippingId,
-  userId,
   guestId,
+  sessionToken,
 }: TrackShipmentVariables): Promise<TrackShipmentResponse> => {
-  const response = await axios.post(API_URL, {
-    shippingId,
-    userId,
-    guestId,
-  });
+  const response = await axios.post(
+    API_URL,
+    { shippingId, guestId },
+    sessionToken
+      ? { headers: { Authorization: `Bearer ${sessionToken}` } }
+      : undefined,
+  );
 
   return response.data;
 };

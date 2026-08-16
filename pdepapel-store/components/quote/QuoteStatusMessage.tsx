@@ -19,6 +19,7 @@ import { ReactNode } from "react";
 type StatusType =
   | "loading"
   | "not-found"
+  | "unavailable"
   | "expired"
   | "cancelled"
   | "processed"
@@ -28,6 +29,7 @@ interface QuoteStatusMessageProps {
   type: StatusType;
   orderNumber?: string;
   onGoHome?: () => void;
+  onRetry?: () => void;
 }
 
 interface StatusConfig {
@@ -60,6 +62,17 @@ const statusConfigs: Record<StatusType, StatusConfig> = {
     emoji: <SearchX className="h-12 w-12 text-pink-400" />,
     showButton: true,
     buttonText: "Volver al inicio",
+  },
+  unavailable: {
+    icon: AlertCircle,
+    iconClass: "text-orange-500",
+    bgClass: "bg-orange-50",
+    title: "No pudimos cargar tu cotización",
+    message:
+      "La tienda está tardando más de lo esperado en responder. Tu cotización sigue guardada; intenta nuevamente en unos segundos.",
+    emoji: <Sparkles className="h-12 w-12 text-orange-300" />,
+    showButton: true,
+    buttonText: "Reintentar",
   },
   expired: {
     icon: Clock,
@@ -110,6 +123,7 @@ const QuoteStatusMessage = ({
   type,
   orderNumber,
   onGoHome,
+  onRetry,
 }: QuoteStatusMessageProps) => {
   const config = statusConfigs[type];
   const Icon = config.icon;
@@ -186,7 +200,7 @@ const QuoteStatusMessage = ({
         </motion.p>
 
         {/* Button */}
-        {config.showButton && onGoHome && (
+        {config.showButton && (onRetry || onGoHome) && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -195,7 +209,7 @@ const QuoteStatusMessage = ({
           >
             <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
               <Button
-                onClick={onGoHome}
+                onClick={onRetry ?? onGoHome}
                 className="rounded-full bg-gradient-to-r from-pink-400 to-purple-400 px-8 text-white hover:opacity-90"
                 size="lg"
               >

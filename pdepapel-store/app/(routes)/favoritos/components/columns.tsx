@@ -67,7 +67,6 @@ export const columns: ColumnDef<WishlistColumn>[] = [
           alt={row.original.name ?? "Imagen del producto"}
           sizes="(max-width: 640px) 100vw, 640px"
           className="object-cover object-center"
-          priority
         />
       </Link>
     ),

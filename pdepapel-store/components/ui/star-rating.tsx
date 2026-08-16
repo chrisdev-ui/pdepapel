@@ -25,7 +25,11 @@ const ReadOnlyStarRating: React.FC<ReadOnlyStarRatingProps> = ({
   const rating = Math.min(5, Math.max(0, Math.round(currentRating)));
 
   return (
-    <div role="img" aria-label={`Calificación: ${rating} de 5 estrellas`}>
+    <div
+      role="img"
+      aria-label={`Calificación: ${rating} de 5 estrellas`}
+      className="inline-flex items-center gap-0.5"
+    >
       {RATING_STEPS.map((step) => (
         <Star
           key={step}
@@ -58,7 +62,11 @@ const InteractiveStarRating: React.FC<InteractiveStarRatingProps> = ({
   }, [currentRating]);
 
   return (
-    <div>
+    <div
+      role="group"
+      aria-label="Selecciona una calificación de 1 a 5 estrellas"
+      className="inline-flex items-center gap-0.5"
+    >
       {RATING_STEPS.map((index) => {
         return (
           <button
@@ -82,6 +90,7 @@ const InteractiveStarRating: React.FC<InteractiveStarRatingProps> = ({
             aria-label={`${index} estrella${index > 1 ? "s" : ""}`}
           >
             <Star
+              aria-hidden="true"
               fill={
                 index <= ((rating && hover) || hover)
                   ? "hsl(var(--yellow-star))"

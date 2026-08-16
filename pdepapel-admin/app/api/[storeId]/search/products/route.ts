@@ -1,24 +1,24 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { createCorsHeaders } from "@/lib/cors";
 import { getProductsPrices } from "@/lib/discount-engine";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { NextRequest, NextResponse } from "next/server";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+const getCorsHeaders = (request: Request) => ({
+  ...createCorsHeaders(request, { methods: "GET, OPTIONS" }),
   ...CACHE_HEADERS.DYNAMIC,
-};
+});
 
-export async function OPTIONS() {
-  return NextResponse.json({}, { headers: corsHeaders });
+export async function OPTIONS(req: Request) {
+  return NextResponse.json({}, { headers: getCorsHeaders(req) });
 }
 
 export async function GET(
   req: NextRequest,
   { params }: { params: { storeId: string } },
 ) {
+  const corsHeaders = getCorsHeaders(req);
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 

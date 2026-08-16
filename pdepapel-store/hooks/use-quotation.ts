@@ -4,11 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 
 const URL = `${process.env.NEXT_PUBLIC_API_URL}/public/custom-orders`;
 
+type QuotationErrorKind = "not-found" | "unavailable" | null;
+
 interface UseQuotationResult {
   data: UnifiedOrder | null;
   isLoading: boolean;
   isError: boolean;
   error?: any;
+  errorKind: QuotationErrorKind;
   markAsViewed: () => Promise<void>;
   acceptQuote: () => Promise<UnifiedOrder>;
   requestChange: (message: string) => Promise<any>;
@@ -22,12 +25,14 @@ export const useQuotation = (token?: string | null): UseQuotationResult => {
   const [isLoading, setIsLoading] = useState(!!token);
   const [isError, setIsError] = useState(false);
   const [error, setError] = useState<any>(null);
+  const [errorKind, setErrorKind] = useState<QuotationErrorKind>(null);
 
   const fetchQuotation = useCallback(async () => {
     if (!token) return;
     setIsLoading(true);
     setIsError(false);
     setError(null);
+    setErrorKind(null);
 
     try {
       // Use timestamp for cache busting to avoid potential CORS preflight issues
@@ -35,18 +40,24 @@ export const useQuotation = (token?: string | null): UseQuotationResult => {
       const timestamp = new Date().getTime();
       const response = await fetch(`${URL}/${token}?t=${timestamp}`);
 
+      if (response.status === 404) {
+        setErrorKind("not-found");
+        setIsError(true);
+        return;
+      }
+
       if (!response.ok) {
-        throw new Error("Failed to fetch quotation");
+        throw new Error(`Failed to fetch quotation (${response.status})`);
       }
 
       const jsonData = await response.json();
       const normalizedData = normalizeOrder(jsonData);
-      console.log("Normalized Quotation Data:", normalizedData);
       setData(normalizedData);
     } catch (err) {
       console.error("Error fetching quotation:", err);
       setIsError(true);
       setError(err);
+      setErrorKind("unavailable");
     } finally {
       setIsLoading(false);
     }
@@ -111,6 +122,7 @@ export const useQuotation = (token?: string | null): UseQuotationResult => {
     isLoading,
     isError,
     error,
+    errorKind,
     refresh,
     markAsViewed,
     acceptQuote,

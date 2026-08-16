@@ -140,7 +140,7 @@ const SHIPPING_ICONS: Record<ShippingStatus, LucideIcon> = {
 const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
   const searchParams = useSearchParams();
   const payUFormRef = useRef<HTMLFormElement>(null);
-  const { userId } = useAuth();
+  const { userId, getToken } = useAuth();
   const { toast } = useToast();
   const guestId = useGuestUser((state) => state.guestId ?? "");
   const [payUformData, setPayUformData] = useState<PayUFormState>();
@@ -593,6 +593,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                                 href={getTrackingUrl()}
                                 className="group/link flex items-center gap-2 font-serif text-lg font-bold text-indigo-600 transition-colors hover:text-indigo-700"
                                 target="_blank"
+                                rel="noopener noreferrer"
                               >
                                 {order.shipping.trackingCode}
                                 <ExternalLink className="h-4 w-4 transition-transform group-hover/link:-translate-y-0.5 group-hover/link:translate-x-0.5" />
@@ -749,11 +750,11 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                             <Button
                               size="lg"
                               className="w-full gap-2 text-base font-bold shadow-lg"
-                              onClick={() =>
+                              onClick={async () =>
                                 trackShipment({
                                   shippingId: order.shipping.id,
-                                  userId: userId || null,
                                   guestId: guestId || null,
+                                  sessionToken: await getToken(),
                                 })
                               }
                               disabled={trackingStatus === "pending"}
@@ -775,7 +776,11 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                               className="w-full gap-2 text-base font-bold"
                               asChild
                             >
-                              <Link href={getTrackingUrl()} target="_blank">
+                              <Link
+                                href={getTrackingUrl()}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
                                 <ExternalLink className="h-5 w-5" />
                                 Rastrear Guía de Envío
                               </Link>
@@ -795,6 +800,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                               <Link
                                 href={order.shipping.trackingUrl}
                                 target="_blank"
+                                rel="noopener noreferrer"
                               >
                                 <ExternalLink className="h-5 w-5" />
                                 Rastrear Envío

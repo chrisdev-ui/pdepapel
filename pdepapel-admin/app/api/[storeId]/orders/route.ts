@@ -1,5 +1,6 @@
 import { BATCH_SIZE } from "@/constants";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { createCorsHeaders } from "@/lib/cors";
 import { getColombiaDate } from "@/lib/date-utils";
 import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
@@ -76,20 +77,18 @@ type OrderData = {
   shipping?: { create: any };
 };
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
+const getCorsHeaders = (request: Request) =>
+  createCorsHeaders(request, { methods: "GET, POST, OPTIONS" });
 
-export async function OPTIONS() {
-  return NextResponse.json({}, { headers: corsHeaders });
+export async function OPTIONS(req: Request) {
+  return NextResponse.json({}, { headers: getCorsHeaders(req) });
 }
 
 export async function POST(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
+  const corsHeaders = getCorsHeaders(req);
   const { userId: userLogged } = auth();
 
   try {
@@ -736,6 +735,7 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { storeId: string } },
 ) {
+  const corsHeaders = getCorsHeaders(req);
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
@@ -781,6 +781,7 @@ export async function DELETE(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
+  const corsHeaders = getCorsHeaders(req);
   const { userId } = auth();
   try {
     if (!userId) throw ErrorFactory.Unauthenticated();
@@ -915,6 +916,7 @@ export async function PATCH(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
+  const corsHeaders = getCorsHeaders(req);
   const { userId } = auth();
 
   try {

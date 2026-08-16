@@ -2,7 +2,7 @@
 
 import { Social } from "@/constants";
 import { Post } from "@/types";
-import { useEffect, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import {
   FacebookEmbed,
   InstagramEmbed,
@@ -16,12 +16,28 @@ interface SocialMediaProps {
   data: Post[];
 }
 
+interface SocialEmbedFrameProps {
+  children: ReactNode;
+  maxWidth: number;
+}
+
+function SocialEmbedFrame({ children, maxWidth }: SocialEmbedFrameProps) {
+  return (
+    <div
+      className="w-full overflow-hidden"
+      style={{ contain: "paint", maxWidth }}
+    >
+      {children}
+    </div>
+  );
+}
+
 const SocialMedia: React.FC<SocialMediaProps> = ({ data }) => {
   const [posts, setPosts] = useState<Record<Social, Post[]> | null>(null);
 
   useEffect(() => {
     const separatePostsBySocial = () => {
-      const separatedPosts = data
+      const separatedPosts = [...data]
         .sort(
           (a, b) =>
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
@@ -50,51 +66,57 @@ const SocialMedia: React.FC<SocialMediaProps> = ({ data }) => {
     <div className="mt-10 flex w-full flex-wrap justify-center gap-x-10 gap-y-5 xl:justify-between xl:gap-0">
       {posts?.Instagram &&
         posts?.Instagram?.map((post) => (
-          <InstagramEmbed
-            key={post.id}
-            url={`https://www.instagram.com/p/${post.postId}/`}
-            width={328}
-          />
+          <SocialEmbedFrame key={post.id} maxWidth={328}>
+            <InstagramEmbed
+              url={`https://www.instagram.com/p/${post.postId}/`}
+              width="100%"
+            />
+          </SocialEmbedFrame>
         ))}
       {posts?.TikTok &&
         posts?.TikTok?.map((post) => (
-          <TikTokEmbed
-            key={post.id}
-            url={`https://www.tiktok.com/@papeleria.pdepapel/video/${post.postId}`}
-            width={328}
-          />
+          <SocialEmbedFrame key={post.id} maxWidth={328}>
+            <TikTokEmbed
+              url={`https://www.tiktok.com/@papeleria.pdepapel/video/${post.postId}`}
+              width="100%"
+            />
+          </SocialEmbedFrame>
         ))}
       {posts?.Facebook &&
         posts?.Facebook?.map((post) => (
-          <FacebookEmbed
-            key={post.id}
-            url={`https://www.facebook.com/papeleria.pdepapel/posts/${post.postId}}`}
-            width={328}
-          />
+          <SocialEmbedFrame key={post.id} maxWidth={328}>
+            <FacebookEmbed
+              url={`https://www.facebook.com/papeleria.pdepapel/posts/${post.postId}`}
+              width="100%"
+            />
+          </SocialEmbedFrame>
         ))}
       {posts?.Pinterest &&
         posts?.Pinterest?.map((post) => (
-          <PinterestEmbed
-            key={post.id}
-            url={`https://www.pinterest.com/pin/${post.postId}/`}
-            width={345}
-          />
+          <SocialEmbedFrame key={post.id} maxWidth={345}>
+            <PinterestEmbed
+              url={`https://www.pinterest.com/pin/${post.postId}/`}
+              width="100%"
+            />
+          </SocialEmbedFrame>
         ))}
       {posts?.Twitter &&
         posts?.Twitter?.map((post) => (
-          <TwitterEmbed
-            key={post.id}
-            url={`https://twitter.com/papeleria.pdepapel/status/${post.postId}`}
-            width={328}
-          />
+          <SocialEmbedFrame key={post.id} maxWidth={328}>
+            <TwitterEmbed
+              url={`https://twitter.com/papeleria.pdepapel/status/${post.postId}`}
+              width="100%"
+            />
+          </SocialEmbedFrame>
         ))}
       {posts?.Youtube &&
         posts?.Youtube?.map((post) => (
-          <YouTubeEmbed
-            key={post.id}
-            url={`https://www.youtube.com/watch?v=${post.postId}`}
-            width={400}
-          />
+          <SocialEmbedFrame key={post.id} maxWidth={400}>
+            <YouTubeEmbed
+              url={`https://www.youtube.com/watch?v=${post.postId}`}
+              width="100%"
+            />
+          </SocialEmbedFrame>
         ))}
     </div>
   );

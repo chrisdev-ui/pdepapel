@@ -1,34 +1,34 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { createCorsHeaders } from "@/lib/cors";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
-import { clerkClient } from "@clerk/nextjs";
+import { auth, clerkClient } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-  ...CACHE_HEADERS.NO_CACHE,
-};
-
-export async function OPTIONS() {
-  return NextResponse.json({}, { headers: corsHeaders });
+export async function OPTIONS(req: Request) {
+  return NextResponse.json({}, {
+    headers: createCorsHeaders(req, { methods: "GET, POST, OPTIONS" }),
+  });
 }
 
 export async function POST(
   req: Request,
   { params }: { params: { storeId: string; productId: string } },
 ) {
+  const corsHeaders = {
+    ...createCorsHeaders(req, { methods: "GET, POST, OPTIONS" }),
+    ...CACHE_HEADERS.NO_CACHE,
+  };
+
   try {
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.productId)
       throw ErrorFactory.InvalidRequest("El ID del producto es requerido");
 
     const body = await req.json();
-    const { rating, comment, userId } = body;
-
-    if (!userId)
-      throw ErrorFactory.InvalidRequest("El ID del usuario es requerido");
+    const { rating, comment } = body;
 
     const user = await clerkClient.users.getUser(userId).catch(() => null);
     if (!user) throw ErrorFactory.Unauthenticated();
@@ -87,6 +87,11 @@ export async function GET(
   req: Request,
   { params }: { params: { storeId: string; productId: string } },
 ) {
+  const corsHeaders = {
+    ...createCorsHeaders(req, { methods: "GET, POST, OPTIONS" }),
+    ...CACHE_HEADERS.DYNAMIC,
+  };
+
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.productId)
@@ -126,11 +131,11 @@ export async function GET(
     }
 
     return NextResponse.json(reviews, {
-      headers: CACHE_HEADERS.DYNAMIC,
+      headers: corsHeaders,
     });
   } catch (error) {
     return handleErrorResponse(error, "REVIEWS_GET", {
-      headers: CACHE_HEADERS.DYNAMIC,
+      headers: corsHeaders,
     });
   }
 }

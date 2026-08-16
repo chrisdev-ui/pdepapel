@@ -90,3 +90,36 @@ test("preserva las páginas históricas de productos archivados sin indexarlas",
     /noindex/,
   );
 });
+
+test("muestra una página de orden no encontrada sin convertirla en error 500", async ({
+  page,
+}) => {
+  await page.goto("/pedido/pedido-inexistente-e2e", {
+    waitUntil: "domcontentloaded",
+  });
+
+  await expect(
+    page.getByRole("heading", { name: "Orden no encontrada" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "500", exact: true }),
+  ).toHaveCount(0);
+});
+
+test("mantiene las rutas principales sin desplazamiento horizontal", async ({
+  page,
+}) => {
+  for (const path of ["/", "/tienda", `/categoria/${categorySlug}`]) {
+    const response = await page.goto(path, { waitUntil: "domcontentloaded" });
+
+    expect(response?.ok(), path).toBeTruthy();
+    await page.waitForTimeout(300);
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth,
+        ),
+      )
+      .toBeTruthy();
+  }
+});

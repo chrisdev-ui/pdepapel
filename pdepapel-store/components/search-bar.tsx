@@ -99,7 +99,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           ref={inputRef}
           type="text"
           className={cn(
-            "relative h-full w-full rounded-[6px] border-none px-4 py-0 text-base font-normal text-blue-yankees shadow-none outline-none transition-all duration-500 ease-in-out focus-visible:outline-0 focus-visible:ring-0 focus-visible:ring-inherit focus-visible:ring-offset-0 focus-visible:ring-offset-transparent",
+            "relative h-full w-full rounded-[6px] border-none px-4 py-0 text-base font-normal text-blue-yankees shadow-none transition-all duration-500 ease-in-out",
             {
               "py-0 pl-16 pr-4 lg:pl-14": displaySearchbox,
             },

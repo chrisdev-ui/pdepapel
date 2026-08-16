@@ -7,7 +7,6 @@ import { useState } from "react";
 
 import { ReviewItem } from "@/components/reviews/review-item";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { NoResults } from "@/components/ui/no-results";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { StarRating } from "@/components/ui/star-rating";
@@ -26,7 +25,7 @@ interface ReviewsProps {
 
 export const Reviews: React.FC<ReviewsProps> = ({ title, reviews = [] }) => {
   const params = useParams();
-  const { userId } = useAuth();
+  const { userId, getToken } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
   const { toast } = useToast();
@@ -37,6 +36,16 @@ export const Reviews: React.FC<ReviewsProps> = ({ title, reviews = [] }) => {
   const onSubmit = async () => {
     try {
       setIsLoading(true);
+      const sessionToken = await getToken();
+      if (!sessionToken) {
+        throw new Error("No se encontró una sesión válida para publicar la reseña.");
+      }
+
+      const config = {
+        headers: {
+          Authorization: `Bearer ${sessionToken}`,
+        },
+      };
       const existentReview = reviews.find((review) => review.userId === userId);
       if (existentReview) {
         await axios.patch(
@@ -44,8 +53,8 @@ export const Reviews: React.FC<ReviewsProps> = ({ title, reviews = [] }) => {
           {
             rating,
             comment: comments,
-            userId,
           },
+          config,
         );
       } else {
         await axios.post(
@@ -53,8 +62,8 @@ export const Reviews: React.FC<ReviewsProps> = ({ title, reviews = [] }) => {
           {
             rating,
             comment: comments,
-            userId,
           },
+          config,
         );
       }
       setRating(0);
@@ -97,11 +106,18 @@ export const Reviews: React.FC<ReviewsProps> = ({ title, reviews = [] }) => {
         </h3>
         <SignedIn>
           <div className="flex w-full flex-col items-start gap-5">
-            <Label htmlFor="message"></Label>
-            <StarRating
-              currentRating={rating}
-              onRatingChange={(value: number) => setRating(value)}
-            />
+            <fieldset>
+              <legend className="mb-2 text-sm font-medium text-primary">
+                Tu calificación
+              </legend>
+              <StarRating
+                currentRating={rating}
+                onRatingChange={(value: number) => setRating(value)}
+              />
+            </fieldset>
+            <label htmlFor="message" className="sr-only">
+              Comentario
+            </label>
             <Textarea
               id="message"
               placeholder="Escribe tu comentario"

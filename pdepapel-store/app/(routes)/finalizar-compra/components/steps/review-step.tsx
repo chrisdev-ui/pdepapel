@@ -177,7 +177,7 @@ export const ReviewStep = ({
                 <FormControl>
                   <Input
                     className={cn(
-                      "h-12 px-4 pl-12 text-lg transition-colors duration-200 focus-visible:outline-none focus-visible:ring-0",
+                      "h-12 px-4 pl-12 text-lg transition-colors duration-200",
                       {
                         "border-success focus:border-success focus:ring-success/20":
                           couponState.isValid === true,

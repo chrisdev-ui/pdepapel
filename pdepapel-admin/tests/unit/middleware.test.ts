@@ -36,11 +36,15 @@ describe("authentication middleware", () => {
     mocks.clerkMiddleware.mockResolvedValue(new Response(null));
 
     const response = await middleware(
-      new NextRequest("https://admin.example.com/api/store-id/products"),
+      new NextRequest("https://admin.example.com/api/store-id/products", {
+        headers: { Origin: "https://papeleriapdepapel.com" },
+      }),
       {} as never,
     );
 
-    expect(response?.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    expect(response?.headers.get("Access-Control-Allow-Origin")).toBe(
+      "https://papeleriapdepapel.com",
+    );
     expect(response?.headers.get("Access-Control-Allow-Methods")).toBe(
       publicApiCorsHeaders["Access-Control-Allow-Methods"],
     );
@@ -59,7 +63,9 @@ describe("authentication middleware", () => {
     );
 
     expect(response?.status).toBe(204);
-    expect(response?.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    expect(response?.headers.get("Access-Control-Allow-Origin")).toBe(
+      "https://papeleriapdepapel.com",
+    );
     expect(mocks.clerkMiddleware).not.toHaveBeenCalled();
   });
 
@@ -68,6 +74,19 @@ describe("authentication middleware", () => {
 
     const response = await middleware(
       new NextRequest("https://admin.example.com/store-id/productos"),
+      {} as never,
+    );
+
+    expect(response?.headers.has("Access-Control-Allow-Origin")).toBe(false);
+  });
+
+  it("does not expose API responses to untrusted browser origins", async () => {
+    mocks.clerkMiddleware.mockResolvedValue(new Response(null));
+
+    const response = await middleware(
+      new NextRequest("https://admin.example.com/api/store-id/products", {
+        headers: { Origin: "https://example-attacker.com" },
+      }),
       {} as never,
     );
 

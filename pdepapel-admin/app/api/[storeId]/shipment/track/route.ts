@@ -1,4 +1,5 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { createCorsHeaders } from "@/lib/cors";
 import { envioClickClient } from "@/lib/envioclick";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, checkIfStoreOwner } from "@/lib/utils";
@@ -6,20 +7,18 @@ import { auth } from "@clerk/nextjs";
 import { ShippingStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
+const getCorsHeaders = (request: Request) =>
+  createCorsHeaders(request, { methods: "POST, OPTIONS" });
 
-export async function OPTIONS() {
-  return NextResponse.json({}, { headers: corsHeaders });
+export async function OPTIONS(req: Request) {
+  return NextResponse.json({}, { headers: getCorsHeaders(req) });
 }
 
 export async function POST(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
+  const corsHeaders = getCorsHeaders(req);
   try {
     const { userId: userLogged } = auth();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
@@ -29,13 +28,12 @@ export async function POST(
       : false;
 
     const body = await req.json();
-    const { shippingId, userId, guestId } = body;
+    const { shippingId, guestId } = body;
 
     if (!shippingId)
       throw ErrorFactory.InvalidRequest("El ID de envío es requerido");
 
-    // Allow authenticated users, guest users, or frontend users with userId
-    if (!userLogged && !userId && !guestId) {
+    if (!userLogged && !guestId) {
       throw ErrorFactory.Unauthenticated();
     }
 
@@ -50,11 +48,10 @@ export async function POST(
     if (!shipping)
       throw ErrorFactory.NotFound("Información de envío no encontrada");
 
-    // Verify ownership: must match logged user, provided userId, guestId, OR be store owner
+    // Verify ownership against the authenticated session or the guest identifier.
     const isOwner =
       isStoreOwner ||
       (userLogged && shipping.order.userId === userLogged) ||
-      (userId && shipping.order.userId === userId) ||
       (guestId && shipping.order.guestId === guestId);
 
     if (!isOwner) throw ErrorFactory.Unauthorized();
