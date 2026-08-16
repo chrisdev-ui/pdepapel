@@ -39,6 +39,12 @@ export function Login() {
       <DialogPortal>
         <DialogOverlay>
           <DialogPrimitive.Content className="relative flex h-full w-full min-w-0 items-center justify-center">
+            <DialogPrimitive.Title className="sr-only">
+              Iniciar sesión
+            </DialogPrimitive.Title>
+            <DialogPrimitive.Description className="sr-only">
+              Inicia sesión para consultar tus pedidos y comprar más rápido.
+            </DialogPrimitive.Description>
             <SignIn
               afterSignInUrl={redirectUrl || "/"}
               afterSignUpUrl={redirectUrl || "/"}
