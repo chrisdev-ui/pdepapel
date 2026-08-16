@@ -16,6 +16,7 @@ import {
   validateStockAvailability,
 } from "@/lib/inventory";
 import { calculateOrderFinancials } from "@/lib/financial";
+import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { auth, clerkClient } from "@clerk/nextjs";
 import {
@@ -755,6 +756,17 @@ export async function PATCH(
 
       return updated;
     });
+
+    if (
+      originalStatus !== OrderStatus.PAID &&
+      updatedOrder.status === OrderStatus.PAID
+    ) {
+      try {
+        await recordPaidOrderInGoogleAnalytics(updatedOrder.id);
+      } catch (analyticsError) {
+        console.error("[ORDER_PATCH] GA4 purchase tracking failed:", analyticsError);
+      }
+    }
 
     // Async email notifications
     setImmediate(async () => {

@@ -1,4 +1,5 @@
 import { Icons } from "@/components/icons";
+import { PrivacyPreferencesButton } from "@/components/privacy-preferences-button";
 import { SEASON_CONFIG } from "@/constants";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { Season } from "@/types";
@@ -97,6 +98,9 @@ export const Footer: React.FC<FooterProps> = ({ season = Season.Default }) => {
                 >
                   Políticas de tratamiento de datos
                 </Link>
+              </li>
+              <li>
+                <PrivacyPreferencesButton />
               </li>
             </ul>
           </div>

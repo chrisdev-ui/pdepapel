@@ -24,6 +24,12 @@ import { useToast } from "@/hooks/use-toast";
 import useValidateCoupon from "@/hooks/use-validate-coupon";
 import { calculateTotals, cn, generateGuestId } from "@/lib/utils";
 import { toBoldCheckoutConfig } from "@/lib/bold";
+import {
+  getAnalyticsValue,
+  getGoogleAnalyticsClientId,
+  toAnalyticsItem,
+  trackCustomerEvent,
+} from "@/lib/customer-analytics";
 import { orderPath, productPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import {
   CheckoutByOrderResponse,
@@ -230,6 +236,8 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     null,
   );
   const hasFinalizedCheckoutRef = useRef(false);
+  const checkoutStartedRef = useRef(false);
+  const analyticsClientIdRef = useRef<string | null>(null);
 
   const [couponState, setCouponState] = useState<CouponState>(() => {
     return (
@@ -429,6 +437,34 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     [activeItems, couponState.coupon, shippingCost],
   );
 
+  const analyticsItems = useMemo(
+    () =>
+      activeItems.map((item) => toAnalyticsItem(item, item.quantity ?? 1)),
+    [activeItems],
+  );
+
+  useEffect(() => {
+    if (checkoutStartedRef.current || analyticsItems.length === 0) return;
+
+    checkoutStartedRef.current = true;
+    trackCustomerEvent("begin_checkout", {
+      currency: "COP",
+      items: analyticsItems,
+      value: getAnalyticsValue(analyticsItems),
+    });
+  }, [analyticsItems]);
+
+  useEffect(() => {
+    const measurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
+    if (!measurementId) return;
+
+    void getGoogleAnalyticsClientId(measurementId).then(
+      (clientId) => {
+        analyticsClientIdRef.current = clientId;
+      },
+    );
+  }, []);
+
   const validateStep = async (step: number) => {
     let fieldsToValidate: (keyof CheckoutFormValue)[] = [];
     if (step === 1) {
@@ -479,6 +515,25 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     try {
       const isValid = await validateStep(currentStep);
       if (isValid) {
+        if (currentStep === 2) {
+          const shipping = form.getValues("shipping");
+          trackCustomerEvent("add_shipping_info", {
+            currency: "COP",
+            items: analyticsItems,
+            shipping_tier: shipping?.carrierName || "Sin transportadora",
+            value: getAnalyticsValue(analyticsItems),
+          });
+        }
+
+        if (currentStep === 3) {
+          trackCustomerEvent("add_payment_info", {
+            currency: "COP",
+            items: analyticsItems,
+            payment_type: form.getValues("paymentMethod"),
+            value: getAnalyticsValue(analyticsItems),
+          });
+        }
+
         const nextStep = Math.min(currentStep + 1, FORM_STEPS.length);
         setCurrentStep(nextStep);
         setStoredStep(nextStep);
@@ -549,6 +604,10 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         }[];
         const ids = items.map((i) => i.productId);
         setOutOfStockItems(ids);
+        trackCustomerEvent("checkout_stock_unavailable", {
+          affected_items: ids.length,
+          checkout_step: currentStep,
+        });
 
         toast({
           title: "Stock insuficiente ⚠️",
@@ -587,11 +646,17 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         (data as CheckoutByOrderResponse as WompiResponse).url !== undefined
       ) {
         const { url } = data as CheckoutByOrderResponse as WompiResponse;
+        trackCustomerEvent("checkout_payment_redirect", {
+          payment_type: PaymentMethod.Wompi,
+        });
         window.location.href = url;
       }
       // Check for Bold response
       else if ((data as any)?.boldData !== undefined) {
         const { order, boldData } = data as any;
+        trackCustomerEvent("checkout_payment_redirect", {
+          payment_type: PaymentMethod.Bold,
+        });
         fireConfetti();
         toast({
           title: "Orden creada",
@@ -684,7 +749,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     0,
   );
 
-  const onSubmit = (data: CheckoutFormValue): void => {
+  const onSubmit = async (data: CheckoutFormValue): Promise<void> => {
     const orderItems = activeItems.map((item) => ({
       productId: item.id,
       quantity: item.quantity ?? 1,
@@ -715,6 +780,14 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       guestUserId = generateGuestId();
       setGuestId(guestUserId);
     }
+    const analyticsClientId =
+      analyticsClientIdRef.current ??
+      (process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID
+        ? await getGoogleAnalyticsClientId(
+            process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID,
+          )
+        : null);
+    analyticsClientIdRef.current = analyticsClientId;
     const formattedData = {
       fullName: `${firstName} ${lastName}`,
       phone: telephone,
@@ -742,8 +815,15 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       subtotal,
       total,
       customOrderToken: customOrder?.token, // Include token for conversion
+      analyticsClientId,
     };
 
+    trackCustomerEvent("checkout_order_submitted", {
+      currency: "COP",
+      items: analyticsItems,
+      payment_type: paymentMethod,
+      value: getAnalyticsValue(analyticsItems),
+    });
     mutate(formattedData);
   };
 

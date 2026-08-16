@@ -1,10 +1,10 @@
 "use client";
 
-import { track } from "@vercel/analytics/react";
 import Image from "next/image";
 import Link from "next/link";
 
 import { categoryPath } from "@/lib/routes";
+import { trackCustomerEvent } from "@/lib/customer-analytics";
 import { Category } from "@/types";
 
 interface CategoryLinksSectionProps {
@@ -36,7 +36,7 @@ export function CategoryLinksSection({
             href={categoryPath(category.slug || category.id)}
             aria-label={`Ver ${category.name}`}
             onClick={() =>
-              track("select_category", {
+              trackCustomerEvent("select_category", {
                 category_slug: category.slug || category.id,
                 section: title,
               })

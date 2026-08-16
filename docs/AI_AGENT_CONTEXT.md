@@ -121,6 +121,9 @@ Public-shop-specific:
 - `next/image` optimization enabled (AVIF/WebP and cache controls).
 - SEO with `schema-dts`, `app/sitemap.ts`, `app/robots.ts`, Open Graph and Twitter images.
 - Vercel Analytics and Speed Insights.
+- Consent-based Google Analytics 4 for customer-journey analysis; it is
+  optional and must never be used to send customer contact, address, identity,
+  or payment data.
 
 ## 5. Admin application (`pdepapel-admin`)
 
@@ -278,6 +281,28 @@ When creating a new customer-navigable route:
 - After an LCP or CLS release, verify Vercel Speed Insights on mobile by route after new real-user samples arrive. Field data is rolling and historical, so do not attribute an existing P75 value to an undeployed change or declare success from a local build alone.
 - Product variant URLs remain individually canonical for direct visits, refreshes, sharing, and crawlers. Inside an already-open product group, change only the selected variant data and update the address bar with the native History API; do not use a full App Router navigation that flashes the route loading state. Keep the selector order based on the stable sibling payload, never on the currently selected variant.
 - Grouped catalog cards must derive their route, stock, category metadata, and price range from the variants matching active catalog filters. Their initial route must point to the matching variant with the displayed lowest effective price; if a different variant is discounted, describe it as an option on offer rather than implying that the initial variant has that discount. Product-group create, edit, and delete actions must use the central catalog invalidation helper so the public shop, Redis cache, and marketplace stock sync remain consistent.
+
+### Customer-journey analytics
+
+- The public shop asks for explicit, revocable browser consent before loading
+  Google Analytics 4. Preferences are versioned in browser local storage and
+  can be reopened from the footer. Essential checkout and security functions do
+  not depend on that consent.
+- GA4 client events use the shared `lib/customer-analytics.ts` helper. Track
+  ecommerce events such as product-list views, product views, add-to-cart,
+  cart view, checkout, shipping/payment steps, and checkout errors. Never put
+  email, phone, address, document number, raw search text, payment credentials,
+  or any other personal data in event parameters.
+- The public checkout obtains the GA client ID only after analytics consent and
+  sends it as optional checkout attribution. The admin persists it temporarily
+  in `Order.analyticsClientId`; once the server sends the verified `purchase`
+  event after a genuine `PAID` transition, it clears that client ID and records
+  `analyticsPurchaseTrackedAt`. Point-of-sale, fair, admin-created, and
+  unconsented orders are skipped.
+- The confirmed-purchase event is sent from admin through the GA4 Measurement
+  Protocol from the Bold/Wompi webhook or a manual paid transition. It is never
+  emitted from a customer redirect. GA failure must be logged but must not roll
+  back payment, stock, email, or order status.
 
 ## 7. Data model and database safety
 
@@ -598,6 +623,8 @@ Full configuration runbook: `pdepapel-admin/docs/mercadolibre.md`.
 - Shipping/data: EnvioClick, MiPaquete, Upstash Redis cache variables.
 - Store revalidation: `REVALIDATION_SECRET` (must equal public app value).
 - Mercado Libre/QStash values listed in Section 12.
+- GA4 server purchase tracking (optional): `GA4_MEASUREMENT_ID` and
+  `GA4_API_SECRET`. The API secret belongs only to the admin Vercel project.
 
 ### Public-shop baseline environment categories
 
@@ -606,6 +633,8 @@ Full configuration runbook: `pdepapel-admin/docs/mercadolibre.md`.
 - `NEXT_PUBLIC_API_URL` pointing to the admin API.
 - Legacy PayU public variables currently remain in the validated contract; do not remove them without removing or migrating dependent code/config.
 - `REVALIDATION_SECRET` server-side value matching admin.
+- Optional public analytics ID: `NEXT_PUBLIC_GA_MEASUREMENT_ID`. It is a public
+  identifier, not a secret.
 
 ### Local vs production
 

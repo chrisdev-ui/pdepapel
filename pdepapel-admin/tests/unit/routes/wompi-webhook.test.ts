@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   findOrder: vi.fn(),
   findUpdatedOrder: vi.fn(),
   invalidateStoreProductsCache: vi.fn(),
+  recordPaidOrderInGoogleAnalytics: vi.fn(),
   paymentUpsert: vi.fn(),
   sendOrderEmail: vi.fn(),
   shippingUpsert: vi.fn(),
@@ -42,6 +43,9 @@ vi.mock("@/lib/cache", () => ({
 }));
 vi.mock("@/lib/financial", () => ({
   calculateOrderFinancials: mocks.calculateOrderFinancials,
+}));
+vi.mock("@/lib/google-analytics", () => ({
+  recordPaidOrderInGoogleAnalytics: mocks.recordPaidOrderInGoogleAnalytics,
 }));
 
 import { POST } from "@/app/api/webhook/wompi/route";
@@ -194,6 +198,9 @@ describe("POST /api/webhook/wompi", () => {
     expect(mocks.paymentUpsert).toHaveBeenCalledTimes(1);
     expect(mocks.shippingUpsert).toHaveBeenCalledTimes(1);
     expect(mocks.sendOrderEmail).toHaveBeenCalledTimes(1);
+    expect(mocks.recordPaidOrderInGoogleAnalytics).toHaveBeenCalledWith(
+      "order-id",
+    );
   });
 
   it("restocks a paid order only once when Wompi cancels it", async () => {

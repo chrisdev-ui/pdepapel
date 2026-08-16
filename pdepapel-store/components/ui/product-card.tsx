@@ -1,7 +1,6 @@
 "use client";
 
 import { Expand, Heart, ShoppingCart } from "lucide-react";
-import { track } from "@vercel/analytics/react";
 import Link from "next/link";
 import { MouseEventHandler, useCallback, useEffect, useState } from "react";
 
@@ -16,6 +15,11 @@ import { useCart } from "@/hooks/use-cart";
 import { usePreviewModal } from "@/hooks/use-preview-modal";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { productPath } from "@/lib/routes";
+import {
+  getAnalyticsValue,
+  toAnalyticsItem,
+  trackCustomerEvent,
+} from "@/lib/customer-analytics";
 import { calculateAverageRating, cn, currencyFormatter } from "@/lib/utils";
 import { Product } from "@/types";
 
@@ -34,11 +38,11 @@ const ProductCard: React.FC<ProductCardProps> = ({
   const openPreview = usePreviewModal((state) => state.onOpen);
   const addToCart = useCart((state) => state.addItem);
   const addToWishlist = useWishlist((state) => state.addItem);
-  const isWishlistProduct = useWishlist((state) =>
-    isMounted && state.items.some((item) => item.id === product.id),
+  const isWishlistProduct = useWishlist(
+    (state) => isMounted && state.items.some((item) => item.id === product.id),
   );
-  const isCartProduct = useCart((state) =>
-    isMounted && state.items.some((item) => item.id === product.id),
+  const isCartProduct = useCart(
+    (state) => isMounted && state.items.some((item) => item.id === product.id),
   );
 
   useEffect(() => {
@@ -66,10 +70,12 @@ const ProductCard: React.FC<ProductCardProps> = ({
       }
 
       addToCart(product);
-      track("add_to_cart", {
+      const item = toAnalyticsItem(product, 1);
+      trackCustomerEvent("add_to_cart", {
+        currency: "COP",
+        items: [item],
         source: "product_card",
-        product_slug: product.slug || product.id,
-        quantity: 1,
+        value: getAnalyticsValue([item]),
       });
     },
     [addToCart, openPreview, product],
@@ -136,9 +142,10 @@ const ProductCard: React.FC<ProductCardProps> = ({
         aria-label={`Ver ${product.name}`}
         className="flex flex-1 flex-col space-y-4 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kawaii-pink focus-visible:ring-offset-2"
         onClick={() =>
-          track("select_item", {
-            product_slug: product.slug || product.id,
-            is_group: Boolean(product.isGroup),
+          trackCustomerEvent("select_item", {
+            item_list_id: "catalog",
+            item_list_name: "Catálogo",
+            items: [toAnalyticsItem(product, 1)],
           })
         }
       >

@@ -9,6 +9,7 @@ import { getCurrentSeason } from "@/lib/date-utils";
 import { beautifulEveryTime, caudex, fredoka, quicksand } from "@/lib/fonts";
 import { ModalProvider } from "@/providers/modal-provider";
 import { ReactQueryProvider } from "@/providers/query-client-provider";
+import { CustomerAnalyticsProvider } from "@/providers/customer-analytics-provider";
 import { Toaster } from "@/providers/toaster";
 import { Season } from "@/types";
 import "./globals.css";
@@ -119,6 +120,9 @@ export default async function RootLayout({
             <Footer season={currentSeason} />
             {currentSeason === Season.Christmas && <Christmas />}
             <Toaster />
+            <CustomerAnalyticsProvider
+              measurementId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID}
+            />
             <Analytics />
             <SpeedInsights />
           </ReactQueryProvider>

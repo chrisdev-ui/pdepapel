@@ -3,7 +3,6 @@
 import { CreditCard, ShoppingCart, X } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
-import { track } from "@vercel/analytics/react";
 
 import { Button } from "@/components/ui/button";
 import { CldImage } from "@/components/ui/CldImage";
@@ -18,6 +17,7 @@ import {
 import { KAWAII_FACE_SAD } from "@/constants";
 import { useCart } from "@/hooks/use-cart";
 import { productPath, STOREFRONT_ROUTES } from "@/lib/routes";
+import { toAnalyticsItem, trackCustomerEvent } from "@/lib/customer-analytics";
 import { calculateTotals } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 
@@ -41,8 +41,10 @@ export const NavbarCartContent: React.FC<NavbarCartContentProps> = ({
   };
 
   const onCheckout = () => {
-    track("begin_checkout", {
-      items: cart.items.length,
+    trackCustomerEvent("checkout_initiated", {
+      currency: "COP",
+      items: cart.items.map((item) => toAnalyticsItem(item, item.quantity)),
+      item_count: cart.items.length,
       total: Number(total),
     });
     onClose();

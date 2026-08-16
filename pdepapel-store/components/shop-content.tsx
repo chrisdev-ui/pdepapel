@@ -1,7 +1,6 @@
 "use client";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { track } from "@vercel/analytics/react";
 import dynamic from "next/dynamic";
 import { X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -12,6 +11,7 @@ import { OnSaleFilter } from "@/components/on-sale-filter";
 import PriceFilter from "@/components/price-filter";
 import { Button } from "@/components/ui/button";
 import { LIMIT_SHOP_ITEMS, SORT_OPTIONS } from "@/constants";
+import { toAnalyticsItem, trackCustomerEvent } from "@/lib/customer-analytics";
 import { useProductFilters } from "@/hooks/use-product-filters";
 import { Category, Color, Design, Product, Size, Type } from "@/types";
 
@@ -65,6 +65,7 @@ export const ShopContent: React.FC<ShopContentProps> = ({
   const { filters, setFilters } = useProductFilters();
   const [isMounted, setIsMounted] = useState(false);
   const noResultsQueryRef = useRef<string>();
+  const viewedListRef = useRef<string>();
 
   const effectiveFilters = useMemo(
     () => ({
@@ -180,7 +181,7 @@ export const ShopContent: React.FC<ShopContentProps> = ({
     if (noResultsQueryRef.current === queryKey) return;
 
     noResultsQueryRef.current = queryKey;
-    track("catalog_no_results", {
+    trackCustomerEvent("catalog_no_results", {
       has_search: Boolean(effectiveFilters.search),
       active_filters:
         effectiveFilters.colorId.length +
@@ -189,6 +190,29 @@ export const ShopContent: React.FC<ShopContentProps> = ({
         Number(effectiveFilters.isOnSale),
     });
   }, [data, effectiveFilters, isFetching, isMounted]);
+
+  useEffect(() => {
+    if (!isMounted || isFetching || !data || data.products.length === 0) return;
+
+    const listKey = `${heading}:${effectiveFilters.page}:${data.products
+      .map((product) => product.id)
+      .join(",")}`;
+    if (viewedListRef.current === listKey) return;
+
+    viewedListRef.current = listKey;
+    trackCustomerEvent("view_item_list", {
+      item_list_id: fixedCategoryId || "shop",
+      item_list_name: heading,
+      items: data.products.map((product) => toAnalyticsItem(product, 1)),
+    });
+  }, [
+    data,
+    effectiveFilters.page,
+    fixedCategoryId,
+    heading,
+    isFetching,
+    isMounted,
+  ]);
 
   const clearFilters = () => {
     setFilters({

@@ -3,7 +3,6 @@
 import { KitContents } from "./kit-contents";
 
 import { Award, Heart, ShieldCheck, ShoppingCart, Truck } from "lucide-react";
-import { track } from "@vercel/analytics/react";
 
 import { Button } from "@/components/ui/button";
 import { Currency } from "@/components/ui/currency";
@@ -15,6 +14,11 @@ import { useCart } from "@/hooks/use-cart";
 import { toast } from "@/hooks/use-toast";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { productPath } from "@/lib/routes";
+import {
+  getAnalyticsValue,
+  toAnalyticsItem,
+  trackCustomerEvent,
+} from "@/lib/customer-analytics";
 import { calculateAverageRating, cn } from "@/lib/utils";
 import { getStableProductVariants } from "@/lib/product-variants";
 import { Color, Design, Product, ProductVariant, Size } from "@/types";
@@ -59,6 +63,15 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
     [data, siblings],
   );
   const hasVariants = allVariants.length > 1;
+
+  useEffect(() => {
+    const item = toAnalyticsItem(data, 1);
+    trackCustomerEvent("view_item", {
+      currency: "COP",
+      items: [item],
+      value: getAnalyticsValue([item]),
+    });
+  }, [data]);
 
   useEffect(() => {
     setQuantity(undefined);
@@ -144,7 +157,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
     }
 
     if (targetVariant) {
-      track("select_item_variant", {
+      trackCustomerEvent("select_item_variant", {
         product_slug: targetVariant.slug || targetVariant.id,
         variant_type: type,
       });
@@ -173,10 +186,12 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
     } else {
       cart.addItem(data, quantity);
     }
-    track("add_to_cart", {
+    const item = toAnalyticsItem(data, quantity ?? 1);
+    trackCustomerEvent("add_to_cart", {
+      currency: "COP",
+      items: [item],
       source: "product_detail",
-      product_slug: data.slug || data.id,
-      quantity: quantity ?? 1,
+      value: getAnalyticsValue([item]),
     });
     // router.push("/cart"); // Removed navigation
     onAddedToCart?.();

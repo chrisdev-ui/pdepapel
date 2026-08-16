@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   generateOrderNumber: vi.fn(),
   getLastOrderTimestamp: vi.fn(),
   getProductsPrices: vi.fn(),
+  normalizeGoogleAnalyticsClientId: vi.fn(),
   orderCreate: vi.fn(),
   sendOrderEmail: vi.fn(),
 }));
@@ -56,6 +57,9 @@ vi.mock("@/lib/bold", () => ({
   generateBoldCheckoutData: mocks.generateBoldCheckoutData,
 }));
 vi.mock("@/lib/email", () => ({ sendOrderEmail: mocks.sendOrderEmail }));
+vi.mock("@/lib/google-analytics", () => ({
+  normalizeGoogleAnalyticsClientId: mocks.normalizeGoogleAnalyticsClientId,
+}));
 
 import { POST } from "@/app/api/[storeId]/checkout/route";
 
@@ -136,6 +140,7 @@ describe("POST /api/[storeId]/checkout", () => {
       total: 15000,
     });
     mocks.generateOrderNumber.mockReturnValue("ORD-123");
+    mocks.normalizeGoogleAnalyticsClientId.mockReturnValue(null);
     mocks.orderCreate.mockResolvedValue(order);
     mocks.generateBoldCheckoutData.mockReturnValue({
       orderId: "order-id",
@@ -193,5 +198,22 @@ describe("POST /api/[storeId]/checkout", () => {
       }),
     );
     expect(mocks.generateBoldCheckoutData).toHaveBeenCalledWith(order);
+  });
+
+  it("stores a consented GA4 client ID without accepting arbitrary values", async () => {
+    mocks.normalizeGoogleAnalyticsClientId.mockReturnValue("123.456");
+
+    await POST(createCheckoutRequest({ analyticsClientId: "123.456" }), {
+      params: { storeId },
+    });
+
+    expect(mocks.normalizeGoogleAnalyticsClientId).toHaveBeenCalledWith(
+      "123.456",
+    );
+    expect(mocks.orderCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ analyticsClientId: "123.456" }),
+      }),
+    );
   });
 });

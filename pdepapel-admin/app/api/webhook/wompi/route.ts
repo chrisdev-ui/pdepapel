@@ -6,6 +6,7 @@ import { createInventoryMovementBatchResilient } from "@/lib/inventory";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
 import { calculateOrderFinancials } from "@/lib/financial";
+import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
 import crypto from "crypto";
 import { NextResponse } from "next/server";
 
@@ -322,6 +323,17 @@ async function updateOrderData(order: any, transaction: any) {
     });
 
     if (!result.processed) {
+      if (currentStatus === OrderStatus.PAID && order.status === OrderStatus.PAID) {
+        try {
+          await recordPaidOrderInGoogleAnalytics(order.id);
+        } catch (analyticsError) {
+          console.error(
+            "[WOMPI_WEBHOOK] GA4 purchase tracking failed:",
+            analyticsError,
+          );
+        }
+      }
+
       return NextResponse.json(
         {
           message: `Orden ${order.orderNumber} ya fue procesada anteriormente`,
@@ -404,6 +416,17 @@ async function updateOrderData(order: any, transaction: any) {
 
     // Send email notification (admin + customer)
     if (updatedOrder) {
+      if (updatedOrder.status === OrderStatus.PAID) {
+        try {
+          await recordPaidOrderInGoogleAnalytics(updatedOrder.id);
+        } catch (analyticsError) {
+          console.error(
+            "[WOMPI_WEBHOOK] GA4 purchase tracking failed:",
+            analyticsError,
+          );
+        }
+      }
+
       if (
         updatedOrder.status === OrderStatus.PAID &&
         updatedOrder.shipping &&

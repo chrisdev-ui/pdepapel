@@ -5,6 +5,7 @@ import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { getProductsPrices } from "@/lib/discount-engine";
+import { normalizeGoogleAnalyticsClientId } from "@/lib/google-analytics";
 
 import {
   CACHE_HEADERS,
@@ -67,6 +68,7 @@ type OrderData = {
   adminNotes?: string | null;
   internalNotes?: string | null;
   createdBy?: string | null;
+  analyticsClientId?: string | null;
   // Relations
   orderItems: { create: any };
   status?: any;
@@ -129,7 +131,11 @@ export async function POST(
       adminNotes,
       internalNotes,
       createdBy, // Optional admin user ID
+      analyticsClientId,
     } = body;
+    const normalizedAnalyticsClientId = isStoreOwner
+      ? null
+      : normalizeGoogleAnalyticsClientId(analyticsClientId);
     const normalizedShippingProvider =
       shippingProvider === "CUSTOM"
         ? ShippingProvider.MANUAL
@@ -516,6 +522,9 @@ export async function POST(
         adminNotes,
         internalNotes,
         createdBy: createdBy || authenticatedUserId,
+        ...(normalizedAnalyticsClientId
+          ? { analyticsClientId: normalizedAnalyticsClientId }
+          : {}),
         orderItems: {
           create: itemsWithPrices.map((item: any) => ({
             quantity: item.quantity,

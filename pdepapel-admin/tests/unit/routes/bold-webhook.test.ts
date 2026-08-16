@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   verifyWebhookSignature: vi.fn(),
   findOrder: vi.fn(),
   invalidateStoreProductsCache: vi.fn(),
+  recordPaidOrderInGoogleAnalytics: vi.fn(),
   sendOrderEmail: vi.fn(),
   transaction: vi.fn(),
 }));
@@ -42,6 +43,9 @@ vi.mock("@/lib/cache", () => ({
 }));
 vi.mock("@/lib/financial", () => ({
   calculateOrderFinancials: mocks.calculateOrderFinancials,
+}));
+vi.mock("@/lib/google-analytics", () => ({
+  recordPaidOrderInGoogleAnalytics: mocks.recordPaidOrderInGoogleAnalytics,
 }));
 
 import { POST } from "@/app/api/webhook/bold/route";
@@ -103,6 +107,9 @@ describe("POST /api/webhook/bold", () => {
       message: "Orden ORD-123 ya fue procesada anteriormente",
     });
     expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.recordPaidOrderInGoogleAnalytics).toHaveBeenCalledWith(
+      "order-id",
+    );
   });
 
   it("records an approved payment once, updates stock, and notifies the customer", async () => {
@@ -214,6 +221,9 @@ describe("POST /api/webhook/bold", () => {
     expect(mocks.sendOrderEmail).toHaveBeenCalledWith(
       expect.objectContaining({ id: "order-id", payment: PaymentMethod.Bold }),
       OrderStatus.PAID,
+    );
+    expect(mocks.recordPaidOrderInGoogleAnalytics).toHaveBeenCalledWith(
+      "order-id",
     );
     expect(mocks.createGuideForOrder).not.toHaveBeenCalled();
   });

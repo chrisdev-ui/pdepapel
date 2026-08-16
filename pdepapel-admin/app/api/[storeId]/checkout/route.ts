@@ -10,6 +10,7 @@ import {
 import { NextResponse } from "next/server";
 import { env } from "@/lib/env.mjs";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { normalizeGoogleAnalyticsClientId } from "@/lib/google-analytics";
 import { generateBoldCheckoutData } from "@/lib/bold";
 import { getColombiaDate } from "@/lib/date-utils";
 import { getProductsPrices } from "@/lib/discount-engine";
@@ -112,7 +113,11 @@ export async function POST(
       envioClickIdRate, // ⭐ ID de tarifa de EnvioClick (top level)
       documentId, // ⭐ Cédula/NIT (opcional)
       customOrderToken, // ⭐ Token para convertir cotización
+      analyticsClientId,
     } = await req.json();
+    const normalizedAnalyticsClientId = isStoreOwner
+      ? null
+      : normalizeGoogleAnalyticsClientId(analyticsClientId);
 
     // Fix implicit any for orderItems
     const typedOrderItems = (orderItems || []) as {
@@ -580,6 +585,9 @@ export async function POST(
           total: totals.total,
           couponDiscount: totals.couponDiscount,
           couponId: coupon?.id,
+          ...(normalizedAnalyticsClientId
+            ? { analyticsClientId: normalizedAnalyticsClientId }
+            : {}),
           // Sync Items: Re-create to ensure fidelity with checkout request
           orderItems: {
             deleteMany: {}, // Clear old quote items (safe refresh)
@@ -637,6 +645,9 @@ export async function POST(
           total: totals.total,
           couponDiscount: totals.couponDiscount,
           couponId: coupon?.id,
+          ...(normalizedAnalyticsClientId
+            ? { analyticsClientId: normalizedAnalyticsClientId }
+            : {}),
           orderItems: { create: orderItemsData },
           shipping: {
             create: buildShippingPayload(params.storeId, selectedQuote),

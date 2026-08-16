@@ -77,6 +77,23 @@ export default function DataPolicyPage() {
             </li>
           </ul>
           <h3 className="font-serif text-lg font-semibold">
+            Analítica de compras:
+          </h3>
+          <ul className="list-disc space-y-3 pl-5">
+            <li>
+              Solo con tu autorización, usamos Google Analytics 4 para conocer
+              de forma agregada cómo se navega el catálogo, el carrito y el
+              proceso de compra. Esto nos permite identificar oportunidades para
+              mejorar el servicio.
+            </li>
+            <li>
+              Puedes aceptar, rechazar o cambiar estas opciones cuando quieras
+              desde el enlace <strong>Preferencias de privacidad</strong> que
+              aparece en el pie de página. Rechazarlas no impide comprar ni usar
+              las funciones esenciales del sitio.
+            </li>
+          </ul>
+          <h3 className="font-serif text-lg font-semibold">
             Derechos de los titulares:
           </h3>
           <ul className="list-disc space-y-3 pl-5">
@@ -150,6 +167,9 @@ export default function DataPolicyPage() {
             compartirán con terceros para fines distintos a los mencionados,
             garantizando así tu privacidad y la seguridad de tus datos
             personales.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Última actualización: 15 de agosto de 2026.
           </p>
         </div>
       </Container>

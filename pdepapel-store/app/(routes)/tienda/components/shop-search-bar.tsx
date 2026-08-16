@@ -2,11 +2,11 @@
 
 import { Search } from "lucide-react";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import { track } from "@vercel/analytics/react";
 
 import { Input } from "@/components/ui/input";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useProductFilters } from "@/hooks/use-product-filters";
+import { trackCustomerEvent } from "@/lib/customer-analytics";
 import { cn } from "@/lib/utils";
 
 interface ShopSearchBarProps {
@@ -53,7 +53,9 @@ const ShopSearchBar: React.FC<ShopSearchBarProps> = ({
     ) {
       setFilter("search", debouncedSearch || null);
       if (debouncedSearch) {
-        track("catalog_search", { query_length: debouncedSearch.length });
+        trackCustomerEvent("catalog_search", {
+          query_length: debouncedSearch.length,
+        });
       }
     }
   }, [debouncedSearch, filters.search, setFilter]);

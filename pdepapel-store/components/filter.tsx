@@ -2,7 +2,6 @@
 
 import { ChevronsDown, ChevronsUp, Search, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import { track } from "@vercel/analytics/react";
 
 import { ProductFilters, useProductFilters } from "@/hooks/use-product-filters";
 
@@ -17,6 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LIMIT } from "@/constants";
+import { trackCustomerEvent } from "@/lib/customer-analytics";
 import { Category, Color, Design, Size, Type } from "@/types";
 
 interface FilterProps {
@@ -44,7 +44,7 @@ const Filter: React.FC<FilterProps> = ({
   }, [data]);
 
   const handleToggleFilter = (id: string) => {
-    track("catalog_filter", {
+    trackCustomerEvent("catalog_filter", {
       filter: valueKey,
       action: parsedSelectedValues.includes(id) ? "remove" : "add",
     });

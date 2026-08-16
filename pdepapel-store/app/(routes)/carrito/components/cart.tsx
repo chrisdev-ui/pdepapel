@@ -8,6 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { KAWAII_FACE_SAD } from "@/constants";
 import { useCart } from "@/hooks/use-cart";
+import {
+  getAnalyticsValue,
+  toAnalyticsItem,
+  trackCustomerEvent,
+} from "@/lib/customer-analytics";
 import { cn } from "@/lib/utils";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import Link from "next/link";
@@ -17,6 +22,19 @@ import { Summary } from "./summary";
 const Cart: React.FC<{}> = () => {
   const cart = useCart();
   const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    if (!isMounted || cart.items.length === 0) return;
+
+    const items = cart.items.map((item) =>
+      toAnalyticsItem(item, item.quantity ?? 1),
+    );
+    trackCustomerEvent("view_cart", {
+      currency: "COP",
+      items,
+      value: getAnalyticsValue(items),
+    });
+  }, [cart.items, isMounted]);
 
   useEffect(() => {
     setIsMounted(true);
@@ -87,9 +105,7 @@ const Cart: React.FC<{}> = () => {
           )}
           <ul>
             {cart.items?.length > 0 &&
-              cart.items.map((item) => (
-                <CartItem key={item.id} item={item} />
-              ))}
+              cart.items.map((item) => <CartItem key={item.id} item={item} />)}
           </ul>
         </div>
         {cart.items?.length > 0 && <Summary disabled={checkoutDisabled} />}

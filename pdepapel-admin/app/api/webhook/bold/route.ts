@@ -9,6 +9,7 @@ import {
 } from "@/lib/bold";
 import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
 import { calculateOrderFinancials } from "@/lib/financial";
+import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
@@ -163,6 +164,12 @@ async function processBoldPayment(transaction: any, targetStatus: OrderStatus) {
 
   // Idempotency Guard: If order is already PAID and event is SALE_APPROVED, skip processing
   if (order.status === OrderStatus.PAID && targetStatus === OrderStatus.PAID) {
+    try {
+      await recordPaidOrderInGoogleAnalytics(order.id);
+    } catch (analyticsError) {
+      console.error("[BOLD_WEBHOOK] GA4 purchase tracking failed:", analyticsError);
+    }
+
     return NextResponse.json(
       { message: `Orden ${order.orderNumber} ya fue procesada anteriormente` },
       { status: 200 },
@@ -324,6 +331,17 @@ async function processBoldPayment(transaction: any, targetStatus: OrderStatus) {
   });
 
   if (updatedOrder) {
+    if (updatedOrder.status === OrderStatus.PAID) {
+      try {
+        await recordPaidOrderInGoogleAnalytics(updatedOrder.id);
+      } catch (analyticsError) {
+        console.error(
+          "[BOLD_WEBHOOK] GA4 purchase tracking failed:",
+          analyticsError,
+        );
+      }
+    }
+
     if (
       updatedOrder.status === OrderStatus.PAID &&
       updatedOrder.shipping &&

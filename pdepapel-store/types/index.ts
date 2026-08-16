@@ -359,6 +359,7 @@ export interface CheckoutOrder {
   shippingOptionType?: string;
   envioClickIdRate?: number;
   customOrderToken?: string;
+  analyticsClientId?: string | null;
 }
 
 export interface DaneLocation {

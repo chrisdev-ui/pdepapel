@@ -451,6 +451,11 @@ model Order {
   viewedAt  DateTime?
   paidAt    DateTime?
 
+  // Analytics attribution is optional and is captured only after visitor consent.
+  // The client ID is cleared once the server-side purchase event is confirmed.
+  analyticsClientId          String?   @db.VarChar(128)
+  analyticsPurchaseTrackedAt DateTime?
+
   // -- BI Financial Fields --
   totalProductCost Float?
   gatewayFee       Float?
@@ -489,6 +494,7 @@ model Order {
   @@index([token])
   @@index([type])
   @@index([storeId, fairEventId])
+  @@index([analyticsPurchaseTrackedAt])
 }
 
 model OrderItem {
