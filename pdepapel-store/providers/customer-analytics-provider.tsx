@@ -105,45 +105,47 @@ export function CustomerAnalyticsProvider({
   return (
     <>
       {isReady && !consent && (
-        <section
-          aria-label="Preferencias de privacidad"
-          className="fixed inset-x-4 bottom-4 z-[60] mx-auto max-w-2xl rounded-2xl border border-blue-baby bg-background p-5 shadow-xl sm:p-6"
-        >
-          <h2 className="font-serif text-xl font-bold">
-            Tu privacidad, tus decisiones
-          </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Con tu permiso usamos analítica de compras para mejorar la tienda y
-            entender qué dificulta finalizar una compra. Nunca usamos estos
-            datos para procesar tu pago.
-          </p>
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => persistPreferences(initialPreferences)}
-            >
-              Rechazar opcionales
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setIsPreferencesOpen(true)}
-            >
-              Personalizar
-            </Button>
-            <Button
-              type="button"
-              onClick={() => persistPreferences({ analytics: true })}
-            >
-              Aceptar y continuar
-            </Button>
-          </div>
-        </section>
+        !isPreferencesOpen && (
+          <section
+            aria-label="Preferencias de privacidad"
+            className="fixed inset-x-4 bottom-4 z-[10000] mx-auto max-w-2xl rounded-2xl border border-blue-baby bg-background p-5 shadow-xl sm:p-6"
+          >
+            <h2 className="font-serif text-xl font-bold">
+              Tu privacidad, tus decisiones
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Con tu permiso usamos analítica de compras para mejorar la tienda
+              y entender qué dificulta finalizar una compra. Nunca usamos estos
+              datos para procesar tu pago.
+            </p>
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => persistPreferences(initialPreferences)}
+              >
+                Rechazar opcionales
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsPreferencesOpen(true)}
+              >
+                Personalizar
+              </Button>
+              <Button
+                type="button"
+                onClick={() => persistPreferences({ analytics: true })}
+              >
+                Aceptar y continuar
+              </Button>
+            </div>
+          </section>
+        )
       )}
 
       <Dialog open={isPreferencesOpen} onOpenChange={setIsPreferencesOpen}>
-        <DialogContent>
+        <DialogContent className="z-[10001]">
           <DialogHeader>
             <DialogTitle>Preferencias de privacidad</DialogTitle>
             <DialogDescription>
