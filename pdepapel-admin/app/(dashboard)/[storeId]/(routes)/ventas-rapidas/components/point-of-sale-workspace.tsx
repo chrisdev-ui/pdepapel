@@ -308,6 +308,7 @@ export function PointOfSaleWorkspace() {
             <div className="grid gap-2">
               <Label>Producto del catálogo</Label>
               <AsyncProductSelect
+                value=""
                 onChange={(_value, product) => {
                   if (product) addProduct(toPointOfSaleProduct(product));
                 }}
@@ -411,6 +412,7 @@ export function PointOfSaleWorkspace() {
               <div className="grid gap-2">
                 <Label>Producto</Label>
                 <AsyncProductSelect
+                  value={labelProduct?.id ?? ""}
                   onChange={(_value, product) => {
                     if (product) {
                       const normalized = toPointOfSaleProduct(product);

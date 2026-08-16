@@ -774,7 +774,7 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
               <div className="grid gap-2">
                 <Label>Producto</Label>
                 <AsyncProductSelect
-                  value={pendingProduct?.id}
+                  value={pendingProduct?.id ?? ""}
                   onChange={(_value, product) => {
                     if (!product) return;
                     if (product.isKit) {

@@ -40,7 +40,7 @@ export type AsyncProductOption = {
 
 export interface AsyncProductSelectProps {
   id?: string;
-  value?: string;
+  value: string;
   onChange: (value: string, product?: AsyncProductOption | null) => void;
   disabled?: boolean;
   placeholder?: string;
@@ -248,7 +248,13 @@ export function AsyncProductSelect({
           )}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
-        <CommandDialog open={open} onOpenChange={setOpen} shouldFilter={false}>
+        <CommandDialog
+          open={open}
+          onOpenChange={setOpen}
+          shouldFilter={false}
+          title={ariaLabel || placeholder}
+          description="Busca y selecciona un producto por nombre, SKU o código."
+        >
           <CommandInput
             placeholder="Buscar por nombre, SKU o código..."
             value={searchQuery}

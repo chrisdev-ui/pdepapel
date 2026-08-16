@@ -2,6 +2,8 @@
 
 import { AsyncProductSelect } from "@/components/ui/async-product-select";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 const { selectedProduct } = vi.hoisted(() => ({
@@ -26,12 +28,14 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("swr", () => ({
-  default: () => ({ data: selectedProduct }),
+  default: (key: string | null) => ({
+    data: key ? selectedProduct : undefined,
+  }),
 }));
 
 vi.mock("swr/infinite", () => ({
   default: () => ({
-    data: [{ data: [], metadata: { hasMore: false } }],
+    data: [{ data: [selectedProduct], metadata: { hasMore: false } }],
     size: 1,
     setSize: vi.fn(),
     isLoading: false,
@@ -82,5 +86,58 @@ describe("AsyncProductSelect", () => {
       "title",
       expect.stringContaining(selectedProduct.sku),
     );
+  });
+
+  it("shows the selected product when the parent controls its value", async () => {
+    function ControlledProductSelect() {
+      const [value, setValue] = useState("");
+
+      return (
+        <AsyncProductSelect
+          value={value}
+          onChange={(productId) => setValue(productId)}
+          modal
+          ariaLabel="Seleccionar producto para etiquetar"
+        />
+      );
+    }
+
+    const user = userEvent.setup();
+    render(<ControlledProductSelect />);
+
+    const trigger = screen.getByRole("combobox", {
+      name: "Seleccionar producto para etiquetar",
+    });
+    await user.click(trigger);
+    await user.click(
+      screen.getByRole("option", { name: new RegExp(selectedProduct.name) }),
+    );
+
+    expect(trigger).toHaveTextContent(selectedProduct.name);
+  });
+
+  it("forwards a selection while a parent intentionally keeps the trigger clear", async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <AsyncProductSelect
+        value=""
+        onChange={onChange}
+        modal
+        ariaLabel="Agregar producto del catálogo"
+      />,
+    );
+
+    const trigger = screen.getByRole("combobox", {
+      name: "Agregar producto del catálogo",
+    });
+    await user.click(trigger);
+    await user.click(
+      screen.getByRole("option", { name: new RegExp(selectedProduct.name) }),
+    );
+
+    expect(onChange).toHaveBeenCalledWith("product-1", selectedProduct);
+    expect(trigger).toHaveTextContent("Seleccionar producto...");
   });
 });

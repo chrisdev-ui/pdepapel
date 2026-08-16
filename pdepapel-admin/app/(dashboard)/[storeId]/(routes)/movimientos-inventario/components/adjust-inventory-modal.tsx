@@ -126,7 +126,7 @@ export const AdjustInventoryModal: React.FC<AdjustInventoryModalProps> = ({
                 <FormLabel isRequired>Producto</FormLabel>
                 <FormControl>
                   <AsyncProductSelect
-                    value={field.value}
+                    value={field.value ?? ""}
                     onChange={field.onChange}
                     placeholder="Buscar producto..."
                     className="w-full"

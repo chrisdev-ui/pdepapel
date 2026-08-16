@@ -284,7 +284,7 @@ export function ListingPublicationWizard({
           <div className="grid gap-2">
             <Label htmlFor="mercadolibre-product">Producto de P de Papel</Label>
             <AsyncProductSelect
-              value={form.productId}
+              value={form.productId ?? ""}
               id="mercadolibre-product"
               modal
               disabled={editing}

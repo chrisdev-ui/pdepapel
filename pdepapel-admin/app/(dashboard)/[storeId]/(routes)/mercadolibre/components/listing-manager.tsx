@@ -1374,7 +1374,7 @@ export function MercadoLibreListingManager({
                         </Label>
                         <AsyncProductSelect
                           id={`mercadolibre-import-${listing.key}`}
-                          value={selection.productId}
+                          value={selection.productId ?? ""}
                           modal
                           ariaLabel={`Producto local para ${listing.title}`}
                           placeholder="Buscar producto local..."

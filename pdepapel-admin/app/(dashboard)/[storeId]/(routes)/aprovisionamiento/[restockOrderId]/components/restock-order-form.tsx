@@ -407,7 +407,7 @@ export const RestockOrderForm: React.FC<RestockOrderFormProps> = ({
                           <FormLabel isRequired>Producto</FormLabel>
                           <AsyncProductSelect
                             disabled={loading || !isDraft}
-                            value={field.value}
+                            value={field.value ?? ""}
                             onChange={(value, product) => {
                               field.onChange(value);
                               if (product) {
