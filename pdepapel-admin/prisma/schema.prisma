@@ -497,6 +497,18 @@ model Order {
   @@index([analyticsPurchaseTrackedAt])
 }
 
+model OrderAccountClaim {
+  id        String    @id @default(uuid())
+  storeId   String
+  orderId   String    @unique
+  tokenHash String    @unique @db.VarChar(64)
+  expiresAt DateTime
+  claimedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([storeId, expiresAt])
+}
+
 model OrderItem {
   id        String  @id @default(uuid())
   orderId   String

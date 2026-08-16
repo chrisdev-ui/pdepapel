@@ -6,8 +6,13 @@ const API_URL = `${env.NEXT_PUBLIC_API_URL}/orders`;
 
 export const createNewOrder = async (
   formData: CheckoutOrder,
+  sessionToken?: string | null,
 ): Promise<Order> => {
-  const response: AxiosResponse<Order> = await axios.post(API_URL, formData);
+  const response: AxiosResponse<Order> = await axios.post(API_URL, formData, {
+    headers: sessionToken
+      ? { Authorization: `Bearer ${sessionToken}` }
+      : undefined,
+  });
 
   return response.data;
 };

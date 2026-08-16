@@ -3,7 +3,7 @@
 import { useAuth } from "@clerk/nextjs";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Store } from "lucide-react";
+import { LogIn, Store } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -25,9 +25,10 @@ import { orderPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import { Order } from "@/types";
 
 export const OrderHistory: React.FC<{}> = () => {
-  const { userId, isLoaded } = useAuth();
+  const { userId, isLoaded, getToken } = useAuth();
   const [orders, setOrders] = useState<Order[]>();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     const getOrderHistory = async () => {
@@ -40,17 +41,68 @@ export const OrderHistory: React.FC<{}> = () => {
       }
 
       try {
-        const orders = await getOrders({ userId });
+        const sessionToken = await getToken();
+        if (!sessionToken) throw new Error("No session token available");
+
+        const orders = await getOrders(sessionToken);
         setOrders(orders);
+      } catch {
+        setError(true);
       } finally {
         setLoading(false);
       }
     };
     getOrderHistory();
-  }, [isLoaded, userId]);
+  }, [getToken, isLoaded, userId]);
 
   if (loading) {
     return <Loader label="Cargando tus órdenes" />;
+  }
+
+  if (!userId) {
+    return (
+      <Container className="space-y-6">
+        <div className="rounded-2xl border-2 border-purple-100 bg-gradient-to-br from-purple-50 to-pink-50 p-6 text-center shadow-sm">
+          <h1 className="font-serif text-2xl font-extrabold">
+            Tus pedidos, siempre a la mano
+          </h1>
+          <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
+            Inicia sesión o crea una cuenta gratis para consultar tus pedidos.
+            Si compraste como invitado, abre el detalle desde tu correo para
+            guardarlo en tu cuenta.
+          </p>
+          <div className="mt-5 flex flex-col justify-center gap-3 sm:flex-row">
+            <Button asChild>
+              <Link
+                href={`${STOREFRONT_ROUTES.signIn}?redirect_url=${STOREFRONT_ROUTES.myOrders}`}
+              >
+                <LogIn className="mr-2 h-5 w-5" /> Iniciar sesión
+              </Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link
+                href={`${STOREFRONT_ROUTES.signUp}?redirect_url=${STOREFRONT_ROUTES.myOrders}`}
+              >
+                Crear cuenta
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </Container>
+    );
+  }
+
+  if (error) {
+    return (
+      <Container className="space-y-6">
+        <NoResults message="No pudimos cargar tus pedidos. Inténtalo de nuevo en unos minutos." />
+        <div>
+          <Button className="w-full" onClick={() => window.location.reload()}>
+            Reintentar
+          </Button>
+        </div>
+      </Container>
+    );
   }
 
   if (!orders?.length) {

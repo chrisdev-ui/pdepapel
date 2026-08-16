@@ -7,7 +7,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  SignInButton,
   SignOutButton,
   SignedIn,
   SignedOut,
@@ -157,11 +156,18 @@ export const HamburgerMenu: React.FC = () => {
           </DropdownMenuItem>
         </SignedIn>
         <SignedOut>
-          <DropdownMenuItem className="flex w-full gap-6 px-6 py-3 text-xl hover:bg-blue-purple hover:text-white">
-            <LogIn className="h-6 w-6" />
-            <SignInButton>
-              <button className="w-full text-left">Inicia sesión</button>
-            </SignInButton>
+          <DropdownMenuItem
+            className="flex w-full px-6 py-3 text-xl hover:bg-blue-purple hover:text-white"
+            asChild
+          >
+            <Link
+              className="flex w-full items-center gap-6"
+              href={`${STOREFRONT_ROUTES.signIn}?redirect_url=${pathname}`}
+              onClick={() => setOpen(false)}
+            >
+              <LogIn className="h-6 w-6" />
+              Inicia sesión o crea tu cuenta
+            </Link>
           </DropdownMenuItem>
         </SignedOut>
       </DropdownMenuContent>

@@ -9,6 +9,7 @@ export default function useCheckout({
   onMutate,
   onSettled,
   onSuccess,
+  getToken,
 }: {
   onError?: (err: Error, variables: CheckoutOrder, context: unknown) => void;
   onSuccess?: (
@@ -23,23 +24,31 @@ export default function useCheckout({
     context: unknown,
   ) => void;
   onMutate?: (variables: CheckoutOrder) => void;
+  getToken?: () => Promise<string | null>;
 } = {}) {
   const mutationFn = async (formData: CheckoutOrder) => {
+    const sessionToken = await getToken?.();
+    if (formData.userId && !sessionToken) {
+      throw new Error(
+        "No pudimos validar tu sesión. Actualiza la página e inténtalo de nuevo.",
+      );
+    }
+
     // If this is a quotation conversion, always use /checkout route
     // which handles the customOrderToken and updates the existing order
     // instead of creating a duplicate via /orders
     if (formData.customOrderToken) {
-      return await checkoutOrder(formData);
+      return await checkoutOrder(formData, sessionToken);
     }
 
     switch (formData.payment.method) {
       case PaymentMethod.BankTransfer:
       case PaymentMethod.COD:
-        return await createNewOrder(formData);
+        return await createNewOrder(formData, sessionToken);
       case PaymentMethod.Bold:
       case PaymentMethod.Wompi:
       case PaymentMethod.PayU:
-        return await checkoutOrder(formData);
+        return await checkoutOrder(formData, sessionToken);
       default:
         throw new Error("Invalid payment method");
     }

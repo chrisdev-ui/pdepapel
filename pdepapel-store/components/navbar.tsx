@@ -123,10 +123,11 @@ const Navbar: React.FC<NavbarProps> = ({ season = Season.Default }) => {
             <SignedOut>
               <Link
                 href={`${STOREFRONT_ROUTES.signIn}?redirect_url=${pathname}`}
-                className="hover:opacity-75"
-                aria-label="Iniciar sesión"
+                className="flex items-center gap-2 rounded-md px-2 py-1 font-semibold transition-opacity hover:opacity-75"
+                aria-label="Iniciar sesión o crear una cuenta"
               >
                 <Icons.user className="h-6 w-6" />
+                <span className="hidden 2xl:inline">Mi cuenta</span>
               </Link>
             </SignedOut>
           </div>

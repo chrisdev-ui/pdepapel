@@ -199,12 +199,9 @@ export async function POST(
           throw ErrorFactory.NotFound("El usuario asignado no existe");
         }
       } else if (!userLogged) {
-        const user = await clerkClient.users.getUser(userId);
-        if (user) {
-          authenticatedUserId = user.id;
-        } else {
-          throw ErrorFactory.Unauthenticated();
-        }
+        throw ErrorFactory.Unauthenticated();
+      } else if (userId !== userLogged) {
+        throw ErrorFactory.Unauthorized();
       }
     }
 
@@ -520,7 +517,7 @@ export async function POST(
         expiresAt,
         adminNotes,
         internalNotes,
-        createdBy: createdBy || authenticatedUserId,
+        createdBy: isStoreOwner ? createdBy || authenticatedUserId : null,
         ...(normalizedAnalyticsClientId
           ? { analyticsClientId: normalizedAnalyticsClientId }
           : {}),
@@ -739,19 +736,25 @@ export async function GET(
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
-    const userId = req.nextUrl.searchParams.get("userId");
-    const guestId = req.nextUrl.searchParams.get("guestId");
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
 
-    const whereClause: { storeId: string; userId?: string; guestId?: string } =
-      {
-        storeId: params.storeId,
-      };
+    const isStoreOwner = await checkIfStoreOwner(userId, params.storeId);
+    const requestedUserId = req.nextUrl.searchParams.get("userId");
 
-    if (userId) {
-      whereClause.userId = userId;
-    } else if (guestId) {
-      whereClause.guestId = guestId;
+    if (!isStoreOwner && requestedUserId && requestedUserId !== userId) {
+      throw ErrorFactory.Unauthorized();
     }
+
+    const whereClause = isStoreOwner
+      ? {
+          storeId: params.storeId,
+          ...(requestedUserId ? { userId: requestedUserId } : {}),
+        }
+      : {
+          storeId: params.storeId,
+          userId,
+        };
 
     const orders = await prismadb.order.findMany({
       where: whereClause,

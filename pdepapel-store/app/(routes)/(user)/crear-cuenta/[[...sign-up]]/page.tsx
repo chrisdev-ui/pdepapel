@@ -1,6 +1,6 @@
-import { SignUp } from "@clerk/nextjs";
 import { Metadata } from "next";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
+import { Register } from "./components/register";
 
 export const metadata: Metadata = {
   title: "Registrarse",
@@ -15,5 +15,5 @@ export const metadata: Metadata = {
 };
 
 export default function RegisterPage() {
-  return <SignUp />;
+  return <Register />;
 }

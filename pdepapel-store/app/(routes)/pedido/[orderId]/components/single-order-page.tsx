@@ -38,6 +38,7 @@ import { Forbidden } from "@/components/forbidden";
 import { BankTransferInstructions } from "@/components/bank-transfer-instructions";
 import { BoldCheckoutButton } from "@/components/bold-checkout-button";
 import { Icons } from "@/components/icons";
+import { OrderAccountClaimCard } from "@/components/order-account-claim-card";
 import { PayUForm } from "@/components/payu-form";
 import { CldImage } from "@/components/ui/CldImage";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
@@ -516,6 +517,15 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                   tu factura.
                 </p>
               </div>
+            </div>
+
+            <div className="mb-8">
+              <OrderAccountClaimCard
+                orderId={activeOrder.id}
+                orderGuestId={activeOrder.guestId}
+                orderUserId={activeOrder.userId}
+                guestId={guestId}
+              />
             </div>
 
             {/* Main Content Grid */}

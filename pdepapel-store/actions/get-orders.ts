@@ -1,24 +1,13 @@
-"use server";
-
 import { env } from "@/lib/env.mjs";
 import { Order } from "@/types";
+import axios from "axios";
 
 const API_URL = `${env.NEXT_PUBLIC_API_URL}/orders`;
 
-interface Query {
-  userId?: string;
-}
+export const getOrders = async (sessionToken: string): Promise<Order[]> => {
+  const response = await axios.get<Order[]>(API_URL, {
+    headers: { Authorization: `Bearer ${sessionToken}` },
+  });
 
-export const getOrders = async (query: Query): Promise<Order[]> => {
-  const url = new URL(API_URL);
-
-  if (query.userId) url.searchParams.append("userId", query.userId);
-
-  try {
-    const response = await fetch(url, { cache: "no-store" });
-    if (!response.ok) return [];
-    return await response.json();
-  } catch {
-    return [];
-  }
+  return response.data;
 };

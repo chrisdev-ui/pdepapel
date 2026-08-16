@@ -185,12 +185,9 @@ export async function POST(
           throw ErrorFactory.NotFound("El usuario asignado no existe");
         }
       } else if (!userLogged) {
-        const user = await clerkClient.users.getUser(userId);
-        if (user) {
-          authenticatedUserId = user.id;
-        } else {
-          throw ErrorFactory.Unauthenticated();
-        }
+        throw ErrorFactory.Unauthenticated();
+      } else if (userId !== userLogged) {
+        throw ErrorFactory.Unauthorized();
       }
     }
 

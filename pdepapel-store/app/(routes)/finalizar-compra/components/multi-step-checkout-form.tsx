@@ -209,7 +209,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   season = Season.Default,
   customOrder,
 }) => {
-  const { userId } = useAuth();
+  const { userId, getToken } = useAuth();
   const router = useRouter();
   const payUFormRef = useRef<HTMLFormElement>(null);
   const [payUformData, setPayUformData] = useState<PayUFormState>();
@@ -581,6 +581,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     });
 
   const { mutate, status } = useCheckout({
+    getToken,
     onError(err: any) {
       console.error(err);
 
