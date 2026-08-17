@@ -8,6 +8,8 @@ import {
 import {
   FairCapsuleStatus,
   FairEventStatus,
+  MarketplaceOutboxAction,
+  MarketplaceProvider,
   OrderStatus,
   OrderType,
   PaymentMethod,
@@ -49,6 +51,28 @@ describe("fair event flow with MySQL", () => {
       },
     });
 
+    const marketplaceConnection = await testPrisma.marketplaceConnection.create({
+      data: {
+        storeId: fixture.store.id,
+        provider: MarketplaceProvider.MERCADOLIBRE,
+        status: "CONNECTED",
+      },
+    });
+    await testPrisma.marketplaceListing.createMany({
+      data: [
+        {
+          connectionId: marketplaceConnection.id,
+          productId: fixture.component.id,
+          externalItemId: "MCO-FAIR-COMPONENT",
+        },
+        {
+          connectionId: marketplaceConnection.id,
+          productId: fixture.kit.id,
+          externalItemId: "MCO-FAIR-KIT",
+        },
+      ],
+    });
+
     await allocateFairInventory({
       storeId: fixture.store.id,
       fairEventId: fairEvent.id,
@@ -61,6 +85,26 @@ describe("fair event flow with MySQL", () => {
         where: { id: fixture.component.id },
       }),
     ).resolves.toMatchObject({ stock: 2 });
+    await expect(
+      testPrisma.marketplaceOutboxEvent.findMany({
+        where: {
+          connectionId: marketplaceConnection.id,
+          action: MarketplaceOutboxAction.SYNC_STOCK,
+        },
+        orderBy: { productId: "asc" },
+      }),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          productId: fixture.component.id,
+          payload: { targetQuantity: 2 },
+        }),
+        expect.objectContaining({
+          productId: fixture.kit.id,
+          payload: { targetQuantity: 1 },
+        }),
+      ]),
+    );
 
     const [capsule] = await packFairCapsules({
       storeId: fixture.store.id,
@@ -136,6 +180,25 @@ describe("fair event flow with MySQL", () => {
         where: { id: fixture.component.id },
       }),
     ).resolves.toMatchObject({ stock: 4 });
+    await expect(
+      testPrisma.marketplaceOutboxEvent.findMany({
+        where: {
+          connectionId: marketplaceConnection.id,
+          action: MarketplaceOutboxAction.SYNC_STOCK,
+        },
+      }),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          productId: fixture.component.id,
+          payload: { targetQuantity: 4 },
+        }),
+        expect.objectContaining({
+          productId: fixture.kit.id,
+          payload: { targetQuantity: 2 },
+        }),
+      ]),
+    );
     await expect(
       testPrisma.fairEvent.findUniqueOrThrow({ where: { id: fairEvent.id } }),
     ).resolves.toMatchObject({ status: FairEventStatus.CLOSED });

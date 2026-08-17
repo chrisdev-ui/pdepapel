@@ -11,6 +11,7 @@ import { v4 as uuidv4 } from "uuid";
 
 import { ErrorFactory } from "@/lib/api-errors";
 import { recalculateKitStock } from "@/lib/inventory";
+import { queueMarketplaceStockSyncEvents } from "@/lib/mercadolibre/outbox";
 import prismadb from "@/lib/prismadb";
 import { generateOrderNumber } from "@/lib/utils";
 
@@ -104,12 +105,12 @@ async function refreshAffectedKits(
     select: { kitId: true },
   });
 
-  if (parentKits.length > 0) {
-    await recalculateKitStock(
-      tx as never,
-      Array.from(new Set(parentKits.map((item) => item.kitId))),
-    );
+  const kitIds = Array.from(new Set(parentKits.map((item) => item.kitId)));
+  if (kitIds.length > 0) {
+    await recalculateKitStock(tx as never, kitIds);
   }
+
+  return kitIds;
 }
 
 export async function getFairEventDetail(storeId: string, fairEventId: string) {
@@ -267,7 +268,8 @@ export async function allocateFairInventory({
       });
     }
 
-    await refreshAffectedKits(tx, productIds);
+    const kitIds = await refreshAffectedKits(tx, productIds);
+    await queueMarketplaceStockSyncEvents(tx, [...productIds, ...kitIds]);
   });
 }
 
@@ -760,10 +762,12 @@ export async function reconcileFairEvent({
       where: { fairEventId, status: FairCapsuleStatus.PACKED },
       data: { status: FairCapsuleStatus.VOID, voidedAt: new Date() },
     });
-    await refreshAffectedKits(
+    const productIds = fairEvent.inventoryItems.map((item) => item.productId);
+    const kitIds = await refreshAffectedKits(
       tx,
-      fairEvent.inventoryItems.map((item) => item.productId),
+      productIds,
     );
+    await queueMarketplaceStockSyncEvents(tx, [...productIds, ...kitIds]);
 
     return tx.fairEvent.update({
       where: { id: fairEventId },

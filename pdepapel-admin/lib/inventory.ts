@@ -49,23 +49,40 @@ export async function createInventoryMovement(
     createdBy,
   } = data;
 
-  // 1. Get current product state for snapshot (Read-only, no lock needed if using atomic update later)
-  // We need this for the "Previous Stock" field in the log.
-  // In highly concurrent scenarios, this snapshot might be slightly off from the "atomic reality",
-  // but it's acceptable for the audit log vs locking the row.
-  const product = await tx.product.findUniqueOrThrow({
-    where: { id: productId },
+  const product = await tx.product.findFirst({
+    where: { id: productId, storeId },
     select: { stock: true, name: true },
   });
+  if (!product) throw ErrorFactory.NotFound("Producto no encontrado");
 
   const previousStock = product.stock;
   const newStock = previousStock + quantity;
 
-  // Prevent negative stock for strictly decremental actions if desired
-  // ensuring logic matches standard accounting, though some businesses allow negative stock (backorders).
-  // For now, we trust the caller has validated if they care about strict non-negative.
+  if (quantity !== 0) {
+    const update = await tx.product.updateMany({
+      where: {
+        id: productId,
+        storeId,
+        ...(quantity < 0 ? { stock: { gte: Math.abs(quantity) } } : {}),
+      },
+      data: {
+        stock: {
+          [quantity > 0 ? "increment" : "decrement"]: Math.abs(quantity),
+        },
+      },
+    });
+    if (update.count !== 1) {
+      if (quantity < 0) {
+        throw ErrorFactory.InsufficientStock(
+          product.name,
+          previousStock,
+          Math.abs(quantity),
+        );
+      }
+      throw ErrorFactory.NotFound("Producto no encontrado");
+    }
+  }
 
-  // 2. Create the movement record (Audit Log)
   const movement = await tx.inventoryMovement.create({
     data: {
       storeId,
@@ -83,22 +100,6 @@ export async function createInventoryMovement(
     },
   });
 
-  // 3. Update the Product.stock using ATOMIC operations
-  // This ensures that even if multiple requests happen at once, the final stock is correct.
-  if (quantity !== 0) {
-    await tx.product.update({
-      where: { id: productId },
-      data: {
-        stock: {
-          [quantity > 0 ? "increment" : "decrement"]: Math.abs(quantity),
-        },
-      },
-    });
-  }
-
-  // 4. Reactive Update: Check if this product is part of any Kit
-  // If so, recalculate the stock of those Kits.
-  // We do this AFTER the atomic update to ensure we read the latest values.
   const parentKits = await tx.productKit.findMany({
     where: { componentId: productId },
     select: { kitId: true },
@@ -294,9 +295,9 @@ export async function createInventoryMovementBatch(
   const productIds = Array.from(new Set(movements.map((m) => m.productId)));
   const products = await tx.product.findMany({
     where: { id: { in: productIds } },
-    select: { id: true, stock: true },
+    select: { id: true, name: true, stock: true },
   });
-  const productStockMap = new Map(products.map((p) => [p.id, p.stock]));
+  const productMap = new Map(products.map((product) => [product.id, product]));
 
   // 3. Prepare creates and updates
   // NOTE: We cannot use createMany easily because each movement has different data (previousStock)
@@ -304,16 +305,47 @@ export async function createInventoryMovementBatch(
 
   // To maintain correct "previousStock" in the log for sequential items of the SAME product in this batch,
   // we need to track the running stock.
-  const runningStockMap = new Map(productStockMap);
+  const runningStockMap = new Map(
+    products.map((product) => [product.id, product.stock]),
+  );
 
   for (const movement of movements) {
-    const currentStock = runningStockMap.get(movement.productId) || 0;
+    const product = productMap.get(movement.productId);
+    const currentStock = runningStockMap.get(movement.productId);
+    if (!product || currentStock === undefined) {
+      throw ErrorFactory.NotFound("Producto no encontrado");
+    }
     const nextStock = currentStock + movement.quantity;
 
-    // Update running map for next iteration
-    runningStockMap.set(movement.productId, nextStock);
+    if (movement.quantity !== 0) {
+      const update = await tx.product.updateMany({
+        where: {
+          id: movement.productId,
+          storeId: movement.storeId,
+          ...(movement.quantity < 0
+            ? { stock: { gte: Math.abs(movement.quantity) } }
+            : {}),
+        },
+        data: {
+          stock: {
+            [movement.quantity > 0 ? "increment" : "decrement"]: Math.abs(
+              movement.quantity,
+            ),
+          },
+        },
+      });
+      if (update.count !== 1) {
+        if (movement.quantity < 0) {
+          throw ErrorFactory.InsufficientStock(
+            product.name,
+            currentStock,
+            Math.abs(movement.quantity),
+          );
+        }
+        throw ErrorFactory.NotFound("Producto no encontrado");
+      }
+    }
 
-    // Create movement
     await tx.inventoryMovement.create({
       data: {
         storeId: movement.storeId,
@@ -330,19 +362,7 @@ export async function createInventoryMovementBatch(
       },
     });
 
-    // Atomic Update (Execute immediately or collect? Immediately is fine inside transaction)
-    if (movement.quantity !== 0) {
-      await tx.product.update({
-        where: { id: movement.productId },
-        data: {
-          stock: {
-            [movement.quantity > 0 ? "increment" : "decrement"]: Math.abs(
-              movement.quantity,
-            ),
-          },
-        },
-      });
-    }
+    runningStockMap.set(movement.productId, nextStock);
   }
 
   // Reactive: recalculate kit stock for any affected parent kits

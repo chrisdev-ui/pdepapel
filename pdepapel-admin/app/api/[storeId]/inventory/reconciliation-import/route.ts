@@ -11,6 +11,7 @@ import {
   type ReconciliationPreview,
 } from "@/lib/fair-reconciliation-import";
 import { recalculateKitStock } from "@/lib/inventory";
+import { queueMarketplaceStockSyncEvents } from "@/lib/mercadolibre/outbox";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
@@ -241,20 +242,23 @@ export async function POST(
         });
       }
 
+      const productIds = freshPreview.readyRows
+        .map((row) => row.productId)
+        .filter((productId): productId is string => Boolean(productId));
       const kits = await tx.productKit.findMany({
         where: {
           componentId: {
-            in: freshPreview.readyRows
-              .map((row) => row.productId)
-              .filter((productId): productId is string => Boolean(productId)),
+            in: productIds,
           },
         },
         select: { kitId: true },
       });
+      const kitIds = Array.from(new Set(kits.map((kit) => kit.kitId)));
       await recalculateKitStock(
         tx,
-        Array.from(new Set(kits.map((kit) => kit.kitId))),
+        kitIds,
       );
+      await queueMarketplaceStockSyncEvents(tx, [...productIds, ...kitIds]);
 
       return freshPreview;
     });

@@ -427,11 +427,11 @@ The fair module exists because in-person events otherwise create serious online-
 ### Normal fair workflow
 
 1. Create a fair in **Ventas en feria**.
-2. Reserve each product’s physical quantity before leaving. Reservation removes it from online availability and creates auditable movements.
+2. Reserve each product’s physical quantity before leaving. Reservation removes it from online availability, creates auditable movements, and queues the corresponding Mercado Libre stock update.
 3. For surprise capsules, use a reserved product with acquisition cost, define margin/price, create **one unique QR per capsule**, print and attach it. The QR identifies the capsule internally without revealing the product to the buyer.
 4. Open the event and use the mobile-friendly admin page/phone camera, a Bluetooth scanner, or manual SKU/GTIN entry.
 5. Record paid fair sales once with cash or transfer. The result is a paid `FESTIVAL` order and inventory is not allowed to exceed the reserved amount.
-6. At the end, physically count unsold, damaged, and lost stock. Reconcile and close the event; closing is irreversible. Returned stock goes back online, damaged/lost stock remains audited.
+6. At the end, physically count unsold, damaged, and lost stock. Reconcile and close the event; closing is irreversible. Returned stock goes back online, damaged/lost stock remains audited, and affected Mercado Libre listings are refreshed.
 
 ### Reconciling a past fair
 
@@ -441,7 +441,7 @@ When sales were already registered as orders but physical stock differs:
 2. Download a fresh template the same day.
 3. Fill only the editable physical-count, cause, note, reviewed, and authorization fields; do not edit gray reference fields.
 4. Review the uploaded file before applying; fix every validation error first.
-5. Apply only explicitly authorized rows. The import creates stock adjustments/movements; it does not create or alter sales orders.
+5. Apply only explicitly authorized rows. The import creates stock adjustments/movements and refreshes affected Mercado Libre listing stock; it does not create or alter sales orders.
 6. If stock changed since template download or an event remains open, start again from a new template/close the active event first.
 
 Operational docs:

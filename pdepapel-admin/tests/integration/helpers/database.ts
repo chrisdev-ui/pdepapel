@@ -115,6 +115,25 @@ export async function deleteInventoryFixture(fixture: InventoryFixture) {
       where: { id: { in: storeOrderIds } },
     });
   }
+
+  const marketplaceConnections = await testPrisma.marketplaceConnection.findMany({
+    where: { storeId: fixture.store.id },
+    select: { id: true },
+  });
+  const marketplaceConnectionIds = marketplaceConnections.map(
+    (connection) => connection.id,
+  );
+  if (marketplaceConnectionIds.length > 0) {
+    await testPrisma.marketplaceOutboxEvent.deleteMany({
+      where: { connectionId: { in: marketplaceConnectionIds } },
+    });
+    await testPrisma.marketplaceListing.deleteMany({
+      where: { connectionId: { in: marketplaceConnectionIds } },
+    });
+    await testPrisma.marketplaceConnection.deleteMany({
+      where: { id: { in: marketplaceConnectionIds } },
+    });
+  }
   if (fairEventIds.length > 0) {
     await testPrisma.fairEvent.deleteMany({
       where: { id: { in: fairEventIds } },

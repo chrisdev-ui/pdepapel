@@ -80,18 +80,20 @@ export async function POST(
       type,
     });
 
-    // Use helper to create movement
-    const movement = await createInventoryMovement(prismadb, {
-      storeId: params.storeId,
-      productId: productId || undefined,
-      type: type as InventoryMovementType,
-      quantity: finalQuantity,
-      reason: reason,
-      description: description,
-      cost: cost ? parseFloat(cost) : undefined,
-      createdBy: `USER_${userId}`,
-    });
-    await invalidateStoreProductsCache(params.storeId, productId || variantId);
+    const targetProductId = productId || variantId;
+    const movement = await prismadb.$transaction((tx) =>
+      createInventoryMovement(tx, {
+        storeId: params.storeId,
+        productId: targetProductId,
+        type: type as InventoryMovementType,
+        quantity: finalQuantity,
+        reason,
+        description,
+        cost: cost ? parseFloat(cost) : undefined,
+        createdBy: `USER_${userId}`,
+      }),
+    );
+    await invalidateStoreProductsCache(params.storeId, targetProductId);
 
     return NextResponse.json(movement, { headers: corsHeaders });
   } catch (error) {

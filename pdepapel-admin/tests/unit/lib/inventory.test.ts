@@ -16,10 +16,10 @@ describe("inventory movements", () => {
     const movement = { id: "movement-id" };
     const tx = {
       product: {
-        findUniqueOrThrow: vi
+        findFirst: vi
           .fn()
           .mockResolvedValue({ stock: 5, name: "Agenda" }),
-        update: vi.fn(),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       inventoryMovement: { create: vi.fn().mockResolvedValue(movement) },
       productKit: { findMany: vi.fn().mockResolvedValue([]) },
@@ -36,6 +36,10 @@ describe("inventory movements", () => {
       }),
     ).resolves.toEqual(movement);
 
+    expect(tx.product.findFirst).toHaveBeenCalledWith({
+      where: { id: "product-id", storeId: "store-id" },
+      select: { stock: true, name: true },
+    });
     expect(tx.inventoryMovement.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         productId: "product-id",
@@ -46,10 +50,38 @@ describe("inventory movements", () => {
         referenceId: "order-id",
       }),
     });
-    expect(tx.product.update).toHaveBeenCalledWith({
-      where: { id: "product-id" },
+    expect(tx.product.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: "product-id",
+        storeId: "store-id",
+        stock: { gte: 3 },
+      },
       data: { stock: { decrement: 3 } },
     });
+  });
+
+  it("rejects a decrement that no longer has enough stock without writing a movement", async () => {
+    const tx = {
+      product: {
+        findFirst: vi
+          .fn()
+          .mockResolvedValue({ stock: 2, name: "Agenda" }),
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      inventoryMovement: { create: vi.fn() },
+      productKit: { findMany: vi.fn().mockResolvedValue([]) },
+    };
+
+    await expect(
+      createInventoryMovement(tx as any, {
+        productId: "product-id",
+        storeId: "store-id",
+        type: "ORDER_PLACED",
+        quantity: -3,
+      }),
+    ).rejects.toMatchObject({ statusCode: 422 });
+
+    expect(tx.inventoryMovement.create).not.toHaveBeenCalled();
   });
 
   it("calculates kit availability from its most limited component", async () => {
@@ -84,8 +116,10 @@ describe("inventory movements", () => {
   it("keeps sequential movement snapshots correct for duplicate products", async () => {
     const tx = {
       product: {
-        findMany: vi.fn().mockResolvedValue([{ id: "product-id", stock: 8 }]),
-        update: vi.fn(),
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ id: "product-id", name: "Agenda", stock: 8 }]),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       inventoryMovement: { create: vi.fn() },
       productKit: { findMany: vi.fn().mockResolvedValue([]) },
@@ -193,10 +227,10 @@ describe("inventory movements", () => {
           { id: "available", name: "Agenda", stock: 3 },
           { id: "empty", name: "Llavero", stock: 0 },
         ]),
-        findUniqueOrThrow: vi
+        findFirst: vi
           .fn()
           .mockResolvedValue({ stock: 3, name: "Agenda" }),
-        update: vi.fn(),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       inventoryMovement: { create: vi.fn() },
       productKit: { findMany: vi.fn().mockResolvedValue([]) },
