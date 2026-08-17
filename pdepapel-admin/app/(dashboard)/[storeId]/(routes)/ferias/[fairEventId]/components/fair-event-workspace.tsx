@@ -18,9 +18,13 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { QRCodeSVG } from "qrcode.react";
 import { useParams, useRouter } from "next/navigation";
 
+import {
+  printQrLabelSheet,
+  QrLabelPrintSheet,
+  type QrPrintLabel,
+} from "@/components/labels/qr-label-print-sheet";
 import { AsyncProductSelect } from "@/components/ui/async-product-select";
 import {
   AlertDialog,
@@ -56,6 +60,7 @@ import {
 } from "@/components/ui/select";
 import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import { useToast } from "@/hooks/use-toast";
+import { LABEL_PRINT_FORMATS } from "@/lib/label-printing";
 
 import { BarcodeScanner } from "./barcode-scanner";
 
@@ -263,6 +268,16 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
   );
   const packedCapsules = event.capsules.filter(
     (capsule) => capsule.status === "PACKED",
+  );
+  const printableCapsuleLabels = useMemo<QrPrintLabel[]>(
+    () =>
+      generatedCapsules.map((capsule) => ({
+        id: capsule.id,
+        code: capsule.code,
+        title: "Cápsula sorpresa",
+        subtitle: capsule.code,
+      })),
+    [generatedCapsules],
   );
   const selectedCapsuleProduct = eventItemsByProduct.get(capsuleProductId);
   const calculatedCapsuleMargin =
@@ -976,10 +991,7 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
             )}
 
             {generatedCapsules.length > 0 && (
-              <div
-                className="rounded-lg border border-dashed p-4"
-                data-capsule-labels
-              >
+              <div className="rounded-lg border border-dashed p-4">
                 <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="font-semibold">Etiquetas listas</p>
@@ -987,31 +999,32 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
                       Pon un QR en cada cápsula sellada; el contenido no aparece
                       en la etiqueta.
                     </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {LABEL_PRINT_FORMATS.STANDARD_40.description}. Este
+                      formato protege la lectura de códigos únicos.
+                    </p>
                   </div>
-                  <Button variant="outline" onClick={() => window.print()}>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (!printQrLabelSheet("capsule")) {
+                        toast({
+                          title: "No se pudo abrir la impresión",
+                          description:
+                            "Permite las ventanas emergentes e inténtalo de nuevo.",
+                          variant: "destructive",
+                        });
+                      }
+                    }}
+                  >
                     Imprimir etiquetas
                   </Button>
                 </div>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  {generatedCapsules.map((capsule) => (
-                    <div
-                      key={capsule.id}
-                      className="flex flex-col items-center gap-2 rounded-lg border bg-white p-3 text-center text-slate-900"
-                    >
-                      <QRCodeSVG
-                        value={capsule.code}
-                        size={128}
-                        includeMargin
-                      />
-                      <span className="text-xs font-semibold">
-                        Cápsula sorpresa
-                      </span>
-                      <span className="break-all text-[10px] text-slate-500">
-                        {capsule.code}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                <QrLabelPrintSheet
+                  target="capsule"
+                  labels={printableCapsuleLabels}
+                  format="STANDARD_40"
+                />
               </div>
             )}
           </CardContent>
@@ -1378,28 +1391,6 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <style jsx global>{`
-        @media print {
-          body * {
-            visibility: hidden !important;
-          }
-
-          [data-capsule-labels],
-          [data-capsule-labels] * {
-            visibility: visible !important;
-          }
-
-          [data-capsule-labels] {
-            position: absolute;
-            inset: 0;
-            border: 0;
-          }
-
-          [data-capsule-labels] button {
-            display: none;
-          }
-        }
-      `}</style>
     </div>
   );
 }

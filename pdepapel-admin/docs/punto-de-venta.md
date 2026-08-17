@@ -15,6 +15,15 @@ Usa **Punto de venta** cuando vendas en el local, por una visita o en cualquier 
 
 Cada etiqueta de producto se puede reutilizar. No necesitas crear una etiqueta nueva después de cada venta ni una por cada unidad. Si cambia el color, tamaño, diseño o SKU, usa la etiqueta correspondiente a esa variante.
 
+### Elegir formato y ahorrar material
+
+Antes de pulsar **Imprimir etiquetas**, selecciona el formato de la hoja:
+
+- **Ahorro · 65 por hoja A4:** etiquetas de 38,1 × 21,2 mm. Es el formato predeterminado para imprimir muchas etiquetas de productos. Usa hojas adhesivas A4 para **inkjet** del mismo tamaño y prueba primero una hoja con el celular.
+- **Estándar · 40 por hoja A4:** etiquetas de 48 × 28 mm. El QR es más grande y es la opción indicada si la etiqueta quedará lejos del celular, se manipulará mucho o la luz es baja.
+
+En la ventana de impresión selecciona papel **A4**, escala **100%** o **tamaño real** y calidad **Normal** u **Óptima**. No elijas *Ajustar a página*, porque desplaza las etiquetas. Haz una prueba sobre papel normal y ponla detrás de una hoja adhesiva para confirmar la alineación antes de imprimir un lote.
+
 ### Ejemplo
 
 Tienes 8 resaltadores pastel iguales. Imprime una etiqueta del producto **Resaltador pastel** y pégala en su caja. Si una persona lleva dos resaltadores, escanea esa misma etiqueta dos veces o ajusta la cantidad a 2. El sistema descuenta 2 unidades.

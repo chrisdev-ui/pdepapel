@@ -9,8 +9,9 @@ Este módulo mantiene separado el inventario llevado a una feria del inventario 
 3. Pulsa **Reservar en inventario**. Las unidades se descuentan de la disponibilidad de la tienda en línea y queda un movimiento de inventario auditable.
 4. Verifica que los productos físicos cargados coincidan con el resumen de unidades reservadas.
 5. Si vas a vender cápsulas sorpresa, en **Cápsulas sorpresa** selecciona un producto ya reservado, define cantidad, precio y margen mínimo. El producto debe tener un costo de adquisición registrado.
-6. Pulsa **Crear QR**, imprime las etiquetas y pega un QR único en cada cápsula antes de sellarla. La etiqueta no revela el producto contenido.
-7. Cuando el inventario físico esté listo, pulsa **Abrir para ventas**. A partir de este punto podrás registrar cobros.
+6. Pulsa **Crear QR**, imprime las etiquetas y pega un QR único en cada cápsula antes de sellarla. La etiqueta no revela el producto contenido. Las cápsulas usan el formato seguro de 40 por hoja A4 (48 × 28 mm) para que cada código se lea bien.
+7. En la ventana de impresión selecciona papel **A4**, escala **100%** o **tamaño real** y calidad **Normal** u **Óptima**. Prueba primero una hoja con el celular antes de sellar todas las cápsulas.
+8. Cuando el inventario físico esté listo, pulsa **Abrir para ventas**. A partir de este punto podrás registrar cobros.
 
 ## Durante la feria
 

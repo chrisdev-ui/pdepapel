@@ -17,8 +17,12 @@ import {
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
-import { QRCodeSVG } from "qrcode.react";
 
+import {
+  printQrLabelSheet,
+  QrLabelPrintSheet,
+  type QrPrintLabel,
+} from "@/components/labels/qr-label-print-sheet";
 import { BarcodeScanner } from "@/components/ui/barcode-scanner";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,6 +37,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { QuantitySelector } from "@/components/ui/quantity-selector";
 import { Separator } from "@/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { AsyncProductSelect, type AsyncProductOption } from "@/components/ui/async-product-select";
 import {
   AlertDialog,
@@ -45,6 +56,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+import {
+  LABEL_PRINT_FORMATS,
+  type LabelPrintFormat,
+} from "@/lib/label-printing";
 
 type PaymentMethod = "CASH" | "BankTransfer";
 
@@ -115,11 +130,23 @@ export function PointOfSaleWorkspace() {
   const [labelProduct, setLabelProduct] = useState<LabelProduct | null>(null);
   const [labelCopies, setLabelCopies] = useState(1);
   const [labels, setLabels] = useState<LabelProduct[]>([]);
+  const [labelPrintFormat, setLabelPrintFormat] =
+    useState<LabelPrintFormat>("COMPACT_65");
 
   const total = useMemo(
     () =>
       cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
     [cart],
+  );
+  const printableLabels = useMemo<QrPrintLabel[]>(
+    () =>
+      labels.map((product) => ({
+        id: product.id,
+        code: `PDP:${product.id}`,
+        title: product.name,
+        subtitle: `SKU: ${product.sku}`,
+      })),
+    [labels],
   );
 
   const addProduct = useCallback(
@@ -408,7 +435,7 @@ export function PointOfSaleWorkspace() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_130px_auto] sm:items-end">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_220px_130px_auto] xl:items-end">
               <div className="grid gap-2">
                 <Label>Producto</Label>
                 <AsyncProductSelect
@@ -435,34 +462,65 @@ export function PointOfSaleWorkspace() {
                   ariaLabel="Cantidad de etiquetas"
                 />
               </div>
+              <div className="grid gap-2">
+                <Label htmlFor="label-print-format">Formato de hoja</Label>
+                <Select
+                  value={labelPrintFormat}
+                  onValueChange={(value) =>
+                    setLabelPrintFormat(value as LabelPrintFormat)
+                  }
+                >
+                  <SelectTrigger id="label-print-format">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.values(LABEL_PRINT_FORMATS).map((format) => (
+                      <SelectItem key={format.id} value={format.id}>
+                        {format.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <Button type="button" variant="outline" onClick={addLabels}>
                 <Plus className="mr-2 h-4 w-4" />
                 Agregar
               </Button>
             </div>
             {labels.length > 0 && (
-              <div data-product-labels className="rounded-lg border border-dashed p-4">
-                <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-sm text-muted-foreground">
-                    {labels.length} etiqueta{labels.length === 1 ? "" : "s"} lista{labels.length === 1 ? "" : "s"} para imprimir.
-                  </p>
-                  <Button type="button" variant="outline" onClick={() => window.print()}>
+              <div className="rounded-lg border border-dashed p-4">
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      {labels.length} etiqueta{labels.length === 1 ? "" : "s"} lista{labels.length === 1 ? "" : "s"} para imprimir.
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {LABEL_PRINT_FORMATS[labelPrintFormat].description}. Usa hoja adhesiva A4 para inkjet y escala 100%.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      if (!printQrLabelSheet("product")) {
+                        toast({
+                          title: "No se pudo abrir la impresión",
+                          description:
+                            "Permite las ventanas emergentes e inténtalo de nuevo.",
+                          variant: "destructive",
+                        });
+                      }
+                    }}
+                  >
                     <Printer className="mr-2 h-4 w-4" />
                     Imprimir etiquetas
                   </Button>
                 </div>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  {labels.map((product, index) => (
-                    <div
-                      key={`${product.id}-${index}`}
-                      className="flex flex-col items-center gap-2 rounded-lg border bg-white p-3 text-center text-slate-900"
-                    >
-                      <QRCodeSVG value={`PDP:${product.id}`} size={112} includeMargin />
-                      <span className="line-clamp-2 text-xs font-semibold">{product.name}</span>
-                      <span className="text-[10px] text-slate-500">SKU: {product.sku}</span>
-                    </div>
-                  ))}
-                </div>
+                <QrLabelPrintSheet
+                  target="product"
+                  labels={printableLabels}
+                  format={labelPrintFormat}
+                />
               </div>
             )}
           </CardContent>
@@ -540,28 +598,6 @@ export function PointOfSaleWorkspace() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <style jsx global>{`
-        @media print {
-          body * {
-            visibility: hidden !important;
-          }
-
-          [data-product-labels],
-          [data-product-labels] * {
-            visibility: visible !important;
-          }
-
-          [data-product-labels] {
-            position: absolute;
-            inset: 0;
-            border: 0;
-          }
-
-          [data-product-labels] button {
-            display: none;
-          }
-        }
-      `}</style>
     </div>
   );
 }
