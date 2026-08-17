@@ -435,8 +435,8 @@ export function PointOfSaleWorkspace() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_220px_130px_auto] xl:items-end">
-              <div className="grid gap-2">
+            <div className="grid gap-4">
+              <div className="grid min-w-0 gap-2">
                 <Label>Producto</Label>
                 <AsyncProductSelect
                   value={labelProduct?.id ?? ""}
@@ -446,46 +446,54 @@ export function PointOfSaleWorkspace() {
                       setLabelProduct(normalized);
                     }
                   }}
-                  placeholder="Seleccionar producto para etiquetar"
+                  placeholder="Busca el producto para etiquetar"
                   modal
                   ariaLabel="Producto para imprimir etiquetas"
+                  className="h-11 py-0"
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="label-copies">Etiquetas</Label>
-                <CountInput
-                  id="label-copies"
-                  min={1}
-                  max={100}
-                  value={labelCopies}
-                  onChange={setLabelCopies}
-                  ariaLabel="Cantidad de etiquetas"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="label-print-format">Formato de hoja</Label>
-                <Select
-                  value={labelPrintFormat}
-                  onValueChange={(value) =>
-                    setLabelPrintFormat(value as LabelPrintFormat)
-                  }
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-[minmax(0,0.8fr)_minmax(260px,1fr)_minmax(180px,0.7fr)] xl:items-end">
+                <div className="grid gap-2">
+                  <Label htmlFor="label-copies">Etiquetas</Label>
+                  <CountInput
+                    id="label-copies"
+                    min={1}
+                    max={100}
+                    value={labelCopies}
+                    onChange={setLabelCopies}
+                    ariaLabel="Cantidad de etiquetas"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="label-print-format">Formato de hoja</Label>
+                  <Select
+                    value={labelPrintFormat}
+                    onValueChange={(value) =>
+                      setLabelPrintFormat(value as LabelPrintFormat)
+                    }
+                  >
+                    <SelectTrigger id="label-print-format">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.values(LABEL_PRINT_FORMATS).map((format) => (
+                        <SelectItem key={format.id} value={format.id}>
+                          {format.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full sm:col-span-2 xl:col-span-1"
+                  onClick={addLabels}
                 >
-                  <SelectTrigger id="label-print-format">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.values(LABEL_PRINT_FORMATS).map((format) => (
-                      <SelectItem key={format.id} value={format.id}>
-                        {format.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Agregar
+                </Button>
               </div>
-              <Button type="button" variant="outline" onClick={addLabels}>
-                <Plus className="mr-2 h-4 w-4" />
-                Agregar
-              </Button>
             </div>
             {labels.length > 0 && (
               <div className="rounded-lg border border-dashed p-4">
