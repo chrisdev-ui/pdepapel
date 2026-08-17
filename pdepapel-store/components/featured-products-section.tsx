@@ -1,15 +1,22 @@
 import { getProducts } from "@/actions/get-products";
 import FeaturedProducts from "@/components/featured-products";
 import { LIMIT_PER_ITEMS } from "@/constants";
+import { Season } from "@/types";
 
 export const revalidate = 0;
 
-export const FeaturedProductsSection = async () => {
+interface FeaturedProductsSectionProps {
+  season?: Season;
+}
+
+export const FeaturedProductsSection = async ({
+  season = Season.Default,
+}: FeaturedProductsSectionProps) => {
   const { products } = await getProducts({
     isFeatured: true,
     limit: LIMIT_PER_ITEMS,
     groupBy: "parents",
   });
 
-  return <FeaturedProducts featureProducts={products} />;
+  return <FeaturedProducts featureProducts={products} season={season} />;
 };

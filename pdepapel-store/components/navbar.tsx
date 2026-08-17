@@ -64,6 +64,17 @@ const Navbar: React.FC<NavbarProps> = ({ season = Season.Default }) => {
               sizes="(max-width: 768px) 1px, 200px"
               quality="100"
             />
+            {!displaySearchbox && seasonConfig.logoAccent && (
+              <Image
+                src={seasonConfig.logoAccent}
+                alt=""
+                aria-hidden="true"
+                width={640}
+                height={466}
+                sizes="80px"
+                className="pointer-events-none absolute -right-12 -top-3 h-auto w-20 max-w-none"
+              />
+            )}
           </Link>
           <Link
             href="/"

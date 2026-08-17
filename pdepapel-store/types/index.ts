@@ -3,12 +3,15 @@ import { PaymentMethod, Social } from "@/constants";
 export enum Season {
   Default = "DEFAULT",
   Christmas = "CHRISTMAS",
+  Spooky = "SPOOKY",
 }
 
 export interface SeasonConfig {
   navbarText: string;
   navbarNoText: string;
   checkoutSuffix?: string;
+  checkoutImage?: string;
+  logoAccent?: string;
 }
 
 export interface Billboard {

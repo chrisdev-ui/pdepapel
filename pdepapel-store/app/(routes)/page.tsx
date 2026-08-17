@@ -7,7 +7,9 @@ import { getBillboards } from "@/actions/get-billboards";
 import { getCategories } from "@/actions/get-categories";
 import { CategoryLinksSection } from "@/components/category-links-section";
 import { BASE_URL } from "@/constants";
+import { getCurrentSeason } from "@/lib/date-utils";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
+import { Season } from "@/types";
 
 import Features from "@/components/features";
 
@@ -129,10 +131,10 @@ import {
 import { MainBannerSection } from "@/components/main-banner-section";
 import { NewArrivalsSection } from "@/components/new-arrivals-section";
 
-async function HomeHero() {
+async function HomeHero({ season }: { season: Season }) {
   const billboards = await getBillboards();
 
-  return <HeroSlider data={billboards} />;
+  return <HeroSlider data={billboards} season={season} />;
 }
 
 async function HomeCategoryLinks() {
@@ -145,11 +147,12 @@ async function HomeCategoryLinks() {
 }
 
 export default function HomePage() {
+  const season = getCurrentSeason();
 
   return (
     <>
       <Suspense fallback={<HeroSliderSkeleton />}>
-        <HomeHero />
+        <HomeHero season={season} />
       </Suspense>
       <section className="bg-kawaii-pink-light/15 py-8 text-center">
         <h1 className="font-serif text-3xl font-extrabold sm:text-4xl">
@@ -165,7 +168,7 @@ export default function HomePage() {
         <HomeCategoryLinks />
       </Suspense>
       <Suspense fallback={<FeaturedProductsSkeleton />}>
-        <FeaturedProductsSection />
+        <FeaturedProductsSection season={season} />
       </Suspense>
       <Suspense fallback={<MainBannerSkeleton />}>
         <MainBannerSection />

@@ -5,6 +5,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata } from "next";
 
 import { Footer } from "@/components/footer";
+import { Spooky } from "@/components/spooky";
 import { getCurrentSeason } from "@/lib/date-utils";
 import { beautifulEveryTime, caudex, fredoka, quicksand } from "@/lib/fonts";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
@@ -126,6 +127,7 @@ export default async function RootLayout({
             <main>{children}</main>
             <Footer season={currentSeason} />
             {currentSeason === Season.Christmas && <Christmas />}
+            {currentSeason === Season.Spooky && <Spooky />}
             <Toaster />
             <CustomerAnalyticsProvider
               measurementId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID}

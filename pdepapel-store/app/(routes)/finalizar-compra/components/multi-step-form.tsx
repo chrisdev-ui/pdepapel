@@ -64,10 +64,12 @@ export const MultiStepForm = ({
             const isActive = currentStep === stepNumber;
             const isComplete = currentStep > stepNumber;
 
-            const logoSrc = step.logo.replace(
-              ".webp",
-              `${seasonConfig.checkoutSuffix || ""}.webp`,
-            );
+            const logoSrc =
+              seasonConfig.checkoutImage ??
+              step.logo.replace(
+                ".webp",
+                `${seasonConfig.checkoutSuffix || ""}.webp`,
+              );
 
             return (
               <div

@@ -32,6 +32,17 @@ export const Footer: React.FC<FooterProps> = ({ season = Season.Default }) => {
                 fill
                 quality="100"
               />
+              {seasonConfig.logoAccent && (
+                <Image
+                  src={seasonConfig.logoAccent}
+                  alt=""
+                  aria-hidden="true"
+                  width={640}
+                  height={466}
+                  sizes="64px"
+                  className="pointer-events-none absolute -right-4 -top-1 h-auto w-16 max-w-none"
+                />
+              )}
             </div>
           </Link>
         </div>

@@ -239,4 +239,10 @@ export const SEASON_CONFIG: Record<Season, SeasonConfig> = {
     navbarNoText: "/images/no-text-transparent-bg-christmas.webp",
     checkoutSuffix: "-christmas",
   },
+  [Season.Spooky]: {
+    navbarText: "/images/text-beside-transparent-bg.webp",
+    navbarNoText: "/images/no-text-transparent-bg.webp",
+    checkoutImage: "spooky-checkout.webp",
+    logoAccent: "/images/spooky-logo-accent.webp",
+  },
 };
