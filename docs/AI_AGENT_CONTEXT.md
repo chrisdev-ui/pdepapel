@@ -298,6 +298,10 @@ When creating a new customer-navigable route:
   cart view, checkout, shipping/payment steps, and checkout errors. Never put
   email, phone, address, document number, raw search text, payment credentials,
   or any other personal data in event parameters.
+- The GA4 bootstrap must keep Google's canonical queue format:
+  `function gtag(){dataLayer.push(arguments);}`. Do not replace it with an
+  arrow function that pushes a rest-parameter array; `gtag.js` may load but
+  ignore queued commands and no events will reach GA4.
 - The public checkout obtains the GA client ID only after analytics consent and
   sends it as optional checkout attribution. The admin persists it temporarily
   in `Order.analyticsClientId`; once the server sends the verified `purchase`

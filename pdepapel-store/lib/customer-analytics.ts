@@ -5,7 +5,7 @@ import { Product } from "@/types";
 
 declare global {
   interface Window {
-    dataLayer?: unknown[][];
+    dataLayer?: unknown[];
     gtag?: (...arguments_: unknown[]) => void;
   }
 }
@@ -66,9 +66,11 @@ export function getAnalyticsValue(items: AnalyticsItem[]): number {
 
 function ensureGoogleTag(): void {
   window.dataLayer ||= [];
-  window.gtag ||= (...arguments_: unknown[]) => {
-    window.dataLayer?.push(arguments_);
-  };
+  if (!window.gtag) {
+    window.gtag = function gtag() {
+      window.dataLayer?.push(arguments);
+    };
+  }
 }
 
 function appendScript(id: string, src: string): void {

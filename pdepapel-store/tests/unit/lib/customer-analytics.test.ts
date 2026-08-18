@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@vercel/analytics/react", () => ({ track: vi.fn() }));
 
 import {
+  enableGoogleAnalytics,
   getAnalyticsValue,
   toAnalyticsItem,
 } from "@/lib/customer-analytics";
@@ -45,5 +46,44 @@ describe("customer analytics items", () => {
         { item_id: "two", item_name: "Dos", price: 5000, quantity: 1 },
       ]),
     ).toBe(25000);
+  });
+});
+
+describe("Google Analytics initialization", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("queues commands using the Google tag arguments format", () => {
+    const appendedScripts: Array<{ id?: string; async?: boolean; src?: string }> = [];
+
+    vi.stubGlobal("window", {});
+    vi.stubGlobal("document", {
+      createElement: vi.fn(() => ({})),
+      getElementById: vi.fn(() => null),
+      head: {
+        appendChild: vi.fn((script) => appendedScripts.push(script)),
+      },
+    });
+
+    enableGoogleAnalytics("G-TEST123");
+
+    const commands = window.dataLayer ?? [];
+    expect(commands).toHaveLength(4);
+    expect(Object.prototype.toString.call(commands[0])).toBe(
+      "[object Arguments]",
+    );
+    expect(Array.from(commands[3] as IArguments)).toEqual([
+      "config",
+      "G-TEST123",
+      { anonymize_ip: true, send_page_view: false },
+    ]);
+    expect(appendedScripts).toEqual([
+      {
+        async: true,
+        id: "pdepapel-google-analytics",
+        src: "https://www.googletagmanager.com/gtag/js?id=G-TEST123",
+      },
+    ]);
   });
 });
