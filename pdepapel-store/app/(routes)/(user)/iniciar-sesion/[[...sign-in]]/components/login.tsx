@@ -3,34 +3,55 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { ArrowBigLeftDashIcon } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogOverlay, DialogPortal } from "@/components/ui/dialog";
-import { SignIn } from "@clerk/nextjs";
+import { STOREFRONT_ROUTES } from "@/lib/routes";
+import { SignIn, useAuth } from "@clerk/nextjs";
 
 export function Login() {
   const [isMounted, setIsMounted] = useState(false);
   const [open, setOpen] = useState(true);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectUrl = searchParams.get("redirect_url");
+  const { isLoaded, isSignedIn } = useAuth();
+
+  const redirectUrl = useMemo(() => {
+    const rawUrl = searchParams.get("redirect_url");
+    if (!rawUrl) return STOREFRONT_ROUTES.home;
+    if (
+      rawUrl.startsWith(STOREFRONT_ROUTES.signIn) ||
+      rawUrl.startsWith(STOREFRONT_ROUTES.signUp) ||
+      rawUrl.startsWith("/sign-in") ||
+      rawUrl.startsWith("/sign-up")
+    ) {
+      return STOREFRONT_ROUTES.home;
+    }
+    return rawUrl;
+  }, [searchParams]);
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  if (!isMounted) {
+  useEffect(() => {
+    if (isLoaded && isSignedIn) {
+      router.replace(redirectUrl);
+    }
+  }, [isLoaded, isSignedIn, redirectUrl, router]);
+
+  if (!isMounted || (isLoaded && isSignedIn)) {
     return null;
   }
 
   const handleCloseModal = () => {
-    router.push(redirectUrl || "/");
+    router.push(redirectUrl);
     setOpen(false);
   };
 
   const handleGoBack = () => {
-    router.push("/");
+    router.push(STOREFRONT_ROUTES.home);
     setOpen(false);
   };
 
@@ -46,8 +67,11 @@ export function Login() {
               Inicia sesión para consultar tus pedidos y comprar más rápido.
             </DialogPrimitive.Description>
             <SignIn
-              afterSignInUrl={redirectUrl || "/"}
-              afterSignUpUrl={redirectUrl || "/"}
+              path={STOREFRONT_ROUTES.signIn}
+              routing="path"
+              signUpUrl={STOREFRONT_ROUTES.signUp}
+              afterSignInUrl={redirectUrl}
+              afterSignUpUrl={redirectUrl}
               appearance={{
                 elements: {
                   headerSubtitle: "hidden",

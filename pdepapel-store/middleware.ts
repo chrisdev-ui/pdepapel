@@ -1,8 +1,22 @@
 import { authMiddleware } from "@clerk/nextjs";
 
 export default authMiddleware({
+  signInUrl: "/iniciar-sesion",
   publicRoutes: [
     "/",
+    "/producto/:path*",
+    "/tienda",
+    "/carrito",
+    "/nosotros",
+    "/contacto",
+    "/favoritos",
+    "/finalizar-compra",
+    "/pedido/:path*",
+    "/cotizacion/:path*",
+    "/politicas/:path*",
+    "/iniciar-sesion(.*)",
+    "/crear-cuenta(.*)",
+    "/api/:path*",
     "/product/:path*",
     "/shop",
     "/cart",
@@ -11,8 +25,10 @@ export default authMiddleware({
     "/wishlist",
     "/checkout",
     "/order/:path*",
-    "/api/:path*",
+    "/quote/:path*",
     "/policies/:path*",
+    "/sign-in(.*)",
+    "/sign-up(.*)",
     "/:path*",
   ],
 });
