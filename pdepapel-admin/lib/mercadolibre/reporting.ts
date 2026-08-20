@@ -8,7 +8,13 @@ export type MarketplaceReportingPeriod = {
 export type MarketplaceReportingItem = {
   quantity: number;
   unitPrice: number;
+  /**
+   * Acquisition cost captured when the sale was synchronized. A paid sale is a
+   * historical record, so this snapshot wins over the product's current cost.
+   */
+  acqPrice?: number | null;
   product?: { acqPrice: number | null } | null;
+  listing?: { product: { acqPrice: number | null } } | null;
 };
 
 export type MarketplaceReportingOrder = {
@@ -69,10 +75,32 @@ export function getMarketplaceItemNetRevenue(
   return (getMarketplaceNetRevenue(order) * itemGrossTotal) / itemsGrossTotal;
 }
 
+/**
+ * Unit acquisition cost of a sold marketplace item, or `null` when it cannot be
+ * established: the item was never linked to a local product, or that product has
+ * no acquisition cost registered. A missing cost is NOT zero — reporting it as
+ * zero turns an unknown into pure profit.
+ */
+export function getMarketplaceItemAcquisitionCost(
+  item: MarketplaceReportingItem,
+): number | null {
+  const snapshot = Number(item.acqPrice ?? Number.NaN);
+  if (Number.isFinite(snapshot) && snapshot > 0) return snapshot;
+
+  const registeredCost = Number(
+    item.listing?.product.acqPrice ?? item.product?.acqPrice ?? Number.NaN,
+  );
+  if (Number.isFinite(registeredCost) && registeredCost > 0) {
+    return registeredCost;
+  }
+
+  return null;
+}
+
 export function getMarketplaceOrderNetProfit(order: MarketplaceReportingOrder) {
   const productCost = order.items.reduce(
     (total, item) =>
-      total + Number(item.product?.acqPrice ?? 0) * item.quantity,
+      total + (getMarketplaceItemAcquisitionCost(item) ?? 0) * item.quantity,
     0,
   );
 

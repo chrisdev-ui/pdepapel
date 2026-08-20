@@ -39,6 +39,7 @@ type MercadoLibreOrder = {
 type ResolvedMercadoLibreOrderItem = MercadoLibreOrderItem & {
   listingId: string | null;
   productId: string | null;
+  acqPrice: number | null;
   stockSafetyBuffer: number;
   syncStock: boolean;
 };
@@ -167,27 +168,77 @@ export function parseMercadoLibreOrder(
   };
 }
 
+function getOrderItemKey(item: {
+  externalItemId: string;
+  externalVariationId: string | null;
+}) {
+  return `${item.externalItemId}:${item.externalVariationId ?? ""}`;
+}
+
 async function resolveOrderItems(
   connectionId: string,
+  externalOrderId: string,
   items: MercadoLibreOrderItem[],
 ) {
   const externalItemIds = Array.from(
     new Set(items.map((item) => item.externalItemId)),
   );
-  const listings = await prismadb.marketplaceListing.findMany({
-    where: {
-      connectionId,
-      externalItemId: { in: externalItemIds },
-    },
-    select: {
-      id: true,
-      productId: true,
-      externalItemId: true,
-      externalVariationId: true,
-      stockSafetyBuffer: true,
-      syncStock: true,
-    },
-  });
+  const [listings, existingOrder] = await Promise.all([
+    prismadb.marketplaceListing.findMany({
+      where: {
+        connectionId,
+        externalItemId: { in: externalItemIds },
+      },
+      select: {
+        id: true,
+        productId: true,
+        externalItemId: true,
+        externalVariationId: true,
+        stockSafetyBuffer: true,
+        syncStock: true,
+      },
+    }),
+    prismadb.marketplaceOrder.findUnique({
+      where: {
+        connectionId_externalOrderId: { connectionId, externalOrderId },
+      },
+      select: {
+        items: {
+          select: {
+            externalItemId: true,
+            externalVariationId: true,
+            acqPrice: true,
+          },
+        },
+      },
+    }),
+  ]);
+
+  const productIds = Array.from(
+    new Set(
+      listings.flatMap((listing) =>
+        listing.productId ? [listing.productId] : [],
+      ),
+    ),
+  );
+  const products =
+    productIds.length > 0
+      ? await prismadb.product.findMany({
+          where: { id: { in: productIds } },
+          select: { id: true, acqPrice: true },
+        })
+      : [];
+  const acqPriceByProductId = new Map(
+    products.map((product) => [product.id, product.acqPrice]),
+  );
+  // A paid sale is a historical record: never overwrite a cost snapshot that was
+  // already captured, only fill it in when it is still missing.
+  const existingAcqPriceByItemKey = new Map(
+    (existingOrder?.items ?? []).map((item) => [
+      getOrderItemKey(item),
+      item.acqPrice,
+    ]),
+  );
 
   return items.map((item): ResolvedMercadoLibreOrderItem => {
     const listing = listings.find(
@@ -195,11 +246,17 @@ async function resolveOrderItems(
         candidate.externalItemId === item.externalItemId &&
         (candidate.externalVariationId ?? null) === item.externalVariationId,
     );
+    const currentAcqPrice = listing?.productId
+      ? (acqPriceByProductId.get(listing.productId) ?? null)
+      : null;
+    const existingAcqPrice =
+      existingAcqPriceByItemKey.get(getOrderItemKey(item)) ?? null;
 
     return {
       ...item,
       listingId: listing?.id ?? null,
       productId: listing?.productId ?? null,
+      acqPrice: existingAcqPrice ?? currentAcqPrice,
       stockSafetyBuffer: listing?.stockSafetyBuffer ?? 0,
       syncStock: listing?.syncStock ?? false,
     };
@@ -411,7 +468,11 @@ export async function synchronizeMercadoLibreOrder(
   payload: Record<string, unknown>,
 ) {
   const order = parseMercadoLibreOrder(payload);
-  const resolvedItems = await resolveOrderItems(connectionId, order.items);
+  const resolvedItems = await resolveOrderItems(
+    connectionId,
+    order.externalOrderId,
+    order.items,
+  );
   const existingMarketplaceOrder = await prismadb.marketplaceOrder.findUnique({
     where: {
       connectionId_externalOrderId: {
@@ -452,6 +513,7 @@ export async function synchronizeMercadoLibreOrder(
           sku: item.sku,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
+          acqPrice: item.acqPrice,
         })),
       },
     },
@@ -476,6 +538,7 @@ export async function synchronizeMercadoLibreOrder(
           sku: item.sku,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
+          acqPrice: item.acqPrice,
         })),
       },
     },

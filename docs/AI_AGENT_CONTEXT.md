@@ -71,6 +71,7 @@ This section records the important recent decisions and must be updated after fu
 ### Current baseline
 
 - Latest deployed Mercado Libre listing-content expansion was committed as `f9a88d6` (`feat(admin): enhance Mercado Libre listing management`) and its matching manual migration was applied to Railway.
+- `pdepapel-admin/prisma/manual-migrations/20260820_add_marketplace_order_item_acq_price.sql` is **written but NOT yet applied to Railway**. It adds the nullable `MarketplaceOrderItem.acqPrice` cost snapshot and backfills it from the linked product. The matching application code must not be deployed before the migration is applied, because the profitability query selects that column.
 - `pdepapel-admin/prisma/manual-migrations/20260816_add_order_account_claims.sql` was applied to Railway on 2026-08-16. It adds the short-lived, hashed claim records used when a guest safely saves an order to a newly created or existing account.
 - The production manual enum migration `pdepapel-admin/prisma/manual-migrations/20260807_add_marketplace_order_notification_action.sql` has already been applied to Railway. It added the outbox actions `SYNC_ORDER_FINANCIALS` and `SEND_ORDER_NOTIFICATION`.
 - Mercado Libre was configured with the billing-read permission. After any permission change, token rotation, or client-secret rotation, the store owner must use **Reconectar Mercado Libre** in the admin panel so Mercado Libre issues a token with the correct scopes.
@@ -570,6 +571,8 @@ For existing publications:
 4. Never guess a product mapping.
 5. Preserve marketplace price; it must not rewrite the public-shop price.
 
+A sale item's `listingId`/`productId` are resolved **once**, at synchronization time, by matching `(externalItemId, externalVariationId)` against `MarketplaceListing` for that connection — never by SKU. A sale that arrives before its publication is imported/linked, or whose variation id does not match, is stored permanently unlinked: no acquisition cost in reports and `inventoryStatus = EXCEPTION` with inventory never applied. The repair is **Re-sincronizar venta** in the operations center (`POST /api/[storeId]/marketplaces/mercadolibre/orders/[externalOrderId]/resync`), which re-reads the order from Mercado Libre and rebuilds its items against today's publications. It releases an `EXCEPTION` order back to `NOT_APPLIED` so the pending inventory can be applied, and deliberately leaves `DECREMENTED` and `RESTOCK_PENDING` untouched so units are never discounted twice. Reconciliation of historical sales cannot repair this: it refuses an order that already exists.
+
 ### Paid sales, settlement, and emails
 
 For every paid Marketplace Order, record **net collected by P de Papel**, not gross buyer price.
@@ -589,6 +592,7 @@ Known real reconciliation reference: a previous Mercado Libre sale had gross COP
 ### Reporting treatment
 
 - Settled Mercado Libre sales contribute their `netAmount` to revenue totals, tax export, daily/monthly financial summaries, average ticket, product/category rankings, and stockout velocity. Product profitability subtracts the actual local acquisition cost from the allocated net settlement.
+- **An unknown acquisition cost is never zero.** `MarketplaceOrderItem.acqPrice` holds the cost snapshot captured when the sale synchronized; reports prefer it over `Product.acqPrice` because a paid sale is a historical record. When neither is available — the item was never linked to a local product, or the product has no cost registered — profitability reports the cost, profit, and margin as unknown (`null` / `—`) and flags the row with `costStatus` (`UNLINKED_PRODUCT` or `MISSING_ACQUISITION_COST`). Reporting such a row as `$0` cost turned it into a fake 100% margin. A cost snapshot that already exists is never overwritten on re-synchronization; it is only filled in when still missing.
 - Do not create a duplicate internal `Order` for a marketplace sale. Marketplace records remain separate for idempotent stock and settlement handling.
 - Never add a paid-but-unsettled marketplace sale as gross revenue. Surface it as pending until the billing endpoint supplies the settlement.
 - Customer intelligence, CRM/re-engagement, and P de Papel shipping-guide workflows intentionally use direct shop orders only, because Mercado Libre does not supply a customer relationship suitable for those flows.

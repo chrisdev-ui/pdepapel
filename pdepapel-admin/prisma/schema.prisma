@@ -1580,6 +1580,10 @@ model MarketplaceOrderItem {
   sku                 String?
   quantity            Int
   unitPrice           Float
+  /// Acquisition cost captured when the sale was synchronized. A paid sale is a
+  /// historical record, so reports must prefer this snapshot over the product's
+  /// current cost. Null means the cost could not be established at sync time.
+  acqPrice            Float?
   createdAt           DateTime @default(now())
 
   marketplaceOrder MarketplaceOrder    @relation(fields: [marketplaceOrderId], references: [id], onDelete: Cascade)

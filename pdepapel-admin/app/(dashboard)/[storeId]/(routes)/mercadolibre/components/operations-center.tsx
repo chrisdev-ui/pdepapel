@@ -80,16 +80,39 @@ type Claim = {
   } | null;
 };
 
+type ProfitabilityCostStatus =
+  | "AVAILABLE"
+  | "UNLINKED_PRODUCT"
+  | "MISSING_ACQUISITION_COST";
+
 type Profitability = {
   listingId: string | null;
   title: string;
   productName: string | null;
   unitsSold: number;
   netCollected: number;
-  productCost: number;
-  netProfit: number;
+  productCost: number | null;
+  netProfit: number | null;
   marginPercentage: number | null;
+  costStatus: ProfitabilityCostStatus;
+  pendingOrderIds: string[];
   lastSaleAt: string | null;
+};
+
+const COST_STATUS_MESSAGES: Record<
+  Exclude<ProfitabilityCostStatus, "AVAILABLE">,
+  { label: string; detail: string }
+> = {
+  UNLINKED_PRODUCT: {
+    label: "Sin producto vinculado",
+    detail:
+      "Esta venta no quedó relacionada con un producto de P de Papel, así que no se puede calcular su costo ni descontar su inventario.",
+  },
+  MISSING_ACQUISITION_COST: {
+    label: "Sin costo registrado",
+    detail:
+      "El producto vinculado no tiene costo de adquisición registrado, así que la ganancia real no se puede calcular.",
+  },
 };
 
 const currencyFormatter = new Intl.NumberFormat("es-CO", {
@@ -133,6 +156,8 @@ export function MercadoLibreOperationsCenter({ storeId }: { storeId: string }) {
   const [answeringQuestionId, setAnsweringQuestionId] = useState<string | null>(
     null,
   );
+  const [resyncingOrderId, setResyncingOrderId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
@@ -225,6 +250,54 @@ export function MercadoLibreOperationsCenter({ storeId }: { storeId: string }) {
     }
   };
 
+  const resyncOrder = async (externalOrderId: string) => {
+    if (
+      !window.confirm(
+        `Se volverá a leer la venta ${externalOrderId} en Mercado Libre para relacionarla con tus productos y aplicar el inventario pendiente. ¿Continuar?`,
+      )
+    ) {
+      return;
+    }
+    setResyncingOrderId(externalOrderId);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch(
+        `/api/${storeId}/marketplaces/mercadolibre/orders/${externalOrderId}/resync`,
+        { method: "POST" },
+      );
+      if (!response.ok) throw new Error(await getErrorMessage(response));
+      const result = (await response.json()) as {
+        unlinkedItems: { title: string; sku: string | null }[];
+        inventoryChanged: boolean;
+        inventoryError: string | null;
+      };
+      // loadData clears the banner, so refresh first and report afterwards.
+      await loadData();
+      if (result.unlinkedItems.length > 0) {
+        setError(
+          `La venta ${externalOrderId} sigue sin producto vinculado: ${result.unlinkedItems
+            .map((item) => item.sku ?? item.title)
+            .join(", ")}. Importa o vincula la publicación en Mercado Libre y vuelve a intentarlo.`,
+        );
+      } else {
+        setNotice(
+          `Venta ${externalOrderId} re-sincronizada.${
+            result.inventoryChanged ? " Se aplicó el inventario pendiente." : ""
+          }`,
+        );
+      }
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "No fue posible re-sincronizar la venta",
+      );
+    } finally {
+      setResyncingOrderId(null);
+    }
+  };
+
   const answerQuestion = async (question: Question) => {
     const text = drafts[question.id]?.trim() ?? "";
     if (!text) {
@@ -291,6 +364,11 @@ export function MercadoLibreOperationsCenter({ storeId }: { storeId: string }) {
         {error ? (
           <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
             {error}
+          </p>
+        ) : null}
+        {notice ? (
+          <p className="rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">
+            {notice}
           </p>
         ) : null}
         {health ? (
@@ -502,7 +580,9 @@ export function MercadoLibreOperationsCenter({ storeId }: { storeId: string }) {
             </p>
             <p className="text-sm text-muted-foreground">
               El valor neto es lo que Mercado Libre reportó que recibiste; se
-              descuenta el costo de adquisición registrado en P de Papel.
+              descuenta el costo de adquisición registrado en P de Papel. Cuando
+              ese costo no se puede establecer se muestra «—» en vez de cero,
+              para no reportar una ganancia mayor a la real.
             </p>
           </div>
           {profitability.length === 0 ? (
@@ -524,38 +604,89 @@ export function MercadoLibreOperationsCenter({ storeId }: { storeId: string }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {profitability.slice(0, 20).map((item) => (
-                    <tr
-                      key={item.listingId ?? item.title}
-                      className="border-b last:border-0"
-                    >
-                      <td className="py-3 pr-4">
-                        <p className="font-medium">{item.title}</p>
-                        {item.productName ? (
-                          <p className="text-xs text-muted-foreground">
-                            {item.productName}
-                          </p>
-                        ) : null}
-                      </td>
-                      <td className="py-3 pr-4">{item.unitsSold}</td>
-                      <td className="py-3 pr-4">
-                        {currencyFormatter.format(item.netCollected)}
-                      </td>
-                      <td className="py-3 pr-4">
-                        {currencyFormatter.format(item.productCost)}
-                      </td>
-                      <td
-                        className={`py-3 pr-4 font-medium ${item.netProfit < 0 ? "text-destructive" : "text-success"}`}
+                  {profitability.slice(0, 20).map((item) => {
+                    const costIssue =
+                      item.costStatus === "AVAILABLE"
+                        ? null
+                        : COST_STATUS_MESSAGES[item.costStatus];
+                    const orderToResync = item.pendingOrderIds[0] ?? null;
+                    return (
+                      <tr
+                        key={item.listingId ?? item.title}
+                        className="border-b align-top last:border-0"
                       >
-                        {currencyFormatter.format(item.netProfit)}
-                      </td>
-                      <td className="py-3">
-                        {item.marginPercentage === null
-                          ? "—"
-                          : `${item.marginPercentage.toFixed(1)}%`}
-                      </td>
-                    </tr>
-                  ))}
+                        <td className="py-3 pr-4">
+                          <p className="font-medium">{item.title}</p>
+                          {item.productName ? (
+                            <p className="text-xs text-muted-foreground">
+                              {item.productName}
+                            </p>
+                          ) : null}
+                          {costIssue ? (
+                            <div className="mt-2 space-y-1">
+                              <Badge
+                                variant="outline"
+                                className="border-amber-300 bg-amber-50 text-amber-900"
+                              >
+                                <AlertTriangle className="mr-1 h-3 w-3" />
+                                {costIssue.label}
+                              </Badge>
+                              <p className="max-w-md text-xs text-muted-foreground">
+                                {costIssue.detail}
+                              </p>
+                              {item.costStatus === "UNLINKED_PRODUCT" &&
+                              orderToResync ? (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="mt-1"
+                                  onClick={() =>
+                                    void resyncOrder(orderToResync)
+                                  }
+                                  disabled={resyncingOrderId !== null}
+                                >
+                                  {resyncingOrderId === orderToResync ? (
+                                    <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <RefreshCw className="mr-2 h-3 w-3" />
+                                  )}
+                                  Re-sincronizar venta {orderToResync}
+                                </Button>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="py-3 pr-4">{item.unitsSold}</td>
+                        <td className="py-3 pr-4">
+                          {currencyFormatter.format(item.netCollected)}
+                        </td>
+                        <td className="py-3 pr-4">
+                          {item.productCost === null
+                            ? "—"
+                            : currencyFormatter.format(item.productCost)}
+                        </td>
+                        <td
+                          className={`py-3 pr-4 font-medium ${
+                            item.netProfit === null
+                              ? "text-muted-foreground"
+                              : item.netProfit < 0
+                                ? "text-destructive"
+                                : "text-success"
+                          }`}
+                        >
+                          {item.netProfit === null
+                            ? "—"
+                            : currencyFormatter.format(item.netProfit)}
+                        </td>
+                        <td className="py-3">
+                          {item.marginPercentage === null
+                            ? "—"
+                            : `${item.marginPercentage.toFixed(1)}%`}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
