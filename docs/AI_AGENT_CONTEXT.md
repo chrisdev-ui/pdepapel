@@ -258,7 +258,7 @@ When creating a new customer-navigable route:
 2. Add a permanent redirect from an existing/previous English segment in `next.config.mjs` when relevant.
 3. Update route helpers, navigation, metadata, sitemap coverage, tests, and any structured data.
 4. Do not remove older redirects or slug aliases without a deliberate SEO migration plan.
-5. Clerk route configuration must use the same Spanish canonical paths: `/iniciar-sesion` and `/crear-cuenta`. Keep the public Clerk variables and `ClerkProvider` aligned with `STOREFRONT_ROUTES`, otherwise the mounted authentication form can remain empty.
+5. Clerk route configuration must use the same Spanish canonical paths: `/iniciar-sesion` and `/crear-cuenta`. Keep the public Clerk variables and `ClerkProvider` aligned with `STOREFRONT_ROUTES`, otherwise the mounted authentication form can remain empty. Auth route pages must redirect an already authenticated visitor on the server to the validated `redirect_url` (or `/`) rather than render an empty Clerk form.
 
 ### UX and rendering rules
 

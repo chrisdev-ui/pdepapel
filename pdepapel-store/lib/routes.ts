@@ -21,20 +21,24 @@ type AuthRoute =
   | typeof STOREFRONT_ROUTES.signUp;
 
 export function getSafeStorefrontRedirectPath(
-  redirectPath: string | null | undefined,
+  redirectPath: string | string[] | null | undefined,
   fallbackPath = STOREFRONT_ROUTES.home,
 ): string {
+  const normalizedRedirectPath = Array.isArray(redirectPath)
+    ? redirectPath[0]
+    : redirectPath;
+
   if (
-    !redirectPath ||
-    !redirectPath.startsWith("/") ||
-    redirectPath.startsWith("//") ||
-    redirectPath.includes("\\")
+    !normalizedRedirectPath ||
+    !normalizedRedirectPath.startsWith("/") ||
+    normalizedRedirectPath.startsWith("//") ||
+    normalizedRedirectPath.includes("\\")
   ) {
     return fallbackPath;
   }
 
   try {
-    const parsedPath = new URL(redirectPath, STOREFRONT_ORIGIN);
+    const parsedPath = new URL(normalizedRedirectPath, STOREFRONT_ORIGIN);
 
     if (parsedPath.origin !== STOREFRONT_ORIGIN) {
       return fallbackPath;

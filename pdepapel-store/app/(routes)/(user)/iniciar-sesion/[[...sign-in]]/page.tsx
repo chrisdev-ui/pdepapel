@@ -1,6 +1,12 @@
+import { auth } from "@clerk/nextjs";
 import { Metadata } from "next";
+import { redirect } from "next/navigation";
+
+import {
+  getSafeStorefrontRedirectPath,
+  STOREFRONT_ROUTES,
+} from "@/lib/routes";
 import { Login } from "./components/login";
-import { STOREFRONT_ROUTES } from "@/lib/routes";
 
 export const metadata: Metadata = {
   title: "Iniciar Sesión",
@@ -14,6 +20,18 @@ export const metadata: Metadata = {
   },
 };
 
-export default function LoginPage() {
+type LoginPageProps = {
+  searchParams?: {
+    redirect_url?: string | string[];
+  };
+};
+
+export default function LoginPage({ searchParams }: LoginPageProps) {
+  const { userId } = auth();
+
+  if (userId) {
+    redirect(getSafeStorefrontRedirectPath(searchParams?.redirect_url));
+  }
+
   return <Login />;
 }

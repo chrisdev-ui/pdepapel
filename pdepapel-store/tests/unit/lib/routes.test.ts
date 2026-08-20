@@ -40,6 +40,9 @@ describe("customer-facing routes", () => {
     expect(getSafeStorefrontRedirectPath("/\\example.com")).toBe("/");
     expect(getSafeStorefrontRedirectPath("/crear-cuenta?step=1")).toBe("/");
     expect(getSafeStorefrontRedirectPath("/sign-in?step=1")).toBe("/");
+    expect(
+      getSafeStorefrontRedirectPath(["/carrito", "https://example.com"]),
+    ).toBe("/carrito");
   });
 
   it("builds safe Clerk account links with the canonical Spanish routes", () => {

@@ -1,5 +1,11 @@
+import { auth } from "@clerk/nextjs";
 import { Metadata } from "next";
-import { STOREFRONT_ROUTES } from "@/lib/routes";
+import { redirect } from "next/navigation";
+
+import {
+  getSafeStorefrontRedirectPath,
+  STOREFRONT_ROUTES,
+} from "@/lib/routes";
 import { Register } from "./components/register";
 
 export const metadata: Metadata = {
@@ -14,6 +20,18 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RegisterPage() {
+type RegisterPageProps = {
+  searchParams?: {
+    redirect_url?: string | string[];
+  };
+};
+
+export default function RegisterPage({ searchParams }: RegisterPageProps) {
+  const { userId } = auth();
+
+  if (userId) {
+    redirect(getSafeStorefrontRedirectPath(searchParams?.redirect_url));
+  }
+
   return <Register />;
 }
