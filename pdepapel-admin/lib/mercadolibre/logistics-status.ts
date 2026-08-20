@@ -32,6 +32,27 @@ export function isMercadoLibreShipmentAwaitingDispatch(status: string) {
   );
 }
 
+/**
+ * A shipment in one of these states will not change again, so refreshing it
+ * would only spend Mercado Libre API calls.
+ */
+const SETTLED_SHIPMENT_STATUSES = new Set([
+  "delivered",
+  "not_delivered",
+  "cancelled",
+  "returned",
+]);
+
+export function isMercadoLibreShipmentSettled(status: string) {
+  return SETTLED_SHIPMENT_STATUSES.has(
+    normalizeMercadoLibreShipmentStatus(status),
+  );
+}
+
+export const SETTLED_MERCADOLIBRE_SHIPMENT_STATUSES = Array.from(
+  SETTLED_SHIPMENT_STATUSES,
+);
+
 export function getEffectiveMercadoLibreShipmentStatus(
   shipmentStatus: string,
   marketplaceOrderStatus: string | null | undefined,

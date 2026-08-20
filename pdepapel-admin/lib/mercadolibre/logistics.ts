@@ -2,15 +2,17 @@ import { Prisma } from "@prisma/client";
 
 import prismadb from "@/lib/prismadb";
 
-import { getMercadoLibreJson } from "./client";
+import { getMercadoLibreJson, getMercadoLibreResource } from "./client";
 import {
   getEffectiveMercadoLibreShipmentStatus,
   normalizeMercadoLibreShipmentStatus,
+  SETTLED_MERCADOLIBRE_SHIPMENT_STATUSES,
 } from "./logistics-status";
 export {
   getEffectiveMercadoLibreShipmentStatus,
   getClaimStatusMeta,
   isMercadoLibreShipmentAwaitingDispatch,
+  isMercadoLibreShipmentSettled,
   normalizeMercadoLibreShipmentStatus,
   getShipmentStatusMeta,
   SHIPMENT_STATUS_META,
@@ -197,6 +199,69 @@ export async function synchronizeMercadoLibreShipment(
       metadata,
     },
   });
+}
+
+const MAX_SHIPMENTS_PER_REFRESH = 25;
+
+/**
+ * Re-reads shipments from Mercado Libre and re-synchronizes them.
+ *
+ * Shipment status is otherwise only ever written by the webhook processor, so a
+ * notification that never arrived — or that failed — leaves the panel showing a
+ * stale state with no way to recover. This is the manual pull path, mirroring
+ * the one questions already have.
+ *
+ * Pass an `externalShipmentId` to refresh a single shipment; without it, every
+ * shipment that can still change is refreshed, newest first and capped, so one
+ * click cannot exhaust the Mercado Libre rate limit.
+ */
+export async function refreshMercadoLibreShipments(
+  connectionId: string,
+  externalShipmentId?: string,
+) {
+  const shipments = await prismadb.marketplaceShipment.findMany({
+    where: {
+      connectionId,
+      ...(externalShipmentId
+        ? { externalShipmentId }
+        : { status: { notIn: SETTLED_MERCADOLIBRE_SHIPMENT_STATUSES } }),
+    },
+    select: { externalShipmentId: true, status: true },
+    orderBy: { lastRemoteUpdateAt: "desc" },
+    take: externalShipmentId ? 1 : MAX_SHIPMENTS_PER_REFRESH,
+  });
+
+  if (externalShipmentId && shipments.length === 0) {
+    throw new Error("Ese envío no existe en P de Papel");
+  }
+
+  let updated = 0;
+  const failures: { externalShipmentId: string; message: string }[] = [];
+  for (const shipment of shipments) {
+    // A single shipment is refreshed on explicit request even when settled; a
+    // bulk refresh already filtered those out.
+    try {
+      const payload = await getMercadoLibreResource(
+        connectionId,
+        `/shipments/${encodeURIComponent(shipment.externalShipmentId)}`,
+      );
+      await synchronizeMercadoLibreShipment(connectionId, payload);
+      updated += 1;
+    } catch (error) {
+      failures.push({
+        externalShipmentId: shipment.externalShipmentId,
+        message: error instanceof Error ? error.message : "Error desconocido",
+      });
+    }
+  }
+
+  return {
+    requested: shipments.length,
+    updated,
+    failures,
+    reachedLimit:
+      !externalShipmentId && shipments.length === MAX_SHIPMENTS_PER_REFRESH,
+  };
 }
 
 export function parseMercadoLibreClaim(

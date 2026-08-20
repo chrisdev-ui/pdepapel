@@ -157,6 +157,10 @@ export function MercadoLibreOperationsCenter({ storeId }: { storeId: string }) {
     null,
   );
   const [resyncingOrderId, setResyncingOrderId] = useState<string | null>(null);
+  const [isRefreshingShipments, setIsRefreshingShipments] = useState(false);
+  const [refreshingShipmentId, setRefreshingShipmentId] = useState<
+    string | null
+  >(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -247,6 +251,69 @@ export function MercadoLibreOperationsCenter({ storeId }: { storeId: string }) {
       );
     } finally {
       setIsRefreshingQuestions(false);
+    }
+  };
+
+  const refreshShipments = async (externalShipmentId?: string) => {
+    if (externalShipmentId) {
+      setRefreshingShipmentId(externalShipmentId);
+    } else {
+      setIsRefreshingShipments(true);
+    }
+    setError(null);
+    setNotice(null);
+    try {
+      const baseUrl = `/api/${storeId}/marketplaces/mercadolibre/shipments`;
+      const response = await fetch(
+        externalShipmentId
+          ? `${baseUrl}/${externalShipmentId}/refresh`
+          : baseUrl,
+        { method: "POST" },
+      );
+      if (!response.ok) throw new Error(await getErrorMessage(response));
+      const result = (await response.json()) as
+        | { status: string }
+        | {
+            requested: number;
+            updated: number;
+            failures: { externalShipmentId: string; message: string }[];
+            reachedLimit: boolean;
+          };
+      // loadData clears the banners, so refresh first and report afterwards.
+      await loadData();
+
+      if ("status" in result) {
+        setNotice(
+          `Envío ${externalShipmentId} actualizado: ${getShipmentStatusMeta(result.status).label}.`,
+        );
+        return;
+      }
+      if (result.failures.length > 0) {
+        setError(
+          `${result.updated} de ${result.requested} envíos actualizados. Falló ${result.failures
+            .map((failure) => failure.externalShipmentId)
+            .join(", ")}: ${result.failures[0].message}`,
+        );
+        return;
+      }
+      setNotice(
+        result.requested === 0
+          ? "No hay envíos pendientes por actualizar."
+          : `${result.updated} envío(s) actualizados desde Mercado Libre.${
+              result.reachedLimit
+                ? " Se alcanzó el máximo por consulta; vuelve a actualizar si faltan envíos."
+                : ""
+            }`,
+      );
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "No fue posible actualizar los envíos",
+      );
+    } finally {
+      setIsRefreshingShipments(false);
+      setRefreshingShipmentId(null);
     }
   };
 
@@ -517,9 +584,28 @@ export function MercadoLibreOperationsCenter({ storeId }: { storeId: string }) {
             title="Envíos y despachos"
             icon={<Truck className="h-4 w-4" />}
             empty="No hay envíos recibidos todavía."
+            action={
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void refreshShipments()}
+                disabled={isRefreshingShipments || refreshingShipmentId !== null}
+                title="Mercado Libre solo avisa por notificación; usa esto si un estado quedó desactualizado."
+              >
+                {isRefreshingShipments ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
+                Actualizar envíos
+              </Button>
+            }
           >
             {shipments.slice(0, 10).map((shipment) => {
               const status = getShipmentStatusMeta(shipment.status);
+              const isRefreshingThis =
+                refreshingShipmentId === shipment.externalShipmentId;
 
               return (
                 <div
@@ -531,6 +617,25 @@ export function MercadoLibreOperationsCenter({ storeId }: { storeId: string }) {
                       Envío {shipment.externalShipmentId}
                     </span>
                     <Badge variant={status.variant}>{status.label}</Badge>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="ml-auto h-7 px-2"
+                      onClick={() =>
+                        void refreshShipments(shipment.externalShipmentId)
+                      }
+                      disabled={
+                        isRefreshingShipments || refreshingShipmentId !== null
+                      }
+                      aria-label={`Actualizar el envío ${shipment.externalShipmentId} desde Mercado Libre`}
+                    >
+                      {isRefreshingThis ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3 w-3" />
+                      )}
+                    </Button>
                   </div>
                   <p className="mt-1 text-muted-foreground">
                     Pedido{" "}
@@ -721,11 +826,13 @@ function OperationsList({
   title,
   icon,
   empty,
+  action,
   children,
 }: {
   title: string;
   icon: ReactNode;
   empty: string;
+  action?: ReactNode;
   children: ReactNode;
 }) {
   const hasChildren = Array.isArray(children)
@@ -733,10 +840,13 @@ function OperationsList({
     : Boolean(children);
   return (
     <div className="space-y-3 rounded-md border p-4">
-      <p className="flex items-center gap-2 font-semibold">
-        {icon}
-        {title}
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="flex items-center gap-2 font-semibold">
+          {icon}
+          {title}
+        </p>
+        {action}
+      </div>
       {hasChildren ? (
         <div className="space-y-2">{children}</div>
       ) : (
