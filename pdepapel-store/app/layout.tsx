@@ -13,6 +13,7 @@ import { ModalProvider } from "@/providers/modal-provider";
 import { ReactQueryProvider } from "@/providers/query-client-provider";
 import { CustomerAnalyticsProvider } from "@/providers/customer-analytics-provider";
 import { Toaster } from "@/providers/toaster";
+import { WishlistSyncProvider } from "@/components/wishlist-sync-provider";
 import { Season } from "@/types";
 import "./globals.css";
 
@@ -123,6 +124,7 @@ export default async function RootLayout({
           <link rel="preconnect" href="https://res.cloudinary.com" />
           <ReactQueryProvider>
             <ModalProvider />
+            <WishlistSyncProvider />
             <Navbar season={currentSeason} />
             <main>{children}</main>
             <Footer season={currentSeason} />

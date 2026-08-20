@@ -3,8 +3,8 @@
 import { DataTableCellDate } from "@/components/ui/data-table-cell-date";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { Icons } from "@/components/ui/icons";
+import { SocialNetworkIcons } from "@/components/ui/social-network-icons";
 import { ColumnDef } from "@tanstack/react-table";
-import { Facebook, Instagram, Twitter } from "lucide-react";
 import { getPosts } from "../server/get-posts";
 import { CellAction } from "./cell-action";
 
@@ -20,12 +20,12 @@ export const columns: ColumnDef<PostColumn>[] = [
       <div className="flex items-center gap-x-2">
         {row.original.social === "Facebook" && (
           <>
-            <Facebook className="w-8" /> Facebook
+            <SocialNetworkIcons.facebook className="w-8" /> Facebook
           </>
         )}
         {row.original.social === "Instagram" && (
           <>
-            <Instagram className="h-8 w-8" /> Instagram
+            <SocialNetworkIcons.instagram className="h-8 w-8" /> Instagram
           </>
         )}
         {row.original.social === "TikTok" && (
@@ -35,7 +35,7 @@ export const columns: ColumnDef<PostColumn>[] = [
         )}
         {row.original.social === "Twitter" && (
           <>
-            <Twitter className="h-8 w-8" /> Twitter
+            <SocialNetworkIcons.twitter className="h-8 w-8" /> Twitter
           </>
         )}
       </div>

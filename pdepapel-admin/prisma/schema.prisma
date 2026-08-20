@@ -51,6 +51,9 @@ model Store {
   payments                     PaymentDetails[]              @relation("StoreToPaymentDetails")
   suppliers                    Supplier[]                    @relation("StoreToSupplier")
   coupons                      Coupon[]                      @relation("StoreToCoupons")
+  customerAddresses            CustomerAddress[]             @relation("StoreToCustomerAddress")
+  customerWishlistItems        CustomerWishlistItem[]        @relation("StoreToCustomerWishlistItem")
+  couponRedemptions            CouponRedemption[]            @relation("StoreToCouponRedemption")
   shippingQuotes               ShippingQuote[]               @relation("StoreToShippingQuotes")
   offers                       Offer[]                       @relation("StoreToOffer")
   boxes                        Box[]                         @relation("StoreToBox")
@@ -288,6 +291,7 @@ model Product {
   images                  Image[]
   orderItems              OrderItem[]
   reviews                 Review[]
+  customerWishlistItems   CustomerWishlistItem[]
   supplierId              String?
   supplier                Supplier?                @relation(fields: [supplierId], references: [id])
   productGroupId          String?
@@ -498,15 +502,81 @@ model Order {
 }
 
 model OrderAccountClaim {
-  id        String    @id @default(uuid())
+  id        String                  @id @default(uuid())
   storeId   String
-  orderId   String    @unique
-  tokenHash String    @unique @db.VarChar(64)
+  orderId   String
+  source    OrderAccountClaimSource @default(DEVICE)
+  tokenHash String                  @unique @db.VarChar(64)
   expiresAt DateTime
   claimedAt DateTime?
-  createdAt DateTime  @default(now())
+  createdAt DateTime                @default(now())
 
+  @@unique([orderId, source])
   @@index([storeId, expiresAt])
+  @@index([orderId])
+}
+
+model CustomerAddress {
+  id               String   @id @default(uuid())
+  storeId          String
+  userId           String   @db.VarChar(128)
+  label            String   @default("") @db.VarChar(60)
+  fullName         String   @default("")
+  phone            String   @default("")
+  documentId       String?  @default("")
+  address          String   @default("")
+  address2         String?  @default("")
+  city             String?  @default("")
+  department       String?  @default("")
+  daneCode         String?  @default("")
+  neighborhood     String?  @default("")
+  addressReference String?  @default("")
+  company          String?  @default("")
+  isDefault        Boolean  @default(false)
+  lastUsedAt       DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  store Store @relation("StoreToCustomerAddress", fields: [storeId], references: [id])
+
+  @@index([storeId, userId, isDefault, updatedAt])
+  @@index([storeId, userId])
+}
+
+model CustomerWishlistItem {
+  id        String   @id @default(uuid())
+  storeId   String
+  userId    String   @db.VarChar(128)
+  productId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store   Store   @relation("StoreToCustomerWishlistItem", fields: [storeId], references: [id])
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, userId, productId])
+  @@index([storeId, userId, createdAt])
+  @@index([productId])
+}
+
+model CouponRedemption {
+  id        String                 @id @default(uuid())
+  storeId   String
+  couponId  String
+  userId    String                 @db.VarChar(128)
+  orderId   String?
+  status    CouponRedemptionStatus @default(RESERVED)
+  createdAt DateTime               @default(now())
+  updatedAt DateTime               @updatedAt
+  redeemedAt DateTime?
+  releasedAt DateTime?
+
+  store  Store  @relation("StoreToCouponRedemption", fields: [storeId], references: [id])
+  coupon Coupon @relation(fields: [couponId], references: [id])
+
+  @@unique([couponId, userId])
+  @@index([storeId, userId, status])
+  @@index([orderId])
 }
 
 model OrderItem {
@@ -709,7 +779,9 @@ model Coupon {
   usedCount     Int          @default(0)
   isActive      Boolean      @default(true)
   minOrderValue Float?       @default(0)
+  isWelcomeBenefit Boolean   @default(false)
   orders        Order[]
+  redemptions   CouponRedemption[]
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
   store         Store        @relation("StoreToCoupons", fields: [storeId], references: [id])
@@ -722,12 +794,24 @@ model Coupon {
   @@index([usedCount, maxUses])
   @@index([storeId, isActive, startDate, endDate])
   @@index([storeId, isActive, startDate, endDate, usedCount])
+  @@index([storeId, isWelcomeBenefit, isActive, startDate, endDate])
   @@index([storeId, code, isActive, startDate, endDate, usedCount, maxUses, minOrderValue])
 }
 
 enum DiscountType {
   PERCENTAGE
   FIXED
+}
+
+enum OrderAccountClaimSource {
+  DEVICE
+  EMAIL
+}
+
+enum CouponRedemptionStatus {
+  RESERVED
+  REDEEMED
+  RELEASED
 }
 
 enum OrderType {

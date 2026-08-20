@@ -363,6 +363,9 @@ export interface CheckoutOrder {
   envioClickIdRate?: number;
   customOrderToken?: string;
   analyticsClientId?: string | null;
+  saveAddress?: boolean;
+  savedAddressId?: string | null;
+  addressLabel?: string | null;
 }
 
 export interface DaneLocation {

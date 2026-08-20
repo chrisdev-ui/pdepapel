@@ -3,7 +3,7 @@
 import { useAuth } from "@clerk/nextjs";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { LogIn, Store } from "lucide-react";
+import { LogIn, MapPinned, PackageCheck, Store } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -21,7 +21,7 @@ import { Container } from "@/components/ui/container";
 import { Currency } from "@/components/ui/currency";
 import { NoResults } from "@/components/ui/no-results";
 import { KAWAII_FACE_SAD, OrderStatus, ShippingStatus } from "@/constants";
-import { orderPath, STOREFRONT_ROUTES } from "@/lib/routes";
+import { accountAccessPath, orderPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import { Order } from "@/types";
 
 export const OrderHistory: React.FC<{}> = () => {
@@ -67,21 +67,38 @@ export const OrderHistory: React.FC<{}> = () => {
             Tus pedidos, siempre a la mano
           </h1>
           <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
-            Inicia sesión o crea una cuenta gratis para consultar tus pedidos.
+            Inicia sesión o crea una cuenta gratis para consultar tus pedidos,
+            guardar direcciones para futuras compras y conservar tus favoritos.
             Si compraste como invitado, abre el detalle desde tu correo para
-            guardarlo en tu cuenta.
+            guardar ese pedido en tu cuenta.
           </p>
+          <ul className="mx-auto mt-5 grid max-w-xl gap-2 text-left text-sm text-muted-foreground sm:grid-cols-2">
+            <li className="flex items-center gap-2">
+              <PackageCheck className="h-4 w-4 shrink-0 text-purple-600" />
+              Consulta y sigue tus pedidos
+            </li>
+            <li className="flex items-center gap-2">
+              <MapPinned className="h-4 w-4 shrink-0 text-purple-600" />
+              Elige direcciones guardadas
+            </li>
+          </ul>
           <div className="mt-5 flex flex-col justify-center gap-3 sm:flex-row">
             <Button asChild>
               <Link
-                href={`${STOREFRONT_ROUTES.signIn}?redirect_url=${STOREFRONT_ROUTES.myOrders}`}
+                href={accountAccessPath(
+                  STOREFRONT_ROUTES.signIn,
+                  STOREFRONT_ROUTES.myOrders,
+                )}
               >
                 <LogIn className="mr-2 h-5 w-5" /> Iniciar sesión
               </Link>
             </Button>
             <Button variant="outline" asChild>
               <Link
-                href={`${STOREFRONT_ROUTES.signUp}?redirect_url=${STOREFRONT_ROUTES.myOrders}`}
+                href={accountAccessPath(
+                  STOREFRONT_ROUTES.signUp,
+                  STOREFRONT_ROUTES.myOrders,
+                )}
               >
                 Crear cuenta
               </Link>
@@ -161,8 +178,8 @@ export const OrderHistory: React.FC<{}> = () => {
                   {order.status === OrderStatus.PAID
                     ? "Pagada"
                     : order.status === OrderStatus.CANCELLED
-                    ? "Cancelada"
-                    : "Pendiente de pago"}
+                      ? "Cancelada"
+                      : "Pendiente de pago"}
                 </span>
                 <span>
                   Estado del envío:{" "}

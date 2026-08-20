@@ -1,9 +1,8 @@
-import { SignedIn, SignedOut, currentUser } from "@clerk/nextjs";
-import { CheckCircle, User2 } from "lucide-react";
+import { SignedIn, currentUser } from "@clerk/nextjs";
+import { CheckCircle } from "lucide-react";
 import { Metadata } from "next";
-import Link from "next/link";
 
-import { Button } from "@/components/ui/button";
+import { AccountPrompt } from "@/components/account-prompt";
 import { BoldCheckoutSdk } from "@/components/bold-checkout-sdk";
 import { Container } from "@/components/ui/container";
 import { KAWAII_FACE_WELCOME } from "@/constants";
@@ -70,18 +69,12 @@ export default async function CheckoutPage({
               : "Ya casi completas tu orden..."}
             <CheckCircle className="h-8 w-8 text-green-500 sm:ml-2" />
           </h1>
-          <SignedOut>
-            <div className="flex items-center gap-3">
-              <span>Tienes una cuenta?</span>
-              <Link
-                href={`${STOREFRONT_ROUTES.signIn}?redirect_url=${STOREFRONT_ROUTES.checkout}`}
-              >
-                <Button className="bg-pink-froly">
-                  <User2 className="mr-2 h-4 w-4" /> Inicia sesión
-                </Button>
-              </Link>
-            </div>
-          </SignedOut>
+          <AccountPrompt
+            className="mt-4 w-full sm:mt-0 sm:w-auto sm:max-w-md"
+            variant="compact"
+            source="checkout"
+            redirectPath={STOREFRONT_ROUTES.checkout}
+          />
           <SignedIn>
             <span className="text-lg text-pink-froly">
               ¡Hola, {user?.firstName}! {KAWAII_FACE_WELCOME}

@@ -17,7 +17,7 @@ import { OrderHistory } from "@/components/order-history";
 import { SearchBar } from "@/components/search-bar";
 import { WishlistButton } from "@/components/wishlist-button";
 import { useScrollPosition } from "@/hooks/use-scroll-position";
-import { STOREFRONT_ROUTES } from "@/lib/routes";
+import { accountAccessPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
 interface NavbarProps {
@@ -133,7 +133,7 @@ const Navbar: React.FC<NavbarProps> = ({ season = Season.Default }) => {
             </SignedIn>
             <SignedOut>
               <Link
-                href={`${STOREFRONT_ROUTES.signIn}?redirect_url=${pathname}`}
+                href={accountAccessPath(STOREFRONT_ROUTES.signIn, pathname)}
                 className="flex items-center gap-2 rounded-md px-2 py-1 font-semibold transition-opacity hover:opacity-75"
                 aria-label="Iniciar sesión o crear una cuenta"
               >

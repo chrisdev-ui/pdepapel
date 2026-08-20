@@ -174,6 +174,18 @@ describe("POST /api/[storeId]/checkout", () => {
     expect(mocks.orderCreate).not.toHaveBeenCalled();
   });
 
+  it("does not let a guest save a delivery address", async () => {
+    const response = await POST(createCheckoutRequest({ saveAddress: true }), {
+      params: { storeId },
+    });
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "Autenticación requerida",
+    });
+    expect(mocks.orderCreate).not.toHaveBeenCalled();
+  });
+
   it("creates a pending order using server prices and returns Bold checkout data", async () => {
     const response = await POST(createCheckoutRequest(), {
       params: { storeId },

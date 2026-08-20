@@ -8,7 +8,7 @@ import {
 } from "@/lib/order-account-claims";
 import prismadb from "@/lib/prismadb";
 import { auth, clerkClient } from "@clerk/nextjs";
-import { OrderType } from "@prisma/client";
+import { OrderAccountClaimSource, OrderType } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 const getCorsHeaders = (request: Request) =>
@@ -57,7 +57,12 @@ export async function POST(
     const { token, tokenHash, expiresAt } = createOrderAccountClaimToken();
 
     await prismadb.orderAccountClaim.upsert({
-      where: { orderId: order.id },
+      where: {
+        orderId_source: {
+          orderId: order.id,
+          source: OrderAccountClaimSource.DEVICE,
+        },
+      },
       update: {
         storeId: params.storeId,
         tokenHash,
@@ -67,6 +72,7 @@ export async function POST(
       create: {
         storeId: params.storeId,
         orderId: order.id,
+        source: OrderAccountClaimSource.DEVICE,
         tokenHash,
         expiresAt,
       },

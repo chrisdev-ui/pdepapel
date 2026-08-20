@@ -1,7 +1,9 @@
 "use client";
 
+import { SignedOut } from "@clerk/nextjs";
 import { Star } from "lucide-react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { Container } from "@/components/ui/container";
@@ -9,6 +11,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { KAWAII_FACE_HAPPY, KAWAII_FACE_SAD } from "@/constants";
 import { useWishlist } from "@/hooks/use-wishlist";
+import { accountAccessPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import { WishlistColumn, columns } from "./columns";
 
 const Newsletter = dynamic(() => import("@/components/newsletter"), {
@@ -51,6 +54,22 @@ export function Wishlist() {
           Mi Lista de Deseos
           <Star className="ml-2 h-8 w-8" />
         </h1>
+        <SignedOut>
+          <aside className="mt-6 rounded-xl border border-purple-100 bg-gradient-to-r from-purple-50 to-pink-50 p-4 text-sm text-muted-foreground">
+            <p className="font-semibold text-foreground">
+              Guarda tus favoritos en todos tus dispositivos
+            </p>
+            <p className="mt-1">
+              Crea una cuenta o inicia sesión para conservar esta lista cuando cambies de celular o computador.
+            </p>
+            <Link
+              href={accountAccessPath(STOREFRONT_ROUTES.signUp, STOREFRONT_ROUTES.wishlist)}
+              className="mt-3 inline-block font-semibold text-purple-700 underline underline-offset-4"
+            >
+              Crear cuenta gratis
+            </Link>
+          </aside>
+        </SignedOut>
         <div className="my-16 w-full">
           {items?.length === 0 && (
             <p className="text-center text-neutral-500">

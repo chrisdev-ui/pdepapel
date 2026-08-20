@@ -8,6 +8,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { WelcomeBenefitCard } from "@/components/welcome-benefit-card";
 import { PaymentMethod } from "@/constants";
 import { cn } from "@/lib/utils";
 import { Edit, Loader2, Tag } from "lucide-react";
@@ -23,6 +24,7 @@ interface ReviewStepProps {
   validateCouponStatus: "idle" | "pending" | "success" | "error";
   subtotal: number;
   onEditStep: (step: number) => void;
+  onApplyWelcomeBenefit: (code: string) => void;
 }
 
 export const ReviewStep = ({
@@ -34,6 +36,7 @@ export const ReviewStep = ({
   validateCouponStatus,
   subtotal,
   onEditStep,
+  onApplyWelcomeBenefit,
 }: ReviewStepProps) => {
   const { getValues } = form;
   const values = getValues();
@@ -156,6 +159,10 @@ export const ReviewStep = ({
 
       {/* Coupon Form */}
       <div className="space-y-4">
+        <WelcomeBenefitCard
+          onApply={onApplyWelcomeBenefit}
+          isApplying={validateCouponStatus === "pending"}
+        />
         <FormField
           control={form.control}
           name="couponCode"

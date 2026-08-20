@@ -27,6 +27,7 @@ export async function POST(
       maxUses,
       minOrderValue,
       isActive,
+      isWelcomeBenefit,
     } = body;
     const normalizedCode = normalizeCouponCode(code ?? "");
 
@@ -69,6 +70,24 @@ export async function POST(
       throw ErrorFactory.Conflict("Ya existe un cupón con este código");
     }
 
+    if (isWelcomeBenefit && isActive !== false) {
+      const activeWelcomeBenefit = await prismadb.coupon.findFirst({
+        where: {
+          storeId: params.storeId,
+          isWelcomeBenefit: true,
+          isActive: true,
+          endDate: { gte: new Date() },
+        },
+        select: { code: true },
+      });
+
+      if (activeWelcomeBenefit) {
+        throw ErrorFactory.Conflict(
+          `El beneficio de bienvenida ${activeWelcomeBenefit.code} ya está activo. Desactívalo antes de crear otro.`,
+        );
+      }
+    }
+
     const coupon = await prismadb.coupon.create({
       data: {
         storeId: params.storeId,
@@ -80,6 +99,7 @@ export async function POST(
         maxUses: maxUses || 99,
         minOrderValue: minOrderValue || 0,
         isActive,
+        isWelcomeBenefit: Boolean(isWelcomeBenefit),
       },
       select: {
         id: true,
@@ -92,6 +112,7 @@ export async function POST(
         usedCount: true,
         isActive: true,
         minOrderValue: true,
+        isWelcomeBenefit: true,
       },
     });
 
@@ -134,6 +155,7 @@ export async function GET(
         usedCount: true,
         isActive: true,
         minOrderValue: true,
+        isWelcomeBenefit: true,
       },
       orderBy: {
         createdAt: "desc",

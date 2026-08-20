@@ -79,6 +79,16 @@ export const columns: ColumnDef<CouponColumn>[] = [
     ),
   },
   {
+    accessorKey: "isWelcomeBenefit",
+    header: "Bienvenida",
+    cell: ({ row }) =>
+      row.original.isWelcomeBenefit ? (
+        <Badge variant="secondary">Solo cuentas nuevas</Badge>
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      ),
+  },
+  {
     accessorKey: "isActive",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title={columnNames.isActive} />

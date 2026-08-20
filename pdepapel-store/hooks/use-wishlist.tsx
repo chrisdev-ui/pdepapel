@@ -12,17 +12,26 @@ export interface WishlistProduct extends Product {
 
 interface WishlistStore {
   items: WishlistProduct[];
+  guestItems: WishlistProduct[];
+  accountUserId: string | null;
+  isHydrated: boolean;
   addItem: (item: Product) => void;
   removeItem: (id: string) => void;
   moveToCart: (id: string) => void;
   moveToCartMultiple: (ids: string[]) => void;
   clearWishlist: () => void;
+  setAccountItems: (items: WishlistProduct[], userId: string) => void;
+  activateGuestWishlist: () => void;
+  setHydrated: () => void;
 }
 
 export const useWishlist = create(
   persist<WishlistStore>(
     (set, get) => ({
       items: [],
+      guestItems: [],
+      accountUserId: null,
+      isHydrated: false,
       addItem: (item: Product) => {
         const currentItems = get().items;
         const existingItem = currentItems.find((i) => i.id === item.id);
@@ -38,7 +47,12 @@ export const useWishlist = create(
           ...item,
           addedOn: new Date(),
         };
-        set({ items: [...currentItems, newItem] });
+        const items = [...currentItems, newItem];
+        set(
+          get().accountUserId
+            ? { items }
+            : { items, guestItems: items },
+        );
         toast({
           description: "Producto agregado a la lista de deseos.",
           variant: "success",
@@ -46,7 +60,12 @@ export const useWishlist = create(
         });
       },
       removeItem: (id: string) => {
-        set({ items: [...get().items.filter((i) => i.id !== id)] });
+        const items = get().items.filter((item) => item.id !== id);
+        set(
+          get().accountUserId
+            ? { items }
+            : { items, guestItems: items },
+        );
         toast({
           description: "Producto eliminado de la lista de deseos.",
           variant: "info",
@@ -83,11 +102,23 @@ export const useWishlist = create(
           get().moveToCart(id);
         });
       },
-      clearWishlist: () => set({ items: [] }),
+      clearWishlist: () =>
+        set(get().accountUserId ? { items: [] } : { items: [], guestItems: [] }),
+      setAccountItems: (items, userId) =>
+        set({ items, accountUserId: userId }),
+      activateGuestWishlist: () =>
+        set({ items: get().guestItems, accountUserId: null }),
+      setHydrated: () =>
+        set({ items: get().guestItems, accountUserId: null, isHydrated: true }),
     }),
     {
       name: "wishlist-storage",
       storage: createJSONStorage(() => localStorage),
+      partialize: (state) =>
+        ({ guestItems: state.guestItems }) as unknown as WishlistStore,
+      onRehydrateStorage: () => (state) => {
+        state?.setHydrated();
+      },
     },
   ),
 );

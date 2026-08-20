@@ -19,6 +19,10 @@ import {
 import { calculateOrderFinancials } from "@/lib/financial";
 import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
 import { invalidateStoreProductsCache } from "@/lib/cache";
+import {
+  markWelcomeBenefitRedeemed,
+  releaseWelcomeBenefitReservation,
+} from "@/lib/customer-benefits";
 import { auth, clerkClient } from "@clerk/nextjs";
 import {
   DiscountType,
@@ -702,6 +706,14 @@ export async function PATCH(
               usedCount: { increment: 1 },
             },
           });
+
+          if (updated.coupon.isWelcomeBenefit) {
+            await markWelcomeBenefitRedeemed(tx, {
+              couponId: updated.coupon.id,
+              userId: updated.userId,
+              orderId: updated.id,
+            });
+          }
         }
 
         // BI Platform: Calculate and persist financial metrics when manually paid
@@ -753,6 +765,14 @@ export async function PATCH(
               },
             },
           });
+
+          if (updated.coupon.isWelcomeBenefit) {
+            await releaseWelcomeBenefitReservation(tx, {
+              couponId: updated.coupon.id,
+              userId: updated.userId,
+              orderId: updated.id,
+            });
+          }
         }
       }
 
@@ -919,6 +939,14 @@ export async function DELETE(
             couponDiscount: 0,
           },
         });
+
+        if (order.coupon.isWelcomeBenefit) {
+          await releaseWelcomeBenefitReservation(tx, {
+            couponId: order.coupon.id,
+            userId: order.userId,
+            orderId: order.id,
+          });
+        }
       }
 
       // Delete the order

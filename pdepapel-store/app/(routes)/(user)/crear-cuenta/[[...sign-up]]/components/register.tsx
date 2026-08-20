@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogOverlay, DialogPortal } from "@/components/ui/dialog";
-import { STOREFRONT_ROUTES } from "@/lib/routes";
+import { getSafeStorefrontRedirectPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import { SignUp, useAuth } from "@clerk/nextjs";
 
 export function Register() {
@@ -18,17 +18,7 @@ export function Register() {
   const { isLoaded, isSignedIn } = useAuth();
 
   const redirectUrl = useMemo(() => {
-    const rawUrl = searchParams.get("redirect_url");
-    if (!rawUrl) return STOREFRONT_ROUTES.home;
-    if (
-      rawUrl.startsWith(STOREFRONT_ROUTES.signIn) ||
-      rawUrl.startsWith(STOREFRONT_ROUTES.signUp) ||
-      rawUrl.startsWith("/sign-in") ||
-      rawUrl.startsWith("/sign-up")
-    ) {
-      return STOREFRONT_ROUTES.home;
-    }
-    return rawUrl;
+    return getSafeStorefrontRedirectPath(searchParams.get("redirect_url"));
   }, [searchParams]);
 
   useEffect(() => {
@@ -73,8 +63,13 @@ export function Register() {
               afterSignUpUrl={redirectUrl}
               afterSignInUrl={redirectUrl}
               appearance={{
+                layout: {
+                  socialButtonsVariant: "blockButton",
+                  socialButtonsPlacement: "top",
+                },
                 elements: {
-                  headerSubtitle: "hidden",
+                  headerSubtitle:
+                    "text-center text-sm font-medium text-muted-foreground",
                   logoBox: "flex items-center mx-auto w-32",
                   headerTitle:
                     "font-serif text-2xl font-bold text-blue-yankees",
@@ -82,6 +77,12 @@ export function Register() {
                   formFieldLabel: "text-blue-yankees",
                   formButtonPrimary:
                     "bg-blue-yankees text-white font-semibold hover:opacity-75",
+                  socialButtons:
+                    "mb-5 flex flex-col gap-3 [&_button]:w-full",
+                  socialButtonsBlockButton:
+                    "min-h-12 border-2 border-purple-200 bg-white font-semibold text-blue-yankees shadow-sm transition hover:border-purple-400 hover:bg-purple-50",
+                  socialButtonsBlockButtonText: "font-semibold",
+                  socialButtonsProviderIcon: "h-5 w-5",
                 },
               }}
             />

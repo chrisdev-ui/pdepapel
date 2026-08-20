@@ -6,12 +6,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  SignOutButton,
-  SignedIn,
-  SignedOut,
-  UserButton,
-} from "@clerk/nextjs";
+import { SignOutButton, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import {
   Contact,
   Heart,
@@ -26,7 +21,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { STOREFRONT_ROUTES } from "@/lib/routes";
+import { accountAccessPath, STOREFRONT_ROUTES } from "@/lib/routes";
 
 export const HamburgerMenu: React.FC = () => {
   const pathname = usePathname();
@@ -162,7 +157,7 @@ export const HamburgerMenu: React.FC = () => {
           >
             <Link
               className="flex w-full items-center gap-6"
-              href={`${STOREFRONT_ROUTES.signIn}?redirect_url=${pathname}`}
+              href={accountAccessPath(STOREFRONT_ROUTES.signIn, pathname)}
               onClick={() => setOpen(false)}
             >
               <LogIn className="h-6 w-6" />

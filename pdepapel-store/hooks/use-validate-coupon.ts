@@ -1,5 +1,6 @@
 import { validateCoupon } from "@/actions/validate-coupon";
 import { Coupon } from "@/types";
+import { useAuth } from "@clerk/nextjs";
 import { useMutation } from "@tanstack/react-query";
 
 type CouponRequest = {
@@ -29,8 +30,14 @@ export default function useValidateCoupon({
   onSettled,
   onSuccess,
 }: UseValidateCouponProps = {}) {
+  const { getToken } = useAuth();
+
   const mutationFn = async (formData: CouponRequest) => {
-    return await validateCoupon(formData.code, formData.subtotal);
+    return await validateCoupon(
+      formData.code,
+      formData.subtotal,
+      await getToken(),
+    );
   };
 
   return useMutation({

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
+import { AccountPrompt } from "@/components/account-prompt";
 import { CldImage } from "@/components/ui/CldImage";
 import { Currency } from "@/components/ui/currency";
 import { NoResults } from "@/components/ui/no-results";
@@ -134,11 +135,18 @@ export const NavbarCartContent: React.FC<NavbarCartContentProps> = ({
           </Button>
         )}
       </div>
-      <SheetFooter className="grid w-full grid-cols-1 grid-rows-2 gap-6 border-t border-blue-purple p-6 sm:space-x-0">
+      <SheetFooter className="flex w-full flex-col gap-4 border-t border-blue-purple p-6 sm:space-x-0">
         <div className="flex w-full items-center justify-between text-2xl">
           <span>Subtotal</span>
           <Currency value={total} />
         </div>
+        {cart.items.length > 0 && (
+          <AccountPrompt
+            variant="compact"
+            source="cart_drawer"
+            redirectPath={STOREFRONT_ROUTES.cart}
+          />
+        )}
         <div className="flex w-full flex-col gap-3 lg:flex-row">
           <Button
             className="group relative w-full overflow-hidden bg-blue-purple font-sans text-base font-bold uppercase text-white hover:bg-blue-purple lg:w-1/2"

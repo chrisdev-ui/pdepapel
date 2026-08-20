@@ -7,15 +7,11 @@ import {
   ArrowLeft,
   AtSign,
   Eraser,
-  Facebook,
-  Instagram,
   Loader2,
   MapPinned,
   Phone,
   Store as StoreIcon,
   Trash,
-  Twitter,
-  Youtube,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import z from "zod";
@@ -44,6 +40,7 @@ import { ImageUpload } from "@/components/ui/image-upload";
 import { Input } from "@/components/ui/input";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { Separator } from "@/components/ui/separator";
+import { SocialNetworkIcons } from "@/components/ui/social-network-icons";
 import { useFormPersist } from "@/hooks/use-form-persist";
 import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useOrigin } from "@/hooks/use-origin";
@@ -354,7 +351,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="flex items-center gap-2">
-                        <Instagram className="h-3.5 w-3.5" />
+                        <SocialNetworkIcons.instagram className="h-3.5 w-3.5" />
                         Instagram
                       </FormLabel>
                       <FormControl>
@@ -375,7 +372,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="flex items-center gap-2">
-                        <Facebook className="h-3.5 w-3.5" />
+                        <SocialNetworkIcons.facebook className="h-3.5 w-3.5" />
                         Facebook
                       </FormLabel>
                       <FormControl>
@@ -417,7 +414,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="flex items-center gap-2">
-                        <Youtube className="h-3.5 w-3.5" />
+                        <SocialNetworkIcons.youtube className="h-3.5 w-3.5" />
                         Youtube
                       </FormLabel>
                       <FormControl>
@@ -438,7 +435,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="flex items-center gap-2">
-                        <Twitter className="h-3.5 w-3.5" />
+                        <SocialNetworkIcons.twitter className="h-3.5 w-3.5" />
                         Twitter
                       </FormLabel>
                       <FormControl>

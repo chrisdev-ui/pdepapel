@@ -1,8 +1,6 @@
 import {
   BookHeartIcon,
-  Facebook,
   HeartHandshake,
-  Instagram,
   Palette,
   Sparkles,
 } from "lucide-react";
@@ -257,12 +255,12 @@ export default function AboutPage() {
             <div className="mt-4 flex flex-wrap justify-center gap-6">
               <SocialButton
                 href="https://instagram.com/papeleria.pdepapel?igshid=OGQ5ZDc2ODk2ZA=="
-                icon={<Instagram className="h-6 w-6" />}
+                icon={<Icons.instagram className="h-6 w-6" />}
                 label="Instagram"
               />
               <SocialButton
                 href="https://instagram.com/papeleria.pdepapel?igshid=OGQ5ZDc2ODk2ZA=="
-                icon={<Facebook className="h-6 w-6" />}
+                icon={<Icons.facebook className="h-6 w-6" />}
                 label="Facebook"
               />
               <SocialButton

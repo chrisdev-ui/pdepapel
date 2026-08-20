@@ -7,6 +7,10 @@ import { invalidateStoreProductsCache } from "@/lib/cache";
 import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
 import { calculateOrderFinancials } from "@/lib/financial";
 import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
+import {
+  markWelcomeBenefitRedeemed,
+  releaseWelcomeBenefitReservation,
+} from "@/lib/customer-benefits";
 import crypto from "crypto";
 import { NextResponse } from "next/server";
 
@@ -219,6 +223,14 @@ async function updateOrderData(order: any, transaction: any) {
             where: { id: order.coupon.id },
             data: { usedCount: { increment: 1 } },
           });
+
+          if (order.coupon.isWelcomeBenefit) {
+            await markWelcomeBenefitRedeemed(tx, {
+              couponId: order.coupon.id,
+              userId: order.userId,
+              orderId: order.id,
+            });
+          }
         }
 
         // Log any stock update failures but don't throw errors
@@ -302,6 +314,14 @@ async function updateOrderData(order: any, transaction: any) {
               coupon: { disconnect: true },
               couponDiscount: 0,
             },
+          });
+        }
+
+        if (order.coupon?.isWelcomeBenefit) {
+          await releaseWelcomeBenefitReservation(tx, {
+            couponId: order.coupon.id,
+            userId: order.userId,
+            orderId: order.id,
           });
         }
 

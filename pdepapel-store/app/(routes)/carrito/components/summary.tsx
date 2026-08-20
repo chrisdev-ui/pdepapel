@@ -1,5 +1,6 @@
 "use client";
 
+import { AccountPrompt } from "@/components/account-prompt";
 import { Button } from "@/components/ui/button";
 import { Currency } from "@/components/ui/currency";
 import { useCart } from "@/hooks/use-cart";
@@ -36,6 +37,11 @@ export const Summary: React.FC<SummaryProps> = ({ disabled }) => {
           <Currency value={total} />
         </div>
       </div>
+      <AccountPrompt
+        className="mt-6"
+        source="cart_page"
+        redirectPath={STOREFRONT_ROUTES.cart}
+      />
       <Button
         onClick={goToCheckout}
         disabled={items.length === 0 || disabled}
@@ -55,10 +61,12 @@ const SavingsRow = ({ formattedSavings }: { formattedSavings: number }) => {
 
   return (
     <div className="flex items-center justify-between border-t border-gray-200 pt-4">
-      <div className="font-quicksand text-base font-semibold text-gray-600">Ahorros en ofertas</div>
+      <div className="font-quicksand text-base font-semibold text-gray-600">
+        Ahorros en ofertas
+      </div>
       <Currency
         value={formattedSavings}
-        className="font-quicksand font-bold text-lg text-success"
+        className="font-quicksand text-lg font-bold text-success"
       />
     </div>
   );

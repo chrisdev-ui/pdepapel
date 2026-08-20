@@ -66,6 +66,7 @@ const formSchema = z.object({
   maxUses: z.coerce.number().optional(),
   minOrderValue: z.coerce.number().optional().default(0),
   isActive: z.coerce.boolean().default(true).optional(),
+  isWelcomeBenefit: z.coerce.boolean().default(false).optional(),
 });
 
 type CouponFormValues = z.infer<typeof formSchema>;
@@ -116,6 +117,7 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData }) => {
             maxUses: undefined,
             minOrderValue: undefined,
             isActive: true,
+            isWelcomeBenefit: false,
           },
     [initialData],
   );
@@ -377,6 +379,27 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData }) => {
                     <FormDescription>
                       Te permite activar o desactivar el cupón al momento de
                       crearlo o editarlo.
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="isWelcomeBenefit"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border border-purple-200 bg-purple-50/50 p-4">
+                  <div className="space-y-0.5">
+                    <FormLabel>Beneficio de bienvenida</FormLabel>
+                    <FormDescription>
+                      Solo cuentas con correo verificado pueden usarlo una vez.
+                      Mantén un único beneficio activo a la vez.
                     </FormDescription>
                   </div>
                   <FormControl>

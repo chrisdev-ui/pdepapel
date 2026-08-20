@@ -44,18 +44,35 @@ export const OrderAccountClaimCard: React.FC<OrderAccountClaimCardProps> = ({
   const [isPreparing, setIsPreparing] = useState(false);
   const [isClaiming, setIsClaiming] = useState(false);
   const [isClaimed, setIsClaimed] = useState(false);
+  const [hasEmailClaim, setHasEmailClaim] = useState(false);
 
   const isGuestOwner = Boolean(
     guestId && orderGuestId && guestId === orderGuestId && !orderUserId,
   );
+  const canClaimOrder = Boolean(!orderUserId && (isGuestOwner || hasEmailClaim));
 
   useEffect(() => {
-    if (!isGuestOwner || isClaimed) return;
+    const storageKey = getOrderAccountClaimStorageKey(orderId);
+    const hash = new URLSearchParams(window.location.hash.slice(1));
+    const emailClaimToken = hash.get("guardar-pedido");
+
+    if (emailClaimToken && emailClaimToken.length >= 32) {
+      window.sessionStorage.setItem(storageKey, emailClaimToken);
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      setHasEmailClaim(true);
+      return;
+    }
+
+    setHasEmailClaim(Boolean(window.sessionStorage.getItem(storageKey)));
+  }, [orderId]);
+
+  useEffect(() => {
+    if (!canClaimOrder || isClaimed) return;
 
     trackCustomerEvent("order_account_prompt_viewed", {
       source: "order_detail",
     });
-  }, [isClaimed, isGuestOwner]);
+  }, [canClaimOrder, isClaimed]);
 
   const claimPendingOrder = useCallback(async () => {
     const storageKey = getOrderAccountClaimStorageKey(orderId);
@@ -81,7 +98,9 @@ export const OrderAccountClaimCard: React.FC<OrderAccountClaimCardProps> = ({
       }
 
       setIsClaimed(true);
-      trackCustomerEvent("order_account_claimed", { source: "order_detail" });
+      trackCustomerEvent("order_account_claimed", {
+        source: hasEmailClaim ? "order_email" : "order_detail",
+      });
       toast({
         title: "Pedido guardado en tu cuenta",
         description: "Ahora puedes consultarlo desde Mis pedidos cuando quieras.",
@@ -100,13 +119,13 @@ export const OrderAccountClaimCard: React.FC<OrderAccountClaimCardProps> = ({
     } finally {
       setIsClaiming(false);
     }
-  }, [getToken, orderId, router, toast, userId]);
+  }, [getToken, hasEmailClaim, orderId, router, toast, userId]);
 
   useEffect(() => {
-    if (!isLoaded || !userId || !isGuestOwner || isClaimed) return;
+    if (!isLoaded || !userId || !canClaimOrder || isClaimed) return;
 
     void claimPendingOrder();
-  }, [claimPendingOrder, isClaimed, isGuestOwner, isLoaded, userId]);
+  }, [canClaimOrder, claimPendingOrder, isClaimed, isLoaded, userId]);
 
   const prepareAndRedirect = useCallback(
     async (destination: string, eventName: string) => {
@@ -165,7 +184,7 @@ export const OrderAccountClaimCard: React.FC<OrderAccountClaimCardProps> = ({
     }
   }, [claimPendingOrder, guestId, orderId, toast]);
 
-  if (!isLoaded || !isGuestOwner || isClaimed) return null;
+  if (!isLoaded || !canClaimOrder || isClaimed) return null;
 
   if (userId) {
     return (
@@ -180,15 +199,23 @@ export const OrderAccountClaimCard: React.FC<OrderAccountClaimCardProps> = ({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Button
-            type="button"
-            onClick={prepareAndClaim}
-            disabled={isPreparing || isClaiming}
-          >
-            {isPreparing || isClaiming
-              ? "Guardando pedido..."
-              : "Guardar este pedido"}
-          </Button>
+          {hasEmailClaim ? (
+            <p className="text-sm text-muted-foreground">
+              {isClaiming
+                ? "Estamos guardando tu pedido..."
+                : "Confirma que iniciaste sesión con el mismo correo usado en la compra."}
+            </p>
+          ) : (
+            <Button
+              type="button"
+              onClick={prepareAndClaim}
+              disabled={isPreparing || isClaiming}
+            >
+              {isPreparing || isClaiming
+                ? "Guardando pedido..."
+                : "Guardar este pedido"}
+            </Button>
+          )}
         </CardContent>
       </Card>
     );

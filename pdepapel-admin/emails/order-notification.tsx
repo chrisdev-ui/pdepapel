@@ -28,6 +28,7 @@ interface OrderNotificationProps {
   thanksParagraph?: string;
   city?: string;
   notificationSource?: string;
+  accountClaimLink?: string | null;
 }
 
 export const OrderNotification = ({
@@ -46,6 +47,7 @@ export const OrderNotification = ({
   thanksParagraph = "¡Gracias por tu compra!",
   city = "Bogotá",
   notificationSource,
+  accountClaimLink,
 }: OrderNotificationProps) => {
   const getStatusMessage = () => {
     switch (status) {
@@ -255,6 +257,21 @@ export const OrderNotification = ({
               </Section>
             )}
 
+            {accountClaimLink && !isAdminEmail && (
+              <Section style={accountClaimBox}>
+                <Heading style={accountClaimTitle}>
+                  Guarda tu pedido en una cuenta gratis
+                </Heading>
+                <Text style={paragraph}>
+                  Inicia sesión o crea tu cuenta con este mismo correo para
+                  consultar este pedido desde cualquier dispositivo.
+                </Text>
+                <Link href={accountClaimLink} style={accountClaimButton}>
+                  Guardar mi pedido
+                </Link>
+              </Section>
+            )}
+
             <Text style={dateText}>
               <strong>📅 Fecha:</strong>{" "}
               {new Date().toLocaleDateString("es-ES", {
@@ -322,6 +339,33 @@ const adminBadge = {
   fontSize: "14px",
   fontWeight: "bold",
   textAlign: "center" as const,
+};
+
+const accountClaimBox = {
+  marginBottom: "25px",
+  padding: "20px",
+  backgroundColor: "#faf5ff",
+  border: "1px solid #e9d5ff",
+  borderRadius: "10px",
+  textAlign: "center" as const,
+};
+
+const accountClaimTitle = {
+  margin: "0 0 8px",
+  color: "#581c87",
+  fontSize: "18px",
+  lineHeight: "1.35",
+};
+
+const accountClaimButton = {
+  display: "inline-block",
+  marginTop: "8px",
+  padding: "12px 18px",
+  backgroundColor: "#581c87",
+  borderRadius: "8px",
+  color: "#ffffff",
+  fontWeight: "bold",
+  textDecoration: "none",
 };
 
 const statusBanner = {

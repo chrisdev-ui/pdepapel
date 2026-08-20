@@ -1,4 +1,7 @@
+import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
+import { checkIfStoreOwner } from "@/lib/utils";
+import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
 export async function GET(
@@ -6,8 +9,15 @@ export async function GET(
   { params }: { params: { storeId: string; userId: string } },
 ) {
   try {
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    if (!(await checkIfStoreOwner(userId, params.storeId))) {
+      throw ErrorFactory.Unauthorized();
+    }
+
     if (!params.userId) {
-      return new NextResponse("User ID is required", { status: 400 });
+      throw ErrorFactory.InvalidRequest("Se requiere el cliente");
     }
 
     // If userId looks like an email, assume it's a guest or manual email lookup
@@ -51,7 +61,6 @@ export async function GET(
 
     return NextResponse.json(lastOrder || {});
   } catch (error) {
-    console.log("[LAST_ORDER_GET]", error);
-    return new NextResponse("Internal error", { status: 500 });
+    return handleErrorResponse(error, "LAST_ORDER_GET");
   }
 }

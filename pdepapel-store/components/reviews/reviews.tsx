@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { KAWAII_FACE_SAD } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { env } from "@/lib/env.mjs";
-import { STOREFRONT_ROUTES } from "@/lib/routes";
+import { accountAccessPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import { Review } from "@/types";
 import axios from "axios";
 
@@ -38,7 +38,9 @@ export const Reviews: React.FC<ReviewsProps> = ({ title, reviews = [] }) => {
       setIsLoading(true);
       const sessionToken = await getToken();
       if (!sessionToken) {
-        throw new Error("No se encontró una sesión válida para publicar la reseña.");
+        throw new Error(
+          "No se encontró una sesión válida para publicar la reseña.",
+        );
       }
 
       const config = {
@@ -130,7 +132,7 @@ export const Reviews: React.FC<ReviewsProps> = ({ title, reviews = [] }) => {
           </div>
         </SignedIn>
         <SignedOut>
-          <Link href={`${STOREFRONT_ROUTES.signIn}?redirect_url=${pathname}`}>
+          <Link href={accountAccessPath(STOREFRONT_ROUTES.signIn, pathname)}>
             <Button className="my-4">
               Inicia sesión para dejar un comentario
             </Button>

@@ -31,6 +31,11 @@ import { auth, clerkClient } from "@clerk/nextjs";
 import { sendOrderEmail } from "@/lib/email";
 import { BATCH_SIZE } from "@/constants";
 import { ENVIOCLICK_DEFAULTS } from "@/constants/shipping";
+import {
+  assertWelcomeBenefitEligibility,
+  reserveWelcomeBenefit,
+} from "@/lib/customer-benefits";
+import { saveCustomerAddressFromCheckout } from "@/lib/customer-addresses";
 
 const getCorsHeaders = (request: Request) => ({
   ...createCorsHeaders(request, { methods: "POST, OPTIONS" }),
@@ -114,6 +119,9 @@ export async function POST(
       documentId, // ⭐ Cédula/NIT (opcional)
       customOrderToken, // ⭐ Token para convertir cotización
       analyticsClientId,
+      saveAddress,
+      savedAddressId,
+      addressLabel,
     } = await req.json();
     const normalizedAnalyticsClientId = isStoreOwner
       ? null
@@ -189,6 +197,35 @@ export async function POST(
       } else if (userId !== userLogged) {
         throw ErrorFactory.Unauthorized();
       }
+    }
+
+    const shouldSaveCustomerAddress = saveAddress === true;
+    const customerAddressUserId =
+      userLogged && authenticatedUserId === userLogged && !isStoreOwner
+        ? userLogged
+        : null;
+    const normalizedSavedAddressId =
+      typeof savedAddressId === "string" ? savedAddressId.trim() || null : null;
+    const normalizedAddressLabel =
+      typeof addressLabel === "string" ? addressLabel.trim() : null;
+
+    if (shouldSaveCustomerAddress && !customerAddressUserId) {
+      throw ErrorFactory.Unauthenticated();
+    }
+
+    if (
+      shouldSaveCustomerAddress &&
+      (customOrderToken ||
+        (savedAddressId !== undefined &&
+          (typeof savedAddressId !== "string" ||
+            savedAddressId.length > 191)) ||
+        (normalizedAddressLabel !== null && normalizedAddressLabel.length > 60))
+    ) {
+      throw ErrorFactory.InvalidRequest(
+        customOrderToken
+          ? "Las cotizaciones no permiten guardar direcciones desde este enlace"
+          : "La dirección guardada no es válida",
+      );
     }
 
     const lastOrderTimestamp = await getLastOrderTimestamp(
@@ -410,7 +447,7 @@ export async function POST(
     );
 
     const errors: string[] = [];
-    const orderItemsData = [];
+    const orderItemsData: Prisma.OrderItemCreateWithoutOrderInput[] = [];
 
     for (const { productId, quantity = 1 } of orderItems) {
       const product = productMap.get(productId);
@@ -486,6 +523,20 @@ export async function POST(
       if (subtotal < Number(coupon.minOrderValue ?? 0)) {
         throw ErrorFactory.Conflict(
           `El pedido debe ser mayor a ${currencyFormatter(coupon.minOrderValue ?? 0)} para usar este cupón`,
+        );
+      }
+
+      await assertWelcomeBenefitEligibility({
+        coupon,
+        storeId: params.storeId,
+        userId: authenticatedUserId,
+        checkoutEmail: email,
+        database: prismadb,
+      });
+
+      if (coupon.isWelcomeBenefit && customOrderToken) {
+        throw ErrorFactory.Conflict(
+          "El beneficio de bienvenida solo aplica a una compra nueva desde tu cuenta",
         );
       }
     }
@@ -619,52 +670,108 @@ export async function POST(
       );
     } else {
       // 🆕 Create NEW Order (Standard Flow)
-      order = (await prismadb.order.create({
-        data: {
-          storeId: params.storeId,
-          userId: authenticatedUserId,
-          guestId: !authenticatedUserId ? guestId : null,
-          orderNumber: orderNumber,
-          status: OrderStatus.PENDING,
-          fullName,
-          phone,
-          email,
-          documentId: documentId || null,
-          address,
-          address2: address2 || null,
-          addressReference: addressReference || null,
-          city,
-          department,
-          daneCode,
-          neighborhood: neighborhood || null,
-          company: company || null,
-          subtotal: totals.subtotal,
-          total: totals.total,
-          couponDiscount: totals.couponDiscount,
-          couponId: coupon?.id,
-          ...(normalizedAnalyticsClientId
-            ? { analyticsClientId: normalizedAnalyticsClientId }
-            : {}),
-          orderItems: { create: orderItemsData },
-          shipping: {
-            create: buildShippingPayload(params.storeId, selectedQuote),
-          },
-          payment: {
-            create: {
-              storeId: params.storeId,
-              method: payment.method,
+      const createNewOrder = (
+        database: Pick<Prisma.TransactionClient, "order" | "customerAddress">,
+      ) =>
+        database.order.create({
+          data: {
+            storeId: params.storeId,
+            userId: authenticatedUserId,
+            guestId: !authenticatedUserId ? guestId : null,
+            orderNumber: orderNumber,
+            status: OrderStatus.PENDING,
+            fullName,
+            phone,
+            email,
+            documentId: documentId || null,
+            address,
+            address2: address2 || null,
+            addressReference: addressReference || null,
+            city,
+            department,
+            daneCode,
+            neighborhood: neighborhood || null,
+            company: company || null,
+            subtotal: totals.subtotal,
+            total: totals.total,
+            couponDiscount: totals.couponDiscount,
+            couponId: coupon?.id,
+            ...(normalizedAnalyticsClientId
+              ? { analyticsClientId: normalizedAnalyticsClientId }
+              : {}),
+            orderItems: { create: orderItemsData },
+            shipping: {
+              create: buildShippingPayload(params.storeId, selectedQuote),
+            },
+            payment: {
+              create: {
+                storeId: params.storeId,
+                method: payment.method,
+              },
             },
           },
-        },
-        include: {
-          orderItems: {
-            include: {
-              product: true,
+          include: {
+            orderItems: {
+              include: {
+                product: true,
+              },
             },
+            coupon: true,
           },
-          coupon: true,
-        },
-      })) as unknown as CheckoutOrder;
+        });
+
+      const createStandardOrder = async (
+        database: Pick<Prisma.TransactionClient, "order" | "customerAddress">,
+      ) => {
+        const createdOrder = await createNewOrder(database);
+
+        if (shouldSaveCustomerAddress && customerAddressUserId) {
+          await saveCustomerAddressFromCheckout(database, {
+            storeId: params.storeId,
+            userId: customerAddressUserId,
+            savedAddressId: normalizedSavedAddressId,
+            label: normalizedAddressLabel,
+            fullName,
+            phone,
+            documentId,
+            address,
+            address2,
+            city,
+            department,
+            daneCode,
+            neighborhood,
+            addressReference,
+            company,
+          });
+        }
+
+        return createdOrder;
+      };
+
+      if (coupon?.isWelcomeBenefit) {
+        if (!authenticatedUserId) {
+          throw ErrorFactory.Unauthenticated();
+        }
+
+        order = (await prismadb.$transaction(async (tx) => {
+          const createdOrder = await createStandardOrder(tx);
+
+          await reserveWelcomeBenefit(tx, {
+            couponId: coupon.id,
+            storeId: params.storeId,
+            userId: authenticatedUserId,
+            orderId: createdOrder.id,
+          });
+
+          return createdOrder;
+        })) as unknown as CheckoutOrder;
+      } else if (shouldSaveCustomerAddress) {
+        order = (await prismadb.$transaction((tx) =>
+          createStandardOrder(tx),
+        )) as unknown as CheckoutOrder;
+      } else {
+        order = (await createNewOrder(prismadb)) as unknown as CheckoutOrder;
+      }
     }
 
     // Send email asynchronously

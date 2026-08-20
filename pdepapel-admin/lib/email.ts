@@ -1,9 +1,11 @@
 import {
   Order,
   OrderStatus,
+  OrderAccountClaimSource,
   PaymentMethod,
   Shipping,
   ShippingStatus,
+  OrderType,
 } from "@prisma/client";
 import { OrderNotification } from "@/emails/order-notification";
 import { resend } from "@/lib/resend";
@@ -13,6 +15,11 @@ import {
   getReadableStatus,
 } from "@/lib/utils";
 import { env } from "@/lib/env.mjs";
+import {
+  createOrderAccountClaimToken,
+  ORDER_ACCOUNT_EMAIL_CLAIM_TTL_MS,
+} from "@/lib/order-account-claims";
+import prismadb from "@/lib/prismadb";
 
 function getOrderSummary(order: any) {
   if (!order.orderItems || !Array.isArray(order.orderItems)) return "";
@@ -26,6 +33,44 @@ function getOrderSummary(order: any) {
 function getOrderLink(orderId: string) {
   // Adjust this URL to your frontend order details page
   return `https://papeleriapdepapel.com/pedido/${orderId}`;
+}
+
+async function getOrderAccountClaimEmailLink(order: Order) {
+  if (
+    !order.email ||
+    order.userId ||
+    order.type !== OrderType.STANDARD
+  ) {
+    return null;
+  }
+
+  const { token, tokenHash, expiresAt } = createOrderAccountClaimToken(
+    ORDER_ACCOUNT_EMAIL_CLAIM_TTL_MS,
+  );
+
+  await prismadb.orderAccountClaim.upsert({
+    where: {
+      orderId_source: {
+        orderId: order.id,
+        source: OrderAccountClaimSource.EMAIL,
+      },
+    },
+    update: {
+      storeId: order.storeId,
+      tokenHash,
+      expiresAt,
+      claimedAt: null,
+    },
+    create: {
+      storeId: order.storeId,
+      orderId: order.id,
+      source: OrderAccountClaimSource.EMAIL,
+      tokenHash,
+      expiresAt,
+    },
+  });
+
+  return `${getOrderLink(order.id)}#guardar-pedido=${encodeURIComponent(token)}`;
 }
 
 function getOrderNotificationSource(status: OrderStatus | ShippingStatus) {
@@ -82,6 +127,10 @@ export const sendOrderEmail = async (
     const readablePayment = getReadablePaymentMethod(order.payment);
     const orderSummary = getOrderSummary(order);
     const orderLink = getOrderLink(order.id);
+    const accountClaimLink =
+      status === OrderStatus.PENDING
+        ? await getOrderAccountClaimEmailLink(order)
+        : null;
 
     // Subject lines
     const subjectAdmin = `[Admin] Pedido #${order.orderNumber} - ${readableStatus}`;
@@ -136,8 +185,9 @@ export const sendOrderEmail = async (
           city: order.city || undefined,
           orderLink,
           thanksParagraph,
+          accountClaimLink,
         }) as React.ReactElement,
-        text: `Tu pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\n\n${orderSummary}\n\nVer detalles: ${orderLink}\n\n${thanksParagraph}`,
+        text: `Tu pedido #${order.orderNumber} - ${readableStatus} para ${order.fullName}\n\n${orderSummary}\n\nVer detalles: ${orderLink}${accountClaimLink ? `\n\nGuarda este pedido en tu cuenta: ${accountClaimLink}` : ""}\n\n${thanksParagraph}`,
       });
     }
   } catch (error) {

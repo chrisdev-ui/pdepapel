@@ -57,9 +57,29 @@ export async function PATCH(
       maxUses,
       minOrderValue,
       isActive,
+      isWelcomeBenefit,
     } = body;
 
     await verifyStoreOwner(userId, params.storeId);
+
+    if (isWelcomeBenefit && isActive !== false) {
+      const activeWelcomeBenefit = await prismadb.coupon.findFirst({
+        where: {
+          storeId: params.storeId,
+          id: { not: params.couponId },
+          isWelcomeBenefit: true,
+          isActive: true,
+          endDate: { gte: new Date() },
+        },
+        select: { code: true },
+      });
+
+      if (activeWelcomeBenefit) {
+        throw ErrorFactory.Conflict(
+          `El beneficio de bienvenida ${activeWelcomeBenefit.code} ya está activo. Desactívalo antes de activar otro.`,
+        );
+      }
+    }
 
     if (type === DiscountType.PERCENTAGE && amount > 100) {
       throw ErrorFactory.InvalidRequest(
@@ -90,6 +110,7 @@ export async function PATCH(
         maxUses,
         minOrderValue,
         isActive,
+        isWelcomeBenefit,
       },
     });
 

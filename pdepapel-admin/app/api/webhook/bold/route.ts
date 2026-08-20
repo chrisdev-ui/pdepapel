@@ -10,6 +10,10 @@ import {
 import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
 import { calculateOrderFinancials } from "@/lib/financial";
 import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
+import {
+  markWelcomeBenefitRedeemed,
+  releaseWelcomeBenefitReservation,
+} from "@/lib/customer-benefits";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
@@ -113,6 +117,7 @@ async function processBoldPayment(transaction: any, targetStatus: OrderStatus) {
       coupon: {
         select: {
           id: true,
+          isWelcomeBenefit: true,
         },
       },
     },
@@ -237,6 +242,14 @@ async function processBoldPayment(transaction: any, targetStatus: OrderStatus) {
           where: { id: order.coupon.id },
           data: { usedCount: { increment: 1 } },
         });
+
+        if (order.coupon.isWelcomeBenefit) {
+          await markWelcomeBenefitRedeemed(tx, {
+            couponId: order.coupon.id,
+            userId: order.userId,
+            orderId: order.id,
+          });
+        }
       }
 
       await tx.paymentDetails.upsert({
@@ -263,6 +276,14 @@ async function processBoldPayment(transaction: any, targetStatus: OrderStatus) {
           order: { connect: { id: order.id } },
         },
       });
+
+      if (order.coupon?.isWelcomeBenefit) {
+        await releaseWelcomeBenefitReservation(tx, {
+          couponId: order.coupon.id,
+          userId: order.userId,
+          orderId: order.id,
+        });
+      }
 
       return true;
     });

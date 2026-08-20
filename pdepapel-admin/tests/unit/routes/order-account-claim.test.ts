@@ -122,12 +122,15 @@ describe("guest order account claims", () => {
     const body = await response.json();
     expect(body.token).toHaveLength(43);
     expect(mocks.upsertClaim).toHaveBeenCalledWith({
-      where: { orderId: "order-id" },
+      where: {
+        orderId_source: { orderId: "order-id", source: "DEVICE" },
+      },
       update: expect.objectContaining({
         tokenHash: expect.not.stringContaining(body.token),
       }),
       create: expect.objectContaining({
         orderId: "order-id",
+        source: "DEVICE",
         tokenHash: expect.not.stringContaining(body.token),
       }),
     });

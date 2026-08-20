@@ -74,93 +74,105 @@ const shippingSchema = z
   })
   .partial();
 
-const formSchema = z.object({
-  firstName: z
-    .string()
-    .min(1, "Por favor, escribe tu nombre")
-    .max(50, "El nombre debe tener menos de 50 caracteres"),
-  lastName: z
-    .string()
-    .min(1, "Por favor, escribe tus apellidos")
-    .max(50, "Los apellidos deben tener menos de 50 caracteres"),
-  email: z
-    .string()
-    .email("Por favor, escribe un correo válido")
-    .min(8, "El correo debe tener al menos 8 caracteres")
-    .max(60, "El correo debe tener menos de 60 caracteres"),
-  telephone: z.string().refine(isValidPhoneNumber, {
-    message: "Por favor, escribe un número de teléfono válido",
-  }),
-  address1: z
-    .string()
-    .min(2, "Por favor, escribe tu dirección principal")
-    .max(50, "La dirección debe tener menos de 50 caracteres"),
-  address2: z
-    .string()
-    .min(2, "La dirección adicional debe tener al menos 2 caracteres")
-    .max(50, "La dirección adicional debe tener menos de 50 caracteres")
-    .optional()
-    .or(z.literal("")),
-  neighborhood: z
-    .string()
-    .min(2, "El barrio debe tener al menos 2 caracteres")
-    .max(30, "El barrio debe tener menos de 30 caracteres")
-    .optional()
-    .or(z.literal("")),
-  addressReference: z
-    .string()
-    .min(2, "La referencia de tu domicilio debe tener al menos 2 caracteres")
-    .max(25, "La referencia de tu domicilio debe tener menos de 25 caracteres")
-    .optional()
-    .or(z.literal("")),
-  company: z
-    .string()
-    .min(2, "El nombre de tu empresa debe tener al menos 2 caracteres")
-    .max(50, "El nombre de tu empresa debe tener menos de 50 caracteres")
-    .optional()
-    .or(z.literal("")),
-  city: z
-    .string()
-    .min(1, "Por favor, escribe tu ciudad")
-    .max(50, "La ciudad debe tener menos de 50 caracteres"),
-  department: z
-    .string()
-    .min(1, "Por favor, escribe tu departamento")
-    .max(50, "El departamento debe tener menos de 50 caracteres"),
-  daneCode: z
-    .string({
-      required_error:
+const formSchema = z
+  .object({
+    firstName: z
+      .string()
+      .min(1, "Por favor, escribe tu nombre")
+      .max(50, "El nombre debe tener menos de 50 caracteres"),
+    lastName: z
+      .string()
+      .min(1, "Por favor, escribe tus apellidos")
+      .max(50, "Los apellidos deben tener menos de 50 caracteres"),
+    email: z
+      .string()
+      .email("Por favor, escribe un correo válido")
+      .min(8, "El correo debe tener al menos 8 caracteres")
+      .max(60, "El correo debe tener menos de 60 caracteres"),
+    telephone: z.string().refine(isValidPhoneNumber, {
+      message: "Por favor, escribe un número de teléfono válido",
+    }),
+    address1: z
+      .string()
+      .min(2, "Por favor, escribe tu dirección principal")
+      .max(50, "La dirección debe tener menos de 50 caracteres"),
+    address2: z
+      .string()
+      .min(2, "La dirección adicional debe tener al menos 2 caracteres")
+      .max(50, "La dirección adicional debe tener menos de 50 caracteres")
+      .optional()
+      .or(z.literal("")),
+    neighborhood: z
+      .string()
+      .min(2, "El barrio debe tener al menos 2 caracteres")
+      .max(30, "El barrio debe tener menos de 30 caracteres")
+      .optional()
+      .or(z.literal("")),
+    addressReference: z
+      .string()
+      .min(2, "La referencia de tu domicilio debe tener al menos 2 caracteres")
+      .max(
+        25,
+        "La referencia de tu domicilio debe tener menos de 25 caracteres",
+      )
+      .optional()
+      .or(z.literal("")),
+    company: z
+      .string()
+      .min(2, "El nombre de tu empresa debe tener al menos 2 caracteres")
+      .max(50, "El nombre de tu empresa debe tener menos de 50 caracteres")
+      .optional()
+      .or(z.literal("")),
+    city: z
+      .string()
+      .min(1, "Por favor, escribe tu ciudad")
+      .max(50, "La ciudad debe tener menos de 50 caracteres"),
+    department: z
+      .string()
+      .min(1, "Por favor, escribe tu departamento")
+      .max(50, "El departamento debe tener menos de 50 caracteres"),
+    daneCode: z
+      .string({
+        required_error:
+          "Selecciona tu ciudad y departamento. Si no encuentras tu ciudad, comunica tu domicilio a nuestro WhatsApp.",
+      })
+      .length(
+        8,
         "Selecciona tu ciudad y departamento. Si no encuentras tu ciudad, comunica tu domicilio a nuestro WhatsApp.",
-    })
-    .length(
-      8,
-      "Selecciona tu ciudad y departamento. Si no encuentras tu ciudad, comunica tu domicilio a nuestro WhatsApp.",
-    ),
-  documentId: z
-    .string()
-    .min(1, "Por favor, escribe tu número de identificación")
-    .max(15, "El número de identificación debe tener menos de 15 caracteres"),
-  couponCode: z.string().optional().or(z.literal("")),
-  paymentMethod: z
-    .nativeEnum(PaymentMethod)
-    .default(PaymentMethod.BankTransfer),
-  shippingProvider: z.string().default("ENVIOCLICK"),
-  shippingOptionType: z
-    .enum(["ENVIOCLICK", "MEDELLIN_LOCAL", "CUSTOM_WHATSAPP"])
-    .default("ENVIOCLICK"),
-  envioClickIdRate: z.number().optional(),
-  shipping: shippingSchema,
-}).superRefine((data, ctx) => {
-  if (data.shippingOptionType === "ENVIOCLICK") {
-    if (data.envioClickIdRate === undefined || data.envioClickIdRate < 1) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Por favor, calcula y selecciona una tarifa de envío",
-        path: ["envioClickIdRate"],
-      });
+      ),
+    documentId: z
+      .string()
+      .min(1, "Por favor, escribe tu número de identificación")
+      .max(15, "El número de identificación debe tener menos de 15 caracteres"),
+    saveAddress: z.boolean().default(false),
+    savedAddressId: z.string().max(191).optional().or(z.literal("")),
+    addressLabel: z
+      .string()
+      .max(60, "El nombre debe tener menos de 60 caracteres")
+      .optional()
+      .or(z.literal("")),
+    couponCode: z.string().optional().or(z.literal("")),
+    paymentMethod: z
+      .nativeEnum(PaymentMethod)
+      .default(PaymentMethod.BankTransfer),
+    shippingProvider: z.string().default("ENVIOCLICK"),
+    shippingOptionType: z
+      .enum(["ENVIOCLICK", "MEDELLIN_LOCAL", "CUSTOM_WHATSAPP"])
+      .default("ENVIOCLICK"),
+    envioClickIdRate: z.number().optional(),
+    shipping: shippingSchema,
+  })
+  .superRefine((data, ctx) => {
+    if (data.shippingOptionType === "ENVIOCLICK") {
+      if (data.envioClickIdRate === undefined || data.envioClickIdRate < 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Por favor, calcula y selecciona una tarifa de envío",
+          path: ["envioClickIdRate"],
+        });
+      }
     }
-  }
-});
+  });
 
 export type CheckoutFormValue = z.infer<typeof formSchema>;
 
@@ -322,6 +334,9 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
           city: customOrder.city ?? "",
           department: customOrder.department ?? "",
           daneCode: customOrder.daneCode ?? "",
+          saveAddress: false,
+          savedAddressId: "",
+          addressLabel: "",
           couponCode: "",
           paymentMethod: PaymentMethod.BankTransfer,
           shippingProvider: "ENVIOCLICK",
@@ -352,6 +367,9 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         city: storedFormData.city ?? "",
         department: storedFormData.department ?? "",
         daneCode: storedFormData.daneCode ?? "",
+        saveAddress: false,
+        savedAddressId: "",
+        addressLabel: "",
         couponCode: storedFormData.couponCode ?? "",
         shippingProvider: storedFormData.shippingProvider ?? "ENVIOCLICK",
         shippingOptionType: storedFormData.shippingOptionType ?? "ENVIOCLICK",
@@ -426,7 +444,9 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
 
   useEffect(() => {
     if (!isCODShipment && paymentMethod === PaymentMethod.COD) {
-      form.setValue("paymentMethod", PaymentMethod.BankTransfer, { shouldDirty: true });
+      form.setValue("paymentMethod", PaymentMethod.BankTransfer, {
+        shouldDirty: true,
+      });
     }
   }, [isCODShipment, paymentMethod, form]);
 
@@ -438,8 +458,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   );
 
   const analyticsItems = useMemo(
-    () =>
-      activeItems.map((item) => toAnalyticsItem(item, item.quantity ?? 1)),
+    () => activeItems.map((item) => toAnalyticsItem(item, item.quantity ?? 1)),
     [activeItems],
   );
 
@@ -458,11 +477,9 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     const measurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
     if (!measurementId) return;
 
-    void getGoogleAnalyticsClientId(measurementId).then(
-      (clientId) => {
-        analyticsClientIdRef.current = clientId;
-      },
-    );
+    void getGoogleAnalyticsClientId(measurementId).then((clientId) => {
+      analyticsClientIdRef.current = clientId;
+    });
   }, []);
 
   const validateStep = async (step: number) => {
@@ -579,6 +596,16 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         });
       },
     });
+
+  const applyWelcomeBenefit = (code: string) => {
+    form.setValue("couponCode", code, { shouldDirty: true });
+    setCouponState((previous) => ({
+      ...previous,
+      coupon: null,
+      isValid: null,
+    }));
+    validateCouponMutate({ code, subtotal });
+  };
 
   const { mutate, status } = useCheckout({
     getToken,
@@ -710,14 +737,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     resetCheckout();
     if (userId) clearGuestId();
     router.replace(completedOrderPath);
-  }, [
-    cart,
-    clearGuestId,
-    completedOrderPath,
-    resetCheckout,
-    router,
-    userId,
-  ]);
+  }, [cart, clearGuestId, completedOrderPath, resetCheckout, router, userId]);
 
   useEffect(() => {
     setIsMounted(true);
@@ -769,6 +789,9 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       department,
       daneCode,
       documentId,
+      saveAddress,
+      savedAddressId,
+      addressLabel,
       paymentMethod,
       shipping,
       shippingProvider,
@@ -817,6 +840,9 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       total,
       customOrderToken: customOrder?.token, // Include token for conversion
       analyticsClientId,
+      saveAddress: Boolean(saveAddress && isUserLoggedIn && !customOrder),
+      savedAddressId: saveAddress ? savedAddressId || null : null,
+      addressLabel: saveAddress ? addressLabel || null : null,
     };
 
     trackCustomerEvent("checkout_order_submitted", {
@@ -866,6 +892,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                       <ShippingInfoStep
                         form={form}
                         isLoading={isPendingSubmit}
+                        allowSavedAddresses={!customOrder}
                         cartItems={activeItems.map((item) => ({
                           id: item.id,
                           quantity: item.quantity || 1,
@@ -889,6 +916,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                         validateCouponStatus={validateCouponStatus}
                         subtotal={subtotal}
                         onEditStep={setCurrentStep}
+                        onApplyWelcomeBenefit={applyWelcomeBenefit}
                       />
                     )}
                   </div>
@@ -912,7 +940,10 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                 ({totalQuantity}) Productos
               </h2>
               {!customOrder && (
-                <Link href={STOREFRONT_ROUTES.cart} className="text-sm underline">
+                <Link
+                  href={STOREFRONT_ROUTES.cart}
+                  className="text-sm underline"
+                >
                   Editar
                 </Link>
               )}
@@ -998,7 +1029,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                     Ahorros en ofertas
                   </span>
                   <Currency
-                    className="font-quicksand font-bold text-lg text-success"
+                    className="font-quicksand text-lg font-bold text-success"
                     value={productSavings}
                   />
                 </div>
