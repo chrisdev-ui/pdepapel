@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -88,8 +89,13 @@ describe("Mercado Libre cashflow", () => {
         releaseStatusCheckedAt: checkedAt.toISOString(),
       },
     });
-    expect(needsMercadoLibreReleaseStatusRefresh(metadata, checkedAt)).toBe(
-      false,
-    );
+    // The merge helper returns the write-side `InputJsonValue`; reading it back
+    // is the read-side `JsonValue`, which is exactly the database round-trip.
+    expect(
+      needsMercadoLibreReleaseStatusRefresh(
+        metadata as Prisma.JsonValue,
+        checkedAt,
+      ),
+    ).toBe(false);
   });
 });

@@ -9,9 +9,16 @@ import {
   Prisma,
 } from "@prisma/client";
 
-type WelcomeBenefitDatabase = Pick<
+/** Transaction-scoped client used to reserve, redeem, and release the benefit. */
+export type WelcomeBenefitDatabase = Pick<
   Prisma.TransactionClient,
   "couponRedemption"
+>;
+
+/** Client used to check eligibility, which also needs to count previous orders. */
+export type WelcomeBenefitEligibilityDatabase = Pick<
+  typeof import("@/lib/prismadb").default,
+  "order" | "couponRedemption"
 >;
 
 export async function getVerifiedPrimaryEmail(userId: string) {
@@ -51,10 +58,7 @@ export async function assertWelcomeBenefitEligibility({
   storeId: string;
   userId: string | null;
   checkoutEmail?: string | null;
-  database: Pick<
-    typeof import("@/lib/prismadb").default,
-    "order" | "couponRedemption"
-  >;
+  database: WelcomeBenefitEligibilityDatabase;
 }) {
   if (!coupon.isWelcomeBenefit) return null;
 

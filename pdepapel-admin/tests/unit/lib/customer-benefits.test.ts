@@ -20,6 +20,10 @@ import {
   releaseWelcomeBenefitReservation,
   reserveWelcomeBenefit,
 } from "@/lib/customer-benefits";
+import type {
+  WelcomeBenefitDatabase,
+  WelcomeBenefitEligibilityDatabase,
+} from "@/lib/customer-benefits";
 import { Coupon, CouponRedemptionStatus } from "@prisma/client";
 
 const welcomeCoupon = {
@@ -34,6 +38,8 @@ const standardCoupon = {
   isWelcomeBenefit: false,
 } as Coupon;
 
+// Only the delegate methods these functions actually call are stubbed, so the
+// mock is cast to the narrow database contracts the module exports.
 const database = {
   order: { count: mocks.countPaidOrders },
   couponRedemption: {
@@ -42,7 +48,7 @@ const database = {
     update: mocks.updateRedemption,
     updateMany: mocks.updateManyRedemptions,
   },
-};
+} as unknown as WelcomeBenefitDatabase & WelcomeBenefitEligibilityDatabase;
 
 describe("customer account benefits", () => {
   beforeEach(() => {

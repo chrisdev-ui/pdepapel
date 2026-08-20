@@ -6,7 +6,8 @@ const mocks = vi.hoisted(() => ({
   importListings: vi.fn(),
   preview: vi.fn(),
   queueStatus: vi.fn(),
-  selectionError: vi.fn(() => null),
+  // Returns the rejection message, or null when the selection is valid.
+  selectionError: vi.fn((): string | null => null),
   verifyStoreOwner: vi.fn(),
 }));
 
