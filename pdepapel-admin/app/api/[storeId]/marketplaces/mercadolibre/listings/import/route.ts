@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import {
+  getMercadoLibreListingImportSelectionError,
   importMercadoLibreListings,
   type MercadoLibreListingImportSelection,
 } from "@/lib/mercadolibre/import-listings";
@@ -21,7 +22,7 @@ function parseSelections(value: unknown): MercadoLibreListingImportSelection[] {
     );
   }
 
-  return value.map((selection) => {
+  const selections = value.map((selection) => {
     if (
       !selection ||
       typeof selection !== "object" ||
@@ -48,6 +49,9 @@ function parseSelections(value: unknown): MercadoLibreListingImportSelection[] {
     }
     return { externalItemId, externalVariationId, productId };
   });
+  const selectionError = getMercadoLibreListingImportSelectionError(selections);
+  if (selectionError) throw ErrorFactory.InvalidRequest(selectionError);
+  return selections;
 }
 
 export async function POST(

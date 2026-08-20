@@ -20,6 +20,7 @@ import {
   getMercadoLibreShipmentOrderIds,
   synchronizeMercadoLibreShipment,
 } from "@/lib/mercadolibre/logistics";
+import { getEffectiveMercadoLibreShipmentStatus } from "@/lib/mercadolibre/logistics-status";
 
 describe("Mercado Libre shipment synchronization", () => {
   beforeEach(() => {
@@ -30,7 +31,10 @@ describe("Mercado Libre shipment synchronization", () => {
     mocks.getJson.mockResolvedValue([
       { item_id: "MCO123", order_id: 2000017813937484 },
     ]);
-    mocks.findFirst.mockResolvedValue({ id: "marketplace-order-id" });
+    mocks.findFirst.mockResolvedValue({
+      id: "marketplace-order-id",
+      status: "PAID",
+    });
     mocks.upsert.mockResolvedValue({ id: "shipment-record-id" });
 
     await synchronizeMercadoLibreShipment("connection-id", {
@@ -48,7 +52,7 @@ describe("Mercado Libre shipment synchronization", () => {
         connectionId: "connection-id",
         externalOrderId: "2000017813937484",
       },
-      select: { id: true },
+      select: { id: true, status: true },
     });
     expect(mocks.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -92,5 +96,34 @@ describe("Mercado Libre shipment synchronization", () => {
         items: [{ order_id: 2000017813937484 }],
       }),
     ).toEqual(["2000017813937484"]);
+  });
+
+  it("marks an undispatched shipment as cancelled with its cancelled sale", async () => {
+    mocks.getJson.mockResolvedValue([
+      { item_id: "MCO123", order_id: 2000017813937484 },
+    ]);
+    mocks.findFirst.mockResolvedValue({
+      id: "marketplace-order-id",
+      status: "CANCELLED",
+    });
+    mocks.upsert.mockResolvedValue({ id: "shipment-record-id" });
+
+    await synchronizeMercadoLibreShipment("connection-id", {
+      id: 47712931618,
+      status: "ready_to_ship",
+    });
+
+    expect(mocks.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({ status: "cancelled" }),
+        create: expect.objectContaining({ status: "cancelled" }),
+      }),
+    );
+  });
+
+  it("does not overwrite a dispatched shipment just because the order is cancelled", () => {
+    expect(
+      getEffectiveMercadoLibreShipmentStatus("shipped", "CANCELLED"),
+    ).toBe("shipped");
   });
 });

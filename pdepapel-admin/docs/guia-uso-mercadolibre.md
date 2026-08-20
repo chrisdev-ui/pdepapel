@@ -126,7 +126,7 @@ Si una publicación fue creada directamente en Mercado Libre antes de usar esta 
 1. Ve a **Ventas → Mercado Libre → Publicaciones**.
 2. Pulsa **Importar existentes**.
 3. Revisa la propuesta de vínculo. Si el sistema no reconoce el producto, elige el producto correcto de P de Papel manualmente.
-4. Marca solamente los vínculos correctos.
+4. Marca solamente los vínculos correctos. Un mismo producto local solo puede quedar vinculado a una publicación o variación. Si varias publicaciones traen el mismo SKU, deja marcada solo la que de verdad corresponde a ese producto y revisa las demás una por una.
 5. Pulsa **Vincular y sincronizar** y confirma.
 
 No vincules una publicación si no estás segura del producto. Es mejor dejarla pendiente que asociarla con un artículo equivocado.
@@ -167,6 +167,7 @@ Las respuestas nunca se envían solas.
 - Revisa los envíos marcados como listos para preparar.
 - Usa el número de venta y la guía para comparar con Mercado Libre.
 - P de Papel muestra la información; no compra guías ni confirma entregas en tu nombre.
+- Si Mercado Libre cancela una venta antes del despacho, el envío aparecerá como **Cancelado** y dejará de estar en la lista de preparación. No devuelvas stock hasta que tengas el producto físicamente.
 
 ### Reclamos o devoluciones
 

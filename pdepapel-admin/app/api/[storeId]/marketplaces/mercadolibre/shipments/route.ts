@@ -3,6 +3,7 @@ import { MarketplaceProvider } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { getEffectiveMercadoLibreShipmentStatus } from "@/lib/mercadolibre/logistics-status";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
@@ -38,13 +39,34 @@ export async function GET(
         trackingNumber: true,
         lastRemoteUpdateAt: true,
         marketplaceOrder: {
-          select: { id: true, externalOrderId: true, buyerName: true },
+          select: {
+            id: true,
+            externalOrderId: true,
+            buyerName: true,
+            status: true,
+          },
         },
       },
       orderBy: { updatedAt: "desc" },
       take: 100,
     });
-    return NextResponse.json(shipments, { headers: CACHE_HEADERS.NO_CACHE });
+    return NextResponse.json(
+      shipments.map(({ marketplaceOrder, status, ...shipment }) => ({
+        ...shipment,
+        status: getEffectiveMercadoLibreShipmentStatus(
+          status,
+          marketplaceOrder?.status,
+        ),
+        marketplaceOrder: marketplaceOrder
+          ? {
+              id: marketplaceOrder.id,
+              externalOrderId: marketplaceOrder.externalOrderId,
+              buyerName: marketplaceOrder.buyerName,
+            }
+          : null,
+      })),
+      { headers: CACHE_HEADERS.NO_CACHE },
+    );
   } catch (error) {
     return handleErrorResponse(error, "MERCADOLIBRE_SHIPMENTS_GET", {
       headers: CACHE_HEADERS.NO_CACHE,

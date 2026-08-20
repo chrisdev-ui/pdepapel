@@ -484,19 +484,30 @@ export function MercadoLibreListingManager({
       if (!response.ok) throw new Error(await getErrorMessage(response));
       const preview = (await response.json()) as ImportPreview;
       setImportPreview(preview);
+      const automaticallySelectedProductIds = new Set<string>();
       setImportSelections(
         Object.fromEntries(
-          preview.listings.map((listing) => [
-            listing.key,
-            {
-              productId: listing.suggestedProduct?.id ?? "",
-              selected: Boolean(
-                !listing.existingListingId &&
-                listing.suggestedProduct &&
-                listing.status !== "ERROR",
-              ),
-            },
-          ]),
+          preview.listings.map((listing) => {
+            const suggestedProductId = listing.suggestedProduct?.id ?? "";
+            const canAutoSelect = Boolean(
+              !listing.existingListingId &&
+                suggestedProductId &&
+                !listing.issue &&
+                listing.status !== "ERROR" &&
+                !automaticallySelectedProductIds.has(suggestedProductId),
+            );
+            if (canAutoSelect) {
+              automaticallySelectedProductIds.add(suggestedProductId);
+            }
+
+            return [
+              listing.key,
+              {
+                productId: suggestedProductId,
+                selected: canAutoSelect,
+              },
+            ];
+          }),
         ),
       );
     } catch (requestError) {
@@ -546,6 +557,15 @@ export function MercadoLibreListingManager({
     });
     if (selections.length === 0) {
       setError("Selecciona al menos una publicación con producto local");
+      return;
+    }
+    if (
+      new Set(selections.map((selection) => selection.productId)).size !==
+      selections.length
+    ) {
+      setError(
+        "Un mismo producto local fue elegido para varias publicaciones. Deja una sola publicación seleccionada y revisa las demás antes de continuar.",
+      );
       return;
     }
     if (

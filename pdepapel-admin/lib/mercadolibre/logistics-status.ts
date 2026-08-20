@@ -15,9 +15,44 @@ export const SHIPMENT_STATUS_META: Record<
   returned: { label: "Devuelto", variant: "destructive" },
 };
 
+const DISPATCHABLE_SHIPMENT_STATUSES = new Set([
+  "pending",
+  "handling",
+  "ready_to_ship",
+]);
+
+export function normalizeMercadoLibreShipmentStatus(status: string) {
+  const normalizedStatus = status.toLowerCase();
+  return normalizedStatus === "canceled" ? "cancelled" : normalizedStatus;
+}
+
+export function isMercadoLibreShipmentAwaitingDispatch(status: string) {
+  return DISPATCHABLE_SHIPMENT_STATUSES.has(
+    normalizeMercadoLibreShipmentStatus(status),
+  );
+}
+
+export function getEffectiveMercadoLibreShipmentStatus(
+  shipmentStatus: string,
+  marketplaceOrderStatus: string | null | undefined,
+) {
+  const normalizedShipmentStatus = normalizeMercadoLibreShipmentStatus(
+    shipmentStatus,
+  );
+  if (
+    marketplaceOrderStatus?.toLowerCase() === "cancelled" &&
+    isMercadoLibreShipmentAwaitingDispatch(normalizedShipmentStatus)
+  ) {
+    return "cancelled";
+  }
+
+  return normalizedShipmentStatus;
+}
+
 export function getShipmentStatusMeta(status: string) {
+  const normalizedStatus = normalizeMercadoLibreShipmentStatus(status);
   return (
-    SHIPMENT_STATUS_META[status.toLowerCase()] ?? {
+    SHIPMENT_STATUS_META[normalizedStatus] ?? {
       label: "Estado pendiente de revisión",
       variant: "secondary" as const,
     }

@@ -1,5 +1,6 @@
 import { MarketplaceListingStatus, Prisma } from "@prisma/client";
 
+import { ErrorFactory } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
 
 import { getMercadoLibreJson } from "./client";
@@ -292,7 +293,7 @@ async function getImportCandidates(
     ]),
   );
 
-  return remoteListings.map((listing): MercadoLibreListingImportCandidate => {
+  const candidateDetails = remoteListings.map((listing) => {
     const key = getListingKey(
       listing.externalItemId,
       listing.externalVariationId,
@@ -305,26 +306,68 @@ async function getImportCandidates(
       ? (productListingById.get(suggestedProduct.id) ?? null)
       : null;
     const hasDifferentLocalLink =
-      productListing?.externalItemId &&
-      productListing.externalItemId !== listing.externalItemId;
+      Boolean(productListing?.externalItemId) &&
+      getListingKey(
+        productListing!.externalItemId!,
+        productListing!.externalVariationId,
+      ) !== key;
 
     return {
-      ...listing,
+      listing,
       key,
-      existingListingId: existingListing?.id ?? null,
-      linkedProduct: existingListing?.product ?? null,
+      existingListing,
       suggestedProduct,
-      issue: existingListing
-        ? null
-        : !listing.sellerSku
-          ? "La publicación no tiene SKU de vendedor"
-          : !suggestedProduct
-            ? "No existe un producto local con este SKU"
-            : hasDifferentLocalLink
-              ? "El producto local ya está vinculado a otra publicación"
-              : null,
+      hasDifferentLocalLink,
     };
   });
+
+  const suggestedProductCounts = new Map<string, number>();
+  for (const candidate of candidateDetails) {
+    if (
+      candidate.existingListing ||
+      !candidate.suggestedProduct ||
+      candidate.hasDifferentLocalLink
+    ) {
+      continue;
+    }
+    suggestedProductCounts.set(
+      candidate.suggestedProduct.id,
+      (suggestedProductCounts.get(candidate.suggestedProduct.id) ?? 0) + 1,
+    );
+  }
+
+  return candidateDetails.map(
+    ({
+      listing,
+      key,
+      existingListing,
+      suggestedProduct,
+      hasDifferentLocalLink,
+    }): MercadoLibreListingImportCandidate => {
+      const hasDuplicateSuggestedProduct =
+        Boolean(suggestedProduct) &&
+        (suggestedProductCounts.get(suggestedProduct!.id) ?? 0) > 1;
+
+      return {
+        ...listing,
+        key,
+        existingListingId: existingListing?.id ?? null,
+        linkedProduct: existingListing?.product ?? null,
+        suggestedProduct,
+        issue: existingListing
+          ? null
+          : !listing.sellerSku
+            ? "La publicación no tiene SKU de vendedor"
+            : !suggestedProduct
+              ? "No existe un producto local con este SKU"
+              : hasDifferentLocalLink
+                ? "El producto local ya está vinculado a otra publicación o variación"
+                : hasDuplicateSuggestedProduct
+                  ? "Este mismo SKU aparece en varias publicaciones o variaciones. Revisa manualmente cuál corresponde a cada producto local."
+                  : null,
+      };
+    },
+  );
 }
 
 export async function previewMercadoLibreListingImport(
@@ -353,6 +396,24 @@ function getRemoteSelectionKey(selection: MercadoLibreListingImportSelection) {
   return getListingKey(selection.externalItemId, selection.externalVariationId);
 }
 
+export function getMercadoLibreListingImportSelectionError(
+  selections: MercadoLibreListingImportSelection[],
+) {
+  const uniqueSelectionKeys = new Set(selections.map(getRemoteSelectionKey));
+  if (uniqueSelectionKeys.size !== selections.length) {
+    return "Una misma publicación o variación fue seleccionada más de una vez";
+  }
+
+  const uniqueProductIds = new Set(
+    selections.map((selection) => selection.productId),
+  );
+  if (uniqueProductIds.size !== selections.length) {
+    return "Un mismo producto local fue elegido para varias publicaciones. Deja una sola publicación vinculada a cada producto y revisa las demás.";
+  }
+
+  return null;
+}
+
 function canSynchronizeStock(status: MarketplaceListingStatus) {
   return (
     status === MarketplaceListingStatus.ACTIVE ||
@@ -372,23 +433,19 @@ export async function importMercadoLibreListings({
   selections: MercadoLibreListingImportSelection[];
 }) {
   if (selections.length === 0) {
-    throw new Error("Selecciona al menos una publicación para importar");
+    throw ErrorFactory.InvalidRequest(
+      "Selecciona al menos una publicación para importar",
+    );
   }
   if (selections.length > 500) {
-    throw new Error("Puedes importar máximo 500 publicaciones a la vez");
+    throw ErrorFactory.InvalidRequest(
+      "Puedes importar máximo 500 publicaciones a la vez",
+    );
   }
 
-  const uniqueSelectionKeys = new Set(selections.map(getRemoteSelectionKey));
-  const uniqueProductIds = new Set(
-    selections.map((selection) => selection.productId),
-  );
-  if (
-    uniqueSelectionKeys.size !== selections.length ||
-    uniqueProductIds.size !== selections.length
-  ) {
-    throw new Error(
-      "Cada publicación y cada producto local solo pueden vincularse una vez",
-    );
+  const selectionError = getMercadoLibreListingImportSelectionError(selections);
+  if (selectionError) {
+    throw ErrorFactory.InvalidRequest(selectionError);
   }
 
   const candidates = await getImportCandidates(connectionId, storeId, sellerId);
@@ -398,25 +455,31 @@ export async function importMercadoLibreListings({
   const selectedListings = selections.map((selection) => {
     const listing = remoteListingByKey.get(getRemoteSelectionKey(selection));
     if (!listing) {
-      throw new Error("Una publicación ya no está disponible en Mercado Libre");
+      throw ErrorFactory.Conflict(
+        "Una publicación ya no está disponible en Mercado Libre. Actualiza la revisión antes de continuar.",
+      );
     }
     if (listing.existingListingId) {
-      throw new Error("Una de las publicaciones ya está vinculada");
+      throw ErrorFactory.Conflict("Una de las publicaciones ya está vinculada");
     }
     if (listing.status === MarketplaceListingStatus.ERROR) {
-      throw new Error("Una publicación tiene un estado no compatible");
+      throw ErrorFactory.InvalidRequest(
+        "Una publicación tiene un estado no compatible",
+      );
     }
     return { listing, productId: selection.productId };
   });
 
-  const productIds = Array.from(uniqueProductIds);
+  const productIds = Array.from(
+    new Set(selections.map((selection) => selection.productId)),
+  );
   const result = await prismadb.$transaction(async (transaction) => {
     const products = await transaction.product.findMany({
       where: { id: { in: productIds }, storeId, isArchived: false },
       select: { id: true, stock: true },
     });
     if (products.length !== productIds.length) {
-      throw new Error("Uno de los productos locales no está disponible");
+      throw ErrorFactory.Conflict("Uno de los productos locales no está disponible");
     }
 
     const existingByProduct = new Map(
@@ -461,9 +524,12 @@ export async function importMercadoLibreListings({
       const existingRemoteListing = existingByRemoteKey.get(listing.key);
       if (
         existingProductListing?.externalItemId &&
-        existingProductListing.externalItemId !== listing.externalItemId
+        getListingKey(
+          existingProductListing.externalItemId,
+          existingProductListing.externalVariationId,
+        ) !== getListingKey(listing.externalItemId, listing.externalVariationId)
       ) {
-        throw new Error(
+        throw ErrorFactory.Conflict(
           "Un producto local ya está vinculado a otra publicación de Mercado Libre",
         );
       }
@@ -471,7 +537,7 @@ export async function importMercadoLibreListings({
         existingRemoteListing &&
         existingRemoteListing.productId !== productId
       ) {
-        throw new Error(
+        throw ErrorFactory.Conflict(
           "Una publicación de Mercado Libre ya está vinculada a otro producto local",
         );
       }

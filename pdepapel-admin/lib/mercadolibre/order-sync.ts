@@ -373,6 +373,38 @@ export function isMercadoLibreOrderNewlyPaid(
   );
 }
 
+async function cancelPendingMercadoLibreShipments({
+  connectionId,
+  marketplaceOrderId,
+  externalShipmentId,
+  lastRemoteUpdateAt,
+}: {
+  connectionId: string;
+  marketplaceOrderId: string;
+  externalShipmentId: string | null;
+  lastRemoteUpdateAt: Date | null;
+}) {
+  await prismadb.marketplaceShipment.updateMany({
+    where: {
+      connectionId,
+      status: {
+        in: ["pending", "handling", "ready_to_ship"],
+      },
+      OR: [
+        { marketplaceOrderId },
+        ...(externalShipmentId
+          ? [{ externalShipmentId }]
+          : []),
+      ],
+    },
+    data: {
+      status: "cancelled",
+      substatus: "cancelled_with_order",
+      lastRemoteUpdateAt: lastRemoteUpdateAt ?? new Date(),
+    },
+  });
+}
+
 export async function synchronizeMercadoLibreOrder(
   connectionId: string,
   storeId: string,
@@ -451,6 +483,12 @@ export async function synchronizeMercadoLibreOrder(
   });
 
   if (order.status === MarketplaceOrderStatus.CANCELLED) {
+    await cancelPendingMercadoLibreShipments({
+      connectionId,
+      marketplaceOrderId: marketplaceOrder.id,
+      externalShipmentId: order.shipmentId,
+      lastRemoteUpdateAt: order.lastRemoteUpdateAt,
+    });
     if (
       marketplaceOrder.inventoryStatus ===
       MarketplaceInventoryStatus.DECREMENTED

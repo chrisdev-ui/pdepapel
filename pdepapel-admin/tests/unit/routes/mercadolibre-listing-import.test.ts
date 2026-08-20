@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   importListings: vi.fn(),
   preview: vi.fn(),
   queueStatus: vi.fn(),
+  selectionError: vi.fn(() => null),
   verifyStoreOwner: vi.fn(),
 }));
 
@@ -18,6 +19,7 @@ vi.mock("@/lib/prismadb", () => ({
   default: { marketplaceConnection: { findUnique: mocks.findUnique } },
 }));
 vi.mock("@/lib/mercadolibre/import-listings", () => ({
+  getMercadoLibreListingImportSelectionError: mocks.selectionError,
   importMercadoLibreListings: mocks.importListings,
   previewMercadoLibreListingImport: mocks.preview,
 }));
@@ -29,6 +31,11 @@ import { POST as importListings } from "@/app/api/[storeId]/marketplaces/mercado
 import { POST as preview } from "@/app/api/[storeId]/marketplaces/mercadolibre/listings/import/preview/route";
 
 describe("Mercado Libre listing import routes", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.selectionError.mockReturnValue(null);
+  });
+
   it("reviews existing listings without modifying the catalog", async () => {
     mocks.auth.mockReturnValue({ userId: "owner-id" });
     mocks.findUnique.mockResolvedValue({
@@ -92,5 +99,47 @@ describe("Mercado Libre listing import routes", () => {
         },
       ],
     });
+  });
+
+  it("rejects duplicate local product selections before importing", async () => {
+    mocks.auth.mockReturnValue({ userId: "owner-id" });
+    mocks.findUnique.mockResolvedValue({
+      id: "connection-id",
+      sellerId: "seller-id",
+      status: "CONNECTED",
+      recoveryScheduleId: "schedule-id",
+    });
+    mocks.queueStatus.mockReturnValue({ configured: true, missing: [] });
+    mocks.selectionError.mockReturnValueOnce(
+      "Un mismo producto local fue elegido para varias publicaciones. Deja una sola publicación vinculada a cada producto y revisa las demás.",
+    );
+
+    const response = await importListings(
+      new Request("https://admin.example.com", {
+        method: "POST",
+        body: JSON.stringify({
+          selections: [
+            {
+              externalItemId: "MCO2000000001",
+              externalVariationId: null,
+              productId: "local-product-id",
+            },
+            {
+              externalItemId: "MCO2000000002",
+              externalVariationId: null,
+              productId: "local-product-id",
+            },
+          ],
+        }),
+      }),
+      { params: { storeId: "store-id" } },
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error:
+        "Un mismo producto local fue elegido para varias publicaciones. Deja una sola publicación vinculada a cada producto y revisa las demás.",
+    });
+    expect(mocks.importListings).not.toHaveBeenCalled();
   });
 });

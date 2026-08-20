@@ -83,7 +83,18 @@ export async function getMercadoLibreHealthSummary(
         take: MAX_HEALTH_ISSUES,
       }),
       prismadb.marketplaceShipment.findMany({
-        where: { connectionId, status: { in: ["ready_to_ship", "handling"] } },
+        where: {
+          connectionId,
+          status: { in: ["ready_to_ship", "handling"] },
+          OR: [
+            { marketplaceOrderId: null },
+            {
+              marketplaceOrder: {
+                is: { status: { not: MarketplaceOrderStatus.CANCELLED } },
+              },
+            },
+          ],
+        },
         select: {
           id: true,
           externalShipmentId: true,

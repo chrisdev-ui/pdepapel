@@ -235,9 +235,12 @@ Usa este proceso para publicaciones que ya existían en Mercado Libre antes de a
    - Si tiene el mismo SKU que un producto local, P de Papel propone el vínculo automáticamente.
    - Si aparece **Sin SKU** o no reconoce el SKU, usa el selector **Producto local** para elegir manualmente el producto correcto.
    - Si ya está vinculada, no la selecciones otra vez.
+   - Un producto local solo puede vincularse una vez. Si varias publicaciones tienen el mismo SKU, deja marcada únicamente la publicación que corresponde a ese producto y revisa las demás manualmente.
 4. Marca solo las publicaciones correctas y pulsa **Vincular y sincronizar**. Confirma la acción.
 5. Las publicaciones activas o pausadas recibirán el stock local de P de Papel. Las cerradas quedan registradas, pero no se actualiza su stock.
 6. Revisa el precio y el colchón de seguridad de cada publicación importada. El precio importado se conserva como referencia exclusiva de Mercado Libre y nunca altera el de la tienda.
+
+Si aparece un aviso de que un producto local fue elegido varias veces, no es una falla de Mercado Libre: desmarca los vínculos repetidos. Cada publicación o variación necesita su propio producto local para que el stock pueda sincronizarse correctamente.
 
 ## Conciliar ventas anteriores
 
@@ -266,5 +269,5 @@ Si aparece **Sin vínculo local**, el SKU de la publicación de Mercado Libre no
 - Si Mercado Libre todavía no publicó ese detalle, la venta muestra **Liquidación pendiente** y se reintenta de forma diferida. Nunca se presenta el valor bruto como ingreso de P de Papel.
 - Cada venta pagada nueva genera un correo administrativo con un enlace directo a su registro en **Ventas de Mercado Libre** solo después de confirmar el neto. El enlace resalta la venta y sus productos locales vinculados.
 - Si falta un vínculo del producto, falta stock o existe una condición insegura, la venta queda como excepción y no se descuenta parcialmente.
-- Una cancelación de Mercado Libre no repone automáticamente las unidades. El administrador debe confirmar el retorno físico antes de registrar un movimiento de devolución.
+- Cuando Mercado Libre cancela una venta que todavía no se había despachado, el envío deja de mostrarse como listo para preparar y pasa a **Cancelado**. La cancelación no repone automáticamente las unidades: el administrador debe confirmar el retorno físico antes de registrar un movimiento de devolución.
 - No publiques productos archivados, sin fotos, sin categoría o sin precio de Mercado Libre configurado.

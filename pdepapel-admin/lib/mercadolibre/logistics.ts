@@ -3,8 +3,15 @@ import { Prisma } from "@prisma/client";
 import prismadb from "@/lib/prismadb";
 
 import { getMercadoLibreJson } from "./client";
+import {
+  getEffectiveMercadoLibreShipmentStatus,
+  normalizeMercadoLibreShipmentStatus,
+} from "./logistics-status";
 export {
+  getEffectiveMercadoLibreShipmentStatus,
   getClaimStatusMeta,
+  isMercadoLibreShipmentAwaitingDispatch,
+  normalizeMercadoLibreShipmentStatus,
   getShipmentStatusMeta,
   SHIPMENT_STATUS_META,
 } from "./logistics-status";
@@ -90,7 +97,7 @@ async function resolveMercadoLibreShipmentOrder(
     const externalOrderIds = getMercadoLibreShipmentOrderIds(items);
 
     if (externalOrderIds.length !== 1) {
-      return { externalOrderIds, marketplaceOrderId: null };
+      return { externalOrderIds, marketplaceOrder: null };
     }
 
     const marketplaceOrder = await prismadb.marketplaceOrder.findFirst({
@@ -98,19 +105,19 @@ async function resolveMercadoLibreShipmentOrder(
         connectionId,
         externalOrderId: externalOrderIds[0],
       },
-      select: { id: true },
+      select: { id: true, status: true },
     });
 
     return {
       externalOrderIds,
-      marketplaceOrderId: marketplaceOrder?.id ?? null,
+      marketplaceOrder,
     };
   } catch (error) {
     console.warn("Mercado Libre shipment order lookup failed", {
       externalShipmentId,
       message: error instanceof Error ? error.message : "unknown",
     });
-    return { externalOrderIds: [], marketplaceOrderId: null };
+    return { externalOrderIds: [], marketplaceOrder: null };
   }
 }
 
@@ -126,7 +133,9 @@ export function parseMercadoLibreShipment(
 
   return {
     externalShipmentId,
-    status: getString(payload.status)?.toLowerCase() ?? "unknown",
+    status: normalizeMercadoLibreShipmentStatus(
+      getString(payload.status) ?? "unknown",
+    ),
     substatus: getString(payload.substatus)?.toLowerCase() ?? null,
     logisticsType: getString(payload.logistic_type) ?? null,
     trackingNumber: getString(payload.tracking_number) ?? null,
@@ -148,9 +157,13 @@ export async function synchronizeMercadoLibreShipment(
     connectionId,
     shipment.externalShipmentId,
   );
-  const marketplaceOrderData = orderLink.marketplaceOrderId
-    ? { marketplaceOrderId: orderLink.marketplaceOrderId }
+  const marketplaceOrderData = orderLink.marketplaceOrder
+    ? { marketplaceOrderId: orderLink.marketplaceOrder.id }
     : {};
+  const status = getEffectiveMercadoLibreShipmentStatus(
+    shipment.status,
+    orderLink.marketplaceOrder?.status,
+  );
   const metadata = toJsonValue({
     ...shipment.metadata,
     externalOrderIds: orderLink.externalOrderIds,
@@ -165,7 +178,7 @@ export async function synchronizeMercadoLibreShipment(
     },
     update: {
       ...marketplaceOrderData,
-      status: shipment.status,
+      status,
       substatus: shipment.substatus,
       logisticsType: shipment.logisticsType,
       trackingNumber: shipment.trackingNumber,
@@ -174,9 +187,9 @@ export async function synchronizeMercadoLibreShipment(
     },
     create: {
       connectionId,
-      marketplaceOrderId: orderLink.marketplaceOrderId,
+      marketplaceOrderId: orderLink.marketplaceOrder?.id ?? null,
       externalShipmentId: shipment.externalShipmentId,
-      status: shipment.status,
+      status,
       substatus: shipment.substatus,
       logisticsType: shipment.logisticsType,
       trackingNumber: shipment.trackingNumber,

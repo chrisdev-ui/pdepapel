@@ -1,12 +1,59 @@
-import { MarketplaceOrderStatus } from "@prisma/client";
-import { describe, expect, it } from "vitest";
+import {
+  MarketplaceInventoryStatus,
+  MarketplaceOrderStatus,
+} from "@prisma/client";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  enqueueOutbox: vi.fn(),
+  findListings: vi.fn(),
+  findOrder: vi.fn(),
+  recalculateKitStock: vi.fn(),
+  shipmentUpdateMany: vi.fn(),
+  updateOrder: vi.fn(),
+  upsertOrder: vi.fn(),
+}));
+
+vi.mock("@/lib/prismadb", () => ({
+  default: {
+    marketplaceListing: { findMany: mocks.findListings },
+    marketplaceOrder: {
+      findUnique: mocks.findOrder,
+      update: mocks.updateOrder,
+      upsert: mocks.upsertOrder,
+    },
+    marketplaceShipment: { updateMany: mocks.shipmentUpdateMany },
+  },
+}));
+vi.mock("@/lib/inventory", () => ({
+  recalculateKitStock: mocks.recalculateKitStock,
+}));
+vi.mock("@/lib/mercadolibre/outbox", () => ({
+  enqueuePendingMarketplaceOutboxEvents: mocks.enqueueOutbox,
+  queueMarketplaceOrderFinancials: vi.fn(),
+  queueMarketplaceOrderNotification: vi.fn(),
+  queueMarketplaceStockSyncEvents: vi.fn(),
+}));
 
 import {
   isMercadoLibreOrderNewlyPaid,
   parseMercadoLibreOrder,
+  synchronizeMercadoLibreOrder,
 } from "@/lib/mercadolibre/order-sync";
 
 describe("Mercado Libre order parsing", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.findListings.mockResolvedValue([]);
+    mocks.findOrder.mockResolvedValue({ status: MarketplaceOrderStatus.PAID });
+    mocks.upsertOrder.mockResolvedValue({
+      id: "marketplace-order-id",
+      inventoryStatus: MarketplaceInventoryStatus.DECREMENTED,
+      netAmount: 46_457,
+    });
+    mocks.shipmentUpdateMany.mockResolvedValue({ count: 1 });
+  });
+
   it("normalizes a confirmed sale without trusting the webhook payload", () => {
     const order = parseMercadoLibreOrder({
       id: 2000001,
@@ -91,5 +138,52 @@ describe("Mercado Libre order parsing", () => {
         MarketplaceOrderStatus.CANCELLED,
       ),
     ).toBe(false);
+  });
+
+  it("cancels an undelivered shipment without automatically restoring stock", async () => {
+    const result = await synchronizeMercadoLibreOrder(
+      "connection-id",
+      "store-id",
+      {
+        id: 2000017813937484,
+        status: "cancelled",
+        total_amount: 69_000,
+        date_last_updated: "2026-08-19T13:30:00.000Z",
+        shipping: { id: 47712931618 },
+        order_items: [
+          {
+            quantity: 1,
+            unit_price: 69_000,
+            item: { id: "MCO123", title: "Agenda kawaii" },
+          },
+        ],
+      },
+    );
+
+    expect(result).toEqual({ inventoryChanged: false, needsAttention: false });
+    expect(mocks.shipmentUpdateMany).toHaveBeenCalledWith({
+      where: {
+        connectionId: "connection-id",
+        status: { in: ["pending", "handling", "ready_to_ship"] },
+        OR: [
+          { marketplaceOrderId: "marketplace-order-id" },
+          { externalShipmentId: "47712931618" },
+        ],
+      },
+      data: {
+        status: "cancelled",
+        substatus: "cancelled_with_order",
+        lastRemoteUpdateAt: new Date("2026-08-19T13:30:00.000Z"),
+      },
+    });
+    expect(mocks.updateOrder).toHaveBeenCalledWith({
+      where: { id: "marketplace-order-id" },
+      data: {
+        inventoryStatus: MarketplaceInventoryStatus.RESTOCK_PENDING,
+        inventoryError:
+          "La venta fue cancelada. Confirma el retorno físico antes de devolver unidades al inventario.",
+      },
+    });
+    expect(mocks.recalculateKitStock).not.toHaveBeenCalled();
   });
 });
