@@ -8,8 +8,10 @@ import { AppError, ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { env } from "@/lib/env.mjs";
 import {
   buildProductImageAnalysisPrompt,
+  getProductImageAnalysisCacheKey,
   getProductImageAnalysisRateLimitKey,
   isSupportedProductImageUrl,
+  PRODUCT_IMAGE_ANALYSIS_CACHE_TTL_SECONDS,
   PRODUCT_IMAGE_ANALYSIS_DAILY_LIMIT,
   productImageAnalysisOutputSchema,
   productImageAnalysisRequestSchema,
@@ -34,8 +36,7 @@ function getModelError(error: unknown) {
   return error;
 }
 
-async function reserveDailyAnalysis(storeId: string) {
-  const redis = Redis.fromEnv();
+async function reserveDailyAnalysis(redis: Redis, storeId: string) {
   const key = getProductImageAnalysisRateLimitKey(storeId);
   const count = await redis.incr(key);
 
@@ -51,6 +52,18 @@ async function reserveDailyAnalysis(storeId: string) {
   }
 
   return PRODUCT_IMAGE_ANALYSIS_DAILY_LIMIT - count;
+}
+
+async function getRemainingDailyAnalyses(redis: Redis, storeId: string) {
+  const count = await redis.get<number>(
+    getProductImageAnalysisRateLimitKey(storeId),
+  );
+
+  return Math.max(
+    0,
+    PRODUCT_IMAGE_ANALYSIS_DAILY_LIMIT -
+      (typeof count === "number" ? count : 0),
+  );
 }
 
 export async function POST(
@@ -93,7 +106,37 @@ export async function POST(
       }),
     ]);
 
-    const remainingAnalysesToday = await reserveDailyAnalysis(params.storeId);
+    const redis = Redis.fromEnv();
+    const cacheKey = getProductImageAnalysisCacheKey(params.storeId, {
+      imageUrls: payload.imageUrls,
+      categoryName: payload.categoryName,
+      colors,
+      designs,
+    });
+    const cachedOutput = productImageAnalysisOutputSchema.safeParse(
+      await redis.get(cacheKey),
+    );
+
+    if (cachedOutput.success) {
+      return NextResponse.json({
+        analysis: sanitizeProductImageAnalysis(cachedOutput.data, {
+          colors,
+          designs,
+        }),
+        remainingAnalysesToday: await getRemainingDailyAnalyses(
+          redis,
+          params.storeId,
+        ),
+        reusedAnalysis: true,
+        message:
+          "Se reutilizó una propuesta para estas mismas fotos. No consumió otro análisis visual.",
+      });
+    }
+
+    const remainingAnalysesToday = await reserveDailyAnalysis(
+      redis,
+      params.storeId,
+    );
     const google = createGoogleGenerativeAI({ apiKey: env.GEMINI_API_KEY });
     const result = await generateText({
       model: google("gemini-3.5-flash-lite"),
@@ -127,12 +170,24 @@ export async function POST(
       );
     }
 
+    try {
+      await redis.set(cacheKey, result.output, {
+        ex: PRODUCT_IMAGE_ANALYSIS_CACHE_TTL_SECONDS,
+      });
+    } catch (cacheError) {
+      console.error(
+        "[PRODUCT_IMAGE_ANALYSIS_CACHE_SET] Could not cache visual analysis",
+        cacheError,
+      );
+    }
+
     return NextResponse.json({
       analysis: sanitizeProductImageAnalysis(result.output, {
         colors,
         designs,
       }),
       remainingAnalysesToday,
+      reusedAnalysis: false,
       message:
         "Propuesta creada. Revisa y confirma los campos antes de guardar el producto.",
     });

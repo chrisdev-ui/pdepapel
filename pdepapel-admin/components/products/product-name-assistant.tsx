@@ -91,6 +91,7 @@ export function ProductNameAssistant({
   const [remainingAnalysesToday, setRemainingAnalysesToday] = useState<
     number | null
   >(null);
+  const [reusedVisualAnalysis, setReusedVisualAnalysis] = useState(false);
   const [pendingVisualAttribute, setPendingVisualAttribute] =
     useState<PendingVisualAttribute | null>(null);
   const [isCreatingVisualAttribute, setIsCreatingVisualAttribute] =
@@ -172,6 +173,7 @@ export function ProductNameAssistant({
 
       setVisualAnalysis(payload.analysis);
       setRemainingAnalysesToday(payload.remainingAnalysesToday ?? null);
+      setReusedVisualAnalysis(payload.reusedAnalysis === true);
     } catch (error) {
       setVisualAnalysisError(
         error instanceof Error
@@ -464,9 +466,15 @@ export function ProductNameAssistant({
         )}
 
         {remainingAnalysesToday !== null && (
-          <p className="mt-3 text-xs text-muted-foreground">
-            Quedan {remainingAnalysesToday} análisis visuales hoy.
-          </p>
+          <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+            {reusedVisualAnalysis && (
+              <p>
+                Se reutilizó la propuesta de estas mismas fotos: no consumió un
+                análisis adicional.
+              </p>
+            )}
+            <p>Quedan {remainingAnalysesToday} análisis visuales hoy.</p>
+          </div>
         )}
       </div>
 

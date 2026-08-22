@@ -143,4 +143,58 @@ describe("ProductNameAssistant visual analysis", () => {
       colorHex: "#F5B7C6",
     });
   });
+
+  it("explains when a previous visual proposal was reused without consuming quota", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            analysis: {
+              suggestedBaseName: "Cuaderno argollado A5",
+              brand: null,
+              colorName: null,
+              colorHex: null,
+              colorId: null,
+              colorSource: "not_detected",
+              colorIsDeterministic: false,
+              designName: null,
+              designId: null,
+              designSource: "not_detected",
+              designIsDeterministic: false,
+              observations: [],
+              limitations: [],
+            },
+            remainingAnalysesToday: 17,
+            reusedAnalysis: true,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      ),
+    );
+
+    render(
+      <ProductNameAssistant
+        currentName=""
+        storeId="store-id"
+        imageUrls={[
+          "https://res.cloudinary.com/pdepapel/image/upload/v1/cuaderno.webp",
+        ]}
+        onApply={vi.fn()}
+        onApplyVisualAnalysis={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Analizar fotos" }));
+
+    expect(
+      await screen.findByText(
+        "Se reutilizó la propuesta de estas mismas fotos: no consumió un análisis adicional.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Quedan 17 análisis visuales hoy."),
+    ).toBeInTheDocument();
+  });
 });

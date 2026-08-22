@@ -1,8 +1,11 @@
+import { createHash } from "node:crypto";
+
 import { normalizeProductNamePart } from "@/lib/product-naming";
 import { z } from "zod";
 
 export const MAX_PRODUCT_IMAGE_ANALYSIS_IMAGES = 3;
-export const PRODUCT_IMAGE_ANALYSIS_DAILY_LIMIT = 12;
+export const PRODUCT_IMAGE_ANALYSIS_DAILY_LIMIT = 20;
+export const PRODUCT_IMAGE_ANALYSIS_CACHE_TTL_SECONDS = 60 * 60 * 24;
 
 const CLOUDINARY_IMAGE_HOST = "res.cloudinary.com";
 
@@ -97,6 +100,37 @@ export function getProductImageAnalysisRateLimitKey(
   date = new Date(),
 ) {
   return `store:${storeId}:product-image-analysis:${getProductImageAnalysisDay(date)}`;
+}
+
+export function getProductImageAnalysisCacheKey(
+  storeId: string,
+  input: {
+    imageUrls: string[];
+    categoryName?: string;
+    colors: TaxonomyOption[];
+    designs: TaxonomyOption[];
+  },
+) {
+  const normalizedInput = {
+    version: 1,
+    imageUrls: [...input.imageUrls].sort(),
+    categoryName: normalizeForMatching(input.categoryName),
+    colors: [...input.colors]
+      .map((color) => ({
+        id: color.id,
+        name: color.name,
+        value: color.value ?? null,
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+    designs: [...input.designs]
+      .map((design) => ({ id: design.id, name: design.name }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+  };
+  const fingerprint = createHash("sha256")
+    .update(JSON.stringify(normalizedInput))
+    .digest("hex");
+
+  return `store:${storeId}:product-image-analysis:cache:${fingerprint}`;
 }
 
 function findExactTaxonomyMatch(

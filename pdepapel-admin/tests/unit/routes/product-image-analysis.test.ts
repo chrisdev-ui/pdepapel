@@ -5,8 +5,10 @@ const mocks = vi.hoisted(() => ({
   verifyStoreOwner: vi.fn(),
   colorFindMany: vi.fn(),
   designFindMany: vi.fn(),
+  redisGet: vi.fn(),
   redisIncr: vi.fn(),
   redisExpire: vi.fn(),
+  redisSet: vi.fn(),
   generateText: vi.fn(),
   createGoogle: vi.fn(),
   env: { GEMINI_API_KEY: "gemini-test-key" as string | undefined },
@@ -24,8 +26,10 @@ vi.mock("@/lib/prismadb", () => ({
 vi.mock("@upstash/redis", () => ({
   Redis: {
     fromEnv: () => ({
+      get: mocks.redisGet,
       incr: mocks.redisIncr,
       expire: mocks.redisExpire,
+      set: mocks.redisSet,
     }),
   },
 }));
@@ -74,8 +78,10 @@ describe("product image analysis route", () => {
     mocks.designFindMany.mockResolvedValue([
       { id: "design-floral", name: "Floral" },
     ]);
+    mocks.redisGet.mockResolvedValue(null);
     mocks.redisIncr.mockResolvedValue(1);
     mocks.redisExpire.mockResolvedValue(1);
+    mocks.redisSet.mockResolvedValue("OK");
     mocks.createGoogle.mockReturnValue(vi.fn(() => "gemini-model"));
     mocks.generateText.mockResolvedValue({
       output: {
@@ -115,11 +121,52 @@ describe("product image analysis route", () => {
         colorSource: "existing",
         designId: "design-floral",
       },
-      remainingAnalysesToday: 11,
+      remainingAnalysesToday: 19,
+      reusedAnalysis: false,
     });
     expect(mocks.verifyStoreOwner).toHaveBeenCalledWith("owner-id", "store-id");
     expect(mocks.generateText).toHaveBeenCalledTimes(1);
     expect(mocks.redisIncr).toHaveBeenCalledTimes(1);
+    expect(mocks.redisSet).toHaveBeenCalledTimes(1);
+  });
+
+  it("reuses an identical cached proposal without consuming another analysis", async () => {
+    mocks.redisGet
+      .mockResolvedValueOnce({
+        suggestedBaseName: "Cuaderno argollado A5",
+        brand: "Sanrio",
+        colorName: "rosa",
+        colorHex: "#F8B4C7",
+        colorIsDeterministic: true,
+        designName: "Floral",
+        designIsDeterministic: true,
+        observations: ["La portada muestra flores."],
+        limitations: [],
+      })
+      .mockResolvedValueOnce(3);
+
+    const response = await POST(
+      new Request("https://admin.example.com", {
+        method: "POST",
+        body: JSON.stringify({
+          imageUrls: [
+            "https://res.cloudinary.com/pdepapel/image/upload/v1/cuaderno.webp",
+          ],
+          categoryName: "Cuadernos",
+        }),
+      }),
+      { params: { storeId: "store-id" } },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      analysis: { suggestedBaseName: "Cuaderno argollado A5" },
+      remainingAnalysesToday: 17,
+      reusedAnalysis: true,
+    });
+    expect(mocks.generateText).not.toHaveBeenCalled();
+    expect(mocks.redisIncr).not.toHaveBeenCalled();
+    expect(mocks.redisSet).not.toHaveBeenCalled();
   });
 
   it("blocks URLs that are not catalog images before calling the model", async () => {

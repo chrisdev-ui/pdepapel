@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   MAX_PRODUCT_IMAGE_ANALYSIS_IMAGES,
+  PRODUCT_IMAGE_ANALYSIS_CACHE_TTL_SECONDS,
   PRODUCT_IMAGE_ANALYSIS_DAILY_LIMIT,
   buildProductImageAnalysisPrompt,
+  getProductImageAnalysisCacheKey,
   getProductImageAnalysisDay,
   getProductImageAnalysisRateLimitKey,
   isSupportedProductImageUrl,
@@ -32,8 +34,34 @@ describe("product image analysis helpers", () => {
     expect(getProductImageAnalysisRateLimitKey("store-id", date)).toBe(
       "store:store-id:product-image-analysis:2026-08-21",
     );
-    expect(PRODUCT_IMAGE_ANALYSIS_DAILY_LIMIT).toBe(12);
+    expect(PRODUCT_IMAGE_ANALYSIS_DAILY_LIMIT).toBe(20);
     expect(MAX_PRODUCT_IMAGE_ANALYSIS_IMAGES).toBe(3);
+    expect(PRODUCT_IMAGE_ANALYSIS_CACHE_TTL_SECONDS).toBe(60 * 60 * 24);
+  });
+
+  it("uses a stable cache key only for the same images and taxonomy", () => {
+    const input = {
+      imageUrls: [
+        "https://res.cloudinary.com/pdepapel/image/upload/v1/segunda.webp",
+        "https://res.cloudinary.com/pdepapel/image/upload/v1/primera.webp",
+      ],
+      categoryName: "Cuadernos",
+      colors: [{ id: "color-rosa", name: "Rosa", value: "#F8B4C7" }],
+      designs: [{ id: "design-floral", name: "Floral" }],
+    };
+
+    expect(getProductImageAnalysisCacheKey("store-id", input)).toBe(
+      getProductImageAnalysisCacheKey("store-id", {
+        ...input,
+        imageUrls: [...input.imageUrls].reverse(),
+      }),
+    );
+    expect(
+      getProductImageAnalysisCacheKey("store-id", {
+        ...input,
+        categoryName: "Agendas",
+      }),
+    ).not.toBe(getProductImageAnalysisCacheKey("store-id", input));
   });
 
   it("matches deterministic attributes already configured by this store", () => {
