@@ -42,6 +42,11 @@ export const columns: ColumnDef<ProductColumn>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Nombre" />
     ),
+    cell: ({ row }) => (
+      <div className="max-w-[280px] truncate" title={row.original.name}>
+        {row.original.name}
+      </div>
+    ),
   },
   {
     accessorKey: "productGroup.name",
@@ -49,7 +54,10 @@ export const columns: ColumnDef<ProductColumn>[] = [
       <DataTableColumnHeader column={column} title="Grupo" />
     ),
     cell: ({ row }) => (
-      <span className="text-muted-foreground">
+      <span
+        className="block max-w-[220px] truncate text-muted-foreground"
+        title={row.original.productGroup?.name}
+      >
         {row.original.productGroup?.name || "-"}
       </span>
     ),

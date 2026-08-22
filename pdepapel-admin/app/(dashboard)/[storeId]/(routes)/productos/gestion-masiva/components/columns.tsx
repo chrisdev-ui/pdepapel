@@ -66,6 +66,11 @@ export const columns: ColumnDef<ProductColumn>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Nombre" />
     ),
+    cell: ({ row }) => (
+      <div className="max-w-[280px] truncate" title={row.original.name}>
+        {row.original.name}
+      </div>
+    ),
   },
   {
     id: "type",

@@ -22,9 +22,12 @@ import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
 export async function OPTIONS(req: Request) {
-  return NextResponse.json({}, {
-    headers: createCorsHeaders(req, { methods: "GET, OPTIONS" }),
-  });
+  return NextResponse.json(
+    {},
+    {
+      headers: createCorsHeaders(req, { methods: "GET, OPTIONS" }),
+    },
+  );
 }
 
 export async function GET(
@@ -158,6 +161,7 @@ export async function PATCH(
       isArchived,
       isFeatured,
       productGroupId,
+      preserveSlug = false,
 
       isKit,
       components,
@@ -263,14 +267,17 @@ export async function PATCH(
       }
     }
 
-    let updatedSlug = generateProductSlug({ name });
-    if (!updatedSlug) updatedSlug = "producto";
+    let uniqueSlug = productToUpdate.slug;
+    if (!preserveSlug) {
+      let updatedSlug = generateProductSlug({ name });
+      if (!updatedSlug) updatedSlug = "producto";
 
-    const uniqueSlug = await getUniqueProductSlug(prismadb, {
-      storeId: params.storeId,
-      baseSlug: updatedSlug,
-      excludeProductId: params.productId,
-    });
+      uniqueSlug = await getUniqueProductSlug(prismadb, {
+        storeId: params.storeId,
+        baseSlug: updatedSlug,
+        excludeProductId: params.productId,
+      });
+    }
     const targetProductGroupId = normalizedProductGroupId;
     const affectedProductGroupIds = Array.from(
       new Set(
@@ -354,19 +361,21 @@ export async function PATCH(
         })),
       });
 
-      if (
-        affectedProductGroupIds.length === 0 &&
-        productToUpdate.slug !== uniqueSlug
-      ) {
-        await preserveProductSlugAlias(tx, {
-          storeId: params.storeId,
-          productId: productToUpdate.id,
-          slug: productToUpdate.slug,
-        });
-      }
+      if (!preserveSlug) {
+        if (
+          affectedProductGroupIds.length === 0 &&
+          productToUpdate.slug !== uniqueSlug
+        ) {
+          await preserveProductSlugAlias(tx, {
+            storeId: params.storeId,
+            productId: productToUpdate.id,
+            slug: productToUpdate.slug,
+          });
+        }
 
-      for (const groupId of affectedProductGroupIds) {
-        await synchronizeProductGroupSlugs(tx, params.storeId, groupId);
+        for (const groupId of affectedProductGroupIds) {
+          await synchronizeProductGroupSlugs(tx, params.storeId, groupId);
+        }
       }
 
       // Return updated product

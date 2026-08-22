@@ -369,6 +369,7 @@ Known manual migration references:
 - `20260809_add_point_of_sale.sql` — adds `POINT_OF_SALE`, `IN_PERSON_SALE`, and the `(storeId, gtin)` product lookup index. Apply to Railway before using the feature in production.
 - `20260816_add_order_account_claims.sql` — creates the short-lived, hashed guest-order claim table; applied to Railway on 2026-08-16.
 - `20260820_add_customer_account_benefits.sql` — adds separate email/device order claims, persisted account favorites, explicit account delivery addresses, and welcome-benefit redemptions. It must be applied to Railway before deploying the related code.
+- `20260821_add_product_naming_changes.sql` — adds the additive, reversible audit trail for title-only product and product-group naming batches. Apply it to Railway before deploying the naming-review route.
 
 ## 8. Catalog, SEO, and revalidation
 
@@ -379,6 +380,9 @@ Known manual migration references:
 - Use color/size in a slug only when the catalog has real variants needing differentiation. Avoid duplicated semantic tokens.
 - For new SEO category pages, ensure they are reachable from relevant public navigation/card sections rather than only by direct URL.
 - Category image is optional at data level. Do not make it mandatory if legitimate categories lack a good image; the UI must have a graceful image fallback.
+- Product titles use the factual template `what it is + package detail + real brand + variant attributes only when they differ`. The admin form exposes a deterministic **Asistente de nombre**; it may organize confirmed fields but must never invent a brand, license, material, measure, compatibility claim, or GTIN.
+- **Catálogo → Nombres para búsqueda** is the audited cleanup flow for existing product and product-group titles. It applies at most 25 reviewed changes per request, updates only `name`, invalidates storefront catalog data once, and can revert a change only when no later edit replaced that title. It must not modify slug/URL, stock, pricing, images, orders, or Mercado Libre listing content.
+- Existing-product and product-group form saves send `preserveSlug: true`; a name edit in the administration UI must not rewrite a public slug. New products still receive their canonical slugs at creation time. Generic API callers retain the legacy slug-regeneration behavior unless they explicitly use the title-only naming endpoint or `preserveSlug`.
 
 ### Store ISR revalidation contract
 
@@ -391,6 +395,8 @@ Catalog changes in administration notify the public shop through `POST /api/reva
 - After a catalog mutation, verify both the admin mutation and the public-page cache refresh. A successful DB update with a stale public page is still a customer-visible defect.
 
 See `docs/revalidacion-catalogo.md` and `docs/seguimiento-seo.md`.
+
+Admin instructions: `pdepapel-admin/docs/nombres-productos.md`.
 
 ## 9. Orders, payments, inventory, and shipping
 

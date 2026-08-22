@@ -67,8 +67,8 @@ const ProductCardSkeleton: React.FC = () => {
       <div className="relative rounded-xl">
         <Skeleton className="aspect-square w-full rounded-md" />
       </div>
-      <div className="flex flex-col gap-y-2.5">
-        <Skeleton className="h-4 w-3/4" />
+      <div className="flex min-h-[4.5rem] flex-col gap-y-2.5">
+        <Skeleton className="h-7 w-3/4" />
         <Skeleton className="h-3 w-1/2" />
       </div>
       <Skeleton className="h-4 w-1/2" />

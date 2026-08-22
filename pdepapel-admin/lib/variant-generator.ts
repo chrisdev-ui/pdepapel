@@ -1,3 +1,5 @@
+import { buildProductVariantNameSuggestion } from "@/lib/product-naming";
+
 export interface VariantOption {
   id: string;
   name: string;
@@ -67,7 +69,7 @@ export function generateSemanticSKU(
 }
 
 export function generateVariants(params: GenerationParams): GeneratedVariant[] {
-  const { category, designs, colors, sizes } = params;
+  const { baseName, category, designs, colors, sizes } = params;
   const variants: GeneratedVariant[] = [];
 
   // Format: CATEGORY(3) - DESIGN(3) - COLOR(3) - SIZE(Full) - RANDOM(4)
@@ -76,9 +78,13 @@ export function generateVariants(params: GenerationParams): GeneratedVariant[] {
   for (const design of designs) {
     for (const color of colors) {
       for (const size of sizes) {
-        // Generated Name
-        // e.g. "T-Shirt Summer Red XL"
-        const name = `${category.name} ${design.name} ${color.name} ${size.value || size.name}`;
+        const name = buildProductVariantNameSuggestion({
+          baseName,
+          categoryName: category.name,
+          designName: design.name,
+          colorName: color.name,
+          sizeName: size.value || size.name,
+        }).name;
 
         const sku = generateSemanticSKU(
           category.name,

@@ -21,7 +21,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useActionConfirmation } from "@/hooks/use-action-confirmation";
 import {
   Select,
   SelectContent,
@@ -295,6 +297,7 @@ export function MercadoLibreListingManager({
   storeId: string;
   canPublish: boolean;
 }) {
+  const { requestConfirmation, confirmationDialog } = useActionConfirmation();
   const [listings, setListings] = useState<Listing[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -349,6 +352,8 @@ export function MercadoLibreListingManager({
     CategoryTemplate[]
   >([]);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+  const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
+  const [templateName, setTemplateName] = useState("");
   const [publicationProfiles, setPublicationProfiles] = useState<
     PublicationProfile[]
   >([]);
@@ -491,10 +496,10 @@ export function MercadoLibreListingManager({
             const suggestedProductId = listing.suggestedProduct?.id ?? "";
             const canAutoSelect = Boolean(
               !listing.existingListingId &&
-                suggestedProductId &&
-                !listing.issue &&
-                listing.status !== "ERROR" &&
-                !automaticallySelectedProductIds.has(suggestedProductId),
+              suggestedProductId &&
+              !listing.issue &&
+              listing.status !== "ERROR" &&
+              !automaticallySelectedProductIds.has(suggestedProductId),
             );
             if (canAutoSelect) {
               automaticallySelectedProductIds.add(suggestedProductId);
@@ -569,9 +574,11 @@ export function MercadoLibreListingManager({
       return;
     }
     if (
-      !window.confirm(
-        `¿Vincular ${selections.length} publicación${selections.length === 1 ? "" : "es"} y sincronizar su stock con P de Papel?`,
-      )
+      !(await requestConfirmation({
+        title: "¿Vincular publicaciones?",
+        description: `Se vincularán ${selections.length} publicación${selections.length === 1 ? "" : "es"} y se sincronizará su stock con P de Papel.`,
+        confirmLabel: "Vincular y sincronizar",
+      }))
     ) {
       return;
     }
@@ -854,9 +861,12 @@ export function MercadoLibreListingManager({
 
   const syncListingContent = async (listing: Listing) => {
     if (
-      !window.confirm(
-        "Se reemplazarán en Mercado Libre las imágenes elegidas, la descripción y las características configuradas. ¿Continuar?",
-      )
+      !(await requestConfirmation({
+        title: "¿Sincronizar contenido?",
+        description:
+          "Se reemplazarán en Mercado Libre las imágenes elegidas, la descripción y las características configuradas.",
+        confirmLabel: "Sincronizar contenido",
+      }))
     ) {
       return;
     }
@@ -993,9 +1003,11 @@ export function MercadoLibreListingManager({
     }
     if (
       !skipConfirmation &&
-      !window.confirm(
-        `¿Publicar “${listing.product.name}” en Mercado Libre por ${currencyFormatter.format(listing.marketplacePrice ?? 0)}?`,
-      )
+      !(await requestConfirmation({
+        title: "¿Publicar en Mercado Libre?",
+        description: `Publicarás “${listing.product.name}” por ${currencyFormatter.format(listing.marketplacePrice ?? 0)}.`,
+        confirmLabel: "Publicar producto",
+      }))
     ) {
       return;
     }
@@ -1031,9 +1043,11 @@ export function MercadoLibreListingManager({
     const productName =
       selectedProduct?.name ?? editingListing?.product.name ?? "este producto";
     if (
-      !window.confirm(
-        `¿Guardar y publicar “${productName}” en Mercado Libre por ${currencyFormatter.format(Number(form.marketplacePrice) || 0)}?`,
-      )
+      !(await requestConfirmation({
+        title: "¿Guardar y publicar?",
+        description: `Guardarás y publicarás “${productName}” por ${currencyFormatter.format(Number(form.marketplacePrice) || 0)}.`,
+        confirmLabel: "Guardar y publicar",
+      }))
     ) {
       return;
     }
@@ -1058,9 +1072,11 @@ export function MercadoLibreListingManager({
     }
     const actionLabel = bulkActionLabels[bulkAction].toLowerCase();
     if (
-      !window.confirm(
-        `¿Confirmas ${actionLabel} para ${selectedListingIds.length} publicación${selectedListingIds.length === 1 ? "" : "es"}? Las acciones se procesarán de forma segura en segundo plano.`,
-      )
+      !(await requestConfirmation({
+        title: "¿Confirmar acción masiva?",
+        description: `Confirmas ${actionLabel} para ${selectedListingIds.length} publicación${selectedListingIds.length === 1 ? "" : "es"}. Las acciones se procesarán de forma segura en segundo plano.`,
+        confirmLabel: "Confirmar acción",
+      }))
     ) {
       return;
     }
@@ -1108,6 +1124,16 @@ export function MercadoLibreListingManager({
     setError(null);
   };
 
+  const openCategoryTemplateDialog = async () => {
+    if (!form.categoryId) {
+      setError("Selecciona una categoría antes de guardar una plantilla");
+      return;
+    }
+
+    setTemplateName("");
+    setIsTemplateDialogOpen(true);
+  };
+
   const saveCategoryTemplate = async () => {
     if (!form.categoryId) {
       setError("Selecciona una categoría antes de guardar una plantilla");
@@ -1130,8 +1156,11 @@ export function MercadoLibreListingManager({
       );
       return;
     }
-    const name = window.prompt("Nombre para la plantilla de esta categoría:");
-    if (!name?.trim()) return;
+    const name = templateName.trim();
+    if (!name) {
+      setError("Escribe un nombre para identificar esta plantilla");
+      return;
+    }
 
     setIsSavingTemplate(true);
     setError(null);
@@ -1152,6 +1181,8 @@ export function MercadoLibreListingManager({
       );
       if (!response.ok) throw new Error(await getErrorMessage(response));
       await loadCategoryTemplates();
+      setIsTemplateDialogOpen(false);
+      setTemplateName("");
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -1843,11 +1874,60 @@ export function MercadoLibreListingManager({
               );
               if (template) applyCategoryTemplate(template);
             }}
-            onSaveCategoryTemplate={saveCategoryTemplate}
+            onSaveCategoryTemplate={openCategoryTemplateDialog}
             onSaveQuickProfile={saveQuickProfile}
             onSave={saveListing}
             onSaveAndPublish={saveAndPublishListing}
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isTemplateDialogOpen}
+        onOpenChange={(open) => {
+          if (!isSavingTemplate) setIsTemplateDialogOpen(open);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Guardar plantilla de categoría</DialogTitle>
+            <DialogDescription>
+              Escribe un nombre corto para reconocer estas características en
+              futuras publicaciones.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void saveCategoryTemplate();
+            }}
+          >
+            <div className="grid gap-2">
+              <Label htmlFor="category-template-name">Nombre</Label>
+              <Input
+                id="category-template-name"
+                value={templateName}
+                maxLength={80}
+                autoFocus
+                placeholder="Ej. Térmicos kawaii"
+                onChange={(event) => setTemplateName(event.target.value)}
+              />
+            </div>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isSavingTemplate}
+                onClick={() => setIsTemplateDialogOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={isSavingTemplate}>
+                {isSavingTemplate ? "Guardando..." : "Guardar plantilla"}
+              </Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -1881,6 +1961,7 @@ export function MercadoLibreListingManager({
           ) : null}
         </DialogContent>
       </Dialog>
+      {confirmationDialog}
     </Card>
   );
 }

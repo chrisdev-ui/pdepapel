@@ -36,6 +36,11 @@ export const columns: ColumnDef<LowStockColumn>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Nombre" />
     ),
+    cell: ({ row }) => (
+      <div className="max-w-[280px] truncate" title={row.original.name}>
+        {row.original.name}
+      </div>
+    ),
   },
   {
     id: "category",

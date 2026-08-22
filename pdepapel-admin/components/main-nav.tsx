@@ -40,6 +40,7 @@ import {
   Settings,
   ShoppingBag,
   ShoppingCart,
+  Sparkles,
   Star,
   Tag,
   Truck,
@@ -82,6 +83,13 @@ export function MainNav({
       active: pathname === dashboardPath("productos/gestion-masiva"),
       group: "catalog",
       icon: ListChecks,
+    },
+    {
+      href: dashboardPath("productos/nombres"),
+      label: "Nombres para búsqueda",
+      active: pathname === dashboardPath("productos/nombres"),
+      group: "catalog",
+      icon: Sparkles,
     },
     {
       href: dashboardPath("categorias"),

@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { CurrencyInput } from "@/components/ui/currency-input";
+import { useActionConfirmation } from "@/hooks/use-action-confirmation";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -120,6 +121,7 @@ function getErrorMessage(response: Response) {
 }
 
 export default function TaxReportsClient() {
+  const { requestConfirmation, confirmationDialog } = useActionConfirmation();
   const params = useParams<{ storeId: string }>();
   const storeId = params.storeId;
   const [startDate, setStartDate] = useState(DEFAULT_START_DATE);
@@ -245,9 +247,12 @@ export default function TaxReportsClient() {
 
   const handleDeletePurchase = async (purchase: TaxPurchaseRow) => {
     if (
-      !window.confirm(
-        `¿Eliminar la factura ${purchase.invoiceNumber} de ${purchase.supplierName}?`,
-      )
+      !(await requestConfirmation({
+        title: "¿Eliminar compra?",
+        description: `Se eliminará la factura ${purchase.invoiceNumber} de ${purchase.supplierName}. Esta acción no se puede deshacer.`,
+        confirmLabel: "Eliminar compra",
+        destructive: true,
+      }))
     ) {
       return;
     }
@@ -681,6 +686,7 @@ export default function TaxReportsClient() {
           </form>
         </DialogContent>
       </Dialog>
+      {confirmationDialog}
     </div>
   );
 }

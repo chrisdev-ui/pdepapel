@@ -106,6 +106,11 @@ export const columns: ColumnDef<InventoryMovementColumn>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Producto" />
     ),
+    cell: ({ row }) => (
+      <div className="max-w-[280px] truncate" title={row.original.productName}>
+        {row.original.productName}
+      </div>
+    ),
   },
   {
     accessorKey: "quantity",

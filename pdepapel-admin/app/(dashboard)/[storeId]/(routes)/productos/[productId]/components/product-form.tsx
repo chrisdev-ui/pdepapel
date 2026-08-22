@@ -1,6 +1,8 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { ProductNameAssistant } from "@/components/products/product-name-assistant";
+import { PRODUCT_NAME_MAX_LENGTH } from "@/lib/product-naming";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Eraser,
@@ -353,9 +355,12 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   }, [form, calculatePrice]);
 
   const watchedGroupId = form.watch("productGroupId");
+  const watchedName = form.watch("name");
+  const watchedCategoryId = form.watch("categoryId");
   const watchedColorId = form.watch("colorId");
   const watchedSizeId = form.watch("sizeId");
   const watchedDesignId = form.watch("designId");
+  const watchedBrand = form.watch("brand");
 
   useEffect(() => {
     if (watchedGroupId) {
@@ -429,7 +434,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
         if (initialData) {
           await axios.patch(
             `/api/${params.storeId}/${Models.Products}/${params.productId}`,
-            data,
+            { ...data, preserveSlug: true },
           );
         } else {
           await axios.post(`/api/${params.storeId}/${Models.Products}`, data);
@@ -678,11 +683,12 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               control={form.control}
               name="name"
               render={({ field }) => (
-                <FormItem>
+                <FormItem className="col-span-3">
                   <FormLabel isRequired>Nombre</FormLabel>
                   <FormControl>
                     <Input
                       disabled={loading}
+                      maxLength={PRODUCT_NAME_MAX_LENGTH}
                       placeholder="Nombre del producto"
                       {...field}
                     />
@@ -691,6 +697,32 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 </FormItem>
               )}
             />
+            <div className="col-span-3">
+              <ProductNameAssistant
+                currentName={watchedName}
+                categoryName={
+                  categories.find(
+                    (category) => category.id === watchedCategoryId,
+                  )?.name
+                }
+                brand={watchedBrand}
+                designName={
+                  designs.find((design) => design.id === watchedDesignId)?.name
+                }
+                colorName={
+                  colors.find((color) => color.id === watchedColorId)?.name
+                }
+                sizeName={sizes.find((size) => size.id === watchedSizeId)?.name}
+                disabled={loading}
+                onApply={(name) =>
+                  form.setValue("name", name, {
+                    shouldDirty: true,
+                    shouldTouch: true,
+                    shouldValidate: true,
+                  })
+                }
+              />
+            </div>
             <FormField
               control={form.control}
               name="brand"

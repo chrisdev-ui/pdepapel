@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { useActionConfirmation } from "@/hooks/use-action-confirmation";
 import { useToast } from "@/hooks/use-toast";
 import { env } from "@/lib/env.mjs";
 import {
@@ -56,6 +57,7 @@ export function ProductVideoLibrary({
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const { requestConfirmation, confirmationDialog } = useActionConfirmation();
 
   const loadVideos = useCallback(async () => {
     setIsLoading(true);
@@ -122,8 +124,17 @@ export function ProductVideoLibrary({
   };
 
   const deleteVideo = async (video: ProductVideo) => {
-    if (!window.confirm("¿Eliminar este video de la biblioteca del producto?"))
+    if (
+      !(await requestConfirmation({
+        title: "¿Eliminar video?",
+        description:
+          "El video se eliminará de la biblioteca de este producto. Esta acción no se puede deshacer.",
+        confirmLabel: "Eliminar video",
+        destructive: true,
+      }))
+    ) {
       return;
+    }
     setDeletingId(video.id);
     try {
       const response = await fetch(
@@ -146,109 +157,115 @@ export function ProductVideoLibrary({
   };
 
   return (
-    <div className="grid gap-3 rounded-md border bg-muted/20 p-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <p className="flex items-center gap-2 text-sm font-medium">
-            <Video className="h-4 w-4" /> Biblioteca de videos
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Guarda un video vertical listo para revisar y subir manualmente a
-            Mercado Libre. No se publica automáticamente.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <CldUploadWidget
-            uploadPreset="u0dp1v1y"
-            onSuccess={saveUploadedVideo}
-            options={{
-              resourceType: "video",
-              sources: ["local", "camera"],
-              clientAllowedFormats: ["mp4", "mov", "mpeg", "avi"],
-              maxVideoFileSize: 280 * 1024 * 1024,
-              ...(env.NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME
-                ? { folder: env.NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME }
-                : {}),
-            }}
-          >
-            {({ open }) => (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={isSaving || !open}
-                onClick={() => open()}
-              >
-                {isSaving ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <UploadCloud className="mr-2 h-4 w-4" />
-                )}
-                Cargar video
-              </Button>
-            )}
-          </CldUploadWidget>
-          {marketplaceUploadUrl ? (
-            <Button asChild type="button" size="sm">
-              <a href={marketplaceUploadUrl} target="_blank" rel="noreferrer">
-                Abrir cargador de Mercado Libre
-                <ExternalLink className="ml-2 h-4 w-4" />
-              </a>
-            </Button>
-          ) : null}
-        </div>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        Requisitos para esta biblioteca: vertical, 10–61 segundos, mínimo 360 px
-        de ancho y máximo 280 MB.
-      </p>
-      {marketplaceUploadUrl ? (
-        <p className="text-xs text-muted-foreground">
-          Después de guardar el clip, ábrelo en Mercado Libre y termina la carga
-          allí. P de Papel no lo publica automáticamente.
-        </p>
-      ) : null}
-      {isLoading ? (
-        <p className="text-sm text-muted-foreground">Cargando videos…</p>
-      ) : videos.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Todavía no hay videos preparados para este producto.
-        </p>
-      ) : (
-        <div className="grid gap-2 sm:grid-cols-2">
-          {videos.map((video) => (
-            <div key={video.id} className="rounded-md border bg-background p-2">
-              <video
-                className="aspect-[9/16] w-full rounded bg-black object-contain"
-                controls
-                preload="metadata"
-                src={video.url}
-              />
-              <div className="mt-2 flex items-center justify-between gap-2 text-xs">
-                <span>
-                  {video.durationSeconds
-                    ? `${Math.round(video.durationSeconds)} s`
-                    : "Video"}
-                  {video.isPrimary ? " · Principal" : ""}
-                </span>
+    <>
+      <div className="grid gap-3 rounded-md border bg-muted/20 p-3">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <p className="flex items-center gap-2 text-sm font-medium">
+              <Video className="h-4 w-4" /> Biblioteca de videos
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Guarda un video vertical listo para revisar y subir manualmente a
+              Mercado Libre. No se publica automáticamente.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <CldUploadWidget
+              uploadPreset="u0dp1v1y"
+              onSuccess={saveUploadedVideo}
+              options={{
+                resourceType: "video",
+                sources: ["local", "camera"],
+                clientAllowedFormats: ["mp4", "mov", "mpeg", "avi"],
+                maxVideoFileSize: 280 * 1024 * 1024,
+                ...(env.NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME
+                  ? { folder: env.NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME }
+                  : {}),
+              }}
+            >
+              {({ open }) => (
                 <Button
                   type="button"
                   size="sm"
-                  variant="ghost"
-                  onClick={() => void deleteVideo(video)}
-                  disabled={deletingId === video.id}
+                  variant="outline"
+                  disabled={isSaving || !open}
+                  onClick={() => open()}
                 >
-                  {deletingId === video.id ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                  {isSaving ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
-                    <Trash2 className="h-4 w-4" />
+                    <UploadCloud className="mr-2 h-4 w-4" />
                   )}
+                  Cargar video
                 </Button>
-              </div>
-            </div>
-          ))}
+              )}
+            </CldUploadWidget>
+            {marketplaceUploadUrl ? (
+              <Button asChild type="button" size="sm">
+                <a href={marketplaceUploadUrl} target="_blank" rel="noreferrer">
+                  Abrir cargador de Mercado Libre
+                  <ExternalLink className="ml-2 h-4 w-4" />
+                </a>
+              </Button>
+            ) : null}
+          </div>
         </div>
-      )}
-    </div>
+        <p className="text-xs text-muted-foreground">
+          Requisitos para esta biblioteca: vertical, 10–61 segundos, mínimo 360
+          px de ancho y máximo 280 MB.
+        </p>
+        {marketplaceUploadUrl ? (
+          <p className="text-xs text-muted-foreground">
+            Después de guardar el clip, ábrelo en Mercado Libre y termina la
+            carga allí. P de Papel no lo publica automáticamente.
+          </p>
+        ) : null}
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Cargando videos…</p>
+        ) : videos.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Todavía no hay videos preparados para este producto.
+          </p>
+        ) : (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {videos.map((video) => (
+              <div
+                key={video.id}
+                className="rounded-md border bg-background p-2"
+              >
+                <video
+                  className="aspect-[9/16] w-full rounded bg-black object-contain"
+                  controls
+                  preload="metadata"
+                  src={video.url}
+                />
+                <div className="mt-2 flex items-center justify-between gap-2 text-xs">
+                  <span>
+                    {video.durationSeconds
+                      ? `${Math.round(video.durationSeconds)} s`
+                      : "Video"}
+                    {video.isPrimary ? " · Principal" : ""}
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => void deleteVideo(video)}
+                    disabled={deletingId === video.id}
+                  >
+                    {deletingId === video.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      {confirmationDialog}
+    </>
   );
 }

@@ -73,6 +73,7 @@ model Store {
   marketplaceOAuthStates       MarketplaceOAuthState[]
   marketplaceCategoryTemplates MarketplaceCategoryTemplate[]
   marketplacePublicationProfiles MarketplacePublicationProfile[]
+  productNamingChanges          ProductNamingChange[]
 }
 
 model Billboard {
@@ -338,6 +339,31 @@ model Product {
   @@index([productGroupId])
   @@fulltext([name])
   @@fulltext([name, description])
+}
+
+enum ProductNamingEntityType {
+  PRODUCT
+  PRODUCT_GROUP
+}
+
+model ProductNamingChange {
+  id           String                  @id @default(uuid())
+  storeId      String
+  entityType   ProductNamingEntityType
+  entityId     String
+  previousName String
+  nextName     String
+  batchId      String
+  changedBy    String
+  revertedAt   DateTime?
+  revertedBy   String?
+  createdAt    DateTime                @default(now())
+
+  store Store @relation(fields: [storeId], references: [id])
+
+  @@index([storeId, batchId])
+  @@index([storeId, entityType, entityId, createdAt])
+  @@index([storeId, revertedAt])
 }
 
 model ProductSlugAlias {

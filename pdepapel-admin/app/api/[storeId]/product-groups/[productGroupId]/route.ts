@@ -84,6 +84,7 @@ export async function PATCH(
       isFeatured,
       categoryId,
       variants: variantsPayload,
+      preserveSlug = false,
     } = body;
     const sanitizedDescription = sanitizeRichTextHtml(description);
 
@@ -108,13 +109,21 @@ export async function PATCH(
 
     const updatedGroup = await prismadb.$transaction(async (tx) => {
       const initialMovements: any[] = [];
+      const existingGroup = await tx.productGroup.findFirst({
+        where: { id: params.productGroupId, storeId: params.storeId },
+        select: { id: true, slug: true },
+      });
+      if (!existingGroup) {
+        throw ErrorFactory.NotFound("Grupo de productos no encontrado");
+      }
+
       // 1. Update Group Details
       const group = await tx.productGroup.update({
         where: { id: params.productGroupId },
         data: {
           name,
           brand: typeof brand === "string" ? brand.trim() || null : null,
-          slug: slugify(name),
+          slug: preserveSlug ? existingGroup.slug : slugify(name),
           description: sanitizedDescription,
         },
       });
@@ -177,15 +186,22 @@ export async function PATCH(
           ]);
 
           const variantName = variant.name || name;
-          let variantSlug = generateProductSlug({
-            name: variantName,
-            color: colorObj,
-            design: designObj,
-            size: sizeObj,
-            includeVariantAttributes: variantsPayload.length > 1,
-          });
-          if (!variantSlug)
-            variantSlug = slugify(variantName) || `variant-${Date.now()}`;
+          const existingVariant = existingProducts.find(
+            (product) => product.id === variant.id,
+          );
+          let variantSlug = existingVariant?.slug || "";
+          if (!preserveSlug || !existingVariant) {
+            variantSlug = generateProductSlug({
+              name: variantName,
+              color: colorObj,
+              design: designObj,
+              size: sizeObj,
+              includeVariantAttributes: variantsPayload.length > 1,
+            });
+            if (!variantSlug) {
+              variantSlug = slugify(variantName) || `variant-${Date.now()}`;
+            }
+          }
 
           // Determine Image Logic
           let applicableImages: { url: string }[] = [];
@@ -307,11 +323,13 @@ export async function PATCH(
         }),
       );
 
-      await synchronizeProductGroupSlugs(
-        tx,
-        params.storeId,
-        params.productGroupId,
-      );
+      if (!preserveSlug) {
+        await synchronizeProductGroupSlugs(
+          tx,
+          params.storeId,
+          params.productGroupId,
+        );
+      }
 
       // Execute Initial Movements for new variants
       if (initialMovements.length > 0) {

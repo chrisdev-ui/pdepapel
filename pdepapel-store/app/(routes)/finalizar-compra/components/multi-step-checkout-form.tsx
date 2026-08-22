@@ -978,18 +978,20 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                       {item.quantity}
                     </span>
                   </Link>
-                  <div className="flex max-h-20 items-center justify-between">
-                    <div className="flex h-full flex-col items-start justify-between">
-                      <div className="flex flex-col text-left font-serif text-sm font-medium tracking-tight">
-                        <span>{item.name}</span>
+                  <div className="flex min-w-0 items-center justify-between">
+                    <div className="flex min-w-0 flex-1 flex-col items-start justify-between gap-2">
+                      <div className="flex min-w-0 flex-col text-left font-serif text-sm font-medium tracking-tight">
+                        <span className="line-clamp-2" title={item.name}>
+                          {item.name}
+                        </span>
                         {item.design && (
-                          <span className="text-xs text-gray-400">{`Diseño: ${item.design.name}`}</span>
+                          <span className="line-clamp-1 text-xs text-gray-400">{`Diseño: ${item.design.name}`}</span>
                         )}
                         {item.color && (
-                          <span className="text-xs text-gray-400">{`Color: ${item.color.name}`}</span>
+                          <span className="line-clamp-1 text-xs text-gray-400">{`Color: ${item.color.name}`}</span>
                         )}
                         {item.size && (
-                          <span className="text-xs text-gray-400">{`Talla: ${item.size.name}`}</span>
+                          <span className="line-clamp-1 text-xs text-gray-400">{`Talla: ${item.size.name}`}</span>
                         )}
                         {outOfStockItems.includes(item.id) && (
                           <span className="mt-1 font-bold text-destructive">

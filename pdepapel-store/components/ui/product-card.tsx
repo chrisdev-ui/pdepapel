@@ -166,8 +166,13 @@ const ProductCard: React.FC<ProductCardProps> = ({
             </div>
           )}
         </div>
-        <div>
-          <p className="font-sans text-lg font-semibold">{product.name}</p>
+        <div className="min-h-[4.5rem]">
+          <p
+            className="line-clamp-2 min-h-[3.5rem] font-sans text-lg font-semibold leading-7"
+            title={product.name}
+          >
+            {product.name}
+          </p>
           <p className="text-sm text-gray-500">{product.category?.name}</p>
         </div>
         <StarRating

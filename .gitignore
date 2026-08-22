@@ -15,3 +15,6 @@ outputs/
 /AGENTS.md
 /CLAUDE.md
 /pdepapel-store/CLAUDE.md
+
+# PDF generados por scripts/generate-mercadolibre-guide-pdf.py
+output/

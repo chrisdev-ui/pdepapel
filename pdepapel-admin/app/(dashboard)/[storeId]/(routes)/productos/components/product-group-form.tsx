@@ -19,6 +19,8 @@ import {
   BatchIntakeVariant,
 } from "@/components/modals/batch-intake-modal";
 import { ProductImportModal } from "@/components/modals/product-import-modal";
+import { ProductNameAssistant } from "@/components/products/product-name-assistant";
+import { PRODUCT_NAME_MAX_LENGTH } from "@/lib/product-naming";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CurrencyInput } from "@/components/ui/currency-input";
@@ -564,12 +566,15 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   const watchedSizeIds = form.watch("sizeIds");
   const watchedDesignIds = form.watch("designIds");
   const watchedCategoryId = form.watch("categoryId");
+  const watchedName = form.watch("name");
+  const watchedBrand = form.watch("brand");
 
   // AUTO-SYNC VARIANTS HOOK
   useEffect(() => {
     // We only trigger if explicit attributes are selected.
     const timer = setTimeout(async () => {
       if (
+        !watchedName.trim() ||
         !watchedCategoryId ||
         (watchedColorIds.length === 0 &&
           watchedSizeIds.length === 0 &&
@@ -608,6 +613,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       }
 
       const result = generateVariants({
+        baseName: watchedName,
         category: { id: catObj.id, name: catObj.name },
         sizes: sList.map((x) => ({
           id: x.id,
@@ -756,6 +762,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     watchedSizeIds,
     watchedDesignIds,
     watchedCategoryId,
+    watchedName,
     categories,
     sizes,
     colors,
@@ -831,6 +838,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
           {
             ...data,
             imageMapping: mapping,
+            preserveSlug: true,
           },
         );
       } else {
@@ -940,6 +948,17 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   const handleMatrixConfirm = async (
     combinations: { colorId: string; designId: string }[],
   ) => {
+    const baseName = form.getValues("name").trim();
+    if (!baseName) {
+      toast({
+        title: "Agrega primero el nombre del producto",
+        description:
+          "Así las variantes se crearán con un nombre claro y consistente.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const { generateVariants } = await import("@/lib/variant-generator");
 
     const catObj = categories.find((x) => x.id === selectedCategoryId);
@@ -967,6 +986,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       // Note: variant-generator usually multiplies Sizes * Colors * Designs
       // Here we invoke it per single (Color, Design) pair.
       const result = generateVariants({
+        baseName,
         category: { id: catObj.id, name: catObj.name },
         sizes: sizesObj.map((x) => ({
           id: x.id,
@@ -1538,11 +1558,12 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
               control={form.control}
               name="name"
               render={({ field }) => (
-                <FormItem>
+                <FormItem className="col-span-3">
                   <FormLabel isRequired>Nombre</FormLabel>
                   <FormControl>
                     <Input
                       disabled={loading}
+                      maxLength={PRODUCT_NAME_MAX_LENGTH}
                       placeholder="Nombre del producto"
                       {...field}
                     />
@@ -1551,6 +1572,26 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                 </FormItem>
               )}
             />
+            <div className="col-span-3">
+              <ProductNameAssistant
+                currentName={watchedName}
+                categoryName={
+                  categories.find(
+                    (category) => category.id === watchedCategoryId,
+                  )?.name
+                }
+                brand={watchedBrand}
+                includeVariantAttributes={false}
+                disabled={loading}
+                onApply={(name) =>
+                  form.setValue("name", name, {
+                    shouldDirty: true,
+                    shouldTouch: true,
+                    shouldValidate: true,
+                  })
+                }
+              />
+            </div>
             <FormField
               control={form.control}
               name="brand"

@@ -43,6 +43,7 @@ import { Separator } from "@/components/ui/separator";
 import { SocialNetworkIcons } from "@/components/ui/social-network-icons";
 import { useFormPersist } from "@/hooks/use-form-persist";
 import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
+import { useActionConfirmation } from "@/hooks/use-action-confirmation";
 import { useOrigin } from "@/hooks/use-origin";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
@@ -94,6 +95,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
   const [loading, setLoading] = useState(false);
   const [migrating, setMigrating] = useState(false);
   const { toast } = useToast();
+  const { requestConfirmation, confirmationDialog } = useActionConfirmation();
 
   const defaultValues = useMemo(
     () => ({
@@ -194,6 +196,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
         onConfirm={onDelete}
         loading={loading}
       />
+      {confirmationDialog}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Button variant="outline" size="icon" onClick={() => router.back()}>
@@ -604,9 +607,12 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
                   className="min-w-[140px] border-blue-600 text-blue-800 hover:bg-blue-100"
                   onClick={async () => {
                     if (
-                      !confirm(
-                        "¿Estás seguro? Esta acción debe realizarse solo una vez para inicializar el historial.",
-                      )
+                      !(await requestConfirmation({
+                        title: "¿Inicializar historial de inventario?",
+                        description:
+                          "Esta acción debe ejecutarse una sola vez para registrar el inventario actual como punto de partida.",
+                        confirmLabel: "Inicializar historial",
+                      }))
                     ) {
                       return;
                     }
@@ -674,9 +680,13 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
                     className="border-yellow-600 text-yellow-800 hover:bg-yellow-100"
                     onClick={async () => {
                       if (
-                        !confirm(
-                          "¿Estás seguro? Esto eliminará PERMANENTEMENTE todas las imágenes de desarrollo.",
-                        )
+                        !(await requestConfirmation({
+                          title: "¿Eliminar imágenes de desarrollo?",
+                          description:
+                            "Se eliminarán permanentemente todas las imágenes de desarrollo de Cloudinary.",
+                          confirmLabel: "Eliminar imágenes",
+                          destructive: true,
+                        }))
                       )
                         return;
                       try {
