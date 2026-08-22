@@ -78,6 +78,9 @@ export function NamingReviewClient({
   const [page, setPage] = useState(0);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [proposalFeedback, setProposalFeedback] = useState<
+    Record<string, string>
+  >({});
   const [loading, setLoading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [rollbackId, setRollbackId] = useState<string | null>(null);
@@ -144,14 +147,33 @@ export function NamingReviewClient({
   const updateSuggestion = (candidate: ProductCandidate | GroupCandidate) => {
     const key = entityKey(entityType, candidate.id);
     const suggestion = suggestionFor(candidate);
+
+    if (suggestion.name === candidate.name) {
+      setSelected((current) => ({ ...current, [key]: false }));
+      setProposalFeedback((current) => ({
+        ...current,
+        [key]:
+          "La propuesta segura coincide con el nombre actual. Edita solo si puedes confirmar un detalle del empaque.",
+      }));
+      return;
+    }
+
     setDrafts((current) => ({ ...current, [key]: suggestion.name }));
     setSelected((current) => ({ ...current, [key]: true }));
+    setProposalFeedback((current) => ({
+      ...current,
+      [key]: "Propuesta lista para revisar antes de aplicarla.",
+    }));
   };
 
   const updateDraft = (id: string, name: string) => {
     const key = entityKey(entityType, id);
     setDrafts((current) => ({ ...current, [key]: name }));
     setSelected((current) => ({ ...current, [key]: true }));
+    setProposalFeedback((current) => {
+      const { [key]: _, ...remainingFeedback } = current;
+      return remainingFeedback;
+    });
   };
 
   const applyNames = async () => {
@@ -168,6 +190,7 @@ export function NamingReviewClient({
       });
       setDrafts({});
       setSelected({});
+      setProposalFeedback({});
       setConfirmOpen(false);
       router.refresh();
     } catch (error) {
@@ -290,6 +313,7 @@ export function NamingReviewClient({
           setEntityType(value as EntityType);
           setPage(0);
           setSelected({});
+          setProposalFeedback({});
         }}
       >
         <TabsList className="grid w-full max-w-md grid-cols-2">
@@ -326,7 +350,7 @@ export function NamingReviewClient({
         {visibleCandidates.map((candidate) => {
           const key = entityKey(entityType, candidate.id);
           const suggestion = suggestionFor(candidate);
-          const draft = drafts[key] ?? suggestion.name;
+          const draft = drafts[key] ?? candidate.name;
           const selectedForApply = Boolean(selected[key]);
           const isTooLong = draft.length > PRODUCT_NAME_MAX_LENGTH;
 
@@ -401,6 +425,11 @@ export function NamingReviewClient({
                 {selectedForApply && !isTooLong && draft !== candidate.name && (
                   <span className="font-medium text-primary">
                     Se aplicará en el próximo lote.
+                  </span>
+                )}
+                {proposalFeedback[key] && (
+                  <span role="status" className="text-primary">
+                    {proposalFeedback[key]}
                   </span>
                 )}
               </div>
