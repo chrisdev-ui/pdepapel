@@ -11,7 +11,7 @@ describe("generateVariants", () => {
       sizes: [{ id: "size-id", name: "Pequeño", value: "S" }],
     });
 
-    expect(variant.name).toBe("Cintas resaltadoras clásico Fluorescente Lila");
+    expect(variant.name).toBe("Cintas resaltadoras clásico");
   });
 
   it("keeps category naming as the fallback for legacy callers", () => {
@@ -22,7 +22,7 @@ describe("generateVariants", () => {
       sizes: [{ id: "size-id", name: "Pequeño", value: "S" }],
     });
 
-    expect(variant.name).toBe("Resaltador Fluorescente Lila");
+    expect(variant.name).toBe("Resaltador");
   });
 
   it("does not repeat a variant attribute already in the confirmed name", () => {
@@ -46,9 +46,7 @@ describe("generateVariants", () => {
       sizes: [{ id: "size-id", name: "M+", value: "M-P" }],
     });
 
-    expect(variant.name).toBe(
-      "Troqueles de figuras en maletín x8 de 1 cm Clásico Pastel",
-    );
+    expect(variant.name).toBe("Troqueles de figuras en maletín x8 de 1 cm");
     expect(variant.sku).toMatch(/-M-P-\d{4}$/);
   });
 
@@ -59,9 +57,25 @@ describe("generateVariants", () => {
       designs: [{ id: "design-id", name: "Gatito" }],
       colors: [{ id: "color-id", name: "Rosa" }],
       sizes: [{ id: "size-id", name: "M", value: "M-P" }],
+      includeColorInName: true,
+      includeDesignInName: true,
     });
 
     expect(variant.name).toBe("Camiseta estampada Gatito Rosa M");
     expect(variant.sku).toMatch(/-M-P-\d{4}$/);
+  });
+
+  it("includes only the variant characteristics confirmed by the admin", () => {
+    const [variant] = generateVariants({
+      baseName: "Mini impresora térmica portátil",
+      category: { id: "category-id", name: "Herramientas de oficina" },
+      designs: [{ id: "design-id", name: "Gatito" }],
+      colors: [{ id: "color-id", name: "Rosa" }],
+      sizes: [{ id: "size-id", name: "Pequeño", value: "S-L" }],
+      includeColorInName: true,
+      includeDesignInName: true,
+    });
+
+    expect(variant.name).toBe("Mini impresora térmica portátil Gatito Rosa");
   });
 });

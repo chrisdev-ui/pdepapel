@@ -10,6 +10,8 @@ export type ProductNamingInput = {
   sizeName?: string | null;
   sizeValue?: string | null;
   includeVariantAttributes?: boolean;
+  includeColorInName?: boolean;
+  includeDesignInName?: boolean;
 };
 
 export type ProductNameSuggestion = {
@@ -137,6 +139,26 @@ function hasEquivalentContent(parts: string[], candidate: string) {
   });
 }
 
+/**
+ * Color and design are mandatory operational attributes in this catalog, but
+ * they are only customer-facing when the final title actually confirms them.
+ * This keeps feeds from advertising a generic fallback such as "Clásico" or
+ * "Pastel" as if it described every product that happens to use that record.
+ */
+export function getCustomerFacingAttributeName(input: {
+  productName?: string | null;
+  attributeName?: string | null;
+}) {
+  const productName = normalizeProductNamePart(input.productName);
+  const attributeName = normalizeProductNamePart(input.attributeName);
+
+  if (!productName || !attributeName) return "";
+
+  return hasEquivalentContent([productName], attributeName)
+    ? attributeName
+    : "";
+}
+
 export function getCategoryHeadNoun(categoryName?: string | null) {
   const category = normalizeProductNamePart(categoryName);
   if (!category) return "";
@@ -170,8 +192,8 @@ export function buildProductNameSuggestion(
 
   const attributes = [
     normalizeProductNamePart(input.brand),
-    normalizeProductNamePart(input.designName),
-    input.includeVariantAttributes
+    input.includeDesignInName ? normalizeProductNamePart(input.designName) : "",
+    input.includeVariantAttributes && input.includeColorInName
       ? normalizeProductNamePart(input.colorName)
       : "",
     input.includeVariantAttributes

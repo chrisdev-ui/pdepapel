@@ -1,7 +1,11 @@
 import { PrismaClient } from "@prisma/client";
 import * as fs from "fs";
 import path from "path";
-import { getGoogleMerchantSize } from "../../lib/google-merchant";
+import {
+  getGoogleMerchantColor,
+  getGoogleMerchantPattern,
+  getGoogleMerchantSize,
+} from "../../lib/google-merchant";
 
 const prismadb = new PrismaClient();
 const BASE_URL = "https://papeleriapdepapel.com";
@@ -143,9 +147,9 @@ async function exportProductsToGoogleMerchant() {
         identifierExists,
         cleanText(productType),
         itemGroupId,
-        cleanText(product.color?.name),
+        cleanText(getGoogleMerchantColor(product.name, product.color)),
         cleanText(getGoogleMerchantSize(product.category?.name, product.size)),
-        cleanText(product.design?.name),
+        cleanText(getGoogleMerchantPattern(product.name, product.design)),
       ].join("\t");
     });
 

@@ -14,6 +14,7 @@ describe("product naming", () => {
       colorName: "Rosa",
       sizeName: "57 mm",
       includeVariantAttributes: true,
+      includeColorInName: true,
     });
 
     expect(result.name).toBe(
@@ -29,6 +30,8 @@ describe("product naming", () => {
       colorName: "Rosa",
       designName: "Pastel",
       includeVariantAttributes: true,
+      includeColorInName: true,
+      includeDesignInName: true,
     });
 
     expect(result.name).toBe("Resaltador Stabilo rosa pastel");
@@ -56,7 +59,7 @@ describe("product naming", () => {
     expect(getCategoryHeadNoun("Papeles especiales")).toBe(
       "Papeles especiales",
     );
-    expect(result.name).toBe("Lapicero Azul");
+    expect(result.name).toBe("Lapicero");
     expect(result.warnings).toContain(
       "Agrega el nombre o detalle que aparece en el empaque antes de guardar.",
     );
@@ -93,9 +96,21 @@ describe("product naming", () => {
       includeVariantAttributes: true,
     });
 
-    expect(result.name).toBe(
-      "Troqueles de figuras en maletín x8 de 1 cm Clásico Pastel",
-    );
+    expect(result.name).toBe("Troqueles de figuras en maletín x8 de 1 cm");
+  });
+
+  it("adds color and design only after they are confirmed as customer-facing", () => {
+    const result = buildProductNameSuggestion({
+      baseName: "Agenda argollada",
+      categoryName: "Agendas",
+      designName: "Hello Kitty",
+      colorName: "Rosa",
+      includeVariantAttributes: true,
+      includeColorInName: true,
+      includeDesignInName: true,
+    });
+
+    expect(result.name).toBe("Agenda argollada Hello Kitty Rosa");
   });
 
   it("keeps commercial measurements that help customers choose a product", () => {

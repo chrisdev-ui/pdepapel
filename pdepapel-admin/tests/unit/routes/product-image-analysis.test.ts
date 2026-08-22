@@ -1,0 +1,157 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  auth: vi.fn(),
+  verifyStoreOwner: vi.fn(),
+  colorFindMany: vi.fn(),
+  designFindMany: vi.fn(),
+  redisIncr: vi.fn(),
+  redisExpire: vi.fn(),
+  generateText: vi.fn(),
+  createGoogle: vi.fn(),
+  env: { GEMINI_API_KEY: "gemini-test-key" as string | undefined },
+}));
+
+vi.mock("@clerk/nextjs", () => ({ auth: mocks.auth }));
+vi.mock("@/lib/utils", () => ({ verifyStoreOwner: mocks.verifyStoreOwner }));
+vi.mock("@/lib/env.mjs", () => ({ env: mocks.env }));
+vi.mock("@/lib/prismadb", () => ({
+  default: {
+    color: { findMany: mocks.colorFindMany },
+    design: { findMany: mocks.designFindMany },
+  },
+}));
+vi.mock("@upstash/redis", () => ({
+  Redis: {
+    fromEnv: () => ({
+      incr: mocks.redisIncr,
+      expire: mocks.redisExpire,
+    }),
+  },
+}));
+vi.mock("@ai-sdk/google", () => ({
+  createGoogleGenerativeAI: mocks.createGoogle,
+}));
+vi.mock("ai", () => ({
+  generateText: mocks.generateText,
+  Output: { object: vi.fn((options) => options) },
+}));
+vi.mock("@/lib/api-errors", () => {
+  class AppError extends Error {
+    constructor(
+      message: string,
+      public readonly statusCode = 500,
+    ) {
+      super(message);
+    }
+  }
+
+  return {
+    AppError,
+    ErrorFactory: {
+      Unauthenticated: () => new AppError("Unauthenticated", 401),
+      MissingStoreId: () => new AppError("Missing store ID", 400),
+      InvalidRequest: (message: string) => new AppError(message, 400),
+    },
+    handleErrorResponse: (error: { message?: string; statusCode?: number }) =>
+      Response.json(
+        { error: error.message ?? "Error interno del servidor" },
+        { status: error.statusCode ?? 500 },
+      ),
+  };
+});
+
+import { POST } from "@/app/api/[storeId]/products/image-analysis/route";
+
+describe("product image analysis route", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.env.GEMINI_API_KEY = "gemini-test-key";
+    mocks.auth.mockReturnValue({ userId: "owner-id" });
+    mocks.colorFindMany.mockResolvedValue([
+      { id: "color-rosa", name: "Rosa", value: "#F8B4C7" },
+    ]);
+    mocks.designFindMany.mockResolvedValue([
+      { id: "design-floral", name: "Floral" },
+    ]);
+    mocks.redisIncr.mockResolvedValue(1);
+    mocks.redisExpire.mockResolvedValue(1);
+    mocks.createGoogle.mockReturnValue(vi.fn(() => "gemini-model"));
+    mocks.generateText.mockResolvedValue({
+      output: {
+        suggestedBaseName: "Cuaderno argollado A5",
+        brand: "Sanrio",
+        colorName: "rosa",
+        colorHex: "#F8B4C7",
+        colorIsDeterministic: true,
+        designName: "Floral",
+        designIsDeterministic: true,
+        observations: ["La portada muestra flores."],
+        limitations: [],
+      },
+    });
+  });
+
+  it("returns a review-only proposal matched to local taxonomy", async () => {
+    const response = await POST(
+      new Request("https://admin.example.com", {
+        method: "POST",
+        body: JSON.stringify({
+          imageUrls: [
+            "https://res.cloudinary.com/pdepapel/image/upload/v1/cuaderno.webp",
+          ],
+          categoryName: "Cuadernos",
+        }),
+      }),
+      { params: { storeId: "store-id" } },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      analysis: {
+        suggestedBaseName: "Cuaderno argollado A5",
+        brand: "Sanrio",
+        colorId: "color-rosa",
+        colorSource: "existing",
+        designId: "design-floral",
+      },
+      remainingAnalysesToday: 11,
+    });
+    expect(mocks.verifyStoreOwner).toHaveBeenCalledWith("owner-id", "store-id");
+    expect(mocks.generateText).toHaveBeenCalledTimes(1);
+    expect(mocks.redisIncr).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks URLs that are not catalog images before calling the model", async () => {
+    const response = await POST(
+      new Request("https://admin.example.com", {
+        method: "POST",
+        body: JSON.stringify({ imageUrls: ["https://example.com/image.jpg"] }),
+      }),
+      { params: { storeId: "store-id" } },
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.generateText).not.toHaveBeenCalled();
+    expect(mocks.redisIncr).not.toHaveBeenCalled();
+  });
+
+  it("does not call the provider when the free integration has no API key", async () => {
+    mocks.env.GEMINI_API_KEY = undefined;
+
+    const response = await POST(
+      new Request("https://admin.example.com", {
+        method: "POST",
+        body: JSON.stringify({
+          imageUrls: [
+            "https://res.cloudinary.com/pdepapel/image/upload/v1/cuaderno.webp",
+          ],
+        }),
+      }),
+      { params: { storeId: "store-id" } },
+    );
+
+    expect(response.status).toBe(503);
+    expect(mocks.generateText).not.toHaveBeenCalled();
+  });
+});

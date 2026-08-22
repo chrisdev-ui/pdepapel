@@ -38,6 +38,7 @@
     "seed:boxes": "ts-node prisma/seed/seed-boxes.ts"
   },
   "dependencies": {
+    "@ai-sdk/google": "^4.0.50",
     "@clerk/localizations": "^1.26.4",
     "@clerk/nextjs": "^4.29.5",
     "@date-fns/tz": "^1.4.1",
@@ -87,6 +88,7 @@
     "@upstash/qstash": "^2.11.3",
     "@upstash/redis": "^1.35.6",
     "@zxing/browser": "^0.2.1",
+    "ai": "^7.0.77",
     "axios": "^1.5.1",
     "class-variance-authority": "^0.7.0",
     "cloudinary": "^1.41.0",

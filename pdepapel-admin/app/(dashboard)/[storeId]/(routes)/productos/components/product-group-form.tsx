@@ -206,6 +206,10 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   // Controls if we automatically fill the matrix when attributes change
   // Defaults to TRUE for standard creation flow
   const [autoGenerate, setAutoGenerate] = useState(true);
+  const [includeColorInVariantName, setIncludeColorInVariantName] =
+    useState(false);
+  const [includeDesignInVariantName, setIncludeDesignInVariantName] =
+    useState(false);
 
   // Determine if we are in "Edit" mode
   const isEdit = !!initialData;
@@ -622,6 +626,8 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
         })),
         colors: cList.map((x) => ({ id: x.id, name: x.name, value: x.value })),
         designs: dList.map((x) => ({ id: x.id, name: x.name, value: x.name })),
+        includeColorInName: includeColorInVariantName,
+        includeDesignInName: includeDesignInVariantName,
       });
 
       const generatedVariants = result;
@@ -769,6 +775,8 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     designs,
     form,
     autoGenerate,
+    includeColorInVariantName,
+    includeDesignInVariantName,
   ]);
 
   // Form Persistence
@@ -1007,6 +1015,8 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
             value: designObj.name,
           },
         ],
+        includeColorInName: includeColorInVariantName,
+        includeDesignInName: includeDesignInVariantName,
       });
       allGenerated = [...allGenerated, ...result];
     }
@@ -1583,6 +1593,8 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                 brand={watchedBrand}
                 includeVariantAttributes={false}
                 disabled={loading}
+                storeId={params.storeId}
+                imageUrls={currentImages?.map((image) => image.url)}
                 onApply={(name) =>
                   form.setValue("name", name, {
                     shouldDirty: true,
@@ -1590,6 +1602,15 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                     shouldValidate: true,
                   })
                 }
+                onApplyVisualAnalysis={(analysis) => {
+                  if (!analysis.brand) return;
+
+                  form.setValue("brand", analysis.brand, {
+                    shouldDirty: true,
+                    shouldTouch: true,
+                    shouldValidate: true,
+                  });
+                }}
               />
             </div>
             <FormField
@@ -1949,6 +1970,37 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                 </FormItem>
               )}
             />
+
+            <div className="col-span-3 rounded-lg border bg-muted/30 p-4">
+              <p className="text-sm font-medium">Nombre de las variantes</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Color y diseño siguen siendo obligatorios para inventario y SKU.
+                Inclúyelos en los nombres únicamente cuando la clienta pueda
+                distinguir y elegir esa variante.
+              </p>
+              <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                <label className="flex cursor-pointer items-start gap-2 text-sm">
+                  <Checkbox
+                    checked={includeColorInVariantName}
+                    disabled={loading || selectedColorIds.length === 0}
+                    onCheckedChange={(checked) =>
+                      setIncludeColorInVariantName(checked === true)
+                    }
+                  />
+                  <span>Incluir color en cada nombre generado</span>
+                </label>
+                <label className="flex cursor-pointer items-start gap-2 text-sm">
+                  <Checkbox
+                    checked={includeDesignInVariantName}
+                    disabled={loading || selectedDesignIds.length === 0}
+                    onCheckedChange={(checked) =>
+                      setIncludeDesignInVariantName(checked === true)
+                    }
+                  />
+                  <span>Incluir diseño en cada nombre generado</span>
+                </label>
+              </div>
+            </div>
 
             <div className="col-span-3 flex justify-end gap-2">
               <Button

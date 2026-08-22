@@ -138,6 +138,8 @@ type InitialData = Awaited<ReturnType<typeof getProduct>>["product"];
 
 type ProductGroup = Awaited<ReturnType<typeof getProduct>>["productGroup"];
 type ProductGroups = Awaited<ReturnType<typeof getProduct>>["productGroups"];
+type CatalogColorOption = Pick<Color, "id" | "name" | "value">;
+type CatalogDesignOption = Pick<Design, "id" | "name">;
 
 interface ProductFormProps {
   initialData: InitialData | null;
@@ -170,6 +172,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   const [convertToVariantsOpen, setConvertToVariantsOpen] = useState(false);
   const [intakeOpen, setIntakeOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [recentColors, setRecentColors] = useState<CatalogColorOption[]>([]);
+  const [recentDesigns, setRecentDesigns] = useState<CatalogDesignOption[]>([]);
 
   const unavailableImages = useMemo(() => {
     if (!productGroup) return new Set();
@@ -363,6 +367,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   const watchedSizeId = form.watch("sizeId");
   const watchedDesignId = form.watch("designId");
   const watchedBrand = form.watch("brand");
+  const watchedImages = form.watch("images");
 
   useEffect(() => {
     if (watchedGroupId) {
@@ -524,6 +529,26 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     [clearStorage, initialData, params.storeId, router, toast],
   );
 
+  const availableColors = useMemo(
+    () => [
+      ...colors,
+      ...recentColors.filter(
+        (recentColor) => !colors.some((color) => color.id === recentColor.id),
+      ),
+    ],
+    [colors, recentColors],
+  );
+  const availableDesigns = useMemo(
+    () => [
+      ...designs,
+      ...recentDesigns.filter(
+        (recentDesign) =>
+          !designs.some((design) => design.id === recentDesign.id),
+      ),
+    ],
+    [designs, recentDesigns],
+  );
+
   const selectOptions = useMemo(
     () => ({
       categories: [...categories]
@@ -538,14 +563,14 @@ export const ProductForm: React.FC<ProductFormProps> = ({
           value: size.id,
           label: size.name,
         })),
-      colors: [...colors]
+      colors: [...availableColors]
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((color) => ({
           value: color.id,
           label: color.name,
           color: color.value,
         })),
-      designs: [...designs]
+      designs: [...availableDesigns]
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((design) => ({
           value: design.id,
@@ -558,7 +583,82 @@ export const ProductForm: React.FC<ProductFormProps> = ({
           label: supplier.name,
         })),
     }),
-    [categories, sizes, colors, designs, suppliers],
+    [availableColors, availableDesigns, categories, sizes, suppliers],
+  );
+
+  const createVisualAttribute = useCallback(
+    async ({
+      type,
+      name,
+      colorHex,
+    }: {
+      type: "color" | "design";
+      name: string;
+      colorHex?: string;
+    }) => {
+      const setValueOptions = {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      };
+
+      if (type === "color") {
+        const existingColor = availableColors.find(
+          (color) =>
+            color.name.localeCompare(name, "es-CO", {
+              sensitivity: "base",
+            }) === 0,
+        );
+
+        if (existingColor) {
+          form.setValue("colorId", existingColor.id, setValueOptions);
+          return existingColor;
+        }
+
+        if (!colorHex) {
+          throw new Error(
+            "No se detectó un tono válido para crear este color.",
+          );
+        }
+
+        const response = await axios.post<CatalogColorOption>(
+          `/api/${params.storeId}/${Models.Colors}`,
+          { name, value: colorHex },
+        );
+        setRecentColors((current) => [...current, response.data]);
+        form.setValue("colorId", response.data.id, setValueOptions);
+        toast({
+          description: `Color “${response.data.name}” creado y seleccionado.`,
+          variant: "success",
+        });
+        return response.data;
+      }
+
+      const existingDesign = availableDesigns.find(
+        (design) =>
+          design.name.localeCompare(name, "es-CO", {
+            sensitivity: "base",
+          }) === 0,
+      );
+
+      if (existingDesign) {
+        form.setValue("designId", existingDesign.id, setValueOptions);
+        return existingDesign;
+      }
+
+      const response = await axios.post<CatalogDesignOption>(
+        `/api/${params.storeId}/${Models.Designs}`,
+        { name },
+      );
+      setRecentDesigns((current) => [...current, response.data]);
+      form.setValue("designId", response.data.id, setValueOptions);
+      toast({
+        description: `Diseño “${response.data.name}” creado y seleccionado.`,
+        variant: "success",
+      });
+      return response.data;
+    },
+    [availableColors, availableDesigns, form, params.storeId, toast],
   );
 
   return (
@@ -774,22 +874,52 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 }
                 brand={watchedBrand}
                 designName={
-                  designs.find((design) => design.id === watchedDesignId)?.name
+                  availableDesigns.find(
+                    (design) => design.id === watchedDesignId,
+                  )?.name
                 }
                 colorName={
-                  colors.find((color) => color.id === watchedColorId)?.name
+                  availableColors.find((color) => color.id === watchedColorId)
+                    ?.name
                 }
                 sizeName={sizes.find((size) => size.id === watchedSizeId)?.name}
                 sizeValue={
                   sizes.find((size) => size.id === watchedSizeId)?.value
                 }
                 disabled={loading}
+                storeId={params.storeId}
+                imageUrls={watchedImages?.map((image) => image.url)}
                 onApply={(name) =>
                   form.setValue("name", name, {
                     shouldDirty: true,
                     shouldTouch: true,
                     shouldValidate: true,
                   })
+                }
+                onApplyVisualAnalysis={(analysis) => {
+                  const options = {
+                    shouldDirty: true,
+                    shouldTouch: true,
+                    shouldValidate: true,
+                  };
+
+                  if (analysis.brand) {
+                    form.setValue("brand", analysis.brand, options);
+                  }
+
+                  if (!watchedGroupId || watchedGroupId === "none") {
+                    if (analysis.colorId) {
+                      form.setValue("colorId", analysis.colorId, options);
+                    }
+                    if (analysis.designId) {
+                      form.setValue("designId", analysis.designId, options);
+                    }
+                  }
+                }}
+                onCreateVisualAttribute={
+                  !watchedGroupId || watchedGroupId === "none"
+                    ? createVisualAttribute
+                    : undefined
                 }
               />
             </div>

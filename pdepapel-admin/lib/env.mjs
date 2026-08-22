@@ -22,7 +22,10 @@ export const env = createEnv({
     INTERNAL_API_SECRET: z.string().min(1),
     // EnvioClick API
     ENVIOCLICK_API_KEY: z.string().min(1),
-    ENVIOCLICK_API_URL: z.string().url().default("https://api.envioclickpro.com.co"),
+    ENVIOCLICK_API_URL: z
+      .string()
+      .url()
+      .default("https://api.envioclickpro.com.co"),
     // MiPaquete API (para códigos DANE)
     MIPAQUETE_API_KEY: z.string().min(1),
     // Upstash Redis (para caché de ubicaciones DANE)
@@ -34,6 +37,7 @@ export const env = createEnv({
       .regex(/^G-[A-Z0-9]+$/, "Debe ser un ID de medición válido de GA4")
       .optional(),
     GA4_API_SECRET: z.string().min(1).optional(),
+    GEMINI_API_KEY: z.string().min(1).optional(),
   },
   client: {
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().min(1),

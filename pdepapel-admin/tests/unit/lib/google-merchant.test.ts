@@ -1,4 +1,8 @@
-import { getGoogleMerchantSize } from "@/lib/google-merchant";
+import {
+  getGoogleMerchantColor,
+  getGoogleMerchantPattern,
+  getGoogleMerchantSize,
+} from "@/lib/google-merchant";
 import { describe, expect, it } from "vitest";
 
 describe("Google Merchant product attributes", () => {
@@ -17,6 +21,22 @@ describe("Google Merchant product attributes", () => {
   it("uses the human-readable letter size for a category where size matters", () => {
     expect(getGoogleMerchantSize("Ropa", { name: "M", value: "M-P" })).toBe(
       "M",
+    );
+  });
+
+  it("omits operational color and design values that the public title does not confirm", () => {
+    const title = "Troqueles de figuras en maletín x8 de 1 cm";
+
+    expect(getGoogleMerchantColor(title, { name: "Pastel" })).toBe("");
+    expect(getGoogleMerchantPattern(title, { name: "Clásico" })).toBe("");
+  });
+
+  it("exports color and design when the public title confirms them", () => {
+    const title = "Agenda Hello Kitty rosa";
+
+    expect(getGoogleMerchantColor(title, { name: "Rosa" })).toBe("Rosa");
+    expect(getGoogleMerchantPattern(title, { name: "Hello Kitty" })).toBe(
+      "Hello Kitty",
     );
   });
 });

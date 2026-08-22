@@ -15,6 +15,8 @@ export interface GenerationParams {
   colors: VariantOption[];
   sizes: VariantOption[];
   baseName?: string;
+  includeColorInName?: boolean;
+  includeDesignInName?: boolean;
 }
 
 export interface GeneratedVariant {
@@ -72,7 +74,15 @@ export function generateSemanticSKU(
 }
 
 export function generateVariants(params: GenerationParams): GeneratedVariant[] {
-  const { baseName, category, designs, colors, sizes } = params;
+  const {
+    baseName,
+    category,
+    designs,
+    colors,
+    sizes,
+    includeColorInName = false,
+    includeDesignInName = false,
+  } = params;
   const variants: GeneratedVariant[] = [];
 
   // Format: CATEGORY(3) - DESIGN(3) - COLOR(3) - SIZE(Full) - RANDOM(4)
@@ -92,6 +102,8 @@ export function generateVariants(params: GenerationParams): GeneratedVariant[] {
             sizeValue: size.value,
           }),
           sizeValue: size.value,
+          includeColorInName,
+          includeDesignInName,
         }).name;
 
         const sku = generateSemanticSKU(
