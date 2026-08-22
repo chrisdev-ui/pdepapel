@@ -433,7 +433,7 @@ export function MercadoLibreListingManager({
   };
 
   const updateCategory = (categoryId: string) => {
-    updateForm("categoryId", categoryId);
+    updateForm("categoryId", categoryId.trim().toUpperCase());
     setSuggestions([]);
     setCategoryAttributes([]);
     setPriceEstimate(null);
@@ -1036,6 +1036,17 @@ export function MercadoLibreListingManager({
     if (!canPublish) {
       setError(
         "Activa primero el procesamiento seguro para evitar desajustes de inventario",
+      );
+      return;
+    }
+    const publishableStock = Math.max(
+      (selectedProduct?.stock ?? 0) -
+        Math.max(Number(form.stockSafetyBuffer) || 0, 0),
+      0,
+    );
+    if (publishableStock === 0) {
+      setError(
+        "No hay unidades disponibles después de descontar el stock de seguridad. Repón stock o ajusta la seguridad antes de publicar.",
       );
       return;
     }

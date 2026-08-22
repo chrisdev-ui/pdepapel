@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { isMercadoLibreCategoryId } from "@/lib/mercadolibre/categories";
 import { buildMercadoLibreListingMetadata } from "@/lib/mercadolibre/listing-metadata";
 import {
   enqueuePendingMarketplaceOutboxEvents,
@@ -129,12 +130,15 @@ export async function PATCH(
       data.marketplacePrice = price;
     }
     if (body.categoryId !== undefined) {
-      if (typeof body.categoryId !== "string" || !body.categoryId.trim()) {
+      if (
+        typeof body.categoryId !== "string" ||
+        !isMercadoLibreCategoryId(body.categoryId)
+      ) {
         throw ErrorFactory.InvalidRequest(
           "La categoría de Mercado Libre es requerida",
         );
       }
-      data.categoryId = body.categoryId.trim();
+      data.categoryId = body.categoryId.trim().toUpperCase();
     }
     if (body.listingType !== undefined) {
       if (typeof body.listingType !== "string" || !body.listingType.trim()) {

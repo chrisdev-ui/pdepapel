@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { isMercadoLibreCategoryId } from "@/lib/mercadolibre/categories";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
@@ -103,11 +104,18 @@ export async function POST(
         ? body.localCategoryId.trim()
         : "";
     const categoryId =
-      typeof body.categoryId === "string" ? body.categoryId.trim() : "";
+      typeof body.categoryId === "string"
+        ? body.categoryId.trim().toUpperCase()
+        : "";
     const name = typeof body.name === "string" ? body.name.trim() : "";
-    if (!localCategoryId || !categoryId || !name || name.length > 120) {
+    if (
+      !localCategoryId ||
+      !isMercadoLibreCategoryId(categoryId) ||
+      !name ||
+      name.length > 120
+    ) {
       throw ErrorFactory.InvalidRequest(
-        "Define un nombre, una categoría local y una categoría de Mercado Libre",
+        "Define un nombre, una categoría local y una categoría válida de Mercado Libre",
       );
     }
 

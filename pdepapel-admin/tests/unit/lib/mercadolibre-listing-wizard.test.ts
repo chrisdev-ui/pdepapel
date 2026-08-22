@@ -46,6 +46,14 @@ describe("getListingWizardStepError", () => {
       getListingWizardStepError({
         ...completeDraft,
         step: 2,
+        categoryId: "papeleria",
+      }),
+    ).toBe("Elige una categoría válida de las sugerencias de Mercado Libre");
+
+    expect(
+      getListingWizardStepError({
+        ...completeDraft,
+        step: 2,
         imageUrls: [],
       }),
     ).toBe("Selecciona al menos una foto para publicar");

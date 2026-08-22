@@ -3,7 +3,8 @@ import { MarketplaceProvider } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { getMercadoLibreResource } from "@/lib/mercadolibre/client";
+import { parseMercadoLibreCategorySuggestions } from "@/lib/mercadolibre/categories";
+import { getMercadoLibreJson } from "@/lib/mercadolibre/client";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
@@ -37,36 +38,8 @@ export async function GET(
     }
 
     const resource = `/sites/MCO/domain_discovery/search?limit=8&q=${encodeURIComponent(query)}`;
-    const payload = await getMercadoLibreResource(connection.id, resource);
-    const suggestions = Array.isArray(payload)
-      ? payload
-          .filter(
-            (suggestion): suggestion is Record<string, unknown> =>
-              Boolean(suggestion) && typeof suggestion === "object",
-          )
-          .flatMap((suggestion) => {
-            if (
-              typeof suggestion.category_id !== "string" ||
-              typeof suggestion.category_name !== "string"
-            ) {
-              return [];
-            }
-            return [
-              {
-                categoryId: suggestion.category_id,
-                categoryName: suggestion.category_name,
-                domainId:
-                  typeof suggestion.domain_id === "string"
-                    ? suggestion.domain_id
-                    : null,
-                domainName:
-                  typeof suggestion.domain_name === "string"
-                    ? suggestion.domain_name
-                    : null,
-              },
-            ];
-          })
-      : [];
+    const payload = await getMercadoLibreJson(connection.id, resource);
+    const suggestions = parseMercadoLibreCategorySuggestions(payload);
 
     return NextResponse.json(suggestions, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {

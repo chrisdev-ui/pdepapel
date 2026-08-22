@@ -222,6 +222,7 @@ export function ListingPublicationWizard({
       Math.max(Number(form.stockSafetyBuffer) || 0, 0),
     0,
   );
+  const hasPublishableStock = unitsToPublish > 0;
 
   const goToNextStep = async () => {
     const validationError = getListingWizardStepError({
@@ -440,7 +441,14 @@ export function ListingPublicationWizard({
               value={form.categoryId}
               onChange={(event) => onCategoryChange(event.target.value)}
               placeholder="Ej. MCO..."
+              autoCapitalize="characters"
+              spellCheck={false}
             />
+            <p className="text-xs text-muted-foreground">
+              Usa una sugerencia y continúa: Administración comprueba que sea
+              una categoría final de Mercado Libre antes de cargar la ficha
+              técnica y de publicar.
+            </p>
             {suggestions.length > 0 ? (
               <div className="grid gap-2 rounded-md border p-2">
                 {suggestions.map((suggestion) => (
@@ -534,9 +542,7 @@ export function ListingPublicationWizard({
                           ...current,
                           imageUrls: [
                             value,
-                            ...current.imageUrls.filter(
-                              (url) => url !== value,
-                            ),
+                            ...current.imageUrls.filter((url) => url !== value),
                           ],
                         }))
                       }
@@ -784,6 +790,12 @@ export function ListingPublicationWizard({
                 Stock local {selectedProduct?.stock ?? 0} · Seguridad{" "}
                 {Number(form.stockSafetyBuffer) || 0}
               </span>
+              {!hasPublishableStock ? (
+                <span className="block text-xs text-destructive">
+                  Ajusta el stock de seguridad o repón unidades antes de
+                  publicar.
+                </span>
+              ) : null}
             </p>
             <p>
               <span className="block text-xs text-muted-foreground">Fotos</span>
@@ -909,7 +921,7 @@ export function ListingPublicationWizard({
               <Button
                 type="button"
                 onClick={() => void onSaveAndPublish()}
-                disabled={isSaving}
+                disabled={isSaving || !hasPublishableStock}
               >
                 Publicar ahora
               </Button>

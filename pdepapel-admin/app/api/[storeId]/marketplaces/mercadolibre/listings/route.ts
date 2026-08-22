@@ -7,6 +7,7 @@ import {
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { isMercadoLibreCategoryId } from "@/lib/mercadolibre/categories";
 import {
   buildMercadoLibreListingMetadata,
   type MercadoLibreAttribute,
@@ -27,12 +28,12 @@ function parseOptionalPrice(value: unknown) {
 
 function parseOptionalCategory(value: unknown) {
   if (value === undefined || value === null || value === "") return null;
-  if (typeof value !== "string" || !value.trim()) {
+  if (typeof value !== "string" || !isMercadoLibreCategoryId(value)) {
     throw ErrorFactory.InvalidRequest(
       "La categoría de Mercado Libre no es válida",
     );
   }
-  return value.trim();
+  return value.trim().toUpperCase();
 }
 
 function parseSafetyBuffer(value: unknown) {

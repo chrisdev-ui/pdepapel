@@ -2,7 +2,11 @@ import { Prisma } from "@prisma/client";
 
 import { richTextToPlainText } from "@/lib/rich-text";
 
-import { getMercadoLibreAccessToken } from "./client";
+import { getMercadoLibreAccessToken, requestMercadoLibreJson } from "./client";
+import {
+  getMercadoLibreCategoryPublicationError,
+  parseMercadoLibreCategoryAttributes,
+} from "./categories";
 import {
   getMercadoLibreAttributes,
   getMercadoLibreListingImageUrls,
@@ -39,10 +43,37 @@ type MercadoLibrePublishedItem = {
 };
 
 export class MercadoLibrePublicationError extends Error {
-  constructor(message: string) {
+  readonly requiresDraftReview: boolean;
+
+  constructor(
+    message: string,
+    { requiresDraftReview = false }: { requiresDraftReview?: boolean } = {},
+  ) {
     super(message);
     this.name = "MercadoLibrePublicationError";
+    this.requiresDraftReview = requiresDraftReview;
   }
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function getMercadoLibreErrorCauses(payload: unknown) {
+  const data = asRecord(payload);
+  if (!data || !Array.isArray(data.cause)) return [];
+
+  return data.cause.flatMap((cause) => {
+    const item = asRecord(cause);
+    if (!item) return [];
+    return [
+      [item.code, item.message]
+        .filter((value): value is string => typeof value === "string")
+        .join(" "),
+    ].filter(Boolean);
+  });
 }
 
 function getApiErrorMessage(payload: unknown) {
@@ -51,9 +82,39 @@ function getApiErrorMessage(payload: unknown) {
   }
   const data = payload as Record<string, unknown>;
   const message = data.message ?? data.error;
-  return typeof message === "string"
-    ? message.slice(0, 1_000)
-    : "Mercado Libre rechazó la publicación";
+  const causes = getMercadoLibreErrorCauses(payload);
+  const mainMessage =
+    typeof message === "string"
+      ? message
+      : "Mercado Libre rechazó la publicación";
+
+  return [mainMessage, ...causes].join(": ").slice(0, 1_000);
+}
+
+function getPublicationErrorMessage(payload: unknown) {
+  const message = getApiErrorMessage(payload);
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("category")) {
+    return "Mercado Libre rechazó la categoría seleccionada. Vuelve a “Categoría y fotos”, usa “Sugerir categoría” y elige una categoría final.";
+  }
+  if (normalized.includes("attribute")) {
+    return "Mercado Libre necesita datos de la ficha técnica. Vuelve a ese paso, actualiza los campos y completa los obligatorios.";
+  }
+  if (normalized.includes("title")) {
+    return "Mercado Libre rechazó el título. Revisa que describa el producto y cumpla el máximo de caracteres de su categoría.";
+  }
+  if (normalized.includes("picture") || normalized.includes("image")) {
+    return "Mercado Libre rechazó una foto. Revisa las imágenes seleccionadas y vuelve a intentar.";
+  }
+  if (normalized.includes("price")) {
+    return "Mercado Libre rechazó el precio. Revisa el precio exclusivo de Mercado Libre y vuelve a intentar.";
+  }
+  if (normalized.includes("listing_type")) {
+    return "El tipo de publicación no está disponible para esta cuenta o categoría. Revisa la configuración de Mercado Libre.";
+  }
+
+  return message;
 }
 
 async function readJson(response: Response) {
@@ -94,42 +155,63 @@ function buildItemPayload(listing: ListingForPublication) {
   if (listing.product.isArchived) {
     throw new MercadoLibrePublicationError(
       "No puedes publicar un producto archivado",
+      { requiresDraftReview: true },
     );
   }
   if (!listing.categoryId) {
     throw new MercadoLibrePublicationError(
       "Selecciona una categoría de Mercado Libre antes de publicar",
+      { requiresDraftReview: true },
     );
   }
   if (!listing.marketplacePrice || listing.marketplacePrice <= 0) {
     throw new MercadoLibrePublicationError(
       "Define un precio de Mercado Libre mayor que cero",
+      { requiresDraftReview: true },
     );
   }
-  if (listing.product.images.length === 0) {
+  const title = listing.product.name.trim();
+  if (!title) {
+    throw new MercadoLibrePublicationError(
+      "El producto necesita un nombre antes de publicar",
+      { requiresDraftReview: true },
+    );
+  }
+  const pictures = getMercadoLibreListingImageUrls(
+    listing.product.images,
+    listing.metadata,
+  );
+  if (pictures.length === 0) {
     throw new MercadoLibrePublicationError(
       "El producto necesita al menos una imagen para publicarse",
+      { requiresDraftReview: true },
+    );
+  }
+  const availableQuantity = Math.max(
+    0,
+    listing.product.stock - listing.stockSafetyBuffer,
+  );
+  if (availableQuantity === 0) {
+    throw new MercadoLibrePublicationError(
+      "No hay unidades disponibles para publicar después de descontar el stock de seguridad",
+      { requiresDraftReview: true },
     );
   }
 
   return {
     site_id: "MCO",
-    title: listing.product.name.trim(),
+    title,
     category_id: listing.categoryId,
     price: listing.marketplacePrice,
     currency_id: "COP",
-    available_quantity: Math.max(
-      0,
-      listing.product.stock - listing.stockSafetyBuffer,
-    ),
+    available_quantity: availableQuantity,
     buying_mode: "buy_it_now",
     listing_type_id: listing.listingType || "gold_special",
     condition: "new",
-    seller_custom_field: listing.product.sku,
-    pictures: getMercadoLibreListingImageUrls(
-      listing.product.images,
-      listing.metadata,
-    ).map((source) => ({ source })),
+    ...(listing.product.sku.trim()
+      ? { seller_custom_field: listing.product.sku.trim() }
+      : {}),
+    pictures: pictures.map((source) => ({ source })),
     attributes: addProductIdentifiers(
       getConfiguredAttributes(listing.metadata),
       listing.product,
@@ -138,8 +220,72 @@ function buildItemPayload(listing: ListingForPublication) {
 }
 
 function getApiError(payload: unknown) {
-  const message = getApiErrorMessage(payload);
-  return new MercadoLibrePublicationError(message);
+  return new MercadoLibrePublicationError(getPublicationErrorMessage(payload), {
+    requiresDraftReview: true,
+  });
+}
+
+export async function validateMercadoLibreListingForPublication(
+  listing: ListingForPublication,
+  request: typeof fetch = fetch,
+) {
+  const payload = buildItemPayload(listing);
+  const categoryResult = await requestMercadoLibreJson(
+    listing.connectionId,
+    `/categories/${encodeURIComponent(payload.category_id)}`,
+    request,
+  );
+  if (!categoryResult.ok) {
+    throw new MercadoLibrePublicationError(
+      "No fue posible validar la categoría en Mercado Libre. Vuelve a sugerir una categoría e inténtalo de nuevo.",
+      { requiresDraftReview: true },
+    );
+  }
+
+  const categoryError = getMercadoLibreCategoryPublicationError(
+    categoryResult.payload,
+    payload.category_id,
+    {
+      title: payload.title,
+      price: payload.price,
+      pictureCount: payload.pictures.length,
+    },
+  );
+  if (categoryError) {
+    throw new MercadoLibrePublicationError(categoryError, {
+      requiresDraftReview: true,
+    });
+  }
+
+  const attributesResult = await requestMercadoLibreJson(
+    listing.connectionId,
+    `/categories/${encodeURIComponent(payload.category_id)}/attributes`,
+    request,
+  );
+  if (!attributesResult.ok || !Array.isArray(attributesResult.payload)) {
+    throw new MercadoLibrePublicationError(
+      "No fue posible validar los campos obligatorios de esta categoría. Actualiza la ficha técnica e inténtalo de nuevo.",
+      { requiresDraftReview: true },
+    );
+  }
+
+  const requiredAttributeIds = parseMercadoLibreCategoryAttributes(
+    attributesResult.payload,
+  )
+    .filter((attribute) => attribute.required)
+    .map((attribute) => attribute.id);
+  const configuredAttributeIds = new Set(
+    payload.attributes.map((attribute) => attribute.id),
+  );
+  const missingAttributes = requiredAttributeIds.filter(
+    (attributeId) => !configuredAttributeIds.has(attributeId),
+  );
+  if (missingAttributes.length > 0) {
+    throw new MercadoLibrePublicationError(
+      "Completa los campos obligatorios de la ficha técnica antes de publicar.",
+      { requiresDraftReview: true },
+    );
+  }
 }
 
 async function createItemDescription(
@@ -289,6 +435,8 @@ export async function publishMercadoLibreListing(
   listing: ListingForPublication,
   request: typeof fetch = fetch,
 ): Promise<MercadoLibrePublishedItem> {
+  await validateMercadoLibreListingForPublication(listing, request);
+
   const accessToken = await getMercadoLibreAccessToken(listing.connectionId);
   const response = await request("https://api.mercadolibre.com/items", {
     method: "POST",
@@ -301,7 +449,7 @@ export async function publishMercadoLibreListing(
   });
   const payload = await readJson(response);
   if (!response.ok) {
-    throw new MercadoLibrePublicationError(getApiErrorMessage(payload));
+    throw getApiError(payload);
   }
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw new MercadoLibrePublicationError(

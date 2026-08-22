@@ -51,6 +51,9 @@ export function getListingWizardStepError({
 
   if (step === 2) {
     if (!categoryId.trim()) return "Selecciona una categoría de Mercado Libre";
+    if (!/^MCO\d+$/i.test(categoryId.trim())) {
+      return "Elige una categoría válida de las sugerencias de Mercado Libre";
+    }
     if (imageUrls.length === 0)
       return "Selecciona al menos una foto para publicar";
   }

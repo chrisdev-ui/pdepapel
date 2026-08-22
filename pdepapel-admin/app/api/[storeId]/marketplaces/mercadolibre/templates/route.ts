@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { isMercadoLibreCategoryId } from "@/lib/mercadolibre/categories";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
@@ -84,11 +85,13 @@ export async function POST(
     await verifyStoreOwner(userId, params.storeId);
     const body = (await request.json()) as Record<string, unknown>;
     const categoryId =
-      typeof body.categoryId === "string" ? body.categoryId.trim() : "";
+      typeof body.categoryId === "string"
+        ? body.categoryId.trim().toUpperCase()
+        : "";
     const name = typeof body.name === "string" ? body.name.trim() : "";
-    if (!categoryId || !name || name.length > 120) {
+    if (!isMercadoLibreCategoryId(categoryId) || !name || name.length > 120) {
       throw ErrorFactory.InvalidRequest(
-        "Define un nombre y una categoría para la plantilla",
+        "Define un nombre y una categoría válida de Mercado Libre para la plantilla",
       );
     }
     const attributes = parseAttributes(body.attributes);

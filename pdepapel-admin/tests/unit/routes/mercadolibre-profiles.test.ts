@@ -82,4 +82,23 @@ describe("Mercado Libre publication profiles routes", () => {
       }),
     );
   });
+
+  it("rejects a profile with a category code outside Mercado Libre Colombia", async () => {
+    mocks.auth.mockReturnValue({ userId: "owner-id" });
+
+    const response = await POST(
+      new Request("https://admin.example.com", {
+        method: "POST",
+        body: JSON.stringify({
+          localCategoryId: "local-category-id",
+          categoryId: "MLA123",
+          name: "Perfil inválido",
+          attributes: [{ id: "BRAND", value_name: "P de Papel" }],
+        }),
+      }),
+      { params: { storeId: "store-id" } },
+    );
+
+    expect(response.status).toBe(400);
+  });
 });

@@ -14,8 +14,11 @@ import {
   MercadoLibreFinancialsPendingError,
   type MercadoLibreOrderFinancials,
 } from "./order-financials";
-import { syncMercadoLibreListingContent } from "./listings";
-import { publishMercadoLibreListing } from "./listings";
+import {
+  MercadoLibrePublicationError,
+  publishMercadoLibreListing,
+  syncMercadoLibreListingContent,
+} from "./listings";
 import { enqueueMercadoLibreOutboxEvent } from "./queue";
 
 const RETRY_DELAY_MS = 5 * 60 * 1000;
@@ -839,6 +842,9 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
     const financialsPending =
       error instanceof MercadoLibreFinancialsPendingError;
     const errorMessage = getSafeErrorMessage(error);
+    const publicationNeedsReview =
+      error instanceof MercadoLibrePublicationError &&
+      error.requiresDraftReview;
     if (
       event.action === MarketplaceOutboxAction.PUBLISH_LISTING &&
       event.listing?.id
@@ -846,7 +852,9 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
       await prismadb.marketplaceListing.update({
         where: { id: event.listing.id },
         data: {
-          status: MarketplaceListingStatus.ERROR,
+          status: publicationNeedsReview
+            ? MarketplaceListingStatus.DRAFT
+            : MarketplaceListingStatus.ERROR,
           lastError: errorMessage,
         },
       });
@@ -854,16 +862,25 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
     await prismadb.marketplaceOutboxEvent.update({
       where: { id: event.id },
       data: {
-        status: MarketplaceOutboxStatus.RETRY,
-        availableAt: new Date(
-          Date.now() +
-            (financialsPending
-              ? FINANCIALS_PENDING_RETRY_DELAY_MS
-              : RETRY_DELAY_MS),
-        ),
+        status: publicationNeedsReview
+          ? MarketplaceOutboxStatus.FAILED
+          : MarketplaceOutboxStatus.RETRY,
+        ...(publicationNeedsReview
+          ? {}
+          : {
+              availableAt: new Date(
+                Date.now() +
+                  (financialsPending
+                    ? FINANCIALS_PENDING_RETRY_DELAY_MS
+                    : RETRY_DELAY_MS),
+              ),
+            }),
         lastError: errorMessage,
       },
     });
+    if (publicationNeedsReview) {
+      return { processed: false, reason: "listing_requires_review" as const };
+    }
     if (financialsPending) {
       return { processed: false, reason: "financials_pending" as const };
     }

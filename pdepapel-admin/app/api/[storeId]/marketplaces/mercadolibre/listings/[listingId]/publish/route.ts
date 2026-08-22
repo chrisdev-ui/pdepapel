@@ -103,6 +103,16 @@ export async function POST(
         error instanceof Error
           ? error.message.slice(0, 1_000)
           : "No fue posible publicar en Mercado Libre";
+      if (
+        error instanceof MercadoLibrePublicationError &&
+        error.requiresDraftReview
+      ) {
+        await prismadb.marketplaceListing.update({
+          where: { id: listing.id },
+          data: { status: MarketplaceListingStatus.DRAFT, lastError: message },
+        });
+        throw ErrorFactory.InvalidRequest(message);
+      }
       await prismadb.marketplaceListing.update({
         where: { id: listing.id },
         data: { status: MarketplaceListingStatus.ERROR, lastError: message },
