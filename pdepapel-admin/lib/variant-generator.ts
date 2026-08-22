@@ -1,4 +1,7 @@
-import { buildProductVariantNameSuggestion } from "@/lib/product-naming";
+import {
+  buildProductVariantNameSuggestion,
+  getCustomerFacingSizeName,
+} from "@/lib/product-naming";
 
 export interface VariantOption {
   id: string;
@@ -83,7 +86,12 @@ export function generateVariants(params: GenerationParams): GeneratedVariant[] {
           categoryName: category.name,
           designName: design.name,
           colorName: color.name,
-          sizeName: size.value || size.name,
+          sizeName: getCustomerFacingSizeName({
+            categoryName: category.name,
+            sizeName: size.name,
+            sizeValue: size.value,
+          }),
+          sizeValue: size.value,
         }).name;
 
         const sku = generateSemanticSKU(

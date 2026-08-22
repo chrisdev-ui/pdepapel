@@ -780,6 +780,9 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   colors.find((color) => color.id === watchedColorId)?.name
                 }
                 sizeName={sizes.find((size) => size.id === watchedSizeId)?.name}
+                sizeValue={
+                  sizes.find((size) => size.id === watchedSizeId)?.value
+                }
                 disabled={loading}
                 onApply={(name) =>
                   form.setValue("name", name, {

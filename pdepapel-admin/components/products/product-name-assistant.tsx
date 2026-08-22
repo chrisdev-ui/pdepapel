@@ -17,6 +17,7 @@ type ProductNameAssistantProps = {
   designName?: string | null;
   colorName?: string | null;
   sizeName?: string | null;
+  sizeValue?: string | null;
   includeVariantAttributes?: boolean;
   disabled?: boolean;
   onApply: (name: string) => void;
@@ -29,6 +30,7 @@ export function ProductNameAssistant({
   designName,
   colorName,
   sizeName,
+  sizeValue,
   includeVariantAttributes = true,
   disabled = false,
   onApply,
@@ -50,6 +52,7 @@ export function ProductNameAssistant({
         designName,
         colorName,
         sizeName,
+        sizeValue,
         includeVariantAttributes,
       }),
     [
@@ -60,6 +63,7 @@ export function ProductNameAssistant({
       designName,
       includeVariantAttributes,
       sizeName,
+      sizeValue,
     ],
   );
 

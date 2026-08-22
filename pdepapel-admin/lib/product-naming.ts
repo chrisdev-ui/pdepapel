@@ -8,6 +8,7 @@ export type ProductNamingInput = {
   designName?: string | null;
   colorName?: string | null;
   sizeName?: string | null;
+  sizeValue?: string | null;
   includeVariantAttributes?: boolean;
 };
 
@@ -49,6 +50,15 @@ const CATEGORY_HEAD_NOUNS: Record<string, string> = {
   stickers: "Stickers",
 };
 
+const LOGISTICS_SIZE_VALUE_PATTERN = /^(?:XXS|XS|S|M|L|XL|XXL)-(?:L|P)$/i;
+const INTERNAL_SIZE_CODE_PATTERN = /^(?:XXS|XS|S|M|L|XL|XXL)\+$/i;
+const LOGISTICS_SIZE_NAME_PATTERN =
+  /^(?:muy\s+)?(?:pequeño|mediano|grande)\s+(?:liviano|pesado)$/i;
+const COMMERCIAL_MEASUREMENT_PATTERN =
+  /(?:\b[A-C][0-9]\b|\b\d+(?:[.,]\d+)?\s?(?:mm|cm|m|g|kg|ml|l|oz)\b|\b(?:carta|oficio|legal)\b)/i;
+const SIZE_RELEVANT_CATEGORY_PATTERN =
+  /(?:ropa|camiseta|buzo|hoodie|disfraz|media|calcet|calzado|zapato|sandalia)/i;
+
 function normalizeForComparison(value: string) {
   return value
     .normalize("NFD")
@@ -64,6 +74,46 @@ export function normalizeProductNamePart(value?: string | null) {
   const normalized = value.replace(/[_|]+/g, " ").replace(/\s+/g, " ").trim();
 
   return EMPTY_VALUES.has(normalizeForComparison(normalized)) ? "" : normalized;
+}
+
+/**
+ * `Size` doubles as the inventory/shipping profile in this catalog. Values
+ * such as M-P and legacy labels such as M+ are operational codes, not facts a
+ * customer can use to decide on a product. Keep genuine commercial measures
+ * (A5, 57 mm, Carta) while only allowing letter sizes for categories where a
+ * customer actually chooses a size.
+ */
+export function getCustomerFacingSizeName(input: {
+  categoryName?: string | null;
+  sizeName?: string | null;
+  sizeValue?: string | null;
+}) {
+  const sizeName = normalizeProductNamePart(input.sizeName);
+  const sizeValue = normalizeProductNamePart(input.sizeValue);
+
+  if (!sizeName) return "";
+
+  if (
+    LOGISTICS_SIZE_VALUE_PATTERN.test(sizeName) ||
+    LOGISTICS_SIZE_NAME_PATTERN.test(sizeName) ||
+    INTERNAL_SIZE_CODE_PATTERN.test(sizeName)
+  ) {
+    return "";
+  }
+
+  if (COMMERCIAL_MEASUREMENT_PATTERN.test(sizeName)) {
+    return sizeName;
+  }
+
+  if (SIZE_RELEVANT_CATEGORY_PATTERN.test(input.categoryName || "")) {
+    return sizeName;
+  }
+
+  if (LOGISTICS_SIZE_VALUE_PATTERN.test(sizeValue)) {
+    return "";
+  }
+
+  return "";
 }
 
 function hasEquivalentContent(parts: string[], candidate: string) {
@@ -125,7 +175,11 @@ export function buildProductNameSuggestion(
       ? normalizeProductNamePart(input.colorName)
       : "",
     input.includeVariantAttributes
-      ? normalizeProductNamePart(input.sizeName)
+      ? getCustomerFacingSizeName({
+          categoryName: input.categoryName,
+          sizeName: input.sizeName,
+          sizeValue: input.sizeValue,
+        })
       : "",
   ];
 

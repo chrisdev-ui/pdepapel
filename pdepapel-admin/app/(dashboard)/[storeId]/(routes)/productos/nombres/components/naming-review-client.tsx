@@ -27,6 +27,7 @@ type ProductCandidate = {
   categoryName: string;
   colorName: string;
   sizeName: string;
+  sizeValue: string;
   designName: string;
   groupName: string | null;
   imageUrl: string | null;
@@ -135,6 +136,7 @@ export function NamingReviewClient({
       designName: isProduct ? (candidate as ProductCandidate).designName : null,
       colorName: isProduct ? (candidate as ProductCandidate).colorName : null,
       sizeName: isProduct ? (candidate as ProductCandidate).sizeName : null,
+      sizeValue: isProduct ? (candidate as ProductCandidate).sizeValue : null,
       includeVariantAttributes: isProduct,
     });
   };

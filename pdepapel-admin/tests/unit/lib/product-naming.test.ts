@@ -1,6 +1,7 @@
 import {
   PRODUCT_NAME_MAX_LENGTH,
   buildProductNameSuggestion,
+  getCustomerFacingSizeName,
   getCategoryHeadNoun,
 } from "@/lib/product-naming";
 import { describe, expect, it } from "vitest";
@@ -78,6 +79,32 @@ describe("product naming", () => {
       includeVariantAttributes: true,
     });
 
-    expect(result.name).toBe("Cintas resaltadoras clásico S");
+    expect(result.name).toBe("Cintas resaltadoras clásico");
+  });
+
+  it("excludes internal logistics sizes from customer-facing names", () => {
+    const result = buildProductNameSuggestion({
+      baseName: "Troqueles de figuras en maletín x8 de 1 cm",
+      categoryName: "Manualidades",
+      designName: "Clásico",
+      colorName: "Pastel",
+      sizeName: "M+",
+      sizeValue: "M-P",
+      includeVariantAttributes: true,
+    });
+
+    expect(result.name).toBe(
+      "Troqueles de figuras en maletín x8 de 1 cm Clásico Pastel",
+    );
+  });
+
+  it("keeps commercial measurements that help customers choose a product", () => {
+    expect(
+      getCustomerFacingSizeName({
+        categoryName: "Cuadernos",
+        sizeName: "A5",
+        sizeValue: "A5",
+      }),
+    ).toBe("A5");
   });
 });

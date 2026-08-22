@@ -14,7 +14,7 @@ export async function getProductNamingCandidates(storeId: string) {
         productGroup: { select: { name: true } },
         category: { select: { name: true } },
         color: { select: { name: true } },
-        size: { select: { name: true } },
+        size: { select: { name: true, value: true } },
         design: { select: { name: true } },
         images: {
           select: { url: true },
@@ -72,6 +72,7 @@ export async function getProductNamingCandidates(storeId: string) {
       categoryName: product.category.name,
       colorName: product.color.name,
       sizeName: product.size.name,
+      sizeValue: product.size.value,
       designName: product.design.name,
       groupName: product.productGroup?.name ?? null,
       imageUrl: product.images[0]?.url ?? null,

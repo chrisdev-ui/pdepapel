@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import * as fs from "fs";
 import path from "path";
+import { getGoogleMerchantSize } from "../../lib/google-merchant";
 
 const prismadb = new PrismaClient();
 const BASE_URL = "https://papeleriapdepapel.com";
@@ -143,7 +144,7 @@ async function exportProductsToGoogleMerchant() {
         cleanText(productType),
         itemGroupId,
         cleanText(product.color?.name),
-        cleanText(product.size?.value || product.size?.name),
+        cleanText(getGoogleMerchantSize(product.category?.name, product.size)),
         cleanText(product.design?.name),
       ].join("\t");
     });
