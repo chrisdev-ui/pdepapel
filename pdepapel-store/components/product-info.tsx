@@ -10,6 +10,7 @@ import { QuantitySelector } from "@/components/ui/quantity-selector";
 import { Separator } from "@/components/ui/separator";
 import { StarRating } from "@/components/ui/star-rating";
 import { ToastIcon } from "@/components/ui/toast-icon";
+import { LowStockNotice } from "@/components/ui/low-stock-notice";
 import { useCart } from "@/hooks/use-cart";
 import { toast } from "@/hooks/use-toast";
 import { useWishlist } from "@/hooks/use-wishlist";
@@ -257,6 +258,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
           />
         </div>
       </div>
+      <LowStockNotice stock={data.stock} variant="detail" />
       <Separator className="my-4" />
       <div className="flex flex-col gap-y-6">
         {isLoading && data.isGroup ? (

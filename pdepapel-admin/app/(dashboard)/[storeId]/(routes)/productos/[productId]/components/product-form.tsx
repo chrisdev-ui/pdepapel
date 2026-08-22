@@ -20,6 +20,7 @@ import z from "zod";
 import { RichTextEditor } from "@/components/editor/rich-text-editor";
 import { PRODUCT_DESCRIPTION_TEMPLATES } from "@/lib/product-description-templates";
 import { AlertModal } from "@/components/modals/alert-modal";
+import { ConvertProductToVariantsModal } from "@/components/modals/convert-product-to-variants-modal";
 import { IntakeModal } from "@/components/modals/intake-modal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -166,6 +167,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   const { toast } = useToast();
 
   const [open, setOpen] = useState(false);
+  const [convertToVariantsOpen, setConvertToVariantsOpen] = useState(false);
   const [intakeOpen, setIntakeOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -489,6 +491,39 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     }
   }, [params.storeId, params.productId, router, toast]);
 
+  const onConvertToVariants = useCallback(
+    async (groupName: string) => {
+      if (!initialData) return;
+
+      try {
+        setLoading(true);
+        const response = await axios.post<{ productGroupId: string }>(
+          `/api/${params.storeId}/${Models.Products}/${initialData.id}/convert-to-variants`,
+          { name: groupName },
+        );
+
+        clearStorage();
+        setConvertToVariantsOpen(false);
+        toast({
+          description:
+            "Grupo creado. Ahora agrega las demás opciones con su propio stock.",
+          variant: "success",
+        });
+        router.push(
+          `/${params.storeId}/${Models.Products}/grupo/${response.data.productGroupId}`,
+        );
+      } catch (error) {
+        toast({
+          description: getErrorMessage(error),
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    },
+    [clearStorage, initialData, params.storeId, router, toast],
+  );
+
   const selectOptions = useMemo(
     () => ({
       categories: [...categories]
@@ -534,9 +569,41 @@ export const ProductForm: React.FC<ProductFormProps> = ({
         onConfirm={onDelete}
         loading={loading}
       />
+      {initialData && (
+        <ConvertProductToVariantsModal
+          defaultName={initialData.name}
+          isOpen={convertToVariantsOpen}
+          loading={loading}
+          onClose={() => setConvertToVariantsOpen(false)}
+          onConfirm={onConvertToVariants}
+        />
+      )}
       <div className="flex items-center justify-between">
         <Heading title={title} description={description} />
         <div className="flex items-center gap-2">
+          {initialData && !initialData.productGroupId && (
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              onClick={() => {
+                if (form.formState.isDirty) {
+                  toast({
+                    description:
+                      "Guarda los cambios del producto antes de convertirlo en variantes.",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+
+                setConvertToVariantsOpen(true);
+              }}
+              disabled={loading}
+            >
+              <Package className="mr-2 h-4 w-4" />
+              Convertir en variantes
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={onClear} type="button">
             <Eraser className="mr-2 h-4 w-4" />
             Limpiar Formulario

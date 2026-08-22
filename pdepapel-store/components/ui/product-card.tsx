@@ -8,6 +8,10 @@ import { CldImage } from "@/components/ui/CldImage";
 import { Currency } from "@/components/ui/currency";
 import { GroupBadge } from "@/components/ui/group-badge";
 import { IconButton } from "@/components/ui/icon-button";
+import {
+  LowStockNotice,
+  canShowLowStockInProductCard,
+} from "@/components/ui/low-stock-notice";
 import { OfferBadge } from "@/components/ui/offer-badge";
 import { ProductCardBadge } from "@/components/ui/product-cart-badge";
 import { StarRating } from "@/components/ui/star-rating";
@@ -253,6 +257,9 @@ const ProductCard: React.FC<ProductCardProps> = ({
             <Currency value={product.price} />
           )}
         </div>
+        {canShowLowStockInProductCard(product.stock, product.isGroup) && (
+          <LowStockNotice stock={product.stock} variant="card" />
+        )}
         {renderBadge()}
       </Link>
       <div className="pointer-events-none absolute inset-x-3 top-2.5 aspect-square">
