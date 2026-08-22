@@ -1,5 +1,3 @@
-import { describe, expect, it } from "vitest";
-
 import {
   MAX_PRODUCT_IMAGE_ANALYSIS_IMAGES,
   PRODUCT_IMAGE_ANALYSIS_CACHE_TTL_SECONDS,
@@ -10,7 +8,47 @@ import {
   getProductImageAnalysisRateLimitKey,
   isSupportedProductImageUrl,
   sanitizeProductImageAnalysis,
+  type ProductImageAnalysisOutput,
 } from "@/lib/product-image-analysis";
+import { describe, expect, it } from "vitest";
+
+const taxonomy = {
+  categories: [
+    { id: "category-notebooks", name: "Cuadernos", typeName: "Útiles" },
+  ],
+  sizes: [{ id: "size-a5", name: "A5", value: "A5" }],
+  colors: [{ id: "color-pastel", name: "Pastel", value: "#F8B4C7" }],
+  designs: [{ id: "design-classic", name: "Clásico" }],
+};
+
+function createOutput(
+  overrides: Partial<ProductImageAnalysisOutput> = {},
+): ProductImageAnalysisOutput {
+  return {
+    suggestedBaseName: "Troquel de figuras en maletín x8 de 1 cm",
+    suggestedDescription: null,
+    brand: null,
+    categoryName: null,
+    categoryIsDeterministic: false,
+    sizeName: null,
+    sizeIsDeterministic: false,
+    colorName: null,
+    colorHex: null,
+    colorIsDeterministic: false,
+    designName: null,
+    designIsDeterministic: false,
+    gtin: null,
+    mpn: null,
+    variantRecommendation: {
+      shouldCreateVariants: false,
+      axes: [],
+      evidence: null,
+    },
+    observations: [],
+    limitations: [],
+    ...overrides,
+  };
+}
 
 describe("product image analysis helpers", () => {
   it("accepts only secure Cloudinary catalog images", () => {
@@ -46,8 +84,7 @@ describe("product image analysis helpers", () => {
         "https://res.cloudinary.com/pdepapel/image/upload/v1/primera.webp",
       ],
       categoryName: "Cuadernos",
-      colors: [{ id: "color-rosa", name: "Rosa", value: "#F8B4C7" }],
-      designs: [{ id: "design-floral", name: "Floral" }],
+      ...taxonomy,
     };
 
     expect(getProductImageAnalysisCacheKey("store-id", input)).toBe(
@@ -59,16 +96,28 @@ describe("product image analysis helpers", () => {
     expect(
       getProductImageAnalysisCacheKey("store-id", {
         ...input,
-        categoryName: "Agendas",
+        categories: [
+          { id: "category-agendas", name: "Agendas", typeName: "Útiles" },
+        ],
+      }),
+    ).not.toBe(getProductImageAnalysisCacheKey("store-id", input));
+    expect(
+      getProductImageAnalysisCacheKey("store-id", {
+        ...input,
+        sizes: [{ id: "size-a4", name: "A4", value: "A4" }],
       }),
     ).not.toBe(getProductImageAnalysisCacheKey("store-id", input));
   });
 
-  it("matches deterministic attributes already configured by this store", () => {
+  it("applies only exact existing taxonomy options", () => {
     const analysis = sanitizeProductImageAnalysis(
-      {
-        suggestedBaseName: "  Troquel de figuras en maletín x8 de 1 cm ",
+      createOutput({
+        suggestedDescription: "  Incluye ocho troqueles dentro de un estuche. ",
         brand: "  Kawaii  ",
+        categoryName: "cuadernos",
+        categoryIsDeterministic: true,
+        sizeName: "A5",
+        sizeIsDeterministic: true,
         colorName: "pastel",
         colorHex: "#F9D7E5",
         colorIsDeterministic: false,
@@ -76,16 +125,20 @@ describe("product image analysis helpers", () => {
         designIsDeterministic: true,
         observations: ["  Se observan ocho troqueles en un estuche. "],
         limitations: [" No se distingue una marca en el empaque. "],
-      },
-      {
-        colors: [{ id: "color-pastel", name: "Pastel" }],
-        designs: [{ id: "design-classic", name: "Clásico" }],
-      },
+      }),
+      taxonomy,
     );
 
     expect(analysis).toMatchObject({
       suggestedBaseName: "Troquel de figuras en maletín x8 de 1 cm",
+      suggestedDescription: "Incluye ocho troqueles dentro de un estuche.",
       brand: "Kawaii",
+      categoryId: "category-notebooks",
+      categoryName: "Cuadernos",
+      categorySource: "existing",
+      sizeId: "size-a5",
+      sizeName: "A5",
+      sizeSource: "existing",
       colorId: null,
       colorName: null,
       colorSource: "not_detected",
@@ -95,23 +148,45 @@ describe("product image analysis helpers", () => {
     });
   });
 
+  it("does not apply an ambiguous or unknown category or size", () => {
+    const analysis = sanitizeProductImageAnalysis(
+      createOutput({
+        categoryName: "Papelería creativa",
+        categoryIsDeterministic: true,
+        sizeName: "Grande",
+        sizeIsDeterministic: true,
+      }),
+      {
+        ...taxonomy,
+        categories: [
+          { id: "category-a", name: "Accesorios", typeName: "Kawaii" },
+          { id: "category-b", name: "Accesorios", typeName: "Oficina" },
+        ],
+        sizes: [
+          { id: "size-a", name: "Grande", value: "L" },
+          { id: "size-b", name: "Grande", value: "XL" },
+        ],
+      },
+    );
+
+    expect(analysis.categoryId).toBeNull();
+    expect(analysis.categorySource).toBe("not_detected");
+    expect(analysis.sizeId).toBeNull();
+    expect(analysis.sizeSource).toBe("not_detected");
+  });
+
   it("keeps a deterministic new color or design as a proposal without inventing an ID", () => {
     const analysis = sanitizeProductImageAnalysis(
-      {
+      createOutput({
         suggestedBaseName: "Mini impresora térmica portátil",
-        brand: null,
         colorName: "Rosa pastel",
         colorHex: "#F5B7C6",
         colorIsDeterministic: true,
         designName: "Gatito kawaii",
         designIsDeterministic: true,
         observations: ["La carcasa es rosa pastel y muestra un gatito."],
-        limitations: [],
-      },
-      {
-        colors: [{ id: "color-rosa", name: "Rosa", value: "#F8B4C7" }],
-        designs: [{ id: "design-floral", name: "Floral" }],
-      },
+      }),
+      taxonomy,
     );
 
     expect(analysis).toMatchObject({
@@ -125,17 +200,80 @@ describe("product image analysis helpers", () => {
     });
   });
 
-  it("requires visual evidence and catalog options in its model instructions", () => {
+  it("accepts only checksum-valid visual GTINs and complete visible MPNs", () => {
+    const accepted = sanitizeProductImageAnalysis(
+      createOutput({
+        gtin: {
+          value: "4006381333931",
+          evidence: "Se lee bajo el código de barras del empaque.",
+        },
+        mpn: {
+          value: "SAN-AGENDA-A5",
+          evidence: "Aparece completo junto a la referencia del fabricante.",
+        },
+      }),
+      taxonomy,
+    );
+    const rejected = sanitizeProductImageAnalysis(
+      createOutput({
+        gtin: {
+          value: "4006381333932",
+          evidence: "Se lee bajo el código de barras del empaque.",
+        },
+        mpn: {
+          value: "?",
+          evidence: "No se lee completa.",
+        },
+      }),
+      taxonomy,
+    );
+
+    expect(accepted.gtin).toEqual({
+      value: "4006381333931",
+      evidence: "Se lee bajo el código de barras del empaque.",
+    });
+    expect(accepted.mpn).toEqual({
+      value: "SAN-AGENDA-A5",
+      evidence: "Aparece completo junto a la referencia del fabricante.",
+    });
+    expect(rejected.gtin).toBeNull();
+    expect(rejected.mpn).toBeNull();
+  });
+
+  it("keeps a variant suggestion as a review-only recommendation", () => {
+    const analysis = sanitizeProductImageAnalysis(
+      createOutput({
+        variantRecommendation: {
+          shouldCreateVariants: true,
+          axes: ["COLOR", "SIZE"],
+          evidence:
+            "Las fotos muestran opciones comprables por color y tamaño.",
+        },
+      }),
+      taxonomy,
+    );
+
+    expect(analysis.variantRecommendation).toEqual({
+      shouldCreateVariants: true,
+      axes: ["COLOR", "SIZE"],
+      evidence: "Las fotos muestran opciones comprables por color y tamaño.",
+    });
+  });
+
+  it("requires visual evidence and current catalog options in its model instructions", () => {
     const prompt = buildProductImageAnalysisPrompt({
       categoryName: "Troqueles",
+      categories: ["Cuadernos (Útiles)"],
+      sizes: ["A5"],
       colors: ["Rosa"],
       designs: ["Floral"],
     });
 
     expect(prompt).toContain("Nunca adivines");
     expect(prompt).toContain("No incluyas marca, color, diseño");
-    expect(prompt).toContain("proponer un nuevo nombre corto");
-    expect(prompt).toContain("Rosa");
-    expect(prompt).toContain("Floral");
+    expect(prompt).toContain("Cuadernos (Útiles)");
+    expect(prompt).toContain("A5");
+    expect(prompt).toContain("checksum GS1");
+    expect(prompt).toContain("variantRecommendation");
   });
 });

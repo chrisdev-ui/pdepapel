@@ -1,9 +1,61 @@
 // @vitest-environment jsdom
 
 import { ProductNameAssistant } from "@/components/products/product-name-assistant";
+import type { ProductImageAnalysis } from "@/lib/product-image-analysis";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+function createVisualAnalysis(
+  overrides: Partial<ProductImageAnalysis> = {},
+): ProductImageAnalysis {
+  return {
+    suggestedBaseName: "Cuaderno argollado A5",
+    suggestedDescription: null,
+    brand: "Sanrio",
+    categoryName: "Cuadernos",
+    categoryIsDeterministic: true,
+    categoryId: "category-notebooks",
+    categorySource: "existing",
+    sizeName: "A5",
+    sizeIsDeterministic: true,
+    sizeId: "size-a5",
+    sizeSource: "existing",
+    colorName: "Rosa",
+    colorHex: "#F8B4C7",
+    colorIsDeterministic: true,
+    colorId: "color-rosa",
+    colorSource: "existing",
+    designName: null,
+    designId: null,
+    designSource: "not_detected",
+    designIsDeterministic: false,
+    gtin: null,
+    mpn: null,
+    variantRecommendation: {
+      shouldCreateVariants: false,
+      axes: [],
+      evidence: null,
+    },
+    observations: ["La portada muestra flores."],
+    limitations: [],
+    ...overrides,
+  };
+}
+
+function createAnalysisResponse(
+  analysis: ProductImageAnalysis,
+  options: { remainingAnalysesToday?: number; reusedAnalysis?: boolean } = {},
+) {
+  return new Response(
+    JSON.stringify({
+      analysis,
+      remainingAnalysesToday: options.remainingAnalysesToday ?? 11,
+      reusedAnalysis: options.reusedAnalysis ?? false,
+    }),
+    { status: 200, headers: { "Content-Type": "application/json" } },
+  );
+}
 
 describe("ProductNameAssistant visual analysis", () => {
   afterEach(() => {
@@ -15,29 +67,9 @@ describe("ProductNameAssistant visual analysis", () => {
     const user = userEvent.setup();
     const onApply = vi.fn();
     const onApplyVisualAnalysis = vi.fn();
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          analysis: {
-            suggestedBaseName: "Cuaderno argollado A5",
-            brand: "Sanrio",
-            colorName: "Rosa",
-            colorHex: "#F8B4C7",
-            colorId: "color-rosa",
-            colorSource: "existing",
-            colorIsDeterministic: true,
-            designName: null,
-            designId: null,
-            designSource: "not_detected",
-            designIsDeterministic: false,
-            observations: ["La portada muestra flores."],
-            limitations: [],
-          },
-          remainingAnalysesToday: 11,
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(createAnalysisResponse(createVisualAnalysis()));
     vi.stubGlobal("fetch", fetchMock);
 
     render(
@@ -67,6 +99,8 @@ describe("ProductNameAssistant visual analysis", () => {
       expect.objectContaining({
         suggestedBaseName: "Cuaderno argollado A5",
         brand: "Sanrio",
+        categoryId: "category-notebooks",
+        sizeId: "size-a5",
         colorId: "color-rosa",
       }),
     );
@@ -87,30 +121,22 @@ describe("ProductNameAssistant visual analysis", () => {
       name: "Rosa pastel",
       value: "#F5B7C6",
     });
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          analysis: {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        createAnalysisResponse(
+          createVisualAnalysis({
             suggestedBaseName: "Mini impresora térmica portátil",
             brand: null,
             colorName: "Rosa pastel",
             colorHex: "#F5B7C6",
             colorId: null,
             colorSource: "new",
-            colorIsDeterministic: true,
             designName: null,
-            designId: null,
-            designSource: "not_detected",
-            designIsDeterministic: false,
-            observations: [],
-            limitations: [],
-          },
-          remainingAnalysesToday: 11,
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
+          }),
+        ),
       ),
     );
-    vi.stubGlobal("fetch", fetchMock);
 
     render(
       <ProductNameAssistant
@@ -144,33 +170,157 @@ describe("ProductNameAssistant visual analysis", () => {
     });
   });
 
+  it("applies a description only when the administrator chooses its draft", async () => {
+    const user = userEvent.setup();
+    const onApplyDescription = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        createAnalysisResponse(
+          createVisualAnalysis({
+            suggestedDescription:
+              "Cuaderno argollado con portada floral y formato A5.",
+          }),
+        ),
+      ),
+    );
+
+    render(
+      <ProductNameAssistant
+        currentName=""
+        storeId="store-id"
+        imageUrls={[
+          "https://res.cloudinary.com/pdepapel/image/upload/v1/cuaderno.webp",
+        ]}
+        onApply={vi.fn()}
+        onApplyVisualAnalysis={vi.fn()}
+        onApplyDescription={onApplyDescription}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Analizar fotos" }));
+    expect(onApplyDescription).not.toHaveBeenCalled();
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Usar borrador de descripción",
+      }),
+    );
+
+    expect(onApplyDescription).toHaveBeenCalledWith(
+      "Cuaderno argollado con portada floral y formato A5.",
+    );
+  });
+
+  it("requires explicit confirmation before applying a visual GTIN or MPN", async () => {
+    const user = userEvent.setup();
+    const onApplyVerifiedIdentifier = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        createAnalysisResponse(
+          createVisualAnalysis({
+            gtin: {
+              value: "4006381333931",
+              evidence: "Se lee bajo el código de barras del empaque.",
+            },
+            mpn: {
+              value: "SAN-AGENDA-A5",
+              evidence: "Se lee junto a la referencia del fabricante.",
+            },
+          }),
+        ),
+      ),
+    );
+
+    render(
+      <ProductNameAssistant
+        currentName=""
+        storeId="store-id"
+        imageUrls={[
+          "https://res.cloudinary.com/pdepapel/image/upload/v1/cuaderno.webp",
+        ]}
+        onApply={vi.fn()}
+        onApplyVisualAnalysis={vi.fn()}
+        onApplyVerifiedIdentifier={onApplyVerifiedIdentifier}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Analizar fotos" }));
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Revisar GTIN: 4006381333931",
+      }),
+    );
+
+    expect(onApplyVerifiedIdentifier).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("heading", { name: "¿Confirmas este GTIN?" }),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Confirmar y aplicar" }),
+    );
+
+    expect(onApplyVerifiedIdentifier).toHaveBeenCalledWith("gtin", {
+      value: "4006381333931",
+      evidence: "Se lee bajo el código de barras del empaque.",
+    });
+  });
+
+  it("only opens the existing variant review flow after an explicit action", async () => {
+    const user = userEvent.setup();
+    const onReviewVariantRecommendation = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        createAnalysisResponse(
+          createVisualAnalysis({
+            variantRecommendation: {
+              shouldCreateVariants: true,
+              axes: ["COLOR", "SIZE"],
+              evidence: "Se muestran colores y tamaños comprables distintos.",
+            },
+          }),
+        ),
+      ),
+    );
+
+    render(
+      <ProductNameAssistant
+        currentName=""
+        storeId="store-id"
+        imageUrls={[
+          "https://res.cloudinary.com/pdepapel/image/upload/v1/cuaderno.webp",
+        ]}
+        onApply={vi.fn()}
+        onApplyVisualAnalysis={vi.fn()}
+        canReviewVariantRecommendation
+        onReviewVariantRecommendation={onReviewVariantRecommendation}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Analizar fotos" }));
+    expect(onReviewVariantRecommendation).not.toHaveBeenCalled();
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Revisar conversión a variantes",
+      }),
+    );
+
+    expect(onReviewVariantRecommendation).toHaveBeenCalledOnce();
+  });
+
   it("explains when a previous visual proposal was reused without consuming quota", async () => {
     const user = userEvent.setup();
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            analysis: {
-              suggestedBaseName: "Cuaderno argollado A5",
-              brand: null,
-              colorName: null,
-              colorHex: null,
-              colorId: null,
-              colorSource: "not_detected",
-              colorIsDeterministic: false,
-              designName: null,
-              designId: null,
-              designSource: "not_detected",
-              designIsDeterministic: false,
-              observations: [],
-              limitations: [],
-            },
-            remainingAnalysesToday: 17,
-            reusedAnalysis: true,
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        ),
+        createAnalysisResponse(createVisualAnalysis({ brand: null }), {
+          remainingAnalysesToday: 17,
+          reusedAnalysis: true,
+        }),
       ),
     );
 

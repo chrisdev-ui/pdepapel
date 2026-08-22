@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   MERCADOLIBRE_FAILURE_CALLBACK_HEADERS,
+  MERCADOLIBRE_RECOVERY_CRON,
   getMercadoLibreFailureUrl,
   getMercadoLibreOutboxFlowControlKey,
   getMercadoLibreOutboxQueueLabel,
   getMercadoLibreProcessorUrl,
   getMercadoLibreQueueConfigurationStatus,
+  getMercadoLibreRecoveryScheduleConfig,
   getMercadoLibreRecoveryUrl,
   getMercadoLibreSyncUrl,
   parseMercadoLibreQueueFailureCallback,
@@ -53,6 +55,25 @@ describe("Mercado Libre durable queue", () => {
     expect(getMercadoLibreFailureUrl(queueEnvironment)).toBe(
       "https://admin.papeleriapdepapel.com/api/internal/marketplaces/mercadolibre/failure",
     );
+  });
+
+  it("uses a low-frequency recovery schedule without delaying direct sale processing", () => {
+    const schedule = getMercadoLibreRecoveryScheduleConfig(
+      "connection-id",
+      queueEnvironment,
+    );
+
+    expect(MERCADOLIBRE_RECOVERY_CRON).toBe("*/15 * * * *");
+    expect(schedule).toMatchObject({
+      destination: getMercadoLibreRecoveryUrl(queueEnvironment),
+      cron: "*/15 * * * *",
+      method: "POST",
+      body: JSON.stringify({ connectionId: "connection-id" }),
+      flowControl: {
+        key: "mercadolibre-recovery-connection-id",
+        parallelism: 1,
+      },
+    });
   });
 
   it("uses a separate queue lane for sale notifications", () => {

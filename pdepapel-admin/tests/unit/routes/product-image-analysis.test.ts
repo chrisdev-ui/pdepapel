@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   verifyStoreOwner: vi.fn(),
+  categoryFindMany: vi.fn(),
+  sizeFindMany: vi.fn(),
   colorFindMany: vi.fn(),
   designFindMany: vi.fn(),
   redisGet: vi.fn(),
@@ -19,6 +21,8 @@ vi.mock("@/lib/utils", () => ({ verifyStoreOwner: mocks.verifyStoreOwner }));
 vi.mock("@/lib/env.mjs", () => ({ env: mocks.env }));
 vi.mock("@/lib/prismadb", () => ({
   default: {
+    category: { findMany: mocks.categoryFindMany },
+    size: { findMany: mocks.sizeFindMany },
     color: { findMany: mocks.colorFindMany },
     design: { findMany: mocks.designFindMany },
   },
@@ -72,6 +76,12 @@ describe("product image analysis route", () => {
     vi.clearAllMocks();
     mocks.env.GEMINI_API_KEY = "gemini-test-key";
     mocks.auth.mockReturnValue({ userId: "owner-id" });
+    mocks.categoryFindMany.mockResolvedValue([
+      { id: "category-notebooks", name: "Cuadernos", type: { name: "Útiles" } },
+    ]);
+    mocks.sizeFindMany.mockResolvedValue([
+      { id: "size-a5", name: "A5", value: "A5" },
+    ]);
     mocks.colorFindMany.mockResolvedValue([
       { id: "color-rosa", name: "Rosa", value: "#F8B4C7" },
     ]);
@@ -86,12 +96,30 @@ describe("product image analysis route", () => {
     mocks.generateText.mockResolvedValue({
       output: {
         suggestedBaseName: "Cuaderno argollado A5",
+        suggestedDescription: "Cuaderno argollado con portada floral.",
         brand: "Sanrio",
+        categoryName: "Cuadernos",
+        categoryIsDeterministic: true,
+        sizeName: "A5",
+        sizeIsDeterministic: true,
         colorName: "rosa",
         colorHex: "#F8B4C7",
         colorIsDeterministic: true,
         designName: "Floral",
         designIsDeterministic: true,
+        gtin: {
+          value: "4006381333931",
+          evidence: "Se lee debajo del código de barras.",
+        },
+        mpn: {
+          value: "SAN-AGENDA-A5",
+          evidence: "Se lee como referencia en la etiqueta.",
+        },
+        variantRecommendation: {
+          shouldCreateVariants: false,
+          axes: [],
+          evidence: null,
+        },
         observations: ["La portada muestra flores."],
         limitations: [],
       },
@@ -117,6 +145,8 @@ describe("product image analysis route", () => {
       analysis: {
         suggestedBaseName: "Cuaderno argollado A5",
         brand: "Sanrio",
+        categoryId: "category-notebooks",
+        sizeId: "size-a5",
         colorId: "color-rosa",
         colorSource: "existing",
         designId: "design-floral",
@@ -134,12 +164,24 @@ describe("product image analysis route", () => {
     mocks.redisGet
       .mockResolvedValueOnce({
         suggestedBaseName: "Cuaderno argollado A5",
+        suggestedDescription: "Cuaderno argollado con portada floral.",
         brand: "Sanrio",
+        categoryName: "Cuadernos",
+        categoryIsDeterministic: true,
+        sizeName: "A5",
+        sizeIsDeterministic: true,
         colorName: "rosa",
         colorHex: "#F8B4C7",
         colorIsDeterministic: true,
         designName: "Floral",
         designIsDeterministic: true,
+        gtin: null,
+        mpn: null,
+        variantRecommendation: {
+          shouldCreateVariants: false,
+          axes: [],
+          evidence: null,
+        },
         observations: ["La portada muestra flores."],
         limitations: [],
       })

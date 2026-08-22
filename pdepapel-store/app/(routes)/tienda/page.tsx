@@ -17,7 +17,7 @@ import { STOREFRONT_ROUTES } from "@/lib/routes";
 
 import { ShopContentSkeleton } from "./components/skeletons";
 
-export const revalidate = 60;
+export const revalidate = 300;
 
 export async function generateMetadata({
   searchParams,

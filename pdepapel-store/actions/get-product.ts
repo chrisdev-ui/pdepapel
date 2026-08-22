@@ -1,18 +1,16 @@
 import { env } from "@/lib/env.mjs";
+import { CATALOG_FETCH_CACHE } from "@/lib/catalog-cache";
 import { UpstreamServiceError } from "@/lib/upstream-service-error";
 import { Product } from "@/types";
 import { cache } from "react";
 
 const API_URL = `${env.NEXT_PUBLIC_API_URL}/products`;
-const CATALOG_CACHE = {
-  next: { revalidate: 60, tags: ["products"] },
-};
 
 export const getProduct = cache(async (id: string): Promise<Product | null> => {
   try {
     const response = await fetch(
       `${API_URL}/${id}?include=kitComponents`,
-      CATALOG_CACHE,
+      CATALOG_FETCH_CACHE,
     );
     if (response.status === 404) return null;
     if (!response.ok) {

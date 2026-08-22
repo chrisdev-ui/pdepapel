@@ -2,11 +2,9 @@
 
 import { env } from "@/lib/env.mjs";
 import { ProductsResponse } from "@/types";
+import { CATALOG_FETCH_CACHE } from "@/lib/catalog-cache";
 
 const API_URL = `${env.NEXT_PUBLIC_API_URL}/products`;
-const CATALOG_CACHE = {
-  next: { revalidate: 60, tags: ["products"] },
-};
 
 interface Query {
   page?: number;
@@ -75,7 +73,7 @@ export const getProducts = async (query: Query): Promise<ProductsResponse> => {
   if (query.ids) url.searchParams.append("ids", query.ids);
 
   try {
-    const response = await fetch(url, CATALOG_CACHE);
+    const response = await fetch(url, CATALOG_FETCH_CACHE);
     if (!response.ok) return UNAVAILABLE_RESPONSE;
     return await response.json();
   } catch {

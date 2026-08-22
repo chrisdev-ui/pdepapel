@@ -91,7 +91,23 @@ export async function POST(
       );
     }
 
-    const [colors, designs] = await Promise.all([
+    const [categories, sizes, colors, designs] = await Promise.all([
+      prismadb.category.findMany({
+        where: { storeId: params.storeId },
+        orderBy: { name: "asc" },
+        take: MAX_TAXONOMY_OPTIONS,
+        select: {
+          id: true,
+          name: true,
+          type: { select: { name: true } },
+        },
+      }),
+      prismadb.size.findMany({
+        where: { storeId: params.storeId },
+        orderBy: { name: "asc" },
+        take: MAX_TAXONOMY_OPTIONS,
+        select: { id: true, name: true, value: true },
+      }),
       prismadb.color.findMany({
         where: { storeId: params.storeId },
         orderBy: { name: "asc" },
@@ -110,6 +126,12 @@ export async function POST(
     const cacheKey = getProductImageAnalysisCacheKey(params.storeId, {
       imageUrls: payload.imageUrls,
       categoryName: payload.categoryName,
+      categories: categories.map((category) => ({
+        id: category.id,
+        name: category.name,
+        typeName: category.type.name,
+      })),
+      sizes,
       colors,
       designs,
     });
@@ -120,6 +142,8 @@ export async function POST(
     if (cachedOutput.success) {
       return NextResponse.json({
         analysis: sanitizeProductImageAnalysis(cachedOutput.data, {
+          categories,
+          sizes,
           colors,
           designs,
         }),
@@ -149,6 +173,10 @@ export async function POST(
               type: "text",
               text: buildProductImageAnalysisPrompt({
                 categoryName: payload.categoryName,
+                categories: categories.map(
+                  (category) => `${category.name} (${category.type.name})`,
+                ),
+                sizes: sizes.map((size) => size.name),
                 colors: colors.map((color) => color.name),
                 designs: designs.map((design) => design.name),
               }),
@@ -183,6 +211,8 @@ export async function POST(
 
     return NextResponse.json({
       analysis: sanitizeProductImageAnalysis(result.output, {
+        categories,
+        sizes,
         colors,
         designs,
       }),

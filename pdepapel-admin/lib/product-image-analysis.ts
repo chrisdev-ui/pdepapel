@@ -22,7 +22,12 @@ export const productImageAnalysisRequestSchema = z.object({
 
 export const productImageAnalysisOutputSchema = z.object({
   suggestedBaseName: z.string().max(120).nullable(),
+  suggestedDescription: z.string().max(600).nullable(),
   brand: z.string().max(120).nullable(),
+  categoryName: z.string().max(120).nullable(),
+  categoryIsDeterministic: z.boolean(),
+  sizeName: z.string().max(80).nullable(),
+  sizeIsDeterministic: z.boolean(),
   colorName: z.string().max(80).nullable(),
   colorHex: z
     .string()
@@ -31,6 +36,23 @@ export const productImageAnalysisOutputSchema = z.object({
   colorIsDeterministic: z.boolean(),
   designName: z.string().max(80).nullable(),
   designIsDeterministic: z.boolean(),
+  gtin: z
+    .object({
+      value: z.string().max(14),
+      evidence: z.string().max(180),
+    })
+    .nullable(),
+  mpn: z
+    .object({
+      value: z.string().max(70),
+      evidence: z.string().max(180),
+    })
+    .nullable(),
+  variantRecommendation: z.object({
+    shouldCreateVariants: z.boolean(),
+    axes: z.array(z.enum(["COLOR", "DESIGN", "SIZE"])).max(3),
+    evidence: z.string().max(180).nullable(),
+  }),
   observations: z.array(z.string().max(180)).max(4),
   limitations: z.array(z.string().max(180)).max(3),
 });
@@ -40,6 +62,10 @@ export type ProductImageAnalysisOutput = z.infer<
 >;
 
 export type ProductImageAnalysis = ProductImageAnalysisOutput & {
+  categoryId: string | null;
+  categorySource: "existing" | "not_detected";
+  sizeId: string | null;
+  sizeSource: "existing" | "not_detected";
   colorId: string | null;
   colorSource: "existing" | "new" | "not_detected";
   designId: string | null;
@@ -50,6 +76,10 @@ type TaxonomyOption = {
   id: string;
   name: string;
   value?: string;
+};
+
+type CategoryTaxonomyOption = TaxonomyOption & {
+  typeName?: string;
 };
 
 function normalizeForMatching(value?: string | null) {
@@ -64,6 +94,19 @@ function normalizeForMatching(value?: string | null) {
 function cleanOptionalText(value?: string | null, maxLength = 120) {
   const normalized = normalizeProductNamePart(value);
   return normalized && normalized.length <= maxLength ? normalized : null;
+}
+
+function cleanDescription(value?: string | null) {
+  if (typeof value !== "string") return null;
+
+  const normalized = value
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n");
+
+  return normalized && normalized.length <= 600 ? normalized : null;
 }
 
 function cleanColorHex(value?: string | null) {
@@ -107,14 +150,30 @@ export function getProductImageAnalysisCacheKey(
   input: {
     imageUrls: string[];
     categoryName?: string;
+    categories: CategoryTaxonomyOption[];
+    sizes: TaxonomyOption[];
     colors: TaxonomyOption[];
     designs: TaxonomyOption[];
   },
 ) {
   const normalizedInput = {
-    version: 1,
+    version: 2,
     imageUrls: [...input.imageUrls].sort(),
     categoryName: normalizeForMatching(input.categoryName),
+    categories: [...input.categories]
+      .map((category) => ({
+        id: category.id,
+        name: category.name,
+        typeName: category.typeName ?? null,
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+    sizes: [...input.sizes]
+      .map((size) => ({
+        id: size.id,
+        name: size.name,
+        value: size.value ?? null,
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
     colors: [...input.colors]
       .map((color) => ({
         id: color.id,
@@ -140,33 +199,98 @@ function findExactTaxonomyMatch(
   const normalizedValue = normalizeForMatching(value);
   if (!normalizedValue) return null;
 
-  return (
-    options.find(
-      (option) => normalizeForMatching(option.name) === normalizedValue,
-    ) ?? null
+  const matches = options.filter(
+    (option) => normalizeForMatching(option.name) === normalizedValue,
   );
+
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function isValidGtin(value: string) {
+  if (!/^(\d{8}|\d{12,14})$/.test(value)) return false;
+
+  const digits = value.split("").map(Number);
+  const checkDigit = digits[digits.length - 1];
+  const sum = digits
+    .slice(0, -1)
+    .reverse()
+    .reduce(
+      (total, digit, index) => total + digit * (index % 2 === 0 ? 3 : 1),
+      0,
+    );
+
+  return (10 - (sum % 10)) % 10 === checkDigit;
+}
+
+function sanitizeIdentifierSuggestion(
+  suggestion: { value: string; evidence: string } | null,
+  sanitizeValue: (value: string) => string | null,
+) {
+  if (!suggestion) return null;
+
+  const value = sanitizeValue(suggestion.value);
+  const evidence = cleanOptionalText(suggestion.evidence, 180);
+
+  return value && evidence ? { value, evidence } : null;
+}
+
+function cleanGtin(value: string) {
+  const normalized = value.trim().replace(/[\s-]/g, "");
+  return isValidGtin(normalized) ? normalized : null;
+}
+
+function cleanMpn(value: string) {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  return /^[A-Za-z0-9][A-Za-z0-9 ._/-]{1,69}$/.test(normalized)
+    ? normalized
+    : null;
 }
 
 export function sanitizeProductImageAnalysis(
   output: ProductImageAnalysisOutput,
   options: {
+    categories: CategoryTaxonomyOption[];
+    sizes: TaxonomyOption[];
     colors: TaxonomyOption[];
     designs: TaxonomyOption[];
   },
 ): ProductImageAnalysis {
+  const suggestedCategoryName = output.categoryIsDeterministic
+    ? cleanOptionalText(output.categoryName, 120)
+    : null;
+  const suggestedSizeName = output.sizeIsDeterministic
+    ? cleanOptionalText(output.sizeName, 80)
+    : null;
   const suggestedColorName = output.colorIsDeterministic
     ? cleanOptionalText(output.colorName, 80)
     : null;
   const suggestedDesignName = output.designIsDeterministic
     ? cleanOptionalText(output.designName, 80)
     : null;
+  const category = findExactTaxonomyMatch(
+    suggestedCategoryName,
+    options.categories,
+  );
+  const size = findExactTaxonomyMatch(suggestedSizeName, options.sizes);
   const color = findExactTaxonomyMatch(suggestedColorName, options.colors);
   const design = findExactTaxonomyMatch(suggestedDesignName, options.designs);
   const colorHex = cleanColorHex(output.colorHex);
+  const shouldCreateVariants =
+    output.variantRecommendation.shouldCreateVariants &&
+    output.variantRecommendation.axes.length > 0;
 
   return {
     suggestedBaseName: cleanOptionalText(output.suggestedBaseName),
+    suggestedDescription: cleanDescription(output.suggestedDescription),
     brand: cleanOptionalText(output.brand),
+    categoryName: category?.name ?? suggestedCategoryName,
+    categoryIsDeterministic: Boolean(suggestedCategoryName),
+    categoryId: category?.id ?? null,
+    categorySource: category ? "existing" : "not_detected",
+    sizeName: size?.name ?? suggestedSizeName,
+    sizeIsDeterministic: Boolean(suggestedSizeName),
+    sizeId: size?.id ?? null,
+    sizeSource: size ? "existing" : "not_detected",
     colorName: color?.name ?? suggestedColorName,
     colorHex: color?.value ?? colorHex,
     colorIsDeterministic: Boolean(suggestedColorName),
@@ -184,6 +308,15 @@ export function sanitizeProductImageAnalysis(
       : suggestedDesignName
         ? "new"
         : "not_detected",
+    gtin: sanitizeIdentifierSuggestion(output.gtin, cleanGtin),
+    mpn: sanitizeIdentifierSuggestion(output.mpn, cleanMpn),
+    variantRecommendation: {
+      shouldCreateVariants,
+      axes: shouldCreateVariants ? output.variantRecommendation.axes : [],
+      evidence: shouldCreateVariants
+        ? cleanOptionalText(output.variantRecommendation.evidence, 180)
+        : null,
+    },
     observations: output.observations
       .map((observation) => cleanOptionalText(observation, 180))
       .filter((observation): observation is string => Boolean(observation)),
@@ -195,26 +328,38 @@ export function sanitizeProductImageAnalysis(
 
 export function buildProductImageAnalysisPrompt(input: {
   categoryName?: string;
+  categories: string[];
+  sizes: string[];
   colors: string[];
   designs: string[];
 }) {
+  const categories = input.categories.join(", ") || "Sin opciones configuradas";
+  const sizes = input.sizes.join(", ") || "Sin opciones configuradas";
   const colors = input.colors.join(", ") || "Sin opciones configuradas";
   const designs = input.designs.join(", ") || "Sin opciones configuradas";
 
   return `Analiza las fotos públicas de un producto de papelería para ayudar a una administradora a completar su catálogo en español de Colombia.
 
 Categoría elegida por la administradora: ${input.categoryName || "Sin categoría"}.
+Categorías disponibles en el catálogo: ${categories}.
+Tamaños disponibles en el catálogo: ${sizes}.
 Colores disponibles en el catálogo: ${colors}.
 Diseños disponibles en el catálogo: ${designs}.
 
 Reglas obligatorias:
 - Describe únicamente elementos, texto y marca que puedas confirmar visualmente. Nunca adivines marca, cantidad, medida, licencia, material o compatibilidad.
 - suggestedBaseName debe ser un nombre base breve, profesional y útil para una tienda. No incluyas marca, color, diseño ni códigos internos; deja esos datos en sus campos separados.
+- suggestedDescription puede contener de una a tres frases breves, sin HTML, únicamente con detalles visibles y confirmables. Si las fotos no bastan para una descripción útil, usa null.
 - brand debe ser null si no se lee claramente en empaque o producto.
+- categoryName solo puede ser una categoría de la lista disponible: devuelve únicamente el nombre antes de los paréntesis, no el tipo. categoryIsDeterministic debe ser true únicamente cuando el producto encaja de forma clara. Nunca propongas ni inventes una categoría o tipo nuevo.
+- sizeName solo puede ser un tamaño de la lista disponible y sizeIsDeterministic debe ser true únicamente cuando la medida o formato se lee claramente. Nunca uses códigos internos ni inventes tamaños.
 - colorName puede coincidir exactamente con un color disponible o proponer un nuevo nombre corto en español. Úsalo solo cuando la foto representa de forma determinística una variante de un único color. Si propones un color nuevo, colorHex debe ser su tono dominante en formato #RRGGBB. Si es multicolor, pastel, una foto de familia o no estás segura, usa null, colorHex null y colorIsDeterministic false.
 - designName puede coincidir exactamente con un diseño disponible o proponer un nuevo nombre corto en español. Úsalo solo cuando identifica de forma clara y determinística el producto. Si el diseño es genérico, de inventario o no visible, usa null y designIsDeterministic false.
 - Nunca inventes una taxonomía: una propuesta nueva debe describir una característica visible, diferenciable y reutilizable en futuros productos.
+- gtin solo puede contener el número completo cuando los dígitos se leen directamente junto al código de barras y el checksum GS1 es válido. No lo deduzcas de las barras, del nombre, ni de otra fuente. Incluye en evidence dónde se ve; de lo contrario usa null.
+- mpn solo puede contener una referencia del fabricante copiada exactamente cuando se lee completa en el empaque o producto. Incluye en evidence dónde se ve; de lo contrario usa null.
+- variantRecommendation solo debe indicar shouldCreateVariants true cuando las fotos demuestran opciones comprables distintas de color, diseño o tamaño. No confundas un set multicolor, un empaque decorado ni una foto de familia con variantes. axes puede usar solamente COLOR, DESIGN o SIZE y evidence debe explicar la evidencia.
 - observations debe explicar de forma corta la evidencia visual útil. limitations debe mencionar qué no se puede confirmar.
-- No sugieras GTIN, SKU, precios, stock ni atributos no visibles.
+- Nunca sugieras SKU, precios, costos, stock, proveedor, descuentos ni atributos no visibles.
 - Esto es una propuesta para revisión humana: no hay ningún cambio automático.`;
 }

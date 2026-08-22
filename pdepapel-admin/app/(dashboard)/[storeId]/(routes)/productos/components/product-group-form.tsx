@@ -57,6 +57,7 @@ import { useFormPersist } from "@/hooks/use-form-persist";
 import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
+import { createPlainTextRichTextHtml } from "@/lib/rich-text";
 import {
   Category,
   Color,
@@ -1603,14 +1604,34 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                   })
                 }
                 onApplyVisualAnalysis={(analysis) => {
-                  if (!analysis.brand) return;
-
-                  form.setValue("brand", analysis.brand, {
+                  const options = {
                     shouldDirty: true,
                     shouldTouch: true,
                     shouldValidate: true,
-                  });
+                  };
+
+                  if (analysis.brand) {
+                    form.setValue("brand", analysis.brand, options);
+                  }
+
+                  if (
+                    analysis.categoryId &&
+                    !currentVariants?.some((variant) => variant.id)
+                  ) {
+                    form.setValue("categoryId", analysis.categoryId, options);
+                  }
                 }}
+                onApplyDescription={(description) =>
+                  form.setValue(
+                    "description",
+                    createPlainTextRichTextHtml(description),
+                    {
+                      shouldDirty: true,
+                      shouldTouch: true,
+                      shouldValidate: true,
+                    },
+                  )
+                }
               />
             </div>
             <FormField

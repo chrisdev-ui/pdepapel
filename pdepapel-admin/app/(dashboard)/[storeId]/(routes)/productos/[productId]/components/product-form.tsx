@@ -66,6 +66,7 @@ import { useFormPersist } from "@/hooks/use-form-persist";
 import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
+import { createPlainTextRichTextHtml } from "@/lib/rich-text";
 import { Color, Design, Size, Supplier } from "@prisma/client";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
@@ -529,6 +530,21 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     [clearStorage, initialData, params.storeId, router, toast],
   );
 
+  const requestVariantConversion = useCallback(() => {
+    if (!initialData) return;
+
+    if (form.formState.isDirty) {
+      toast({
+        description:
+          "Guarda los cambios del producto antes de convertirlo en variantes.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setConvertToVariantsOpen(true);
+  }, [form.formState.isDirty, initialData, toast]);
+
   const availableColors = useMemo(
     () => [
       ...colors,
@@ -686,18 +702,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               variant="outline"
               size="sm"
               type="button"
-              onClick={() => {
-                if (form.formState.isDirty) {
-                  toast({
-                    description:
-                      "Guarda los cambios del producto antes de convertirlo en variantes.",
-                    variant: "destructive",
-                  });
-                  return;
-                }
-
-                setConvertToVariantsOpen(true);
-              }}
+              onClick={requestVariantConversion}
               disabled={loading}
             >
               <Package className="mr-2 h-4 w-4" />
@@ -908,6 +913,12 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   }
 
                   if (!watchedGroupId || watchedGroupId === "none") {
+                    if (analysis.categoryId) {
+                      form.setValue("categoryId", analysis.categoryId, options);
+                    }
+                    if (analysis.sizeId) {
+                      form.setValue("sizeId", analysis.sizeId, options);
+                    }
                     if (analysis.colorId) {
                       form.setValue("colorId", analysis.colorId, options);
                     }
@@ -916,6 +927,37 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                     }
                   }
                 }}
+                onApplyDescription={(description) =>
+                  form.setValue(
+                    "description",
+                    createPlainTextRichTextHtml(description),
+                    {
+                      shouldDirty: true,
+                      shouldTouch: true,
+                      shouldValidate: true,
+                    },
+                  )
+                }
+                onApplyVerifiedIdentifier={(type, identifier) => {
+                  const options = {
+                    shouldDirty: true,
+                    shouldTouch: true,
+                    shouldValidate: true,
+                  };
+                  form.setValue(type, identifier.value, options);
+                  form.setValue("hasNoProductIdentifier", false, options);
+                  toast({
+                    description: `${type.toUpperCase()} confirmado desde el empaque.`,
+                    variant: "success",
+                  });
+                }}
+                canReviewVariantRecommendation={Boolean(
+                  initialData &&
+                  !initialData.productGroupId &&
+                  !initialData.isKit &&
+                  !initialData.isArchived,
+                )}
+                onReviewVariantRecommendation={requestVariantConversion}
                 onCreateVisualAttribute={
                   !watchedGroupId || watchedGroupId === "none"
                     ? createVisualAttribute

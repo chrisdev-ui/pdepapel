@@ -42,6 +42,8 @@ export const MERCADOLIBRE_FAILURE_CALLBACK_HEADERS = {
   "Upstash-Failure-Callback-Timeout": "30s",
 } as const;
 
+export const MERCADOLIBRE_RECOVERY_CRON = "*/15 * * * *";
+
 export function getMercadoLibreQueueConfigurationStatus(
   environment: QueueEnvironment = process.env,
 ) {
@@ -274,28 +276,14 @@ export function getMercadoLibreRecoveryUrl(
   );
 }
 
-export async function ensureMercadoLibreRecoverySchedule(
+export function getMercadoLibreRecoveryScheduleConfig(
   connectionId: string,
   environment: QueueEnvironment = process.env,
 ) {
-  if (!getMercadoLibreQueueConfigurationStatus(environment).configured) {
-    return false;
-  }
-
-  const connection = await prismadb.marketplaceConnection.findUniqueOrThrow({
-    where: { id: connectionId },
-    select: { id: true, recoveryScheduleId: true },
-  });
-  if (connection.recoveryScheduleId) return true;
-
-  const client = new Client({
-    token: environment.QSTASH_TOKEN,
-    enableTelemetry: false,
-  });
-  const schedule = await client.schedules.create({
+  return {
     destination: getMercadoLibreRecoveryUrl(environment),
-    cron: "*/5 * * * *",
-    method: "POST",
+    cron: MERCADOLIBRE_RECOVERY_CRON,
+    method: "POST" as const,
     body: JSON.stringify({ connectionId }),
     headers: {
       "Content-Type": "application/json",
@@ -309,8 +297,41 @@ export async function ensureMercadoLibreRecoverySchedule(
       parallelism: 1,
     },
     label: ["mercadolibre", "recovery"],
-    redact: { body: true },
+    redact: { body: true as const },
+  };
+}
+
+export async function ensureMercadoLibreRecoverySchedule(
+  connectionId: string,
+  environment: QueueEnvironment = process.env,
+) {
+  if (!getMercadoLibreQueueConfigurationStatus(environment).configured) {
+    return false;
+  }
+
+  const connection = await prismadb.marketplaceConnection.findUniqueOrThrow({
+    where: { id: connectionId },
+    select: { id: true, recoveryScheduleId: true },
   });
+
+  const client = new Client({
+    token: environment.QSTASH_TOKEN,
+    enableTelemetry: false,
+  });
+  const scheduleConfig = getMercadoLibreRecoveryScheduleConfig(
+    connectionId,
+    environment,
+  );
+
+  if (connection.recoveryScheduleId) {
+    await client.schedules.create({
+      scheduleId: connection.recoveryScheduleId,
+      ...scheduleConfig,
+    });
+    return true;
+  }
+
+  const schedule = await client.schedules.create(scheduleConfig);
 
   const claim = await prismadb.marketplaceConnection.updateMany({
     where: { id: connection.id, recoveryScheduleId: null },

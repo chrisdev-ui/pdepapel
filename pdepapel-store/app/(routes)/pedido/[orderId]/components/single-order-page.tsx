@@ -59,6 +59,10 @@ import { useToast } from "@/hooks/use-toast";
 import useTrackShipment from "@/hooks/use-track-shipment";
 import { cn } from "@/lib/utils";
 import {
+  ORDER_STATUS_POLL_INTERVAL_MS,
+  shouldPollOrderStatus,
+} from "@/lib/order-status-polling";
+import {
   Order,
   PayUFormState,
   ShippingTrackingEvent,
@@ -153,23 +157,38 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
   const [currentOrder, setCurrentOrder] = useState(order);
   const activeOrder = currentOrder || order;
 
-  // 🚀 Real-time status polling for PENDING or CREATED orders
   useEffect(() => {
-    if (
-      currentOrder.status !== OrderStatus.PENDING &&
-      currentOrder.status !== OrderStatus.CREATED
-    ) {
+    if (!shouldPollOrderStatus(currentOrder.status, true)) {
       return;
     }
 
-    const intervalId = setInterval(async () => {
+    let isDisposed = false;
+    let isRequestInFlight = false;
+
+    const refreshOrder = async () => {
+      if (
+        isDisposed ||
+        isRequestInFlight ||
+        !shouldPollOrderStatus(
+          currentOrder.status,
+          document.visibilityState === "visible",
+        )
+      ) {
+        return;
+      }
+
+      isRequestInFlight = true;
       try {
         const storeApiUrl = process.env.NEXT_PUBLIC_API_URL;
         if (!storeApiUrl) return;
 
         const response = await axios.get(`${storeApiUrl}/orders/${order.id}`);
         const fetchedOrder = response.data;
-        if (fetchedOrder && fetchedOrder.status !== currentOrder.status) {
+        if (
+          !isDisposed &&
+          fetchedOrder &&
+          fetchedOrder.status !== currentOrder.status
+        ) {
           setCurrentOrder(fetchedOrder);
 
           if (fetchedOrder.status === OrderStatus.PAID) {
@@ -195,10 +214,29 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
         }
       } catch (e) {
         // Silent catch for background polling
+      } finally {
+        isRequestInFlight = false;
       }
-    }, 4000);
+    };
 
-    return () => clearInterval(intervalId);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void refreshOrder();
+      }
+    };
+
+    const intervalId = window.setInterval(() => {
+      void refreshOrder();
+    }, ORDER_STATUS_POLL_INTERVAL_MS);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    void refreshOrder();
+
+    return () => {
+      isDisposed = true;
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [currentOrder.status, order.id, removeAll, fireConfetti, toast]);
 
   const { mutate, status } = useCheckoutOrder({

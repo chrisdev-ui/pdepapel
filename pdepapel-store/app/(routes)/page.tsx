@@ -13,7 +13,7 @@ import { Season } from "@/types";
 
 import Features from "@/components/features";
 
-export const revalidate = 60;
+export const revalidate = 300;
 
 const jsonLd: {
   "@context": "https://schema.org";

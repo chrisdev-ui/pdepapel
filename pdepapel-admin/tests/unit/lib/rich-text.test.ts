@@ -1,4 +1,5 @@
 import {
+  createPlainTextRichTextHtml,
   createRichTextExcerpt,
   normalizeRichTextLink,
   richTextToPlainText,
@@ -46,6 +47,16 @@ describe("rich text helpers", () => {
     );
     expect(createRichTextExcerpt(content, "Respaldo", 32)).toBe(
       "✨ Agenda kawaii Organiza tus…",
+    );
+  });
+
+  it("converts an AI plain-text draft into safe rich-text paragraphs", () => {
+    expect(
+      createPlainTextRichTextHtml(
+        "Portada con flores <script>alert(1)</script>\n\nFormato A5.",
+      ),
+    ).toBe(
+      "<p>Portada con flores &lt;script&gt;alert(1)&lt;/script&gt;</p><p>Formato A5.</p>",
     );
   });
 

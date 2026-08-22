@@ -6,6 +6,7 @@ vi.mock("@/lib/env.mjs", () => ({
 
 import { getProducts } from "@/actions/get-products";
 import { SORT_OPTIONS } from "@/constants";
+import { CATALOG_FETCH_CACHE } from "@/lib/catalog-cache";
 
 const emptyCatalogResponse = {
   products: [],
@@ -43,6 +44,17 @@ describe("getProducts", () => {
 
     const [requestUrl] = fetchMock.mock.calls[0] as [string];
     expect(new URL(requestUrl).searchParams.get("isOnSale")).toBe("true");
+  });
+
+  it("uses the shared five-minute catalog cache", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(emptyCatalogResponse), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getProducts({});
+
+    expect(fetchMock.mock.calls[0][1]).toEqual(CATALOG_FETCH_CACHE);
   });
 
   it("marks unavailable catalog responses instead of treating them as empty", async () => {

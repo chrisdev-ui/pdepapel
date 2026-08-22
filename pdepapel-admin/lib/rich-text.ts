@@ -95,6 +95,24 @@ function escapeAttribute(value: string) {
     .replace(/>/g, "&gt;");
 }
 
+function escapeText(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+export function createPlainTextRichTextHtml(content: string) {
+  const paragraphs = content
+    .split(/\r?\n+/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .map((paragraph) => `<p>${escapeText(paragraph)}</p>`)
+    .join("");
+
+  return sanitizeRichTextHtml(paragraphs);
+}
+
 function secureAnchors(html: string) {
   return html.replace(/<a\b[^>]*href="([^"]*)"[^>]*>/gi, (_match, href) => {
     const normalizedHref = normalizeRichTextLink(href);

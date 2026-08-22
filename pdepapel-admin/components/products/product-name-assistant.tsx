@@ -20,9 +20,11 @@ import {
 } from "@/lib/product-naming";
 import type { ProductImageAnalysis } from "@/lib/product-image-analysis";
 import {
+  Barcode,
   Check,
   Lightbulb,
   Loader2,
+  PackagePlus,
   Plus,
   ScanSearch,
   Sparkles,
@@ -43,6 +45,14 @@ type PendingVisualAttribute = {
   colorHex?: string;
 };
 
+type IdentifierType = "gtin" | "mpn";
+
+type PendingIdentifier = {
+  type: IdentifierType;
+  value: string;
+  evidence: string;
+};
+
 type ProductNameAssistantProps = {
   categoryName?: string | null;
   currentName?: string | null;
@@ -57,6 +67,13 @@ type ProductNameAssistantProps = {
   imageUrls?: string[];
   onApply: (name: string) => void;
   onApplyVisualAnalysis?: (analysis: ProductImageAnalysis) => void;
+  onApplyDescription?: (description: string) => void;
+  onApplyVerifiedIdentifier?: (
+    type: IdentifierType,
+    identifier: Pick<PendingIdentifier, "value" | "evidence">,
+  ) => void;
+  canReviewVariantRecommendation?: boolean;
+  onReviewVariantRecommendation?: () => void;
   onCreateVisualAttribute?: (
     attribute: PendingVisualAttribute,
   ) => Promise<CreatedVisualAttribute>;
@@ -76,6 +93,10 @@ export function ProductNameAssistant({
   imageUrls = [],
   onApply,
   onApplyVisualAnalysis,
+  onApplyDescription,
+  onApplyVerifiedIdentifier,
+  canReviewVariantRecommendation = false,
+  onReviewVariantRecommendation,
   onCreateVisualAttribute,
 }: ProductNameAssistantProps) {
   const [baseName, setBaseName] = useState(currentName || "");
@@ -96,6 +117,8 @@ export function ProductNameAssistant({
     useState<PendingVisualAttribute | null>(null);
   const [isCreatingVisualAttribute, setIsCreatingVisualAttribute] =
     useState(false);
+  const [pendingIdentifier, setPendingIdentifier] =
+    useState<PendingIdentifier | null>(null);
 
   useEffect(() => {
     setBaseName(currentName || "");
@@ -238,16 +261,32 @@ export function ProductNameAssistant({
     }
   };
 
+  const applyVerifiedIdentifier = () => {
+    if (!pendingIdentifier || !onApplyVerifiedIdentifier) return;
+
+    onApplyVerifiedIdentifier(pendingIdentifier.type, {
+      value: pendingIdentifier.value,
+      evidence: pendingIdentifier.evidence,
+    });
+    setPendingIdentifier(null);
+  };
+
+  const variationAxes = visualAnalysis?.variantRecommendation.axes
+    .map((axis) =>
+      axis === "COLOR" ? "color" : axis === "DESIGN" ? "diseño" : "tamaño",
+    )
+    .join(", ");
+
   return (
     <section className="space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex gap-2">
           <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
           <div>
-            <p className="text-sm font-semibold">Asistente de nombre</p>
+            <p className="text-sm font-semibold">Asistente de producto</p>
             <p className="text-xs text-muted-foreground">
-              Usa solo información confirmada del empaque. Puedes editar el
-              resultado antes de guardar.
+              Organiza únicamente datos confirmables en las fotos. Puedes
+              revisar y editar todo antes de guardar.
             </p>
           </div>
         </div>
@@ -308,8 +347,8 @@ export function ProductNameAssistant({
             <div>
               <p className="text-xs font-medium">Analizar fotos con IA</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Propone un borrador a partir de hasta tres fotos. No guarda ni
-                modifica el producto automáticamente.
+                Propone campos revisables a partir de hasta tres fotos. No
+                guarda ni modifica el producto automáticamente.
               </p>
             </div>
           </div>
@@ -358,11 +397,29 @@ export function ProductNameAssistant({
                 </p>
               )}
               {(visualAnalysis.brand ||
+                visualAnalysis.categoryName ||
+                visualAnalysis.sizeName ||
                 visualAnalysis.colorName ||
                 visualAnalysis.designName) && (
                 <div className="space-y-1 text-muted-foreground">
                   {visualAnalysis.brand && (
                     <p>Marca visible: {visualAnalysis.brand}</p>
+                  )}
+                  {visualAnalysis.categoryName && (
+                    <p>
+                      Categoría: {visualAnalysis.categoryName}
+                      {visualAnalysis.categorySource === "existing"
+                        ? " · existente"
+                        : " · revisa manualmente"}
+                    </p>
+                  )}
+                  {visualAnalysis.sizeName && (
+                    <p>
+                      Tamaño: {visualAnalysis.sizeName}
+                      {visualAnalysis.sizeSource === "existing"
+                        ? " · existente"
+                        : " · revisa manualmente"}
+                    </p>
                   )}
                   {visualAnalysis.colorName && (
                     <p>
@@ -387,6 +444,29 @@ export function ProductNameAssistant({
                 </div>
               )}
             </div>
+
+            {visualAnalysis.suggestedDescription && (
+              <div className="rounded-md border bg-muted/30 p-3">
+                <p className="font-medium">Borrador de descripción</p>
+                <p className="mt-1 whitespace-pre-line text-muted-foreground">
+                  {visualAnalysis.suggestedDescription}
+                </p>
+                {onApplyDescription && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
+                    disabled={disabled}
+                    onClick={() =>
+                      onApplyDescription(visualAnalysis.suggestedDescription!)
+                    }
+                  >
+                    Usar borrador de descripción
+                  </Button>
+                )}
+              </div>
+            )}
 
             {onCreateVisualAttribute &&
               (visualAnalysis.colorSource === "new" ||
@@ -433,6 +513,85 @@ export function ProductNameAssistant({
                 </div>
               )}
 
+            {(visualAnalysis.gtin || visualAnalysis.mpn) && (
+              <div className="rounded-md border border-dashed p-3">
+                <div className="flex gap-2">
+                  <Barcode className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <div>
+                    <p className="font-medium">Identificadores legibles</p>
+                    <p className="mt-1 text-muted-foreground">
+                      Confirma cada código contra el empaque antes de usarlo.
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                  {visualAnalysis.gtin && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={disabled || !onApplyVerifiedIdentifier}
+                      onClick={() =>
+                        setPendingIdentifier({
+                          type: "gtin",
+                          ...visualAnalysis.gtin!,
+                        })
+                      }
+                    >
+                      Revisar GTIN: {visualAnalysis.gtin.value}
+                    </Button>
+                  )}
+                  {visualAnalysis.mpn && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={disabled || !onApplyVerifiedIdentifier}
+                      onClick={() =>
+                        setPendingIdentifier({
+                          type: "mpn",
+                          ...visualAnalysis.mpn!,
+                        })
+                      }
+                    >
+                      Revisar MPN: {visualAnalysis.mpn.value}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {visualAnalysis.variantRecommendation.shouldCreateVariants && (
+              <div className="rounded-md border border-dashed p-3">
+                <div className="flex gap-2">
+                  <PackagePlus className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <div>
+                    <p className="font-medium">
+                      Posibles variantes por {variationAxes}
+                    </p>
+                    {visualAnalysis.variantRecommendation.evidence && (
+                      <p className="mt-1 text-muted-foreground">
+                        {visualAnalysis.variantRecommendation.evidence}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {canReviewVariantRecommendation &&
+                  onReviewVariantRecommendation && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-3"
+                      disabled={disabled}
+                      onClick={onReviewVariantRecommendation}
+                    >
+                      Revisar conversión a variantes
+                    </Button>
+                  )}
+              </div>
+            )}
+
             {visualAnalysis.observations.length > 0 && (
               <ul className="space-y-1 text-muted-foreground">
                 {visualAnalysis.observations.map((observation) => (
@@ -449,8 +608,8 @@ export function ProductNameAssistant({
 
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-muted-foreground">
-                Cargar la propuesta solo rellena este formulario; todavía puedes
-                editarla antes de guardar.
+                Cargar aplica únicamente los campos compatibles del formulario.
+                Aún puedes editar todo antes de guardar.
               </p>
               <Button
                 type="button"
@@ -561,6 +720,34 @@ export function ProductNameAssistant({
                 <Plus className="mr-2 h-4 w-4" />
               )}
               Crear y usar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={Boolean(pendingIdentifier)}
+        onOpenChange={(open) => {
+          if (!open) setPendingIdentifier(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              ¿Confirmas este{" "}
+              {pendingIdentifier?.type === "gtin" ? "GTIN" : "MPN"}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              La IA leyó “{pendingIdentifier?.value}”. Evidencia:{" "}
+              {pendingIdentifier?.evidence}. Compáralo con el empaque físico: no
+              se puede recuperar el identificador correcto desde una foto
+              borrosa o incompleta.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Revisar</AlertDialogCancel>
+            <AlertDialogAction onClick={applyVerifiedIdentifier}>
+              Confirmar y aplicar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

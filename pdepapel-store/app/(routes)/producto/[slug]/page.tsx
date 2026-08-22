@@ -83,7 +83,7 @@ export async function generateMetadata({
   };
 }
 
-export const revalidate = 60;
+export const revalidate = 300;
 
 function buildProductSchema(product: Product, includeGroupReference = true) {
   const slug = product.slug || product.id;
