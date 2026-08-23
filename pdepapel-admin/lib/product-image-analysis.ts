@@ -6,6 +6,7 @@ import { z } from "zod";
 export const MAX_PRODUCT_IMAGE_ANALYSIS_IMAGES = 3;
 export const PRODUCT_IMAGE_ANALYSIS_DAILY_LIMIT = 20;
 export const PRODUCT_IMAGE_ANALYSIS_CACHE_TTL_SECONDS = 60 * 60 * 24;
+export const PRODUCT_IMAGE_ANALYSIS_NAME_OPTIONS_MAX = 3;
 
 const CLOUDINARY_IMAGE_HOST = "res.cloudinary.com";
 
@@ -22,6 +23,10 @@ export const productImageAnalysisRequestSchema = z.object({
 
 export const productImageAnalysisOutputSchema = z.object({
   suggestedBaseName: z.string().max(120).nullable(),
+  suggestedNameOptions: z
+    .array(z.string().max(120))
+    .max(PRODUCT_IMAGE_ANALYSIS_NAME_OPTIONS_MAX)
+    .default([]),
   suggestedDescription: z.string().max(600).nullable(),
   brand: z.string().max(120).nullable(),
   categoryName: z.string().max(120).nullable(),
@@ -96,6 +101,29 @@ function cleanOptionalText(value?: string | null, maxLength = 120) {
   return normalized && normalized.length <= maxLength ? normalized : null;
 }
 
+function cleanSuggestedName(value?: string | null) {
+  const normalized = cleanOptionalText(value);
+  if (!normalized) return null;
+
+  return normalized.replace(/\bpad\s+mouse\b/gi, "Mouse pad");
+}
+
+function getSuggestedNameOptions(output: ProductImageAnalysisOutput) {
+  const seen = new Set<string>();
+
+  return [output.suggestedBaseName, ...output.suggestedNameOptions]
+    .map((option) => cleanSuggestedName(option))
+    .filter((option): option is string => Boolean(option))
+    .filter((option) => {
+      const normalizedOption = normalizeForMatching(option);
+      if (seen.has(normalizedOption)) return false;
+
+      seen.add(normalizedOption);
+      return true;
+    })
+    .slice(0, PRODUCT_IMAGE_ANALYSIS_NAME_OPTIONS_MAX);
+}
+
 function cleanDescription(value?: string | null) {
   if (typeof value !== "string") return null;
 
@@ -157,7 +185,7 @@ export function getProductImageAnalysisCacheKey(
   },
 ) {
   const normalizedInput = {
-    version: 2,
+    version: 3,
     imageUrls: [...input.imageUrls].sort(),
     categoryName: normalizeForMatching(input.categoryName),
     categories: [...input.categories]
@@ -255,6 +283,7 @@ export function sanitizeProductImageAnalysis(
     designs: TaxonomyOption[];
   },
 ): ProductImageAnalysis {
+  const suggestedNameOptions = getSuggestedNameOptions(output);
   const suggestedCategoryName = output.categoryIsDeterministic
     ? cleanOptionalText(output.categoryName, 120)
     : null;
@@ -280,7 +309,8 @@ export function sanitizeProductImageAnalysis(
     output.variantRecommendation.axes.length > 0;
 
   return {
-    suggestedBaseName: cleanOptionalText(output.suggestedBaseName),
+    suggestedBaseName: suggestedNameOptions[0] ?? null,
+    suggestedNameOptions,
     suggestedDescription: cleanDescription(output.suggestedDescription),
     brand: cleanOptionalText(output.brand),
     categoryName: category?.name ?? suggestedCategoryName,
@@ -348,7 +378,10 @@ Diseños disponibles en el catálogo: ${designs}.
 
 Reglas obligatorias:
 - Describe únicamente elementos, texto y marca que puedas confirmar visualmente. Nunca adivines marca, cantidad, medida, licencia, material o compatibilidad.
-- suggestedBaseName debe ser un nombre base breve, profesional y útil para una tienda. No incluyas marca, color, diseño ni códigos internos; deja esos datos en sus campos separados.
+- suggestedBaseName debe ser el primer elemento de suggestedNameOptions: el nombre base recomendado. suggestedNameOptions debe contener de una a tres opciones distintas, breves (máximo 65 caracteres), profesionales y útiles para búsqueda en una tienda colombiana.
+- Prioriza el término comercial natural que buscaría una clienta en Colombia, con el tipo de producto al inicio y los detalles visibles después. Usa préstamos establecidos en su orden natural, por ejemplo "mouse pad" y nunca "pad mouse". No hagas traducciones palabra por palabra ni listes palabras clave separadas por barras.
+- Las opciones pueden variar solo en redacción; todas deben describir exactamente el mismo producto visible. Incluye descriptores generales que sí se vean y apliquen a todas las unidades, como "de personajes" o "diseños surtidos", pero no una marca, color, diseño particular, medida ni código cuando no sea determinístico para la unidad.
+- No incluyas marca, color, diseño de variante ni códigos internos en suggestedBaseName o suggestedNameOptions; deja esos datos en sus campos separados cuando correspondan.
 - suggestedDescription puede contener de una a tres frases breves, sin HTML, únicamente con detalles visibles y confirmables. Si las fotos no bastan para una descripción útil, usa null.
 - brand debe ser null si no se lee claramente en empaque o producto.
 - categoryName solo puede ser una categoría de la lista disponible: devuelve únicamente el nombre antes de los paréntesis, no el tipo. categoryIsDeterministic debe ser true únicamente cuando el producto encaja de forma clara. Nunca propongas ni inventes una categoría o tipo nuevo.

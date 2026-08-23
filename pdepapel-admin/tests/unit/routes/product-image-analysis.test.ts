@@ -96,6 +96,7 @@ describe("product image analysis route", () => {
     mocks.generateText.mockResolvedValue({
       output: {
         suggestedBaseName: "Cuaderno argollado A5",
+        suggestedNameOptions: ["Cuaderno argollado A5"],
         suggestedDescription: "Cuaderno argollado con portada floral.",
         brand: "Sanrio",
         categoryName: "Cuadernos",
@@ -164,6 +165,7 @@ describe("product image analysis route", () => {
     mocks.redisGet
       .mockResolvedValueOnce({
         suggestedBaseName: "Cuaderno argollado A5",
+        suggestedNameOptions: ["Cuaderno argollado A5"],
         suggestedDescription: "Cuaderno argollado con portada floral.",
         brand: "Sanrio",
         categoryName: "Cuadernos",

@@ -11,6 +11,7 @@ function createVisualAnalysis(
 ): ProductImageAnalysis {
   return {
     suggestedBaseName: "Cuaderno argollado A5",
+    suggestedNameOptions: ["Cuaderno argollado A5"],
     suggestedDescription: null,
     brand: "Sanrio",
     categoryName: "Cuadernos",
@@ -168,6 +169,49 @@ describe("ProductNameAssistant visual analysis", () => {
       name: "Rosa pastel",
       colorHex: "#F5B7C6",
     });
+  });
+
+  it("lets the administrator choose a factual alternative before applying it", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        createAnalysisResponse(
+          createVisualAnalysis({
+            suggestedBaseName: "Mouse pad con personajes surtidos",
+            suggestedNameOptions: [
+              "Mouse pad con personajes surtidos",
+              "Alfombrilla para mouse con personajes surtidos",
+            ],
+          }),
+        ),
+      ),
+    );
+
+    render(
+      <ProductNameAssistant
+        currentName=""
+        storeId="store-id"
+        imageUrls={[
+          "https://res.cloudinary.com/pdepapel/image/upload/v1/mouse-pad.webp",
+        ]}
+        onApply={vi.fn()}
+        onApplyVisualAnalysis={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Analizar fotos" }));
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Elegir nombre: Alfombrilla para mouse con personajes surtidos",
+      }),
+    );
+
+    expect(
+      screen.getByDisplayValue(
+        "Alfombrilla para mouse con personajes surtidos",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("applies a description only when the administrator chooses its draft", async () => {

@@ -2,6 +2,7 @@ import {
   MAX_PRODUCT_IMAGE_ANALYSIS_IMAGES,
   PRODUCT_IMAGE_ANALYSIS_CACHE_TTL_SECONDS,
   PRODUCT_IMAGE_ANALYSIS_DAILY_LIMIT,
+  PRODUCT_IMAGE_ANALYSIS_NAME_OPTIONS_MAX,
   buildProductImageAnalysisPrompt,
   getProductImageAnalysisCacheKey,
   getProductImageAnalysisDay,
@@ -26,6 +27,7 @@ function createOutput(
 ): ProductImageAnalysisOutput {
   return {
     suggestedBaseName: "Troquel de figuras en maletín x8 de 1 cm",
+    suggestedNameOptions: ["Troquel de figuras en maletín x8 de 1 cm"],
     suggestedDescription: null,
     brand: null,
     categoryName: null,
@@ -75,6 +77,7 @@ describe("product image analysis helpers", () => {
     expect(PRODUCT_IMAGE_ANALYSIS_DAILY_LIMIT).toBe(20);
     expect(MAX_PRODUCT_IMAGE_ANALYSIS_IMAGES).toBe(3);
     expect(PRODUCT_IMAGE_ANALYSIS_CACHE_TTL_SECONDS).toBe(60 * 60 * 24);
+    expect(PRODUCT_IMAGE_ANALYSIS_NAME_OPTIONS_MAX).toBe(3);
   });
 
   it("uses a stable cache key only for the same images and taxonomy", () => {
@@ -200,6 +203,28 @@ describe("product image analysis helpers", () => {
     });
   });
 
+  it("keeps concise commercial name alternatives and fixes inverted common terms", () => {
+    const analysis = sanitizeProductImageAnalysis(
+      createOutput({
+        suggestedBaseName: "Pad mouse con personajes surtidos",
+        suggestedNameOptions: [
+          "Pad mouse con personajes surtidos",
+          "Mouse pad con personajes surtidos",
+          "Alfombrilla para mouse con personajes surtidos",
+        ],
+      }),
+      taxonomy,
+    );
+
+    expect(analysis.suggestedBaseName).toBe(
+      "Mouse pad con personajes surtidos",
+    );
+    expect(analysis.suggestedNameOptions).toEqual([
+      "Mouse pad con personajes surtidos",
+      "Alfombrilla para mouse con personajes surtidos",
+    ]);
+  });
+
   it("accepts only checksum-valid visual GTINs and complete visible MPNs", () => {
     const accepted = sanitizeProductImageAnalysis(
       createOutput({
@@ -275,5 +300,7 @@ describe("product image analysis helpers", () => {
     expect(prompt).toContain("A5");
     expect(prompt).toContain("checksum GS1");
     expect(prompt).toContain("variantRecommendation");
+    expect(prompt).toContain("mouse pad");
+    expect(prompt).toContain("suggestedNameOptions");
   });
 });

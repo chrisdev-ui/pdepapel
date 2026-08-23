@@ -218,6 +218,11 @@ export function ProductNameAssistant({
     setWasApplied(false);
   };
 
+  const selectVisualNameOption = (name: string) => {
+    setBaseName(name);
+    setWasApplied(false);
+  };
+
   const createVisualAttribute = async () => {
     if (!pendingVisualAttribute || !onCreateVisualAttribute) return;
 
@@ -386,7 +391,9 @@ export function ProductNameAssistant({
               <p className="font-medium">Propuesta visual para revisar</p>
               {visualAnalysis.suggestedBaseName ? (
                 <p>
-                  <span className="text-muted-foreground">Nombre base: </span>
+                  <span className="text-muted-foreground">
+                    Nombre recomendado:
+                  </span>
                   <span className="font-medium">
                     {visualAnalysis.suggestedBaseName}
                   </span>
@@ -395,6 +402,30 @@ export function ProductNameAssistant({
                 <p className="text-muted-foreground">
                   Las fotos no permiten confirmar un nombre base.
                 </p>
+              )}
+              {visualAnalysis.suggestedNameOptions.length > 1 && (
+                <div className="pt-2">
+                  <p className="font-medium">Otras opciones equivalentes</p>
+                  <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                    {visualAnalysis.suggestedNameOptions
+                      .slice(1)
+                      .map((name) => (
+                        <Button
+                          key={name}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={disabled}
+                          onClick={() => selectVisualNameOption(name)}
+                        >
+                          Elegir nombre: {name}
+                        </Button>
+                      ))}
+                  </div>
+                  <p className="mt-2 text-muted-foreground">
+                    Elige una opción y usa la sugerencia cuando estés conforme.
+                  </p>
+                </div>
               )}
               {(visualAnalysis.brand ||
                 visualAnalysis.categoryName ||
