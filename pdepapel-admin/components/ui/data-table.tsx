@@ -16,6 +16,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
+import type { Table as ReactTable } from "@tanstack/react-table";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { DataTableActionOptions } from "@/components/ui/data-table-action-options";
@@ -50,7 +51,7 @@ interface DataTableProps<TData, TValue> {
     }[];
   }[];
   onColumnFiltersChange?: (filters: ColumnFiltersState) => void;
-  bulkActions?: (table: Table<TData>) => React.ReactNode;
+  bulkActions?: (table: ReactTable<TData>) => React.ReactNode;
   // New opt-in controlled selection props
   rowSelection?: Record<string, boolean>;
   onRowSelectionChange?: (selection: Record<string, boolean>) => void;
