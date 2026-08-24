@@ -29,6 +29,7 @@ import {
   LayoutDashboard,
   LineChart,
   ListChecks,
+  Megaphone,
   Menu,
   MessageSquare,
   Package,
@@ -177,8 +178,15 @@ export function MainNav({
     },
     // Ventas
     {
+      href: dashboardPath("negocio"),
+      label: "Negocio y crecimiento",
+      active: pathname === dashboardPath("negocio"),
+      group: "sales",
+      icon: Megaphone,
+    },
+    {
       href: dashboardPath("inteligencia-negocio"),
-      label: "Business Intelligence",
+      label: "Rendimiento detallado",
       active: pathname === dashboardPath("inteligencia-negocio"),
       group: "sales",
       icon: LineChart,

@@ -71,6 +71,7 @@ This section records the important recent decisions and must be updated after fu
 ### Current baseline
 
 - Latest deployed Mercado Libre listing-content expansion was committed as `f9a88d6` (`feat(admin): enhance Mercado Libre listing management`) and its matching manual migration was applied to Railway.
+- `pdepapel-admin/prisma/manual-migrations/20260824_add_business_growth.sql` was applied to Railway on 2026-08-24. It creates the store-scoped policy, cash-movement, campaign-draft, and campaign-product records used by the private `Negocio y crecimiento` module.
 - `pdepapel-admin/prisma/manual-migrations/20260820_add_marketplace_order_item_acq_price.sql` is **written but NOT yet applied to Railway**. It adds the nullable `MarketplaceOrderItem.acqPrice` cost snapshot and backfills it from the linked product. The matching application code must not be deployed before the migration is applied, because the profitability query selects that column.
 - `pdepapel-admin/prisma/manual-migrations/20260816_add_order_account_claims.sql` was applied to Railway on 2026-08-16. It adds the short-lived, hashed claim records used when a guest safely saves an order to a newly created or existing account.
 - The production manual enum migration `pdepapel-admin/prisma/manual-migrations/20260807_add_marketplace_order_notification_action.sql` has already been applied to Railway. It added the outbox actions `SYNC_ORDER_FINANCIALS` and `SEND_ORDER_NOTIFICATION`.
@@ -342,6 +343,7 @@ The Prisma schema is `pdepapel-admin/prisma/schema.prisma`.
 - `MarketplaceConnection`, `MarketplaceListing`, `MarketplaceOrder`, `MarketplaceOrderItem`, `MarketplaceWebhookEvent`, and `MarketplaceOutboxEvent` implement marketplace sync.
 - `Invoice` and `DianStatus` handle electronic invoicing flows.
 - `OrderAccountClaim` lets a guest save an individual eligible order after sign-in; `CustomerWishlistItem` stores signed-in favorites; `CustomerAddress` is an explicit per-account delivery address book; `CouponRedemption` records the single account-level redemption of a welcome benefit.
+- `BusinessCashPolicy`, `BusinessCashMovement`, `GrowthCampaign`, and `GrowthCampaignProduct` provide decision support for monthly distribution and social-media campaign drafts. They never move money, mutate orders/inventory, replace tax reporting, or create/modify ads externally. Cash movements are explicitly owner-entered and scoped to a store; owner withdrawals and inventory purchases remain separately visible so they are not double-counted as operating profit expenses.
 
 ### Product identifiers: do not conflate them
 
@@ -370,6 +372,7 @@ Known manual migration references:
 - `20260816_add_order_account_claims.sql` — creates the short-lived, hashed guest-order claim table; applied to Railway on 2026-08-16.
 - `20260820_add_customer_account_benefits.sql` — adds separate email/device order claims, persisted account favorites, explicit account delivery addresses, and welcome-benefit redemptions. It must be applied to Railway before deploying the related code.
 - `20260821_add_product_naming_changes.sql` — adds the additive, reversible audit trail for title-only product and product-group naming batches. Apply it to Railway before deploying the naming-review route.
+- `20260824_add_business_growth.sql` — creates additive, store-scoped policy, cash-movement, and social-campaign-draft tables; applied to Railway on 2026-08-24. It has no foreign keys because `relationMode = "prisma"`.
 
 ## 8. Catalog, SEO, and revalidation
 
@@ -839,6 +842,14 @@ When user approval is granted:
 - [ ] Question responses, listing status changes, and publication actions require explicit human confirmation.
 - [ ] Claim/return notifications remain review-only; no automatic refund or physical stock restock occurs.
 
+### Business growth or social campaign change
+
+- [ ] Financial advice is clearly labeled as an estimate, never an available bank balance or accounting/tax result.
+- [ ] Orders, product costs, inventory purchases, owner withdrawals, and manual expenses cannot be silently double-counted.
+- [ ] Store ownership and `[storeId]` scoping protect every read/write endpoint.
+- [ ] UTM paths use the canonical public product URL and do not trust arbitrary external landing URLs.
+- [ ] No Instagram/Meta or TikTok publish, budget, pause, or charge action happens without a future OAuth connection and explicit owner confirmation.
+
 ### Fair/in-person inventory change
 
 - [ ] Reservation, sale, and closing/reconciliation states remain auditable.
@@ -853,6 +864,7 @@ When user approval is granted:
 - `docs/seguimiento-seo.md` — post-migration Search Console/SEO monitoring.
 - `pdepapel-admin/docs/mercadolibre.md` — Mercado Libre application, OAuth, QStash, webhook, listing, and reconciliation runbook.
 - `pdepapel-admin/docs/guia-uso-mercadolibre.md` — nontechnical daily Mercado Libre guide for publishing, profiles, sales, dispatches, historical reconciliation, and Product Ads decisions. Its printable PDF is `output/pdf/guia-practica-mercadolibre-p-de-papel.pdf`; regenerate it with `pdepapel-admin/scripts/generate-mercadolibre-guide-pdf.py` using the bundled Python runtime when that guide changes.
+- `pdepapel-admin/docs/negocio-y-crecimiento.md` — nontechnical guide for monthly money decisions, registering real cash movements, preparing measured social drafts, and the safe future connection requirements for Instagram/Meta and TikTok.
 - `pdepapel-admin/docs/ventas-en-feria.md` — nontechnical fair/event operation guide.
 - `pdepapel-admin/docs/punto-de-venta.md` — nontechnical guide for reusable product labels and ordinary in-person sales.
 - `pdepapel-admin/docs/conciliar-inventario-feria-anterior.md` — previous-fair inventory reconciliation guide.

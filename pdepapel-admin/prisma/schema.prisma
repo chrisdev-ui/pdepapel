@@ -9,71 +9,74 @@ datasource db {
 }
 
 model Store {
-  id                           String                        @id @default(uuid())
-  name                         String
-  userId                       String
-  logoUrl                      String?
-  phone                        String?                       @default("")
-  email                        String?                       @default("")
-  address                      String?                       @default("")
-  instagram                    String?                       @default("")
-  tiktok                       String?                       @default("")
-  youtube                      String?                       @default("")
-  facebook                     String?                       @default("")
-  twitter                      String?                       @default("")
-  pinterest                    String?                       @default("")
-  policies                     Json?                         @default("{}")
-  daneCode                     String?                       @default("")
-  neighborhood                 String?                       @default("")
-  addressReference             String?                       @default("")
-  contactName                  String?                       @default("")
-  defaultPackageWeight         Float?                        @default(1.0) // Peso por defecto (kg)
-  defaultPackageHeight         Float?                        @default(10.0) // Alto por defecto (cm)
-  defaultPackageWidth          Float?                        @default(10.0) // Ancho por defecto (cm)
-  defaultPackageLength         Float?                        @default(10.0) // Largo por defecto (cm)
-  createdAt                    DateTime                      @default(now())
-  updatedAt                    DateTime                      @updatedAt
-  types                        Type[]                        @relation("StoreToType")
-  billboards                   Billboard[]                   @relation("StoreToBillboard")
-  posts                        Post[]                        @relation("StoreToPost")
-  categories                   Category[]                    @relation("StoreToCategory")
-  sizes                        Size[]                        @relation("StoreToSize")
-  colors                       Color[]                       @relation("StoreToColor")
-  designs                      Design[]                      @relation("StoreToDesign")
-  products                     Product[]                     @relation("StoreToProduct")
-  productSlugAliases           ProductSlugAlias[]
-  categorySlugAliases          CategorySlugAlias[]
-  orders                       Order[]                       @relation("StoreToOrder")
-  mainBanner                   MainBanner?                   @relation("StoreToMainBanner")
-  banners                      Banner[]                      @relation("StoreToBanner")
-  reviews                      Review[]                      @relation("StoreToReview")
-  shippings                    Shipping[]                    @relation("StoreToShipping")
-  payments                     PaymentDetails[]              @relation("StoreToPaymentDetails")
-  suppliers                    Supplier[]                    @relation("StoreToSupplier")
-  coupons                      Coupon[]                      @relation("StoreToCoupons")
-  customerAddresses            CustomerAddress[]             @relation("StoreToCustomerAddress")
-  customerWishlistItems        CustomerWishlistItem[]        @relation("StoreToCustomerWishlistItem")
-  couponRedemptions            CouponRedemption[]            @relation("StoreToCouponRedemption")
-  shippingQuotes               ShippingQuote[]               @relation("StoreToShippingQuotes")
-  offers                       Offer[]                       @relation("StoreToOffer")
-  boxes                        Box[]                         @relation("StoreToBox")
-  productGroups                ProductGroup[]                @relation("StoreToProductGroup")
-  inventoryMovements           InventoryMovement[]           @relation("StoreToInventoryMovement")
-  restockOrders                RestockOrder[]                @relation("StoreToRestockOrder")
-  customOrders                 CustomOrder[]                 @relation("StoreToCustomOrder")
-  quotations                   Quotation[]                   @relation("StoreToQuotation")
-  whatsappMessages             WhatsAppMessage[]             @relation("StoreToWhatsAppMessage")
-  whatsappTemplates            WhatsAppTemplate[]            @relation("StoreToWhatsAppTemplate")
-  quoteRequests                QuoteRequest[]                @relation("StoreToQuoteRequest")
-  invoices                     Invoice[]                     @relation("StoreToInvoice")
-  taxPurchases                 TaxPurchase[]                 @relation("StoreToTaxPurchase")
-  customerReactivations        CustomerReactivation[]        @relation("StoreToCustomerReactivation")
-  fairEvents                   FairEvent[]
-  marketplaceConnections       MarketplaceConnection[]
-  marketplaceOAuthStates       MarketplaceOAuthState[]
-  marketplaceCategoryTemplates MarketplaceCategoryTemplate[]
+  id                             String                          @id @default(uuid())
+  name                           String
+  userId                         String
+  logoUrl                        String?
+  phone                          String?                         @default("")
+  email                          String?                         @default("")
+  address                        String?                         @default("")
+  instagram                      String?                         @default("")
+  tiktok                         String?                         @default("")
+  youtube                        String?                         @default("")
+  facebook                       String?                         @default("")
+  twitter                        String?                         @default("")
+  pinterest                      String?                         @default("")
+  policies                       Json?                           @default("{}")
+  daneCode                       String?                         @default("")
+  neighborhood                   String?                         @default("")
+  addressReference               String?                         @default("")
+  contactName                    String?                         @default("")
+  defaultPackageWeight           Float?                          @default(1.0) // Peso por defecto (kg)
+  defaultPackageHeight           Float?                          @default(10.0) // Alto por defecto (cm)
+  defaultPackageWidth            Float?                          @default(10.0) // Ancho por defecto (cm)
+  defaultPackageLength           Float?                          @default(10.0) // Largo por defecto (cm)
+  createdAt                      DateTime                        @default(now())
+  updatedAt                      DateTime                        @updatedAt
+  types                          Type[]                          @relation("StoreToType")
+  billboards                     Billboard[]                     @relation("StoreToBillboard")
+  posts                          Post[]                          @relation("StoreToPost")
+  categories                     Category[]                      @relation("StoreToCategory")
+  sizes                          Size[]                          @relation("StoreToSize")
+  colors                         Color[]                         @relation("StoreToColor")
+  designs                        Design[]                        @relation("StoreToDesign")
+  products                       Product[]                       @relation("StoreToProduct")
+  productSlugAliases             ProductSlugAlias[]
+  categorySlugAliases            CategorySlugAlias[]
+  orders                         Order[]                         @relation("StoreToOrder")
+  mainBanner                     MainBanner?                     @relation("StoreToMainBanner")
+  banners                        Banner[]                        @relation("StoreToBanner")
+  reviews                        Review[]                        @relation("StoreToReview")
+  shippings                      Shipping[]                      @relation("StoreToShipping")
+  payments                       PaymentDetails[]                @relation("StoreToPaymentDetails")
+  suppliers                      Supplier[]                      @relation("StoreToSupplier")
+  coupons                        Coupon[]                        @relation("StoreToCoupons")
+  customerAddresses              CustomerAddress[]               @relation("StoreToCustomerAddress")
+  customerWishlistItems          CustomerWishlistItem[]          @relation("StoreToCustomerWishlistItem")
+  couponRedemptions              CouponRedemption[]              @relation("StoreToCouponRedemption")
+  shippingQuotes                 ShippingQuote[]                 @relation("StoreToShippingQuotes")
+  offers                         Offer[]                         @relation("StoreToOffer")
+  boxes                          Box[]                           @relation("StoreToBox")
+  productGroups                  ProductGroup[]                  @relation("StoreToProductGroup")
+  inventoryMovements             InventoryMovement[]             @relation("StoreToInventoryMovement")
+  restockOrders                  RestockOrder[]                  @relation("StoreToRestockOrder")
+  customOrders                   CustomOrder[]                   @relation("StoreToCustomOrder")
+  quotations                     Quotation[]                     @relation("StoreToQuotation")
+  whatsappMessages               WhatsAppMessage[]               @relation("StoreToWhatsAppMessage")
+  whatsappTemplates              WhatsAppTemplate[]              @relation("StoreToWhatsAppTemplate")
+  quoteRequests                  QuoteRequest[]                  @relation("StoreToQuoteRequest")
+  invoices                       Invoice[]                       @relation("StoreToInvoice")
+  taxPurchases                   TaxPurchase[]                   @relation("StoreToTaxPurchase")
+  customerReactivations          CustomerReactivation[]          @relation("StoreToCustomerReactivation")
+  fairEvents                     FairEvent[]
+  marketplaceConnections         MarketplaceConnection[]
+  marketplaceOAuthStates         MarketplaceOAuthState[]
+  marketplaceCategoryTemplates   MarketplaceCategoryTemplate[]
   marketplacePublicationProfiles MarketplacePublicationProfile[]
-  productNamingChanges          ProductNamingChange[]
+  productNamingChanges           ProductNamingChange[]
+  businessCashPolicy             BusinessCashPolicy?
+  businessCashMovements          BusinessCashMovement[]
+  growthCampaigns                GrowthCampaign[]
 }
 
 model Billboard {
@@ -177,24 +180,24 @@ model Type {
 }
 
 model Category {
-  id             String              @id @default(uuid())
-  storeId        String
-  typeId         String
-  name           String
-  slug           String              @default("")
-  seoEnabled     Boolean             @default(false)
-  seoFeatured    Boolean             @default(false)
-  seoTitle       String?             @db.VarChar(70)
-  seoDescription String?             @db.VarChar(170)
-  seoIntro       String?             @db.Text
-  imageUrl       String?             @db.Text
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
-  store          Store               @relation("StoreToCategory", fields: [storeId], references: [id])
-  type           Type                @relation(fields: [typeId], references: [id])
-  products       Product[]           @relation("CategoryToProduct")
-  offers         OfferCategory[]
-  slugAliases    CategorySlugAlias[]
+  id                             String                          @id @default(uuid())
+  storeId                        String
+  typeId                         String
+  name                           String
+  slug                           String                          @default("")
+  seoEnabled                     Boolean                         @default(false)
+  seoFeatured                    Boolean                         @default(false)
+  seoTitle                       String?                         @db.VarChar(70)
+  seoDescription                 String?                         @db.VarChar(170)
+  seoIntro                       String?                         @db.Text
+  imageUrl                       String?                         @db.Text
+  createdAt                      DateTime                        @default(now())
+  updatedAt                      DateTime                        @updatedAt
+  store                          Store                           @relation("StoreToCategory", fields: [storeId], references: [id])
+  type                           Type                            @relation(fields: [typeId], references: [id])
+  products                       Product[]                       @relation("CategoryToProduct")
+  offers                         OfferCategory[]
+  slugAliases                    CategorySlugAlias[]
   marketplacePublicationProfiles MarketplacePublicationProfile[]
 
   @@unique([storeId, slug])
@@ -310,6 +313,7 @@ model Product {
   marketplaceOutboxEvents MarketplaceOutboxEvent[]
   marketplaceQuestions    MarketplaceQuestion[]
   videos                  ProductVideo[]
+  growthCampaignProducts  GrowthCampaignProduct[]
 
   // -- KIT / COMBO FIELDS --
   isKit         Boolean      @default(false)
@@ -543,25 +547,25 @@ model OrderAccountClaim {
 }
 
 model CustomerAddress {
-  id               String   @id @default(uuid())
+  id               String    @id @default(uuid())
   storeId          String
-  userId           String   @db.VarChar(128)
-  label            String   @default("") @db.VarChar(60)
-  fullName         String   @default("")
-  phone            String   @default("")
-  documentId       String?  @default("")
-  address          String   @default("")
-  address2         String?  @default("")
-  city             String?  @default("")
-  department       String?  @default("")
-  daneCode         String?  @default("")
-  neighborhood     String?  @default("")
-  addressReference String?  @default("")
-  company          String?  @default("")
-  isDefault        Boolean  @default(false)
+  userId           String    @db.VarChar(128)
+  label            String    @default("") @db.VarChar(60)
+  fullName         String    @default("")
+  phone            String    @default("")
+  documentId       String?   @default("")
+  address          String    @default("")
+  address2         String?   @default("")
+  city             String?   @default("")
+  department       String?   @default("")
+  daneCode         String?   @default("")
+  neighborhood     String?   @default("")
+  addressReference String?   @default("")
+  company          String?   @default("")
+  isDefault        Boolean   @default(false)
   lastUsedAt       DateTime?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   store Store @relation("StoreToCustomerAddress", fields: [storeId], references: [id])
 
@@ -586,14 +590,14 @@ model CustomerWishlistItem {
 }
 
 model CouponRedemption {
-  id        String                 @id @default(uuid())
-  storeId   String
-  couponId  String
-  userId    String                 @db.VarChar(128)
-  orderId   String?
-  status    CouponRedemptionStatus @default(RESERVED)
-  createdAt DateTime               @default(now())
-  updatedAt DateTime               @updatedAt
+  id         String                 @id @default(uuid())
+  storeId    String
+  couponId   String
+  userId     String                 @db.VarChar(128)
+  orderId    String?
+  status     CouponRedemptionStatus @default(RESERVED)
+  createdAt  DateTime               @default(now())
+  updatedAt  DateTime               @updatedAt
   redeemedAt DateTime?
   releasedAt DateTime?
 
@@ -794,23 +798,23 @@ model PaymentDetails {
 }
 
 model Coupon {
-  id            String       @id @default(uuid())
-  storeId       String
-  code          String       @unique
-  type          DiscountType
-  amount        Float
-  startDate     DateTime
-  endDate       DateTime
-  maxUses       Int?         @default(99)
-  usedCount     Int          @default(0)
-  isActive      Boolean      @default(true)
-  minOrderValue Float?       @default(0)
-  isWelcomeBenefit Boolean   @default(false)
-  orders        Order[]
-  redemptions   CouponRedemption[]
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  store         Store        @relation("StoreToCoupons", fields: [storeId], references: [id])
+  id               String             @id @default(uuid())
+  storeId          String
+  code             String             @unique
+  type             DiscountType
+  amount           Float
+  startDate        DateTime
+  endDate          DateTime
+  maxUses          Int?               @default(99)
+  usedCount        Int                @default(0)
+  isActive         Boolean            @default(true)
+  minOrderValue    Float?             @default(0)
+  isWelcomeBenefit Boolean            @default(false)
+  orders           Order[]
+  redemptions      CouponRedemption[]
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  store            Store              @relation("StoreToCoupons", fields: [storeId], references: [id])
 
   @@unique([storeId, code])
   @@index([storeId])
@@ -893,6 +897,39 @@ enum Social {
   TikTok
   Pinterest
   Youtube
+}
+
+enum BusinessCashMovementType {
+  OPERATING_EXPENSE
+  MARKETING_SPEND
+  TAX_PAYMENT
+  INVENTORY_PURCHASE
+  OWNER_DRAW
+  OWNER_CONTRIBUTION
+  OTHER_INFLOW
+  OTHER_OUTFLOW
+}
+
+enum GrowthCampaignChannel {
+  INSTAGRAM
+  TIKTOK
+  MULTI_CHANNEL
+}
+
+enum GrowthCampaignObjective {
+  TRAFFIC
+  SALES
+  ENGAGEMENT
+  REMARKETING
+}
+
+enum GrowthCampaignStatus {
+  DRAFT
+  READY
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
 }
 
 enum ShippingProvider {
@@ -1418,6 +1455,86 @@ model TaxPurchase {
   @@index([storeId, issuedAt])
 }
 
+model BusinessCashPolicy {
+  id                       String   @id @default(uuid())
+  storeId                  String   @unique
+  minimumOperatingReserve  Decimal  @default(0) @db.Decimal(15, 2)
+  taxReserveRate           Decimal  @default(0) @db.Decimal(5, 2)
+  reinvestmentRate         Decimal  @default(50) @db.Decimal(5, 2)
+  ownerDrawRate            Decimal  @default(50) @db.Decimal(5, 2)
+  marketingTestRate        Decimal  @default(10) @db.Decimal(5, 2)
+  minimumCampaignMarginPct Decimal  @default(35) @db.Decimal(5, 2)
+  minimumCampaignStock     Int      @default(5)
+  minimumCampaignDaysCover Int      @default(14)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+}
+
+model BusinessCashMovement {
+  id          String                   @id @default(uuid())
+  storeId     String
+  type        BusinessCashMovementType
+  amount      Decimal                  @db.Decimal(15, 2)
+  description String                   @db.VarChar(180)
+  occurredAt  DateTime
+  reference   String?                  @db.VarChar(120)
+  notes       String?                  @db.Text
+  createdBy   String                   @db.VarChar(191)
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, occurredAt])
+  @@index([storeId, type, occurredAt])
+}
+
+model GrowthCampaign {
+  id                 String                  @id @default(uuid())
+  storeId            String
+  name               String                  @db.VarChar(160)
+  channel            GrowthCampaignChannel
+  objective          GrowthCampaignObjective @default(SALES)
+  status             GrowthCampaignStatus    @default(DRAFT)
+  seasonLabel        String?                 @db.VarChar(80)
+  landingPath        String                  @db.VarChar(500)
+  utmSource          String                  @db.VarChar(80)
+  utmMedium          String                  @db.VarChar(80)
+  utmCampaign        String                  @db.VarChar(120)
+  brief              String?                 @db.Text
+  plannedBudget      Decimal?                @db.Decimal(15, 2)
+  actualSpend        Decimal?                @db.Decimal(15, 2)
+  attributedRevenue  Decimal?                @db.Decimal(15, 2)
+  externalCampaignId String?                 @db.VarChar(191)
+  externalUrl        String?                 @db.VarChar(500)
+  startsAt           DateTime?
+  endsAt             DateTime?
+  createdBy          String                  @db.VarChar(191)
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  store    Store                   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  products GrowthCampaignProduct[]
+
+  @@index([storeId, status, createdAt])
+  @@index([storeId, channel, status])
+}
+
+model GrowthCampaignProduct {
+  id         String   @id @default(uuid())
+  campaignId String
+  productId  String
+  createdAt  DateTime @default(now())
+
+  campaign GrowthCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  product  Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, productId])
+  @@index([productId])
+}
+
 model MarketplaceConnection {
   id                    String                      @id @default(uuid())
   storeId               String
@@ -1435,14 +1552,14 @@ model MarketplaceConnection {
   createdAt             DateTime                    @default(now())
   updatedAt             DateTime                    @updatedAt
 
-  store         Store                     @relation(fields: [storeId], references: [id])
-  listings      MarketplaceListing[]
-  orders        MarketplaceOrder[]
-  webhookEvents MarketplaceWebhookEvent[]
-  outboxEvents  MarketplaceOutboxEvent[]
-  questions     MarketplaceQuestion[]
-  shipments     MarketplaceShipment[]
-  claims        MarketplaceClaim[]
+  store           Store                       @relation(fields: [storeId], references: [id])
+  listings        MarketplaceListing[]
+  orders          MarketplaceOrder[]
+  webhookEvents   MarketplaceWebhookEvent[]
+  outboxEvents    MarketplaceOutboxEvent[]
+  questions       MarketplaceQuestion[]
+  shipments       MarketplaceShipment[]
+  claims          MarketplaceClaim[]
   campaignActions MarketplaceCampaignAction[]
 
   @@unique([storeId, provider])
@@ -1541,7 +1658,7 @@ model MarketplacePublicationProfile {
 }
 
 model MarketplaceCampaignAction {
-  id                 String                         @id @default(uuid())
+  id                 String                          @id @default(uuid())
   connectionId       String
   externalCampaignId String
   action             MarketplaceCampaignActionType
@@ -1550,9 +1667,9 @@ model MarketplaceCampaignAction {
   before             Json
   requested          Json
   result             Json?
-  error              String?                        @db.Text
-  createdAt          DateTime                       @default(now())
-  updatedAt          DateTime                       @updatedAt
+  error              String?                         @db.Text
+  createdAt          DateTime                        @default(now())
+  updatedAt          DateTime                        @updatedAt
 
   connection MarketplaceConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
 

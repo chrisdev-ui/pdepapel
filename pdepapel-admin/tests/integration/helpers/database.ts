@@ -143,6 +143,25 @@ export async function deleteInventoryFixture(fixture: InventoryFixture) {
   await testPrisma.inventoryMovement.deleteMany({
     where: { storeId: fixture.store.id },
   });
+  const growthCampaigns = await testPrisma.growthCampaign.findMany({
+    where: { storeId: fixture.store.id },
+    select: { id: true },
+  });
+  const growthCampaignIds = growthCampaigns.map((campaign) => campaign.id);
+  if (growthCampaignIds.length > 0) {
+    await testPrisma.growthCampaignProduct.deleteMany({
+      where: { campaignId: { in: growthCampaignIds } },
+    });
+    await testPrisma.growthCampaign.deleteMany({
+      where: { id: { in: growthCampaignIds } },
+    });
+  }
+  await testPrisma.businessCashMovement.deleteMany({
+    where: { storeId: fixture.store.id },
+  });
+  await testPrisma.businessCashPolicy.deleteMany({
+    where: { storeId: fixture.store.id },
+  });
   await testPrisma.productKit.deleteMany({
     where: {
       OR: [{ kitId: { in: productIds } }, { componentId: { in: productIds } }],
