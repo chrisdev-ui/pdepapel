@@ -73,7 +73,7 @@ type ProductNameAssistantProps = {
     identifier: Pick<PendingIdentifier, "value" | "evidence">,
   ) => void;
   canReviewVariantRecommendation?: boolean;
-  onReviewVariantRecommendation?: () => void;
+  onReviewVariantRecommendation?: (analysis: ProductImageAnalysis) => void;
   onCreateVisualAttribute?: (
     attribute: PendingVisualAttribute,
   ) => Promise<CreatedVisualAttribute>;
@@ -615,9 +615,11 @@ export function ProductNameAssistant({
                       size="sm"
                       className="mt-3"
                       disabled={disabled}
-                      onClick={onReviewVariantRecommendation}
+                      onClick={() =>
+                        onReviewVariantRecommendation(visualAnalysis)
+                      }
                     >
-                      Revisar conversión a variantes
+                      Revisar {visualAnalysis.variantCandidates.length} opciones
                     </Button>
                   )}
               </div>

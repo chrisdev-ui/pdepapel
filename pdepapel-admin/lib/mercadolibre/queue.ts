@@ -1,6 +1,9 @@
 import { Client, Receiver } from "@upstash/qstash";
 
+import { MERCADOLIBRE_RECOVERY_CRON } from "@/lib/mercadolibre/recovery-schedule";
 import prismadb from "@/lib/prismadb";
+
+export { MERCADOLIBRE_RECOVERY_CRON } from "@/lib/mercadolibre/recovery-schedule";
 
 type QueueEnvironment = Record<string, string | undefined>;
 export type MercadoLibreOutboxQueueLane = "notification" | "operation";
@@ -41,8 +44,6 @@ export const MERCADOLIBRE_FAILURE_CALLBACK_HEADERS = {
   "Upstash-Failure-Callback-Retries": "3",
   "Upstash-Failure-Callback-Timeout": "30s",
 } as const;
-
-export const MERCADOLIBRE_RECOVERY_CRON = "*/15 * * * *";
 
 export function getMercadoLibreQueueConfigurationStatus(
   environment: QueueEnvironment = process.env,

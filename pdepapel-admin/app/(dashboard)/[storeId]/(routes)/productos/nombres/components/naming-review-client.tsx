@@ -6,6 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Heading } from "@/components/ui/heading";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
@@ -15,9 +22,20 @@ import {
   buildProductNameSuggestion,
 } from "@/lib/product-naming";
 import axios from "axios";
-import { Check, RefreshCcw, Search, Sparkles, Undo2 } from "lucide-react";
+import {
+  Check,
+  ExternalLink,
+  ImageOff,
+  ListFilter,
+  RefreshCcw,
+  Search,
+  Sparkles,
+  Undo2,
+} from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 type ProductCandidate = {
   id: string;
@@ -57,6 +75,7 @@ type NamingReviewClientProps = {
 };
 
 type EntityType = "PRODUCT" | "PRODUCT_GROUP";
+type ReviewFilter = "ALL" | "SUGGESTED" | "LONG" | "UNCHANGED";
 
 const PAGE_SIZE = 20;
 const MAX_BATCH_SIZE = 25;
@@ -74,6 +93,7 @@ export function NamingReviewClient({
   const router = useRouter();
   const { toast } = useToast();
   const [entityType, setEntityType] = useState<EntityType>("PRODUCT");
+  const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("ALL");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -85,12 +105,30 @@ export function NamingReviewClient({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [rollbackId, setRollbackId] = useState<string | null>(null);
 
+  const suggestionFor = useCallback(
+    (candidate: ProductCandidate | GroupCandidate) => {
+      const isProduct = entityType === "PRODUCT";
+      return buildProductNameSuggestion({
+        baseName: candidate.name,
+        categoryName: candidate.categoryName,
+        brand: candidate.brand,
+        designName: isProduct
+          ? (candidate as ProductCandidate).designName
+          : null,
+        colorName: isProduct ? (candidate as ProductCandidate).colorName : null,
+        sizeName: isProduct ? (candidate as ProductCandidate).sizeName : null,
+        sizeValue: isProduct ? (candidate as ProductCandidate).sizeValue : null,
+        includeVariantAttributes: isProduct,
+      });
+    },
+    [entityType],
+  );
+
   const candidates = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase("es-CO");
     const source = entityType === "PRODUCT" ? products : groups;
 
     return source.filter((candidate) => {
-      if (!normalizedQuery) return true;
       const text = [
         candidate.name,
         candidate.brand,
@@ -107,9 +145,21 @@ export function NamingReviewClient({
         .filter(Boolean)
         .join(" ")
         .toLocaleLowerCase("es-CO");
-      return text.includes(normalizedQuery);
+      if (normalizedQuery && !text.includes(normalizedQuery)) return false;
+
+      const suggestion = suggestionFor(candidate);
+      if (reviewFilter === "SUGGESTED") {
+        return Boolean(suggestion.name && suggestion.name !== candidate.name);
+      }
+      if (reviewFilter === "LONG") {
+        return candidate.name.length > PRODUCT_NAME_RECOMMENDED_MAX_LENGTH;
+      }
+      if (reviewFilter === "UNCHANGED") {
+        return suggestion.name === candidate.name;
+      }
+      return true;
     });
-  }, [entityType, groups, products, query]);
+  }, [entityType, groups, products, query, reviewFilter, suggestionFor]);
 
   const pageCount = Math.max(1, Math.ceil(candidates.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
@@ -130,19 +180,23 @@ export function NamingReviewClient({
 
   const selectedCount = selectedChanges.length;
 
-  const suggestionFor = (candidate: ProductCandidate | GroupCandidate) => {
-    const isProduct = entityType === "PRODUCT";
-    return buildProductNameSuggestion({
-      baseName: candidate.name,
-      categoryName: candidate.categoryName,
-      brand: candidate.brand,
-      designName: isProduct ? (candidate as ProductCandidate).designName : null,
-      colorName: isProduct ? (candidate as ProductCandidate).colorName : null,
-      sizeName: isProduct ? (candidate as ProductCandidate).sizeName : null,
-      sizeValue: isProduct ? (candidate as ProductCandidate).sizeValue : null,
-      includeVariantAttributes: isProduct,
-    });
-  };
+  const reviewStats = useMemo(() => {
+    const source = entityType === "PRODUCT" ? products : groups;
+    return source.reduce(
+      (stats, candidate) => {
+        const suggestion = suggestionFor(candidate);
+        if (suggestion.name && suggestion.name !== candidate.name) {
+          stats.withSuggestion += 1;
+        }
+        if (candidate.name.length > PRODUCT_NAME_RECOMMENDED_MAX_LENGTH) {
+          stats.longNames += 1;
+        }
+        if (suggestion.name === candidate.name) stats.unchanged += 1;
+        return stats;
+      },
+      { withSuggestion: 0, longNames: 0, unchanged: 0 },
+    );
+  }, [entityType, groups, products, suggestionFor]);
 
   const updateSuggestion = (candidate: ProductCandidate | GroupCandidate) => {
     const key = entityKey(entityType, candidate.id);
@@ -164,6 +218,45 @@ export function NamingReviewClient({
       ...current,
       [key]: "Propuesta lista para revisar antes de aplicarla.",
     }));
+  };
+
+  const prepareVisibleSuggestions = () => {
+    const candidatesToPrepare = visibleCandidates.filter((candidate) => {
+      const key = entityKey(entityType, candidate.id);
+      const suggestion = suggestionFor(candidate);
+      return (
+        !drafts[key] &&
+        Boolean(suggestion.name && suggestion.name !== candidate.name)
+      );
+    });
+
+    if (candidatesToPrepare.length === 0) {
+      toast({
+        description:
+          "No hay propuestas nuevas y seguras en esta página. Puedes revisar los nombres sin cambios o editar uno manualmente.",
+      });
+      return;
+    }
+    setDrafts((current) => {
+      const next = { ...current };
+      candidatesToPrepare.forEach((candidate) => {
+        next[entityKey(entityType, candidate.id)] =
+          suggestionFor(candidate).name;
+      });
+      return next;
+    });
+    setSelected((current) => {
+      const next = { ...current };
+      candidatesToPrepare.forEach((candidate) => {
+        const key = entityKey(entityType, candidate.id);
+        next[key] = true;
+      });
+      return next;
+    });
+    toast({
+      description: `${candidatesToPrepare.length} propuesta${candidatesToPrepare.length === 1 ? "" : "s"} preparada${candidatesToPrepare.length === 1 ? "" : "s"} para revisión. Aún no se aplicó ningún cambio.`,
+      variant: "success",
+    });
   };
 
   const updateDraft = (id: string, name: string) => {
@@ -312,6 +405,7 @@ export function NamingReviewClient({
         onValueChange={(value) => {
           setEntityType(value as EntityType);
           setPage(0);
+          setReviewFilter("ALL");
           setSelected({});
           setProposalFeedback({});
         }}
@@ -339,9 +433,64 @@ export function NamingReviewClient({
             placeholder="Buscar por nombre, SKU, categoría, diseño o color"
           />
         </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Select
+            value={reviewFilter}
+            onValueChange={(value) => {
+              setReviewFilter(value as ReviewFilter);
+              setPage(0);
+            }}
+          >
+            <SelectTrigger
+              aria-label="Priorizar revisión de nombres"
+              className="w-full sm:w-56"
+            >
+              <SelectValue placeholder="Priorizar revisión" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Todos</SelectItem>
+              <SelectItem value="SUGGESTED">Con propuesta segura</SelectItem>
+              <SelectItem value="LONG">Nombres largos</SelectItem>
+              <SelectItem value="UNCHANGED">Sin cambio sugerido</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-sm text-muted-foreground">
+            {candidates.length} resultado{candidates.length === 1 ? "" : "s"}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border p-3">
+          <p className="text-xs text-muted-foreground">Con propuesta segura</p>
+          <p className="mt-1 text-2xl font-semibold">
+            {reviewStats.withSuggestion}
+          </p>
+        </div>
+        <div className="rounded-lg border p-3">
+          <p className="text-xs text-muted-foreground">Sobre 65 caracteres</p>
+          <p className="mt-1 text-2xl font-semibold">{reviewStats.longNames}</p>
+        </div>
+        <div className="rounded-lg border p-3">
+          <p className="text-xs text-muted-foreground">Sin cambio automático</p>
+          <p className="mt-1 text-2xl font-semibold">{reviewStats.unchanged}</p>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2 rounded-lg border border-dashed p-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
-          {candidates.length} resultado{candidates.length === 1 ? "" : "s"}
+          Prepara las propuestas seguras de esta página para revisarlas juntas.
+          No modifica ningún producto todavía.
         </p>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={loading || visibleCandidates.length === 0}
+          onClick={prepareVisibleSuggestions}
+        >
+          <ListFilter className="mr-2 h-4 w-4" />
+          Preparar visibles
+        </Button>
       </div>
 
       <Separator />
@@ -357,29 +506,54 @@ export function NamingReviewClient({
           return (
             <article key={key} className="rounded-lg border p-4">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div className="min-w-0 space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-semibold">{candidate.name}</p>
-                    <Badge variant="secondary">
-                      {entityType === "PRODUCT" ? "Producto" : "Grupo"}
-                    </Badge>
-                    {entityType === "PRODUCT" &&
-                      (candidate as ProductCandidate).groupName && (
-                        <Badge variant="outline">Con variantes</Badge>
-                      )}
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {entityType === "PRODUCT" &&
-                      `${(candidate as ProductCandidate).sku} · `}
-                    {candidate.categoryName || "Sin categoría"}
-                    {entityType === "PRODUCT" && (
-                      <>
-                        {` · ${(candidate as ProductCandidate).designName}`}
-                        {` · ${(candidate as ProductCandidate).colorName}`}
-                        {` · ${(candidate as ProductCandidate).sizeName}`}
-                      </>
+                <div className="flex min-w-0 gap-3">
+                  <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-md border bg-muted">
+                    {candidate.imageUrl ? (
+                      <Image
+                        src={candidate.imageUrl}
+                        alt=""
+                        fill
+                        sizes="56px"
+                        className="object-cover"
+                        unoptimized
+                      />
+                    ) : (
+                      <ImageOff className="m-4 h-6 w-6 text-muted-foreground" />
                     )}
-                  </p>
+                  </div>
+                  <div className="min-w-0 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="break-words font-semibold">
+                        {candidate.name}
+                      </p>
+                      <Badge variant="secondary">
+                        {entityType === "PRODUCT" ? "Producto" : "Grupo"}
+                      </Badge>
+                      {entityType === "PRODUCT" &&
+                        (candidate as ProductCandidate).groupName && (
+                          <Badge variant="outline">Con variantes</Badge>
+                        )}
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {entityType === "PRODUCT" &&
+                        `${(candidate as ProductCandidate).sku} · `}
+                      {candidate.categoryName || "Sin categoría"}
+                      {entityType === "PRODUCT" && (
+                        <>
+                          {` · ${(candidate as ProductCandidate).designName}`}
+                          {` · ${(candidate as ProductCandidate).colorName}`}
+                          {` · ${(candidate as ProductCandidate).sizeName}`}
+                        </>
+                      )}
+                    </p>
+                    <Link
+                      href={`/${params.storeId}/productos${entityType === "PRODUCT" ? `/${candidate.id}` : `/grupo/${candidate.id}`}`}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                    >
+                      Abrir ficha y revisar fotos{" "}
+                      <ExternalLink className="h-3 w-3" />
+                    </Link>
+                  </div>
                 </div>
                 <Button
                   type="button"

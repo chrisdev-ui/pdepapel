@@ -120,7 +120,7 @@ Haz este paso solo cuando el código y el esquema de base de datos hayan sido ap
 5. Pulsa **Conectar Mercado Libre**.
 6. Inicia sesión con la cuenta vendedora principal de P de Papel, no con un operador o colaborador, y acepta los permisos solicitados.
 7. Al volver al panel, confirma que el estado diga **Conectada**. Si cambiaste un permiso después de haber conectado la cuenta, pulsa **Reconectar Mercado Libre** para emitir un token con el nuevo alcance.
-8. Pulsa **Activar procesamiento seguro** y espera el mensaje de confirmación. Esto crea una recuperación automática cada cinco minutos.
+8. Pulsa **Activar procesamiento seguro** y espera el mensaje de confirmación. Esto crea una recuperación automática cada quince minutos. Si ya aparece como activa, usa **Actualizar programación** para reemplazar el schedule existente sin reconectar Mercado Libre ni crear uno adicional.
 
 ### Activar y gestionar Product Ads (opcional)
 

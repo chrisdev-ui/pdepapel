@@ -38,6 +38,7 @@ function createVisualAnalysis(
       axes: [],
       evidence: null,
     },
+    variantCandidates: [],
     observations: ["La portada muestra flores."],
     limitations: [],
     ...overrides,
@@ -325,6 +326,34 @@ describe("ProductNameAssistant visual analysis", () => {
               axes: ["COLOR", "SIZE"],
               evidence: "Se muestran colores y tamaños comprables distintos.",
             },
+            variantCandidates: [
+              {
+                imageIndex: 0,
+                colorName: "Rosa",
+                colorHex: "#F8B4C7",
+                colorId: "color-rosa",
+                colorSource: "existing",
+                designName: null,
+                designId: null,
+                designSource: "not_detected",
+                sizeName: "A5",
+                sizeId: "size-a5",
+                evidence: "Primera opción rosa.",
+              },
+              {
+                imageIndex: 1,
+                colorName: "Azul",
+                colorHex: "#4F8EF7",
+                colorId: null,
+                colorSource: "new",
+                designName: null,
+                designId: null,
+                designSource: "not_detected",
+                sizeName: "A5",
+                sizeId: "size-a5",
+                evidence: "Segunda opción azul.",
+              },
+            ],
           }),
         ),
       ),
@@ -336,6 +365,7 @@ describe("ProductNameAssistant visual analysis", () => {
         storeId="store-id"
         imageUrls={[
           "https://res.cloudinary.com/pdepapel/image/upload/v1/cuaderno.webp",
+          "https://res.cloudinary.com/pdepapel/image/upload/v1/cuaderno-azul.webp",
         ]}
         onApply={vi.fn()}
         onApplyVisualAnalysis={vi.fn()}
@@ -349,11 +379,13 @@ describe("ProductNameAssistant visual analysis", () => {
 
     await user.click(
       await screen.findByRole("button", {
-        name: "Revisar conversión a variantes",
+        name: "Revisar 2 opciones",
       }),
     );
 
-    expect(onReviewVariantRecommendation).toHaveBeenCalledOnce();
+    expect(onReviewVariantRecommendation).toHaveBeenCalledWith(
+      expect.objectContaining({ variantCandidates: expect.any(Array) }),
+    );
   });
 
   it("explains when a previous visual proposal was reused without consuming quota", async () => {

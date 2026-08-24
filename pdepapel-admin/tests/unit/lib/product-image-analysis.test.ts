@@ -46,6 +46,7 @@ function createOutput(
       axes: [],
       evidence: null,
     },
+    variantCandidates: [],
     observations: [],
     limitations: [],
     ...overrides,
@@ -274,6 +275,30 @@ describe("product image analysis helpers", () => {
           evidence:
             "Las fotos muestran opciones comprables por color y tamaño.",
         },
+        variantCandidates: [
+          {
+            imageIndex: 0,
+            colorName: "Pastel",
+            colorHex: "#F8B4C7",
+            colorIsDeterministic: true,
+            designName: "Clásico",
+            designIsDeterministic: true,
+            sizeName: "A5",
+            sizeIsDeterministic: true,
+            evidence: "Primera opción pastel.",
+          },
+          {
+            imageIndex: 1,
+            colorName: "Rosa",
+            colorHex: "#F9C3D3",
+            colorIsDeterministic: true,
+            designName: "Clásico",
+            designIsDeterministic: true,
+            sizeName: "A5",
+            sizeIsDeterministic: true,
+            evidence: "Segunda opción rosa.",
+          },
+        ],
       }),
       taxonomy,
     );
@@ -282,6 +307,43 @@ describe("product image analysis helpers", () => {
       shouldCreateVariants: true,
       axes: ["COLOR", "SIZE"],
       evidence: "Las fotos muestran opciones comprables por color y tamaño.",
+    });
+    expect(analysis.variantCandidates).toEqual([
+      expect.objectContaining({
+        imageIndex: 0,
+        colorId: "color-pastel",
+        designId: "design-classic",
+        sizeId: "size-a5",
+      }),
+      expect.objectContaining({
+        imageIndex: 1,
+        colorName: "Rosa",
+        colorSource: "new",
+        designId: "design-classic",
+      }),
+    ]);
+  });
+
+  it("keeps cached analyses from before variant candidates as review-only", () => {
+    const legacyOutput = createOutput({
+      variantRecommendation: {
+        shouldCreateVariants: true,
+        axes: ["COLOR"],
+        evidence: "Las fotos parecen mostrar opciones distintas.",
+      },
+    }) as Partial<ProductImageAnalysisOutput>;
+    delete legacyOutput.variantCandidates;
+
+    const analysis = sanitizeProductImageAnalysis(
+      legacyOutput as ProductImageAnalysisOutput,
+      taxonomy,
+    );
+
+    expect(analysis.variantCandidates).toEqual([]);
+    expect(analysis.variantRecommendation).toEqual({
+      shouldCreateVariants: false,
+      axes: [],
+      evidence: null,
     });
   });
 

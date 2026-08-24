@@ -355,6 +355,7 @@ export async function createInventoryMovementBatch(
         previousStock: currentStock,
         newStock: nextStock,
         reason: movement.reason,
+        description: movement.description,
         referenceId: movement.referenceId,
         cost: movement.cost,
         price: movement.price,

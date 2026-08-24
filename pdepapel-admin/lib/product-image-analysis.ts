@@ -58,6 +58,29 @@ export const productImageAnalysisOutputSchema = z.object({
     axes: z.array(z.enum(["COLOR", "DESIGN", "SIZE"])).max(3),
     evidence: z.string().max(180).nullable(),
   }),
+  variantCandidates: z
+    .array(
+      z.object({
+        imageIndex: z
+          .number()
+          .int()
+          .min(0)
+          .max(MAX_PRODUCT_IMAGE_ANALYSIS_IMAGES - 1),
+        colorName: z.string().max(80).nullable(),
+        colorHex: z
+          .string()
+          .regex(/^#[0-9A-Fa-f]{6}$/)
+          .nullable(),
+        colorIsDeterministic: z.boolean(),
+        designName: z.string().max(80).nullable(),
+        designIsDeterministic: z.boolean(),
+        sizeName: z.string().max(80).nullable(),
+        sizeIsDeterministic: z.boolean(),
+        evidence: z.string().max(180).nullable(),
+      }),
+    )
+    .max(MAX_PRODUCT_IMAGE_ANALYSIS_IMAGES)
+    .default([]),
   observations: z.array(z.string().max(180)).max(4),
   limitations: z.array(z.string().max(180)).max(3),
 });
@@ -66,7 +89,24 @@ export type ProductImageAnalysisOutput = z.infer<
   typeof productImageAnalysisOutputSchema
 >;
 
-export type ProductImageAnalysis = ProductImageAnalysisOutput & {
+export type ProductImageVariantCandidate = {
+  imageIndex: number;
+  colorName: string | null;
+  colorHex: string | null;
+  colorId: string | null;
+  colorSource: "existing" | "new" | "not_detected";
+  designName: string | null;
+  designId: string | null;
+  designSource: "existing" | "new" | "not_detected";
+  sizeName: string | null;
+  sizeId: string | null;
+  evidence: string | null;
+};
+
+export type ProductImageAnalysis = Omit<
+  ProductImageAnalysisOutput,
+  "variantCandidates"
+> & {
   categoryId: string | null;
   categorySource: "existing" | "not_detected";
   sizeId: string | null;
@@ -75,6 +115,7 @@ export type ProductImageAnalysis = ProductImageAnalysisOutput & {
   colorSource: "existing" | "new" | "not_detected";
   designId: string | null;
   designSource: "existing" | "new" | "not_detected";
+  variantCandidates: ProductImageVariantCandidate[];
 };
 
 type TaxonomyOption = {
@@ -185,7 +226,7 @@ export function getProductImageAnalysisCacheKey(
   },
 ) {
   const normalizedInput = {
-    version: 3,
+    version: 4,
     imageUrls: [...input.imageUrls].sort(),
     categoryName: normalizeForMatching(input.categoryName),
     categories: [...input.categories]
@@ -232,6 +273,67 @@ function findExactTaxonomyMatch(
   );
 
   return matches.length === 1 ? matches[0] : null;
+}
+
+function sanitizeVariantCandidates(
+  output: ProductImageAnalysisOutput,
+  options: {
+    sizes: TaxonomyOption[];
+    colors: TaxonomyOption[];
+    designs: TaxonomyOption[];
+  },
+): ProductImageVariantCandidate[] {
+  const usedImageIndexes = new Set<number>();
+
+  return (output.variantCandidates ?? []).flatMap((candidate) => {
+    if (usedImageIndexes.has(candidate.imageIndex)) return [];
+
+    const colorName = candidate.colorIsDeterministic
+      ? cleanOptionalText(candidate.colorName, 80)
+      : null;
+    const designName = candidate.designIsDeterministic
+      ? cleanOptionalText(candidate.designName, 80)
+      : null;
+    const sizeName = candidate.sizeIsDeterministic
+      ? cleanOptionalText(candidate.sizeName, 80)
+      : null;
+    const color = findExactTaxonomyMatch(colorName, options.colors);
+    const design = findExactTaxonomyMatch(designName, options.designs);
+    const size = findExactTaxonomyMatch(sizeName, options.sizes);
+    const colorHex = color?.value ?? cleanColorHex(candidate.colorHex);
+    const canCreateColor = Boolean(colorName && colorHex && !color);
+    const canCreateDesign = Boolean(designName && !design);
+    const hasConfirmedAttribute = Boolean(
+      color || design || size || canCreateColor || canCreateDesign,
+    );
+
+    if (!hasConfirmedAttribute) return [];
+
+    usedImageIndexes.add(candidate.imageIndex);
+    return [
+      {
+        imageIndex: candidate.imageIndex,
+        colorName: color?.name ?? colorName,
+        colorHex,
+        colorId: color?.id ?? null,
+        colorSource: color
+          ? "existing"
+          : canCreateColor
+            ? "new"
+            : "not_detected",
+        designName: design?.name ?? designName,
+        designId: design?.id ?? null,
+        designSource: design
+          ? "existing"
+          : canCreateDesign
+            ? "new"
+            : "not_detected",
+        sizeName: size?.name ?? sizeName,
+        sizeId: size?.id ?? null,
+        evidence: cleanOptionalText(candidate.evidence, 180),
+      },
+    ];
+  });
 }
 
 function isValidGtin(value: string) {
@@ -307,6 +409,10 @@ export function sanitizeProductImageAnalysis(
   const shouldCreateVariants =
     output.variantRecommendation.shouldCreateVariants &&
     output.variantRecommendation.axes.length > 0;
+  const variantCandidates = shouldCreateVariants
+    ? sanitizeVariantCandidates(output, options)
+    : [];
+  const canReviewVariantCandidates = variantCandidates.length >= 2;
 
   return {
     suggestedBaseName: suggestedNameOptions[0] ?? null,
@@ -341,12 +447,13 @@ export function sanitizeProductImageAnalysis(
     gtin: sanitizeIdentifierSuggestion(output.gtin, cleanGtin),
     mpn: sanitizeIdentifierSuggestion(output.mpn, cleanMpn),
     variantRecommendation: {
-      shouldCreateVariants,
-      axes: shouldCreateVariants ? output.variantRecommendation.axes : [],
-      evidence: shouldCreateVariants
+      shouldCreateVariants: canReviewVariantCandidates,
+      axes: canReviewVariantCandidates ? output.variantRecommendation.axes : [],
+      evidence: canReviewVariantCandidates
         ? cleanOptionalText(output.variantRecommendation.evidence, 180)
         : null,
     },
+    variantCandidates,
     observations: output.observations
       .map((observation) => cleanOptionalText(observation, 180))
       .filter((observation): observation is string => Boolean(observation)),
@@ -392,6 +499,7 @@ Reglas obligatorias:
 - gtin solo puede contener el número completo cuando los dígitos se leen directamente junto al código de barras y el checksum GS1 es válido. No lo deduzcas de las barras, del nombre, ni de otra fuente. Incluye en evidence dónde se ve; de lo contrario usa null.
 - mpn solo puede contener una referencia del fabricante copiada exactamente cuando se lee completa en el empaque o producto. Incluye en evidence dónde se ve; de lo contrario usa null.
 - variantRecommendation solo debe indicar shouldCreateVariants true cuando las fotos demuestran opciones comprables distintas de color, diseño o tamaño. No confundas un set multicolor, un empaque decorado ni una foto de familia con variantes. axes puede usar solamente COLOR, DESIGN o SIZE y evidence debe explicar la evidencia.
+- variantCandidates se usa únicamente cuando variantRecommendation.shouldCreateVariants es true. Incluye una fila por foto que muestre una opción individual y comprable; imageIndex empieza en 0 y respeta el orden de las fotos. Para cada fila confirma solo color, diseño o tamaño visibles que distingan esa opción. Si una foto muestra varias opciones, un surtido, una familia o no identifica una variante individual, no incluyas esa foto. Nunca repitas imageIndex ni inventes atributos. Deben existir al menos dos filas distintas para recomendar variantes.
 - observations debe explicar de forma corta la evidencia visual útil. limitations debe mencionar qué no se puede confirmar.
 - Nunca sugieras SKU, precios, costos, stock, proveedor, descuentos ni atributos no visibles.
 - Esto es una propuesta para revisión humana: no hay ningún cambio automático.`;

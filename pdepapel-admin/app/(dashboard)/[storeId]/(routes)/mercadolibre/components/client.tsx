@@ -20,6 +20,7 @@ import {
   Rocket,
   Store,
 } from "lucide-react";
+import { MERCADOLIBRE_RECOVERY_INTERVAL_MINUTES } from "@/lib/mercadolibre/recovery-schedule";
 import { useParams, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
@@ -117,8 +118,7 @@ export default function MercadoLibreClient({
       }
       setQueueFeedback({
         type: "success",
-        message:
-          "La recuperación automática quedó activada. Actualiza esta página para confirmar el estado.",
+        message: `La programación quedó actualizada. QStash ejecutará la recuperación cada ${MERCADOLIBRE_RECOVERY_INTERVAL_MINUTES} minutos.`,
       });
     } catch (error) {
       setQueueFeedback({
@@ -298,9 +298,22 @@ export default function MercadoLibreClient({
                 </ul>
               </>
             ) : queueState === "active" ? (
-              <p className="text-success">
-                La recuperación automática está activa cada cinco minutos.
-              </p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-success">
+                  La recuperación automática está activa cada{" "}
+                  {MERCADOLIBRE_RECOVERY_INTERVAL_MINUTES} minutos.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void activateQueue()}
+                  disabled={isActivatingQueue}
+                >
+                  {isActivatingQueue
+                    ? "Actualizando…"
+                    : "Actualizar programación"}
+                </Button>
+              </div>
             ) : (
               <Button
                 type="button"

@@ -2,7 +2,12 @@
 
 import { cn } from "@/lib/utils";
 import { ProductNameAssistant } from "@/components/products/product-name-assistant";
+import {
+  ReviewProductVariantsModal,
+  type ProductVariantReviewPayload,
+} from "@/components/modals/review-product-variants-modal";
 import { PRODUCT_NAME_MAX_LENGTH } from "@/lib/product-naming";
+import type { ProductImageAnalysis } from "@/lib/product-image-analysis";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Eraser,
@@ -171,6 +176,9 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 
   const [open, setOpen] = useState(false);
   const [convertToVariantsOpen, setConvertToVariantsOpen] = useState(false);
+  const [reviewVariantsOpen, setReviewVariantsOpen] = useState(false);
+  const [variantReviewAnalysis, setVariantReviewAnalysis] =
+    useState<ProductImageAnalysis | null>(null);
   const [intakeOpen, setIntakeOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [recentColors, setRecentColors] = useState<CatalogColorOption[]>([]);
@@ -369,6 +377,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   const watchedDesignId = form.watch("designId");
   const watchedBrand = form.watch("brand");
   const watchedImages = form.watch("images");
+  const watchedStock = form.watch("stock");
 
   useEffect(() => {
     if (watchedGroupId) {
@@ -530,20 +539,66 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     [clearStorage, initialData, params.storeId, router, toast],
   );
 
-  const requestVariantConversion = useCallback(() => {
-    if (!initialData) return;
+  const onCreateReviewedVariants = useCallback(
+    async (payload: ProductVariantReviewPayload) => {
+      if (!initialData) return;
 
-    if (form.formState.isDirty) {
-      toast({
-        description:
-          "Guarda los cambios del producto antes de convertirlo en variantes.",
-        variant: "destructive",
-      });
-      return;
-    }
+      try {
+        setLoading(true);
+        const response = await axios.post<{ productGroupId: string }>(
+          `/api/${params.storeId}/${Models.Products}/${initialData.id}/convert-to-variants/review`,
+          payload,
+        );
 
-    setConvertToVariantsOpen(true);
-  }, [form.formState.isDirty, initialData, toast]);
+        clearStorage();
+        setReviewVariantsOpen(false);
+        setVariantReviewAnalysis(null);
+        toast({
+          description:
+            "Variantes creadas con el inventario distribuido y registrado.",
+          variant: "success",
+        });
+        router.push(
+          `/${params.storeId}/${Models.Products}/grupo/${response.data.productGroupId}`,
+        );
+      } catch (error) {
+        toast({
+          description: getErrorMessage(error),
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    },
+    [clearStorage, initialData, params.storeId, router, toast],
+  );
+
+  const requestVariantConversion = useCallback(
+    (analysis?: ProductImageAnalysis) => {
+      if (!initialData) return;
+
+      if (form.formState.isDirty) {
+        toast({
+          description:
+            "Guarda los cambios del producto antes de convertirlo en variantes.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (
+        analysis?.variantCandidates.length &&
+        analysis.variantCandidates.length >= 2
+      ) {
+        setVariantReviewAnalysis(analysis);
+        setReviewVariantsOpen(true);
+        return;
+      }
+
+      setConvertToVariantsOpen(true);
+    },
+    [form.formState.isDirty, initialData, toast],
+  );
 
   const availableColors = useMemo(
     () => [
@@ -694,6 +749,29 @@ export const ProductForm: React.FC<ProductFormProps> = ({
           onConfirm={onConvertToVariants}
         />
       )}
+      {initialData && (
+        <ReviewProductVariantsModal
+          analysis={variantReviewAnalysis}
+          colors={availableColors}
+          defaultName={initialData.name}
+          defaultVariant={{
+            colorId: watchedColorId,
+            designId: watchedDesignId,
+            sizeId: watchedSizeId,
+            stock: watchedStock,
+          }}
+          designs={availableDesigns}
+          imageUrls={watchedImages?.map((image) => image.url) ?? []}
+          isOpen={reviewVariantsOpen}
+          loading={loading}
+          onClose={() => {
+            setReviewVariantsOpen(false);
+            setVariantReviewAnalysis(null);
+          }}
+          onConfirm={onCreateReviewedVariants}
+          sizes={sizes}
+        />
+      )}
       <div className="flex items-center justify-between">
         <Heading title={title} description={description} />
         <div className="flex items-center gap-2">
@@ -702,7 +780,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               variant="outline"
               size="sm"
               type="button"
-              onClick={requestVariantConversion}
+              onClick={() => requestVariantConversion()}
               disabled={loading}
             >
               <Package className="mr-2 h-4 w-4" />

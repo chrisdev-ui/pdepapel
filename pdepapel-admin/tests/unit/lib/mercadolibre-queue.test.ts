@@ -13,6 +13,7 @@ import {
   getMercadoLibreSyncUrl,
   parseMercadoLibreQueueFailureCallback,
 } from "@/lib/mercadolibre/queue";
+import { MERCADOLIBRE_RECOVERY_INTERVAL_MINUTES } from "@/lib/mercadolibre/recovery-schedule";
 
 const queueEnvironment = {
   ADMIN_WEB_URL: "https://admin.papeleriapdepapel.com",
@@ -63,10 +64,13 @@ describe("Mercado Libre durable queue", () => {
       queueEnvironment,
     );
 
-    expect(MERCADOLIBRE_RECOVERY_CRON).toBe("*/15 * * * *");
+    expect(MERCADOLIBRE_RECOVERY_INTERVAL_MINUTES).toBe(15);
+    expect(MERCADOLIBRE_RECOVERY_CRON).toBe(
+      `*/${MERCADOLIBRE_RECOVERY_INTERVAL_MINUTES} * * * *`,
+    );
     expect(schedule).toMatchObject({
       destination: getMercadoLibreRecoveryUrl(queueEnvironment),
-      cron: "*/15 * * * *",
+      cron: `*/${MERCADOLIBRE_RECOVERY_INTERVAL_MINUTES} * * * *`,
       method: "POST",
       body: JSON.stringify({ connectionId: "connection-id" }),
       flowControl: {
