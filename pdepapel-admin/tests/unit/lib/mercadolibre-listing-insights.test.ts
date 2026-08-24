@@ -146,6 +146,7 @@ describe("Mercado Libre listing insights", () => {
   it("preserves a video recommendation reminder while editing listing media", () => {
     const metadata = buildMercadoLibreListingMetadata({
       current: {
+        familyName: "Agenda de estudio",
         media: { imageUrls: ["https://images.example.com/cover.jpg"] },
         quality: {
           videoRecommendationSnoozedUntil: "2026-09-07T00:00:00.000Z",
@@ -154,10 +155,12 @@ describe("Mercado Libre listing insights", () => {
       imageUrls: ["https://images.example.com/cover.jpg"],
     });
 
-    expect(
-      getMercadoLibreListingMetadata(metadata as unknown as Prisma.JsonValue)
-        .quality,
-    ).toEqual({
+    const parsed = getMercadoLibreListingMetadata(
+      metadata as unknown as Prisma.JsonValue,
+    );
+
+    expect(parsed.familyName).toBe("Agenda de estudio");
+    expect(parsed.quality).toEqual({
       videoRecommendationSnoozedUntil: "2026-09-07T00:00:00.000Z",
     });
   });

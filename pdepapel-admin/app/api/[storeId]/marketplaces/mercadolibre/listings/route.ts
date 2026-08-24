@@ -10,6 +10,7 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { isMercadoLibreCategoryId } from "@/lib/mercadolibre/categories";
 import {
   buildMercadoLibreListingMetadata,
+  normalizeMercadoLibreFamilyName,
   type MercadoLibreAttribute,
 } from "@/lib/mercadolibre/listing-metadata";
 import prismadb from "@/lib/prismadb";
@@ -56,6 +57,23 @@ function parseMinimumMargin(value: unknown) {
     );
   }
   return margin;
+}
+
+function parseFamilyName(value: unknown) {
+  if (value === undefined) return undefined;
+
+  const familyName = normalizeMercadoLibreFamilyName(value);
+  if (!familyName) {
+    throw ErrorFactory.InvalidRequest(
+      "Escribe un nombre de familia para Mercado Libre",
+    );
+  }
+  if (familyName.length > 120) {
+    throw ErrorFactory.InvalidRequest(
+      "El nombre de familia de Mercado Libre puede tener máximo 120 caracteres",
+    );
+  }
+  return familyName;
 }
 
 function parseAttributes(value: unknown): MercadoLibreAttribute[] {
@@ -216,12 +234,15 @@ export async function POST(
 
     const product = await prismadb.product.findFirst({
       where: { id: productId, storeId: params.storeId },
-      select: { id: true, images: { select: { url: true } } },
+      select: { id: true, name: true, images: { select: { url: true } } },
     });
     if (!product) throw ErrorFactory.NotFound("Producto no encontrado");
 
     const attributes = parseAttributes(body.attributes);
     const imageUrls = parseImageUrls(body.imageUrls);
+    const familyName =
+      parseFamilyName(body.familyName) ??
+      parseFamilyName(product.name);
     validateProductImageUrls(imageUrls, product.images);
 
     const listing = await prismadb.marketplaceListing.create({
@@ -241,6 +262,7 @@ export async function POST(
         metadata: buildMercadoLibreListingMetadata({
           current: null,
           attributes,
+          familyName,
           imageUrls,
         }),
       },

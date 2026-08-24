@@ -50,6 +50,7 @@ interface DataTableProps<TData, TValue> {
     }[];
   }[];
   onColumnFiltersChange?: (filters: ColumnFiltersState) => void;
+  bulkActions?: (table: Table<TData>) => React.ReactNode;
   // New opt-in controlled selection props
   rowSelection?: Record<string, boolean>;
   onRowSelectionChange?: (selection: Record<string, boolean>) => void;
@@ -62,6 +63,7 @@ export function DataTable<TData, TValue>({
   tableKey,
   filters,
   onColumnFiltersChange: onColumnFiltersChangeProp,
+  bulkActions,
   rowSelection: controlledRowSelection,
   onRowSelectionChange: controlledOnRowSelectionChange,
 }: DataTableProps<TData, TValue>) {
@@ -207,7 +209,11 @@ export function DataTable<TData, TValue>({
           <div className="hidden sm:block">
             <DataTableViewOptions table={table} model={tableKey} />
           </div>
-          <DataTableActionOptions table={table} model={tableKey} />
+          {bulkActions ? (
+            bulkActions(table)
+          ) : (
+            <DataTableActionOptions table={table} model={tableKey} />
+          )}
         </div>
       </div>
 

@@ -118,7 +118,7 @@ describe("Mercado Libre category helpers", () => {
           },
         },
         "MCO1234",
-        { title: "Agenda kawaii", price: 10_000, pictureCount: 1 },
+        { familyName: "Agenda kawaii", price: 10_000, pictureCount: 1 },
       ),
     ).toContain("máximo 10");
 
@@ -130,7 +130,7 @@ describe("Mercado Libre category helpers", () => {
           settings: { minimum_price: 5000 },
         },
         "MCO1234",
-        { title: "Agenda", price: 4000, pictureCount: 1 },
+        { familyName: "Agenda", price: 4000, pictureCount: 1 },
       ),
     ).toContain("mínimo 5000");
   });

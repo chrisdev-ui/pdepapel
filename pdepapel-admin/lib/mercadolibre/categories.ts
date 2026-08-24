@@ -16,7 +16,7 @@ export type MercadoLibreCategoryAttribute = {
 };
 
 export type MercadoLibreCategoryPublicationRequirements = {
-  title: string;
+  familyName: string;
   price: number;
   pictureCount: number;
 };
@@ -153,8 +153,11 @@ export function getMercadoLibreCategoryPublicationError(
   if (!requirements) return null;
 
   const maxTitleLength = getFiniteNumber(settings?.max_title_length);
-  if (maxTitleLength !== null && requirements.title.length > maxTitleLength) {
-    return `El título tiene ${requirements.title.length} caracteres y esta categoría permite máximo ${maxTitleLength}. Acórtalo antes de publicar.`;
+  if (
+    maxTitleLength !== null &&
+    requirements.familyName.length > maxTitleLength
+  ) {
+    return `El nombre de familia tiene ${requirements.familyName.length} caracteres y esta categoría permite máximo ${maxTitleLength}. Acórtalo antes de publicar.`;
   }
 
   const minimumPrice = getFiniteNumber(settings?.minimum_price);

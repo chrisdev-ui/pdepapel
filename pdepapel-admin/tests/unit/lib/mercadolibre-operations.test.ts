@@ -75,7 +75,11 @@ describe("Mercado Libre operations", () => {
     const review = createMercadoLibreContentReview({
       categoryId: "MCO123",
       marketplacePrice: 29900,
-      metadata: { attributes: [{ id: "COLOR", value_name: "Rosado" }] },
+      metadata: {
+        familyName: "Agenda kawaii",
+        media: { imageUrls: ["one"] },
+        attributes: [{ id: "COLOR", value_name: "Rosado" }],
+      },
       product: {
         name: "Agenda kawaii con flores",
         description:
@@ -88,6 +92,7 @@ describe("Mercado Libre operations", () => {
     });
 
     expect(review.checks.every((check) => check.ready)).toBe(true);
+    expect(review.familyName).toBe("Agenda kawaii");
     expect(review.descriptionPreview).toContain("Agenda con separadores");
   });
 });

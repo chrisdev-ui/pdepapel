@@ -13,6 +13,7 @@ import { Models, ModelsColumns } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { makeApiCall } from "@/lib/api";
 import { getErrorMessage } from "@/lib/api-errors";
+import { getDashboardApiRoute } from "@/lib/dashboard-api-routes";
 import { cn } from "@/lib/utils";
 import { OrderStatus, ShippingStatus } from "@prisma/client";
 import { Table } from "@tanstack/react-table";
@@ -28,7 +29,7 @@ import {
   StarOff,
   Trash,
 } from "lucide-react";
-import { useParams, usePathname, useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertModal } from "../modals/alert-modal";
 
@@ -87,18 +88,12 @@ const shippingStatusMap: Record<
   "mark-as-returned": ShippingStatus.Returned,
 };
 
-const MODEL_MAPPING: Partial<Record<Models, Models>> = {
-  [Models.LowStock]: Models.Products,
-  [Models.OutOfStock]: Models.Products,
-};
-
 export function DataTableActionOptions<TData>({
   table,
   model,
 }: DataTableActionOptionsProps<TData>) {
   const router = useRouter();
   const params = useParams();
-  const pathname = usePathname();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -145,10 +140,12 @@ export function DataTableActionOptions<TData>({
   const handleAction = async (action: Action) => {
     setIsLoading(true);
     try {
+      const apiRoute = getDashboardApiRoute(params.storeId as string, model);
+
       switch (action) {
         case "delete":
           await makeApiCall<{ ids: string[] }>(
-            `/${params.storeId}/${MODEL_MAPPING[model] || model}`,
+            apiRoute,
             "DELETE",
             {
               ids: table
@@ -170,7 +167,7 @@ export function DataTableActionOptions<TData>({
           await makeApiCall<{
             ids: string[];
             isArchived: boolean;
-          }>(`/${params.storeId}/${MODEL_MAPPING[model] || model}`, "PATCH", {
+          }>(apiRoute, "PATCH", {
             ids: table
               .getFilteredSelectedRowModel()
               .rows.map((row) => (row.original as { id: string }).id),
@@ -190,7 +187,7 @@ export function DataTableActionOptions<TData>({
           await makeApiCall<{
             ids: string[];
             isFeatured: boolean;
-          }>(`/${params.storeId}/${MODEL_MAPPING[model] || model}`, "PATCH", {
+          }>(apiRoute, "PATCH", {
             ids: table
               .getFilteredSelectedRowModel()
               .rows.map((row) => (row.original as { id: string }).id),
@@ -207,7 +204,7 @@ export function DataTableActionOptions<TData>({
           break;
         case "clear-images":
           await makeApiCall<{ ids: string[] }>(
-            `/${params.storeId}/${MODEL_MAPPING[model] || model}/clear-images`,
+            `${apiRoute}/clear-images`,
             "PATCH",
             {
               ids: table
@@ -238,7 +235,7 @@ export function DataTableActionOptions<TData>({
         case "mark-as-paid":
         case "mark-as-cancelled":
           await makeApiCall<{ ids: string[]; status: OrderStatus }>(
-            pathname,
+            apiRoute,
             "PATCH",
             {
               ids: table
@@ -262,7 +259,7 @@ export function DataTableActionOptions<TData>({
         case "mark-as-delivered":
         case "mark-as-returned":
           await makeApiCall<{ ids: string[]; shipping: ShippingStatus }>(
-            pathname,
+            apiRoute,
             "PATCH",
             {
               ids: table
@@ -282,7 +279,7 @@ export function DataTableActionOptions<TData>({
           break;
         case "invalidate":
           await makeApiCall<{ ids: string[] }>(
-            `/${params.storeId}/${model}`,
+            apiRoute,
             "PATCH",
             {
               ids: table

@@ -10,6 +10,7 @@ import {
 import {
   getMercadoLibreAttributes,
   getMercadoLibreListingImageUrls,
+  getMercadoLibreListingMetadata,
   type MercadoLibreAttribute,
 } from "./listing-metadata";
 
@@ -95,6 +96,9 @@ function getPublicationErrorMessage(payload: unknown) {
   const message = getApiErrorMessage(payload);
   const normalized = message.toLowerCase();
 
+  if (normalized.includes("family_name")) {
+    return "Mercado Libre necesita el nombre de familia. Vuelve a “Producto”, escribe un nombre genérico que agrupe sus variantes y vuelve a publicar.";
+  }
   if (normalized.includes("category")) {
     return "Mercado Libre rechazó la categoría seleccionada. Vuelve a “Categoría y fotos”, usa “Sugerir categoría” y elige una categoría final.";
   }
@@ -102,7 +106,7 @@ function getPublicationErrorMessage(payload: unknown) {
     return "Mercado Libre necesita datos de la ficha técnica. Vuelve a ese paso, actualiza los campos y completa los obligatorios.";
   }
   if (normalized.includes("title")) {
-    return "Mercado Libre rechazó el título. Revisa que describa el producto y cumpla el máximo de caracteres de su categoría.";
+    return "Mercado Libre rechazó el nombre de familia. Revisa que describa el producto y cumpla el máximo de caracteres de su categoría.";
   }
   if (normalized.includes("picture") || normalized.includes("image")) {
     return "Mercado Libre rechazó una foto. Revisa las imágenes seleccionadas y vuelve a intentar.";
@@ -170,10 +174,12 @@ function buildItemPayload(listing: ListingForPublication) {
       { requiresDraftReview: true },
     );
   }
-  const title = listing.product.name.trim();
-  if (!title) {
+  const familyName =
+    getMercadoLibreListingMetadata(listing.metadata).familyName ??
+    listing.product.name.trim();
+  if (!familyName) {
     throw new MercadoLibrePublicationError(
-      "El producto necesita un nombre antes de publicar",
+      "Escribe un nombre de familia antes de publicar",
       { requiresDraftReview: true },
     );
   }
@@ -200,7 +206,7 @@ function buildItemPayload(listing: ListingForPublication) {
 
   return {
     site_id: "MCO",
-    title,
+    family_name: familyName,
     category_id: listing.categoryId,
     price: listing.marketplacePrice,
     currency_id: "COP",
@@ -246,7 +252,7 @@ export async function validateMercadoLibreListingForPublication(
     categoryResult.payload,
     payload.category_id,
     {
-      title: payload.title,
+      familyName: payload.family_name,
       price: payload.price,
       pictureCount: payload.pictures.length,
     },

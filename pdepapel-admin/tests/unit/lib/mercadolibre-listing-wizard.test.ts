@@ -4,6 +4,7 @@ import { getListingWizardStepError } from "@/lib/mercadolibre/listing-wizard";
 
 const completeDraft = {
   productId: "product-1",
+  familyName: "Agenda kawaii",
   marketplacePrice: "35000",
   categoryId: "MCO123",
   imageUrls: ["https://example.com/product.jpg"],
@@ -23,6 +24,14 @@ describe("getListingWizardStepError", () => {
         productId: "",
       }),
     ).toBe("Selecciona el producto que vas a publicar");
+
+    expect(
+      getListingWizardStepError({
+        ...completeDraft,
+        step: 1,
+        familyName: "",
+      }),
+    ).toBe("Escribe el nombre de familia que verá Mercado Libre");
 
     expect(
       getListingWizardStepError({

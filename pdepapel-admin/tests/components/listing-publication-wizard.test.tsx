@@ -33,6 +33,7 @@ function WizardHarness({
 }) {
   const [form, setForm] = useState({
     productId: product.id,
+    familyName: "Lapicero kawaii",
     marketplacePrice: "24000",
     categoryId: "MCO123",
     stockSafetyBuffer: "0",
@@ -44,6 +45,7 @@ function WizardHarness({
 
   return (
     <ListingPublicationWizard
+      storeId="store-1"
       editing={false}
       canPublishDirectly
       form={form}
@@ -114,6 +116,9 @@ describe("ListingPublicationWizard", () => {
       screen.getByRole("spinbutton", { name: "Unidades de seguridad" }),
     ).toHaveValue("0");
     expect(screen.getByText(/Precio de la tienda en línea:/)).toBeVisible();
+    expect(
+      screen.getByLabelText("Nombre de familia en Mercado Libre"),
+    ).toHaveValue("Lapicero kawaii");
 
     fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
     expect(screen.getByLabelText("Categoría de Mercado Libre")).toBeVisible();
@@ -126,7 +131,7 @@ describe("ListingPublicationWizard", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
 
-    expect(screen.getByText("Lapicero kawaii")).toBeVisible();
+    expect(screen.getAllByText("Lapicero kawaii")).toHaveLength(2);
     expect(screen.getByText("Precio de la tienda en línea")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Publicar ahora" }));
 

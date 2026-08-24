@@ -8,6 +8,7 @@ export type ListingWizardCategoryAttribute = {
 export type ListingWizardValidationInput = {
   step: ListingWizardStep;
   productId: string;
+  familyName: string;
   marketplacePrice: string;
   categoryId: string;
   imageUrls: readonly string[];
@@ -33,6 +34,7 @@ function parseAttributeValues(value: string) {
 export function getListingWizardStepError({
   step,
   productId,
+  familyName,
   marketplacePrice,
   categoryId,
   imageUrls,
@@ -41,6 +43,12 @@ export function getListingWizardStepError({
 }: ListingWizardValidationInput) {
   if (step === 1) {
     if (!productId) return "Selecciona el producto que vas a publicar";
+    if (!familyName.trim()) {
+      return "Escribe el nombre de familia que verá Mercado Libre";
+    }
+    if (familyName.trim().length > 120) {
+      return "El nombre de familia puede tener máximo 120 caracteres";
+    }
     if (
       !Number.isFinite(Number(marketplacePrice)) ||
       Number(marketplacePrice) <= 0

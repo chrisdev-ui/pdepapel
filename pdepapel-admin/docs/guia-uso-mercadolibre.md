@@ -27,6 +27,7 @@ Haz esta revisión una vez y cada vez que agregues productos nuevos:
 ### Paso 1: producto, precio y stock
 
 - Confirma que escogiste el producto correcto mirando su foto y nombre.
+- Revisa el **Nombre de familia en Mercado Libre**. Es el nombre común del artículo, sin color, talla ni diseño. Mercado Libre usa ese dato para completar el título de la publicación.
 - Escribe el precio para Mercado Libre. El precio de la tienda es solo una referencia y no se cambia.
 - Si aparece un valor sugerido, tómalo como una ayuda. Revísalo y cámbialo si es necesario.
 - Define la **reserva de seguridad**. Normalmente 1 unidad funciona bien para productos con pocas existencias.
@@ -34,12 +35,15 @@ Haz esta revisión una vez y cada vez que agregues productos nuevos:
 
 **Ejemplo sencillo:** un producto cuesta $10.000 y quieres recibir al menos $6.000 de utilidad después del cargo estimado de Mercado Libre. La sugerencia de precio intenta cubrir esos $16.000 y el cargo estimado. Los valores finales de envío, impuestos, descuentos o devoluciones pueden cambiar lo que realmente recibes.
 
+**Ejemplo de nombre de familia:** para un termo rojo, uno lila y uno negro, escribe `Termo Owala FreeSip`. No escribas `Termo Owala FreeSip rojo`; el color se completa como una característica de la variación.
+
 ### Paso 2: categoría y fotos
 
 1. Pulsa **Sugerir categoría** y escoge la categoría que mejor describa el producto.
 2. Revisa las fotos. La primera será la foto principal.
 3. Deja seleccionadas solo fotos que correspondan exactamente al artículo y muestren bien color, tamaño o contenido.
-4. Si falta una foto, sal a **Productos**, agrégala y vuelve a preparar la publicación.
+4. Se necesita al menos **una** foto para publicar. Procura usar **tres o más** (frente, detalle y contenido) para que la clienta tenga más confianza.
+5. Si no hay fotos, usa **Agregar fotos**: abrirá el producto en una pestaña nueva. Carga las fotos, guarda el producto y vuelve al asistente para continuar.
 
 **Consejo:** una foto clara del producto completo suele ser mejor portada que una foto con muchos artículos diferentes.
 
@@ -48,7 +52,8 @@ Haz esta revisión una vez y cada vez que agregues productos nuevos:
 1. Completa los datos que Mercado Libre pida, por ejemplo marca, color, material, medida o unidades.
 2. Escribe datos reales. No inventes medidas, marca o características.
 3. Si ves información que no aplica, no la uses solo para completar el formulario.
-4. Pulsa **Revisar contenido** si quieres una lista de cosas para comprobar. Esta revisión no cambia ni publica nada.
+4. Pulsa **Actualizar campos** después de escoger o cambiar la categoría. Si el aviso dice que no hay campos adicionales, ese paso ya está listo: no es un error ni hay nada más que llenar.
+5. Pulsa **Revisar contenido** si quieres una lista de cosas para comprobar. Esta revisión no cambia ni publica nada.
 
 ### Paso 4: revisar y decidir
 
@@ -86,9 +91,10 @@ Un perfil rápido **no publica productos por sí solo** y tampoco modifica publi
 En la lista de publicaciones puedes:
 
 - **Editar:** cambiar precio, reserva, fotos o datos antes de enviar una actualización.
+- **Eliminar borrador:** borrar un intento que nunca llegó a publicarse. Solo aparece para borradores o errores sin ventas ni preguntas; no elimina publicaciones que ya estén en Mercado Libre.
 - **Sincronizar contenido:** enviar las fotos, descripción y datos seleccionados a Mercado Libre. Revisa la confirmación porque reemplaza esos datos allá.
 - **Pausar o activar:** dejar de ofrecer temporalmente una publicación o volver a ofrecerla.
-- **Revisar calidad:** ver sugerencias sobre fotos, título, datos o condiciones. Tú decides si aplicarlas.
+- **Revisar calidad:** ver sugerencias sobre fotos, nombre de familia, datos o condiciones. Tú decides si aplicarlas.
 - **Acciones masivas:** marcar hasta 20 publicaciones y confirmar una misma acción para todas. Úsalo solo cuando los productos sean parecidos y ya los hayas revisado uno por uno.
 
 **Regla de oro:** una publicación de Mercado Libre no se actualiza sola por cambiar una foto o una descripción en P de Papel. Usa **Sincronizar contenido** cuando realmente quieras enviar ese cambio.
@@ -194,6 +200,9 @@ No concilies una venta antigua si ya creaste una venta manual o ya ajustaste el 
 | No aparece el botón para publicar           | Guarda el producto, revisa que tenga fotos y vuelve a entrar. Si continúa, avisa a la persona responsable de la administración. |
 | El precio sugerido no me convence           | Cámbialo. Es una ayuda, no una obligación.                                                                                      |
 | El producto no tiene una categoría adecuada | Busca una categoría más específica en el selector; no publiques hasta estar conforme.                                           |
+| Mercado Libre pide “nombre de familia”       | En **Editar**, escribe el nombre común del producto sin color, talla ni diseño; guarda y vuelve a publicar.                    |
+| El paso “Ficha técnica” no muestra campos    | Pulsa **Actualizar campos**. Si dice que no hay campos adicionales, continúa: esa categoría no exige más datos.                |
+| Me quedó un borrador que no usaré            | Usa **Eliminar borrador**. Solo borra intentos locales sin publicar, sin ventas y sin preguntas.                               |
 | Una venta no aparece al instante            | Espera unos minutos y actualiza la sección. No crees una venta manual mientras revisas.                                         |
 | No puedo relacionar una publicación vieja   | Elige el producto local manualmente o déjala sin vincular hasta confirmar cuál es.                                              |
 | Una publicación muestra poco stock          | Revisa el inventario real y la reserva de seguridad. Nunca aumentes la cantidad solo para que vuelva a estar activa.            |
@@ -213,9 +222,10 @@ No concilies una venta antigua si ya creaste una venta manual o ya ajustaste el 
 Marca cada punto antes de pulsar **Publicar ahora**:
 
 - [ ] El producto local es el correcto.
+- [ ] El nombre de familia describe el producto base, sin color, talla ni diseño.
 - [ ] El precio corresponde a Mercado Libre.
 - [ ] La reserva de seguridad protege el inventario.
-- [ ] La primera foto muestra bien el producto.
+- [ ] Hay al menos una foto y la primera muestra bien el producto.
 - [ ] La categoría y los datos describen el artículo real.
 - [ ] Revisé que las variantes, colores, tamaños o cantidades sean correctos.
 - [ ] Elegí publicar ahora o guardar borrador de manera consciente.

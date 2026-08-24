@@ -89,6 +89,7 @@ This section records the important recent decisions and must be updated after fu
 ### Previously completed product decisions
 
 - Public routes are Spanish canonical routes; old English routes redirect permanently.
+- Dashboard pages are also Spanish-first, but their REST resources remain the established English API names (for example, `/pedidos` uses `/api/{storeId}/orders`). Client mutations must resolve the endpoint from a stable resource/model mapping, never from `usePathname()` or another visible dashboard route.
 - Product pages use slugs rather than product IDs. Product slug generation must add differentiators such as color/size **only when they are required to distinguish real sibling variants**. Do not create redundant slugs such as repeating a product name when there is no variant reason.
 - Product and category slug aliases preserve old links. Never delete alias logic merely because the current canonical slug changed.
 - Categories can be SEO-enabled and optionally featured. Their cards use category imagery and must retain an accessible high-contrast label treatment; white text directly over light imagery is not acceptable.
@@ -870,7 +871,15 @@ When user approval is granted:
 - `pdepapel-admin/docs/conciliar-inventario-feria-anterior.md` — previous-fair inventory reconciliation guide.
 - `pdepapel-admin/docs/reportes-tributarios.md` — tax export and supplier-invoice rules.
 
-## 20. Definition of done for an agent task
+## 20. Mercado Libre listing publication requirements
+
+- Mercado Libre MCO listings use `family_name` instead of sending a `title`. Store the editable generic product name in `MarketplaceListing.metadata.familyName`; it must not include variable-specific color, size, or design.
+- Existing listings without `metadata.familyName` safely fall back to the local product name when publishing. The listing wizard exposes the field before a draft is created or published.
+- One valid product image is the publishing minimum; three or more are a non-blocking quality recommendation. Only selected image URLs that belong to the local product can be sent.
+- The technical-data step must explicitly explain when a category has no additional required attributes. Publishing remains prevalidated against the category and required attributes.
+- A local `DRAFT` or `ERROR` listing may be deleted only before it has an external Mercado Libre item and only with no linked order items or questions. Delete linked outbox events in the same transaction.
+
+## 21. Definition of done for an agent task
 
 Do not call a task complete merely because code compiles locally. For a production-impacting change, completion means:
 

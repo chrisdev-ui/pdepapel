@@ -1,10 +1,13 @@
 import { auth } from "@clerk/nextjs";
-import { Prisma } from "@prisma/client";
+import { MarketplaceListingStatus, Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { isMercadoLibreCategoryId } from "@/lib/mercadolibre/categories";
-import { buildMercadoLibreListingMetadata } from "@/lib/mercadolibre/listing-metadata";
+import {
+  buildMercadoLibreListingMetadata,
+  normalizeMercadoLibreFamilyName,
+} from "@/lib/mercadolibre/listing-metadata";
 import {
   enqueuePendingMarketplaceOutboxEvents,
   queueMarketplacePriceSyncEvent,
@@ -79,6 +82,23 @@ function parseImageUrls(value: unknown) {
   return imageUrls;
 }
 
+function parseFamilyName(value: unknown) {
+  if (value === undefined) return undefined;
+
+  const familyName = normalizeMercadoLibreFamilyName(value);
+  if (!familyName) {
+    throw ErrorFactory.InvalidRequest(
+      "Escribe un nombre de familia para Mercado Libre",
+    );
+  }
+  if (familyName.length > 120) {
+    throw ErrorFactory.InvalidRequest(
+      "El nombre de familia de Mercado Libre puede tener máximo 120 caracteres",
+    );
+  }
+  return familyName;
+}
+
 export async function PATCH(
   request: Request,
   { params }: { params: { storeId: string; listingId: string } },
@@ -109,6 +129,7 @@ export async function PATCH(
     const body = (await request.json()) as Record<string, unknown>;
     const data: Prisma.MarketplaceListingUpdateInput = {};
     const imageUrls = parseImageUrls(body.imageUrls);
+    const familyName = parseFamilyName(body.familyName);
     if (imageUrls) {
       const productImageUrls = new Set(
         listing.product.images.map((image) => image.url),
@@ -187,12 +208,17 @@ export async function PATCH(
       }
       data.syncPrice = body.syncPrice;
     }
-    if (body.attributes !== undefined || imageUrls !== undefined) {
+    if (
+      body.attributes !== undefined ||
+      familyName !== undefined ||
+      imageUrls !== undefined
+    ) {
       data.metadata = buildMercadoLibreListingMetadata({
         current: listing.metadata,
         ...(body.attributes !== undefined
           ? { attributes: parseAttributes(body.attributes) }
           : {}),
+        ...(familyName !== undefined ? { familyName } : {}),
         ...(imageUrls !== undefined ? { imageUrls } : {}),
       });
     }
@@ -230,6 +256,59 @@ export async function PATCH(
     });
   } catch (error) {
     return handleErrorResponse(error, "MERCADOLIBRE_LISTING_PATCH", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
+  }
+}
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: { storeId: string; listingId: string } },
+) {
+  try {
+    const { userId } = auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    await verifyStoreOwner(userId, params.storeId);
+
+    const listing = await prismadb.marketplaceListing.findFirst({
+      where: {
+        id: params.listingId,
+        connection: { storeId: params.storeId },
+      },
+      select: {
+        id: true,
+        externalItemId: true,
+        status: true,
+        _count: { select: { orderItems: true, questions: true } },
+      },
+    });
+    if (!listing) throw ErrorFactory.NotFound("Publicación no encontrada");
+
+    const canDeleteDraft =
+      !listing.externalItemId &&
+      (listing.status === MarketplaceListingStatus.DRAFT ||
+        listing.status === MarketplaceListingStatus.ERROR) &&
+      listing._count.orderItems === 0 &&
+      listing._count.questions === 0;
+    if (!canDeleteDraft) {
+      throw ErrorFactory.InvalidRequest(
+        "Solo puedes eliminar borradores sin publicar y sin ventas o preguntas asociadas",
+      );
+    }
+
+    await prismadb.$transaction([
+      prismadb.marketplaceOutboxEvent.deleteMany({
+        where: { listingId: listing.id },
+      }),
+      prismadb.marketplaceListing.delete({ where: { id: listing.id } }),
+    ]);
+
+    return new NextResponse(null, {
+      status: 204,
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
+  } catch (error) {
+    return handleErrorResponse(error, "MERCADOLIBRE_LISTING_DELETE", {
       headers: CACHE_HEADERS.NO_CACHE,
     });
   }

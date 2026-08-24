@@ -66,6 +66,7 @@ describe("Mercado Libre listing publication", () => {
           marketplacePrice: 19_900,
           stockSafetyBuffer: 2,
           metadata: {
+            familyName: "Agenda kawaii",
             attributes: [{ id: "COLOR", value_name: "Rosado" }],
           },
           product: {
@@ -102,6 +103,7 @@ describe("Mercado Libre listing publication", () => {
     const itemRequest = request.mock.calls[2];
     expect(itemRequest[0]).toBe("https://api.mercadolibre.com/items");
     expect(JSON.parse(itemRequest[1].body)).toMatchObject({
+      family_name: "Agenda kawaii",
       category_id: "MCO1234",
       price: 19_900,
       available_quantity: 3,
@@ -113,11 +115,68 @@ describe("Mercado Libre listing publication", () => {
         { id: "GTIN", value_name: "7701234567890" },
       ]),
     });
+    expect(JSON.parse(itemRequest[1].body)).not.toHaveProperty("title");
     expect(request.mock.calls[3][0]).toBe(
       "https://api.mercadolibre.com/items/MCO123/description",
     );
     expect(JSON.parse(request.mock.calls[3][1].body)).toEqual({
       plain_text: "Agenda kawaii",
+    });
+  });
+
+  it("uses the product name as a safe family-name fallback for existing drafts", async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: "MCO1234",
+            children_categories: [],
+            settings: { listing_allowed: true, item_conditions: ["new"] },
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: "MCO123",
+            permalink: "https://mercadolibre.com.co/MCO123",
+            status: "active",
+          }),
+          { status: 201 },
+        ),
+      )
+      .mockResolvedValueOnce(new Response("{}", { status: 201 }));
+
+    await publishMercadoLibreListing(
+      {
+        id: "listing-id",
+        connectionId: "connection-id",
+        categoryId: "MCO1234",
+        listingType: "gold_special",
+        marketplacePrice: 19_900,
+        stockSafetyBuffer: 0,
+        metadata: { attributes: [] },
+        product: {
+          id: "product-id",
+          name: "Agenda kawaii",
+          description: "",
+          stock: 5,
+          sku: "AGENDA-01",
+          brand: null,
+          gtin: null,
+          mpn: null,
+          isArchived: false,
+          images: [{ url: "https://images.example.com/agenda.jpg" }],
+        },
+      },
+      request,
+    );
+
+    expect(JSON.parse(request.mock.calls[2][1].body)).toMatchObject({
+      family_name: "Agenda kawaii",
     });
   });
 

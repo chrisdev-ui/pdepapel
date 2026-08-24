@@ -43,6 +43,7 @@ import {
   Pencil,
   Plus,
   Sparkles,
+  Trash2,
   UploadCloud,
   Video,
 } from "lucide-react";
@@ -97,6 +98,7 @@ type Listing = {
   metadata: {
     attributes?: MarketplaceAttribute[];
     media?: { imageUrls?: string[] };
+    familyName?: string;
   } | null;
   product: ProductReference;
 };
@@ -120,6 +122,7 @@ type CategorySuggestion = {
 
 type ListingForm = {
   productId: string;
+  familyName: string;
   marketplacePrice: string;
   categoryId: string;
   stockSafetyBuffer: string;
@@ -188,8 +191,8 @@ type ListingQuality = {
 };
 
 type ContentReview = {
-  title: string;
-  titleLength: number;
+  familyName: string;
+  familyNameLength: number;
   descriptionPreview: string;
   checks: { label: string; ready: boolean; detail: string }[];
 };
@@ -226,6 +229,7 @@ type ImportSelection = {
 
 const emptyForm: ListingForm = {
   productId: "",
+  familyName: "",
   marketplacePrice: "",
   categoryId: "",
   stockSafetyBuffer: "0",
@@ -337,6 +341,7 @@ export function MercadoLibreListingManager({
   const [selectedProduct, setSelectedProduct] =
     useState<SelectedProduct | null>(null);
   const [publishingId, setPublishingId] = useState<string | null>(null);
+  const [deletingDraftId, setDeletingDraftId] = useState<string | null>(null);
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(
     null,
   );
@@ -456,6 +461,7 @@ export function MercadoLibreListingManager({
     setEditingListing(listing);
     setForm({
       productId: listing.product.id,
+      familyName: listing.metadata?.familyName ?? listing.product.name,
       marketplacePrice: String(listing.marketplacePrice ?? ""),
       categoryId: listing.categoryId ?? "",
       stockSafetyBuffer: String(listing.stockSafetyBuffer),
@@ -833,6 +839,7 @@ export function MercadoLibreListingManager({
     setForm((current) => ({
       ...current,
       productId,
+      familyName: selected?.name ?? "",
       marketplacePrice: initialMarketplacePrice,
       categoryId: profile?.categoryId ?? "",
       stockSafetyBuffer: String(profile?.stockSafetyBuffer ?? 0),
@@ -991,6 +998,7 @@ export function MercadoLibreListingManager({
     try {
       const attributes = parseAttributes(form.attributes);
       const payload = {
+        familyName: form.familyName,
         marketplacePrice: form.marketplacePrice,
         categoryId: form.categoryId,
         stockSafetyBuffer: form.stockSafetyBuffer,
@@ -1092,6 +1100,39 @@ export function MercadoLibreListingManager({
       );
     } finally {
       setPublishingId(null);
+    }
+  };
+
+  const deleteDraft = async (listing: Listing) => {
+    if (
+      !(await requestConfirmation({
+        title: "¿Eliminar este borrador?",
+        description:
+          "Se eliminará solo de Administración. No se puede recuperar y no afecta publicaciones ya activas en Mercado Libre.",
+        confirmLabel: "Eliminar borrador",
+        destructive: true,
+      }))
+    ) {
+      return;
+    }
+
+    setDeletingDraftId(listing.id);
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/${storeId}/marketplaces/mercadolibre/listings/${listing.id}`,
+        { method: "DELETE" },
+      );
+      if (!response.ok) throw new Error(await getErrorMessage(response));
+      await loadListings();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "No fue posible eliminar el borrador",
+      );
+    } finally {
+      setDeletingDraftId(null);
     }
   };
 
@@ -1790,7 +1831,7 @@ export function MercadoLibreListingManager({
                             Revisión de contenido
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Título: {contentReview.titleLength} caracteres ·{" "}
+                            Nombre de familia: {contentReview.familyNameLength} caracteres ·{" "}
                             {contentReview.descriptionPreview ||
                               "Sin descripción visible"}
                           </p>
@@ -1833,6 +1874,22 @@ export function MercadoLibreListingManager({
                       <Pencil className="mr-2 h-4 w-4" />
                       Editar
                     </Button>
+                    {!listing.externalItemId &&
+                    (listing.status === "DRAFT" || listing.status === "ERROR") ? (
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        onClick={() => void deleteDraft(listing)}
+                        disabled={deletingDraftId === listing.id}
+                      >
+                        {deletingDraftId === listing.id ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="mr-2 h-4 w-4" />
+                        )}
+                        Eliminar borrador
+                      </Button>
+                    ) : null}
                     <Button
                       type="button"
                       variant="outline"
@@ -1916,6 +1973,7 @@ export function MercadoLibreListingManager({
           </DialogHeader>
           <ListingPublicationWizard
             key={editingListing?.id ?? "new-listing"}
+            storeId={storeId}
             editing={Boolean(editingListing)}
             canPublishDirectly={canPublish && !editingListing?.externalItemId}
             form={form}

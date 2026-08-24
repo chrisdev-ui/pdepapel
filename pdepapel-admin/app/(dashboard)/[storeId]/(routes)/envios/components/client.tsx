@@ -12,6 +12,7 @@ import { Download, Edit, RefreshCw } from "lucide-react"; // Added imports
 import { useParams, useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import { BulkManualUpdateModal } from "./bulk-manual-update-modal"; // New Component
+import { BulkActions } from "./bulk-actions";
 import { ShipmentColumn, columns } from "./columns";
 import { ShipmentFilters } from "./shipment-filters";
 
@@ -143,6 +144,7 @@ const ShipmentsClient: React.FC<ShipmentsClientProps> = ({ data }) => {
         searchKey="trackingCode"
         columns={columns}
         data={data}
+        bulkActions={(table) => <BulkActions table={table} />}
       />
       <Heading title="API" description="API calls para los envíos" />
       <Separator />

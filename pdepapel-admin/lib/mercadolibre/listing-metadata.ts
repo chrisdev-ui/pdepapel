@@ -8,6 +8,7 @@ export type MercadoLibreAttribute = {
 
 export type MercadoLibreListingMetadata = {
   attributes: MercadoLibreAttribute[];
+  familyName: string | null;
   media: {
     imageUrls: string[];
   } | null;
@@ -37,6 +38,12 @@ function getIsoDate(value: unknown) {
 
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+export function normalizeMercadoLibreFamilyName(value: unknown) {
+  return typeof value === "string" && value.trim()
+    ? value.trim().replace(/\s+/g, " ")
+    : null;
 }
 
 export function getMercadoLibreAttributes(
@@ -76,12 +83,16 @@ export function getMercadoLibreListingMetadata(
   const quality =
     isRecord(value) && isRecord(value.quality) ? value.quality : null;
   const imageUrls = media ? getStringArray(media.imageUrls) : [];
+  const familyName = isRecord(value)
+    ? normalizeMercadoLibreFamilyName(value.familyName)
+    : null;
   const videoRecommendationSnoozedUntil = quality
     ? getIsoDate(quality.videoRecommendationSnoozedUntil)
     : null;
 
   return {
     attributes: getMercadoLibreAttributes(value),
+    familyName,
     media: imageUrls.length > 0 ? { imageUrls } : null,
     quality: videoRecommendationSnoozedUntil
       ? { videoRecommendationSnoozedUntil }
@@ -92,11 +103,13 @@ export function getMercadoLibreListingMetadata(
 export function buildMercadoLibreListingMetadata({
   current,
   attributes,
+  familyName,
   imageUrls,
   videoRecommendationSnoozedUntil,
 }: {
   current: Prisma.JsonValue | null;
   attributes?: MercadoLibreAttribute[];
+  familyName?: string | null;
   imageUrls?: string[];
   videoRecommendationSnoozedUntil?: string | null;
 }): Prisma.InputJsonValue {
@@ -109,9 +122,14 @@ export function buildMercadoLibreListingMetadata({
     videoRecommendationSnoozedUntil === undefined
       ? currentMetadata.quality?.videoRecommendationSnoozedUntil
       : getIsoDate(videoRecommendationSnoozedUntil);
+  const normalizedFamilyName =
+    familyName === undefined
+      ? currentMetadata.familyName
+      : normalizeMercadoLibreFamilyName(familyName);
 
   return {
     attributes: attributes ?? currentMetadata.attributes,
+    ...(normalizedFamilyName ? { familyName: normalizedFamilyName } : {}),
     ...(normalizedImages?.length
       ? { media: { imageUrls: normalizedImages } }
       : {}),

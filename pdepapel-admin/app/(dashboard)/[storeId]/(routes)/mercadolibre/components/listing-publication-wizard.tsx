@@ -36,6 +36,7 @@ import { useState, type Dispatch, type SetStateAction } from "react";
 
 export type ListingPublicationForm = {
   productId: string;
+  familyName: string;
   marketplacePrice: string;
   categoryId: string;
   stockSafetyBuffer: string;
@@ -95,6 +96,7 @@ export type ListingPublicationPriceEstimate = {
 };
 
 type ListingPublicationWizardProps = {
+  storeId: string;
   editing: boolean;
   canPublishDirectly: boolean;
   form: ListingPublicationForm;
@@ -189,6 +191,7 @@ function updateAttributeValue(
 }
 
 export function ListingPublicationWizard({
+  storeId,
   editing,
   canPublishDirectly,
   form,
@@ -262,6 +265,7 @@ export function ListingPublicationWizard({
     const validationError = getListingWizardStepError({
       step,
       productId: form.productId,
+      familyName: form.familyName,
       marketplacePrice: form.marketplacePrice,
       categoryId: form.categoryId,
       imageUrls: form.imageUrls,
@@ -342,6 +346,25 @@ export function ListingPublicationWizard({
                 </p>
               </div>
             ) : null}
+            <div className="grid gap-2 pt-1">
+              <Label htmlFor="mercadolibre-family-name">
+                Nombre de familia en Mercado Libre
+              </Label>
+              <Input
+                id="mercadolibre-family-name"
+                value={form.familyName}
+                onChange={(event) =>
+                  onFormChange("familyName", event.target.value)
+                }
+                placeholder="Ej. Termo Owala"
+                maxLength={120}
+              />
+              <p className="text-xs text-muted-foreground">
+                Es el nombre común de todas las variaciones. Usa el producto
+                base sin color, talla o diseño; Mercado Libre completa el título
+                final de la publicación.
+              </p>
+            </div>
             {quickProfile ? (
               <div className="rounded-md border border-primary/20 bg-primary/[0.03] p-3 text-sm">
                 <p className="font-medium">
@@ -552,7 +575,8 @@ export function ListingPublicationWizard({
               <div>
                 <p className="text-sm font-medium">Fotos para Mercado Libre</p>
                 <p className="text-xs text-muted-foreground">
-                  Elige las fotos que se enviarán. La primera será la portada.
+                  Selecciona al menos una para publicar. Tres o más ayudan a la
+                  clienta a conocer mejor el producto. La primera será la portada.
                 </p>
               </div>
               <Badge variant="secondary">
@@ -639,10 +663,23 @@ export function ListingPublicationWizard({
                 ) : null}
               </>
             ) : (
-              <p className="text-sm text-destructive">
-                Este producto no tiene imágenes. Agrégalas desde Productos antes
-                de publicar.
-              </p>
+              <div className="flex flex-wrap items-center gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
+                <p className="flex-1 text-destructive">
+                  Este producto no tiene imágenes. Agrega al menos una antes de
+                  publicar.
+                </p>
+                {selectedProduct ? (
+                  <Button asChild type="button" size="sm" variant="outline">
+                    <a
+                      href={`/${storeId}/productos/${selectedProduct.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Agregar fotos
+                    </a>
+                  </Button>
+                ) : null}
+              </div>
             )}
           </div>
         </div>
@@ -669,6 +706,24 @@ export function ListingPublicationWizard({
               ) : null}
               Actualizar campos
             </Button>
+          </div>
+          <div className="rounded-md border border-dashed bg-background/60 p-3 text-sm" aria-live="polite">
+            {isLoadingCategoryAttributes ? (
+              <p className="text-muted-foreground">
+                Consultando los campos obligatorios de Mercado Libre…
+              </p>
+            ) : requiredAttributes.length > 0 ? (
+              <p>
+                Mercado Libre pidió {requiredAttributes.length} campo
+                {requiredAttributes.length === 1 ? "" : "s"} obligatorio
+                {requiredAttributes.length === 1 ? "" : "s"} para esta categoría.
+              </p>
+            ) : (
+              <p className="text-muted-foreground">
+                Esta categoría no tiene campos obligatorios adicionales. Puedes
+                continuar después de revisar la información opcional.
+              </p>
+            )}
           </div>
           {form.categoryId ? (
             <div className="flex flex-col gap-2 rounded-md border border-dashed bg-background/60 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
@@ -844,6 +899,12 @@ export function ListingPublicationWizard({
             </p>
             <p>
               <span className="block text-xs text-muted-foreground">
+                Nombre de familia en Mercado Libre
+              </span>
+              <span className="font-medium">{form.familyName}</span>
+            </p>
+            <p>
+              <span className="block text-xs text-muted-foreground">
                 Precio de la tienda en línea
               </span>
               <span className="font-medium">
@@ -894,6 +955,13 @@ export function ListingPublicationWizard({
               <span className="font-medium">
                 {form.imageUrls.length} seleccionada
                 {form.imageUrls.length === 1 ? "" : "s"}
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                {form.imageUrls.length === 0
+                  ? "Falta al menos una foto para publicar."
+                  : form.imageUrls.length < 3
+                    ? "Puedes publicar; agregar más fotos mejora la confianza."
+                    : "Cantidad recomendada para mostrar el producto."}
               </span>
             </p>
             <p>
