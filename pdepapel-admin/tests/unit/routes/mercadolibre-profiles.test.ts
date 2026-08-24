@@ -83,6 +83,36 @@ describe("Mercado Libre publication profiles routes", () => {
     );
   });
 
+  it("defaults new profile safety stock to zero when it is omitted", async () => {
+    mocks.auth.mockReturnValue({ userId: "owner-id" });
+    mocks.findCategory.mockResolvedValue({ id: "local-category-id" });
+    mocks.upsertProfile.mockResolvedValue({
+      id: "profile-id",
+      localCategoryId: "local-category-id",
+    });
+
+    const response = await POST(
+      new Request("https://admin.example.com", {
+        method: "POST",
+        body: JSON.stringify({
+          localCategoryId: "local-category-id",
+          categoryId: "MCO123",
+          name: "Lapiceros · Mercado Libre",
+          attributes: [{ id: "BRAND", value_name: "P de Papel" }],
+        }),
+      }),
+      { params: { storeId: "store-id" } },
+    );
+
+    expect(response.status).toBe(201);
+    expect(mocks.upsertProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ stockSafetyBuffer: 0 }),
+        update: expect.objectContaining({ stockSafetyBuffer: 0 }),
+      }),
+    );
+  });
+
   it("rejects a profile with a category code outside Mercado Libre Colombia", async () => {
     mocks.auth.mockReturnValue({ userId: "owner-id" });
 

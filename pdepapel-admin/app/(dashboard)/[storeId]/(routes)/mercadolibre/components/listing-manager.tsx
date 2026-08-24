@@ -228,7 +228,7 @@ const emptyForm: ListingForm = {
   productId: "",
   marketplacePrice: "",
   categoryId: "",
-  stockSafetyBuffer: "1",
+  stockSafetyBuffer: "0",
   minimumMarginAmount: "",
   syncPrice: true,
   imageUrls: [],
@@ -752,6 +752,69 @@ export function MercadoLibreListingManager({
     }
   };
 
+  const suggestPriceFromTarget = async () => {
+    if (!selectedProduct) {
+      setError("Selecciona un producto antes de calcular su precio");
+      return;
+    }
+    if (!form.categoryId.trim()) {
+      setError("Selecciona una categoría de Mercado Libre antes de calcular");
+      return;
+    }
+    if (selectedProduct.acqPrice === null) {
+      setError(
+        "Registra el costo de adquisición del producto para calcular la ganancia objetivo",
+      );
+      return;
+    }
+    const targetProfit = Number(form.minimumMarginAmount);
+    if (
+      !form.minimumMarginAmount.trim() ||
+      !Number.isFinite(targetProfit) ||
+      targetProfit < 0
+    ) {
+      setError("Escribe una ganancia objetivo válida antes de calcular");
+      return;
+    }
+
+    setIsSuggestingPrice(true);
+    setError(null);
+    try {
+      const initialPrice = Number(form.marketplacePrice);
+      const recommendation = await recommendMercadoLibreListingPrice({
+        acquisitionCost: selectedProduct.acqPrice,
+        targetProfit,
+        initialPrice:
+          Number.isFinite(initialPrice) && initialPrice > 0
+            ? initialPrice
+            : selectedProduct.price,
+        getFeeQuote: (price) => getPriceEstimate(price, form.categoryId),
+      });
+      if (!recommendation) {
+        setError("No fue posible calcular un precio sugerido para esta meta");
+        return;
+      }
+
+      setForm((current) =>
+        current.productId === selectedProduct.id &&
+        current.categoryId === form.categoryId
+          ? { ...current, marketplacePrice: String(recommendation.price) }
+          : current,
+      );
+      setPriceEstimate(
+        await getPriceEstimate(recommendation.price, form.categoryId),
+      );
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "No fue posible calcular el precio de Mercado Libre",
+      );
+    } finally {
+      setIsSuggestingPrice(false);
+    }
+  };
+
   const updateSelectedProduct = (
     productId: string,
     product?: AsyncProductOption | null,
@@ -772,7 +835,7 @@ export function MercadoLibreListingManager({
       productId,
       marketplacePrice: initialMarketplacePrice,
       categoryId: profile?.categoryId ?? "",
-      stockSafetyBuffer: String(profile?.stockSafetyBuffer ?? 1),
+      stockSafetyBuffer: String(profile?.stockSafetyBuffer ?? 0),
       minimumMarginAmount:
         profile?.minimumMarginAmount === null ||
         profile?.minimumMarginAmount === undefined
@@ -1879,6 +1942,7 @@ export function MercadoLibreListingManager({
             onCategoryChange={updateCategory}
             onLoadCategoryAttributes={loadCategoryAttributes}
             onLoadPriceEstimate={loadPriceEstimate}
+            onSuggestPriceFromTarget={suggestPriceFromTarget}
             onApplyCategoryTemplate={(templateId) => {
               const template = categoryTemplates.find(
                 (item) => item.id === templateId,

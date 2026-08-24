@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 
 import { ListingPublicationWizard } from "@/app/(dashboard)/[storeId]/(routes)/mercadolibre/components/listing-publication-wizard";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/image", () => ({
   default: (props: { alt: string }) => <img alt={props.alt} />,
@@ -24,13 +24,19 @@ const product = {
   images: [{ url: "https://example.com/lapicero.jpg" }],
 };
 
-function WizardHarness({ onPublish }: { onPublish: () => Promise<void> }) {
+function WizardHarness({
+  onPublish,
+  onSuggestPrice = async () => undefined,
+}: {
+  onPublish: () => Promise<void>;
+  onSuggestPrice?: () => Promise<void>;
+}) {
   const [form, setForm] = useState({
     productId: product.id,
     marketplacePrice: "24000",
     categoryId: "MCO123",
-    stockSafetyBuffer: "1",
-    minimumMarginAmount: "",
+    stockSafetyBuffer: "0",
+    minimumMarginAmount: "12000",
     syncPrice: true,
     imageUrls: [product.images[0].url],
     attributes: "",
@@ -58,7 +64,7 @@ function WizardHarness({ onPublish }: { onPublish: () => Promise<void> }) {
         id: "profile-1",
         name: "Lapiceros · Mercado Libre",
         categoryId: "MCO123",
-        stockSafetyBuffer: 1,
+        stockSafetyBuffer: 0,
         minimumMarginAmount: 12000,
         localCategory: product.category,
       }}
@@ -81,6 +87,7 @@ function WizardHarness({ onPublish }: { onPublish: () => Promise<void> }) {
       }
       onLoadCategoryAttributes={async () => true}
       onLoadPriceEstimate={async () => undefined}
+      onSuggestPriceFromTarget={onSuggestPrice}
       onApplyCategoryTemplate={() => undefined}
       onSaveCategoryTemplate={async () => undefined}
       onSaveQuickProfile={async () => undefined}
@@ -91,6 +98,10 @@ function WizardHarness({ onPublish }: { onPublish: () => Promise<void> }) {
 }
 
 describe("ListingPublicationWizard", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   it("guides an administrator from product details to direct publishing", async () => {
     const onPublish = vi.fn(async () => undefined);
     render(<WizardHarness onPublish={onPublish} />);
@@ -99,6 +110,10 @@ describe("ListingPublicationWizard", () => {
       screen.queryByText(/videos de la publicación/i),
     ).not.toBeInTheDocument();
     expect(screen.getByText(/Perfil rápido aplicado/i)).toBeVisible();
+    expect(
+      screen.getByRole("spinbutton", { name: "Unidades de seguridad" }),
+    ).toHaveValue("0");
+    expect(screen.getByText(/Precio de la tienda en línea:/)).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
     expect(screen.getByLabelText("Categoría de Mercado Libre")).toBeVisible();
@@ -112,8 +127,35 @@ describe("ListingPublicationWizard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
 
     expect(screen.getByText("Lapicero kawaii")).toBeVisible();
+    expect(screen.getByText("Precio de la tienda en línea")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Publicar ahora" }));
 
     expect(onPublish).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the store price as a reference and calculates only the Mercado Libre price", async () => {
+    const onPublish = vi.fn(async () => undefined);
+    const onSuggestPrice = vi.fn(async () => undefined);
+    render(
+      <WizardHarness onPublish={onPublish} onSuggestPrice={onSuggestPrice} />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    expect(screen.getByLabelText("Categoría de Mercado Libre")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    fireEvent.change(await screen.findByLabelText(/Marca/), {
+      target: { value: "P de Papel" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+
+    expect(screen.getByText("Precio de venta en Mercado Libre")).toBeVisible();
+    expect(screen.getByText(/Diferencia frente a tienda:/)).toBeVisible();
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Sugerir precio de Mercado Libre",
+      }),
+    );
+
+    expect(onSuggestPrice).toHaveBeenCalledOnce();
   });
 });

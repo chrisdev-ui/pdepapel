@@ -494,6 +494,7 @@ For historic second-half 2025 reporting, use the fiscal guidance in `pdepapel-ad
 
 - Mercado Libre prices are deliberately independent from the public-shop price because commissions, shipping subsidies, and taxes affect marketplace margin. Never automatically overwrite one channel’s price from the other.
 - P de Papel inventory is the source of truth. A listing’s available quantity is local stock minus its configured safety buffer.
+- New listing drafts default their safety buffer to `0`; existing quick profiles retain any explicitly saved buffer. An optional target profit is only a recommendation: after selecting a Mercado Libre category, the administrator may calculate a suggested Mercado Libre price from acquisition cost and the estimated commission. That action never lowers an already higher Mercado Libre price and never changes the public-shop price.
 - Existing Mercado Libre listings can predate this integration. Importing a publication does not create a local product, alter public-shop pricing, or immediately change stock until the admin confirms the link/sync.
 - A publication is not a sale. Do not create orders/movements for a listing import.
 - A Mercado Libre paid sale must be idempotently applied exactly once. Its marketplace data and inventory movement must be auditable.

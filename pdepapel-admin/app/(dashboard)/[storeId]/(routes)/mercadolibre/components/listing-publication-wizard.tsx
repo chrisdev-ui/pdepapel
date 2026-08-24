@@ -122,6 +122,7 @@ type ListingPublicationWizardProps = {
   onCategoryChange: (categoryId: string) => void;
   onLoadCategoryAttributes: () => Promise<boolean>;
   onLoadPriceEstimate: () => Promise<void>;
+  onSuggestPriceFromTarget: () => Promise<void>;
   onApplyCategoryTemplate: (templateId: string) => void;
   onSaveCategoryTemplate: () => Promise<void>;
   onSaveQuickProfile: () => Promise<void>;
@@ -150,7 +151,12 @@ function toCurrencyInputValue(value: string) {
 
 function toStockQuantityValue(value: string) {
   const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed >= 0 ? parsed : 1;
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+function formatSignedCurrency(value: number) {
+  const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+  return `${sign}${currencyFormatter.format(Math.abs(value))}`;
 }
 
 function getAttributeValues(value: string) {
@@ -207,6 +213,7 @@ export function ListingPublicationWizard({
   onCategoryChange,
   onLoadCategoryAttributes,
   onLoadPriceEstimate,
+  onSuggestPriceFromTarget,
   onApplyCategoryTemplate,
   onSaveCategoryTemplate,
   onSaveQuickProfile,
@@ -223,6 +230,33 @@ export function ListingPublicationWizard({
     0,
   );
   const hasPublishableStock = unitsToPublish > 0;
+  const marketplacePrice = Number(form.marketplacePrice);
+  const hasMarketplacePrice =
+    Number.isFinite(marketplacePrice) && marketplacePrice > 0;
+  const priceDifference =
+    selectedProduct && hasMarketplacePrice
+      ? marketplacePrice - selectedProduct.price
+      : null;
+  const targetProfit = Number(form.minimumMarginAmount);
+  const hasTargetProfit =
+    form.minimumMarginAmount.trim() !== "" &&
+    Number.isFinite(targetProfit) &&
+    targetProfit >= 0;
+  const hasAcquisitionCost =
+    selectedProduct?.acqPrice !== null &&
+    selectedProduct?.acqPrice !== undefined;
+  const canSuggestPriceFromTarget =
+    hasTargetProfit && hasAcquisitionCost && Boolean(form.categoryId.trim());
+  const estimatedProfit =
+    priceEstimate && hasAcquisitionCost
+      ? marketplacePrice -
+        priceEstimate.saleFeeAmount -
+        (selectedProduct?.acqPrice ?? 0)
+      : null;
+  const profitDifference =
+    estimatedProfit !== null && hasTargetProfit
+      ? estimatedProfit - targetProfit
+      : null;
 
   const goToNextStep = async () => {
     const validationError = getListingWizardStepError({
@@ -294,10 +328,19 @@ export function ListingPublicationWizard({
               onChange={onProductChange}
             />
             {selectedProduct ? (
-              <p className="text-xs text-muted-foreground">
-                SKU {selectedProduct.sku || "sin SKU"} · Stock local{" "}
-                {selectedProduct.stock}
-              </p>
+              <div className="space-y-1 text-xs text-muted-foreground">
+                <p>
+                  SKU {selectedProduct.sku || "sin SKU"} · Stock local{" "}
+                  {selectedProduct.stock}
+                </p>
+                <p>
+                  Precio de la tienda en línea:{" "}
+                  <span className="font-medium text-foreground">
+                    {currencyFormatter.format(selectedProduct.price)}
+                  </span>{" "}
+                  · Solo referencia, no se modificará.
+                </p>
+              </div>
             ) : null}
             {quickProfile ? (
               <div className="rounded-md border border-primary/20 bg-primary/[0.03] p-3 text-sm">
@@ -313,7 +356,9 @@ export function ListingPublicationWizard({
             ) : null}
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="mercadolibre-price">Precio de Mercado Libre</Label>
+            <Label htmlFor="mercadolibre-price">
+              Precio de venta en Mercado Libre
+            </Label>
             <CurrencyInput
               id="mercadolibre-price"
               inputMode="numeric"
@@ -326,9 +371,30 @@ export function ListingPublicationWizard({
               }
               placeholder="Ej. 18500"
             />
-            <p className="text-xs text-muted-foreground">
-              Este precio es independiente del precio de la tienda en línea.
-            </p>
+            <div className="space-y-1 text-xs text-muted-foreground">
+              <p>
+                Es el precio que verá la clienta en Mercado Libre. Nunca cambia
+                el precio de la tienda en línea.
+              </p>
+              {selectedProduct && priceDifference !== null ? (
+                <p>
+                  Tienda en línea:{" "}
+                  {currencyFormatter.format(selectedProduct.price)}
+                  {" · "}Diferencia en Mercado Libre:{" "}
+                  <span
+                    className={
+                      priceDifference > 0
+                        ? "font-medium text-success"
+                        : priceDifference < 0
+                          ? "font-medium text-warning"
+                          : "font-medium text-foreground"
+                    }
+                  >
+                    {formatSignedCurrency(priceDifference)}
+                  </span>
+                </p>
+              ) : null}
+            </div>
             {isSuggestingPrice ? (
               <p className="text-xs text-muted-foreground">
                 Calculando un precio sugerido según la comisión estimada…
@@ -365,17 +431,19 @@ export function ListingPublicationWizard({
                   id="mercadolibre-buffer-description"
                   className="text-xs text-muted-foreground"
                 >
-                  Se reservan para evitar vender más unidades de las
-                  disponibles.
+                  Se restan del stock publicado para evitar sobreventas. Con la
+                  seguridad actual, se publicarán {unitsToPublish} de{" "}
+                  {selectedProduct?.stock ?? 0} unidades locales.
                 </p>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="mercadolibre-minimum-margin">
-                  Utilidad objetivo tras comisión (opcional)
+                  Ganancia objetivo después de costo y comisión (opcional)
                 </Label>
                 <CurrencyInput
                   id="mercadolibre-minimum-margin"
                   inputMode="numeric"
+                  aria-describedby="mercadolibre-minimum-margin-description"
                   value={toCurrencyInputValue(form.minimumMarginAmount)}
                   onChange={(value) =>
                     onFormChange(
@@ -385,9 +453,14 @@ export function ListingPublicationWizard({
                   }
                   placeholder="Ej. 12000"
                 />
-                <p className="text-xs text-muted-foreground">
-                  El precio sugerido no contempla envío, impuestos ni descuentos
-                  posteriores.
+                <p
+                  id="mercadolibre-minimum-margin-description"
+                  className="text-xs text-muted-foreground"
+                >
+                  Esta meta no cambia precios sola. En la revisión final puedes
+                  calcular un precio de Mercado Libre que la busque cumplir;
+                  nunca baja el precio escrito ni cambia la tienda en línea. No
+                  contempla envío, impuestos ni descuentos posteriores.
                 </p>
               </div>
               <div className="flex items-start gap-2 text-sm">
@@ -407,10 +480,12 @@ export function ListingPublicationWizard({
                   className="cursor-pointer"
                 >
                   <span className="block font-medium">
-                    Mantener este precio desde Administración
+                    Permitir actualizar este precio de Mercado Libre desde
+                    Administración
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    Actualiza solo Mercado Libre, nunca el precio de la tienda.
+                    Solo sincroniza el precio de esta publicación; el precio de
+                    la tienda en línea nunca cambia.
                   </span>
                 </Label>
               </div>
@@ -769,11 +844,28 @@ export function ListingPublicationWizard({
             </p>
             <p>
               <span className="block text-xs text-muted-foreground">
-                Precio de Mercado Libre
+                Precio de la tienda en línea
+              </span>
+              <span className="font-medium">
+                {currencyFormatter.format(selectedProduct?.price ?? 0)}
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                Solo referencia; no se modifica.
+              </span>
+            </p>
+            <p>
+              <span className="block text-xs text-muted-foreground">
+                Precio de venta en Mercado Libre
               </span>
               <span className="font-medium">
                 {currencyFormatter.format(Number(form.marketplacePrice) || 0)}
               </span>
+              {priceDifference !== null ? (
+                <span className="block text-xs text-muted-foreground">
+                  Diferencia frente a tienda:{" "}
+                  {formatSignedCurrency(priceDifference)}
+                </span>
+              ) : null}
             </p>
             <p>
               <span className="block text-xs text-muted-foreground">
@@ -837,8 +929,42 @@ export function ListingPublicationWizard({
               Calcular comisión
             </Button>
           </div>
+          {hasTargetProfit ? (
+            <div className="flex flex-col gap-3 rounded-md border border-primary/20 bg-primary/[0.03] p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-medium">
+                  Ganancia objetivo: {currencyFormatter.format(targetProfit)}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Calcula y actualiza solo el precio de Mercado Libre con el
+                  valor necesario para buscar esta ganancia después del costo y
+                  la comisión estimada.
+                </p>
+                {!canSuggestPriceFromTarget ? (
+                  <p className="mt-1 text-xs text-warning">
+                    {!form.categoryId.trim()
+                      ? "Elige primero una categoría de Mercado Libre."
+                      : "Registra el costo de adquisición del producto para poder calcular la ganancia."}
+                  </p>
+                ) : null}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void onSuggestPriceFromTarget()}
+                disabled={!canSuggestPriceFromTarget || isSuggestingPrice}
+              >
+                {isSuggestingPrice ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <CircleDollarSign className="mr-2 h-4 w-4" />
+                )}
+                Sugerir precio de Mercado Libre
+              </Button>
+            </div>
+          ) : null}
           {priceEstimate ? (
-            <div className="grid gap-2 rounded-md border border-primary/20 bg-primary/[0.03] p-3 text-sm sm:grid-cols-3">
+            <div className="grid gap-2 rounded-md border border-primary/20 bg-primary/[0.03] p-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
               <p>
                 <span className="block text-xs text-muted-foreground">
                   Comisión estimada
@@ -869,6 +995,29 @@ export function ListingPublicationWizard({
                   )}
                 </span>
               </p>
+              {estimatedProfit !== null ? (
+                <p>
+                  <span className="block text-xs text-muted-foreground">
+                    Ganancia estimada
+                  </span>
+                  <span className="font-semibold">
+                    {currencyFormatter.format(estimatedProfit)}
+                  </span>
+                  {profitDifference !== null ? (
+                    <span
+                      className={
+                        profitDifference >= 0
+                          ? "block text-xs text-success"
+                          : "block text-xs text-warning"
+                      }
+                    >
+                      {profitDifference >= 0
+                        ? `Cumple la meta por ${formatSignedCurrency(profitDifference)}.`
+                        : `Faltan ${currencyFormatter.format(Math.abs(profitDifference))} para la meta.`}
+                    </span>
+                  ) : null}
+                </p>
+              ) : null}
             </div>
           ) : null}
           <p className="text-xs text-muted-foreground">

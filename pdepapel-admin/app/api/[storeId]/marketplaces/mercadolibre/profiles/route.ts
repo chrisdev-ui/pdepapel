@@ -46,7 +46,7 @@ function parseAttributes(value: unknown): Attribute[] {
 }
 
 function parseStockSafetyBuffer(value: unknown) {
-  if (value === undefined || value === null || value === "") return 1;
+  if (value === undefined || value === null || value === "") return 0;
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 0 || parsed > 10_000) {
     throw ErrorFactory.InvalidRequest(
