@@ -9,7 +9,7 @@ const API_URL = `${env.NEXT_PUBLIC_API_URL}/products`;
 export const getProduct = cache(async (id: string): Promise<Product | null> => {
   try {
     const response = await fetch(
-      `${API_URL}/${id}?include=kitComponents`,
+      `${API_URL}/${id}?include=kitComponents&scope=storefront`,
       CATALOG_FETCH_CACHE,
     );
     if (response.status === 404) return null;

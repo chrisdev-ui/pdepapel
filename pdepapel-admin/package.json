@@ -33,6 +33,7 @@
     "export:products": "tsx prisma/utils/products-to-csv.ts",
     "export:products-merchant": "tsx prisma/utils/products-to-google-merchant.ts",
     "normalize:product-slugs": "tsx scripts/normalize-product-slugs.ts",
+    "export:product-slug-redirects": "tsx scripts/export-product-slug-redirects.ts",
     "update:orders": "ts-node prisma/scripts/update-orders-totals.ts",
     "cleanup:orphaned-shipments": "ts-node scripts/cleanup-orphaned-shipments.ts",
     "seed:boxes": "ts-node prisma/seed/seed-boxes.ts"

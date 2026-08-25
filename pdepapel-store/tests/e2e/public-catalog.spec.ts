@@ -74,21 +74,17 @@ test("mantiene la categoría acotada, canónica y sin filtro de categorías", as
   expect(canonical).toContain(`/categoria/${categorySlug}`);
 });
 
-test("preserva las páginas históricas de productos archivados sin indexarlas", async ({
+test("oculta productos archivados de la tienda", async ({
   page,
 }) => {
   const response = await page.goto(`/producto/${archivedProductSlug}`, {
     waitUntil: "domcontentloaded",
   });
 
-  expect(response?.ok()).toBeTruthy();
+  expect(response?.status()).toBe(404);
   await expect(
-    page.getByText("Este producto ya no está disponible para la venta."),
+    page.getByRole("heading", { name: "!Página no encontrada!" }),
   ).toBeVisible();
-  await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
-    "content",
-    /noindex/,
-  );
 });
 
 test("muestra una página de orden no encontrada sin convertirla en error 500", async ({

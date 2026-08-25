@@ -18,6 +18,18 @@ afterEach(() => {
 });
 
 describe("upstream catalog resource errors", () => {
+  it("requests product detail through the storefront scope", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ id: "product-id" }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getProduct("product-id");
+
+    const [requestUrl] = fetchMock.mock.calls[0] as [string];
+    expect(new URL(requestUrl).searchParams.get("scope")).toBe("storefront");
+  });
+
   it.each([
     ["product", () => getProduct("product-id")],
     ["category", () => getCategory("category-id")],

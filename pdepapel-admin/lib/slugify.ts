@@ -12,12 +12,33 @@ export function slugify(text: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+const LOGISTICS_SIZE_VALUE_PATTERN = /^(?:XXS|XS|S|M|L|XL|XXL)-(?:L|P)$/i;
+const INTERNAL_SIZE_CODE_PATTERN = /^(?:XXS|XS|S|M|L|XL|XXL)\+$/i;
+
+function isCustomerFacingSize(size?: { name?: string; value?: string } | null) {
+  const sizeName = size?.name?.trim();
+  const sizeValue = size?.value?.trim();
+
+  if (!sizeName) return false;
+
+  return !(
+    LOGISTICS_SIZE_VALUE_PATTERN.test(sizeName) ||
+    LOGISTICS_SIZE_VALUE_PATTERN.test(sizeValue || "") ||
+    INTERNAL_SIZE_CODE_PATTERN.test(sizeName)
+  );
+}
+
 export function generateProductSlug(product: {
   name: string;
   color?: { name?: string; value?: string } | null;
   design?: { name?: string } | null;
   size?: { name?: string; value?: string } | null;
   includeVariantAttributes?: boolean;
+  variantAttributes?: {
+    color?: boolean;
+    design?: boolean;
+    size?: boolean;
+  };
 }): string {
   const base = slugify(product.name);
 
@@ -28,6 +49,7 @@ export function generateProductSlug(product: {
   const attributes: string[] = [];
 
   if (
+    product.variantAttributes?.design !== false &&
     product.design?.name &&
     product.design.name !== "S-D" &&
     product.design.name !== "Sin Diseño" &&
@@ -36,6 +58,7 @@ export function generateProductSlug(product: {
     attributes.push(product.design.name);
   }
   if (
+    product.variantAttributes?.color !== false &&
     product.color?.name &&
     product.color.name !== "S-C" &&
     product.color.name !== "Sin Color"
@@ -43,11 +66,12 @@ export function generateProductSlug(product: {
     attributes.push(product.color.name);
   }
   if (
+    product.variantAttributes?.size !== false &&
     product.size?.name &&
-    product.size.name !== "S-P" &&
     product.size.name !== "Sin Tamaño" &&
     product.size.name !== "Estándar" &&
-    product.size.name !== "Única"
+    product.size.name !== "Única" &&
+    isCustomerFacingSize(product.size)
   ) {
     attributes.push(product.size.name);
   }

@@ -91,7 +91,8 @@ This section records the important recent decisions and must be updated after fu
 - Public routes are Spanish canonical routes; old English routes redirect permanently.
 - Dashboard pages are also Spanish-first, but their REST resources remain the established English API names (for example, `/pedidos` uses `/api/{storeId}/orders`). Client mutations must resolve the endpoint from a stable resource/model mapping, never from `usePathname()` or another visible dashboard route.
 - Product pages use slugs rather than product IDs. Product slug generation must add differentiators such as color/size **only when they are required to distinguish real sibling variants**. Do not create redundant slugs such as repeating a product name when there is no variant reason.
-- Product and category slug aliases preserve old links. Never delete alias logic merely because the current canonical slug changed.
+- Product and category slug aliases preserve old links. Never delete alias logic merely because the current canonical slug changed. Product variant URLs only include attributes that distinguish variants; internal logistics sizes such as `S+`/`M-P` are never customer-facing URL segments.
+- Run `npm run normalize:product-slugs` before changing stored canonical slugs. It is read-only by default. Apply deliberate production batches with `npm run normalize:product-slugs -- --apply --limit=40`; each completed batch preserves old URLs as aliases and can be rerun safely until no changes remain. After a deliberate historical-slug migration, run `npm run export:product-slug-redirects -- --store-id=<public-store-id>` from `pdepapel-admin`, review the generated `pdepapel-store/lib/legacy-product-redirects.mjs`, and deploy both applications together. The generated map is handled by the storefront middleware and returns HTTP `308` before rendering without one deployment route per alias; dynamic aliases remain the safe fallback for any later title edit.
 - Categories can be SEO-enabled and optionally featured. Their cards use category imagery and must retain an accessible high-contrast label treatment; white text directly over light imagery is not acceptable.
 - Category landing pages are intentionally more focused than the general shop: do not present a category selector that invites a shopper to leave the current category. Product search within a category must be constrained to that category.
 - Store route skeleton/loading behavior was improved to avoid showing only the header and footer before a page body arrives. Preserve route-level loading UI and avoid client-only data waterfalls that reintroduce this flash, especially for product detail and order detail after checkout.
@@ -807,6 +808,7 @@ When user approval is granted:
 ### Product/category/stock change
 
 - [ ] Store scoping and archival state are honored.
+- [ ] Archived products return `404` from the storefront, while remaining available to the authenticated admin for management.
 - [ ] Slug and alias behavior preserve old URLs.
 - [ ] Public revalidation is triggered and tested.
 - [ ] Inventory movement/audit behavior remains correct.

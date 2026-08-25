@@ -29,4 +29,33 @@ describe("product slugs", () => {
       }),
     ).toBe("agenda-floral");
   });
+
+  it("omits internal logistics sizes from customer-facing URLs", () => {
+    expect(
+      generateProductSlug({
+        name: "Sello lacre amarillo pastel",
+        design: { name: "Kawaii" },
+        color: { name: "Amarillo pastel" },
+        size: { name: "S+", value: "S-P" },
+        includeVariantAttributes: true,
+      }),
+    ).toBe("sello-lacre-amarillo-pastel-kawaii");
+  });
+
+  it("only includes variant attributes that differentiate a product", () => {
+    expect(
+      generateProductSlug({
+        name: "Sello lacre amarillo pastel",
+        design: { name: "Kawaii" },
+        color: { name: "Amarillo pastel" },
+        size: { name: "S+", value: "S-P" },
+        includeVariantAttributes: true,
+        variantAttributes: {
+          color: true,
+          design: false,
+          size: false,
+        },
+      }),
+    ).toBe("sello-lacre-amarillo-pastel");
+  });
 });

@@ -44,6 +44,9 @@ export async function GET(
     if (!params.productId)
       throw ErrorFactory.InvalidRequest("El ID del producto es requerido");
 
+    const isStorefrontRequest =
+      new URL(req.url).searchParams.get("scope") === "storefront";
+
     const productInclude = {
       images: true,
       category: true,
@@ -73,6 +76,7 @@ export async function GET(
     let product = await prismadb.product.findFirst({
       where: {
         storeId: params.storeId,
+        ...(isStorefrontRequest ? { isArchived: false } : {}),
         OR: [{ id: params.productId }, { slug: params.productId }],
       },
       include: productInclude,
@@ -91,13 +95,17 @@ export async function GET(
 
       if (alias) {
         product = await prismadb.product.findFirst({
-          where: { id: alias.productId, storeId: params.storeId },
+          where: {
+            id: alias.productId,
+            storeId: params.storeId,
+            ...(isStorefrontRequest ? { isArchived: false } : {}),
+          },
           include: productInclude,
         });
       }
     }
 
-    if (!product) {
+    if (!product || (isStorefrontRequest && product.isArchived)) {
       throw ErrorFactory.NotFound("Producto no encontrado");
     }
 

@@ -16,6 +16,32 @@ interface ProductSlugAliasOptions {
   slug: string;
 }
 
+type ProductSlugVariant = {
+  color?: { name?: string | null } | null;
+  design?: { name?: string | null } | null;
+  size?: { name?: string | null; value?: string | null } | null;
+};
+
+export function getVariantSlugAttributeInclusion(
+  products: ProductSlugVariant[],
+) {
+  const hasMultipleValues = (
+    getValue: (product: ProductSlugVariant) => string | null | undefined,
+  ) => {
+    if (products.length <= 1) return false;
+
+    return new Set(products.map((product) => getValue(product) || "")).size > 1;
+  };
+
+  return {
+    color: hasMultipleValues((product) => product.color?.name),
+    design: hasMultipleValues((product) => product.design?.name),
+    size: hasMultipleValues(
+      (product) => product.size?.value || product.size?.name,
+    ),
+  };
+}
+
 const buildUniqueSlug = (baseSlug: string, reservedSlugs: Set<string>) => {
   let slug = baseSlug || "producto";
   let suffix = 2;
@@ -132,7 +158,7 @@ export async function synchronizeProductGroupSlugs(
       .filter(Boolean),
   );
   const nextSlugs = new Set<string>();
-  const includeVariantAttributes = products.length > 1;
+  const variantAttributes = getVariantSlugAttributeInclusion(products);
 
   for (const product of products) {
     const unavailableSlugs = new Set(reservedSlugs);
@@ -142,7 +168,8 @@ export async function synchronizeProductGroupSlugs(
       color: product.color,
       design: product.design,
       size: product.size,
-      includeVariantAttributes,
+      includeVariantAttributes: products.length > 1,
+      variantAttributes,
     });
     const slug = buildUniqueSlug(baseSlug, unavailableSlugs);
     nextSlugs.add(slug);

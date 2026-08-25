@@ -10,13 +10,21 @@ vi.mock("@/lib/api-errors", () => ({
   ErrorFactory: {
     MissingStoreId: () => new Error("Missing store ID"),
     InvalidRequest: (message: string) => new Error(message),
-    NotFound: (message: string) => new Error(message),
+    NotFound: (message: string) =>
+      Object.assign(new Error(message), { statusCode: 404 }),
   },
   handleErrorResponse: (
-    _error: unknown,
+    error: unknown,
     _context: string,
     options?: { headers?: HeadersInit },
-  ) => new Response(null, { status: 500, headers: options?.headers }),
+  ) =>
+    new Response(null, {
+      status:
+        error && typeof error === "object" && "statusCode" in error
+          ? Number(error.statusCode)
+          : 500,
+      headers: options?.headers,
+    }),
 }));
 vi.mock("@/lib/cache", () => ({ invalidateStoreProductsCache: vi.fn() }));
 vi.mock("@/lib/cloudinary", () => ({ default: {} }));
@@ -87,7 +95,7 @@ describe("public product detail CORS", () => {
     });
   });
 
-  it("keeps CORS headers when a product detail request fails", async () => {
+  it("keeps CORS headers when a public product detail is missing", async () => {
     mocks.findProduct.mockResolvedValue(null);
     mocks.findProductSlugAlias.mockResolvedValue(null);
 
@@ -98,9 +106,36 @@ describe("public product detail CORS", () => {
       { params: { storeId: "store-id", productId: "missing" } },
     );
 
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(404);
     expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
       "https://papeleriapdepapel.com",
+    );
+  });
+
+  it("hides archived products from storefront detail requests", async () => {
+    mocks.findProduct.mockResolvedValue({
+      id: "archived-product-id",
+      name: "Sello archivado",
+      price: 12000,
+      isArchived: true,
+    });
+
+    const response = await GET(
+      new Request(
+        "https://admin.example.com/api/store-id/products/sello-archivado?scope=storefront",
+        { headers: { Origin: "https://papeleriapdepapel.com" } },
+      ),
+      { params: { storeId: "store-id", productId: "sello-archivado" } },
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
+      "https://papeleriapdepapel.com",
+    );
+    expect(mocks.findProduct).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ isArchived: false }),
+      }),
     );
   });
 
