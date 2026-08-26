@@ -9,6 +9,7 @@ import { getMercadoLibreCategoryAppError } from "@/lib/mercadolibre/category-val
 import {
   buildMercadoLibreListingMetadata,
   normalizeMercadoLibreFamilyName,
+  parseMercadoLibreSaleConditions,
 } from "@/lib/mercadolibre/listing-metadata";
 import {
   enqueuePendingMarketplaceOutboxEvents,
@@ -101,6 +102,17 @@ function parseFamilyName(value: unknown) {
   return familyName;
 }
 
+function parseSaleConditions(value: unknown) {
+  if (value === undefined) return undefined;
+  const saleConditions = parseMercadoLibreSaleConditions(value);
+  if (!saleConditions) {
+    throw ErrorFactory.InvalidRequest(
+      "Las condiciones de envío de Mercado Libre no son válidas",
+    );
+  }
+  return saleConditions;
+}
+
 export async function PATCH(
   request: Request,
   { params }: { params: { storeId: string; listingId: string } },
@@ -132,6 +144,15 @@ export async function PATCH(
     const data: Prisma.MarketplaceListingUpdateInput = {};
     const imageUrls = parseImageUrls(body.imageUrls);
     const familyName = parseFamilyName(body.familyName);
+    const saleConditions = parseSaleConditions(body.saleConditions);
+    if (
+      listing.externalItemId &&
+      (body.listingType !== undefined || saleConditions !== undefined)
+    ) {
+      throw ErrorFactory.InvalidRequest(
+        "Por seguridad, cambia el tipo de publicación o el envío antes de publicar. Mercado Libre puede limitar cambios posteriores en publicaciones activas.",
+      );
+    }
     if (imageUrls) {
       const productImageUrls = new Set(
         listing.product.images.map((image) => image.url),
@@ -222,7 +243,8 @@ export async function PATCH(
     if (
       body.attributes !== undefined ||
       familyName !== undefined ||
-      imageUrls !== undefined
+      imageUrls !== undefined ||
+      saleConditions !== undefined
     ) {
       data.metadata = buildMercadoLibreListingMetadata({
         current: listing.metadata,
@@ -231,6 +253,7 @@ export async function PATCH(
           : {}),
         ...(familyName !== undefined ? { familyName } : {}),
         ...(imageUrls !== undefined ? { imageUrls } : {}),
+        ...(saleConditions !== undefined ? { saleConditions } : {}),
       });
     }
     if (Object.keys(data).length === 0) {

@@ -3,8 +3,12 @@ import { MarketplaceProvider } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { getMercadoLibreResource } from "@/lib/mercadolibre/client";
-import { parseMercadoLibreListingPriceEstimate } from "@/lib/mercadolibre/listing-pricing";
+import { getMercadoLibreJson } from "@/lib/mercadolibre/client";
+import {
+  addMercadoLibreInstallmentTerms,
+  parseMercadoLibreListingPriceEstimate,
+  parseMercadoLibreListingPriceEstimates,
+} from "@/lib/mercadolibre/listing-pricing";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
@@ -21,10 +25,8 @@ export async function GET(
     const price = Number(searchParams.get("price"));
     const categoryId = searchParams.get("categoryId")?.trim() ?? "";
     const listingType = searchParams.get("listingType")?.trim() ?? "";
-    if (!Number.isFinite(price) || price <= 0 || !categoryId || !listingType) {
-      throw ErrorFactory.InvalidRequest(
-        "Precio, categoría y tipo de publicación son obligatorios",
-      );
+    if (!Number.isFinite(price) || price <= 0 || !categoryId) {
+      throw ErrorFactory.InvalidRequest("Precio y categoría son obligatorios");
     }
 
     const connection = await prismadb.marketplaceConnection.findUnique({
@@ -40,9 +42,32 @@ export async function GET(
       throw ErrorFactory.NotFound("Primero conecta la cuenta de Mercado Libre");
     }
 
-    const resource = `/sites/${encodeURIComponent(connection.siteId)}/listing_prices?price=${encodeURIComponent(String(price))}&category_id=${encodeURIComponent(categoryId)}&listing_type_id=${encodeURIComponent(listingType)}`;
-    const payload = await getMercadoLibreResource(connection.id, resource);
-    const estimate = parseMercadoLibreListingPriceEstimate(payload);
+    const query = new URLSearchParams({
+      price: String(price),
+      category_id: categoryId,
+    });
+    if (listingType) query.set("listing_type_id", listingType);
+    const resource = `/sites/${encodeURIComponent(connection.siteId)}/listing_prices?${query.toString()}`;
+    const payload = await getMercadoLibreJson(connection.id, resource);
+    if (!listingType) {
+      const options = parseMercadoLibreListingPriceEstimates(payload).map(
+        (estimate) =>
+          addMercadoLibreInstallmentTerms(estimate, connection.siteId),
+      );
+      if (options.length === 0) {
+        throw ErrorFactory.InvalidRequest(
+          "Mercado Libre no devolvió tipos de publicación disponibles",
+        );
+      }
+      return NextResponse.json(
+        { options },
+        { headers: CACHE_HEADERS.NO_CACHE },
+      );
+    }
+    const parsedEstimate = parseMercadoLibreListingPriceEstimate(payload);
+    const estimate = parsedEstimate
+      ? addMercadoLibreInstallmentTerms(parsedEstimate, connection.siteId)
+      : null;
     if (!estimate) {
       throw ErrorFactory.InvalidRequest(
         "Mercado Libre no devolvió una comisión para esa publicación",

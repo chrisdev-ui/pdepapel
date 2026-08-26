@@ -13,6 +13,7 @@ import { getMercadoLibreCategoryAppError } from "@/lib/mercadolibre/category-val
 import {
   buildMercadoLibreListingMetadata,
   normalizeMercadoLibreFamilyName,
+  parseMercadoLibreSaleConditions,
   type MercadoLibreAttribute,
 } from "@/lib/mercadolibre/listing-metadata";
 import prismadb from "@/lib/prismadb";
@@ -48,6 +49,36 @@ function parseSafetyBuffer(value: unknown) {
     );
   }
   return buffer;
+}
+
+function parseListingType(value: unknown) {
+  if (value === undefined || value === null || value === "") {
+    return "gold_special";
+  }
+  if (typeof value !== "string" || !value.trim() || value.length > 50) {
+    throw ErrorFactory.InvalidRequest(
+      "El tipo de publicación de Mercado Libre no es válido",
+    );
+  }
+  return value.trim();
+}
+
+function parseSaleConditions(value: unknown) {
+  if (value === undefined) {
+    return {
+      shippingMode: "me2" as const,
+      freeShipping: false,
+      localPickUp: false,
+      packageDimensions: null,
+    };
+  }
+  const saleConditions = parseMercadoLibreSaleConditions(value);
+  if (!saleConditions) {
+    throw ErrorFactory.InvalidRequest(
+      "Las condiciones de envío de Mercado Libre no son válidas",
+    );
+  }
+  return saleConditions;
 }
 
 function parseMinimumMargin(value: unknown) {
@@ -180,6 +211,7 @@ export async function GET(
             name: true,
             sku: true,
             stock: true,
+            price: true,
             acqPrice: true,
             images: {
               select: { url: true, isMain: true },
@@ -255,8 +287,7 @@ export async function POST(
     const attributes = parseAttributes(body.attributes);
     const imageUrls = parseImageUrls(body.imageUrls);
     const familyName =
-      parseFamilyName(body.familyName) ??
-      parseFamilyName(product.name);
+      parseFamilyName(body.familyName) ?? parseFamilyName(product.name);
     validateProductImageUrls(imageUrls, product.images);
 
     const listing = await prismadb.marketplaceListing.create({
@@ -265,10 +296,7 @@ export async function POST(
         productId: product.id,
         marketplacePrice: parseOptionalPrice(body.marketplacePrice),
         categoryId,
-        listingType:
-          typeof body.listingType === "string" && body.listingType.trim()
-            ? body.listingType.trim()
-            : "gold_special",
+        listingType: parseListingType(body.listingType),
         stockSafetyBuffer: parseSafetyBuffer(body.stockSafetyBuffer),
         syncStock: body.syncStock !== false,
         syncPrice: body.syncPrice !== false,
@@ -278,6 +306,7 @@ export async function POST(
           attributes,
           familyName,
           imageUrls,
+          saleConditions: parseSaleConditions(body.saleConditions),
         }),
       },
     });

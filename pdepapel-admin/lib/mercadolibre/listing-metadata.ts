@@ -6,6 +6,20 @@ export type MercadoLibreAttribute = {
   value_name?: string | null;
 };
 
+export type MercadoLibrePackageDimensions = {
+  heightCm: number;
+  widthCm: number;
+  lengthCm: number;
+  weightGrams: number;
+};
+
+export type MercadoLibreSaleConditions = {
+  shippingMode: "me2";
+  freeShipping: boolean;
+  localPickUp: boolean;
+  packageDimensions: MercadoLibrePackageDimensions | null;
+};
+
 export type MercadoLibreListingMetadata = {
   attributes: MercadoLibreAttribute[];
   familyName: string | null;
@@ -15,6 +29,7 @@ export type MercadoLibreListingMetadata = {
   quality: {
     videoRecommendationSnoozedUntil: string | null;
   } | null;
+  saleConditions: MercadoLibreSaleConditions | null;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -38,6 +53,52 @@ function getIsoDate(value: unknown) {
 
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function getPositiveNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : null;
+}
+
+export function parseMercadoLibreSaleConditions(
+  value: unknown,
+): MercadoLibreSaleConditions | null {
+  if (!isRecord(value)) return null;
+  if (
+    typeof value.freeShipping !== "boolean" ||
+    typeof value.localPickUp !== "boolean"
+  ) {
+    return null;
+  }
+
+  let packageDimensions: MercadoLibrePackageDimensions | null = null;
+  if (
+    value.packageDimensions !== null &&
+    value.packageDimensions !== undefined
+  ) {
+    if (!isRecord(value.packageDimensions)) return null;
+    const heightCm = getPositiveNumber(value.packageDimensions.heightCm);
+    const widthCm = getPositiveNumber(value.packageDimensions.widthCm);
+    const lengthCm = getPositiveNumber(value.packageDimensions.lengthCm);
+    const weightGrams = getPositiveNumber(value.packageDimensions.weightGrams);
+    if (
+      heightCm === null ||
+      widthCm === null ||
+      lengthCm === null ||
+      weightGrams === null
+    ) {
+      return null;
+    }
+    packageDimensions = { heightCm, widthCm, lengthCm, weightGrams };
+  }
+
+  return {
+    shippingMode: "me2",
+    freeShipping: value.freeShipping,
+    localPickUp: value.localPickUp,
+    packageDimensions,
+  };
 }
 
 export function normalizeMercadoLibreFamilyName(value: unknown) {
@@ -89,6 +150,9 @@ export function getMercadoLibreListingMetadata(
   const videoRecommendationSnoozedUntil = quality
     ? getIsoDate(quality.videoRecommendationSnoozedUntil)
     : null;
+  const saleConditions = isRecord(value)
+    ? parseMercadoLibreSaleConditions(value.saleConditions)
+    : null;
 
   return {
     attributes: getMercadoLibreAttributes(value),
@@ -97,6 +161,7 @@ export function getMercadoLibreListingMetadata(
     quality: videoRecommendationSnoozedUntil
       ? { videoRecommendationSnoozedUntil }
       : null,
+    saleConditions,
   };
 }
 
@@ -106,12 +171,14 @@ export function buildMercadoLibreListingMetadata({
   familyName,
   imageUrls,
   videoRecommendationSnoozedUntil,
+  saleConditions,
 }: {
   current: Prisma.JsonValue | null;
   attributes?: MercadoLibreAttribute[];
   familyName?: string | null;
   imageUrls?: string[];
   videoRecommendationSnoozedUntil?: string | null;
+  saleConditions?: MercadoLibreSaleConditions | null;
 }): Prisma.InputJsonValue {
   const currentMetadata = getMercadoLibreListingMetadata(current);
   const normalizedImages =
@@ -126,6 +193,10 @@ export function buildMercadoLibreListingMetadata({
     familyName === undefined
       ? currentMetadata.familyName
       : normalizeMercadoLibreFamilyName(familyName);
+  const normalizedSaleConditions =
+    saleConditions === undefined
+      ? currentMetadata.saleConditions
+      : saleConditions;
 
   return {
     attributes: attributes ?? currentMetadata.attributes,
@@ -139,6 +210,9 @@ export function buildMercadoLibreListingMetadata({
             videoRecommendationSnoozedUntil: normalizedVideoReminder,
           },
         }
+      : {}),
+    ...(normalizedSaleConditions
+      ? { saleConditions: normalizedSaleConditions }
       : {}),
   } as Prisma.InputJsonValue;
 }

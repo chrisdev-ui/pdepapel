@@ -10,6 +10,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MeasurementInput } from "@/components/ui/measurement-input";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -29,7 +31,9 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
+  Info,
   Loader2,
+  Truck,
 } from "lucide-react";
 import Image from "next/image";
 import { useState, type Dispatch, type SetStateAction } from "react";
@@ -39,11 +43,18 @@ export type ListingPublicationForm = {
   familyName: string;
   marketplacePrice: string;
   categoryId: string;
+  listingType: string;
   stockSafetyBuffer: string;
   minimumMarginAmount: string;
   syncPrice: boolean;
   imageUrls: string[];
   attributes: string;
+  freeShipping: boolean;
+  localPickUp: boolean;
+  packageHeightCm: string;
+  packageWidthCm: string;
+  packageLengthCm: string;
+  packageWeightGrams: string;
 };
 
 export type ListingPublicationProduct = {
@@ -91,13 +102,51 @@ export type ListingPublicationPriceEstimate = {
   saleFeeAmount: number;
   percentageFee: number | null;
   fixedFee: number | null;
+  financingAddOnFee: number | null;
+  listingFeeAmount: number | null;
   listingTypeId: string | null;
   listingTypeName: string | null;
+  listingExposure: string | null;
+  installmentCount: number | null;
+  installmentLabel: string | null;
+};
+
+export type ListingPublicationShippingEstimate = {
+  sellerCost: number;
+  currencyId: string | null;
+  billableWeightGrams: number | null;
+  discountRate: number | null;
+  promotedAmount: number | null;
+};
+
+export type ListingPublicationShippingComparison = {
+  buyerPays: ListingPublicationShippingEstimate | null;
+  sellerOffersFree: ListingPublicationShippingEstimate;
+  currentFreeShipping: boolean | null;
+  mandatoryFreeShipping: boolean;
+  logisticType: string | null;
+};
+
+export type ListingPublicationActiveSaleConditions = {
+  current: {
+    listingType: string;
+    categoryId: string;
+    price: number;
+    shippingMode: string | null;
+    logisticType: string | null;
+    freeShipping: boolean;
+    localPickUp: boolean;
+    mandatoryFreeShipping: boolean;
+  };
+  availableListingTypes: string[];
+  options: ListingPublicationPriceEstimate[];
 };
 
 type ListingPublicationWizardProps = {
   storeId: string;
   editing: boolean;
+  activePublication: boolean;
+  activeSaleConditions: ListingPublicationActiveSaleConditions | null;
   canPublishDirectly: boolean;
   form: ListingPublicationForm;
   setForm: Dispatch<SetStateAction<ListingPublicationForm>>;
@@ -109,9 +158,14 @@ type ListingPublicationWizardProps = {
   categoryTemplates: ListingPublicationCategoryTemplate[];
   quickProfile: ListingPublicationQuickProfile | null;
   priceEstimate: ListingPublicationPriceEstimate | null;
+  priceOptions: ListingPublicationPriceEstimate[];
+  shippingComparison: ListingPublicationShippingComparison | null;
   isSearchingCategories: boolean;
   isLoadingCategoryAttributes: boolean;
   isLoadingPriceEstimate: boolean;
+  isLoadingShippingComparison: boolean;
+  isLoadingSaleConditions: boolean;
+  isApplyingSaleConditions: boolean;
   isSuggestingPrice: boolean;
   isSaving: boolean;
   isSavingTemplate: boolean;
@@ -126,6 +180,9 @@ type ListingPublicationWizardProps = {
   onCategoryChange: (categoryId: string) => void;
   onLoadCategoryAttributes: () => Promise<boolean>;
   onLoadPriceEstimate: () => Promise<void>;
+  onLoadShippingComparison: () => Promise<unknown>;
+  onApplyActiveSaleConditions: () => Promise<void>;
+  onListingTypeChange: (listingType: string) => void;
   onSuggestPriceFromTarget: () => Promise<void>;
   onApplyCategoryTemplate: (templateId: string) => void;
   onSaveCategoryTemplate: () => Promise<void>;
@@ -156,6 +213,12 @@ function toCurrencyInputValue(value: string) {
 function toStockQuantityValue(value: string) {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+function toMeasurementValue(value: string) {
+  if (!value.trim()) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 function formatSignedCurrency(value: number) {
@@ -195,6 +258,8 @@ function updateAttributeValue(
 export function ListingPublicationWizard({
   storeId,
   editing,
+  activePublication,
+  activeSaleConditions,
   canPublishDirectly,
   form,
   setForm,
@@ -206,9 +271,14 @@ export function ListingPublicationWizard({
   categoryTemplates,
   quickProfile,
   priceEstimate,
+  priceOptions,
+  shippingComparison,
   isSearchingCategories,
   isLoadingCategoryAttributes,
   isLoadingPriceEstimate,
+  isLoadingShippingComparison,
+  isLoadingSaleConditions,
+  isApplyingSaleConditions,
   isSuggestingPrice,
   isSaving,
   isSavingTemplate,
@@ -220,6 +290,9 @@ export function ListingPublicationWizard({
   onCategoryChange,
   onLoadCategoryAttributes,
   onLoadPriceEstimate,
+  onLoadShippingComparison,
+  onApplyActiveSaleConditions,
+  onListingTypeChange,
   onSuggestPriceFromTarget,
   onApplyCategoryTemplate,
   onSaveCategoryTemplate,
@@ -253,16 +326,44 @@ export function ListingPublicationWizard({
     selectedProduct?.acqPrice !== null &&
     selectedProduct?.acqPrice !== undefined;
   const canSuggestPriceFromTarget =
-    hasTargetProfit && hasAcquisitionCost && Boolean(form.categoryId.trim());
+    hasTargetProfit &&
+    hasAcquisitionCost &&
+    Boolean(form.categoryId.trim()) &&
+    (!form.freeShipping || Boolean(shippingComparison));
+  const selectedShippingEstimate = shippingComparison
+    ? form.freeShipping
+      ? shippingComparison.sellerOffersFree
+      : shippingComparison.buyerPays
+    : null;
+  const estimatedSellerShippingCost = selectedShippingEstimate
+    ? selectedShippingEstimate.sellerCost
+    : form.freeShipping || shippingComparison
+      ? null
+      : 0;
+  const financingCost = priceEstimate?.financingAddOnFee ?? 0;
+  const baseMarketplaceFee = priceEstimate
+    ? Math.max(priceEstimate.saleFeeAmount - financingCost, 0)
+    : null;
   const estimatedProfit =
-    priceEstimate && hasAcquisitionCost
+    priceEstimate && hasAcquisitionCost && estimatedSellerShippingCost !== null
       ? marketplacePrice -
         priceEstimate.saleFeeAmount -
+        estimatedSellerShippingCost -
         (selectedProduct?.acqPrice ?? 0)
       : null;
   const profitDifference =
     estimatedProfit !== null && hasTargetProfit
       ? estimatedProfit - targetProfit
+      : null;
+  const activeConditionsChanged = Boolean(
+    activePublication &&
+      activeSaleConditions &&
+      (form.listingType !== activeSaleConditions.current.listingType ||
+        form.freeShipping !== activeSaleConditions.current.freeShipping),
+  );
+  const lowestSaleFee =
+    priceOptions.length > 0
+      ? Math.min(...priceOptions.map((option) => option.saleFeeAmount))
       : null;
 
   const goToNextStep = async () => {
@@ -284,6 +385,10 @@ export function ListingPublicationWizard({
     if (step === 2) {
       const didLoadAttributes = await onLoadCategoryAttributes();
       if (!didLoadAttributes) return;
+    }
+
+    if (step === 3) {
+      await onLoadPriceEstimate();
     }
 
     setStep((currentStep) => Math.min(currentStep + 1, 4) as ListingWizardStep);
@@ -594,7 +699,8 @@ export function ListingPublicationWizard({
                 <p className="text-sm font-medium">Fotos para Mercado Libre</p>
                 <p className="text-xs text-muted-foreground">
                   Selecciona al menos una para publicar. Tres o más ayudan a la
-                  clienta a conocer mejor el producto. La primera será la portada.
+                  clienta a conocer mejor el producto. La primera será la
+                  portada.
                 </p>
               </div>
               <Badge variant="secondary">
@@ -725,7 +831,10 @@ export function ListingPublicationWizard({
               Actualizar campos
             </Button>
           </div>
-          <div className="rounded-md border border-dashed bg-background/60 p-3 text-sm" aria-live="polite">
+          <div
+            className="rounded-md border border-dashed bg-background/60 p-3 text-sm"
+            aria-live="polite"
+          >
             {isLoadingCategoryAttributes ? (
               <p className="text-muted-foreground">
                 Consultando los campos obligatorios de Mercado Libre…
@@ -734,7 +843,8 @@ export function ListingPublicationWizard({
               <p>
                 Mercado Libre pidió {requiredAttributes.length} campo
                 {requiredAttributes.length === 1 ? "" : "s"} obligatorio
-                {requiredAttributes.length === 1 ? "" : "s"} para esta categoría.
+                {requiredAttributes.length === 1 ? "" : "s"} para esta
+                categoría.
               </p>
             ) : (
               <p className="text-muted-foreground">
@@ -993,11 +1103,383 @@ export function ListingPublicationWizard({
               </span>
             </p>
           </div>
+          <section className="space-y-4 rounded-md border p-4 text-sm">
+            <div className="flex items-start gap-3">
+              <Truck className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+              <div>
+                <h3 className="font-semibold">Condiciones de venta</h3>
+                <p className="text-xs text-muted-foreground">
+                  Define quién asume el envío y qué tipo de publicación usarás.
+                  Administración calcula el impacto antes de publicar.
+                </p>
+              </div>
+            </div>
+
+            {isLoadingSaleConditions ? (
+              <div className="flex items-center gap-2 rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Consultando en Mercado Libre las cuotas y el envío actuales…
+              </div>
+            ) : activePublication && !activeSaleConditions ? (
+              <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/5 p-3 text-xs">
+                <Info className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                <p>
+                  No se cargaron las condiciones actuales. Cierra y vuelve a
+                  abrir la publicación antes de cambiar cuotas o envío.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="grid gap-2">
+                  <Label>Cuotas sin interés ofrecidas</Label>
+                  <RadioGroup
+                    value={form.listingType}
+                    onValueChange={onListingTypeChange}
+                    className="grid gap-2 sm:grid-cols-2"
+                  >
+                    {priceOptions.map((option) => {
+                      const optionId =
+                        option.listingTypeId ?? option.listingTypeName;
+                      if (!optionId) return null;
+                      const financingCost = option.financingAddOnFee ?? 0;
+                      const feeDifference =
+                        lowestSaleFee === null
+                          ? 0
+                          : option.saleFeeAmount - lowestSaleFee;
+                      return (
+                        <Label
+                          key={optionId}
+                          htmlFor={`mercadolibre-listing-type-${optionId}`}
+                          className="flex cursor-pointer items-start gap-3 rounded-md border p-3 font-normal has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/[0.03]"
+                        >
+                          <RadioGroupItem
+                            id={`mercadolibre-listing-type-${optionId}`}
+                            value={optionId}
+                            className="mt-0.5"
+                          />
+                          <span className="min-w-0 space-y-1">
+                            <span className="block font-medium">
+                              {option.installmentLabel ??
+                                option.listingTypeName ??
+                                optionId}
+                            </span>
+                            <span className="block text-xs text-muted-foreground">
+                              Cargo total por vender: {" "}
+                              {currencyFormatter.format(option.saleFeeAmount)}
+                            </span>
+                            {financingCost > 0 ? (
+                              <span className="block text-xs text-muted-foreground">
+                                Incluye {currencyFormatter.format(financingCost)}
+                                {" "}por ofrecer más cuotas.
+                              </span>
+                            ) : null}
+                            {feeDifference > 0 ? (
+                              <span className="block text-xs font-medium text-warning">
+                                P de Papel recibe {" "}
+                                {currencyFormatter.format(feeDifference)} menos
+                                que con la opción de menor cargo.
+                              </span>
+                            ) : (
+                              <span className="block text-xs text-success">
+                                Menor cargo disponible para esta publicación.
+                              </span>
+                            )}
+                          </span>
+                        </Label>
+                      );
+                    })}
+                  </RadioGroup>
+                  <p className="text-xs text-muted-foreground">
+                    Solo aparecen planes que Mercado Libre permite actualmente
+                    para esta categoría y cuenta. Más cuotas pueden facilitar
+                    la compra, pero elevan el cargo descontado a P de Papel.
+                  </p>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>¿Quién asume el costo del envío?</Label>
+                  <RadioGroup
+                    value={form.freeShipping ? "seller" : "buyer"}
+                    onValueChange={(value) =>
+                      setForm((current) => ({
+                        ...current,
+                        freeShipping: value === "seller",
+                      }))
+                    }
+                    className="grid gap-2 sm:grid-cols-2"
+                  >
+                    <Label
+                      htmlFor="mercadolibre-shipping-buyer"
+                      className="flex cursor-pointer items-start gap-3 rounded-md border p-3 font-normal has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/[0.03]"
+                    >
+                      <RadioGroupItem
+                        id="mercadolibre-shipping-buyer"
+                        value="buyer"
+                        className="mt-0.5"
+                        disabled={
+                          shippingComparison?.mandatoryFreeShipping === true ||
+                          activeSaleConditions?.current
+                            .mandatoryFreeShipping === true
+                        }
+                      />
+                      <span>
+                        <span className="block font-medium">
+                          La compradora paga el envío
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {shippingComparison?.buyerPays
+                            ? `Costo estimado para P de Papel: ${currencyFormatter.format(shippingComparison.buyerPays.sellerCost)}.`
+                            : shippingComparison?.mandatoryFreeShipping ||
+                                activeSaleConditions?.current
+                                  .mandatoryFreeShipping
+                              ? "No disponible: Mercado Libre exige envío gratis."
+                              : "Normalmente protege mejor la utilidad de P de Papel."}
+                        </span>
+                      </span>
+                    </Label>
+                    <Label
+                      htmlFor="mercadolibre-shipping-seller"
+                      className="flex cursor-pointer items-start gap-3 rounded-md border p-3 font-normal has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/[0.03]"
+                    >
+                      <RadioGroupItem
+                        id="mercadolibre-shipping-seller"
+                        value="seller"
+                        className="mt-0.5"
+                      />
+                      <span>
+                        <span className="block font-medium">
+                          P de Papel ofrece envío gratis
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {shippingComparison
+                            ? `P de Papel paga aproximadamente ${currencyFormatter.format(shippingComparison.sellerOffersFree.sellerCost)} por venta.`
+                            : "Puede mejorar conversión, pero el costo se descuenta de la utilidad."}
+                        </span>
+                        {shippingComparison?.sellerOffersFree.promotedAmount !==
+                          null &&
+                        shippingComparison?.sellerOffersFree.promotedAmount !==
+                          undefined &&
+                        shippingComparison.sellerOffersFree.promotedAmount >
+                          shippingComparison.sellerOffersFree.sellerCost ? (
+                          <span className="block text-xs text-success">
+                            Mercado Libre reduce el costo desde {" "}
+                            <span className="line-through">
+                              {currencyFormatter.format(
+                                shippingComparison.sellerOffersFree
+                                  .promotedAmount,
+                              )}
+                            </span>{" "}
+                            por la reputación actual.
+                          </span>
+                        ) : null}
+                      </span>
+                    </Label>
+                  </RadioGroup>
+                </div>
+
+                <div className="space-y-3 rounded-md bg-muted/30 p-3">
+                  {!activePublication ? (
+                    <>
+                      <div>
+                        <p className="font-medium">Paquete para cotizar</p>
+                        <p className="text-xs text-muted-foreground">
+                          Usa las medidas del producto ya empacado. Mercado Libre
+                          entrega una aproximación para una unidad.
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                        <div className="grid gap-1.5">
+                          <Label htmlFor="mercadolibre-package-height">
+                            Alto
+                          </Label>
+                          <MeasurementInput
+                            id="mercadolibre-package-height"
+                            unit="cm"
+                            value={toMeasurementValue(form.packageHeightCm)}
+                            onChange={(value) =>
+                              onFormChange(
+                                "packageHeightCm",
+                                value === undefined ? "" : String(value),
+                              )
+                            }
+                          />
+                        </div>
+                        <div className="grid gap-1.5">
+                          <Label htmlFor="mercadolibre-package-width">
+                            Ancho
+                          </Label>
+                          <MeasurementInput
+                            id="mercadolibre-package-width"
+                            unit="cm"
+                            value={toMeasurementValue(form.packageWidthCm)}
+                            onChange={(value) =>
+                              onFormChange(
+                                "packageWidthCm",
+                                value === undefined ? "" : String(value),
+                              )
+                            }
+                          />
+                        </div>
+                        <div className="grid gap-1.5">
+                          <Label htmlFor="mercadolibre-package-length">
+                            Largo
+                          </Label>
+                          <MeasurementInput
+                            id="mercadolibre-package-length"
+                            unit="cm"
+                            value={toMeasurementValue(form.packageLengthCm)}
+                            onChange={(value) =>
+                              onFormChange(
+                                "packageLengthCm",
+                                value === undefined ? "" : String(value),
+                              )
+                            }
+                          />
+                        </div>
+                        <div className="grid gap-1.5">
+                          <Label htmlFor="mercadolibre-package-weight">
+                            Peso
+                          </Label>
+                          <MeasurementInput
+                            id="mercadolibre-package-weight"
+                            unit="g"
+                            step="1"
+                            value={toMeasurementValue(
+                              form.packageWeightGrams,
+                            )}
+                            onChange={(value) =>
+                              onFormChange(
+                                "packageWeightGrams",
+                                value === undefined ? "" : String(value),
+                              )
+                            }
+                          />
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex items-start gap-2 text-xs text-muted-foreground">
+                      <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                      <p>
+                        La cotización usa directamente el producto publicado y
+                        la logística que Mercado Libre tiene activa.
+                      </p>
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    {!activePublication ? (
+                      <Label
+                        htmlFor="mercadolibre-local-pickup"
+                        className="flex cursor-pointer items-start gap-2 font-normal"
+                      >
+                        <Checkbox
+                          id="mercadolibre-local-pickup"
+                          checked={form.localPickUp}
+                          onCheckedChange={(checked) =>
+                            setForm((current) => ({
+                              ...current,
+                              localPickUp: checked === true,
+                            }))
+                          }
+                        />
+                        <span>
+                          <span className="block font-medium">
+                            Permitir retiro acordado
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            Solo actívalo si realmente puedes entregar en
+                            persona.
+                          </span>
+                        </span>
+                      </Label>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        Retiro acordado: {form.localPickUp ? "activo" : "inactivo"}
+                      </p>
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => void onLoadShippingComparison()}
+                      disabled={isLoadingShippingComparison}
+                    >
+                      {isLoadingShippingComparison ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Truck className="mr-2 h-4 w-4" />
+                      )}
+                      {shippingComparison
+                        ? "Actualizar costo de envío"
+                        : "Comparar costos de envío"}
+                    </Button>
+                  </div>
+                </div>
+
+                {shippingComparison ? (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="rounded-md border p-3">
+                      <p className="text-xs text-muted-foreground">
+                        Si paga la compradora
+                      </p>
+                      <p className="font-semibold">
+                        {shippingComparison.buyerPays
+                          ? `Costo estimado para P de Papel: ${currencyFormatter.format(shippingComparison.buyerPays.sellerCost)}`
+                          : "No disponible para esta publicación"}
+                      </p>
+                    </div>
+                    <div className="rounded-md border p-3">
+                      <p className="text-xs text-muted-foreground">
+                        Si P de Papel ofrece envío gratis
+                      </p>
+                      <p className="font-semibold">
+                        Costo estimado para P de Papel:{" "}
+                        {currencyFormatter.format(
+                          shippingComparison.sellerOffersFree.sellerCost,
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+                {activePublication ? (
+                  <div className="flex flex-col gap-2 rounded-md border border-primary/20 bg-primary/[0.03] p-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="font-medium">
+                        Aplicar cuotas y envío en Mercado Libre
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Antes de confirmar verás el cargo actual, el nuevo cargo,
+                        el costo de envío y el neto estimado. El precio de la
+                        tienda en línea no cambia.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => void onApplyActiveSaleConditions()}
+                      disabled={
+                        isApplyingSaleConditions ||
+                        !activeConditionsChanged ||
+                        !shippingComparison
+                      }
+                    >
+                      {isApplyingSaleConditions ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : null}
+                      {activeConditionsChanged
+                        ? "Aplicar condiciones"
+                        : "Sin cambios pendientes"}
+                    </Button>
+                  </div>
+                ) : null}
+              </>
+            )}
+          </section>
+
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3 text-sm">
             <div>
-              <p className="font-medium">Comisión estimada</p>
+              <p className="font-medium">Costos oficiales estimados</p>
               <p className="text-xs text-muted-foreground">
-                El valor final puede variar por envío, impuestos y descuentos.
+                Consulta nuevamente si cambias precio, categoría o tipo de
+                publicación.
               </p>
             </div>
             <Button
@@ -1012,7 +1494,7 @@ export function ListingPublicationWizard({
               ) : (
                 <CircleDollarSign className="mr-2 h-4 w-4" />
               )}
-              Calcular comisión
+              Actualizar comisiones
             </Button>
           </div>
           {hasTargetProfit ? (
@@ -1023,14 +1505,16 @@ export function ListingPublicationWizard({
                 </p>
                 <p className="text-xs text-muted-foreground">
                   Calcula y actualiza solo el precio de Mercado Libre con el
-                  valor necesario para buscar esta ganancia después del costo y
-                  la comisión estimada.
+                  valor necesario para buscar esta ganancia después del costo,
+                  la comisión y el envío seleccionado.
                 </p>
                 {!canSuggestPriceFromTarget ? (
                   <p className="mt-1 text-xs text-warning">
                     {!form.categoryId.trim()
                       ? "Elige primero una categoría de Mercado Libre."
-                      : "Registra el costo de adquisición del producto para poder calcular la ganancia."}
+                      : form.freeShipping && !shippingComparison
+                        ? "Compara primero el envío para incluirlo en el cálculo."
+                        : "Registra el costo de adquisición del producto para poder calcular la ganancia."}
                   </p>
                 ) : null}
               </div>
@@ -1050,10 +1534,26 @@ export function ListingPublicationWizard({
             </div>
           ) : null}
           {priceEstimate ? (
-            <div className="grid gap-2 rounded-md border border-primary/20 bg-primary/[0.03] p-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-2 rounded-md border border-primary/20 bg-primary/[0.03] p-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
               <p>
                 <span className="block text-xs text-muted-foreground">
-                  Comisión estimada
+                  Cargo base por vender
+                </span>
+                <span className="font-semibold">
+                  {currencyFormatter.format(baseMarketplaceFee ?? 0)}
+                </span>
+              </p>
+              <p>
+                <span className="block text-xs text-muted-foreground">
+                  Costo adicional por financiación
+                </span>
+                <span className="font-semibold">
+                  {currencyFormatter.format(financingCost)}
+                </span>
+              </p>
+              <p>
+                <span className="block text-xs text-muted-foreground">
+                  Comisión total de Mercado Libre
                 </span>
                 <span className="font-semibold">
                   {currencyFormatter.format(priceEstimate.saleFeeAmount)}
@@ -1061,54 +1561,59 @@ export function ListingPublicationWizard({
               </p>
               <p>
                 <span className="block text-xs text-muted-foreground">
-                  Neto antes de envío e impuestos
+                  Envío asumido por P de Papel
                 </span>
                 <span className="font-semibold">
-                  {currencyFormatter.format(
-                    Number(form.marketplacePrice) - priceEstimate.saleFeeAmount,
-                  )}
+                  {estimatedSellerShippingCost === null
+                    ? "Falta estimar"
+                    : currencyFormatter.format(estimatedSellerShippingCost)}
                 </span>
               </p>
               <p>
                 <span className="block text-xs text-muted-foreground">
-                  Margen antes de envío e impuestos
+                  Neto estimado a liquidar
                 </span>
                 <span className="font-semibold">
-                  {currencyFormatter.format(
-                    Number(form.marketplacePrice) -
-                      priceEstimate.saleFeeAmount -
-                      (selectedProduct?.acqPrice ?? 0),
-                  )}
+                  {estimatedSellerShippingCost === null
+                    ? "Falta estimar"
+                    : currencyFormatter.format(
+                        Number(form.marketplacePrice) -
+                          priceEstimate.saleFeeAmount -
+                          estimatedSellerShippingCost,
+                      )}
                 </span>
               </p>
-              {estimatedProfit !== null ? (
-                <p>
-                  <span className="block text-xs text-muted-foreground">
-                    Ganancia estimada
+              <p>
+                <span className="block text-xs text-muted-foreground">
+                  Ganancia operativa estimada
+                </span>
+                <span className="font-semibold">
+                  {estimatedProfit === null
+                    ? "Falta costo o envío"
+                    : currencyFormatter.format(estimatedProfit)}
+                </span>
+                {profitDifference !== null ? (
+                  <span
+                    className={
+                      profitDifference >= 0
+                        ? "block text-xs text-success"
+                        : "block text-xs text-warning"
+                    }
+                  >
+                    {profitDifference >= 0
+                      ? `Cumple la meta por ${formatSignedCurrency(profitDifference)}.`
+                      : `Faltan ${currencyFormatter.format(Math.abs(profitDifference))} para la meta.`}
                   </span>
-                  <span className="font-semibold">
-                    {currencyFormatter.format(estimatedProfit)}
-                  </span>
-                  {profitDifference !== null ? (
-                    <span
-                      className={
-                        profitDifference >= 0
-                          ? "block text-xs text-success"
-                          : "block text-xs text-warning"
-                      }
-                    >
-                      {profitDifference >= 0
-                        ? `Cumple la meta por ${formatSignedCurrency(profitDifference)}.`
-                        : `Faltan ${currencyFormatter.format(Math.abs(profitDifference))} para la meta.`}
-                    </span>
-                  ) : null}
-                </p>
-              ) : null}
+                ) : null}
+              </p>
             </div>
           ) : null}
           <p className="text-xs text-muted-foreground">
-            Al publicar, Administración enviará el producto, fotos, precio,
-            stock y ficha técnica a Mercado Libre.
+            Son estimaciones oficiales previas a la venta. Impuestos,
+            descuentos, cambios logísticos o reclamos pueden modificar el valor
+            final; la liquidación de Mercado Libre sigue siendo la fuente
+            definitiva. Al publicar, Administración enviará producto, fotos,
+            precio, stock, ficha técnica y condiciones de envío.
           </p>
         </div>
       ) : null}
@@ -1148,9 +1653,13 @@ export function ListingPublicationWizard({
               type="button"
               variant="outline"
               onClick={() => void onSave()}
-              disabled={isSaving}
+              disabled={isSaving || isApplyingSaleConditions}
             >
-              {isSaving ? "Guardando…" : "Guardar borrador"}
+              {isSaving
+                ? "Guardando…"
+                : editing
+                  ? "Guardar cambios generales"
+                  : "Guardar borrador"}
             </Button>
             {canPublishDirectly ? (
               <Button

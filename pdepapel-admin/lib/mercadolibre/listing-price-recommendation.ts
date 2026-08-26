@@ -8,6 +8,7 @@ type PriceRecommendationInput = {
   acquisitionCost: number | null;
   targetProfit: number | null;
   initialPrice: number;
+  additionalCosts?: number;
   getFeeQuote: (price: number) => Promise<MercadoLibreListingFeeQuote>;
 };
 
@@ -25,6 +26,7 @@ export async function recommendMercadoLibreListingPrice({
   acquisitionCost,
   targetProfit,
   initialPrice,
+  additionalCosts = 0,
   getFeeQuote,
 }: PriceRecommendationInput): Promise<MercadoLibreListingPriceRecommendation | null> {
   if (
@@ -33,12 +35,14 @@ export async function recommendMercadoLibreListingPrice({
     acquisitionCost < 0 ||
     targetProfit === null ||
     !Number.isFinite(targetProfit) ||
-    targetProfit < 0
+    targetProfit < 0 ||
+    !Number.isFinite(additionalCosts) ||
+    additionalCosts < 0
   ) {
     return null;
   }
 
-  const requiredNetAmount = acquisitionCost + targetProfit;
+  const requiredNetAmount = acquisitionCost + targetProfit + additionalCosts;
   let price = toPositiveInteger(Math.max(initialPrice, requiredNetAmount));
   let quote: MercadoLibreListingFeeQuote | null = null;
 
@@ -62,7 +66,8 @@ export async function recommendMercadoLibreListingPrice({
       return {
         price,
         saleFeeAmount: quote.saleFeeAmount,
-        expectedProfit: price - quote.saleFeeAmount - acquisitionCost,
+        expectedProfit:
+          price - quote.saleFeeAmount - acquisitionCost - additionalCosts,
       };
     }
     price = nextPrice;
@@ -73,6 +78,7 @@ export async function recommendMercadoLibreListingPrice({
   return {
     price,
     saleFeeAmount: finalQuote.saleFeeAmount,
-    expectedProfit: price - finalQuote.saleFeeAmount - acquisitionCost,
+    expectedProfit:
+      price - finalQuote.saleFeeAmount - acquisitionCost - additionalCosts,
   };
 }

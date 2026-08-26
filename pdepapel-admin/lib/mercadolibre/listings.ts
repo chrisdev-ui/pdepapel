@@ -201,6 +201,10 @@ function buildItemPayload(listing: ListingForPublication) {
     );
   }
 
+  const saleConditions = getMercadoLibreListingMetadata(
+    listing.metadata,
+  ).saleConditions;
+
   return {
     site_id: "MCO",
     family_name: familyName,
@@ -211,6 +215,15 @@ function buildItemPayload(listing: ListingForPublication) {
     buying_mode: "buy_it_now",
     listing_type_id: listing.listingType || "gold_special",
     condition: "new",
+    ...(saleConditions
+      ? {
+          shipping: {
+            mode: saleConditions.shippingMode,
+            free_shipping: saleConditions.freeShipping,
+            local_pick_up: saleConditions.localPickUp,
+          },
+        }
+      : {}),
     ...(listing.product.sku.trim()
       ? { seller_custom_field: listing.product.sku.trim() }
       : {}),
@@ -247,10 +260,9 @@ export async function validateMercadoLibreListingForPublication(
     },
   );
   if (!categoryInspection.ok) {
-    throw new MercadoLibrePublicationError(
-      categoryInspection.message,
-      { requiresDraftReview: true },
-    );
+    throw new MercadoLibrePublicationError(categoryInspection.message, {
+      requiresDraftReview: true,
+    });
   }
   const requiredAttributeIds = (categoryInspection.attributes ?? [])
     .filter((attribute) => attribute.required)

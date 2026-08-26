@@ -27,10 +27,14 @@ const product = {
 function WizardHarness({
   onPublish,
   onSuggestPrice = async () => undefined,
+  onApplyActiveConditions = async () => undefined,
+  activePublication = false,
   error = null,
 }: {
   onPublish: () => Promise<void>;
   onSuggestPrice?: () => Promise<void>;
+  onApplyActiveConditions?: () => Promise<void>;
+  activePublication?: boolean;
   error?: string | null;
 }) {
   const [form, setForm] = useState({
@@ -38,18 +42,65 @@ function WizardHarness({
     familyName: "Lapicero kawaii",
     marketplacePrice: "24000",
     categoryId: "MCO123",
+    listingType: "gold_special",
     stockSafetyBuffer: "0",
     minimumMarginAmount: "12000",
     syncPrice: true,
     imageUrls: [product.images[0].url],
     attributes: "",
+    freeShipping: false,
+    localPickUp: false,
+    packageHeightCm: "",
+    packageWidthCm: "",
+    packageLengthCm: "",
+    packageWeightGrams: "",
   });
+
+  const priceEstimate = {
+    saleFeeAmount: 4560,
+    percentageFee: 19,
+    fixedFee: 0,
+    financingAddOnFee: 0,
+    listingFeeAmount: 0,
+    listingTypeId: "gold_special",
+    listingTypeName: "Clásica",
+    listingExposure: "highest",
+    installmentCount: 3,
+    installmentLabel: "Hasta 3 cuotas con 0% interés",
+  };
+  const premiumPriceEstimate = {
+    ...priceEstimate,
+    saleFeeAmount: 6120,
+    financingAddOnFee: 1560,
+    listingTypeId: "gold_pro",
+    listingTypeName: "Premium",
+    installmentCount: 6,
+    installmentLabel: "Hasta 6 cuotas con 0% interés",
+  };
+  const activeSaleConditions = activePublication
+    ? {
+        current: {
+          listingType: "gold_special",
+          categoryId: "MCO123",
+          price: 24000,
+          shippingMode: "me2",
+          logisticType: "drop_off",
+          freeShipping: false,
+          localPickUp: false,
+          mandatoryFreeShipping: false,
+        },
+        availableListingTypes: ["gold_special", "gold_pro"],
+        options: [priceEstimate, premiumPriceEstimate],
+      }
+    : null;
 
   return (
     <ListingPublicationWizard
       storeId="store-1"
-      editing={false}
-      canPublishDirectly
+      editing={activePublication}
+      activePublication={activePublication}
+      activeSaleConditions={activeSaleConditions}
+      canPublishDirectly={!activePublication}
       form={form}
       setForm={setForm}
       error={error}
@@ -74,10 +125,37 @@ function WizardHarness({
         minimumMarginAmount: 12000,
         localCategory: product.category,
       }}
-      priceEstimate={null}
+      priceEstimate={priceEstimate}
+      priceOptions={[priceEstimate, premiumPriceEstimate]}
+      shippingComparison={
+        activePublication
+          ? {
+              buyerPays: {
+                sellerCost: 0,
+                currencyId: "COP",
+                billableWeightGrams: 500,
+                discountRate: null,
+                promotedAmount: null,
+              },
+              sellerOffersFree: {
+                sellerCost: 15200,
+                currencyId: "COP",
+                billableWeightGrams: 500,
+                discountRate: 0.5,
+                promotedAmount: 30400,
+              },
+              currentFreeShipping: false,
+              mandatoryFreeShipping: false,
+              logisticType: "drop_off",
+            }
+          : null
+      }
       isSearchingCategories={false}
       isLoadingCategoryAttributes={false}
       isLoadingPriceEstimate={false}
+      isLoadingShippingComparison={false}
+      isLoadingSaleConditions={false}
+      isApplyingSaleConditions={false}
       isSuggestingPrice={false}
       isSaving={false}
       isSavingTemplate={false}
@@ -93,6 +171,11 @@ function WizardHarness({
       }
       onLoadCategoryAttributes={async () => true}
       onLoadPriceEstimate={async () => undefined}
+      onLoadShippingComparison={async () => undefined}
+      onApplyActiveSaleConditions={onApplyActiveConditions}
+      onListingTypeChange={(listingType) =>
+        setForm((current) => ({ ...current, listingType }))
+      }
       onSuggestPriceFromTarget={onSuggestPrice}
       onApplyCategoryTemplate={() => undefined}
       onSaveCategoryTemplate={async () => undefined}
@@ -135,8 +218,15 @@ describe("ListingPublicationWizard", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
 
-    expect(screen.getAllByText("Lapicero kawaii")).toHaveLength(2);
+    expect(await screen.findAllByText("Lapicero kawaii")).toHaveLength(2);
     expect(screen.getByText("Precio de la tienda en línea")).toBeVisible();
+    expect(screen.getByText("Condiciones de venta")).toBeVisible();
+    expect(
+      screen.getByText("Hasta 3 cuotas con 0% interés"),
+    ).toBeVisible();
+    expect(
+      screen.getByText("Hasta 6 cuotas con 0% interés"),
+    ).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Publicar ahora" }));
 
     expect(onPublish).toHaveBeenCalledOnce();
@@ -157,7 +247,9 @@ describe("ListingPublicationWizard", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
 
-    expect(screen.getByText("Precio de venta en Mercado Libre")).toBeVisible();
+    expect(
+      await screen.findByText("Precio de venta en Mercado Libre"),
+    ).toBeVisible();
     expect(screen.getByText(/Diferencia frente a tienda:/)).toBeVisible();
     fireEvent.click(
       screen.getByRole("button", {
@@ -179,5 +271,35 @@ describe("ListingPublicationWizard", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "La categoría ya no está disponible",
     );
+  });
+
+  it("explains the financial impact before applying active sale conditions", async () => {
+    const onApplyActiveConditions = vi.fn(async () => undefined);
+    render(
+      <WizardHarness
+        activePublication
+        onPublish={async () => undefined}
+        onApplyActiveConditions={onApplyActiveConditions}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    fireEvent.change(await screen.findByLabelText(/Marca/), {
+      target: { value: "P de Papel" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+
+    expect(await screen.findByText("Condiciones de venta")).toBeVisible();
+    fireEvent.click(
+      screen.getByRole("radio", {
+        name: /Hasta 6 cuotas con 0% interés/,
+      }),
+    );
+    expect(screen.getByText(/P de Papel recibe.*menos/)).toBeVisible();
+    expect(screen.getByText(/reduce el costo desde/)).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Aplicar condiciones" }));
+
+    expect(onApplyActiveConditions).toHaveBeenCalledOnce();
   });
 });

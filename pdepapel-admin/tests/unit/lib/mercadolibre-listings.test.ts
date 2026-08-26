@@ -68,6 +68,17 @@ describe("Mercado Libre listing publication", () => {
           metadata: {
             familyName: "Agenda kawaii",
             attributes: [{ id: "COLOR", value_name: "Rosado" }],
+            saleConditions: {
+              shippingMode: "me2",
+              freeShipping: true,
+              localPickUp: false,
+              packageDimensions: {
+                heightCm: 4,
+                widthCm: 20,
+                lengthCm: 28,
+                weightGrams: 500,
+              },
+            },
           },
           product: {
             id: "product-id",
@@ -108,6 +119,11 @@ describe("Mercado Libre listing publication", () => {
       price: 19_900,
       available_quantity: 3,
       seller_custom_field: "AGENDA-01",
+      shipping: {
+        mode: "me2",
+        free_shipping: true,
+        local_pick_up: false,
+      },
       attributes: expect.arrayContaining([
         { id: "COLOR", value_name: "Rosado" },
         { id: "BRAND", value_name: "P de Papel" },
@@ -225,13 +241,11 @@ describe("Mercado Libre listing publication", () => {
   });
 
   it("keeps the draft reviewable when Mercado Libre removed the category", async () => {
-    const request = vi
-      .fn()
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ message: "Category not found" }), {
-          status: 404,
-        }),
-      );
+    const request = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ message: "Category not found" }), {
+        status: 404,
+      }),
+    );
 
     await expect(
       publishMercadoLibreListing(

@@ -48,7 +48,7 @@ import {
   UploadCloud,
   Video,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ListingPublicationWizard } from "./listing-publication-wizard";
 import { ProductVideoLibrary } from "./product-video-library";
@@ -58,12 +58,13 @@ type ProductReference = {
   name: string;
   sku: string;
   stock: number;
+  price: number;
   acqPrice: number | null;
   images: { url: string; isMain?: boolean }[];
   category?: { id: string; name: string } | null;
 };
 
-type SelectedProduct = ProductReference & { price: number };
+type SelectedProduct = ProductReference;
 
 function toSelectedProduct(
   product: AsyncProductOption | null | undefined,
@@ -87,6 +88,7 @@ function toSelectedProduct(
 type Listing = {
   id: string;
   categoryId: string | null;
+  listingType: string | null;
   marketplacePrice: number | null;
   stockSafetyBuffer: number;
   syncStock: boolean;
@@ -100,6 +102,17 @@ type Listing = {
     attributes?: MarketplaceAttribute[];
     media?: { imageUrls?: string[] };
     familyName?: string;
+    saleConditions?: {
+      shippingMode: "me2";
+      freeShipping: boolean;
+      localPickUp: boolean;
+      packageDimensions: {
+        heightCm: number;
+        widthCm: number;
+        lengthCm: number;
+        weightGrams: number;
+      } | null;
+    };
   } | null;
   product: ProductReference;
 };
@@ -126,11 +139,18 @@ type ListingForm = {
   familyName: string;
   marketplacePrice: string;
   categoryId: string;
+  listingType: string;
   stockSafetyBuffer: string;
   minimumMarginAmount: string;
   syncPrice: boolean;
   imageUrls: string[];
   attributes: string;
+  freeShipping: boolean;
+  localPickUp: boolean;
+  packageHeightCm: string;
+  packageWidthCm: string;
+  packageLengthCm: string;
+  packageWeightGrams: string;
 };
 
 type CategoryAttribute = {
@@ -165,8 +185,44 @@ type PriceEstimate = {
   saleFeeAmount: number;
   percentageFee: number | null;
   fixedFee: number | null;
+  financingAddOnFee: number | null;
+  listingFeeAmount: number | null;
   listingTypeId: string | null;
   listingTypeName: string | null;
+  listingExposure: string | null;
+  installmentCount: number | null;
+  installmentLabel: string | null;
+};
+
+type ShippingCostEstimate = {
+  sellerCost: number;
+  currencyId: string | null;
+  billableWeightGrams: number | null;
+  discountRate: number | null;
+  promotedAmount: number | null;
+};
+
+type ShippingCostComparison = {
+  buyerPays: ShippingCostEstimate | null;
+  sellerOffersFree: ShippingCostEstimate;
+  currentFreeShipping: boolean | null;
+  mandatoryFreeShipping: boolean;
+  logisticType: string | null;
+};
+
+type ActiveSaleConditions = {
+  current: {
+    listingType: string;
+    categoryId: string;
+    price: number;
+    shippingMode: string | null;
+    logisticType: string | null;
+    freeShipping: boolean;
+    localPickUp: boolean;
+    mandatoryFreeShipping: boolean;
+  };
+  availableListingTypes: string[];
+  options: PriceEstimate[];
 };
 
 type ListingQualityRule = {
@@ -233,11 +289,18 @@ const emptyForm: ListingForm = {
   familyName: "",
   marketplacePrice: "",
   categoryId: "",
+  listingType: "gold_special",
   stockSafetyBuffer: "0",
   minimumMarginAmount: "",
   syncPrice: true,
   imageUrls: [],
   attributes: "",
+  freeShipping: false,
+  localPickUp: false,
+  packageHeightCm: "",
+  packageWidthCm: "",
+  packageLengthCm: "",
+  packageWeightGrams: "",
 };
 
 const currencyFormatter = new Intl.NumberFormat("es-CO", {
@@ -245,6 +308,20 @@ const currencyFormatter = new Intl.NumberFormat("es-CO", {
   currency: "COP",
   maximumFractionDigits: 0,
 });
+
+function formatCurrencyDifference(value: number) {
+  const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+  return `${sign}${currencyFormatter.format(Math.abs(value))}`;
+}
+
+function getSellerShippingCost(
+  comparison: ShippingCostComparison | null,
+  freeShipping: boolean,
+) {
+  if (!comparison) return null;
+  if (freeShipping) return comparison.sellerOffersFree.sellerCost;
+  return comparison.buyerPays?.sellerCost ?? 0;
+}
 
 const bulkActionLabels = {
   publish: "Publicar borradores",
@@ -293,13 +370,10 @@ type ResponseError = {
 function getResponseError(response: Response): Promise<ResponseError> {
   return response
     .json()
-    .then(
-      (body: { error?: string; details?: { code?: string } }) => ({
-        message: body.error ?? "No fue posible completar la acción",
-        code:
-          typeof body.details?.code === "string" ? body.details.code : null,
-      }),
-    )
+    .then((body: { error?: string; details?: { code?: string } }) => ({
+      message: body.error ?? "No fue posible completar la acción",
+      code: typeof body.details?.code === "string" ? body.details.code : null,
+    }))
     .catch(() => ({
       message: "No fue posible completar la acción",
       code: null,
@@ -337,7 +411,20 @@ export function MercadoLibreListingManager({
   const [priceEstimate, setPriceEstimate] = useState<PriceEstimate | null>(
     null,
   );
+  const [priceOptions, setPriceOptions] = useState<PriceEstimate[]>([]);
   const [isLoadingPriceEstimate, setIsLoadingPriceEstimate] = useState(false);
+  const [shippingComparison, setShippingComparison] =
+    useState<ShippingCostComparison | null>(null);
+  const [activeSaleConditions, setActiveSaleConditions] =
+    useState<ActiveSaleConditions | null>(null);
+  const [activeCurrentShippingComparison, setActiveCurrentShippingComparison] =
+    useState<ShippingCostComparison | null>(null);
+  const [isLoadingSaleConditions, setIsLoadingSaleConditions] = useState(false);
+  const [isApplyingSaleConditions, setIsApplyingSaleConditions] =
+    useState(false);
+  const saleConditionsRequestId = useRef(0);
+  const [isLoadingShippingComparison, setIsLoadingShippingComparison] =
+    useState(false);
   const [qualityByListingId, setQualityByListingId] = useState<
     Record<string, ListingQuality>
   >({});
@@ -454,6 +541,19 @@ export function MercadoLibreListingManager({
   const updateForm = (key: keyof ListingForm, value: string) => {
     setError(null);
     setForm((current) => ({ ...current, [key]: value }));
+    if (key === "marketplacePrice") {
+      setPriceEstimate(null);
+      setPriceOptions([]);
+      setShippingComparison(null);
+    }
+    if (
+      key === "packageHeightCm" ||
+      key === "packageWidthCm" ||
+      key === "packageLengthCm" ||
+      key === "packageWeightGrams"
+    ) {
+      setShippingComparison(null);
+    }
   };
 
   const updateCategory = (categoryId: string) => {
@@ -472,16 +572,24 @@ export function MercadoLibreListingManager({
     setCategoryAttributes([]);
     setVerifiedCategoryId(null);
     setPriceEstimate(null);
+    setPriceOptions([]);
+    setShippingComparison(null);
     setQuickProfile(null);
   };
 
   const openNewListing = () => {
+    saleConditionsRequestId.current += 1;
     setEditingListing(null);
     setForm(emptyForm);
     setSuggestions([]);
     setCategoryAttributes([]);
     setVerifiedCategoryId(null);
     setPriceEstimate(null);
+    setPriceOptions([]);
+    setShippingComparison(null);
+    setActiveSaleConditions(null);
+    setActiveCurrentShippingComparison(null);
+    setIsLoadingSaleConditions(false);
     setSelectedProduct(null);
     setQuickProfile(null);
     setError(null);
@@ -489,12 +597,15 @@ export function MercadoLibreListingManager({
   };
 
   const openEditListing = (listing: Listing) => {
+    const requestId = saleConditionsRequestId.current + 1;
+    saleConditionsRequestId.current = requestId;
     setEditingListing(listing);
     setForm({
       productId: listing.product.id,
       familyName: listing.metadata?.familyName ?? listing.product.name,
       marketplacePrice: String(listing.marketplacePrice ?? ""),
       categoryId: listing.categoryId ?? "",
+      listingType: listing.listingType ?? "gold_special",
       stockSafetyBuffer: String(listing.stockSafetyBuffer),
       minimumMarginAmount: String(listing.minimumMarginAmount ?? ""),
       syncPrice: listing.syncPrice,
@@ -502,18 +613,40 @@ export function MercadoLibreListingManager({
         ? listing.metadata.media.imageUrls
         : listing.product.images.map((image) => image.url),
       attributes: attributesToText(listing.metadata?.attributes),
+      freeShipping: listing.metadata?.saleConditions?.freeShipping ?? false,
+      localPickUp: listing.metadata?.saleConditions?.localPickUp ?? false,
+      packageHeightCm: String(
+        listing.metadata?.saleConditions?.packageDimensions?.heightCm ?? "",
+      ),
+      packageWidthCm: String(
+        listing.metadata?.saleConditions?.packageDimensions?.widthCm ?? "",
+      ),
+      packageLengthCm: String(
+        listing.metadata?.saleConditions?.packageDimensions?.lengthCm ?? "",
+      ),
+      packageWeightGrams: String(
+        listing.metadata?.saleConditions?.packageDimensions?.weightGrams ?? "",
+      ),
     });
     setSelectedProduct({
       ...listing.product,
-      price: listing.marketplacePrice ?? 0,
+      price: listing.product.price,
     });
     setSuggestions([]);
     setCategoryAttributes([]);
     setVerifiedCategoryId(null);
     setPriceEstimate(null);
+    setPriceOptions([]);
+    setShippingComparison(null);
+    setActiveSaleConditions(null);
+    setActiveCurrentShippingComparison(null);
+    setIsLoadingSaleConditions(Boolean(listing.externalItemId));
     setQuickProfile(null);
     setError(null);
     setIsDialogOpen(true);
+    if (listing.externalItemId) {
+      void loadActiveSaleConditions(listing, requestId);
+    }
   };
 
   const loadImportPreview = async () => {
@@ -710,6 +843,8 @@ export function MercadoLibreListingManager({
           setCategoryAttributes([]);
           setVerifiedCategoryId(null);
           setPriceEstimate(null);
+          setPriceOptions([]);
+          setShippingComparison(null);
           setQuickProfile(null);
           setForm((current) => ({
             ...current,
@@ -747,13 +882,45 @@ export function MercadoLibreListingManager({
       const query = new URLSearchParams({
         price: form.marketplacePrice,
         categoryId: form.categoryId,
-        listingType: "gold_special",
       });
       const response = await fetch(
         `/api/${storeId}/marketplaces/mercadolibre/listings/pricing?${query.toString()}`,
       );
       if (!response.ok) throw new Error(await getErrorMessage(response));
-      setPriceEstimate((await response.json()) as PriceEstimate);
+      const result = (await response.json()) as { options: PriceEstimate[] };
+      const options = activeSaleConditions
+        ? result.options.filter((option) =>
+            option.listingTypeId
+              ? activeSaleConditions.availableListingTypes.includes(
+                  option.listingTypeId,
+                )
+              : false,
+          )
+        : result.options;
+      if (!options.length) {
+        throw new Error(
+          "Mercado Libre no devolvió tipos de publicación disponibles",
+        );
+      }
+      setPriceOptions(options);
+      const currentEstimate = options.find(
+        (option) => option.listingTypeId === form.listingType,
+      );
+      const selectedEstimate =
+        currentEstimate ??
+        (editingListing?.externalItemId ? null : options[0]);
+      setPriceEstimate(selectedEstimate);
+      if (
+        !editingListing?.externalItemId &&
+        selectedEstimate?.listingTypeId &&
+        selectedEstimate.listingTypeId !== form.listingType
+      ) {
+        setForm((current) => ({
+          ...current,
+          listingType: selectedEstimate.listingTypeId!,
+        }));
+      }
+      setShippingComparison(null);
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -768,17 +935,277 @@ export function MercadoLibreListingManager({
   const getPriceEstimate = async (
     price: number,
     categoryId: string,
+    listingType = form.listingType,
   ): Promise<PriceEstimate> => {
     const query = new URLSearchParams({
       price: String(price),
       categoryId,
-      listingType: "gold_special",
+      listingType,
     });
     const response = await fetch(
       `/api/${storeId}/marketplaces/mercadolibre/listings/pricing?${query.toString()}`,
     );
     if (!response.ok) throw new Error(await getErrorMessage(response));
     return (await response.json()) as PriceEstimate;
+  };
+
+  const updateListingType = (listingType: string) => {
+    setError(null);
+    setForm((current) => ({ ...current, listingType }));
+    setPriceEstimate(
+      priceOptions.find((option) => option.listingTypeId === listingType) ??
+        null,
+    );
+    setShippingComparison(null);
+  };
+
+  const loadShippingComparison = async (override?: {
+    listingId?: string;
+    price?: string;
+    listingType?: string;
+  }) => {
+    const activeListingId =
+      override?.listingId ??
+      (editingListing?.externalItemId ? editingListing.id : undefined);
+    const price = override?.price ?? form.marketplacePrice;
+    const listingType = override?.listingType ?? form.listingType;
+    const packageFields = [
+      form.packageHeightCm,
+      form.packageWidthCm,
+      form.packageLengthCm,
+      form.packageWeightGrams,
+    ];
+    if (!price || !listingType) {
+      setError("Define precio y tipo de publicación antes de estimar el envío");
+      return null;
+    }
+    if (
+      !activeListingId &&
+      packageFields.some((value) => !value || Number(value) <= 0)
+    ) {
+      setError(
+        "Completa alto, ancho, largo y peso del paquete para comparar el envío",
+      );
+      return null;
+    }
+
+    setIsLoadingShippingComparison(true);
+    setError(null);
+    try {
+      const query = new URLSearchParams({
+        price,
+        listingType,
+      });
+      if (activeListingId) {
+        query.set("listingId", activeListingId);
+      } else {
+        query.set("heightCm", form.packageHeightCm);
+        query.set("widthCm", form.packageWidthCm);
+        query.set("lengthCm", form.packageLengthCm);
+        query.set("weightGrams", form.packageWeightGrams);
+      }
+      const response = await fetch(
+        `/api/${storeId}/marketplaces/mercadolibre/listings/shipping-cost?${query.toString()}`,
+      );
+      if (!response.ok) throw new Error(await getErrorMessage(response));
+      const comparison = (await response.json()) as ShippingCostComparison;
+      setShippingComparison(comparison);
+      return comparison;
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "No fue posible comparar los costos de envío",
+      );
+      return null;
+    } finally {
+      setIsLoadingShippingComparison(false);
+    }
+  };
+
+  const loadActiveSaleConditions = async (
+    listing: Listing,
+    requestId: number,
+  ) => {
+    setIsLoadingSaleConditions(true);
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/${storeId}/marketplaces/mercadolibre/listings/${listing.id}/sale-conditions`,
+      );
+      if (!response.ok) throw new Error(await getErrorMessage(response));
+      const result = (await response.json()) as ActiveSaleConditions;
+      if (saleConditionsRequestId.current !== requestId) return;
+
+      const currentEstimate =
+        result.options.find(
+          (option) => option.listingTypeId === result.current.listingType,
+        ) ?? null;
+      setActiveSaleConditions(result);
+      setPriceOptions(result.options);
+      setPriceEstimate(currentEstimate);
+      setForm((current) => ({
+        ...current,
+        marketplacePrice: String(result.current.price),
+        categoryId: result.current.categoryId,
+        listingType: result.current.listingType,
+        freeShipping: result.current.freeShipping,
+        localPickUp: result.current.localPickUp,
+      }));
+
+      const comparison = await loadShippingComparison({
+        listingId: listing.id,
+        price: String(result.current.price),
+        listingType: result.current.listingType,
+      });
+      if (saleConditionsRequestId.current === requestId) {
+        setActiveCurrentShippingComparison(comparison);
+      }
+    } catch (requestError) {
+      if (saleConditionsRequestId.current !== requestId) return;
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "No fue posible consultar las condiciones actuales de Mercado Libre",
+      );
+    } finally {
+      if (saleConditionsRequestId.current === requestId) {
+        setIsLoadingSaleConditions(false);
+      }
+    }
+  };
+
+  const applyActiveSaleConditions = async () => {
+    if (!editingListing?.externalItemId || !activeSaleConditions) {
+      setError(
+        "Espera a que Administración consulte las condiciones actuales de Mercado Libre",
+      );
+      return;
+    }
+    if (
+      form.listingType === activeSaleConditions.current.listingType &&
+      form.freeShipping === activeSaleConditions.current.freeShipping
+    ) {
+      setError("No hay cambios de cuotas o envío para aplicar");
+      return;
+    }
+
+    const currentEstimate = priceOptions.find(
+      (option) =>
+        option.listingTypeId === activeSaleConditions.current.listingType,
+    );
+    const selectedEstimate = priceOptions.find(
+      (option) => option.listingTypeId === form.listingType,
+    );
+    if (!currentEstimate || !selectedEstimate) {
+      setError(
+        "Actualiza las comisiones antes de cambiar las cuotas de la publicación",
+      );
+      return;
+    }
+    if (!shippingComparison) {
+      setError(
+        "Compara el envío antes de aplicar estas condiciones en Mercado Libre",
+      );
+      return;
+    }
+    if (!form.freeShipping && !shippingComparison.buyerPays) {
+      setError(
+        "Mercado Libre exige envío gratis para esta publicación; P de Papel debe asumirlo",
+      );
+      return;
+    }
+
+    const currentShippingCost =
+      getSellerShippingCost(
+        activeCurrentShippingComparison,
+        activeSaleConditions.current.freeShipping,
+      ) ?? 0;
+    const selectedShippingCost =
+      getSellerShippingCost(shippingComparison, form.freeShipping) ?? 0;
+    const feeDifference =
+      selectedEstimate.saleFeeAmount - currentEstimate.saleFeeAmount;
+    const shippingDifference = selectedShippingCost - currentShippingCost;
+    const selectedNet =
+      activeSaleConditions.current.price -
+      selectedEstimate.saleFeeAmount -
+      selectedShippingCost;
+    const currentInstallments =
+      currentEstimate.installmentLabel ??
+      currentEstimate.listingTypeName ??
+      activeSaleConditions.current.listingType;
+    const selectedInstallments =
+      selectedEstimate.installmentLabel ??
+      selectedEstimate.listingTypeName ??
+      form.listingType;
+    const currentShippingLabel = activeSaleConditions.current.freeShipping
+      ? `P de Papel paga aproximadamente ${currencyFormatter.format(currentShippingCost)}`
+      : "La compradora paga el envío";
+    const selectedShippingLabel = form.freeShipping
+      ? `P de Papel pagará aproximadamente ${currencyFormatter.format(selectedShippingCost)}`
+      : "La compradora pagará el envío";
+
+    if (
+      !(await requestConfirmation({
+        title: "¿Aplicar estas condiciones en Mercado Libre?",
+        description: `Cuotas: ${currentInstallments} → ${selectedInstallments}. Cargo por venta: ${currencyFormatter.format(currentEstimate.saleFeeAmount)} → ${currencyFormatter.format(selectedEstimate.saleFeeAmount)} (${formatCurrencyDifference(feeDifference)}). Envío: ${currentShippingLabel} → ${selectedShippingLabel} (${formatCurrencyDifference(shippingDifference)} para P de Papel). Neto estimado antes de costo del producto e impuestos: ${currencyFormatter.format(selectedNet)}.`,
+        confirmLabel: "Aplicar condiciones",
+      }))
+    ) {
+      return;
+    }
+
+    setIsApplyingSaleConditions(true);
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/${storeId}/marketplaces/mercadolibre/listings/${editingListing.id}/sale-conditions`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            listingType: form.listingType,
+            freeShipping: form.freeShipping,
+          }),
+        },
+      );
+      if (!response.ok) throw new Error(await getErrorMessage(response));
+      const result = (await response.json()) as {
+        current: ActiveSaleConditions["current"];
+      };
+      const nextConditions = {
+        ...activeSaleConditions,
+        current: result.current,
+        options: priceOptions,
+      };
+      setActiveSaleConditions(nextConditions);
+      setForm((current) => ({
+        ...current,
+        listingType: result.current.listingType,
+        freeShipping: result.current.freeShipping,
+        localPickUp: result.current.localPickUp,
+      }));
+      setPriceEstimate(
+        nextConditions.options.find(
+          (option) => option.listingTypeId === result.current.listingType,
+        ) ?? null,
+      );
+      const refreshedShipping = await loadShippingComparison({
+        listingId: editingListing.id,
+        price: String(result.current.price),
+        listingType: result.current.listingType,
+      });
+      setActiveCurrentShippingComparison(refreshedShipping);
+      await loadListings();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "No fue posible actualizar las condiciones en Mercado Libre",
+      );
+    } finally {
+      setIsApplyingSaleConditions(false);
+    }
   };
 
   const suggestPriceFromProfile = async (
@@ -841,10 +1268,22 @@ export function MercadoLibreListingManager({
     setIsSuggestingPrice(true);
     setError(null);
     try {
+      if (form.freeShipping && !shippingComparison) {
+        setError(
+          "Compara primero el envío para incluir su costo en la ganancia objetivo",
+        );
+        return;
+      }
+      const estimatedShippingCost = shippingComparison
+        ? form.freeShipping
+          ? shippingComparison.sellerOffersFree.sellerCost
+          : (shippingComparison.buyerPays?.sellerCost ?? 0)
+        : 0;
       const initialPrice = Number(form.marketplacePrice);
       const recommendation = await recommendMercadoLibreListingPrice({
         acquisitionCost: selectedProduct.acqPrice,
         targetProfit,
+        additionalCosts: estimatedShippingCost,
         initialPrice:
           Number.isFinite(initialPrice) && initialPrice > 0
             ? initialPrice
@@ -863,8 +1302,13 @@ export function MercadoLibreListingManager({
           : current,
       );
       setPriceEstimate(
-        await getPriceEstimate(recommendation.price, form.categoryId),
+        await getPriceEstimate(
+          recommendation.price,
+          form.categoryId,
+          form.listingType,
+        ),
       );
+      setShippingComparison(null);
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -891,6 +1335,8 @@ export function MercadoLibreListingManager({
     setCategoryAttributes([]);
     setVerifiedCategoryId(null);
     setPriceEstimate(null);
+    setPriceOptions([]);
+    setShippingComparison(null);
     setError(null);
     setForm((current) => ({
       ...current,
@@ -1061,6 +1507,28 @@ export function MercadoLibreListingManager({
         familyName: form.familyName,
         marketplacePrice: form.marketplacePrice,
         categoryId: form.categoryId,
+        ...(!editingListing?.externalItemId
+          ? {
+              listingType: form.listingType,
+              saleConditions: {
+                shippingMode: "me2",
+                freeShipping: form.freeShipping,
+                localPickUp: form.localPickUp,
+                packageDimensions:
+                  form.packageHeightCm &&
+                  form.packageWidthCm &&
+                  form.packageLengthCm &&
+                  form.packageWeightGrams
+                    ? {
+                        heightCm: Number(form.packageHeightCm),
+                        widthCm: Number(form.packageWidthCm),
+                        lengthCm: Number(form.packageLengthCm),
+                        weightGrams: Number(form.packageWeightGrams),
+                      }
+                    : null,
+              },
+            }
+          : {}),
         stockSafetyBuffer: form.stockSafetyBuffer,
         minimumMarginAmount: form.minimumMarginAmount,
         syncStock: true,
@@ -1899,7 +2367,8 @@ export function MercadoLibreListingManager({
                             Revisión de contenido
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Nombre de familia: {contentReview.familyNameLength} caracteres ·{" "}
+                            Nombre de familia: {contentReview.familyNameLength}{" "}
+                            caracteres ·{" "}
                             {contentReview.descriptionPreview ||
                               "Sin descripción visible"}
                           </p>
@@ -1943,7 +2412,8 @@ export function MercadoLibreListingManager({
                       Editar
                     </Button>
                     {!listing.externalItemId &&
-                    (listing.status === "DRAFT" || listing.status === "ERROR") ? (
+                    (listing.status === "DRAFT" ||
+                      listing.status === "ERROR") ? (
                       <Button
                         type="button"
                         variant="destructive"
@@ -2023,7 +2493,13 @@ export function MercadoLibreListingManager({
         )}
       </CardContent>
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog
+        open={isDialogOpen}
+        onOpenChange={(open) => {
+          setIsDialogOpen(open);
+          if (!open) saleConditionsRequestId.current += 1;
+        }}
+      >
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -2032,7 +2508,11 @@ export function MercadoLibreListingManager({
               ) : (
                 <Plus className="h-5 w-5 text-muted-foreground" />
               )}
-              {editingListing ? "Editar borrador" : "Preparar publicación"}
+              {editingListing?.externalItemId
+                ? "Editar publicación"
+                : editingListing
+                  ? "Editar borrador"
+                  : "Preparar publicación"}
             </DialogTitle>
             <DialogDescription>
               El precio corresponde solo a Mercado Libre. Incluye su comisión
@@ -2043,6 +2523,8 @@ export function MercadoLibreListingManager({
             key={editingListing?.id ?? "new-listing"}
             storeId={storeId}
             editing={Boolean(editingListing)}
+            activePublication={Boolean(editingListing?.externalItemId)}
+            activeSaleConditions={activeSaleConditions}
             canPublishDirectly={canPublish && !editingListing?.externalItemId}
             form={form}
             setForm={setForm}
@@ -2056,9 +2538,14 @@ export function MercadoLibreListingManager({
             )}
             quickProfile={quickProfile}
             priceEstimate={priceEstimate}
+            priceOptions={priceOptions}
+            shippingComparison={shippingComparison}
             isSearchingCategories={isSearchingCategories}
             isLoadingCategoryAttributes={isLoadingCategoryAttributes}
             isLoadingPriceEstimate={isLoadingPriceEstimate}
+            isLoadingShippingComparison={isLoadingShippingComparison}
+            isLoadingSaleConditions={isLoadingSaleConditions}
+            isApplyingSaleConditions={isApplyingSaleConditions}
             isSuggestingPrice={isSuggestingPrice}
             isSaving={isSaving}
             isSavingTemplate={isSavingTemplate}
@@ -2070,6 +2557,9 @@ export function MercadoLibreListingManager({
             onCategoryChange={updateCategory}
             onLoadCategoryAttributes={loadCategoryAttributes}
             onLoadPriceEstimate={loadPriceEstimate}
+            onLoadShippingComparison={loadShippingComparison}
+            onApplyActiveSaleConditions={applyActiveSaleConditions}
+            onListingTypeChange={updateListingType}
             onSuggestPriceFromTarget={suggestPriceFromTarget}
             onApplyCategoryTemplate={(templateId) => {
               const template = categoryTemplates.find(

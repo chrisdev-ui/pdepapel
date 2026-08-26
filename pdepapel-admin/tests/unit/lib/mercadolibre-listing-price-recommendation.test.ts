@@ -42,4 +42,20 @@ describe("recommendMercadoLibreListingPrice", () => {
     ).resolves.toBeNull();
     expect(getFeeQuote).not.toHaveBeenCalled();
   });
+
+  it("includes seller-paid shipping in the target profit", async () => {
+    const recommendation = await recommendMercadoLibreListingPrice({
+      acquisitionCost: 10_000,
+      targetProfit: 6_000,
+      additionalCosts: 8_500,
+      initialPrice: 20_000,
+      getFeeQuote: async (price) => ({
+        saleFeeAmount: Math.ceil(price * 0.2),
+        percentageFee: 20,
+      }),
+    });
+
+    expect(recommendation?.expectedProfit).toBeGreaterThanOrEqual(6_000);
+    expect(recommendation?.price).toBeGreaterThan(30_000);
+  });
 });
