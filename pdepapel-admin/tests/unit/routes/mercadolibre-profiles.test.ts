@@ -1,9 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   findCategory: vi.fn(),
+  findConnection: vi.fn(),
   findProfiles: vi.fn(),
+  inspectCategory: vi.fn(),
   upsertProfile: vi.fn(),
   verifyStoreOwner: vi.fn(),
 }));
@@ -13,9 +15,14 @@ vi.mock("@/lib/utils", () => ({
   CACHE_HEADERS: { NO_CACHE: { "Cache-Control": "no-store" } },
   verifyStoreOwner: mocks.verifyStoreOwner,
 }));
+vi.mock("@/lib/mercadolibre/category-validation", () => ({
+  inspectMercadoLibreCategory: mocks.inspectCategory,
+  getMercadoLibreCategoryInspectionHttpStatus: () => 409,
+}));
 vi.mock("@/lib/prismadb", () => ({
   default: {
     category: { findFirst: mocks.findCategory },
+    marketplaceConnection: { findUnique: mocks.findConnection },
     marketplacePublicationProfile: {
       findMany: mocks.findProfiles,
       upsert: mocks.upsertProfile,
@@ -29,6 +36,16 @@ import {
 } from "@/app/api/[storeId]/marketplaces/mercadolibre/profiles/route";
 
 describe("Mercado Libre publication profiles routes", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.findConnection.mockResolvedValue({ id: "connection-id" });
+    mocks.inspectCategory.mockResolvedValue({
+      ok: true,
+      categoryId: "MCO123",
+      attributes: [],
+    });
+  });
+
   it("returns only profiles owned by the current store", async () => {
     mocks.auth.mockReturnValue({ userId: "owner-id" });
     mocks.findProfiles.mockResolvedValue([]);
@@ -130,5 +147,37 @@ describe("Mercado Libre publication profiles routes", () => {
     );
 
     expect(response.status).toBe(400);
+  });
+
+  it("rejects a profile when Mercado Libre retired its saved category", async () => {
+    mocks.auth.mockReturnValue({ userId: "owner-id" });
+    mocks.findCategory.mockResolvedValue({ id: "local-category-id" });
+    mocks.inspectCategory.mockResolvedValue({
+      ok: false,
+      categoryId: "MCO123",
+      code: "MERCADOLIBRE_CATEGORY_REVIEW_REQUIRED",
+      message: "La categoría ya no está disponible",
+      upstreamStatus: 404,
+    });
+
+    const response = await POST(
+      new Request("https://admin.example.com", {
+        method: "POST",
+        body: JSON.stringify({
+          localCategoryId: "local-category-id",
+          categoryId: "MCO123",
+          name: "Perfil desactualizado",
+          attributes: [],
+        }),
+      }),
+      { params: { storeId: "store-id" } },
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "La categoría ya no está disponible",
+      details: { code: "MERCADOLIBRE_CATEGORY_REVIEW_REQUIRED" },
+    });
+    expect(mocks.upsertProfile).not.toHaveBeenCalled();
   });
 });

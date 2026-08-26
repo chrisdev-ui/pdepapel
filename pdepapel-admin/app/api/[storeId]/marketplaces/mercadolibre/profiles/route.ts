@@ -1,9 +1,11 @@
 import { auth } from "@clerk/nextjs";
-import { Prisma } from "@prisma/client";
+import { MarketplaceProvider, Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { isMercadoLibreCategoryId } from "@/lib/mercadolibre/categories";
+import { inspectMercadoLibreCategory } from "@/lib/mercadolibre/category-validation";
+import { getMercadoLibreCategoryAppError } from "@/lib/mercadolibre/category-validation-error";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
@@ -125,6 +127,26 @@ export async function POST(
     });
     if (!localCategory) {
       throw ErrorFactory.NotFound("Categoría local no encontrada");
+    }
+    const connection = await prismadb.marketplaceConnection.findUnique({
+      where: {
+        storeId_provider: {
+          storeId: params.storeId,
+          provider: MarketplaceProvider.MERCADOLIBRE,
+        },
+      },
+      select: { id: true },
+    });
+    if (!connection) {
+      throw ErrorFactory.NotFound("Primero conecta la cuenta de Mercado Libre");
+    }
+    const categoryInspection = await inspectMercadoLibreCategory(
+      connection.id,
+      categoryId,
+      { includeAttributes: true },
+    );
+    if (!categoryInspection.ok) {
+      throw getMercadoLibreCategoryAppError(categoryInspection);
     }
 
     const profile = await prismadb.marketplacePublicationProfile.upsert({

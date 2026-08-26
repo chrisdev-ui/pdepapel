@@ -27,9 +27,11 @@ const product = {
 function WizardHarness({
   onPublish,
   onSuggestPrice = async () => undefined,
+  error = null,
 }: {
   onPublish: () => Promise<void>;
   onSuggestPrice?: () => Promise<void>;
+  error?: string | null;
 }) {
   const [form, setForm] = useState({
     productId: product.id,
@@ -50,6 +52,7 @@ function WizardHarness({
       canPublishDirectly
       form={form}
       setForm={setForm}
+      error={error}
       selectedProduct={product}
       suggestions={[]}
       categoryAttributes={[
@@ -61,6 +64,7 @@ function WizardHarness({
           values: [],
         },
       ]}
+      verifiedCategoryId="MCO123"
       categoryTemplates={[]}
       quickProfile={{
         id: "profile-1",
@@ -162,5 +166,18 @@ describe("ListingPublicationWizard", () => {
     );
 
     expect(onSuggestPrice).toHaveBeenCalledOnce();
+  });
+
+  it("shows category recovery errors inside the publication modal", () => {
+    render(
+      <WizardHarness
+        onPublish={async () => undefined}
+        error="La categoría ya no está disponible. Elige una opción verificada."
+      />,
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "La categoría ya no está disponible",
+    );
   });
 });

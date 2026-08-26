@@ -2,11 +2,8 @@ import { Prisma } from "@prisma/client";
 
 import { richTextToPlainText } from "@/lib/rich-text";
 
-import { getMercadoLibreAccessToken, requestMercadoLibreJson } from "./client";
-import {
-  getMercadoLibreCategoryPublicationError,
-  parseMercadoLibreCategoryAttributes,
-} from "./categories";
+import { inspectMercadoLibreCategory } from "./category-validation";
+import { getMercadoLibreAccessToken } from "./client";
 import {
   getMercadoLibreAttributes,
   getMercadoLibreListingImageUrls,
@@ -236,48 +233,26 @@ export async function validateMercadoLibreListingForPublication(
   request: typeof fetch = fetch,
 ) {
   const payload = buildItemPayload(listing);
-  const categoryResult = await requestMercadoLibreJson(
+  const categoryInspection = await inspectMercadoLibreCategory(
     listing.connectionId,
-    `/categories/${encodeURIComponent(payload.category_id)}`,
-    request,
-  );
-  if (!categoryResult.ok) {
-    throw new MercadoLibrePublicationError(
-      "No fue posible validar la categoría en Mercado Libre. Vuelve a sugerir una categoría e inténtalo de nuevo.",
-      { requiresDraftReview: true },
-    );
-  }
-
-  const categoryError = getMercadoLibreCategoryPublicationError(
-    categoryResult.payload,
     payload.category_id,
     {
-      familyName: payload.family_name,
-      price: payload.price,
-      pictureCount: payload.pictures.length,
+      includeAttributes: true,
+      requirements: {
+        familyName: payload.family_name,
+        price: payload.price,
+        pictureCount: payload.pictures.length,
+      },
+      request,
     },
   );
-  if (categoryError) {
-    throw new MercadoLibrePublicationError(categoryError, {
-      requiresDraftReview: true,
-    });
-  }
-
-  const attributesResult = await requestMercadoLibreJson(
-    listing.connectionId,
-    `/categories/${encodeURIComponent(payload.category_id)}/attributes`,
-    request,
-  );
-  if (!attributesResult.ok || !Array.isArray(attributesResult.payload)) {
+  if (!categoryInspection.ok) {
     throw new MercadoLibrePublicationError(
-      "No fue posible validar los campos obligatorios de esta categoría. Actualiza la ficha técnica e inténtalo de nuevo.",
+      categoryInspection.message,
       { requiresDraftReview: true },
     );
   }
-
-  const requiredAttributeIds = parseMercadoLibreCategoryAttributes(
-    attributesResult.payload,
-  )
+  const requiredAttributeIds = (categoryInspection.attributes ?? [])
     .filter((attribute) => attribute.required)
     .map((attribute) => attribute.id);
   const configuredAttributeIds = new Set(

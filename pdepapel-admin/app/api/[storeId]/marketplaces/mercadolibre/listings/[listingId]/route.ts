@@ -4,6 +4,8 @@ import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { isMercadoLibreCategoryId } from "@/lib/mercadolibre/categories";
+import { inspectMercadoLibreCategory } from "@/lib/mercadolibre/category-validation";
+import { getMercadoLibreCategoryAppError } from "@/lib/mercadolibre/category-validation-error";
 import {
   buildMercadoLibreListingMetadata,
   normalizeMercadoLibreFamilyName,
@@ -159,7 +161,16 @@ export async function PATCH(
           "La categoría de Mercado Libre es requerida",
         );
       }
-      data.categoryId = body.categoryId.trim().toUpperCase();
+      const categoryId = body.categoryId.trim().toUpperCase();
+      const categoryInspection = await inspectMercadoLibreCategory(
+        listing.connectionId,
+        categoryId,
+        { includeAttributes: true },
+      );
+      if (!categoryInspection.ok) {
+        throw getMercadoLibreCategoryAppError(categoryInspection);
+      }
+      data.categoryId = categoryId;
     }
     if (body.listingType !== undefined) {
       if (typeof body.listingType !== "string" || !body.listingType.trim()) {

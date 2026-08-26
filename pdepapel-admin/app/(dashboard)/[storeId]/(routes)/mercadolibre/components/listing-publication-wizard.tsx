@@ -101,9 +101,11 @@ type ListingPublicationWizardProps = {
   canPublishDirectly: boolean;
   form: ListingPublicationForm;
   setForm: Dispatch<SetStateAction<ListingPublicationForm>>;
+  error: string | null;
   selectedProduct: ListingPublicationProduct | null;
   suggestions: ListingPublicationCategorySuggestion[];
   categoryAttributes: ListingPublicationCategoryAttribute[];
+  verifiedCategoryId: string | null;
   categoryTemplates: ListingPublicationCategoryTemplate[];
   quickProfile: ListingPublicationQuickProfile | null;
   priceEstimate: ListingPublicationPriceEstimate | null;
@@ -196,9 +198,11 @@ export function ListingPublicationWizard({
   canPublishDirectly,
   form,
   setForm,
+  error,
   selectedProduct,
   suggestions,
   categoryAttributes,
+  verifiedCategoryId,
   categoryTemplates,
   quickProfile,
   priceEstimate,
@@ -287,6 +291,14 @@ export function ListingPublicationWizard({
 
   return (
     <div className="space-y-5 py-2">
+      {error ? (
+        <p
+          className="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
+          role="alert"
+        >
+          {error}
+        </p>
+      ) : null}
       <ol
         className="grid grid-cols-4 gap-2"
         aria-label="Pasos de la publicación"
@@ -547,6 +559,12 @@ export function ListingPublicationWizard({
               una categoría final de Mercado Libre antes de cargar la ficha
               técnica y de publicar.
             </p>
+            {verifiedCategoryId === form.categoryId.trim().toUpperCase() ? (
+              <p className="flex items-center gap-1.5 text-xs font-medium text-success">
+                <Check className="h-3.5 w-3.5" />
+                Categoría y ficha técnica verificadas con Mercado Libre.
+              </p>
+            ) : null}
             {suggestions.length > 0 ? (
               <div className="grid gap-2 rounded-md border p-2">
                 {suggestions.map((suggestion) => (

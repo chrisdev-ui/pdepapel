@@ -3,7 +3,12 @@ import { MarketplaceProvider } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { parseMercadoLibreCategorySuggestions } from "@/lib/mercadolibre/categories";
+import {
+  MERCADOLIBRE_CATEGORY_REVIEW_REQUIRED,
+  parseMercadoLibreCategorySuggestions,
+} from "@/lib/mercadolibre/categories";
+import { inspectMercadoLibreCategory } from "@/lib/mercadolibre/category-validation";
+import { getMercadoLibreCategoryAppError } from "@/lib/mercadolibre/category-validation-error";
 import { getMercadoLibreJson } from "@/lib/mercadolibre/client";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
@@ -39,7 +44,30 @@ export async function GET(
 
     const resource = `/sites/MCO/domain_discovery/search?limit=8&q=${encodeURIComponent(query)}`;
     const payload = await getMercadoLibreJson(connection.id, resource);
-    const suggestions = parseMercadoLibreCategorySuggestions(payload);
+    const candidates = parseMercadoLibreCategorySuggestions(payload);
+    const inspections = await Promise.all(
+      candidates.map(async (suggestion) => ({
+        suggestion,
+        inspection: await inspectMercadoLibreCategory(
+          connection.id,
+          suggestion.categoryId,
+        ),
+      })),
+    );
+    const suggestions = inspections.flatMap(({ suggestion, inspection }) =>
+      inspection.ok ? [suggestion] : [],
+    );
+
+    if (candidates.length > 0 && suggestions.length === 0) {
+      const unavailableInspection = inspections.find(
+        ({ inspection }) =>
+          !inspection.ok &&
+          inspection.code !== MERCADOLIBRE_CATEGORY_REVIEW_REQUIRED,
+      )?.inspection;
+      if (unavailableInspection && !unavailableInspection.ok) {
+        throw getMercadoLibreCategoryAppError(unavailableInspection);
+      }
+    }
 
     return NextResponse.json(suggestions, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {

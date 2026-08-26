@@ -8,6 +8,8 @@ import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { isMercadoLibreCategoryId } from "@/lib/mercadolibre/categories";
+import { inspectMercadoLibreCategory } from "@/lib/mercadolibre/category-validation";
+import { getMercadoLibreCategoryAppError } from "@/lib/mercadolibre/category-validation-error";
 import {
   buildMercadoLibreListingMetadata,
   normalizeMercadoLibreFamilyName,
@@ -238,6 +240,18 @@ export async function POST(
     });
     if (!product) throw ErrorFactory.NotFound("Producto no encontrado");
 
+    const categoryId = parseOptionalCategory(body.categoryId);
+    if (categoryId) {
+      const categoryInspection = await inspectMercadoLibreCategory(
+        connection.id,
+        categoryId,
+        { includeAttributes: true },
+      );
+      if (!categoryInspection.ok) {
+        throw getMercadoLibreCategoryAppError(categoryInspection);
+      }
+    }
+
     const attributes = parseAttributes(body.attributes);
     const imageUrls = parseImageUrls(body.imageUrls);
     const familyName =
@@ -250,7 +264,7 @@ export async function POST(
         connectionId: connection.id,
         productId: product.id,
         marketplacePrice: parseOptionalPrice(body.marketplacePrice),
-        categoryId: parseOptionalCategory(body.categoryId),
+        categoryId,
         listingType:
           typeof body.listingType === "string" && body.listingType.trim()
             ? body.listingType.trim()

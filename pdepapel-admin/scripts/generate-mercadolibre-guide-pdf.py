@@ -187,7 +187,7 @@ def publish_page(pdf: canvas.Canvas) -> None:
     steps = [
         ("Empieza", "En Ventas -> Mercado Libre pulsa Preparar publicación y busca el producto local correcto. Mira nombre y fotografía para confirmarlo."),
         ("Precio y cantidad", "Escribe o revisa el precio de Mercado Libre y la reserva de seguridad. El precio de la tienda no cambia."),
-        ("Categoría y fotos", "Pulsa Sugerir categoría, elige la más precisa y deja seleccionadas solo las fotos del artículo. La primera foto será la portada."),
+        ("Categoría y fotos", "Pulsa Sugerir categoría y elige una opción verificada. No reutilices códigos antiguos. Si Mercado Libre retiró una categoría, el asistente conserva el borrador, elimina solo esa selección y muestra alternativas nuevas. La primera foto será la portada."),
         ("Datos del producto", "Completa marca, color, medida, unidades u otros datos que pida Mercado Libre. Escribe solamente información real."),
         ("Decide", "Pulsa Guardar borrador si quieres volver después o Publicar ahora cuando estés completamente segura."),
     ]

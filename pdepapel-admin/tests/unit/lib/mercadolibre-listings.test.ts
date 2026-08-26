@@ -224,6 +224,48 @@ describe("Mercado Libre listing publication", () => {
     expect(request).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps the draft reviewable when Mercado Libre removed the category", async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ message: "Category not found" }), {
+          status: 404,
+        }),
+      );
+
+    await expect(
+      publishMercadoLibreListing(
+        {
+          id: "listing-id",
+          connectionId: "connection-id",
+          categoryId: "MCO1234",
+          listingType: "gold_special",
+          marketplacePrice: 19_900,
+          stockSafetyBuffer: 0,
+          metadata: { attributes: [] },
+          product: {
+            id: "product-id",
+            name: "Agenda kawaii",
+            description: "",
+            stock: 5,
+            sku: "AGENDA-01",
+            brand: null,
+            gtin: null,
+            mpn: null,
+            isArchived: false,
+            images: [{ url: "https://images.example.com/agenda.jpg" }],
+          },
+        },
+        request,
+      ),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("ya no está disponible"),
+      requiresDraftReview: true,
+    });
+
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
   it("stops before creating an item when a required category attribute is missing", async () => {
     const request = vi
       .fn()

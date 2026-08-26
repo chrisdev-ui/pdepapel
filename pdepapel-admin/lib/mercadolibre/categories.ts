@@ -1,5 +1,12 @@
 type MercadoLibreRecord = Record<string, unknown>;
 
+export const MERCADOLIBRE_CATEGORY_REVIEW_REQUIRED =
+  "MERCADOLIBRE_CATEGORY_REVIEW_REQUIRED";
+export const MERCADOLIBRE_CATEGORY_SERVICE_UNAVAILABLE =
+  "MERCADOLIBRE_CATEGORY_SERVICE_UNAVAILABLE";
+export const MERCADOLIBRE_CATEGORY_REAUTH_REQUIRED =
+  "MERCADOLIBRE_CATEGORY_REAUTH_REQUIRED";
+
 export type MercadoLibreCategorySuggestion = {
   categoryId: string;
   categoryName: string;

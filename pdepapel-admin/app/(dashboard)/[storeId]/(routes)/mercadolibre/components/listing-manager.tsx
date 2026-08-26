@@ -24,6 +24,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useActionConfirmation } from "@/hooks/use-action-confirmation";
+import { MERCADOLIBRE_CATEGORY_REVIEW_REQUIRED } from "@/lib/mercadolibre/categories";
 import {
   Select,
   SelectContent,
@@ -284,14 +285,29 @@ function parseAttributes(value: string) {
     });
 }
 
-function getErrorMessage(response: Response) {
+type ResponseError = {
+  message: string;
+  code: string | null;
+};
+
+function getResponseError(response: Response): Promise<ResponseError> {
   return response
     .json()
     .then(
-      (body: { error?: string }) =>
-        body.error ?? "No fue posible completar la acción",
+      (body: { error?: string; details?: { code?: string } }) => ({
+        message: body.error ?? "No fue posible completar la acción",
+        code:
+          typeof body.details?.code === "string" ? body.details.code : null,
+      }),
     )
-    .catch(() => "No fue posible completar la acción");
+    .catch(() => ({
+      message: "No fue posible completar la acción",
+      code: null,
+    }));
+}
+
+function getErrorMessage(response: Response) {
+  return getResponseError(response).then((error) => error.message);
 }
 
 export function MercadoLibreListingManager({
@@ -313,6 +329,9 @@ export function MercadoLibreListingManager({
   const [categoryAttributes, setCategoryAttributes] = useState<
     CategoryAttribute[]
   >([]);
+  const [verifiedCategoryId, setVerifiedCategoryId] = useState<string | null>(
+    null,
+  );
   const [isLoadingCategoryAttributes, setIsLoadingCategoryAttributes] =
     useState(false);
   const [priceEstimate, setPriceEstimate] = useState<PriceEstimate | null>(
@@ -438,9 +457,20 @@ export function MercadoLibreListingManager({
   };
 
   const updateCategory = (categoryId: string) => {
-    updateForm("categoryId", categoryId.trim().toUpperCase());
+    const normalizedCategoryId = categoryId.trim().toUpperCase();
+    setError(null);
+    setForm((current) =>
+      current.categoryId === normalizedCategoryId
+        ? current
+        : {
+            ...current,
+            categoryId: normalizedCategoryId,
+            attributes: "",
+          },
+    );
     setSuggestions([]);
     setCategoryAttributes([]);
+    setVerifiedCategoryId(null);
     setPriceEstimate(null);
     setQuickProfile(null);
   };
@@ -450,6 +480,7 @@ export function MercadoLibreListingManager({
     setForm(emptyForm);
     setSuggestions([]);
     setCategoryAttributes([]);
+    setVerifiedCategoryId(null);
     setPriceEstimate(null);
     setSelectedProduct(null);
     setQuickProfile(null);
@@ -478,6 +509,7 @@ export function MercadoLibreListingManager({
     });
     setSuggestions([]);
     setCategoryAttributes([]);
+    setVerifiedCategoryId(null);
     setPriceEstimate(null);
     setQuickProfile(null);
     setError(null);
@@ -627,21 +659,28 @@ export function MercadoLibreListingManager({
       }).length
     : 0;
 
-  const searchCategories = async () => {
-    const query = selectedProduct?.name ?? "";
+  const searchCategories = async ({ preserveError = false } = {}) => {
+    const query = form.familyName.trim() || selectedProduct?.name || "";
     if (query.length < 3) {
       setError("Selecciona un producto para buscar una categoría");
       return;
     }
 
     setIsSearchingCategories(true);
-    setError(null);
+    if (!preserveError) setError(null);
     try {
       const response = await fetch(
         `/api/${storeId}/marketplaces/mercadolibre/categories?query=${encodeURIComponent(query)}`,
       );
       if (!response.ok) throw new Error(await getErrorMessage(response));
-      setSuggestions((await response.json()) as CategorySuggestion[]);
+      const verifiedSuggestions =
+        (await response.json()) as CategorySuggestion[];
+      setSuggestions(verifiedSuggestions);
+      if (verifiedSuggestions.length === 0 && !preserveError) {
+        setError(
+          "Mercado Libre no encontró una categoría final y publicable para este nombre. Ajusta el nombre de familia con el tipo de producto y vuelve a sugerir.",
+        );
+      }
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -665,8 +704,24 @@ export function MercadoLibreListingManager({
       const response = await fetch(
         `/api/${storeId}/marketplaces/mercadolibre/categories/${encodeURIComponent(form.categoryId)}/attributes`,
       );
-      if (!response.ok) throw new Error(await getErrorMessage(response));
+      if (!response.ok) {
+        const responseError = await getResponseError(response);
+        if (responseError.code === MERCADOLIBRE_CATEGORY_REVIEW_REQUIRED) {
+          setCategoryAttributes([]);
+          setVerifiedCategoryId(null);
+          setPriceEstimate(null);
+          setQuickProfile(null);
+          setForm((current) => ({
+            ...current,
+            categoryId: "",
+            attributes: "",
+          }));
+          await searchCategories({ preserveError: true });
+        }
+        throw new Error(responseError.message);
+      }
       setCategoryAttributes((await response.json()) as CategoryAttribute[]);
+      setVerifiedCategoryId(form.categoryId.trim().toUpperCase());
       return true;
     } catch (requestError) {
       setError(
@@ -834,6 +889,7 @@ export function MercadoLibreListingManager({
     setQuickProfile(profile ?? null);
     setSuggestions([]);
     setCategoryAttributes([]);
+    setVerifiedCategoryId(null);
     setPriceEstimate(null);
     setError(null);
     setForm((current) => ({
@@ -991,6 +1047,10 @@ export function MercadoLibreListingManager({
         "Producto, precio de Mercado Libre y categoría son obligatorios",
       );
       return null;
+    }
+    if (verifiedCategoryId !== form.categoryId.trim().toUpperCase()) {
+      const categoryIsReady = await loadCategoryAttributes();
+      if (!categoryIsReady) return null;
     }
 
     setIsSaving(true);
@@ -1254,6 +1314,10 @@ export function MercadoLibreListingManager({
       setError("Selecciona una categoría antes de guardar una plantilla");
       return;
     }
+    if (verifiedCategoryId !== form.categoryId.trim().toUpperCase()) {
+      const categoryIsReady = await loadCategoryAttributes();
+      if (!categoryIsReady) return;
+    }
     let attributes: MarketplaceAttribute[];
     try {
       attributes = parseAttributes(form.attributes);
@@ -1321,6 +1385,10 @@ export function MercadoLibreListingManager({
         "Selecciona una categoría de Mercado Libre antes de guardar el perfil",
       );
       return;
+    }
+    if (verifiedCategoryId !== form.categoryId.trim().toUpperCase()) {
+      const categoryIsReady = await loadCategoryAttributes();
+      if (!categoryIsReady) return;
     }
 
     let attributes: MarketplaceAttribute[];
@@ -1978,9 +2046,11 @@ export function MercadoLibreListingManager({
             canPublishDirectly={canPublish && !editingListing?.externalItemId}
             form={form}
             setForm={setForm}
+            error={error}
             selectedProduct={selectedProduct}
             suggestions={suggestions}
             categoryAttributes={categoryAttributes}
+            verifiedCategoryId={verifiedCategoryId}
             categoryTemplates={categoryTemplates.filter(
               (template) => template.categoryId === form.categoryId,
             )}
@@ -1996,7 +2066,7 @@ export function MercadoLibreListingManager({
             onError={setError}
             onFormChange={updateForm}
             onProductChange={updateSelectedProduct}
-            onSearchCategories={searchCategories}
+            onSearchCategories={() => searchCategories()}
             onCategoryChange={updateCategory}
             onLoadCategoryAttributes={loadCategoryAttributes}
             onLoadPriceEstimate={loadPriceEstimate}

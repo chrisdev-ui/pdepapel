@@ -39,7 +39,7 @@ Haz esta revisión una vez y cada vez que agregues productos nuevos:
 
 ### Paso 2: categoría y fotos
 
-1. Pulsa **Sugerir categoría** y escoge la categoría que mejor describa el producto.
+1. Pulsa **Sugerir categoría** y escoge la categoría verificada que mejor describa el producto. No escribas ni reutilices manualmente un código de categoría antiguo.
 2. Revisa las fotos. La primera será la foto principal.
 3. Deja seleccionadas solo fotos que correspondan exactamente al artículo y muestren bien color, tamaño o contenido.
 4. Se necesita al menos **una** foto para publicar. Procura usar **tres o más** (frente, detalle y contenido) para que la clienta tenga más confianza.
@@ -202,6 +202,7 @@ No concilies una venta antigua si ya creaste una venta manual o ya ajustaste el 
 | El producto no tiene una categoría adecuada | Busca una categoría más específica en el selector; no publiques hasta estar conforme.                                           |
 | Mercado Libre pide “nombre de familia”       | En **Editar**, escribe el nombre común del producto sin color, talla ni diseño; guarda y vuelve a publicar.                    |
 | El paso “Ficha técnica” no muestra campos    | Pulsa **Actualizar campos**. Si dice que no hay campos adicionales, continúa: esa categoría no exige más datos.                |
+| La categoría dejó de estar disponible        | El asistente conserva el borrador, elimina solo la categoría antigua y muestra opciones verificadas. Escoge una y vuelve a cargar la ficha técnica. |
 | Me quedó un borrador que no usaré            | Usa **Eliminar borrador**. Solo borra intentos locales sin publicar, sin ventas y sin preguntas.                               |
 | Una venta no aparece al instante            | Espera unos minutos y actualiza la sección. No crees una venta manual mientras revisas.                                         |
 | No puedo relacionar una publicación vieja   | Elige el producto local manualmente o déjala sin vincular hasta confirmar cuál es.                                              |
