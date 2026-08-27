@@ -43,6 +43,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const isClosedOrder =
     data.status === OrderStatus.PAID || data.status === OrderStatus.SENT;
   const isPointOfSale = data.type === "POINT_OF_SALE";
+  const isBoldPayment = data.payment?.method === PaymentMethod.Bold;
 
   const isOfflinePayment =
     Boolean(data.payment?.method) &&
@@ -200,6 +201,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
           {!isPointOfSale && (
             <DropdownMenuItem
               className="cursor-pointer"
+              disabled={isClosedOrder || !isBoldPayment}
               onClick={() =>
                 onCopy(
                   `https://papeleriapdepapel.com/pedido/${data.id}`,
@@ -228,6 +230,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
           {!isPointOfSale && (
             <DropdownMenuItem
               className="cursor-pointer"
+              disabled={isClosedOrder || !isBoldPayment}
               onClick={() =>
                 onCopy(
                   `https://papeleriapdepapel.com/pedido/${data.id}?autoPay=true`,
@@ -236,18 +239,26 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
               }
             >
               <CreditCard className="mr-2 h-4 w-4 text-emerald-600" />
-              Copiar enlace de pago
+              {isClosedOrder
+                ? "Orden cerrada (sin enlace de pago)"
+                : isBoldPayment
+                  ? "Copiar enlace de pago en línea"
+                  : "Guarda primero como Pago en línea"}
             </DropdownMenuItem>
           )}
           <DropdownMenuItem
             className="cursor-pointer"
-            disabled={isPointOfSale || pushingBold || isClosedOrder}
+            disabled={
+              isPointOfSale || pushingBold || isClosedOrder || !isBoldPayment
+            }
             onClick={onPushBoldDatafono}
           >
             <CreditCard className="mr-2 h-4 w-4 text-emerald-600" />
             {isClosedOrder
               ? "Datáfono (Orden completada)"
-              : "Cobrar en datáfono"}
+              : !isBoldPayment
+                ? "Datáfono (Solo para pagos en línea)"
+                : "Cobrar en datáfono"}
           </DropdownMenuItem>
           {!isPointOfSale && (
             <DropdownMenuItem

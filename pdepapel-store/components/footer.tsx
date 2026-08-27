@@ -3,7 +3,7 @@ import { PrivacyPreferencesButton } from "@/components/privacy-preferences-butto
 import { SEASON_CONFIG } from "@/constants";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { Season } from "@/types";
-import { CalendarDays, Mail, Phone } from "lucide-react";
+import { CalendarDays, Mail, MapPin, Phone } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -80,6 +80,15 @@ export const Footer: React.FC<FooterProps> = ({ season = Season.Default }) => {
               <li className="flex items-center gap-2 text-blue-yankees hover:text-pink-shell focus-visible:text-pink-shell">
                 <CalendarDays className="h-5 w-5" />
                 08:00 - 20:00, Lun - Dom
+              </li>
+              <li className="flex items-start gap-2 text-blue-yankees">
+                <MapPin className="mt-0.5 h-5 w-5 shrink-0" />
+                <span>
+                  Operamos desde Medellín, Colombia
+                  <span className="block text-xs text-muted-foreground">
+                    Tienda online con envíos a todo el país
+                  </span>
+                </span>
               </li>
             </ul>
           </div>

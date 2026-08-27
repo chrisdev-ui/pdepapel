@@ -1,4 +1,4 @@
-import { Clock, Mail, MailCheck, PhoneCall } from "lucide-react";
+import { Clock, Mail, MailCheck, MapPin, PhoneCall, Truck } from "lucide-react";
 import { Metadata } from "next";
 import Image from "next/image";
 import { ContactPage as ContactPageSchema, WithContext } from "schema-dts";
@@ -13,7 +13,7 @@ import { ContactForm } from "./components/contact-form";
 export const metadata: Metadata = {
   title: "Contáctanos",
   description:
-    "Ponte en contacto con Papelería P de Papel para cualquier consulta o asistencia. Nuestro equipo está listo para ayudarte con tus preguntas sobre productos kawaii y de oficina, pedidos y más. ¡Tu satisfacción es nuestra prioridad! Visita nuestra página de contacto.",
+    "Contacta a Papelería P de Papel, tienda online colombiana con operación desde Medellín y envíos a todo el país. Resolvemos dudas sobre productos kawaii, pedidos y entregas.",
   alternates: {
     canonical: STOREFRONT_ROUTES.contact,
   },
@@ -49,6 +49,12 @@ export default function ContactPage() {
         contactType: "customer service",
         areaServed: "CO",
         availableLanguage: "es",
+      },
+      address: {
+        "@type": "PostalAddress",
+        addressLocality: "Medellín",
+        addressRegion: "Antioquia",
+        addressCountry: "CO",
       },
     },
   };
@@ -100,6 +106,40 @@ export default function ContactPage() {
                 órdenes con todos los detalles que necesitas. ¡Estamos aquí para
                 ayudarte en cada paso de tu experiencia kawaii con nosotros!
               </p>
+              <section
+                aria-labelledby="ubicacion-cobertura"
+                className="rounded-2xl border border-pink-shell/30 bg-kawaii-pink-light/10 p-5"
+              >
+                <h2
+                  id="ubicacion-cobertura"
+                  className="font-serif text-xl font-semibold"
+                >
+                  Ubicación y cobertura
+                </h2>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div className="flex items-start gap-3">
+                    <MapPin className="mt-0.5 h-6 w-6 shrink-0 text-pink-froly" />
+                    <div>
+                      <p className="font-semibold">Operamos desde Medellín</p>
+                      <p className="text-sm text-muted-foreground">
+                        Somos una tienda online colombiana; la atención y
+                        preparación de pedidos se realiza desde Medellín,
+                        Antioquia.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Truck className="mt-0.5 h-6 w-6 shrink-0 text-blue-purple" />
+                    <div>
+                      <p className="font-semibold">Enviamos a toda Colombia</p>
+                      <p className="text-sm text-muted-foreground">
+                        Despachamos pedidos a ciudades y municipios con
+                        cobertura de las transportadoras disponibles.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </section>
               <div className="flex w-full items-center justify-start py-2">
                 <h2 className="font-serif text-xl font-semibold">
                   Contáctanos

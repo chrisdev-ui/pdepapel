@@ -142,11 +142,11 @@ import {
   detailsTitleOptions,
   discountOptions,
   paymentMethodsByOption,
-  paymentOptions,
   shippingOptions,
 } from "@/constants";
 import { ENVIOCLICK_LIMITS, getCarrierInfo } from "@/constants/shipping";
 import { getErrorMessage } from "@/lib/api-errors";
+import { getAdminOrderPaymentOptions } from "@/lib/order-payment-options";
 import { cn, currencyFormatter } from "@/lib/utils";
 import dynamic from "next/dynamic";
 import { getBoxes } from "../server/get-boxes";
@@ -728,6 +728,12 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     initialData?.status === OrderStatus.PAID ||
     initialData?.status === OrderStatus.SENT;
   const isBoldPayment = watchedPaymentMethod === PaymentMethod.Bold;
+  const canCopyOnlinePaymentLink =
+    initialData?.payment?.method === PaymentMethod.Bold && isBoldPayment;
+  const adminPaymentOptions = useMemo(
+    () => getAdminOrderPaymentOptions(watchedPaymentMethod),
+    [watchedPaymentMethod],
+  );
 
   const discountType = form.watch("discount.type");
   const discountAmount = form.watch("discount.amount");
@@ -1242,7 +1248,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 hover:text-purple-800 font-medium"
+                  className="border-purple-200 bg-purple-50 font-medium text-purple-700 hover:bg-purple-100 hover:text-purple-800"
                   type="button"
                 >
                   <Sparkles className="mr-2 h-4 w-4 text-purple-600" />
@@ -1251,7 +1257,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-72">
-                <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <DropdownMenuLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Enlaces & Métodos de Pago
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
@@ -1283,7 +1289,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                     initialData?.status === OrderStatus.SENT ||
                     Boolean(
                       initialData?.payment?.method &&
-                        initialData.payment.method !== PaymentMethod.Wompi,
+                      initialData.payment.method !== PaymentMethod.Wompi,
                     )
                   }
                   onClick={async () => {
@@ -1397,6 +1403,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 </DropdownMenuItem>
 
                 <DropdownMenuItem
+                  disabled={isCompletedOrder || !canCopyOnlinePaymentLink}
                   onClick={() => {
                     if (!initialData?.id) return;
                     const storeUrl =
@@ -1413,7 +1420,13 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   className="cursor-pointer py-2"
                 >
                   <Link2 className="mr-2 h-4 w-4 text-emerald-600" />
-                  <span>Copiar enlace de pago</span>
+                  <span>
+                    {isCompletedOrder
+                      ? "Orden cerrada (sin enlace de pago)"
+                      : canCopyOnlinePaymentLink
+                        ? "Copiar enlace de pago en línea"
+                        : "Guarda primero como Pago en línea"}
+                  </span>
                 </DropdownMenuItem>
 
                 {initialData.token && (
@@ -2557,7 +2570,11 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                     disabled={loading}
                     onValueChange={(val) => {
                       field.onChange(val);
-                      form.setValue("shipping.isCOD", val === PaymentMethod.COD, { shouldDirty: true });
+                      form.setValue(
+                        "shipping.isCOD",
+                        val === PaymentMethod.COD,
+                        { shouldDirty: true },
+                      );
                     }}
                     value={field.value}
                     defaultValue={field.value}
@@ -2571,13 +2588,17 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {Object.values(PaymentMethod).map((state) => (
-                        <SelectItem key={state} value={state}>
-                          {paymentOptions[state]}
+                      {adminPaymentOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  <FormDescription>
+                    Para enviar un enlace de pago, selecciona Pago en línea,
+                    guarda la orden y luego cópialo desde Links y Pagos.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -3004,14 +3025,14 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                                       {quote.isCOD ? (
                                         <Badge
                                           variant="outline"
-                                          className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 font-semibold text-[10px] rounded-full px-2 py-0.5"
+                                          className="rounded-full border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600"
                                         >
                                           ✓ Admite contraentrega
                                         </Badge>
                                       ) : (
                                         <Badge
                                           variant="secondary"
-                                          className="text-muted-foreground/80 font-medium text-[10px] rounded-full px-2 py-0.5"
+                                          className="rounded-full px-2 py-0.5 text-[10px] font-medium text-muted-foreground/80"
                                         >
                                           ✗ Solo pago online
                                         </Badge>
@@ -3291,10 +3312,21 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                             onCheckedChange={(checked) => {
                               field.onChange(checked);
                               if (checked) {
-                                form.setValue("payment.method", PaymentMethod.COD, { shouldDirty: true });
+                                form.setValue(
+                                  "payment.method",
+                                  PaymentMethod.COD,
+                                  { shouldDirty: true },
+                                );
                               } else {
-                                if (form.getValues("payment.method") === PaymentMethod.COD) {
-                                  form.setValue("payment.method", PaymentMethod.BankTransfer, { shouldDirty: true });
+                                if (
+                                  form.getValues("payment.method") ===
+                                  PaymentMethod.COD
+                                ) {
+                                  form.setValue(
+                                    "payment.method",
+                                    PaymentMethod.BankTransfer,
+                                    { shouldDirty: true },
+                                  );
                                 }
                               }
                             }}

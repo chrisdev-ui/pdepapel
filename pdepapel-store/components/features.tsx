@@ -18,8 +18,8 @@ const features: Feature[] = [
     icon: <Icons.catalog className="h-16 w-16 text-pink-shell" />,
   },
   {
-    title: "Envíos",
-    description: "¡Realizamos envíos a todo el país!",
+    title: "Envíos nacionales",
+    description: "Desde Medellín enviamos a toda Colombia.",
     icon: <Icons.truck className="h-16 w-16 text-pink-shell" />,
   },
   {

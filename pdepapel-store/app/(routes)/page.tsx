@@ -156,11 +156,11 @@ export default function HomePage() {
       </Suspense>
       <section className="bg-kawaii-pink-light/15 py-8 text-center">
         <h1 className="font-serif text-3xl font-extrabold sm:text-4xl">
-          Papelería kawaii y creativa con envíos a toda Colombia
+          Papelería kawaii desde Medellín con envíos a toda Colombia
         </h1>
         <p className="mx-auto mt-3 max-w-2xl px-6 text-muted-foreground">
-          Encuentra agendas, cuadernos, útiles escolares y regalos con diseños
-          únicos para estudiar, crear y regalar.
+          Somos una tienda online colombiana. Desde Medellín enviamos agendas,
+          cuadernos, útiles escolares y regalos kawaii a todo el país.
         </p>
       </section>
       <Features />
