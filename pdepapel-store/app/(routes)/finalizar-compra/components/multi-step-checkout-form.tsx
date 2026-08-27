@@ -883,6 +883,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                   onSubmit={form.handleSubmit(onSubmit)}
                   className="space-y-8"
                   autoComplete="off"
+                  data-clarity-mask="true"
                 >
                   <div className="relative min-h-[300px]">
                     {currentStep === 1 && (

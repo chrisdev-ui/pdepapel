@@ -1,4 +1,4 @@
-export const ANALYTICS_CONSENT_STORAGE_KEY = "pdepapel:analytics-consent:v1";
+export const ANALYTICS_CONSENT_STORAGE_KEY = "pdepapel:analytics-consent:v2";
 export const OPEN_PRIVACY_PREFERENCES_EVENT =
   "pdepapel:open-privacy-preferences";
 

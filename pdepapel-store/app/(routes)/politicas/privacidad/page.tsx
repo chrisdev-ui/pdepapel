@@ -77,14 +77,21 @@ export default function DataPolicyPage() {
             </li>
           </ul>
           <h3 className="font-serif text-lg font-semibold">
-            Analítica de compras:
+            Analítica y mejora de experiencia:
           </h3>
           <ul className="list-disc space-y-3 pl-5">
             <li>
-              Solo con tu autorización, usamos Google Analytics 4 para conocer
-              de forma agregada cómo se navega el catálogo, el carrito y el
-              proceso de compra. Esto nos permite identificar oportunidades para
-              mejorar el servicio.
+              Solo con tu autorización, usamos Google Analytics 4 y Microsoft
+              Clarity para conocer cómo se navega el catálogo, el carrito y el
+              proceso de compra. Esto incluye métricas agregadas, mapas de calor
+              y reproducciones técnicas de interacción que nos permiten detectar
+              dificultades y mejorar el servicio.
+            </li>
+            <li>
+              Los campos de formularios, direcciones, datos de contacto, números
+              de pedido, cotizaciones y demás contenido sensible se ocultan para
+              Clarity. No usamos identificadores personalizados ni enviamos
+              datos de pago a estas herramientas.
             </li>
             <li>
               Puedes aceptar, rechazar o cambiar estas opciones cuando quieras
@@ -169,7 +176,7 @@ export default function DataPolicyPage() {
             personales.
           </p>
           <p className="text-sm text-muted-foreground">
-            Última actualización: 15 de agosto de 2026.
+            Última actualización: 27 de agosto de 2026.
           </p>
         </div>
       </Container>

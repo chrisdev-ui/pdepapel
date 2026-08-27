@@ -22,6 +22,11 @@ export const env = createEnv({
       .string()
       .regex(/^G-[A-Z0-9]+$/, "Debe ser un ID de medición válido de GA4")
       .optional(),
+    NEXT_PUBLIC_CLARITY_PROJECT_ID: z
+      .string()
+      .regex(/^[a-z0-9]+$/i, "Debe ser un ID de proyecto válido de Clarity")
+      .optional(),
+    NEXT_PUBLIC_CLARITY_ENABLED: z.enum(["true", "false"]).optional(),
   },
   experimental__runtimeEnv: {
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:
@@ -38,5 +43,7 @@ export const env = createEnv({
     NEXT_PUBLIC_PAYU_ACCOUNT_ID: process.env.NEXT_PUBLIC_PAYU_ACCOUNT_ID,
     NEXT_PUBLIC_PAYU_API_KEY: process.env.NEXT_PUBLIC_PAYU_API_KEY,
     NEXT_PUBLIC_GA_MEASUREMENT_ID: process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID,
+    NEXT_PUBLIC_CLARITY_PROJECT_ID: process.env.NEXT_PUBLIC_CLARITY_PROJECT_ID,
+    NEXT_PUBLIC_CLARITY_ENABLED: process.env.NEXT_PUBLIC_CLARITY_ENABLED,
   },
 });

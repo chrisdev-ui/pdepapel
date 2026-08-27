@@ -5,6 +5,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata } from "next";
 
 import { Footer } from "@/components/footer";
+import { ClarityPrivacyBoundary } from "@/components/clarity-privacy-boundary";
 import { Spooky } from "@/components/spooky";
 import { getCurrentSeason } from "@/lib/date-utils";
 import { beautifulEveryTime, caudex, fredoka, quicksand } from "@/lib/fonts";
@@ -126,13 +127,17 @@ export default async function RootLayout({
             <ModalProvider />
             <WishlistSyncProvider />
             <Navbar season={currentSeason} />
-            <main>{children}</main>
+            <ClarityPrivacyBoundary>{children}</ClarityPrivacyBoundary>
             <Footer season={currentSeason} />
             {currentSeason === Season.Christmas && <Christmas />}
             {currentSeason === Season.Spooky && <Spooky />}
             <Toaster />
             <CustomerAnalyticsProvider
               measurementId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID}
+              clarityProjectId={process.env.NEXT_PUBLIC_CLARITY_PROJECT_ID}
+              clarityEnabled={
+                process.env.NEXT_PUBLIC_CLARITY_ENABLED === "true"
+              }
             />
             <Analytics />
             <SpeedInsights />

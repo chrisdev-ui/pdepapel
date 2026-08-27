@@ -14,6 +14,12 @@ import {
   enableGoogleAnalytics,
   trackGooglePageView,
 } from "@/lib/customer-analytics";
+import {
+  configureMicrosoftClarity,
+  initializeMicrosoftClarity,
+  isClarityEligiblePath,
+  updateMicrosoftClarityContext,
+} from "@/lib/microsoft-clarity";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -32,10 +38,32 @@ const initialPreferences = {
 
 interface CustomerAnalyticsProviderProps {
   measurementId?: string;
+  clarityProjectId?: string;
+  clarityEnabled?: boolean;
+}
+
+function scheduleWhenIdle(callback: () => void): () => void {
+  const idleWindow = window as unknown as {
+    requestIdleCallback?: (
+      callback: IdleRequestCallback,
+      options?: IdleRequestOptions,
+    ) => number;
+    cancelIdleCallback?: (handle: number) => void;
+  };
+
+  if (idleWindow.requestIdleCallback) {
+    const handle = idleWindow.requestIdleCallback(callback, { timeout: 2000 });
+    return () => idleWindow.cancelIdleCallback?.(handle);
+  }
+
+  const handle = window.setTimeout(callback, 1200);
+  return () => window.clearTimeout(handle);
 }
 
 export function CustomerAnalyticsProvider({
   measurementId,
+  clarityProjectId,
+  clarityEnabled = false,
 }: CustomerAnalyticsProviderProps) {
   const pathname = usePathname();
   const [consent, setConsent] = useState<AnalyticsConsent | null>(null);
@@ -43,7 +71,8 @@ export function CustomerAnalyticsProvider({
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
   const [draftPreferences, setDraftPreferences] = useState(initialPreferences);
 
-  const hasOptionalAnalytics = Boolean(measurementId);
+  const hasClarity = Boolean(clarityEnabled && clarityProjectId);
+  const hasOptionalAnalytics = Boolean(measurementId || hasClarity);
 
   useEffect(() => {
     const persistedConsent = readAnalyticsConsent();
@@ -77,8 +106,32 @@ export function CustomerAnalyticsProvider({
     } else {
       disableGoogleAnalytics();
     }
-
   }, [consent?.analytics, isReady, measurementId]);
+
+  useEffect(() => {
+    if (!isReady) return;
+
+    configureMicrosoftClarity({
+      enabled: hasClarity,
+      projectId: clarityProjectId,
+    });
+    updateMicrosoftClarityContext({
+      analyticsConsent: consent?.analytics === true,
+      pathname,
+    });
+
+    if (
+      !hasClarity ||
+      !consent?.analytics ||
+      !isClarityEligiblePath(pathname)
+    ) {
+      return;
+    }
+
+    return scheduleWhenIdle(() => {
+      void initializeMicrosoftClarity();
+    });
+  }, [clarityProjectId, consent?.analytics, hasClarity, isReady, pathname]);
 
   useEffect(() => {
     if (!consent?.analytics || !measurementId || !isReady) return;
@@ -104,44 +157,43 @@ export function CustomerAnalyticsProvider({
 
   return (
     <>
-      {isReady && !consent && (
-        !isPreferencesOpen && (
-          <section
-            aria-label="Preferencias de privacidad"
-            className="fixed inset-x-4 bottom-4 z-[10000] mx-auto max-w-2xl rounded-2xl border border-blue-baby bg-background p-5 shadow-xl sm:p-6"
-          >
-            <h2 className="font-serif text-xl font-bold">
-              Tu privacidad, tus decisiones
-            </h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Con tu permiso usamos analítica de compras para mejorar la tienda
-              y entender qué dificulta finalizar una compra. Nunca usamos estos
-              datos para procesar tu pago.
-            </p>
-            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => persistPreferences(initialPreferences)}
-              >
-                Rechazar opcionales
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsPreferencesOpen(true)}
-              >
-                Personalizar
-              </Button>
-              <Button
-                type="button"
-                onClick={() => persistPreferences({ analytics: true })}
-              >
-                Aceptar y continuar
-              </Button>
-            </div>
-          </section>
-        )
+      {isReady && !consent && !isPreferencesOpen && (
+        <section
+          aria-label="Preferencias de privacidad"
+          className="fixed inset-x-4 bottom-4 z-[10000] mx-auto max-w-2xl rounded-2xl border border-blue-baby bg-background p-5 shadow-xl sm:p-6"
+        >
+          <h2 className="font-serif text-xl font-bold">
+            Tu privacidad, tus decisiones
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Con tu permiso usamos métricas y reproducciones técnicas de la
+            navegación para mejorar la tienda y entender qué dificulta una
+            compra. Ocultamos los campos personales y nunca usamos estos datos
+            para procesar tu pago.
+          </p>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => persistPreferences(initialPreferences)}
+            >
+              Rechazar opcionales
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsPreferencesOpen(true)}
+            >
+              Personalizar
+            </Button>
+            <Button
+              type="button"
+              onClick={() => persistPreferences({ analytics: true })}
+            >
+              Aceptar y continuar
+            </Button>
+          </div>
+        </section>
       )}
 
       <Dialog open={isPreferencesOpen} onOpenChange={setIsPreferencesOpen}>
@@ -163,7 +215,7 @@ export function CustomerAnalyticsProvider({
                 </span>
               </span>
             </label>
-            {measurementId && (
+            {hasOptionalAnalytics && (
               <div className="flex items-start gap-3 rounded-lg border p-4">
                 <Checkbox
                   id="analytics-consent"
@@ -177,11 +229,12 @@ export function CustomerAnalyticsProvider({
                 />
                 <Label htmlFor="analytics-consent" className="cursor-pointer">
                   <span className="block font-medium">
-                    Analítica de compras
+                    Analítica y mejora de experiencia
                   </span>
                   <span className="mt-1 block text-sm font-normal text-muted-foreground">
                     Nos ayuda a entender páginas vistas, productos, carrito y
-                    pasos del proceso de compra de forma agregada.
+                    pasos del proceso de compra mediante métricas y sesiones
+                    técnicas con los datos personales ocultos.
                   </span>
                 </Label>
               </div>

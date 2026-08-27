@@ -1,6 +1,7 @@
 import { track as trackVercelEvent } from "@vercel/analytics/react";
 
 import { hasAnalyticsConsent } from "@/lib/analytics-consent";
+import { trackMicrosoftClarityEvent } from "@/lib/microsoft-clarity";
 import { Product } from "@/types";
 
 declare global {
@@ -147,6 +148,7 @@ export function trackCustomerEvent(
   }
   trackVercelEvent(eventName, vercelParameters);
   window.gtag?.("event", eventName, parameters);
+  trackMicrosoftClarityEvent(eventName);
 }
 
 export function trackGooglePageView(path: string, title: string): void {

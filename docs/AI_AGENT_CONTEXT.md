@@ -32,10 +32,10 @@ Terminology used by the business:
 
 This is a two-application repository, **not** an npm workspace. There is no root `package.json`.
 
-| Folder | Role | Local development port | Database access | Production domain |
-| --- | --- | ---: | --- | --- |
-| `pdepapel-admin/` | Private admin dashboard, full REST API, Prisma schema, database owner, webhooks, cron jobs | `3001` | Direct via Prisma/MySQL | `admin.papeleriapdepapel.com` |
-| `pdepapel-store/` | Public customer-facing Next.js app | `3000` | **None**; uses admin REST API | `papeleriapdepapel.com` |
+| Folder            | Role                                                                                       | Local development port | Database access               | Production domain             |
+| ----------------- | ------------------------------------------------------------------------------------------ | ---------------------: | ----------------------------- | ----------------------------- |
+| `pdepapel-admin/` | Private admin dashboard, full REST API, Prisma schema, database owner, webhooks, cron jobs |                 `3001` | Direct via Prisma/MySQL       | `admin.papeleriapdepapel.com` |
+| `pdepapel-store/` | Public customer-facing Next.js app                                                         |                 `3000` | **None**; uses admin REST API | `papeleriapdepapel.com`       |
 
 Each application has its own `package.json`, `package-lock.json`, `node_modules`, Next config, test configuration, and Vercel project. Run npm commands from the application folder, never from the repository root.
 
@@ -130,9 +130,10 @@ Public-shop-specific:
 - `next/image` optimization enabled (AVIF/WebP and cache controls).
 - SEO with `schema-dts`, `app/sitemap.ts`, `app/robots.ts`, Open Graph and Twitter images.
 - Vercel Analytics and Speed Insights.
-- Consent-based Google Analytics 4 for customer-journey analysis; it is
-  optional and must never be used to send customer contact, address, identity,
-  or payment data.
+- Consent-based Google Analytics 4 and optional Microsoft Clarity for
+  customer-journey analysis. They must never receive customer contact, address,
+  identity, order, quote, or payment data. Clarity remains behind a separate
+  production kill switch and the runbook in `docs/analitica-microsoft-clarity.md`.
 
 ## 5. Admin application (`pdepapel-admin`)
 
@@ -244,18 +245,18 @@ Spanish routes are canonical. English folders/routes exist only for permanent co
 
 Examples:
 
-| Canonical Spanish route | Legacy English route |
-| --- | --- |
-| `/tienda` | `/shop` |
-| `/producto/[slug]` | `/product/[slug]` |
-| `/categoria/[slug]` | no canonical English use |
-| `/carrito` | `/cart` |
-| `/finalizar-compra` | `/checkout` |
-| `/favoritos` | `/wishlist` |
-| `/pedido/[orderId]` | `/order/[orderId]` |
-| `/nosotros` | `/about` |
-| `/contacto` | `/contact` |
-| `/politicas/*` | `/policies/*` |
+| Canonical Spanish route | Legacy English route     |
+| ----------------------- | ------------------------ |
+| `/tienda`               | `/shop`                  |
+| `/producto/[slug]`      | `/product/[slug]`        |
+| `/categoria/[slug]`     | no canonical English use |
+| `/carrito`              | `/cart`                  |
+| `/finalizar-compra`     | `/checkout`              |
+| `/favoritos`            | `/wishlist`              |
+| `/pedido/[orderId]`     | `/order/[orderId]`       |
+| `/nosotros`             | `/about`                 |
+| `/contacto`             | `/contact`               |
+| `/politicas/*`          | `/policies/*`            |
 
 When creating a new customer-navigable route:
 
@@ -296,9 +297,9 @@ When creating a new customer-navigable route:
 ### Customer-journey analytics
 
 - The public shop asks for explicit, revocable browser consent before loading
-  Google Analytics 4. Preferences are versioned in browser local storage and
-  can be reopened from the footer. Essential checkout and security functions do
-  not depend on that consent.
+  Google Analytics 4 or Microsoft Clarity. Preferences are versioned in browser
+  local storage and can be reopened from the footer. Essential checkout and
+  security functions do not depend on that consent.
 - GA4 client events use the shared `lib/customer-analytics.ts` helper. Track
   ecommerce events such as product-list views, product views, add-to-cart,
   cart view, checkout, shipping/payment steps, and checkout errors. Never put
@@ -318,6 +319,13 @@ When creating a new customer-navigable route:
   Protocol from the Bold/Wompi webhook or a manual paid transition. It is never
   emitted from a customer redirect. GA failure must be logged but must not roll
   back payment, stock, email, or order status.
+- Clarity is loaded through the official package only after consent, only on the
+  public commerce funnel, and during browser idle time. Its event allowlist sends
+  event names without GA4 parameters. Never call Clarity `identify`.
+- Checkout form content and private order/quote/account routes are explicitly
+  masked. Clarity storage is denied outside the allowlisted route groups. Keep
+  `NEXT_PUBLIC_CLARITY_ENABLED=false` until the audience/privacy activation gate
+  in `docs/analitica-microsoft-clarity.md` is complete.
 
 ## 7. Data model and database safety
 
@@ -462,8 +470,8 @@ The fair module exists because in-person events otherwise create serious online-
 3. For surprise capsules, use a reserved product with acquisition cost, define margin/price, create **one unique QR per capsule**, print and attach it. The QR identifies the capsule internally without revealing the product to the buyer. Capsule labels use the `STANDARD_40` A4 print format to preserve scanning reliability.
 4. Reusable point-of-sale product labels use `PDP:<productId>` and can be printed as `COMPACT_65` (38.1 × 21.2 mm) or `STANDARD_40` (48 × 28 mm). Both layouts require A4 inkjet label sheets, A4 at 100% scale, and a one-sheet scan/alignment test before a batch.
 5. Open the event and use the mobile-friendly admin page/phone camera, a Bluetooth scanner, or manual SKU/GTIN entry.
-5. Record paid fair sales once with cash or transfer. The result is a paid `FESTIVAL` order and inventory is not allowed to exceed the reserved amount.
-6. At the end, physically count unsold, damaged, and lost stock. Reconcile and close the event; closing is irreversible. Returned stock goes back online, damaged/lost stock remains audited, and affected Mercado Libre listings are refreshed.
+6. Record paid fair sales once with cash or transfer. The result is a paid `FESTIVAL` order and inventory is not allowed to exceed the reserved amount.
+7. At the end, physically count unsold, damaged, and lost stock. Reconcile and close the event; closing is irreversible. Returned stock goes back online, damaged/lost stock remains audited, and affected Mercado Libre listings are refreshed.
 
 ### Reconciling a past fair
 
@@ -683,6 +691,9 @@ Full configuration runbook: `pdepapel-admin/docs/mercadolibre.md`.
 - `REVALIDATION_SECRET` server-side value matching admin.
 - Optional public analytics ID: `NEXT_PUBLIC_GA_MEASUREMENT_ID`. It is a public
   identifier, not a secret.
+- Optional Microsoft Clarity values: `NEXT_PUBLIC_CLARITY_PROJECT_ID` (public)
+  and `NEXT_PUBLIC_CLARITY_ENABLED` (`true`/`false` kill switch). Configure them
+  only in the storefront project.
 
 ### Local vs production
 
@@ -784,19 +795,19 @@ When user approval is granted:
 
 ## 17. Common failures and their root cause
 
-| Symptom | Most likely cause | Safe first response |
-| --- | --- | --- |
-| Shop page lacks data | Admin API/server env/upstream endpoint issue | Check admin API response and Vercel logs before changing public UI. |
-| Catalog changes do not appear publicly | Revalidation secret mismatch/invalid header or ISR cache | Verify identical single-line `REVALIDATION_SECRET` in both Vercel projects and inspect `/api/revalidate` logs. |
-| Admin redirects in a loop | Clerk/session/cookie/domain middleware configuration | Inspect `middleware.ts`, public route matchers, Clerk URLs, domain config, and cookies; do not clear auth logic blindly. |
-| Order paid unexpectedly | Webhook/manual update/payment-state bug | Audit provider event, signature, payment details, admin actions, and `paidAt`; do not infer from current stock or redirect URL. |
-| Paid order shows unavailable products | UI is reading current stock rather than order snapshot | Fix presentation to preserve historical order truth. |
-| Mercado Libre sale lacks net amount | Billing permissions/token missing or settlement unavailable | Verify billing-read scope, reconnect, inspect outbox; leave net pending and retry—do not substitute gross. |
-| Mercado Libre queue error about duration | QStash delay has no time unit | Use valid durations such as `30s`, `5m`, or `6h`. |
-| Marketplace sale would decrement twice | Manual reconciliation plus automatic process, or non-idempotent retry | Inspect `MarketplaceOrder`, inventory status, webhook/outbox keys before doing anything. |
-| Fair created online stock mismatch | Stock was not reserved/reconciled | Use fair reservation before event or approved reconciliation template afterward. |
-| Tax purchases empty | Supplier invoices were never recorded | Add actual invoice records in tax reports; restock orders are not fiscal invoices. |
-| Production build fails after env change | Admin strict env schema/config mismatch | Update `lib/env.mjs` only when the variable must be mandatory; verify all Vercel environments. |
+| Symptom                                  | Most likely cause                                                     | Safe first response                                                                                                             |
+| ---------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Shop page lacks data                     | Admin API/server env/upstream endpoint issue                          | Check admin API response and Vercel logs before changing public UI.                                                             |
+| Catalog changes do not appear publicly   | Revalidation secret mismatch/invalid header or ISR cache              | Verify identical single-line `REVALIDATION_SECRET` in both Vercel projects and inspect `/api/revalidate` logs.                  |
+| Admin redirects in a loop                | Clerk/session/cookie/domain middleware configuration                  | Inspect `middleware.ts`, public route matchers, Clerk URLs, domain config, and cookies; do not clear auth logic blindly.        |
+| Order paid unexpectedly                  | Webhook/manual update/payment-state bug                               | Audit provider event, signature, payment details, admin actions, and `paidAt`; do not infer from current stock or redirect URL. |
+| Paid order shows unavailable products    | UI is reading current stock rather than order snapshot                | Fix presentation to preserve historical order truth.                                                                            |
+| Mercado Libre sale lacks net amount      | Billing permissions/token missing or settlement unavailable           | Verify billing-read scope, reconnect, inspect outbox; leave net pending and retry—do not substitute gross.                      |
+| Mercado Libre queue error about duration | QStash delay has no time unit                                         | Use valid durations such as `30s`, `5m`, or `6h`.                                                                               |
+| Marketplace sale would decrement twice   | Manual reconciliation plus automatic process, or non-idempotent retry | Inspect `MarketplaceOrder`, inventory status, webhook/outbox keys before doing anything.                                        |
+| Fair created online stock mismatch       | Stock was not reserved/reconciled                                     | Use fair reservation before event or approved reconciliation template afterward.                                                |
+| Tax purchases empty                      | Supplier invoices were never recorded                                 | Add actual invoice records in tax reports; restock orders are not fiscal invoices.                                              |
+| Production build fails after env change  | Admin strict env schema/config mismatch                               | Update `lib/env.mjs` only when the variable must be mandatory; verify all Vercel environments.                                  |
 
 ## 18. Agent checklist by change type
 
