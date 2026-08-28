@@ -305,6 +305,11 @@ When creating a new customer-navigable route:
   cart view, checkout, shipping/payment steps, and checkout errors. Never put
   email, phone, address, document number, raw search text, payment credentials,
   or any other personal data in event parameters.
+- Checkout diagnostics distinguish the cart page from the cart drawer and
+  record privacy-safe step views, generic validation groups, shipping-quote
+  outcomes, order-submission failures, and payment handoff failures. Keep those
+  parameters limited to step names, generic groups, counts, status classes, and
+  provider-neutral technical state; never add form values or server messages.
 - The GA4 bootstrap must keep Google's canonical queue format:
   `function gtag(){dataLayer.push(arguments);}`. Do not replace it with an
   arrow function that pushes a rest-parameter array; `gtag.js` may load but

@@ -15,11 +15,19 @@ const TRACKED_CLARITY_EVENTS = new Set([
   "catalog_search",
   "checkout_initiated",
   "checkout_order_submitted",
+  "checkout_payment_redirect_failed",
   "checkout_payment_redirect",
+  "checkout_step_view",
   "checkout_stock_unavailable",
+  "checkout_submit_failed",
+  "checkout_validation_error",
   "select_category",
   "select_item",
   "select_item_variant",
+  "shipping_quote_failed",
+  "shipping_quote_no_results",
+  "shipping_quote_requested",
+  "shipping_quote_succeeded",
   "view_cart",
   "view_item",
   "view_item_list",
@@ -32,6 +40,22 @@ const CHECKOUT_STEP_BY_EVENT: Record<string, string> = {
   checkout_stock_unavailable: "stock_no_disponible",
   checkout_order_submitted: "pedido_enviado",
   checkout_payment_redirect: "redireccion_pago",
+  shipping_quote_failed: "envio",
+  shipping_quote_no_results: "envio",
+  shipping_quote_requested: "envio",
+  shipping_quote_succeeded: "envio",
+};
+
+const SAFE_CHECKOUT_STEP_TAGS = new Set([
+  "envio",
+  "informacion",
+  "pago",
+  "revision",
+]);
+
+type QueuedClarityEvent = {
+  checkoutStep?: string;
+  eventName: string;
 };
 
 const SENSITIVE_ROUTE_PREFIXES = [
@@ -48,7 +72,7 @@ let configuredProjectId: string | null = null;
 let isConfiguredEnabled = false;
 let hasConsent = false;
 let currentPathname = "/";
-let queuedEvents: string[] = [];
+let queuedEvents: QueuedClarityEvent[] = [];
 
 export type ClarityRouteGroup =
   | "carrito"
@@ -104,12 +128,26 @@ function applyRouteTags(client: ClarityClient): void {
   client.setTag("consent_version", "v2");
 }
 
+function getCheckoutStepTag(
+  eventName: string,
+  parameters: Record<string, unknown>,
+): string | undefined {
+  const parameterStep = parameters.checkout_step_name;
+  if (
+    typeof parameterStep === "string" &&
+    SAFE_CHECKOUT_STEP_TAGS.has(parameterStep)
+  ) {
+    return parameterStep;
+  }
+
+  return CHECKOUT_STEP_BY_EVENT[eventName];
+}
+
 function flushQueuedEvents(client: ClarityClient): void {
   const events = queuedEvents;
   queuedEvents = [];
 
-  for (const eventName of events) {
-    const checkoutStep = CHECKOUT_STEP_BY_EVENT[eventName];
+  for (const { checkoutStep, eventName } of events) {
     if (checkoutStep) client.setTag("checkout_step", checkoutStep);
     client.event(eventName);
   }
@@ -184,15 +222,21 @@ export async function initializeMicrosoftClarity(): Promise<boolean> {
   return initializationPromise;
 }
 
-export function trackMicrosoftClarityEvent(eventName: string): void {
+export function trackMicrosoftClarityEvent(
+  eventName: string,
+  parameters: Record<string, unknown> = {},
+): void {
   if (!TRACKED_CLARITY_EVENTS.has(eventName) || !canCollect()) return;
 
+  const checkoutStep = getCheckoutStepTag(eventName, parameters);
+
   if (!clarityClient) {
-    if (queuedEvents.length < MAX_QUEUED_EVENTS) queuedEvents.push(eventName);
+    if (queuedEvents.length < MAX_QUEUED_EVENTS) {
+      queuedEvents.push({ checkoutStep, eventName });
+    }
     return;
   }
 
-  const checkoutStep = CHECKOUT_STEP_BY_EVENT[eventName];
   if (checkoutStep) clarityClient.setTag("checkout_step", checkoutStep);
   clarityClient.event(eventName);
 }

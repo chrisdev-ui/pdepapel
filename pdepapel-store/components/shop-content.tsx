@@ -276,7 +276,7 @@ export const ShopContent: React.FC<ShopContentProps> = ({
         <PriceFilter min={0} max={1000000} step={1000} />
       </div>
       <div className="mt-6 space-y-8 lg:col-span-4 lg:mt-0">
-        <div className="flex w-full flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h2 className="font-sans text-3xl font-bold">{heading}</h2>
             {fixedCategoryId && (
@@ -288,8 +288,18 @@ export const ShopContent: React.FC<ShopContentProps> = ({
               </p>
             )}
           </div>
-          <section className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-center md:gap-4">
-            <div className="flex flex-wrap items-center gap-3">
+          <section
+            aria-label="Controles del catálogo"
+            className="flex w-full flex-col gap-2 lg:w-auto lg:items-end"
+          >
+            <div className="flex w-full items-center gap-2 md:justify-end md:gap-4 lg:w-auto">
+              <ShopSearchBar
+                className="hidden md:flex"
+                placeholder={searchPlaceholder}
+              />
+              <SortSelector options={SORT_OPTIONS} />
+            </div>
+            <div className="flex w-full flex-col gap-2 md:flex-row md:items-center md:justify-end md:gap-3 lg:w-auto">
               <OnSaleFilter />
               {hasActiveFilters && (
                 <Button
@@ -297,18 +307,12 @@ export const ShopContent: React.FC<ShopContentProps> = ({
                   variant="ghost"
                   size="sm"
                   onClick={clearFilters}
+                  className="self-end md:self-auto"
                 >
                   Limpiar filtros
                   <X className="ml-1 h-4 w-4" />
                 </Button>
               )}
-            </div>
-            <div className="flex w-full items-center gap-2 md:w-auto md:gap-4">
-              <ShopSearchBar
-                className="hidden md:flex"
-                placeholder={searchPlaceholder}
-              />
-              <SortSelector options={SORT_OPTIONS} />
             </div>
           </section>
         </div>

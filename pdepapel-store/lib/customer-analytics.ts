@@ -148,7 +148,7 @@ export function trackCustomerEvent(
   }
   trackVercelEvent(eventName, vercelParameters);
   window.gtag?.("event", eventName, parameters);
-  trackMicrosoftClarityEvent(eventName);
+  trackMicrosoftClarityEvent(eventName, parameters);
 }
 
 export function trackGooglePageView(path: string, title: string): void {

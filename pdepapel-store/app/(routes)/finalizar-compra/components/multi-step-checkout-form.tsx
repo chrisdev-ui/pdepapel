@@ -25,6 +25,11 @@ import useValidateCoupon from "@/hooks/use-validate-coupon";
 import { calculateTotals, cn, generateGuestId } from "@/lib/utils";
 import { toBoldCheckoutConfig } from "@/lib/bold";
 import {
+  getCheckoutRequestFailureAnalytics,
+  getCheckoutStepName,
+  summarizeCheckoutValidationErrors,
+} from "@/lib/checkout-analytics";
+import {
   getAnalyticsValue,
   getGoogleAnalyticsClientId,
   toAnalyticsItem,
@@ -249,6 +254,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   );
   const hasFinalizedCheckoutRef = useRef(false);
   const checkoutStartedRef = useRef(false);
+  const trackedCheckoutStepsRef = useRef(new Set<number>());
   const analyticsClientIdRef = useRef<string | null>(null);
 
   const [couponState, setCouponState] = useState<CouponState>(() => {
@@ -474,6 +480,23 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   }, [analyticsItems]);
 
   useEffect(() => {
+    const checkoutStepName = getCheckoutStepName(currentStep);
+    if (
+      !checkoutStepName ||
+      analyticsItems.length === 0 ||
+      trackedCheckoutStepsRef.current.has(currentStep)
+    ) {
+      return;
+    }
+
+    trackedCheckoutStepsRef.current.add(currentStep);
+    trackCustomerEvent("checkout_step_view", {
+      checkout_step: currentStep,
+      checkout_step_name: checkoutStepName,
+    });
+  }, [analyticsItems.length, currentStep]);
+
+  useEffect(() => {
     const measurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
     if (!measurementId) return;
 
@@ -509,6 +532,16 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       fieldsToValidate = ["paymentMethod"];
     }
     const result = await form.trigger(fieldsToValidate);
+    if (!result) {
+      const invalidFields = fieldsToValidate
+        .filter((fieldName) => form.getFieldState(fieldName).invalid)
+        .map(String);
+
+      trackCustomerEvent(
+        "checkout_validation_error",
+        summarizeCheckoutValidationErrors(step, invalidFields),
+      );
+    }
     return result;
   };
 
@@ -652,6 +685,12 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         err?.response?.data?.message ||
         err?.message;
 
+      trackCustomerEvent("checkout_submit_failed", {
+        checkout_step: currentStep,
+        checkout_step_name: getCheckoutStepName(currentStep) ?? "desconocido",
+        ...getCheckoutRequestFailureAnalytics(err),
+      });
+
       toast({
         title: "Error al crear la orden",
         description:
@@ -667,6 +706,9 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         undefined
       ) {
         const payUData = data as CheckoutByOrderResponse as PayUFormState;
+        trackCustomerEvent("checkout_payment_redirect", {
+          payment_type: PaymentMethod.PayU,
+        });
         setPayUformData(payUData);
       }
       // Check for Wompi response second
@@ -707,6 +749,10 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
             return; // Exit here, the browser will redirect
           } catch (e) {
             console.error("Error opening Bold checkout:", e);
+            trackCustomerEvent("checkout_payment_redirect_failed", {
+              fallback_used: true,
+              payment_type: PaymentMethod.Bold,
+            });
           }
         }
 

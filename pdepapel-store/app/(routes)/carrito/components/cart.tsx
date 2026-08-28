@@ -30,6 +30,7 @@ const Cart: React.FC<{}> = () => {
       toAnalyticsItem(item, item.quantity ?? 1),
     );
     trackCustomerEvent("view_cart", {
+      cart_surface: "page",
       currency: "COP",
       items,
       value: getAnalyticsValue(items),

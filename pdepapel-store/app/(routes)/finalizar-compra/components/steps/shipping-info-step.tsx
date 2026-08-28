@@ -33,6 +33,7 @@ import { useCheckoutStore } from "@/hooks/use-checkout-store";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useLocations } from "@/hooks/use-locations";
 import { useShippingQuote } from "@/hooks/use-shipping-quote";
+import { trackCustomerEvent } from "@/lib/customer-analytics";
 import { useAuth } from "@clerk/nextjs";
 import {
   Bike,
@@ -124,7 +125,34 @@ export const ShippingInfoStep = ({
     isPending: isLoadingQuotes,
     error: quoteError,
     reset: resetQuotes,
-  } = useShippingQuote();
+  } = useShippingQuote({
+    onMutate: () => {
+      trackCustomerEvent("shipping_quote_requested", {
+        checkout_step: 2,
+        checkout_step_name: "envio",
+      });
+    },
+    onSuccess: (data) => {
+      const quoteCount = data.quotes?.length ?? 0;
+      trackCustomerEvent(
+        quoteCount > 0
+          ? "shipping_quote_succeeded"
+          : "shipping_quote_no_results",
+        {
+          checkout_step: 2,
+          checkout_step_name: "envio",
+          quote_count: quoteCount,
+        },
+      );
+    },
+    onError: () => {
+      trackCustomerEvent("shipping_quote_failed", {
+        checkout_step: 2,
+        checkout_step_name: "envio",
+        failure_type: "request_error",
+      });
+    },
+  });
 
   // Initialize quote data from store on mount
   const [localQuoteData, setLocalQuoteData] = useState(storedQuoteData);

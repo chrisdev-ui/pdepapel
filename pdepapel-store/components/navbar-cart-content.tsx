@@ -2,7 +2,7 @@
 
 import { CreditCard, ShoppingCart, X } from "lucide-react";
 import Link from "next/link";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
 import { AccountPrompt } from "@/components/account-prompt";
@@ -31,10 +31,26 @@ export const NavbarCartContent: React.FC<NavbarCartContentProps> = ({
 }) => {
   const cart = useCart();
   const router = useRouter();
+  const hasTrackedCartViewRef = useRef(false);
   const { total } = useMemo(
     () => calculateTotals(cart.items, null),
     [cart.items],
   );
+
+  useEffect(() => {
+    if (hasTrackedCartViewRef.current || cart.items.length === 0) return;
+
+    hasTrackedCartViewRef.current = true;
+    const items = cart.items.map((item) =>
+      toAnalyticsItem(item, item.quantity ?? 1),
+    );
+    trackCustomerEvent("view_cart", {
+      cart_surface: "drawer",
+      currency: "COP",
+      items,
+      value: Number(total),
+    });
+  }, [cart.items, total]);
 
   const onGoToCart = () => {
     onClose();

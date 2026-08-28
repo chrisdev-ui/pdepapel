@@ -36,8 +36,9 @@ const SortSelector: React.FC<SortSelectorProps> = ({
           type="button"
           aria-label="Restablecer orden de productos"
           onClick={() => setFilter("sortOption", null)}
+          className="inline-flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
-          <XCircle className="h-6 w-6" />
+          <XCircle className="h-5 w-5" aria-hidden="true" />
         </button>
       )}
       <Select
@@ -45,7 +46,10 @@ const SortSelector: React.FC<SortSelectorProps> = ({
         onValueChange={(value) => setFilter("sortOption", value)}
         disabled={isDisabled}
       >
-        <SelectTrigger>
+        <SelectTrigger
+          aria-label="Ordenar productos"
+          className="h-11 touch-manipulation"
+        >
           <SelectValue placeholder="Ordenar productos" />
         </SelectTrigger>
         <SelectContent>

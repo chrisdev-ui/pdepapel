@@ -26,7 +26,7 @@ export const FilterSkeleton: React.FC<{ name: string; items: number }> = ({
 
 export const SortSelectorSkeleton: React.FC = () => {
   return (
-    <div className="flex w-auto min-w-fit items-center gap-2 sm:w-44 md:w-52 lg:w-64">
+    <div className="flex w-full min-w-full items-center gap-2 sm:w-44 sm:min-w-fit md:w-52 lg:w-64">
       <div className="flex h-10 w-full items-center justify-between rounded-md border border-blue-baby bg-background px-3 py-2 text-sm">
         <Skeleton className="h-2 w-full" />
       </div>
@@ -129,11 +129,16 @@ export const ShopContentSkeleton: React.FC<ShopContentSkeletonProps> = ({
         <FilterSkeleton name="Precios" items={3} />
       </div>
       <div className="mt-6 space-y-5 lg:col-span-4 lg:mt-0 lg:space-y-0">
-        <div className="mb-4 flex w-full items-center justify-between">
+        <div className="mb-4 flex w-full flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <h2 className="font-serif text-3xl font-bold">{heading}</h2>
-          <section className="flex w-full items-center gap-4 md:w-auto">
-            <SortSelectorSkeleton />
-            <SortSelectorSkeleton />
+          <section className="flex w-full flex-col gap-2 lg:w-auto lg:items-end">
+            <div className="flex w-full items-center gap-2 md:justify-end md:gap-4 lg:w-auto">
+              <div className="hidden md:block">
+                <SortSelectorSkeleton />
+              </div>
+              <SortSelectorSkeleton />
+            </div>
+            <Skeleton className="h-12 w-full rounded-lg md:h-11 md:w-44" />
           </section>
         </div>
         <MobileFiltersSkeleton />

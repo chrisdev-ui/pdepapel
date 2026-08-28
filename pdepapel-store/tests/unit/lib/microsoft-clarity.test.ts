@@ -89,6 +89,32 @@ describe("Microsoft Clarity integration", () => {
     expect(clarityMocks.event).toHaveBeenCalledWith("begin_checkout");
   });
 
+  it("uses only allowlisted checkout step tags from event parameters", async () => {
+    const {
+      configureMicrosoftClarity,
+      initializeMicrosoftClarity,
+      trackMicrosoftClarityEvent,
+      updateMicrosoftClarityContext,
+    } = await loadClarityModule();
+
+    configureMicrosoftClarity({ enabled: true, projectId: "sc857ich8n" });
+    updateMicrosoftClarityContext({
+      analyticsConsent: true,
+      pathname: "/finalizar-compra",
+    });
+    await initializeMicrosoftClarity();
+    vi.clearAllMocks();
+
+    trackMicrosoftClarityEvent("checkout_step_view", {
+      checkout_step_name: "envio",
+      email: "never-forward-this@example.com",
+    });
+
+    expect(clarityMocks.setTag).toHaveBeenCalledWith("checkout_step", "envio");
+    expect(clarityMocks.event).toHaveBeenCalledWith("checkout_step_view");
+    expect(clarityMocks.event).toHaveBeenCalledTimes(1);
+  });
+
   it("denies Clarity storage when navigation becomes sensitive", async () => {
     const {
       configureMicrosoftClarity,
