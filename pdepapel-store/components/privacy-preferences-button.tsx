@@ -7,7 +7,7 @@ export function PrivacyPreferencesButton() {
     <button
       type="button"
       onClick={openPrivacyPreferences}
-      className="flex items-center gap-2 text-blue-yankees hover:text-pink-shell focus-visible:text-pink-shell"
+      className="flex min-h-[44px] items-center rounded-md py-2 text-left text-blue-yankees hover:text-pink-shell focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-shell focus-visible:ring-offset-2"
     >
       Preferencias de privacidad
     </button>

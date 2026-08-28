@@ -13,24 +13,26 @@ interface FooterProps {
 
 export const Footer: React.FC<FooterProps> = ({ season = Season.Default }) => {
   const seasonConfig = SEASON_CONFIG[season];
+  const footerLinkClassName =
+    "flex min-h-[44px] min-w-0 items-center gap-3 rounded-md py-2 text-left text-blue-yankees hover:text-pink-shell focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-shell focus-visible:ring-offset-2";
 
   return (
-    <footer className="divide-y px-4">
-      <div className="container mx-auto flex flex-col justify-between space-y-8 py-10 lg:flex-row lg:space-y-0">
-        <div className="lg:w-1/3">
+    <footer className="divide-y border-t bg-kawaii-pink-light/10 px-4">
+      <div className="container mx-auto grid gap-10 py-10 sm:py-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:gap-12">
+        <div className="max-w-xs">
           <Link
-            href="#"
-            rel="noopener noreferrer"
-            className="flex justify-center space-x-3 lg:justify-start"
+            href={STOREFRONT_ROUTES.home}
+            aria-label="Ir al inicio de Papelería P de Papel"
+            className="flex w-fit rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-shell focus-visible:ring-offset-2"
           >
-            <div className="relative flex h-32 w-full items-center justify-center sm:w-64">
+            <div className="relative h-24 w-56 sm:h-28 sm:w-64">
               <Image
                 src={seasonConfig.navbarText}
                 alt="Logo Papelería P de Papel con nombre al lado"
-                sizes="(max-width: 640px) 300px, 256px"
-                className="object-contain" // Changed to contain to preserve aspect ratio of logo
+                sizes="(max-width: 640px) 224px, 256px"
+                className="object-contain object-left"
                 fill
-                quality="100"
+                quality={100}
               />
               {seasonConfig.logoAccent && (
                 <Image
@@ -45,44 +47,61 @@ export const Footer: React.FC<FooterProps> = ({ season = Season.Default }) => {
               )}
             </div>
           </Link>
+          <p className="mt-3 max-w-sm text-sm leading-6 text-muted-foreground">
+            Papelería kawaii en línea con operación desde Medellín y envíos a
+            toda Colombia.
+          </p>
         </div>
-        <div className="grid grid-cols-1 gap-x-3 gap-y-8 text-sm md:grid-cols-3 lg:w-2/3">
-          <div className="mx-auto mb-auto flex flex-col justify-center space-y-3 lg:block">
-            <h3 className="uppercase tracking-wide">Contáctenos</h3>
-            <ul className="space-y-1">
-              <li className="">
+        <div className="grid min-w-0 grid-cols-1 gap-x-8 gap-y-10 text-sm sm:grid-cols-2 lg:grid-cols-3">
+          <section
+            aria-labelledby="footer-contacto"
+            className="min-w-0 sm:col-span-2 lg:col-span-1"
+          >
+            <h2
+              id="footer-contacto"
+              className="text-left font-semibold uppercase tracking-wide"
+            >
+              Contáctenos
+            </h2>
+            <ul className="mt-3 space-y-1">
+              <li>
                 <Link
                   href="https://api.whatsapp.com/send/?phone=%2B573132582293&text&type=phone_number&app_absent=0"
-                  className="flex items-center gap-2 text-blue-yankees hover:text-pink-shell focus-visible:text-pink-shell"
+                  className={footerLinkClassName}
                 >
-                  <Icons.whatsapp className="h-5 w-5" />
+                  <Icons.whatsapp
+                    aria-hidden="true"
+                    className="h-5 w-5 shrink-0"
+                  />
                   (+57) 313 258 2293
                 </Link>
               </li>
-              <li className="">
-                <Link
-                  href="tel:+573132582293"
-                  className="flex items-center gap-2 text-blue-yankees hover:text-pink-shell focus-visible:text-pink-shell"
-                >
-                  <Phone className="h-5 w-5" />
+              <li>
+                <Link href="tel:+573132582293" className={footerLinkClassName}>
+                  <Phone aria-hidden="true" className="h-5 w-5 shrink-0" />
                   (+57) 313 258 2293
                 </Link>
               </li>
-              <li className="">
+              <li>
                 <Link
                   href="mailto:papeleria.pdepapel@gmail.com"
-                  className="flex items-center gap-2 text-blue-yankees hover:text-pink-shell focus-visible:text-pink-shell"
+                  className={footerLinkClassName}
                 >
-                  <Mail className="h-5 w-5" />
-                  <span className="truncate">papeleria.pdepapel@gmail.com</span>
+                  <Mail aria-hidden="true" className="h-5 w-5 shrink-0" />
+                  <span className="min-w-0 break-all">
+                    papeleria.pdepapel@gmail.com
+                  </span>
                 </Link>
               </li>
-              <li className="flex items-center gap-2 text-blue-yankees hover:text-pink-shell focus-visible:text-pink-shell">
-                <CalendarDays className="h-5 w-5" />
+              <li className="min-h-11 flex items-center gap-3 py-2 text-blue-yankees">
+                <CalendarDays aria-hidden="true" className="h-5 w-5 shrink-0" />
                 08:00 - 20:00, Lun - Dom
               </li>
-              <li className="flex items-start gap-2 text-blue-yankees">
-                <MapPin className="mt-0.5 h-5 w-5 shrink-0" />
+              <li className="min-h-11 flex items-start gap-3 py-2 text-blue-yankees">
+                <MapPin
+                  aria-hidden="true"
+                  className="mt-0.5 h-5 w-5 shrink-0"
+                />
                 <span>
                   Operamos desde Medellín, Colombia
                   <span className="block text-xs text-muted-foreground">
@@ -91,30 +110,35 @@ export const Footer: React.FC<FooterProps> = ({ season = Season.Default }) => {
                 </span>
               </li>
             </ul>
-          </div>
-          <div className="mx-auto mb-auto flex flex-col justify-center space-y-3 lg:block">
-            <h3 className="uppercase tracking-wide">Términos Legales</h3>
-            <ul className="space-y-1">
-              <li className="">
+          </section>
+          <section aria-labelledby="footer-legales" className="min-w-0">
+            <h2
+              id="footer-legales"
+              className="text-left font-semibold uppercase tracking-wide"
+            >
+              Términos Legales
+            </h2>
+            <ul className="mt-3 space-y-1">
+              <li>
                 <Link
                   href={STOREFRONT_ROUTES.returnsPolicy}
-                  className="flex items-center gap-2 text-blue-yankees hover:text-pink-shell focus-visible:text-pink-shell"
+                  className={footerLinkClassName}
                 >
                   Políticas de devolución o cambio
                 </Link>
               </li>
-              <li className="">
+              <li>
                 <Link
                   href={STOREFRONT_ROUTES.shippingPolicy}
-                  className="flex items-center gap-2 text-blue-yankees hover:text-pink-shell focus-visible:text-pink-shell"
+                  className={footerLinkClassName}
                 >
                   Políticas de entrega
                 </Link>
               </li>
-              <li className="">
+              <li>
                 <Link
                   href={STOREFRONT_ROUTES.dataPolicy}
-                  className="flex items-center gap-2 text-blue-yankees hover:text-pink-shell focus-visible:text-pink-shell"
+                  className={footerLinkClassName}
                 >
                   Políticas de tratamiento de datos
                 </Link>
@@ -123,33 +147,38 @@ export const Footer: React.FC<FooterProps> = ({ season = Season.Default }) => {
                 <PrivacyPreferencesButton />
               </li>
             </ul>
-          </div>
-          <div className="mx-auto mb-auto flex flex-col justify-center space-y-3 lg:block">
-            <h3 className="uppercase tracking-wide">Redes Sociales</h3>
-            <div className="flex justify-start space-x-3">
+          </section>
+          <section aria-labelledby="footer-redes" className="min-w-0">
+            <h2
+              id="footer-redes"
+              className="text-left font-semibold uppercase tracking-wide"
+            >
+              Redes Sociales
+            </h2>
+            <div className="mt-4 flex justify-start gap-3">
               <Link
                 rel="noopener noreferrer"
                 href="https://instagram.com/papeleria.pdepapel?igshid=OGQ5ZDc2ODk2ZA=="
-                title="Instagram"
-                className="flex items-center p-1 text-blue-yankees hover:text-pink-shell focus-visible:text-pink-shell"
+                aria-label="Visitar Instagram de Papelería P de Papel"
+                className="flex h-11 w-11 items-center justify-center rounded-full border bg-background text-blue-yankees hover:border-pink-shell hover:text-pink-shell focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-shell focus-visible:ring-offset-2"
                 target="_blank"
               >
-                <Icons.instagram className="h-5 w-5" />
+                <Icons.instagram aria-hidden="true" className="h-5 w-5" />
               </Link>
               <Link
                 rel="noopener noreferrer"
                 href="https://www.tiktok.com/@papeleria.pdepapel?_t=8gctJXIdqD7&_r=1"
-                title="TikTok"
-                className="flex items-center p-1 text-blue-yankees hover:text-pink-shell focus-visible:text-pink-shell"
+                aria-label="Visitar TikTok de Papelería P de Papel"
+                className="flex h-11 w-11 items-center justify-center rounded-full border bg-background text-blue-yankees hover:border-pink-shell hover:text-pink-shell focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-shell focus-visible:ring-offset-2"
                 target="_blank"
               >
-                <Icons.tiktok className="h-5 w-5" />
+                <Icons.tiktok aria-hidden="true" className="h-5 w-5" />
               </Link>
             </div>
-          </div>
+          </section>
         </div>
       </div>
-      <div className="py-6 text-center text-sm">
+      <div className="container mx-auto py-6 text-left text-sm text-muted-foreground sm:text-center">
         &copy; {new Date().getFullYear()} P de papel. Todos los derechos
         reservados.
       </div>
