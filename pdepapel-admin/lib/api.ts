@@ -1,20 +1,22 @@
-import axios, { AxiosError } from "axios";
+import axios, { AxiosError, AxiosRequestConfig } from "axios";
 
 const api = axios.create({
   baseURL: "/api",
-  timeout: 10000,
+  timeout: 60000,
 });
 
 export const makeApiCall = async <T>(
   endpoint: string,
   method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH",
   data?: T[] | T,
+  config?: AxiosRequestConfig,
 ) => {
   try {
     const response = await api({
       method,
       url: endpoint,
       data,
+      ...config,
     });
     return response.data;
   } catch (error) {

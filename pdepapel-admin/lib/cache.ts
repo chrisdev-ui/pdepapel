@@ -12,28 +12,19 @@ function getRedis(): Redis {
 }
 
 /**
- * Invalidate cache using SCAN instead of KEYS (Redis best practice).
- * SCAN is non-blocking and works better at scale.
+ * Purges cached product queries for a specific store from Redis.
  */
-export async function invalidateStoreProductsCache(
-  storeId: string,
-  productId?: string,
-): Promise<void> {
+async function purgeRedisProductKeys(storeId: string): Promise<void> {
   try {
-    // ⚡ Trigger instant storefront On-Demand Revalidation on Vercel Edge CDN
-    await triggerStorefrontRevalidation({ productId });
-
     const redisClient = getRedis();
     const pattern = `store:${storeId}:products:*`;
     let cursor = 0;
-
-    // Safety limit to prevent infinite loops in weird connection states
-    let maxIterations = 1000;
+    let maxIterations = 500;
 
     do {
       const result = await redisClient.scan(cursor, {
         match: pattern,
-        count: 100,
+        count: 250,
       });
       cursor = Number(result[0]);
       const keys = result[1];
@@ -51,9 +42,31 @@ export async function invalidateStoreProductsCache(
     } else {
       console.log(`Cache invalidated for store ${storeId}`);
     }
-
-    await enqueuePendingMarketplaceOutboxEventsForStore(storeId);
   } catch (error) {
-    console.error("Redis cache invalidation error:", error);
+    console.error(`Redis cache purge error for store ${storeId}:`, error);
   }
 }
+
+/**
+ * Invalidates store products cache across layers:
+ * 1. Edge CDN (Storefront On-Demand Revalidation)
+ * 2. Key-Value Cache (Upstash Redis)
+ * 3. Marketplace Outbox Dispatch (Mercado Libre queue)
+ *
+ * Runs concurrently with Promise.allSettled to minimize API response latency.
+ */
+export async function invalidateStoreProductsCache(
+  storeId: string,
+  productId?: string,
+): Promise<void> {
+  try {
+    await Promise.allSettled([
+      triggerStorefrontRevalidation({ productId }),
+      purgeRedisProductKeys(storeId),
+      enqueuePendingMarketplaceOutboxEventsForStore(storeId),
+    ]);
+  } catch (error) {
+    console.error("Error during store products cache invalidation:", error);
+  }
+}
+

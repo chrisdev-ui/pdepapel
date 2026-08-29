@@ -161,13 +161,26 @@ export const handleErrorResponse = (
 export const getErrorMessage = (error: unknown): string => {
   let errorMessage = GENERIC_ERROR;
   if (axios.isAxiosError(error)) {
+    if (
+      error.code === "ECONNABORTED" ||
+      error.message?.toLowerCase().includes("timeout")
+    ) {
+      return "La solicitud tardó más de lo esperado en responder. Es posible que la operación se haya completado en el servidor; por favor recarga la página para verificar.";
+    }
+    if (error.code === "ERR_NETWORK") {
+      return "Error de conexión con el servidor. Por favor verifica tu conexión a internet.";
+    }
     errorMessage = error.response?.data?.error ?? error.message;
     // Append details if available (e.g. from Prisma Validation)
     if (error.response?.data?.details?.message) {
       errorMessage += `: ${error.response?.data?.details?.message}`;
     }
   } else if (error instanceof Error) {
+    if (error.message?.toLowerCase().includes("timeout")) {
+      return "La solicitud tardó más de lo esperado en responder. Es posible que la operación se haya completado en el servidor; por favor recarga la página para verificar.";
+    }
     errorMessage = error.message;
   }
   return errorMessage;
 };
+

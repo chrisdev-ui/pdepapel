@@ -87,4 +87,33 @@ describe("API error helpers", () => {
       "No se pudo guardar",
     );
   });
+
+  it("handles timeout and network connection errors gracefully", () => {
+    expect(
+      getErrorMessage({
+        isAxiosError: true,
+        code: "ECONNABORTED",
+        message: "timeout of 10000ms exceeded",
+      }),
+    ).toBe(
+      "La solicitud tardó más de lo esperado en responder. Es posible que la operación se haya completado en el servidor; por favor recarga la página para verificar.",
+    );
+
+    expect(
+      getErrorMessage({
+        isAxiosError: true,
+        code: "ERR_NETWORK",
+        message: "Network Error",
+      }),
+    ).toBe(
+      "Error de conexión con el servidor. Por favor verifica tu conexión a internet.",
+    );
+
+    expect(
+      getErrorMessage(new Error("timeout of 60000ms exceeded")),
+    ).toBe(
+      "La solicitud tardó más de lo esperado en responder. Es posible que la operación se haya completado en el servidor; por favor recarga la página para verificar.",
+    );
+  });
 });
+

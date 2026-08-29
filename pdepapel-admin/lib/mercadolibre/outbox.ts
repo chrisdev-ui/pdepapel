@@ -380,15 +380,17 @@ export async function enqueuePendingMarketplaceOutboxEvents(
     take: MAX_OUTBOX_EVENTS_PER_DISPATCH,
   });
 
-  for (const event of events) {
-    await enqueueMercadoLibreOutboxEvent(
-      event.id,
-      event.connectionId,
-      event.action === MarketplaceOutboxAction.SEND_ORDER_NOTIFICATION
-        ? "notification"
-        : "operation",
-    );
-  }
+  await Promise.allSettled(
+    events.map((event) =>
+      enqueueMercadoLibreOutboxEvent(
+        event.id,
+        event.connectionId,
+        event.action === MarketplaceOutboxAction.SEND_ORDER_NOTIFICATION
+          ? "notification"
+          : "operation",
+      ),
+    ),
+  );
 
   return events.length;
 }
@@ -401,13 +403,18 @@ export async function enqueuePendingMarketplaceOutboxEventsForStore(
     select: { id: true },
   });
 
-  let enqueued = 0;
-  for (const connection of connections) {
-    enqueued += await enqueuePendingMarketplaceOutboxEvents(connection.id);
-  }
+  const results = await Promise.allSettled(
+    connections.map((connection) =>
+      enqueuePendingMarketplaceOutboxEvents(connection.id),
+    ),
+  );
 
-  return enqueued;
+  return results.reduce(
+    (acc, res) => acc + (res.status === "fulfilled" ? res.value : 0),
+    0,
+  );
 }
+
 
 async function updateMercadoLibreStock(
   connectionId: string,
