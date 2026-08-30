@@ -115,6 +115,35 @@ describe("Microsoft Clarity integration", () => {
     expect(clarityMocks.event).toHaveBeenCalledTimes(1);
   });
 
+  it("distinguishes manual and automatic cart preview dismissals", async () => {
+    const {
+      configureMicrosoftClarity,
+      initializeMicrosoftClarity,
+      trackMicrosoftClarityEvent,
+      updateMicrosoftClarityContext,
+    } = await loadClarityModule();
+
+    configureMicrosoftClarity({ enabled: true, projectId: "sc857ich8n" });
+    updateMicrosoftClarityContext({
+      analyticsConsent: true,
+      pathname: "/producto/cuaderno-kawaii",
+    });
+    await initializeMicrosoftClarity();
+    vi.clearAllMocks();
+
+    trackMicrosoftClarityEvent("cart_preview_dismiss", { reason: "manual" });
+    trackMicrosoftClarityEvent("cart_preview_dismiss", { reason: "auto" });
+
+    expect(clarityMocks.event).toHaveBeenNthCalledWith(
+      1,
+      "cart_preview_dismiss_manual",
+    );
+    expect(clarityMocks.event).toHaveBeenNthCalledWith(
+      2,
+      "cart_preview_dismiss_auto",
+    );
+  });
+
   it("denies Clarity storage when navigation becomes sensitive", async () => {
     const {
       configureMicrosoftClarity,

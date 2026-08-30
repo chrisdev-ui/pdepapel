@@ -11,6 +11,7 @@ const TRACKED_CLARITY_EVENTS = new Set([
   "add_to_cart",
   "begin_checkout",
   "cart_preview_action",
+  "cart_preview_dismiss",
   "cart_preview_view",
   "catalog_filter",
   "catalog_no_results",
@@ -145,6 +146,18 @@ function getCheckoutStepTag(
   return CHECKOUT_STEP_BY_EVENT[eventName];
 }
 
+function getClarityEventName(
+  eventName: string,
+  parameters: Record<string, unknown>,
+): string {
+  if (eventName !== "cart_preview_dismiss") return eventName;
+
+  const reason = parameters.reason;
+  return reason === "auto" || reason === "manual"
+    ? `${eventName}_${reason}`
+    : eventName;
+}
+
 function flushQueuedEvents(client: ClarityClient): void {
   const events = queuedEvents;
   queuedEvents = [];
@@ -231,14 +244,15 @@ export function trackMicrosoftClarityEvent(
   if (!TRACKED_CLARITY_EVENTS.has(eventName) || !canCollect()) return;
 
   const checkoutStep = getCheckoutStepTag(eventName, parameters);
+  const clarityEventName = getClarityEventName(eventName, parameters);
 
   if (!clarityClient) {
     if (queuedEvents.length < MAX_QUEUED_EVENTS) {
-      queuedEvents.push({ checkoutStep, eventName });
+      queuedEvents.push({ checkoutStep, eventName: clarityEventName });
     }
     return;
   }
 
   if (checkoutStep) clarityClient.setTag("checkout_step", checkoutStep);
-  clarityClient.event(eventName);
+  clarityClient.event(clarityEventName);
 }

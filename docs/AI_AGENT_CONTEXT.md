@@ -274,7 +274,7 @@ When creating a new customer-navigable route:
 - Reuse the existing specialized admin form controls before adding a generic input: `CurrencyInput` for COP amounts, `PercentageInput` for percentages, `StockQuantityInput` for inventory, `CountInput` for bounded counts, `MeasurementInput` for dimensions, `QuantitySelector` for cart lines, `ImageUpload` for images, rich-text editor for product descriptions, and calendar/date controls for dates. If a domain-specific input does not exist, create one reusable component using the installed shadcn/Radix primitives instead of styling a one-off control inside a route.
 - Product-form customer catalog characteristics use `CatalogAttributesEditor`. It receives every canonical store option/value from the server, ranks options already linked to the selected subcategory first, canonicalizes exact typed matches, suggests existing values after a feature is selected, and rejects duplicate feature keys. Keep this review-first behavior: new names/values are persisted only with the product save, and no AI/network call is required for autocomplete.
 - A first navigation from `/tienda` to a product must immediately display a coherent product skeleton/content frame—not just the persistent header and footer.
-- A successful add-to-cart from a product card or product detail opens the shared non-modal cart preview. On mobile it is a safe-area-aware bottom card; on larger screens it is a compact top-right card. It shows the actual cart quantity, pauses its eight-second dismissal while hovered/focused, and offers **Ver carrito** and **Finalizar compra** without blocking continued shopping. It must never open when stock validation fails. Product-card wishlist/cart controls remain directly tappable on touch screens and use hover/focus reveal only from the `sm` breakpoint upward.
+- A successful add-to-cart from a product card or product detail opens the shared non-modal cart preview. On mobile it is a safe-area-aware bottom card; on larger screens it is a compact top-right card. The first mobile addition, and additions after 20 seconds of inactivity, show the full preview with **Ver carrito** and **Finalizar compra**. Repeated mobile additions inside that window update the same preview in a slimmer presentation with a direct **Ver carrito** action, so confirmations never stack or repeatedly cover the catalog. Both presentations show the actual cart quantity, use at least 44px touch targets, and pause their eight-second dismissal while hovered/focused. The preview must never open when stock validation fails. Product-card wishlist/cart controls remain directly tappable on touch screens and use hover/focus reveal only from the `sm` breakpoint upward.
 - Checkout-to-order-detail navigation must not flash a reset checkout state before the order page appears.
 - Preserve responsive behavior. Header additions, category cards, drawers, dialogs, and tables must be checked at mobile, tablet, and desktop breakpoints.
 - Category cards need strong readable contrast independent of the image content.
@@ -331,10 +331,15 @@ When creating a new customer-navigable route:
 - Clarity is loaded through the official package only after consent, only on the
   public commerce funnel, and during browser idle time. Its event allowlist sends
   event names without GA4 parameters. Never call Clarity `identify`.
-- The cart preview records privacy-safe `cart_preview_view` and
-  `cart_preview_action` events. Parameters are limited to the UI source and the
-  generic action (`view_cart` or `checkout`); never attach a customer identifier
-  or free-form product/customer text.
+- The cart preview records privacy-safe `cart_preview_view`,
+  `cart_preview_action`, and `cart_preview_dismiss` events. Parameters are
+  limited to the UI source, presentation (`full` or `compact`), generic action
+  (`view_cart` or `checkout`), and generic dismissal reason (`manual` or
+  `auto`); never attach a customer identifier or free-form product/customer
+  text. GA4 receives `cart_preview_dismiss` with its reason parameter; Clarity
+  receives the distinguishable privacy-safe event names
+  `cart_preview_dismiss_manual` and `cart_preview_dismiss_auto` because Clarity
+  custom events do not retain GA4 parameters.
 - Checkout form content and private order/quote/account routes are explicitly
   masked. Clarity storage is denied outside the allowlisted route groups. Keep
   `NEXT_PUBLIC_CLARITY_ENABLED=false` until the audience/privacy activation gate
