@@ -35,6 +35,10 @@ import { NextResponse } from "next/server";
 import { Redis } from "@upstash/redis";
 
 import { invalidateStoreProductsCache } from "@/lib/cache";
+import {
+  syncProductCatalogAttributes,
+  visualCatalogAttributesSchema,
+} from "@/lib/catalog-migration";
 
 /**
  * Unified product type for storefront responses.
@@ -134,6 +138,7 @@ export async function POST(
       productGroupId,
       isKit, // [NEW]
       components, // [NEW] Array of { componentId, quantity }
+      catalogAttributes,
     } = body;
     const normalizedSupplierId =
       typeof supplierId === "string" && supplierId !== "none"
@@ -144,6 +149,9 @@ export async function POST(
         ? productGroupId || null
         : null;
     const sanitizedDescription = sanitizeRichTextHtml(description);
+    const parsedCatalogAttributes = visualCatalogAttributesSchema.parse(
+      catalogAttributes ?? [],
+    );
 
     if (!name)
       throw ErrorFactory.InvalidRequest(
@@ -267,6 +275,17 @@ export async function POST(
       },
     });
 
+    if (parsedCatalogAttributes.length > 0) {
+      await prismadb.$transaction((tx) =>
+        syncProductCatalogAttributes(tx, {
+          storeId: params.storeId,
+          productId: product.id,
+          categoryId,
+          attributes: parsedCatalogAttributes,
+        }),
+      );
+    }
+
     if (normalizedProductGroupId) {
       await prismadb.$transaction((tx) =>
         synchronizeProductGroupSlugs(
@@ -337,6 +356,8 @@ export async function GET(
     const colorId = searchParams.get("colorId")?.split(",") || [];
     const sizeId = searchParams.get("sizeId")?.split(",") || [];
     const designId = searchParams.get("designId")?.split(",") || [];
+    const optionValueId =
+      searchParams.get("optionValueId")?.split(",").filter(Boolean) || [];
     const isFeatured = searchParams.get("isFeatured");
     const includeSupplier = searchParams.get("includeSupplier") || false;
     const onlyNew = searchParams.get("onlyNew") || undefined;
@@ -371,6 +392,7 @@ export async function GET(
       colorId: colorId.sort(),
       sizeId: sizeId.sort(),
       designId: designId.sort(),
+      optionValueId: optionValueId.sort(),
       isFeatured,
       includeSupplier,
       onlyNew,
@@ -384,7 +406,7 @@ export async function GET(
       groupBy,
       productGroupId,
       isOnSale, // Include in cache key
-      v: "6",
+      v: "7",
     })}`;
 
     // Try to get from Redis cache
@@ -425,17 +447,28 @@ export async function GET(
     // Resolve categories from Type if needed (supports both UUIDs and Slugs)
     let categoriesIds: string[] = [];
     if (typeId.length > 0) {
-      const resolvedTypes = await prismadb.type.findMany({
-        where: {
-          storeId: params.storeId,
-          OR: [{ id: { in: typeId } }, { slug: { in: typeId } }],
-        },
-        select: { id: true },
-      });
-      const actualTypeIds = resolvedTypes.map((t: { id: string }) => t.id);
+      const [resolvedTypes, resolvedAliases] = await Promise.all([
+        prismadb.type.findMany({
+          where: {
+            storeId: params.storeId,
+            OR: [{ id: { in: typeId } }, { slug: { in: typeId } }],
+          },
+          select: { id: true },
+        }),
+        prismadb.typeSlugAlias.findMany({
+          where: { storeId: params.storeId, slug: { in: typeId } },
+          select: { typeId: true },
+        }),
+      ]);
+      const actualTypeIds = Array.from(
+        new Set([
+          ...resolvedTypes.map((type) => type.id),
+          ...resolvedAliases.map((alias) => alias.typeId),
+        ]),
+      );
       const categoriesForType = await prismadb.category.findMany({
         where: {
-          typeId: { in: actualTypeIds.length > 0 ? actualTypeIds : typeId },
+          typeId: { in: actualTypeIds },
           storeId: params.storeId,
         },
         select: { id: true },
@@ -443,6 +476,39 @@ export async function GET(
       categoriesIds = categoriesForType.map(
         (category: { id: string }) => category.id,
       );
+    }
+
+    const selectedOptionValues =
+      optionValueId.length > 0
+        ? await prismadb.catalogOptionValue.findMany({
+            where: {
+              storeId: params.storeId,
+              id: { in: optionValueId },
+            },
+            select: { id: true, optionId: true },
+          })
+        : [];
+    const optionValuesByOption = selectedOptionValues.reduce(
+      (groups, value) => {
+        const values = groups.get(value.optionId) ?? [];
+        values.push(value.id);
+        groups.set(value.optionId, values);
+        return groups;
+      },
+      new Map<string, string[]>(),
+    );
+    const catalogOptionConditions: Prisma.ProductWhereInput[] = Array.from(
+      optionValuesByOption.entries(),
+    ).map(([optionId, valueIds]) => ({
+      catalogOptionValues: {
+        some: { optionId, optionValueId: { in: valueIds } },
+      },
+    }));
+    if (
+      optionValueId.length > 0 &&
+      selectedOptionValues.length !== new Set(optionValueId).size
+    ) {
+      catalogOptionConditions.push({ id: "INVALID_CATALOG_OPTION_VALUE" });
     }
 
     // Common Price Filter
@@ -615,6 +681,10 @@ export async function GET(
         colorId: colorId.length > 0 ? { in: colorId } : undefined,
         sizeId: sizeId.length > 0 ? { in: sizeId } : undefined,
         designId: designId.length > 0 ? { in: designId } : undefined,
+        AND:
+          catalogOptionConditions.length > 0
+            ? catalogOptionConditions
+            : undefined,
         isArchived: false,
         price: priceFilter,
         NOT: {
@@ -935,7 +1005,9 @@ export async function GET(
         const getFacetWhere = (
           excludedKey: "colorId" | "sizeId" | "categoryId" | "designId",
         ): Prisma.ProductWhereInput => {
-          const conditions: Prisma.ProductWhereInput[] = [];
+          const conditions: Prisma.ProductWhereInput[] = [
+            ...catalogOptionConditions,
+          ];
 
           if (search) {
             conditions.push({
@@ -1082,6 +1154,10 @@ export async function GET(
         colorId: colorId.length > 0 ? { in: colorId } : undefined,
         sizeId: sizeId.length > 0 ? { in: sizeId } : undefined,
         designId: designId.length > 0 ? { in: designId } : undefined,
+        AND:
+          catalogOptionConditions.length > 0
+            ? catalogOptionConditions
+            : undefined,
         OR: search ? [{ name: { contains: search } }] : undefined,
         isFeatured: isFeatured !== null ? isFeatured === "true" : undefined,
         isArchived: false,
@@ -1096,13 +1172,17 @@ export async function GET(
       // We use the already calculated `onSaleFilter` which contains IDs of discounted items
       const whereSales: Prisma.ProductWhereInput = {
         ...baseProductWhere,
-        AND: [onSaleFilter || { id: "NO_MATCH" }],
+        AND: [
+          ...catalogOptionConditions,
+          onSaleFilter || { id: "NO_MATCH" },
+        ],
       };
 
       // Partition B: Regular Items (NOT in Sale List)
       const whereRegular: Prisma.ProductWhereInput = {
         ...baseProductWhere,
         AND: [
+          ...catalogOptionConditions,
           {
             NOT: onSaleFilter,
           },
@@ -1230,6 +1310,10 @@ export async function GET(
         colorId: colorId.length > 0 ? { in: colorId } : undefined,
         sizeId: sizeId.length > 0 ? { in: sizeId } : undefined,
         designId: designId.length > 0 ? { in: designId } : undefined,
+        AND:
+          catalogOptionConditions.length > 0
+            ? catalogOptionConditions
+            : undefined,
         OR: [
           { name: search ? { search } : undefined },
           { name: { contains: search } },

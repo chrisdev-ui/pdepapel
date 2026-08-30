@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronsDown, ChevronsUp, Search, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 
 import { ProductFilters, useProductFilters } from "@/hooks/use-product-filters";
 
@@ -17,13 +17,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LIMIT } from "@/constants";
 import { trackCustomerEvent } from "@/lib/customer-analytics";
-import { Category, Color, Design, Size, Type } from "@/types";
-
 interface FilterProps {
   valueKey: string;
   name: string;
   emptyMessage?: string;
-  data: (Type | Category | Size | Color | Design)[];
+  data: Array<{
+    id: string;
+    name: string;
+    value?: string;
+    count?: number;
+    icon?: string | null;
+  }>;
 }
 
 const Filter: React.FC<FilterProps> = ({
@@ -32,12 +36,14 @@ const Filter: React.FC<FilterProps> = ({
   data,
   emptyMessage,
 }) => {
+  const filterInstanceId = useId();
   const { filters, toggleFilter, setFilter } = useProductFilters();
 
   const parsedSelectedValues = useMemo(() => {
     const values = filters[valueKey as keyof ProductFilters];
     return Array.isArray(values) ? values : [];
   }, [filters, valueKey]);
+  const visibleIds = useMemo(() => new Set(data.map((item) => item.id)), [data]);
 
   const sortedData = useMemo(() => {
     return [...data].sort((a, b) => a.name.localeCompare(b.name));
@@ -68,7 +74,19 @@ const Filter: React.FC<FilterProps> = ({
     return filteredData.slice(0, LIMIT);
   }, [filteredData, showAll, searchQuery]);
 
-  const activeCount = parsedSelectedValues.length;
+  const activeCount = parsedSelectedValues.filter((id) =>
+    visibleIds.has(id),
+  ).length;
+
+  const clearCurrentFilter = () => {
+    const remainingValues = parsedSelectedValues.filter(
+      (id) => !visibleIds.has(id),
+    );
+    setFilter(
+      valueKey as keyof ProductFilters,
+      remainingValues.length > 0 ? remainingValues : null,
+    );
+  };
 
   return (
     <Accordion type="single" collapsible defaultValue={name}>
@@ -103,9 +121,7 @@ const Filter: React.FC<FilterProps> = ({
                   variant="ghost"
                   size="sm"
                   className="h-auto w-fit self-end px-2 py-1 text-xs text-muted-foreground hover:text-red-500"
-                  onClick={() =>
-                    setFilter(valueKey as keyof ProductFilters, null)
-                  }
+                  onClick={clearCurrentFilter}
                 >
                   Limpiar filtros
                   <X className="ml-1 h-3 w-3" />
@@ -119,10 +135,13 @@ const Filter: React.FC<FilterProps> = ({
               </div>
             )}
             {!!visibleData?.length &&
-              visibleData?.map((filter: any) => (
+              visibleData?.map((filter: any) => {
+                const inputId = `${filterInstanceId}-${valueKey}-${filter.id}`;
+
+                return (
                 <div key={filter.id} className="flex items-center space-x-2">
                   <Checkbox
-                    id={`${valueKey}-${filter.id}`}
+                    id={inputId}
                     checked={parsedSelectedValues.includes(filter.id)}
                     onCheckedChange={() => handleToggleFilter(filter.id)}
                   />
@@ -134,9 +153,14 @@ const Filter: React.FC<FilterProps> = ({
                       />
                     )}
                     <Label
-                      htmlFor={`${valueKey}-${filter.id}`}
+                      htmlFor={inputId}
                       className="cursor-pointer text-sm font-medium capitalize leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                     >
+                      {filter.icon && (
+                        <span aria-hidden="true" className="mr-1">
+                          {filter.icon}
+                        </span>
+                      )}
                       {filter.name}
                       {filter.count !== undefined && (
                         <span className="ml-1 text-gray-500">
@@ -146,7 +170,8 @@ const Filter: React.FC<FilterProps> = ({
                     </Label>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             {/* Only show View More if not searching and we have more data than limit */}
             {!searchQuery && filteredData.length > LIMIT && (
               <Button

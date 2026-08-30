@@ -27,6 +27,7 @@ export interface Type {
   categories: Category[];
   name: string;
   slug?: string;
+  icon?: string | null;
 }
 
 export interface KitComponent {
@@ -81,6 +82,10 @@ export interface Product {
   // Kit fields
   isKit?: boolean;
   kitComponents?: KitComponent[];
+  catalogOptionValues?: Array<{
+    option: { id: string; key: string; name: string; displayOrder: number };
+    optionValue: { id: string; name: string; value: string };
+  }>;
 }
 
 export interface ProductVariant {
@@ -103,6 +108,24 @@ export interface Category {
   seoDescription?: string | null;
   seoIntro?: string | null;
   imageUrl?: string | null;
+  icon?: string | null;
+}
+
+export interface CatalogOptionValue {
+  id: string;
+  name: string;
+  value: string;
+  count: number;
+  categoryCounts?: Record<string, number>;
+}
+
+export interface CatalogOption {
+  id: string;
+  key: string;
+  name: string;
+  displayOrder: number;
+  categoryIds: string[];
+  values: CatalogOptionValue[];
 }
 
 export interface Size {

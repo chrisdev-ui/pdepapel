@@ -33,7 +33,7 @@ describe("customer analytics items", () => {
       item_category: "Agendas",
       item_id: "AGENDA-001",
       item_name: "Agenda floral",
-      item_variant: "Flores · Lila · Mediana",
+      item_variant: "Flores · Lila",
       price: 18000,
       quantity: 2,
     });

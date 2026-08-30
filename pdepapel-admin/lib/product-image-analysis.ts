@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { normalizeProductNamePart } from "@/lib/product-naming";
+import { normalizeCatalogOptionKey } from "@/lib/catalog-options";
 import { z } from "zod";
 
 export const MAX_PRODUCT_IMAGE_ANALYSIS_IMAGES = 3;
@@ -81,6 +82,16 @@ export const productImageAnalysisOutputSchema = z.object({
     )
     .max(MAX_PRODUCT_IMAGE_ANALYSIS_IMAGES)
     .default([]),
+  catalogAttributes: z
+    .array(
+      z.object({
+        optionName: z.string().max(80),
+        valueName: z.string().max(100),
+        evidence: z.string().max(180),
+      }),
+    )
+    .max(6)
+    .default([]),
   observations: z.array(z.string().max(180)).max(4),
   limitations: z.array(z.string().max(180)).max(3),
 });
@@ -105,7 +116,7 @@ export type ProductImageVariantCandidate = {
 
 export type ProductImageAnalysis = Omit<
   ProductImageAnalysisOutput,
-  "variantCandidates"
+  "catalogAttributes" | "variantCandidates"
 > & {
   categoryId: string | null;
   categorySource: "existing" | "not_detected";
@@ -116,6 +127,12 @@ export type ProductImageAnalysis = Omit<
   designId: string | null;
   designSource: "existing" | "new" | "not_detected";
   variantCandidates: ProductImageVariantCandidate[];
+  catalogAttributes: Array<{
+    key: string;
+    name: string;
+    value: string;
+    evidence: string;
+  }>;
 };
 
 type TaxonomyOption = {
@@ -226,7 +243,7 @@ export function getProductImageAnalysisCacheKey(
   },
 ) {
   const normalizedInput = {
-    version: 4,
+    version: 5,
     imageUrls: [...input.imageUrls].sort(),
     categoryName: normalizeForMatching(input.categoryName),
     categories: [...input.categories]
@@ -454,6 +471,16 @@ export function sanitizeProductImageAnalysis(
         : null,
     },
     variantCandidates,
+    catalogAttributes: output.catalogAttributes.flatMap((attribute) => {
+      const name = cleanOptionalText(attribute.optionName, 80);
+      const value = cleanOptionalText(attribute.valueName, 100);
+      const evidence = cleanOptionalText(attribute.evidence, 180);
+      const key = name ? normalizeCatalogOptionKey(name) : "";
+
+      return key && name && value && evidence
+        ? [{ key, name, value, evidence }]
+        : [];
+    }),
     observations: output.observations
       .map((observation) => cleanOptionalText(observation, 180))
       .filter((observation): observation is string => Boolean(observation)),
@@ -500,6 +527,7 @@ Reglas obligatorias:
 - mpn solo puede contener una referencia del fabricante copiada exactamente cuando se lee completa en el empaque o producto. Incluye en evidence dónde se ve; de lo contrario usa null.
 - variantRecommendation solo debe indicar shouldCreateVariants true cuando las fotos demuestran opciones comprables distintas de color, diseño o tamaño. No confundas un set multicolor, un empaque decorado ni una foto de familia con variantes. axes puede usar solamente COLOR, DESIGN o SIZE y evidence debe explicar la evidencia.
 - variantCandidates se usa únicamente cuando variantRecommendation.shouldCreateVariants es true. Incluye una fila por foto que muestre una opción individual y comprable; imageIndex empieza en 0 y respeta el orden de las fotos. Para cada fila confirma solo color, diseño o tamaño visibles que distingan esa opción. Si una foto muestra varias opciones, un surtido, una familia o no identifica una variante individual, no incluyas esa foto. Nunca repitas imageIndex ni inventes atributos. Deben existir al menos dos filas distintas para recomendar variantes.
+- catalogAttributes contiene características comerciales visibles y útiles para elegir o filtrar el producto, por ejemplo Formato=A5, Capacidad=500 ml, Medida=15 cm, Punta=Fina o Cantidad=12 colores. No uses códigos internos de empaque como S, S+, M-P o L-L. No repitas color, diseño, categoría, marca, GTIN, MPN, precio, stock ni texto meramente decorativo. Incluye evidence con el texto o detalle visual que confirma cada valor. Si una medida o cantidad no se puede leer con certeza, no la incluyas.
 - observations debe explicar de forma corta la evidencia visual útil. limitations debe mencionar qué no se puede confirmar.
 - Nunca sugieras SKU, precios, costos, stock, proveedor, descuentos ni atributos no visibles.
 - Esto es una propuesta para revisión humana: no hay ningún cambio automático.`;

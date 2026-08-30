@@ -2,6 +2,7 @@ import { track as trackVercelEvent } from "@vercel/analytics/react";
 
 import { hasAnalyticsConsent } from "@/lib/analytics-consent";
 import { trackMicrosoftClarityEvent } from "@/lib/microsoft-clarity";
+import { getStructuredProductSize } from "@/lib/product-options";
 import { Product } from "@/types";
 
 declare global {
@@ -36,7 +37,11 @@ function getProductPrice(product: Product): number {
 }
 
 function getProductVariant(product: Product): string | undefined {
-  const parts = [product.design?.name, product.color?.name, product.size?.name]
+  const parts = [
+    product.design?.name,
+    product.color?.name,
+    getStructuredProductSize(product),
+  ]
     .filter(Boolean)
     .join(" · ");
 

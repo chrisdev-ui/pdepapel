@@ -121,6 +121,8 @@ describe("product image analysis route", () => {
           axes: [],
           evidence: null,
         },
+        variantCandidates: [],
+        catalogAttributes: [],
         observations: ["La portada muestra flores."],
         limitations: [],
       },
@@ -184,6 +186,8 @@ describe("product image analysis route", () => {
           axes: [],
           evidence: null,
         },
+        variantCandidates: [],
+        catalogAttributes: [],
         observations: ["La portada muestra flores."],
         limitations: [],
       })

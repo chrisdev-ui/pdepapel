@@ -2,11 +2,11 @@ import { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
 
 import { getCategory } from "@/actions/get-category";
+import { getCatalogOptions } from "@/actions/get-catalog-options";
 import { getCategories } from "@/actions/get-categories";
 import { getColors } from "@/actions/get-colors";
 import { getDesigns } from "@/actions/get-designs";
 import { getProducts } from "@/actions/get-products";
-import { getSizes } from "@/actions/get-sizes";
 import { CategoryLinksSection } from "@/components/category-links-section";
 import { CategorySeoContent } from "@/components/category-seo-content";
 import { ShopContent } from "@/components/shop-content";
@@ -22,6 +22,7 @@ interface CategoryPageProps {
   searchParams: {
     colorId?: string;
     sizeId?: string;
+    optionValueId?: string;
     designId?: string;
     sortOption?: string;
     minPrice?: string;
@@ -110,12 +111,17 @@ export default async function CategoryPage({
     permanentRedirect(categoryPath(canonicalSlug));
   }
 
-  const [{ products, totalPages, totalItems, facets }, sizes, colors, designs] =
-    await Promise.all([
+  const [
+    { products, totalPages, totalItems, facets },
+    catalogOptions,
+    colors,
+    designs,
+  ] = await Promise.all([
       getProducts({
         categoryId: category.id,
         colorId: searchParams.colorId,
         sizeId: searchParams.sizeId,
+        optionValueId: searchParams.optionValueId,
         designId: searchParams.designId,
         sortOption: searchParams.sortOption,
         minPrice: searchParams.minPrice
@@ -131,7 +137,7 @@ export default async function CategoryPage({
         isOnSale: searchParams.isOnSale === "true",
         groupBy: "parents",
       }),
-      getSizes(),
+      getCatalogOptions(),
       getColors(),
       getDesigns(),
     ]);
@@ -216,7 +222,7 @@ export default async function CategoryPage({
           initialFacets={facets}
           types={[]}
           categories={[category]}
-          sizes={sizes}
+          catalogOptions={catalogOptions}
           colors={colors}
           designs={designs}
           fixedCategoryId={category.id}

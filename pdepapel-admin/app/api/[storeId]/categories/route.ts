@@ -1,4 +1,5 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { splitTaxonomyIcon } from "@/lib/catalog-options";
 import { getUniqueCategorySlug } from "@/lib/category-slugs";
 import prismadb from "@/lib/prismadb";
 import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
@@ -39,6 +40,7 @@ export async function POST(
       seoDescription,
       seoIntro,
       imageUrl,
+      icon,
     } = body;
 
     if (!name)
@@ -51,14 +53,24 @@ export async function POST(
         "Se requiere un tipo para la sub-categoría",
       );
 
+    const type = await prismadb.type.findFirst({
+      where: { id: typeId, storeId: params.storeId },
+      select: { id: true },
+    });
+    if (!type) {
+      throw ErrorFactory.NotFound("El tipo no existe en esta tienda");
+    }
+
+    const canonical = splitTaxonomyIcon(name);
     const slug = await getUniqueCategorySlug(prismadb, {
       storeId: params.storeId,
-      baseSlug: slugify(name),
+      baseSlug: slugify(canonical.name),
     });
 
     const category = await prismadb.category.create({
       data: {
-        name,
+        name: canonical.name,
+        icon: icon?.trim() || canonical.icon,
         slug,
         typeId,
         storeId: params.storeId,
@@ -79,6 +91,7 @@ export async function POST(
         seoDescription: true,
         seoIntro: true,
         imageUrl: true,
+        icon: true,
       },
     });
 
@@ -115,6 +128,7 @@ export async function GET(
         seoDescription: true,
         seoIntro: true,
         imageUrl: true,
+        icon: true,
       },
     });
 
@@ -184,6 +198,13 @@ export async function DELETE(
           },
         );
       }
+
+      await tx.categoryCatalogOption.deleteMany({
+        where: { categoryId: { in: ids } },
+      });
+      await tx.categorySlugAlias.deleteMany({
+        where: { categoryId: { in: ids } },
+      });
 
       await tx.category.deleteMany({
         where: {

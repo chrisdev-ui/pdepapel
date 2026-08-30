@@ -3,7 +3,7 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { BadgeAlert, BadgeCheck } from "lucide-react";
+import { BadgeAlert, BadgeCheck, ImageOff } from "lucide-react";
 import Link from "next/link";
 
 import { CldImage } from "@/components/ui/CldImage";
@@ -17,7 +17,7 @@ import { DeleteButton } from "./delete-button";
 export type WishlistColumn = {
   id: string;
   slug?: string;
-  imageUrl: string;
+  imageUrl?: string;
   name: string;
   price: string | number;
   originalPrice?: number;
@@ -59,15 +59,22 @@ export const columns: ColumnDef<WishlistColumn>[] = [
     cell: ({ row }) => (
       <Link
         href={productPath(row.original.slug || row.original.id)}
-        className="relative block h-12 w-12 overflow-hidden rounded-md sm:h-24 sm:w-24"
+        className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-md bg-gray-100 sm:h-24 sm:w-24"
       >
-        <CldImage
-          fill
-          src={row.original.imageUrl}
-          alt={row.original.name ?? "Imagen del producto"}
-          sizes="(max-width: 640px) 100vw, 640px"
-          className="object-cover object-center"
-        />
+        {row.original.imageUrl ? (
+          <CldImage
+            fill
+            src={row.original.imageUrl}
+            alt={row.original.name ?? "Imagen del producto"}
+            sizes="(max-width: 640px) 100vw, 640px"
+            className="object-cover object-center"
+          />
+        ) : (
+          <>
+            <ImageOff aria-hidden="true" className="h-5 w-5 text-gray-400" />
+            <span className="sr-only">Sin imagen disponible</span>
+          </>
+        )}
       </Link>
     ),
   },

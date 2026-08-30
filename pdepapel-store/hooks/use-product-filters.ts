@@ -12,6 +12,7 @@ const filterParsers = {
   colorId: parseAsArrayOf(parseAsString).withDefault([]),
   sizeId: parseAsArrayOf(parseAsString).withDefault([]),
   designId: parseAsArrayOf(parseAsString).withDefault([]),
+  optionValueId: parseAsArrayOf(parseAsString).withDefault([]),
   minPrice: parseAsInteger,
   maxPrice: parseAsInteger,
   sortOption: parseAsString.withDefault(""),
@@ -26,6 +27,7 @@ export interface ProductFilters {
   colorId: string[];
   sizeId: string[];
   designId: string[];
+  optionValueId: string[];
   minPrice: number | null;
   maxPrice: number | null;
   sortOption: string | null;

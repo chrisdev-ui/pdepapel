@@ -29,6 +29,7 @@ import {
   ListFilter,
   RefreshCcw,
   Search,
+  SlidersHorizontal,
   Sparkles,
   Undo2,
 } from "lucide-react";
@@ -398,6 +399,22 @@ export function NamingReviewClient({
           revertirlo; no toca slug, inventario, precios, fotos, pedidos ni
           publicaciones de Mercado Libre.
         </p>
+      </div>
+
+      <div className="flex flex-col gap-3 rounded-lg border p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="font-medium">Tamaños claros, códigos internos aparte</p>
+          <p className="mt-1 text-muted-foreground">
+            Los códigos S, S+, M-P y similares sirven para envío y SKU; no se
+            añaden a los nombres ni se muestran como filtros para clientes.
+          </p>
+        </div>
+        <Button asChild type="button" variant="outline" className="shrink-0">
+          <Link href={`/${params.storeId}/productos/opciones`}>
+            <SlidersHorizontal className="mr-2 h-4 w-4" />
+            Revisar opciones
+          </Link>
+        </Button>
       </div>
 
       <Tabs

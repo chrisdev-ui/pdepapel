@@ -39,7 +39,9 @@ describe("AccountPrompt", () => {
     expect(
       screen.getByText(/en segundos con Google o con tu correo/i),
     ).toBeInTheDocument();
-    expect(screen.getByText(/podrás elegirla en pedidos futuros/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/podrás elegirla en pedidos futuros/i),
+    ).toBeInTheDocument();
 
     const signUp = screen.getByRole("link", {
       name: "Crear cuenta gratis",
@@ -80,6 +82,11 @@ describe("AccountPrompt", () => {
       "account_sign_in_cta_clicked",
       { source: "cart_drawer" },
     );
-    expect(screen.getByText(/podrás elegirla en pedidos futuros/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/también puedes comprar como invitado/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Crear cuenta" }),
+    ).toBeInTheDocument();
   });
 });

@@ -70,6 +70,7 @@ This section records the important recent decisions and must be updated after fu
 
 ### Current baseline
 
+- `pdepapel-admin/prisma/manual-migrations/20260828_add_catalog_options.sql` was applied to Railway on 2026-08-30 after a verified production backup and local unit, integration, build, and E2E validation. It additively separates internal shipping/SKU sizes from customer-facing catalog options, stores taxonomy icons outside canonical names, preserves type aliases, and adds the reviewed bulk-migration queue.
 - Latest deployed Mercado Libre listing-content expansion was committed as `f9a88d6` (`feat(admin): enhance Mercado Libre listing management`) and its matching manual migration was applied to Railway.
 - `pdepapel-admin/prisma/manual-migrations/20260824_add_business_growth.sql` was applied to Railway on 2026-08-24. It creates the store-scoped policy, cash-movement, campaign-draft, and campaign-product records used by the private `Negocio y crecimiento` module.
 - `pdepapel-admin/prisma/manual-migrations/20260820_add_marketplace_order_item_acq_price.sql` is **written but NOT yet applied to Railway**. It adds the nullable `MarketplaceOrderItem.acqPrice` cost snapshot and backfills it from the linked product. The matching application code must not be deployed before the migration is applied, because the profitability query selects that column.
@@ -95,7 +96,7 @@ This section records the important recent decisions and must be updated after fu
 - Run `npm run normalize:product-slugs` before changing stored canonical slugs. It is read-only by default. Apply deliberate production batches with `npm run normalize:product-slugs -- --apply --limit=40`; each completed batch preserves old URLs as aliases and can be rerun safely until no changes remain. After a deliberate historical-slug migration, run `npm run export:product-slug-redirects -- --store-id=<public-store-id>` from `pdepapel-admin`, review the generated `pdepapel-store/lib/legacy-product-redirects.mjs`, and deploy both applications together. The generated map is handled by the storefront middleware and returns HTTP `308` before rendering without one deployment route per alias; dynamic aliases remain the safe fallback for any later title edit.
 - Categories can be SEO-enabled and optionally featured. Their cards use category imagery and must retain an accessible high-contrast label treatment; white text directly over light imagery is not acceptable.
 - Category landing pages are intentionally more focused than the general shop: do not present a category selector that invites a shopper to leave the current category. Product search within a category must be constrained to that category.
-- Store route skeleton/loading behavior was improved to avoid showing only the header and footer before a page body arrives. Preserve route-level loading UI and avoid client-only data waterfalls that reintroduce this flash, especially for product detail and order detail after checkout.
+- Store route skeleton/loading behavior was improved to avoid showing only the header and footer before a page body arrives. Preserve route-level loading UI and avoid client-only data waterfalls that reintroduce this flash. Product detail is the deliberate exception: it must resolve product existence before streaming so missing or archived products return a real HTTP `404`; keep loading skeletons inside the resolved page (for example, related products) rather than restoring `producto/[slug]/loading.tsx`.
 - Rich product descriptions use Tiptap and are sanitized. The editor supports more expressive formatting (including color and emoji), but output must remain sanitized and safe for the product page.
 - Order pages must not confuse an already-paid order’s historical purchased items with **current** catalog stock. A later stock depletion must not make a paid order appear to have failed or changed retroactively.
 - Browser-facing API handlers use `pdepapel-admin/lib/cors.ts` to echo only the approved shop/admin origins, add `Vary: Origin`, and support the needed preflight methods. Never reintroduce `Access-Control-Allow-Origin: *` on a customer flow. Keep CORS and authorization separate: customer review authors and shipment tracking must derive the Clerk user from the authenticated token, never from a client-supplied user ID.
@@ -265,12 +266,15 @@ When creating a new customer-navigable route:
 3. Update route helpers, navigation, metadata, sitemap coverage, tests, and any structured data.
 4. Do not remove older redirects or slug aliases without a deliberate SEO migration plan.
 5. Clerk route configuration must use the same Spanish canonical paths: `/iniciar-sesion` and `/crear-cuenta`. Keep the public Clerk variables and `ClerkProvider` aligned with `STOREFRONT_ROUTES`, otherwise the mounted authentication form can remain empty. Auth route pages must redirect an already authenticated visitor on the server to the validated `redirect_url` (or `/`) rather than render an empty Clerk form.
+6. Storefront Clerk middleware runs only on routes that actually read authentication on the server (`/finalizar-compra`, sign-in, and sign-up, plus their legacy redirects). Public catalog routes bypass Clerk middleware so genuine `notFound()` responses retain HTTP `404` instead of becoming soft-404 `200` rewrites; client-side Clerk components still initialize through `ClerkProvider`.
 
 ### UX and rendering rules
 
-- Prefer server data and route-level `loading.tsx`/skeleton UI over client-only fetches that leave a blank content area.
+- Prefer server data and route-level `loading.tsx`/skeleton UI over client-only fetches that leave a blank content area, except where an authentic pre-stream HTTP status is required (notably product-detail `404` responses).
 - Reuse the existing specialized admin form controls before adding a generic input: `CurrencyInput` for COP amounts, `PercentageInput` for percentages, `StockQuantityInput` for inventory, `CountInput` for bounded counts, `MeasurementInput` for dimensions, `QuantitySelector` for cart lines, `ImageUpload` for images, rich-text editor for product descriptions, and calendar/date controls for dates. If a domain-specific input does not exist, create one reusable component using the installed shadcn/Radix primitives instead of styling a one-off control inside a route.
+- Product-form customer catalog characteristics use `CatalogAttributesEditor`. It receives every canonical store option/value from the server, ranks options already linked to the selected subcategory first, canonicalizes exact typed matches, suggests existing values after a feature is selected, and rejects duplicate feature keys. Keep this review-first behavior: new names/values are persisted only with the product save, and no AI/network call is required for autocomplete.
 - A first navigation from `/tienda` to a product must immediately display a coherent product skeleton/content frame—not just the persistent header and footer.
+- A successful add-to-cart from a product card or product detail opens the shared non-modal cart preview. On mobile it is a safe-area-aware bottom card; on larger screens it is a compact top-right card. It shows the actual cart quantity, pauses its eight-second dismissal while hovered/focused, and offers **Ver carrito** and **Finalizar compra** without blocking continued shopping. It must never open when stock validation fails. Product-card wishlist/cart controls remain directly tappable on touch screens and use hover/focus reveal only from the `sm` breakpoint upward.
 - Checkout-to-order-detail navigation must not flash a reset checkout state before the order page appears.
 - Preserve responsive behavior. Header additions, category cards, drawers, dialogs, and tables must be checked at mobile, tablet, and desktop breakpoints.
 - Category cards need strong readable contrast independent of the image content.
@@ -327,6 +331,10 @@ When creating a new customer-navigable route:
 - Clarity is loaded through the official package only after consent, only on the
   public commerce funnel, and during browser idle time. Its event allowlist sends
   event names without GA4 parameters. Never call Clarity `identify`.
+- The cart preview records privacy-safe `cart_preview_view` and
+  `cart_preview_action` events. Parameters are limited to the UI source and the
+  generic action (`view_cart` or `checkout`); never attach a customer identifier
+  or free-form product/customer text.
 - Checkout form content and private order/quote/account routes are explicitly
   masked. Clarity storage is denied outside the allowlisted route groups. Keep
   `NEXT_PUBLIC_CLARITY_ENABLED=false` until the audience/privacy activation gate
@@ -348,6 +356,8 @@ The Prisma schema is `pdepapel-admin/prisma/schema.prisma`.
 
 - `Store` is the tenant root.
 - `Product` belongs to a `Category`, size, color, and design; it has `sku`, optional `gtin`, optional `mpn`, brand, acquisition cost, images, variants/grouping, supplier, kits, offers, movements, fairs, and marketplace links.
+- Legacy `Size` remains the required internal logistics/SKU dimension. `ShippingProfile` stores its separated operational meaning, while `CatalogOption`, `CatalogOptionValue`, `CategoryCatalogOption`, and `ProductCatalogOptionValue` store only customer-recognizable choices such as Formato=A5, Capacidad=500 ml, or Punta=Fina. Never repurpose or delete `Size` during this migration.
+- `CatalogMigrationSuggestion` is a review queue, not an automatic data migration. `Type.icon`/`Category.icon` separate decoration from canonical taxonomy names, and `TypeSlugAlias` preserves old type URLs when a future canonical slug changes.
 - `ProductSlugAlias` and `CategorySlugAlias` protect old public URLs.
 - `Order` plus `OrderItem` is the unified sales record. Order types: `STANDARD`, `CUSTOM`, `QUOTATION`, `FESTIVAL`, and `POINT_OF_SALE`.
 - Order statuses include draft/quotation states and active `PENDING`, `PAID`, `SENT`, and `CANCELLED` states. `paidAt` must be written when an order truly becomes paid, not during unrelated updates.
@@ -388,6 +398,7 @@ Known manual migration references:
 - `20260820_add_customer_account_benefits.sql` — adds separate email/device order claims, persisted account favorites, explicit account delivery addresses, and welcome-benefit redemptions. It must be applied to Railway before deploying the related code.
 - `20260821_add_product_naming_changes.sql` — adds the additive, reversible audit trail for title-only product and product-group naming batches. Apply it to Railway before deploying the naming-review route.
 - `20260824_add_business_growth.sql` — creates additive, store-scoped policy, cash-movement, and social-campaign-draft tables; applied to Railway on 2026-08-24. It has no foreign keys because `relationMode = "prisma"`.
+- `20260828_add_catalog_options.sql` — additive customer-option/shipping-profile/taxonomy-icon migration; applied to Railway on 2026-08-30. It preserves every legacy `Size`, SKU, product slug, stock, price, image, order, and marketplace link.
 
 ## 8. Catalog, SEO, and revalidation
 
@@ -400,6 +411,10 @@ Known manual migration references:
 - Category image is optional at data level. Do not make it mandatory if legitimate categories lack a good image; the UI must have a graceful image fallback.
 - Product titles use the factual template `what it is + package detail + real brand + variant attributes only when they differ`. The admin form exposes a deterministic **Asistente de nombre**; it may organize confirmed fields but must never invent a brand, license, material, measure, compatibility claim, or GTIN.
 - `Size.value` is an operational dimension/weight code used by logistics and SKU generation (for example `M-P` or `S-L`). Never expose that code in product titles or Google Merchant. Use `getCustomerFacingSizeName` so only meaningful measures such as `A5` or `57 mm` reach customers; generic letter sizes require a category where a buyer genuinely chooses a size.
+- Customer shop filters no longer render legacy `Size` records. They render active category-scoped `CatalogOption` values with live counts; values within one option are OR alternatives, while different options combine with AND. Unknown/inactive option IDs must return zero products rather than silently broadening the result set.
+- **Productos → Opciones para clientes** is the reviewed bulk migration. **Preparar propuestas** inspects at most 100 active products that still lack `shippingProfileId`; deterministic rules may extract only explicit measures/formats/counts from current names. The optional photo pass processes at most 20 selected rows sequentially through the existing cached/free-tier image analysis. Neither preparation nor AI changes data. The administrator may add, edit, remove, and save at most eight visible options per product, then explicitly confirm **Aplicar seleccionadas**.
+- Applying an option proposal may create/reuse a shipping profile, split a leading taxonomy emoji into `icon`, and synchronize that product's reviewed catalog-option assignments. It must not change the legacy `sizeId`, SKU, stock, price, product name, slug/URL, images, groups, orders, or Mercado Libre content. Re-running preparation skips products with an assigned shipping profile, making rollout resumable in batches.
+- New/edit product forms expose the same reviewable customer-option rows. AI may preload visible catalog attributes, but an administrator can always manage them manually. Internal values such as S, S+, M-P, or L-L are forbidden as customer options.
 - `Color` and `Design` remain mandatory operational attributes for catalog, variants, and SKU workflows, but they must never be appended automatically to a customer-facing title. The name assistant and group generator require an explicit admin opt-in when the value visibly and deterministically identifies the purchasable product. Google Merchant exports `color` and `pattern` only when the final public title confirms each value. This must not alter SKU, stock, or slugs.
 - The optional **Analizar fotos con IA** aid in product and product-group forms is review-only. It uses the Vercel AI SDK (`ai`) with the direct Google provider (`@ai-sdk/google`) and `gemini-3.5-flash-lite`; it does **not** use AI Gateway, does not require a Vercel AI budget, and must never write catalog data itself. The administrator explicitly loads the proposal into the current form, reviews it, and saves through the ordinary product flow.
 - Configure the server-only optional `GEMINI_API_KEY` in `pdepapel-admin` (never expose it as `NEXT_PUBLIC_*`). Keep the Google AI Studio project on its free tier and do not enable billing for this optional aid. Free-tier availability and quotas can change; Google states that free-tier content can be used to improve its products, so send only public catalog photos—never customer data, invoices, order details, or private uploads.
@@ -421,7 +436,7 @@ Catalog changes in administration notify the public shop through `POST /api/reva
 
 See `docs/revalidacion-catalogo.md` and `docs/seguimiento-seo.md`.
 
-Admin instructions: `pdepapel-admin/docs/nombres-productos.md`.
+Admin instructions: `pdepapel-admin/docs/nombres-productos.md` and `pdepapel-admin/docs/opciones-catalogo-clientes.md`.
 
 ## 9. Orders, payments, inventory, and shipping
 

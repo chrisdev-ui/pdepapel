@@ -1,5 +1,7 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { splitTaxonomyIcon } from "@/lib/catalog-options";
 import prismadb from "@/lib/prismadb";
+import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 import { slugify } from "@/lib/slugify";
 import {
   CACHE_HEADERS,
@@ -21,12 +23,32 @@ export async function GET(
       throw ErrorFactory.InvalidRequest("El ID de la categoría es requerido");
     }
 
-    const type = await prismadb.type.findFirst({
+    let type = await prismadb.type.findFirst({
       where: {
         storeId: params.storeId,
         OR: [{ id: params.typeId }, { slug: params.typeId }],
       },
     });
+
+    if (!type) {
+      const alias = await prismadb.typeSlugAlias.findUnique({
+        where: {
+          storeId_slug: {
+            storeId: params.storeId,
+            slug: params.typeId,
+          },
+        },
+        select: { typeId: true },
+      });
+
+      if (alias) {
+        type = await prismadb.type.findFirst({
+          where: { id: alias.typeId, storeId: params.storeId },
+        });
+      }
+    }
+
+    if (!type) throw ErrorFactory.NotFound("Categoría no encontrada");
 
     return NextResponse.json(type, {
       headers: CACHE_HEADERS.STATIC,
@@ -51,7 +73,7 @@ export async function PATCH(
     }
 
     const body = await req.json();
-    const { name } = body;
+    const { name, icon } = body;
 
     await verifyStoreOwner(userId, params.storeId);
 
@@ -74,10 +96,11 @@ export async function PATCH(
       );
     }
 
+    const canonical = splitTaxonomyIcon(name.trim());
     const duplicateType = await prismadb.type.findFirst({
       where: {
         storeId: params.storeId,
-        name: name.trim(),
+        name: canonical.name,
         NOT: {
           id: params.typeId,
         },
@@ -88,14 +111,41 @@ export async function PATCH(
       throw ErrorFactory.Conflict("Ya existe una categoría con este nombre");
     }
 
-    const updatedType = await prismadb.type.update({
-      where: {
-        id: params.typeId,
-      },
-      data: {
-        name: name.trim(),
-        slug: slugify(name.trim()),
-      },
+    const updatedType = await prismadb.$transaction(async (tx) => {
+      const slug = slugify(canonical.name);
+      if (existingType.slug && existingType.slug !== slug) {
+        const existingAlias = await tx.typeSlugAlias.findUnique({
+          where: {
+            storeId_slug: {
+              storeId: params.storeId,
+              slug: existingType.slug,
+            },
+          },
+        });
+        if (!existingAlias) {
+          await tx.typeSlugAlias.create({
+            data: {
+              storeId: params.storeId,
+              typeId: existingType.id,
+              slug: existingType.slug,
+            },
+          });
+        }
+      }
+
+      return tx.type.update({
+        where: { id: params.typeId },
+        data: {
+          name: canonical.name,
+          slug,
+          icon: icon?.trim() || canonical.icon || existingType.icon,
+        },
+      });
+    });
+
+    await triggerStorefrontRevalidation({
+      paths: ["/", "/tienda"],
+      tags: ["categories", "products"],
     });
 
     return NextResponse.json(updatedType, {
@@ -168,6 +218,17 @@ export async function DELETE(
         );
       }
 
+      const categoryIds = type.categories.map((category) => category.id);
+      await tx.categoryCatalogOption.deleteMany({
+        where: { categoryId: { in: categoryIds } },
+      });
+      await tx.categorySlugAlias.deleteMany({
+        where: { categoryId: { in: categoryIds } },
+      });
+      await tx.typeSlugAlias.deleteMany({
+        where: { typeId: params.typeId },
+      });
+
       await tx.category.deleteMany({
         where: {
           typeId: params.typeId,
@@ -179,6 +240,11 @@ export async function DELETE(
           id: params.typeId,
         },
       });
+    });
+
+    await triggerStorefrontRevalidation({
+      paths: ["/", "/tienda", "/sitemap.xml"],
+      tags: ["categories", "products"],
     });
 
     return NextResponse.json("Categoría eliminada correctamente", {

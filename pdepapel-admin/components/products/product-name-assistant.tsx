@@ -499,6 +499,26 @@ export function ProductNameAssistant({
               </div>
             )}
 
+            {visualAnalysis.catalogAttributes.length > 0 && (
+              <div className="rounded-md border border-dashed p-3">
+                <p className="font-medium">Opciones comerciales visibles</p>
+                <p className="mt-1 text-muted-foreground">
+                  Se cargarán como campos revisables del producto, separados
+                  del tamaño interno usado para envío y SKU.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {visualAnalysis.catalogAttributes.map((attribute) => (
+                    <span
+                      key={`${attribute.key}-${attribute.value}`}
+                      className="rounded-full border bg-muted/30 px-2 py-1"
+                    >
+                      {attribute.name}: {attribute.value}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {onCreateVisualAttribute &&
               (visualAnalysis.colorSource === "new" ||
                 visualAnalysis.designSource === "new") && (

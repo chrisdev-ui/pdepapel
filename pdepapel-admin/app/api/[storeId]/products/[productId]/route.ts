@@ -1,4 +1,8 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import {
+  syncProductCatalogAttributes,
+  visualCatalogAttributesSchema,
+} from "@/lib/catalog-migration";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import cloudinaryInstance from "@/lib/cloudinary";
 import { createCorsHeaders } from "@/lib/cors";
@@ -54,6 +58,9 @@ export async function GET(
       color: true,
       design: true,
       productGroup: true,
+      catalogOptionValues: {
+        include: { option: true, optionValue: true },
+      },
       supplier: true,
       reviews: {
         orderBy: { createdAt: "desc" },
@@ -173,6 +180,7 @@ export async function PATCH(
 
       isKit,
       components,
+      catalogAttributes,
     } = body;
     const normalizedSupplierId =
       typeof supplierId === "string" && supplierId !== "none"
@@ -183,6 +191,9 @@ export async function PATCH(
         ? productGroupId || null
         : null;
     const sanitizedDescription = sanitizeRichTextHtml(description);
+    const parsedCatalogAttributes = Array.isArray(catalogAttributes)
+      ? visualCatalogAttributesSchema.parse(catalogAttributes)
+      : null;
 
     if (!name)
       throw ErrorFactory.InvalidRequest("El nombre del producto es requerido");
@@ -368,6 +379,15 @@ export async function PATCH(
           productId: params.productId,
         })),
       });
+
+      if (parsedCatalogAttributes) {
+        await syncProductCatalogAttributes(tx, {
+          storeId: params.storeId,
+          productId: params.productId,
+          categoryId,
+          attributes: parsedCatalogAttributes,
+        });
+      }
 
       if (!preserveSlug) {
         if (

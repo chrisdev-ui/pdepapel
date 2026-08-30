@@ -1,4 +1,5 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { splitTaxonomyIcon } from "@/lib/catalog-options";
 import {
   getUniqueCategorySlug,
   preserveCategorySlugAlias,
@@ -42,6 +43,7 @@ export async function GET(
         seoDescription: true,
         seoIntro: true,
         imageUrl: true,
+        icon: true,
       },
     });
 
@@ -70,6 +72,7 @@ export async function GET(
             seoDescription: true,
             seoIntro: true,
             imageUrl: true,
+            icon: true,
           },
         });
       }
@@ -110,6 +113,7 @@ export async function PATCH(
       seoDescription,
       seoIntro,
       imageUrl,
+      icon,
     } = body;
 
     if (!name)
@@ -133,8 +137,8 @@ export async function PATCH(
           `La sub-categoría ${params.categoryId} no existe en esta tienda`,
         );
 
-      const type = await tx.type.findUnique({
-        where: { id: typeId },
+      const type = await tx.type.findFirst({
+        where: { id: typeId, storeId: params.storeId },
       });
 
       if (!type)
@@ -142,9 +146,10 @@ export async function PATCH(
           `El tipo ${typeId} no existe en esta tienda`,
         );
 
+      const canonical = splitTaxonomyIcon(name);
       const slug = await getUniqueCategorySlug(tx, {
         storeId: params.storeId,
-        baseSlug: slugify(name),
+        baseSlug: slugify(canonical.name),
         excludeCategoryId: category.id,
       });
 
@@ -160,7 +165,8 @@ export async function PATCH(
       return tx.category.update({
         where: { id: params.categoryId, storeId: params.storeId },
         data: {
-          name,
+          name: canonical.name,
+          icon: icon?.trim() || canonical.icon || category.icon,
           slug,
           typeId,
           seoEnabled: Boolean(seoEnabled),
@@ -181,6 +187,7 @@ export async function PATCH(
           seoDescription: true,
           seoIntro: true,
           imageUrl: true,
+          icon: true,
         },
       });
     });
@@ -238,6 +245,9 @@ export async function DELETE(
         );
 
       await tx.categorySlugAlias.deleteMany({
+        where: { categoryId: category.id },
+      });
+      await tx.categoryCatalogOption.deleteMany({
         where: { categoryId: category.id },
       });
 

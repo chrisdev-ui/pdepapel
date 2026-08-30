@@ -41,6 +41,9 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
     <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
       <SheetTrigger asChild>
         <Button
+          aria-label={`Abrir carrito, ${totalQuantity} ${
+            totalQuantity === 1 ? "producto" : "productos"
+          }`}
           className={cn(
             "flex min-w-[5.5rem] items-center justify-center rounded-full border-transparent bg-blue-yankees px-4 py-2 font-semibold tabular-nums text-white transition hover:opacity-75 disabled:cursor-not-allowed disabled:opacity-50",
             className,

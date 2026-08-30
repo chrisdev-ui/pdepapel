@@ -3,6 +3,10 @@
 import { cn } from "@/lib/utils";
 import { ProductNameAssistant } from "@/components/products/product-name-assistant";
 import {
+  CatalogAttributesEditor,
+  type CatalogOptionSuggestion,
+} from "@/components/products/catalog-attributes-editor";
+import {
   ReviewProductVariantsModal,
   type ProductVariantReviewPayload,
 } from "@/components/modals/review-product-variants-modal";
@@ -106,6 +110,39 @@ const formSchema = z.object({
   colorId: z.string().min(1),
   sizeId: z.string().min(1),
   designId: z.string().min(1),
+  catalogAttributes: z
+    .array(
+      z.object({
+        key: z.string().min(1).max(60),
+        name: z.string().min(1).max(80),
+        value: z.string().min(1).max(100),
+        evidence: z.string().min(1).max(180),
+      }),
+    )
+    .max(8)
+    .superRefine((attributes, context) => {
+      const seenKeys = new Set<string>();
+
+      attributes.forEach((attribute, index) => {
+        const key = attribute.key
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLocaleLowerCase("es-CO")
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+        if (!key || !seenKeys.has(key)) {
+          if (key) seenKeys.add(key);
+          return;
+        }
+
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [index, "name"],
+          message: "La característica está repetida",
+        });
+      });
+    })
+    .default([]),
   supplierId: z.string().optional(),
   brand: z.string().max(120).optional(),
   gtin: z
@@ -157,6 +194,7 @@ interface ProductFormProps {
   suppliers: Supplier[];
   productGroup: ProductGroup;
   productGroups: ProductGroups;
+  catalogOptions: CatalogOptionSuggestion[];
 }
 
 export const ProductForm: React.FC<ProductFormProps> = ({
@@ -169,6 +207,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   suppliers,
   productGroup,
   productGroups,
+  catalogOptions,
 }) => {
   const params = useParams();
   const router = useRouter();
@@ -254,6 +293,13 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 colorName: c.component?.color?.name,
                 designName: c.component?.design?.name,
               })) || [],
+            catalogAttributes:
+              initialData.catalogOptionValues?.map((item) => ({
+                key: item.option.key,
+                name: item.option.name,
+                value: item.optionValue.name,
+                evidence: "Característica guardada en el catálogo",
+              })) || [],
           }
         : {
             name: "",
@@ -278,6 +324,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             productGroupId: productGroup?.id || "",
             isKit: false,
             components: [],
+            catalogAttributes: [],
           },
     [initialData, productGroup],
   );
@@ -378,6 +425,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   const watchedBrand = form.watch("brand");
   const watchedImages = form.watch("images");
   const watchedStock = form.watch("stock");
+  const watchedCatalogAttributes = form.watch("catalogAttributes") || [];
 
   useEffect(() => {
     if (watchedGroupId) {
@@ -1004,6 +1052,14 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                       form.setValue("designId", analysis.designId, options);
                     }
                   }
+
+                  if (analysis.catalogAttributes.length > 0) {
+                    form.setValue(
+                      "catalogAttributes",
+                      analysis.catalogAttributes,
+                      options,
+                    );
+                  }
                 }}
                 onApplyDescription={(description) =>
                   form.setValue(
@@ -1040,6 +1096,21 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   !watchedGroupId || watchedGroupId === "none"
                     ? createVisualAttribute
                     : undefined
+                }
+              />
+            </div>
+            <div className="col-span-3">
+              <CatalogAttributesEditor
+                value={watchedCatalogAttributes}
+                options={catalogOptions}
+                categoryId={watchedCategoryId}
+                disabled={loading}
+                onChange={(attributes) =>
+                  form.setValue("catalogAttributes", attributes, {
+                    shouldDirty: true,
+                    shouldTouch: true,
+                    shouldValidate: true,
+                  })
                 }
               />
             </div>

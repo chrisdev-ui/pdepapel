@@ -38,11 +38,18 @@ model Store {
   posts                          Post[]                          @relation("StoreToPost")
   categories                     Category[]                      @relation("StoreToCategory")
   sizes                          Size[]                          @relation("StoreToSize")
+  shippingProfiles               ShippingProfile[]
+  catalogOptions                 CatalogOption[]
+  catalogOptionValues            CatalogOptionValue[]
+  categoryCatalogOptions         CategoryCatalogOption[]
+  productCatalogOptionValues     ProductCatalogOptionValue[]
+  catalogMigrationSuggestions    CatalogMigrationSuggestion[]
   colors                         Color[]                         @relation("StoreToColor")
   designs                        Design[]                        @relation("StoreToDesign")
   products                       Product[]                       @relation("StoreToProduct")
   productSlugAliases             ProductSlugAlias[]
   categorySlugAliases            CategorySlugAlias[]
+  typeSlugAliases                TypeSlugAlias[]
   orders                         Order[]                         @relation("StoreToOrder")
   mainBanner                     MainBanner?                     @relation("StoreToMainBanner")
   banners                        Banner[]                        @relation("StoreToBanner")
@@ -166,14 +173,16 @@ model Post {
 }
 
 model Type {
-  id         String     @id @default(uuid())
-  storeId    String
-  name       String
-  slug       String     @default("")
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
-  store      Store      @relation("StoreToType", fields: [storeId], references: [id])
-  categories Category[]
+  id          String          @id @default(uuid())
+  storeId     String
+  name        String
+  slug        String          @default("")
+  icon        String?         @db.VarChar(32)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  store       Store           @relation("StoreToType", fields: [storeId], references: [id])
+  categories  Category[]
+  slugAliases TypeSlugAlias[]
 
   @@index([storeId])
   @@index([storeId, slug])
@@ -185,6 +194,7 @@ model Category {
   typeId                         String
   name                           String
   slug                           String                          @default("")
+  icon                           String?                         @db.VarChar(32)
   seoEnabled                     Boolean                         @default(false)
   seoFeatured                    Boolean                         @default(false)
   seoTitle                       String?                         @db.VarChar(70)
@@ -198,6 +208,7 @@ model Category {
   products                       Product[]                       @relation("CategoryToProduct")
   offers                         OfferCategory[]
   slugAliases                    CategorySlugAlias[]
+  catalogOptions                 CategoryCatalogOption[]
   marketplacePublicationProfiles MarketplacePublicationProfile[]
 
   @@unique([storeId, slug])
@@ -217,6 +228,93 @@ model Size {
 
   @@unique([storeId, value])
   @@index([storeId])
+}
+
+model ShippingProfile {
+  id            String    @id @default(uuid())
+  storeId       String
+  name          String
+  code          String
+  dimensionCode String?   @db.VarChar(16)
+  weightCode    String?   @db.VarChar(16)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  store         Store     @relation(fields: [storeId], references: [id])
+  products      Product[]
+
+  @@unique([storeId, code])
+  @@index([storeId])
+}
+
+model CatalogOption {
+  id            String                      @id @default(uuid())
+  storeId       String
+  key           String                      @db.VarChar(60)
+  name          String                      @db.VarChar(80)
+  displayOrder  Int                         @default(0)
+  isActive      Boolean                     @default(true)
+  createdAt     DateTime                    @default(now())
+  updatedAt     DateTime                    @updatedAt
+  store         Store                       @relation(fields: [storeId], references: [id])
+  values        CatalogOptionValue[]
+  categories    CategoryCatalogOption[]
+  productValues ProductCatalogOptionValue[]
+
+  @@unique([storeId, key])
+  @@index([storeId])
+  @@index([storeId, isActive, displayOrder])
+}
+
+model CatalogOptionValue {
+  id            String                      @id @default(uuid())
+  storeId       String
+  optionId      String
+  name          String                      @db.VarChar(100)
+  value         String                      @db.VarChar(100)
+  displayOrder  Int                         @default(0)
+  createdAt     DateTime                    @default(now())
+  updatedAt     DateTime                    @updatedAt
+  store         Store                       @relation(fields: [storeId], references: [id])
+  option        CatalogOption               @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  productValues ProductCatalogOptionValue[]
+
+  @@unique([optionId, value])
+  @@index([storeId])
+  @@index([optionId])
+}
+
+model CategoryCatalogOption {
+  id           String        @id @default(uuid())
+  storeId      String
+  categoryId   String
+  optionId     String
+  displayOrder Int           @default(0)
+  store        Store         @relation(fields: [storeId], references: [id])
+  category     Category      @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  option       CatalogOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, optionId])
+  @@index([storeId])
+  @@index([categoryId])
+  @@index([optionId])
+}
+
+model ProductCatalogOptionValue {
+  id            String             @id @default(uuid())
+  storeId       String
+  productId     String
+  optionId      String
+  optionValueId String
+  store         Store              @relation(fields: [storeId], references: [id])
+  product       Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
+  option        CatalogOption      @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  optionValue   CatalogOptionValue @relation(fields: [optionValueId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, optionId])
+  @@index([storeId])
+  @@index([productId])
+  @@index([optionId])
+  @@index([optionValueId])
 }
 
 model Color {
@@ -245,18 +343,19 @@ model Design {
 }
 
 model ProductGroup {
-  id          String              @id @default(uuid())
-  storeId     String
-  store       Store               @relation("StoreToProductGroup", fields: [storeId], references: [id])
-  name        String
-  slug        String              @default("")
-  description String              @db.Text
-  brand       String?             @db.VarChar(120)
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-  products    Product[]
-  images      Image[]
-  offers      OfferProductGroup[]
+  id                          String                       @id @default(uuid())
+  storeId                     String
+  store                       Store                        @relation("StoreToProductGroup", fields: [storeId], references: [id])
+  name                        String
+  slug                        String                       @default("")
+  description                 String                       @db.Text
+  brand                       String?                      @db.VarChar(120)
+  createdAt                   DateTime                     @default(now())
+  updatedAt                   DateTime                     @updatedAt
+  products                    Product[]
+  images                      Image[]
+  offers                      OfferProductGroup[]
+  catalogMigrationSuggestions CatalogMigrationSuggestion[]
 
   @@index([storeId])
   @@index([storeId, slug])
@@ -266,54 +365,58 @@ model ProductGroup {
 }
 
 model Product {
-  id                      String                   @id @default(uuid())
-  storeId                 String
-  categoryId              String
-  name                    String
-  slug                    String                   @default("")
-  description             String                   @db.Text
-  stock                   Int                      @default(0)
-  price                   Float                    @default(0)
-  acqPrice                Float?                   @default(0)
-  isFeatured              Boolean                  @default(false)
-  isArchived              Boolean                  @default(false)
-  sizeId                  String
-  colorId                 String
-  designId                String
-  createdAt               DateTime                 @default(now())
-  updatedAt               DateTime                 @updatedAt
-  sku                     String                   @unique
-  brand                   String?                  @db.VarChar(120)
-  gtin                    String?                  @db.VarChar(14)
-  mpn                     String?                  @db.VarChar(70)
-  hasNoProductIdentifier  Boolean                  @default(false)
-  store                   Store                    @relation("StoreToProduct", fields: [storeId], references: [id])
-  category                Category                 @relation("CategoryToProduct", fields: [categoryId], references: [id])
-  size                    Size                     @relation(fields: [sizeId], references: [id])
-  color                   Color                    @relation(fields: [colorId], references: [id])
-  design                  Design                   @relation(fields: [designId], references: [id])
-  images                  Image[]
-  orderItems              OrderItem[]
-  reviews                 Review[]
-  customerWishlistItems   CustomerWishlistItem[]
-  supplierId              String?
-  supplier                Supplier?                @relation(fields: [supplierId], references: [id])
-  productGroupId          String?
-  productGroup            ProductGroup?            @relation(fields: [productGroupId], references: [id])
-  offers                  OfferProduct[]
-  inventoryMovements      InventoryMovement[]
-  restockOrderItems       RestockOrderItem[]
-  customOrderItems        CustomOrderItem[]
-  quotationItems          QuotationItem[]
-  slugAliases             ProductSlugAlias[]
-  fairInventoryItems      FairEventInventoryItem[]
-  fairCapsules            FairCapsule[]
-  marketplaceListings     MarketplaceListing[]
-  marketplaceOrderItems   MarketplaceOrderItem[]
-  marketplaceOutboxEvents MarketplaceOutboxEvent[]
-  marketplaceQuestions    MarketplaceQuestion[]
-  videos                  ProductVideo[]
-  growthCampaignProducts  GrowthCampaignProduct[]
+  id                          String                       @id @default(uuid())
+  storeId                     String
+  categoryId                  String
+  name                        String
+  slug                        String                       @default("")
+  description                 String                       @db.Text
+  stock                       Int                          @default(0)
+  price                       Float                        @default(0)
+  acqPrice                    Float?                       @default(0)
+  isFeatured                  Boolean                      @default(false)
+  isArchived                  Boolean                      @default(false)
+  sizeId                      String
+  shippingProfileId           String?
+  colorId                     String
+  designId                    String
+  createdAt                   DateTime                     @default(now())
+  updatedAt                   DateTime                     @updatedAt
+  sku                         String                       @unique
+  brand                       String?                      @db.VarChar(120)
+  gtin                        String?                      @db.VarChar(14)
+  mpn                         String?                      @db.VarChar(70)
+  hasNoProductIdentifier      Boolean                      @default(false)
+  store                       Store                        @relation("StoreToProduct", fields: [storeId], references: [id])
+  category                    Category                     @relation("CategoryToProduct", fields: [categoryId], references: [id])
+  size                        Size                         @relation(fields: [sizeId], references: [id])
+  shippingProfile             ShippingProfile?             @relation(fields: [shippingProfileId], references: [id])
+  color                       Color                        @relation(fields: [colorId], references: [id])
+  design                      Design                       @relation(fields: [designId], references: [id])
+  images                      Image[]
+  orderItems                  OrderItem[]
+  reviews                     Review[]
+  customerWishlistItems       CustomerWishlistItem[]
+  supplierId                  String?
+  supplier                    Supplier?                    @relation(fields: [supplierId], references: [id])
+  productGroupId              String?
+  productGroup                ProductGroup?                @relation(fields: [productGroupId], references: [id])
+  offers                      OfferProduct[]
+  inventoryMovements          InventoryMovement[]
+  restockOrderItems           RestockOrderItem[]
+  customOrderItems            CustomOrderItem[]
+  quotationItems              QuotationItem[]
+  slugAliases                 ProductSlugAlias[]
+  fairInventoryItems          FairEventInventoryItem[]
+  fairCapsules                FairCapsule[]
+  marketplaceListings         MarketplaceListing[]
+  marketplaceOrderItems       MarketplaceOrderItem[]
+  marketplaceOutboxEvents     MarketplaceOutboxEvent[]
+  marketplaceQuestions        MarketplaceQuestion[]
+  videos                      ProductVideo[]
+  growthCampaignProducts      GrowthCampaignProduct[]
+  catalogOptionValues         ProductCatalogOptionValue[]
+  catalogMigrationSuggestions CatalogMigrationSuggestion[]
 
   // -- KIT / COMBO FIELDS --
   isKit         Boolean      @default(false)
@@ -328,6 +431,7 @@ model Product {
   @@index([storeId, slug])
   @@index([categoryId])
   @@index([sizeId])
+  @@index([shippingProfileId])
   @@index([colorId])
   @@index([designId])
   @@index([supplierId])
@@ -398,6 +502,60 @@ model CategorySlugAlias {
   @@unique([storeId, slug])
   @@index([categoryId])
   @@index([storeId, createdAt])
+}
+
+model TypeSlugAlias {
+  id        String   @id @default(uuid())
+  storeId   String
+  typeId    String
+  slug      String
+  createdAt DateTime @default(now())
+
+  type  Type  @relation(fields: [typeId], references: [id], onDelete: Cascade)
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, slug])
+  @@index([typeId])
+  @@index([storeId, createdAt])
+}
+
+enum CatalogMigrationStatus {
+  PREPARED
+  NEEDS_REVIEW
+  APPROVED
+  REJECTED
+  APPLIED
+}
+
+enum CatalogMigrationSource {
+  DETERMINISTIC
+  AI
+}
+
+model CatalogMigrationSuggestion {
+  id             String                 @id @default(uuid())
+  storeId        String
+  productId      String?
+  productGroupId String?
+  fingerprint    String                 @db.VarChar(191)
+  status         CatalogMigrationStatus @default(PREPARED)
+  source         CatalogMigrationSource @default(DETERMINISTIC)
+  confidence     Float                  @default(0)
+  payload        Json
+  evidence       Json?
+  model          String?                @db.VarChar(80)
+  promptVersion  String?                @db.VarChar(40)
+  appliedAt      DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  store          Store                  @relation(fields: [storeId], references: [id])
+  product        Product?               @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productGroup   ProductGroup?          @relation(fields: [productGroupId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, fingerprint])
+  @@index([storeId, status])
+  @@index([productId])
+  @@index([productGroupId])
 }
 
 model ProductKit {

@@ -13,6 +13,7 @@ export default async function ProductPage({
     colors,
     designs,
     suppliers,
+    catalogOptions,
     reviews,
     productGroup,
     productGroups,
@@ -29,6 +30,7 @@ export default async function ProductPage({
           initialData={product}
           reviews={reviews}
           suppliers={suppliers}
+          catalogOptions={catalogOptions}
           productGroup={productGroup}
           productGroups={productGroups}
         />

@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { LIMIT_SHOP_ITEMS, SORT_OPTIONS } from "@/constants";
 import { toAnalyticsItem, trackCustomerEvent } from "@/lib/customer-analytics";
 import { useProductFilters } from "@/hooks/use-product-filters";
-import { Category, Color, Design, Product, Size, Type } from "@/types";
+import { CatalogOption, Category, Color, Design, Product, Type } from "@/types";
 
 import Products from "../app/(routes)/tienda/components/products";
 import ShopSearchBar from "../app/(routes)/tienda/components/shop-search-bar";
@@ -40,7 +40,7 @@ interface ShopContentProps {
   };
   types: Type[];
   categories: Category[];
-  sizes: Size[];
+  catalogOptions: CatalogOption[];
   colors: Color[];
   designs: Design[];
   fixedCategoryId?: string;
@@ -55,7 +55,7 @@ export const ShopContent: React.FC<ShopContentProps> = ({
   initialFacets,
   types,
   categories,
-  sizes,
+  catalogOptions,
   colors,
   designs,
   fixedCategoryId,
@@ -92,6 +92,9 @@ export const ShopContent: React.FC<ShopContentProps> = ({
         sizeId: Array.isArray(effectiveFilters.sizeId)
           ? effectiveFilters.sizeId.join(",")
           : effectiveFilters.sizeId,
+        optionValueId: Array.isArray(effectiveFilters.optionValueId)
+          ? effectiveFilters.optionValueId.join(",")
+          : effectiveFilters.optionValueId,
         typeId: Array.isArray(effectiveFilters.typeId)
           ? effectiveFilters.typeId.join(",")
           : effectiveFilters.typeId,
@@ -153,9 +156,37 @@ export const ShopContent: React.FC<ShopContentProps> = ({
   const colorsWithCounts = onlyAvailableInCategory(
     mergeCounts(colors, data?.facets?.colors),
   );
-  const sizesWithCounts = onlyAvailableInCategory(
-    mergeCounts(sizes, data?.facets?.formattedSizes),
-  );
+  const selectedCategoryIds = fixedCategoryId
+    ? [fixedCategoryId]
+    : effectiveFilters.categoryId;
+  const visibleCatalogOptions = catalogOptions
+    .filter(
+      (option) =>
+        selectedCategoryIds.length === 0 ||
+        option.categoryIds.some((categoryId) =>
+          selectedCategoryIds.includes(categoryId),
+        ),
+    )
+    .map((option) => ({
+      ...option,
+      values: option.values
+        .map((value) => ({
+          ...value,
+          count:
+            selectedCategoryIds.length === 0
+              ? value.count
+              : selectedCategoryIds.reduce(
+                  (total, categoryId) =>
+                    total + (value.categoryCounts?.[categoryId] ?? 0),
+                  0,
+                ),
+        }))
+        .filter(
+          (value) =>
+            value.count > 0 || filters.optionValueId.includes(value.id),
+        ),
+    }))
+    .filter((option) => option.values.length > 0);
   const designsWithCounts = onlyAvailableInCategory(
     mergeCounts(designs, data?.facets?.designs),
   );
@@ -164,6 +195,7 @@ export const ShopContent: React.FC<ShopContentProps> = ({
     filters.categoryId.length ||
     filters.colorId.length ||
     filters.sizeId.length ||
+    filters.optionValueId.length ||
     filters.designId.length ||
     filters.minPrice !== null ||
     filters.maxPrice !== null ||
@@ -186,6 +218,7 @@ export const ShopContent: React.FC<ShopContentProps> = ({
       active_filters:
         effectiveFilters.colorId.length +
         effectiveFilters.sizeId.length +
+        effectiveFilters.optionValueId.length +
         effectiveFilters.designId.length +
         Number(effectiveFilters.isOnSale),
     });
@@ -220,6 +253,7 @@ export const ShopContent: React.FC<ShopContentProps> = ({
       categoryId: null,
       colorId: null,
       sizeId: null,
+      optionValueId: null,
       designId: null,
       minPrice: null,
       maxPrice: null,
@@ -249,14 +283,15 @@ export const ShopContent: React.FC<ShopContentProps> = ({
             data={categoriesWithCounts}
           />
         )}
-        {sizesWithCounts.length > 0 && (
+        {visibleCatalogOptions.map((option) => (
           <Filter
-            valueKey="sizeId"
-            name="Tamaños"
-            emptyMessage="No hay tamaños disponibles"
-            data={sizesWithCounts}
+            key={option.id}
+            valueKey="optionValueId"
+            name={option.name}
+            emptyMessage={`No hay valores de ${option.name.toLocaleLowerCase("es-CO")} disponibles`}
+            data={option.values}
           />
-        )}
+        ))}
         {colorsWithCounts.length > 0 && (
           <Filter
             valueKey="colorId"
@@ -319,7 +354,7 @@ export const ShopContent: React.FC<ShopContentProps> = ({
         <MobileFilters
           types={types}
           categories={categoriesWithCounts}
-          sizes={sizesWithCounts}
+          catalogOptions={visibleCatalogOptions}
           colors={colorsWithCounts}
           designs={designsWithCounts}
           hideCategoryFilters={Boolean(fixedCategoryId)}
@@ -340,7 +375,10 @@ export const ShopContent: React.FC<ShopContentProps> = ({
               </Button>
             </div>
           ) : (
-            <div
+            <section
+              aria-busy={isFetching}
+              aria-label="Resultados del catálogo"
+              aria-live="polite"
               className={`transition-opacity duration-300 ease-in-out ${
                 isFetching ? "pointer-events-none opacity-50" : "opacity-100"
               }`}
@@ -349,7 +387,7 @@ export const ShopContent: React.FC<ShopContentProps> = ({
                 products={data?.products ?? []}
                 totalPages={data?.totalPages ?? 0}
               />
-            </div>
+            </section>
           )}
         </div>
       </div>

@@ -17,6 +17,7 @@ import { ProductCardBadge } from "@/components/ui/product-cart-badge";
 import { StarRating } from "@/components/ui/star-rating";
 import { useCart } from "@/hooks/use-cart";
 import { usePreviewModal } from "@/hooks/use-preview-modal";
+import { useToast } from "@/hooks/use-toast";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { productPath } from "@/lib/routes";
 import {
@@ -25,6 +26,7 @@ import {
   trackCustomerEvent,
 } from "@/lib/customer-analytics";
 import { calculateAverageRating, cn, currencyFormatter } from "@/lib/utils";
+import { useCartPreview } from "@/providers/cart-preview-provider";
 import { Product } from "@/types";
 
 interface ProductCardProps {
@@ -41,6 +43,8 @@ const ProductCard: React.FC<ProductCardProps> = ({
   const [isMounted, setIsMounted] = useState(false);
   const openPreview = usePreviewModal((state) => state.onOpen);
   const addToCart = useCart((state) => state.addItem);
+  const { showCartPreview } = useCartPreview();
+  const { toast } = useToast();
   const addToWishlist = useWishlist((state) => state.addItem);
   const isWishlistProduct = useWishlist(
     (state) => isMounted && state.items.some((item) => item.id === product.id),
@@ -73,7 +77,18 @@ const ProductCard: React.FC<ProductCardProps> = ({
         return;
       }
 
-      addToCart(product);
+      const result = addToCart(product);
+      if (!result.ok) {
+        toast({
+          description:
+            result.status === "stock_limit"
+              ? "No hay más stock disponible de este producto."
+              : "Este producto no está disponible en este momento.",
+          variant: "warning",
+        });
+        return;
+      }
+
       const item = toAnalyticsItem(product, 1);
       trackCustomerEvent("add_to_cart", {
         currency: "COP",
@@ -81,8 +96,13 @@ const ProductCard: React.FC<ProductCardProps> = ({
         source: "product_card",
         value: getAnalyticsValue([item]),
       });
+      showCartPreview({
+        product: result.item,
+        quantity: result.item.quantity ?? 1,
+        source: "product_card",
+      });
     },
-    [addToCart, openPreview, product],
+    [addToCart, openPreview, product, showCartPreview, toast],
   );
 
   const onAddToWishlist = useCallback<MouseEventHandler<HTMLButtonElement>>(
@@ -263,7 +283,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
         {renderBadge()}
       </Link>
       <div className="pointer-events-none absolute inset-x-3 top-2.5 aspect-square">
-        <div className="pointer-events-none absolute bottom-5 w-full px-6 opacity-0 transition group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100">
+        <div className="pointer-events-auto absolute bottom-5 w-full px-6 opacity-100 transition sm:pointer-events-none sm:opacity-0 sm:group-focus-within:pointer-events-auto sm:group-focus-within:opacity-100 sm:group-hover:pointer-events-auto sm:group-hover:opacity-100">
           <div className="flex justify-center gap-x-6">
             <IconButton
               onClick={onAddToWishlist}

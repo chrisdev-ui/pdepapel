@@ -39,6 +39,7 @@ function createVisualAnalysis(
       evidence: null,
     },
     variantCandidates: [],
+    catalogAttributes: [],
     observations: ["La portada muestra flores."],
     limitations: [],
     ...overrides,

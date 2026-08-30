@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { gotoPublicPage } from "./helpers/public-page";
+
 const legacyRoutes = [
   ["/shop", "/tienda"],
   ["/about", "/nosotros"],
@@ -42,16 +44,15 @@ test("redirige rutas en inglés a sus URLs canónicas en español", async ({
   }
 });
 
-test("carga el SDK de pago solo durante la compra", async ({ request }) => {
-  const [homeResponse, checkoutResponse] = await Promise.all([
-    request.get("/"),
-    request.get("/finalizar-compra"),
-  ]);
+test("carga el SDK de pago solo durante la compra", async ({ page }) => {
+  await gotoPublicPage(page, "/");
+  await expect(page.locator("#bold-checkout-sdk")).toHaveCount(0);
 
-  expect(homeResponse.ok()).toBeTruthy();
-  expect(checkoutResponse.ok()).toBeTruthy();
-  expect(await homeResponse.text()).not.toContain("checkout.bold.co");
-  expect(await checkoutResponse.text()).toContain("checkout.bold.co");
+  await gotoPublicPage(page, "/finalizar-compra");
+  await expect(page.locator("#bold-checkout-sdk")).toHaveAttribute(
+    "src",
+    "https://checkout.bold.co/library/boldPaymentButton.js",
+  );
 });
 
 test("mantiene la categoría acotada, canónica y sin filtro de categorías", async ({

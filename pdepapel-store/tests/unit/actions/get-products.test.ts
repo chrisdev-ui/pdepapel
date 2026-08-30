@@ -22,9 +22,11 @@ describe("getProducts", () => {
   it.each(SORT_OPTIONS)(
     "sends the %s sort option to the catalog API",
     async ({ value }) => {
-      const fetchMock = vi.fn().mockResolvedValue(
-        new Response(JSON.stringify(emptyCatalogResponse), { status: 200 }),
-      );
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify(emptyCatalogResponse), { status: 200 }),
+        );
       vi.stubGlobal("fetch", fetchMock);
 
       await getProducts({ sortOption: value });
@@ -35,9 +37,11 @@ describe("getProducts", () => {
   );
 
   it("sends the dedicated only-offers filter", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify(emptyCatalogResponse), { status: 200 }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify(emptyCatalogResponse), { status: 200 }),
+      );
     vi.stubGlobal("fetch", fetchMock);
 
     await getProducts({ isOnSale: true });
@@ -47,9 +51,11 @@ describe("getProducts", () => {
   });
 
   it("uses the shared five-minute catalog cache", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify(emptyCatalogResponse), { status: 200 }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify(emptyCatalogResponse), { status: 200 }),
+      );
     vi.stubGlobal("fetch", fetchMock);
 
     await getProducts({});
@@ -57,8 +63,45 @@ describe("getProducts", () => {
     expect(fetchMock.mock.calls[0][1]).toEqual(CATALOG_FETCH_CACHE);
   });
 
+  it("normalizes the bulk product array used by cart stock validation", async () => {
+    const products = [{ id: "product-1", stock: 4 }];
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify(products), { status: 200 }),
+        ),
+    );
+
+    await expect(getProducts({ ids: "product-1" })).resolves.toMatchObject({
+      products,
+      totalItems: 1,
+      totalPages: 1,
+    });
+  });
+
+  it("marks malformed successful responses as unavailable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ unexpected: true }), { status: 200 }),
+        ),
+    );
+
+    await expect(getProducts({})).resolves.toMatchObject({
+      products: [],
+      isUnavailable: true,
+    });
+  });
+
   it("marks unavailable catalog responses instead of treating them as empty", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 503 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 503 })),
+    );
 
     await expect(getProducts({})).resolves.toMatchObject({
       products: [],
@@ -67,7 +110,10 @@ describe("getProducts", () => {
   });
 
   it("marks failed catalog requests as unavailable", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network unavailable")));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new Error("Network unavailable")),
+    );
 
     await expect(getProducts({})).resolves.toMatchObject({
       products: [],

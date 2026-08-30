@@ -123,7 +123,7 @@ export const ShopContentSkeleton: React.FC<ShopContentSkeletonProps> = ({
       <div className="hidden lg:block">
         {!fixedCategory && <FilterSkeleton name="Categorías" items={3} />}
         {!fixedCategory && <FilterSkeleton name="Sub-Categorías" items={3} />}
-        <FilterSkeleton name="Tamaños" items={3} />
+        <FilterSkeleton name="Características" items={3} />
         <FilterSkeleton name="Colores" items={3} />
         <FilterSkeleton name="Diseños" items={3} />
         <FilterSkeleton name="Precios" items={3} />

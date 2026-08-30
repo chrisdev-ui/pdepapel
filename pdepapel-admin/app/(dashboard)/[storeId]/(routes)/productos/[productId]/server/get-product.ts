@@ -12,6 +12,9 @@ export async function getProduct(id: string, storeId: string) {
     include: {
       images: true,
       reviews: true,
+      catalogOptionValues: {
+        include: { option: true, optionValue: true },
+      },
       kitComponents: {
         include: {
           component: {
@@ -53,6 +56,30 @@ export async function getProduct(id: string, storeId: string) {
   const suppliers = await prismadb.supplier.findMany({
     where: {
       storeId,
+    },
+  });
+  const catalogOptions = await prismadb.catalogOption.findMany({
+    where: { storeId },
+    orderBy: [{ isActive: "desc" }, { displayOrder: "asc" }, { name: "asc" }],
+    select: {
+      id: true,
+      key: true,
+      name: true,
+      isActive: true,
+      categories: {
+        orderBy: { displayOrder: "asc" },
+        select: { categoryId: true },
+      },
+      values: {
+        orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
+        select: {
+          id: true,
+          name: true,
+          value: true,
+          _count: { select: { productValues: true } },
+        },
+      },
+      _count: { select: { productValues: true } },
     },
   });
 
@@ -115,6 +142,20 @@ export async function getProduct(id: string, storeId: string) {
     colors,
     designs,
     suppliers,
+    catalogOptions: catalogOptions.map((option) => ({
+      id: option.id,
+      key: option.key,
+      name: option.name,
+      isActive: option.isActive,
+      categoryIds: option.categories.map((category) => category.categoryId),
+      usageCount: option._count.productValues,
+      values: option.values.map((value) => ({
+        id: value.id,
+        name: value.name,
+        value: value.value,
+        usageCount: value._count.productValues,
+      })),
+    })),
     reviews,
     productGroup,
     productGroups,

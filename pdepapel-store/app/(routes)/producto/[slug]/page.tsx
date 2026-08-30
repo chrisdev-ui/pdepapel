@@ -10,6 +10,7 @@ import { SingleProductPage } from "@/components/single-product-page";
 import { Container } from "@/components/ui/container";
 import { BASE_URL } from "@/constants";
 import { createRichTextExcerpt } from "@/lib/rich-text";
+import { getStructuredProductSize } from "@/lib/product-options";
 import { categoryPath, productPath } from "@/lib/routes";
 import { Product } from "@/types";
 import { Suspense } from "react";
@@ -26,14 +27,7 @@ export async function generateMetadata({
   const product = await getProduct(params.slug);
 
   if (!product) {
-    return {
-      title: "Producto no encontrado",
-      description:
-        "Lo sentimos, el producto que buscas no está disponible en Papelería P de Papel. Revisa nuestro catálogo para encontrar artículos kawaii y de oficina que te encantarán. ¡Agrega color y diversión a tu espacio!",
-      alternates: {
-        canonical: "/",
-      },
-    };
+    notFound();
   }
 
   const canonicalSlug = product.slug || product.id;
@@ -111,7 +105,9 @@ function buildProductSchema(product: Product, includeGroupReference = true) {
     ...(product.gtin ? { gtin: product.gtin } : {}),
     ...(product.mpn ? { mpn: product.mpn } : {}),
     ...(product.color?.name ? { color: product.color.name } : {}),
-    ...(product.size?.name ? { size: product.size.name } : {}),
+    ...(getStructuredProductSize(product)
+      ? { size: getStructuredProductSize(product) }
+      : {}),
     ...(product.design?.name ? { pattern: product.design.name } : {}),
     ...(includeGroupReference && product.productGroupId
       ? { inProductGroupWithID: product.productGroupId }

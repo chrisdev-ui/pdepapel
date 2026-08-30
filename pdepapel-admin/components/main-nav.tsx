@@ -41,6 +41,7 @@ import {
   Settings,
   ShoppingBag,
   ShoppingCart,
+  SlidersHorizontal,
   Sparkles,
   Star,
   Tag,
@@ -91,6 +92,13 @@ export function MainNav({
       active: pathname === dashboardPath("productos/nombres"),
       group: "catalog",
       icon: Sparkles,
+    },
+    {
+      href: dashboardPath("productos/opciones"),
+      label: "Opciones para clientes",
+      active: pathname === dashboardPath("productos/opciones"),
+      group: "catalog",
+      icon: SlidersHorizontal,
     },
     {
       href: dashboardPath("categorias"),

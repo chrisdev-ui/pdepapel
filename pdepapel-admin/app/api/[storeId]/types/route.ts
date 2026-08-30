@@ -1,5 +1,7 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { splitTaxonomyIcon } from "@/lib/catalog-options";
 import prismadb from "@/lib/prismadb";
+import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 import { slugify } from "@/lib/slugify";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
@@ -17,7 +19,7 @@ export async function POST(
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
     const body = await req.json();
-    const { name } = body;
+    const { name, icon } = body;
 
     await verifyStoreOwner(userId, params.storeId);
 
@@ -27,10 +29,11 @@ export async function POST(
       );
     }
 
+    const canonical = splitTaxonomyIcon(name.trim());
     const existingType = await prismadb.type.findFirst({
       where: {
         storeId: params.storeId,
-        name: name.trim(),
+        name: canonical.name,
       },
     });
 
@@ -40,10 +43,16 @@ export async function POST(
 
     const type = await prismadb.type.create({
       data: {
-        name: name.trim(),
-        slug: slugify(name.trim()),
+        name: canonical.name,
+        slug: slugify(canonical.name),
+        icon: icon?.trim() || canonical.icon,
         storeId: params.storeId,
       },
+    });
+
+    await triggerStorefrontRevalidation({
+      paths: ["/", "/tienda"],
+      tags: ["categories", "products"],
     });
 
     return NextResponse.json(type, {
@@ -152,6 +161,18 @@ export async function DELETE(
         );
       }
 
+      const categoryIds = types.flatMap((type) =>
+        type.categories.map((category) => category.id),
+      );
+      await tx.categoryCatalogOption.deleteMany({
+        where: { categoryId: { in: categoryIds } },
+      });
+      await tx.categorySlugAlias.deleteMany({
+        where: { categoryId: { in: categoryIds } },
+      });
+      await tx.typeSlugAlias.deleteMany({
+        where: { typeId: { in: ids } },
+      });
       await tx.category.deleteMany({
         where: {
           typeId: {
@@ -168,6 +189,11 @@ export async function DELETE(
           },
         },
       });
+    });
+
+    await triggerStorefrontRevalidation({
+      paths: ["/", "/tienda", "/sitemap.xml"],
+      tags: ["categories", "products"],
     });
 
     return NextResponse.json("Categorías eliminadas correctamente", {

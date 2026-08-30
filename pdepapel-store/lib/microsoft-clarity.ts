@@ -10,6 +10,8 @@ const TRACKED_CLARITY_EVENTS = new Set([
   "add_shipping_info",
   "add_to_cart",
   "begin_checkout",
+  "cart_preview_action",
+  "cart_preview_view",
   "catalog_filter",
   "catalog_no_results",
   "catalog_search",

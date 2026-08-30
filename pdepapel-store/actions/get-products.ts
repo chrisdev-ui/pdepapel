@@ -1,7 +1,7 @@
 "use server";
 
 import { env } from "@/lib/env.mjs";
-import { ProductsResponse } from "@/types";
+import { Product, ProductsResponse } from "@/types";
 import { CATALOG_FETCH_CACHE } from "@/lib/catalog-cache";
 
 const API_URL = `${env.NEXT_PUBLIC_API_URL}/products`;
@@ -13,6 +13,7 @@ interface Query {
   colorId?: string;
   sizeId?: string;
   designId?: string;
+  optionValueId?: string;
   isFeatured?: boolean;
   onlyNew?: boolean;
   fromShop?: boolean;
@@ -40,6 +41,36 @@ const UNAVAILABLE_RESPONSE: ProductsResponse = {
   isUnavailable: true,
 };
 
+function normalizeProductsResponse(payload: unknown): ProductsResponse {
+  if (Array.isArray(payload)) {
+    const products = payload as Product[];
+    return {
+      products,
+      totalItems: products.length,
+      totalPages: products.length > 0 ? 1 : 0,
+    };
+  }
+
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "products" in payload &&
+    Array.isArray(payload.products)
+  ) {
+    const response = payload as Partial<ProductsResponse> & {
+      products: Product[];
+    };
+    return {
+      ...response,
+      products: response.products,
+      totalItems: response.totalItems ?? response.products.length,
+      totalPages: response.totalPages ?? (response.products.length > 0 ? 1 : 0),
+    };
+  }
+
+  return UNAVAILABLE_RESPONSE;
+}
+
 export const getProducts = async (query: Query): Promise<ProductsResponse> => {
   const url = new URL(API_URL);
 
@@ -48,6 +79,8 @@ export const getProducts = async (query: Query): Promise<ProductsResponse> => {
   if (query.categoryId) url.searchParams.append("categoryId", query.categoryId);
   if (query.sizeId) url.searchParams.append("sizeId", query.sizeId);
   if (query.designId) url.searchParams.append("designId", query.designId);
+  if (query.optionValueId)
+    url.searchParams.append("optionValueId", query.optionValueId);
   if (query.groupBy) url.searchParams.append("groupBy", query.groupBy);
   if (query.productGroupId)
     url.searchParams.append("productGroupId", query.productGroupId);
@@ -75,7 +108,7 @@ export const getProducts = async (query: Query): Promise<ProductsResponse> => {
   try {
     const response = await fetch(url, CATALOG_FETCH_CACHE);
     if (!response.ok) return UNAVAILABLE_RESPONSE;
-    return await response.json();
+    return normalizeProductsResponse(await response.json());
   } catch {
     return UNAVAILABLE_RESPONSE;
   }

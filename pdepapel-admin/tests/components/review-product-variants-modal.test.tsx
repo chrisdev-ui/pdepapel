@@ -66,6 +66,7 @@ const analysis: ProductImageAnalysis = {
       evidence: "Opción azul.",
     },
   ],
+  catalogAttributes: [],
   observations: [],
   limitations: [],
   categoryId: null,

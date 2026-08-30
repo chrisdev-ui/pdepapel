@@ -78,11 +78,17 @@ test.describe("ventas en feria", () => {
     await page
       .getByRole("combobox", { name: "Producto para reservar" })
       .click();
-    await page
-      .getByPlaceholder("Buscar por nombre o SKU...")
+    const productDialog = page.getByRole("dialog", {
+      name: "Producto para reservar",
+    });
+    await expect(productDialog).toBeVisible();
+    await productDialog
+      .getByRole("combobox")
       .fill("E2E-FAIR-PRODUCT");
-    await page.getByText("Producto feria E2E", { exact: false }).click();
-    await page.getByLabel("Cantidad").fill("2");
+    await productDialog
+      .getByRole("option", { name: /Producto feria E2E/ })
+      .click();
+    await page.getByLabel("Cantidad para reservar", { exact: true }).fill("2");
     await page.getByRole("button", { name: "Agregar" }).click();
     await page.getByRole("button", { name: "Reservar en inventario" }).click();
     await expect(

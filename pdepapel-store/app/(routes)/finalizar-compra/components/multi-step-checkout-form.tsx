@@ -47,7 +47,7 @@ import {
 import { UnifiedOrder } from "@/types/unified-order";
 import { useAuth } from "@clerk/nextjs";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, ShoppingBag } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { isValidPhoneNumber } from "react-phone-number-input";
@@ -64,6 +64,9 @@ type CheckoutFormUser = {
   telephone?: string | null;
   email?: string | null;
 };
+
+const getProductImageUrl = (product: Product) =>
+  product.images.find((image) => image.isMain)?.url ?? product.images[0]?.url;
 
 const shippingSchema = z
   .object({
@@ -1009,18 +1012,25 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                 >
                   <Link
                     href={productPath(item.slug || item.id)}
-                    className="relative h-20 w-20"
+                    className="relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-md bg-gray-100"
                   >
-                    <CldImage
-                      src={
-                        item.images.find((image) => image.isMain)?.url ??
-                        item.images[0].url
-                      }
-                      alt={item.name ?? "Imagen del producto"}
-                      fill
-                      sizes="(max-width: 640px) 80px, 120px"
-                      className="rounded-md"
-                    />
+                    {getProductImageUrl(item) ? (
+                      <CldImage
+                        src={getProductImageUrl(item)!}
+                        alt={item.name ?? "Imagen del producto"}
+                        fill
+                        sizes="(max-width: 640px) 80px, 120px"
+                        className="object-cover"
+                      />
+                    ) : (
+                      <>
+                        <ShoppingBag
+                          aria-hidden="true"
+                          className="h-7 w-7 text-gray-400"
+                        />
+                        <span className="sr-only">Sin imagen disponible</span>
+                      </>
+                    )}
                     <span className="absolute right-0 top-0 flex h-4 w-4 items-center justify-center rounded-full bg-blue-yankees font-serif text-xs text-white">
                       {item.quantity}
                     </span>

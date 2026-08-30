@@ -1,6 +1,6 @@
 "use client";
 
-import { CreditCard, ShoppingCart, X } from "lucide-react";
+import { CreditCard, ShoppingBag, ShoppingCart, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef } from "react";
 
@@ -12,7 +12,6 @@ import { NoResults } from "@/components/ui/no-results";
 import {
   SheetContent,
   SheetDescription,
-  SheetFooter,
   SheetTitle,
 } from "@/components/ui/sheet";
 import { KAWAII_FACE_SAD } from "@/constants";
@@ -71,16 +70,16 @@ export const NavbarCartContent: React.FC<NavbarCartContentProps> = ({
   return (
     <SheetContent
       variant="cart"
-      className="flex w-full max-w-full flex-col p-0 sm:max-w-sm lg:max-w-md"
+      className="h-dvh max-h-dvh flex w-full max-w-full flex-col overscroll-contain p-0 sm:max-w-sm lg:max-w-md"
     >
-      <SheetTitle className="flex w-full items-center justify-center bg-blue-baby p-5 font-sans font-bold">
+      <SheetTitle className="text-balance flex w-full shrink-0 items-center justify-center bg-blue-baby px-14 py-5 font-quicksand text-xl font-semibold">
         Carrito de compras
       </SheetTitle>
       <SheetDescription className="sr-only">
         Resumen de tu carrito de compras
       </SheetDescription>
-      <div className="flex grow flex-col justify-between overflow-y-auto overflow-x-hidden px-6 py-0">
-        <div className="flex w-full flex-col gap-4">
+      <div className="flex min-h-0 flex-1 flex-col justify-between overflow-y-auto overflow-x-hidden overscroll-contain px-4 py-5 sm:px-6">
+        <div className="flex w-full flex-col gap-5">
           {cart.items.length === 0 && (
             <NoResults
               message={`No hay productos en el carrito ${KAWAII_FACE_SAD}`}
@@ -91,18 +90,30 @@ export const NavbarCartContent: React.FC<NavbarCartContentProps> = ({
               <div key={item.id} className="grid grid-cols-[80px_1fr] gap-2.5">
                 <Link
                   href={productPath(item.slug || item.id)}
-                  className="relative block h-20 w-20"
+                  className="relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-md bg-gray-100"
+                  onClick={onClose}
                 >
-                  <CldImage
-                    src={
-                      item.images.find((image) => image.isMain)?.url ??
-                      item.images[0].url
-                    }
-                    alt={item.name ?? "Imagen del producto"}
-                    fill
-                    sizes="(max-width: 640px) 80px, 120px"
-                    className="rounded-md object-cover"
-                  />
+                  {(item.images.find((image) => image.isMain)?.url ??
+                  item.images[0]?.url) ? (
+                    <CldImage
+                      src={
+                        item.images.find((image) => image.isMain)?.url ??
+                        item.images[0]!.url
+                      }
+                      alt={item.name ?? "Imagen del producto"}
+                      fill
+                      sizes="(max-width: 640px) 80px, 120px"
+                      className="object-cover"
+                    />
+                  ) : (
+                    <>
+                      <ShoppingBag
+                        aria-hidden="true"
+                        className="h-7 w-7 text-gray-400"
+                      />
+                      <span className="sr-only">Sin imagen disponible</span>
+                    </>
+                  )}
                   <span className="absolute right-0 top-0 flex h-4 w-4 items-center justify-center rounded-full bg-blue-yankees font-serif text-xs text-white">
                     {item.quantity}
                   </span>
@@ -135,7 +146,9 @@ export const NavbarCartContent: React.FC<NavbarCartContentProps> = ({
                     </div>
                   </div>
                   <button
-                    className="group h-8 w-8 rounded-full bg-gray-200 text-blue-yankees/50 hover:bg-blue-baby hover:text-blue-yankees"
+                    type="button"
+                    aria-label={`Eliminar ${item.name} del carrito`}
+                    className="size-10 group flex shrink-0 items-center justify-center rounded-full bg-gray-200 text-blue-yankees/60 transition-colors hover:bg-blue-baby hover:text-blue-yankees focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kawaii-pink focus-visible:ring-offset-2"
                     onClick={() => cart.removeItem(item.id)}
                   >
                     <X className="m-auto h-4 w-4" />
@@ -146,15 +159,18 @@ export const NavbarCartContent: React.FC<NavbarCartContentProps> = ({
         </div>
         {cart.items.length > 0 && (
           <Button
-            className="w-fit self-center bg-gray-400/30 p-2 text-gray-500/60 hover:bg-gray-400 hover:text-gray-500"
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="mt-5 w-fit self-center font-quicksand font-medium text-gray-600"
             onClick={() => cart.removeAll()}
           >
             Limpiar carrito
           </Button>
         )}
       </div>
-      <SheetFooter className="flex w-full flex-col gap-4 border-t border-blue-purple p-6 sm:space-x-0">
-        <div className="flex w-full items-center justify-between text-2xl">
+      <footer className="flex max-h-[60dvh] w-full shrink-0 flex-col gap-3 overflow-y-auto overscroll-contain border-t border-blue-purple/40 bg-background px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 sm:px-6">
+        <div className="flex w-full items-center justify-between font-quicksand text-lg font-semibold">
           <span>Subtotal</span>
           <Currency value={total} />
         </div>
@@ -165,24 +181,27 @@ export const NavbarCartContent: React.FC<NavbarCartContentProps> = ({
             redirectPath={STOREFRONT_ROUTES.cart}
           />
         )}
-        <div className="flex w-full flex-col gap-3 lg:flex-row">
+        <div className="grid w-full grid-cols-1 gap-2.5 xxs:grid-cols-2">
           <Button
-            className="group relative w-full overflow-hidden bg-blue-purple font-sans text-base font-bold uppercase text-white hover:bg-blue-purple lg:w-1/2"
+            type="button"
+            variant="outline"
+            className="h-11 w-full border-blue-purple/40 bg-background px-3 font-quicksand text-sm font-semibold normal-case text-blue-yankees hover:bg-blue-purple/10"
             onClick={onGoToCart}
           >
-            <ShoppingCart className="absolute left-0 h-5 w-5 -translate-x-full transform transition-transform duration-500 ease-out group-hover:translate-x-20" />
-            <span className="group-hover:hidden">Ver Carrito</span>
+            <ShoppingCart aria-hidden="true" className="mr-2 h-4 w-4" />
+            Ver carrito
           </Button>
           <Button
-            className="group relative w-full overflow-hidden bg-pink-shell font-sans text-base font-bold uppercase text-white hover:bg-pink-shell lg:w-1/2"
+            type="button"
+            className="h-11 w-full bg-blue-yankees px-3 font-quicksand text-sm font-semibold normal-case text-white hover:bg-blue-yankees/90"
             disabled={cart.items.length === 0}
             onClick={onCheckout}
           >
-            <CreditCard className="absolute left-0 h-5 w-5 -translate-x-full transform transition-transform duration-500 ease-out group-hover:translate-x-20" />
-            <span className="group-hover:hidden">Finalizar compra</span>
+            <CreditCard aria-hidden="true" className="mr-2 h-4 w-4" />
+            Finalizar compra
           </Button>
         </div>
-      </SheetFooter>
+      </footer>
     </SheetContent>
   );
 };

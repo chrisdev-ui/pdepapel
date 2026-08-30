@@ -49,7 +49,7 @@ export function AccountPrompt({
           <div className="min-w-0">
             <p className={cn("font-semibold", !isCompact && "text-lg")}>
               {isCompact
-                ? "¿Quieres volver a comprar más fácil?"
+                ? "Compra más fácil con una cuenta"
                 : "Guarda favoritos, pedidos y tus direcciones"}
             </p>
             <p
@@ -58,11 +58,9 @@ export function AccountPrompt({
                 isCompact ? "text-xs leading-5" : "text-sm leading-6",
               )}
             >
-              Crea una cuenta gratis en segundos con Google o con tu correo
-              para conservar tus favoritos y consultar tus pedidos. Cuando
-              guardes una dirección durante tu compra, podrás elegirla en
-              pedidos futuros. Puedes seguir comprando como invitado cuando
-              prefieras.
+              {isCompact
+                ? "Guarda direcciones y consulta tus pedidos. También puedes comprar como invitado."
+                : "Crea una cuenta gratis en segundos con Google o con tu correo para conservar tus favoritos y consultar tus pedidos. Cuando guardes una dirección durante tu compra, podrás elegirla en pedidos futuros. Puedes seguir comprando como invitado cuando prefieras."}
             </p>
             {!isCompact && (
               <p className="mt-3 flex items-start gap-2 text-sm font-medium text-blue-yankees">
@@ -80,7 +78,14 @@ export function AccountPrompt({
                 isCompact && "mt-2",
               )}
             >
-              <Button asChild size={isCompact ? "sm" : "default"}>
+              <Button
+                asChild
+                size={isCompact ? "sm" : "default"}
+                className={cn(
+                  "font-quicksand font-semibold",
+                  isCompact && "min-h-10 px-3",
+                )}
+              >
                 <Link
                   href={signUpHref}
                   onClick={() =>
@@ -89,7 +94,7 @@ export function AccountPrompt({
                     })
                   }
                 >
-                  Crear cuenta gratis
+                  {isCompact ? "Crear cuenta" : "Crear cuenta gratis"}
                   <ArrowRight className="ml-1.5 h-4 w-4" />
                 </Link>
               </Button>

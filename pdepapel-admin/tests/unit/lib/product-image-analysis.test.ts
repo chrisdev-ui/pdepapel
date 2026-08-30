@@ -47,6 +47,7 @@ function createOutput(
       evidence: null,
     },
     variantCandidates: [],
+    catalogAttributes: [],
     observations: [],
     limitations: [],
     ...overrides,

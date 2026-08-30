@@ -6,15 +6,15 @@ import { Award, Heart, ShieldCheck, ShoppingCart, Truck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Currency } from "@/components/ui/currency";
+import { LowStockNotice } from "@/components/ui/low-stock-notice";
 import { QuantitySelector } from "@/components/ui/quantity-selector";
 import { Separator } from "@/components/ui/separator";
 import { StarRating } from "@/components/ui/star-rating";
-import { ToastIcon } from "@/components/ui/toast-icon";
-import { LowStockNotice } from "@/components/ui/low-stock-notice";
 import { useCart } from "@/hooks/use-cart";
 import { toast } from "@/hooks/use-toast";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { productPath } from "@/lib/routes";
+import { isCustomerFacingLegacySize } from "@/lib/product-options";
 import {
   getAnalyticsValue,
   toAnalyticsItem,
@@ -22,6 +22,7 @@ import {
 } from "@/lib/customer-analytics";
 import { calculateAverageRating, cn } from "@/lib/utils";
 import { getStableProductVariants } from "@/lib/product-variants";
+import { useCartPreview } from "@/providers/cart-preview-provider";
 import { Color, Design, Product, ProductVariant, Size } from "@/types";
 import { useRouter } from "next/navigation";
 import { RefObject, useEffect, useMemo, useState } from "react";
@@ -50,6 +51,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
 }) => {
   const [quantity, setQuantity] = useState<number>();
   const cart = useCart();
+  const { showCartPreview } = useCartPreview();
   const router = useRouter();
 
   const goToReviews = () => {
@@ -106,7 +108,8 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
       if (
         v.design?.id === data.design?.id &&
         v.color?.id === data.color?.id &&
-        v.size
+        v.size &&
+        isCustomerFacingLegacySize(v.size)
       ) {
         sizes.set(v.size.id, v.size);
       }
@@ -177,24 +180,34 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
   const handleAddToCart = () => {
     if (isUnavailable) return;
 
-    if (productInCart) {
-      cart.updateQuantity(data.id, quantity ?? 1);
+    const requestedQuantity = quantity ?? 1;
+    const result = productInCart
+      ? cart.updateQuantity(data.id, requestedQuantity)
+      : cart.addItem(data, requestedQuantity);
+
+    if (!result.ok) {
       toast({
-        description: "Carrito actualizado.",
-        variant: "success",
-        icon: <ToastIcon icon="cart" variant="success" />,
+        description:
+          result.status === "stock_limit"
+            ? "La cantidad solicitada supera el stock disponible."
+            : "Este producto no está disponible en este momento.",
+        variant: "warning",
       });
-    } else {
-      cart.addItem(data, quantity);
+      return;
     }
-    const item = toAnalyticsItem(data, quantity ?? 1);
+
+    const item = toAnalyticsItem(data, requestedQuantity);
     trackCustomerEvent("add_to_cart", {
       currency: "COP",
       items: [item],
       source: "product_detail",
       value: getAnalyticsValue([item]),
     });
-    // router.push("/cart"); // Removed navigation
+    showCartPreview({
+      product: result.item,
+      quantity: result.item.quantity ?? requestedQuantity,
+      source: "product_detail",
+    });
     onAddedToCart?.();
   };
 
@@ -397,7 +410,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
           </>
         ) : (
           <>
-            {data?.size && (
+            {data?.size && isCustomerFacingLegacySize(data.size) && (
               <div className="flex items-center gap-x-4">
                 <h3 className="font-serif font-semibold">Tamaño:</h3>
                 <div>{data.size.name}</div>
@@ -422,6 +435,13 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
             )}
           </>
         )}
+
+        {data.catalogOptionValues?.map(({ option, optionValue }) => (
+          <div key={option.id} className="flex items-center gap-x-4">
+            <h3 className="font-serif font-semibold">{option.name}:</h3>
+            <div>{optionValue.name}</div>
+          </div>
+        ))}
 
         {isLoading && hasVariants && (
           <p className="text-sm text-muted-foreground" role="status">

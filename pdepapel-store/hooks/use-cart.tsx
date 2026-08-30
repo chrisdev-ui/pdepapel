@@ -5,10 +5,18 @@ import { ToastIcon } from "@/components/ui/toast-icon";
 import { toast } from "@/hooks/use-toast";
 import { Product } from "@/types";
 
+export type CartMutationResult =
+  | { ok: true; status: "added" | "updated"; item: Product }
+  | {
+      ok: false;
+      status: "stock_limit" | "unavailable";
+      item: Product | null;
+    };
+
 interface CartStore {
   items: Product[];
-  addItem: (item: Product, quantity?: number) => void;
-  updateQuantity: (id: string, quantity: number) => void;
+  addItem: (item: Product, quantity?: number) => CartMutationResult;
+  updateQuantity: (id: string, quantity: number) => CartMutationResult;
   updateStock: (id: string, stock: number) => void;
   removeItem: (id: string) => void;
   removeAll: () => void;
@@ -21,75 +29,75 @@ export const useCart = create(
       addItem: (item: Product, quantity: number = 1) => {
         const currentItems = get().items;
         const existingItem = currentItems.find((i) => i.id === item.id);
+        const requestedQuantity = Math.max(1, Math.floor(quantity));
+
+        if (item.isArchived || item.stock <= 0) {
+          return { ok: false, status: "unavailable", item };
+        }
 
         if (existingItem) {
-          if (
-            existingItem.quantity &&
-            existingItem.quantity + quantity <= existingItem.stock
-          ) {
-            existingItem.quantity += quantity;
-            set({ items: [...currentItems] });
-            toast({
-              description: "Producto agregado al carrito.",
-              variant: "success",
-              icon: <ToastIcon icon="cart" variant="success" />,
-            });
-          } else {
-            toast({
-              description: "No hay más stock de este producto.",
-              variant: "warning",
-              icon: <ToastIcon icon="cart" variant="warning" />,
-            });
-          }
-        } else {
-          // Check stock before adding new item
-          if (item.stock < quantity) {
-            toast({
-              description: "No hay suficiente stock disponible.",
-              variant: "warning",
-              icon: <ToastIcon icon="cart" variant="warning" />,
-            });
-            return;
+          const nextQuantity = (existingItem.quantity ?? 1) + requestedQuantity;
+          if (nextQuantity > existingItem.stock) {
+            return { ok: false, status: "stock_limit", item: existingItem };
           }
 
-          const newItem: Product = {
-            ...item,
-            quantity,
-          };
-          set({ items: [...currentItems, newItem] });
-          toast({
-            description: "Producto agregado al carrito.",
-            variant: "success",
-            icon: <ToastIcon icon="cart" variant="success" />,
+          const updatedItem = { ...existingItem, quantity: nextQuantity };
+          set({
+            items: currentItems.map((currentItem) =>
+              currentItem.id === item.id ? updatedItem : currentItem,
+            ),
           });
+          return { ok: true, status: "updated", item: updatedItem };
         }
+
+        if (item.stock < requestedQuantity) {
+          return { ok: false, status: "stock_limit", item };
+        }
+
+        const newItem: Product = {
+          ...item,
+          quantity: requestedQuantity,
+        };
+        set({ items: [...currentItems, newItem] });
+        return { ok: true, status: "added", item: newItem };
       },
       updateQuantity: (id: string, quantity: number) => {
         const currentItems = get().items;
         const item = currentItems.find((i) => i.id === id);
 
-        if (item && quantity <= item.stock) {
-          item.quantity = quantity;
-          set({ items: [...currentItems] });
+        if (!item || item.isArchived || item.stock <= 0 || quantity < 0) {
+          return { ok: false, status: "unavailable", item: item ?? null };
         }
+        if (quantity > item.stock) {
+          return { ok: false, status: "stock_limit", item };
+        }
+
+        const updatedItem = { ...item, quantity };
+        set({
+          items: currentItems.map((currentItem) =>
+            currentItem.id === id ? updatedItem : currentItem,
+          ),
+        });
+        return { ok: true, status: "updated", item: updatedItem };
       },
       updateStock: (id: string, stock: number) => {
         const currentItems = get().items;
         const item = currentItems.find((i) => i.id === id);
 
         if (item) {
-          item.stock = stock;
-          // Auto-adjust quantity if it exceeds new stock
-          if (item.quantity && item.quantity > stock) {
-            item.quantity = stock > 0 ? stock : 0; // Or keep it and let validation fail?
-            // Requirements say: "Highlight items... Disable Checkout".
-            // If I auto-adjust, the user might not notice.
-            // BUT, if I update stock, the QuantitySelector MAX will update.
-            // If I don't change quantity, it might be > max.
-            // Let's just update stock for now.
-            // Actually, if stock is 0, quantity should probably be 0 or handled gracefully.
-          }
-          set({ items: [...currentItems] });
+          const updatedItem = {
+            ...item,
+            stock,
+            quantity:
+              item.quantity && item.quantity > stock
+                ? Math.max(0, stock)
+                : item.quantity,
+          };
+          set({
+            items: currentItems.map((currentItem) =>
+              currentItem.id === id ? updatedItem : currentItem,
+            ),
+          });
         }
       },
       removeItem: (id: string) => {

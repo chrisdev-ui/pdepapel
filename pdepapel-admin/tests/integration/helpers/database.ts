@@ -116,10 +116,11 @@ export async function deleteInventoryFixture(fixture: InventoryFixture) {
     });
   }
 
-  const marketplaceConnections = await testPrisma.marketplaceConnection.findMany({
-    where: { storeId: fixture.store.id },
-    select: { id: true },
-  });
+  const marketplaceConnections =
+    await testPrisma.marketplaceConnection.findMany({
+      where: { storeId: fixture.store.id },
+      select: { id: true },
+    });
   const marketplaceConnectionIds = marketplaceConnections.map(
     (connection) => connection.id,
   );
@@ -162,6 +163,21 @@ export async function deleteInventoryFixture(fixture: InventoryFixture) {
   await testPrisma.businessCashPolicy.deleteMany({
     where: { storeId: fixture.store.id },
   });
+  await testPrisma.catalogMigrationSuggestion.deleteMany({
+    where: { storeId: fixture.store.id },
+  });
+  await testPrisma.productCatalogOptionValue.deleteMany({
+    where: { storeId: fixture.store.id },
+  });
+  await testPrisma.categoryCatalogOption.deleteMany({
+    where: { storeId: fixture.store.id },
+  });
+  await testPrisma.catalogOptionValue.deleteMany({
+    where: { storeId: fixture.store.id },
+  });
+  await testPrisma.catalogOption.deleteMany({
+    where: { storeId: fixture.store.id },
+  });
   await testPrisma.productKit.deleteMany({
     where: {
       OR: [{ kitId: { in: productIds } }, { componentId: { in: productIds } }],
@@ -171,7 +187,13 @@ export async function deleteInventoryFixture(fixture: InventoryFixture) {
   await testPrisma.category.deleteMany({
     where: { storeId: fixture.store.id },
   });
+  await testPrisma.typeSlugAlias.deleteMany({
+    where: { storeId: fixture.store.id },
+  });
   await testPrisma.type.deleteMany({ where: { storeId: fixture.store.id } });
+  await testPrisma.shippingProfile.deleteMany({
+    where: { storeId: fixture.store.id },
+  });
   await testPrisma.size.deleteMany({ where: { storeId: fixture.store.id } });
   await testPrisma.color.deleteMany({ where: { storeId: fixture.store.id } });
   await testPrisma.design.deleteMany({ where: { storeId: fixture.store.id } });

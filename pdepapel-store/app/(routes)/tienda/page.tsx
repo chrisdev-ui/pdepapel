@@ -2,10 +2,10 @@ import { Metadata } from "next";
 import { Suspense } from "react";
 
 import { getCategories } from "@/actions/get-categories";
+import { getCatalogOptions } from "@/actions/get-catalog-options";
 import { getColors } from "@/actions/get-colors";
 import { getDesigns } from "@/actions/get-designs";
 import { getProducts } from "@/actions/get-products";
-import { getSizes } from "@/actions/get-sizes";
 import { getTypes } from "@/actions/get-types";
 import Features from "@/components/features";
 import Newsletter from "@/components/newsletter";
@@ -113,6 +113,7 @@ interface ShopPageProps {
     typeId: string;
     colorId: string;
     sizeId: string;
+    optionValueId: string;
     categoryId: string;
     designId: string;
     sortOption: string;
@@ -133,7 +134,7 @@ async function ShopContentWrapper({
   const [
     { products, totalPages, totalItems, facets },
     types,
-    sizes,
+    catalogOptions,
     colors,
     designs,
     categories,
@@ -143,6 +144,7 @@ async function ShopContentWrapper({
       categoryId: searchParams.categoryId,
       colorId: searchParams.colorId,
       sizeId: searchParams.sizeId,
+      optionValueId: searchParams.optionValueId,
       designId: searchParams.designId,
       sortOption: searchParams.sortOption,
       minPrice: searchParams.minPrice ? parseInt(searchParams.minPrice) : null,
@@ -155,7 +157,7 @@ async function ShopContentWrapper({
       groupBy: "parents",
     }),
     getTypes(),
-    getSizes(),
+    getCatalogOptions(),
     getColors(),
     getDesigns(),
     getCategories(),
@@ -207,7 +209,7 @@ async function ShopContentWrapper({
         initialFacets={facets}
         types={types}
         categories={categories}
-        sizes={sizes}
+        catalogOptions={catalogOptions}
         colors={colors}
         designs={designs}
       />

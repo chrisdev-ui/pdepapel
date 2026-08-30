@@ -55,6 +55,11 @@ export function CategoryLinksSection({
               <div className="absolute inset-0 bg-gradient-to-br from-kawaii-pink-light to-kawaii-blue-light" />
             )}
             <span className="absolute inset-x-4 bottom-4 rounded-full bg-white/95 px-3 py-2 text-center text-sm font-bold text-blue-yankees shadow-md backdrop-blur-sm sm:text-base">
+              {category.icon && (
+                <span aria-hidden="true" className="mr-1.5">
+                  {category.icon}
+                </span>
+              )}
               {category.name}
             </span>
           </Link>

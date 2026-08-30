@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { ShoppingBag, X } from "lucide-react";
 import Link from "next/link";
 
 import { CldImage } from "@/components/ui/CldImage";
@@ -33,13 +33,20 @@ export const CartItem: React.FC<CartItemProps> = ({ item }) => {
     <li className="flex border-b py-6">
       <div className="relative h-24 w-24 overflow-hidden rounded-md sm:h-48 sm:w-48">
         <Link href={productPath(item.slug || item.id)}>
-          <CldImage
-            fill
-            src={mainImage.url}
-            alt={item?.name ?? "Imagen del producto"}
-            sizes="(max-width: 640px) 100vw, 640px"
-            className="object-cover object-center"
-          />
+          {mainImage?.url ? (
+            <CldImage
+              fill
+              src={mainImage.url}
+              alt={item?.name ?? "Imagen del producto"}
+              sizes="(max-width: 640px) 100vw, 640px"
+              className="object-cover object-center"
+            />
+          ) : (
+            <span className="flex h-full w-full items-center justify-center bg-gray-100 text-gray-400">
+              <ShoppingBag aria-hidden="true" className="h-8 w-8" />
+              <span className="sr-only">Sin imagen disponible</span>
+            </span>
+          )}
         </Link>
       </div>
       <div className="relative ml-4 flex flex-1 flex-col justify-between sm:ml-6">

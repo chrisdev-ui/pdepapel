@@ -3,8 +3,11 @@ import { PrismaClient } from "@prisma/client";
 const clerkUserId = process.env.E2E_ADMIN_CLERK_USER_ID;
 const storeId = process.env.E2E_ADMIN_STORE_ID || "e2e-admin-store";
 const productId = "e2e-fair-product";
-const typeId = "e2e-fair-type";
-const categoryId = "e2e-fair-category";
+const archivedProductId = "e2e-archived-product";
+const typeId = "00000000-0000-4000-8000-000000000001";
+const categoryId = "00000000-0000-4000-8000-000000000002";
+const legacyTypeId = "e2e-fair-type";
+const legacyCategoryId = "e2e-fair-category";
 const sizeId = "e2e-fair-size";
 const colorId = "e2e-fair-color";
 const designId = "e2e-fair-design";
@@ -67,22 +70,55 @@ async function main() {
     });
   }
 
+  await prisma.productCatalogOptionValue.deleteMany({
+    where: { productId },
+  });
+  await prisma.catalogMigrationSuggestion.deleteMany({
+    where: { storeId, productId },
+  });
+  await prisma.product.updateMany({
+    where: { id: productId },
+    data: { shippingProfileId: null },
+  });
+  await prisma.categoryCatalogOption.deleteMany({
+    where: { categoryId },
+  });
+  await prisma.catalogOptionValue.deleteMany({
+    where: { storeId },
+  });
+  await prisma.catalogOption.deleteMany({ where: { storeId } });
+  await prisma.shippingProfile.deleteMany({ where: { storeId } });
+  await prisma.category.updateMany({
+    where: { id: legacyCategoryId },
+    data: { name: "Categoría E2E anterior", slug: "categoria-e2e-anterior" },
+  });
+  await prisma.type.updateMany({
+    where: { id: legacyTypeId },
+    data: { name: "Tipo E2E anterior", slug: "tipo-e2e-anterior" },
+  });
+
   await prisma.type.upsert({
     where: { id: typeId },
-    update: { name: "Tipo E2E", slug: "tipo-e2e", storeId },
-    create: { id: typeId, name: "Tipo E2E", slug: "tipo-e2e", storeId },
+    update: { name: "📦 Tipo E2E", icon: null, slug: "tipo-e2e", storeId },
+    create: {
+      id: typeId,
+      name: "📦 Tipo E2E",
+      slug: "tipo-e2e",
+      storeId,
+    },
   });
   await prisma.category.upsert({
     where: { id: categoryId },
     update: {
-      name: "Categoría E2E",
+      name: "✏️ Categoría E2E",
+      icon: null,
       slug: "categoria-e2e",
       storeId,
       typeId,
     },
     create: {
       id: categoryId,
-      name: "Categoría E2E",
+      name: "✏️ Categoría E2E",
       slug: "categoria-e2e",
       storeId,
       typeId,
@@ -90,8 +126,8 @@ async function main() {
   });
   await prisma.size.upsert({
     where: { id: sizeId },
-    update: { name: "E2E", value: "e2e", storeId },
-    create: { id: sizeId, name: "E2E", value: "e2e", storeId },
+    update: { name: "M", value: "M-P", storeId },
+    create: { id: sizeId, name: "M", value: "M-P", storeId },
   });
   await prisma.color.upsert({
     where: { id: colorId },
@@ -136,6 +172,42 @@ async function main() {
       acqPrice: 4000,
     },
   });
+  await prisma.product.upsert({
+    where: { id: archivedProductId },
+    update: {
+      storeId,
+      categoryId,
+      sizeId,
+      colorId,
+      designId,
+      name: "Producto archivado E2E",
+      description: "Producto archivado que no debe mostrarse en la tienda.",
+      slug: "producto-archivado-e2e",
+      sku: "E2E-ARCHIVED-PRODUCT",
+      stock: 5,
+      price: 12000,
+      acqPrice: 5000,
+      isArchived: true,
+    },
+    create: {
+      id: archivedProductId,
+      storeId,
+      categoryId,
+      sizeId,
+      colorId,
+      designId,
+      name: "Producto archivado E2E",
+      description: "Producto archivado que no debe mostrarse en la tienda.",
+      slug: "producto-archivado-e2e",
+      sku: "E2E-ARCHIVED-PRODUCT",
+      stock: 5,
+      price: 12000,
+      acqPrice: 5000,
+      isArchived: true,
+    },
+  });
+  await prisma.category.deleteMany({ where: { id: legacyCategoryId } });
+  await prisma.type.deleteMany({ where: { id: legacyTypeId } });
   await prisma.inventoryMovement.deleteMany({
     where: { storeId, productId },
   });
