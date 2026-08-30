@@ -34,6 +34,7 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { useLocations } from "@/hooks/use-locations";
 import { useShippingQuote } from "@/hooks/use-shipping-quote";
 import { trackCustomerEvent } from "@/lib/customer-analytics";
+import { normalizePhoneForInput } from "@/lib/phone";
 import { useAuth } from "@clerk/nextjs";
 import {
   Bike,
@@ -211,7 +212,11 @@ export const ShippingInfoStep = ({
       if (lastNameParts.length > 0) {
         form.setValue("lastName", lastNameParts.join(" "), options);
       }
-      form.setValue("telephone", savedAddress.phone || "", options);
+      form.setValue(
+        "telephone",
+        normalizePhoneForInput(savedAddress.phone),
+        options,
+      );
       form.setValue("documentId", savedAddress.documentId || "", options);
       form.setValue("address1", savedAddress.address || "", options);
       form.setValue("address2", savedAddress.address2 || "", options);

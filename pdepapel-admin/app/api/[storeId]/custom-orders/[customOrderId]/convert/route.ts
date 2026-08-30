@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs";
 import prismadb from "@/lib/prismadb";
+import { normalizePhone } from "@/lib/phone";
 
 export async function POST(
   req: Request,
@@ -91,7 +92,7 @@ export async function POST(
         // Let's stick to CREATED or PENDING.
         // isPaid does not exist in schema, relying on status = CREATED (Draft) or PENDING
         // isPaid: false,
-        phone: customOrder.customerPhone,
+        phone: normalizePhone(customOrder.customerPhone),
         address: customOrder.address || "",
         address2: customOrder.address2 || "",
         city: customOrder.city || "",

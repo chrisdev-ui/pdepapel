@@ -15,8 +15,8 @@ test.describe("recorrido de compra sin pago", () => {
   }) => {
     await gotoPublicPage(page, `/producto/${purchasableProductSlug}`);
 
-    const addToCartButton = page.getByRole("button", {
-      name: "Agregar al carrito",
+    const addToCartButton = page.getByText("Agregar al carrito", {
+      exact: true,
     });
     await expect(
       page.getByRole("button", { name: "Abrir carrito, 0 productos" }).first(),

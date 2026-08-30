@@ -36,6 +36,7 @@ import {
   reserveWelcomeBenefit,
 } from "@/lib/customer-benefits";
 import { saveCustomerAddressFromCheckout } from "@/lib/customer-addresses";
+import { normalizePhone } from "@/lib/phone";
 
 const getCorsHeaders = (request: Request) => ({
   ...createCorsHeaders(request, { methods: "POST, OPTIONS" }),
@@ -123,6 +124,7 @@ export async function POST(
       savedAddressId,
       addressLabel,
     } = await req.json();
+    const normalizedPhone = normalizePhone(phone);
     const normalizedAnalyticsClientId = isStoreOwner
       ? null
       : normalizeGoogleAnalyticsClientId(analyticsClientId);
@@ -139,7 +141,7 @@ export async function POST(
 
     if (!fullName)
       throw ErrorFactory.InvalidRequest("El nombre completo es obligatorio");
-    if (!phone)
+    if (!normalizedPhone)
       throw ErrorFactory.InvalidRequest("El número de teléfono es obligatorio");
     if (!email)
       throw ErrorFactory.InvalidRequest("El correo electrónico es obligatorio");
@@ -617,7 +619,7 @@ export async function POST(
           updatedAt: new Date(), // Mark as active
           // Update Customer Info (User might have changed it in Checkout)
           fullName,
-          phone,
+          phone: normalizedPhone,
           email,
           documentId: documentId || null,
           address,
@@ -681,7 +683,7 @@ export async function POST(
             orderNumber: orderNumber,
             status: OrderStatus.PENDING,
             fullName,
-            phone,
+            phone: normalizedPhone,
             email,
             documentId: documentId || null,
             address,
@@ -732,7 +734,7 @@ export async function POST(
             savedAddressId: normalizedSavedAddressId,
             label: normalizedAddressLabel,
             fullName,
-            phone,
+            phone: normalizedPhone,
             documentId,
             address,
             address2,

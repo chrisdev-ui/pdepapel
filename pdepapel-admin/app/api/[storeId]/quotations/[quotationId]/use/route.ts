@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs";
 import prismadb from "@/lib/prismadb";
+import { normalizePhone } from "@/lib/phone";
 import { generateOrderNumber } from "@/lib/utils";
 import crypto from "crypto";
 
@@ -72,7 +73,7 @@ export async function POST(
         orderNumber,
         token,
         customerName,
-        customerPhone,
+        customerPhone: normalizePhone(customerPhone),
         customerEmail,
         type: quotation.type === "SCHOOL_LIST" ? "SCHOOL_LIST" : "QUOTATION",
         subtotal,

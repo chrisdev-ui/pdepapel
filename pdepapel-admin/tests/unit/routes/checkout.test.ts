@@ -201,6 +201,7 @@ describe("POST /api/[storeId]/checkout", () => {
         data: expect.objectContaining({
           orderNumber: "ORD-123",
           status: "PENDING",
+          phone: "+573001234567",
           subtotal: 10000,
           total: 15000,
           payment: expect.objectContaining({

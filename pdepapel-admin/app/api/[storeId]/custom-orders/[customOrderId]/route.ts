@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs";
 import prismadb from "@/lib/prismadb";
+import { normalizePhone } from "@/lib/phone";
 
 export async function GET(
   req: Request,
@@ -93,7 +94,10 @@ export async function PATCH(
 
     let updateData: any = {
       customerName,
-      customerPhone,
+      customerPhone:
+        customerPhone === undefined
+          ? undefined
+          : normalizePhone(customerPhone),
       customerEmail,
       status,
       discount,

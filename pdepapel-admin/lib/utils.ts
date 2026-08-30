@@ -20,10 +20,10 @@ import { ErrorFactory } from "./api-errors";
 import { env } from "./env.mjs";
 import { DefaultArgs } from "@prisma/client/runtime/library";
 import { formatValue } from "react-currency-input-field";
-import { parsePhoneNumber } from "libphonenumber-js";
 import { round2 } from "@/lib/order-totals";
 
 export { getDatePresets, type CustomDate } from "@/lib/date-presets";
+export { formatPhoneNumber, normalizePhone } from "@/lib/phone";
 export {
   calculateOrderTotals,
   round2,
@@ -169,26 +169,6 @@ export async function getLastOrderTimestamp(
 
 export const capitalizeFirstLetter = (string: string) => {
   return string.charAt(0).toUpperCase() + string.slice(1);
-};
-
-export const formatPhoneNumber = (phone: string | null | undefined) => {
-  if (!phone) return null;
-  try {
-    const phoneNumber = parsePhoneNumber(phone);
-    return phoneNumber ? phoneNumber.format("INTERNATIONAL") : phone;
-  } catch (error) {
-    return phone;
-  }
-};
-
-export const normalizePhone = (phone: string | null | undefined) => {
-  if (!phone) return "";
-  try {
-    const phoneNumber = parsePhoneNumber(phone, "CO");
-    return phoneNumber ? phoneNumber.number.toString() : phone.trim();
-  } catch (error) {
-    return phone.trim();
-  }
 };
 
 export async function checkIfStoreOwner(

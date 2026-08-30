@@ -1,4 +1,5 @@
 import { ErrorFactory } from "@/lib/api-errors";
+import { normalizePhone } from "@/lib/phone";
 import { Prisma } from "@prisma/client";
 
 export const MAX_CUSTOMER_ADDRESSES = 10;
@@ -38,7 +39,7 @@ export async function saveCustomerAddressFromCheckout(
   const addressData = {
     label: normalizeLabel(input.label),
     fullName: input.fullName.trim(),
-    phone: input.phone.trim(),
+    phone: normalizePhone(input.phone),
     documentId: normalizeOptionalValue(input.documentId),
     address: input.address.trim(),
     address2: normalizeOptionalValue(input.address2),

@@ -35,6 +35,7 @@ import {
   toAnalyticsItem,
   trackCustomerEvent,
 } from "@/lib/customer-analytics";
+import { normalizePhoneForInput } from "@/lib/phone";
 import { orderPath, productPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import {
   CheckoutByOrderResponse,
@@ -332,7 +333,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
           lastName: customOrder.customerName
             ? customOrder.customerName.split(" ").slice(1).join(" ")
             : "",
-          telephone: customOrder.customerPhone ?? "",
+          telephone: normalizePhoneForInput(customOrder.customerPhone),
           email: customOrder.email ?? "",
           documentId: "", // Not usually in quotation but can be if added
           address1: customOrder.address ?? "",
@@ -365,7 +366,9 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       return {
         firstName: storedFormData.firstName ?? currentUser?.firstName ?? "",
         lastName: storedFormData.lastName ?? currentUser?.lastName ?? "",
-        telephone: storedFormData.telephone ?? currentUser?.telephone ?? "",
+        telephone: normalizePhoneForInput(
+          storedFormData.telephone ?? currentUser?.telephone,
+        ),
         email: storedFormData.email ?? currentUser?.email ?? "",
         documentId: storedFormData.documentId ?? "",
         address1: storedFormData.address1 ?? "",

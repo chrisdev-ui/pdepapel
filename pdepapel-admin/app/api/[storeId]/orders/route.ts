@@ -7,6 +7,7 @@ import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { getProductsPrices } from "@/lib/discount-engine";
 import { normalizeGoogleAnalyticsClientId } from "@/lib/google-analytics";
+import { normalizePhone } from "@/lib/phone";
 
 import {
   CACHE_HEADERS,
@@ -132,6 +133,7 @@ export async function POST(
       createdBy, // Optional admin user ID
       analyticsClientId,
     } = body;
+    const normalizedPhone = normalizePhone(phone);
     const normalizedAnalyticsClientId = isStoreOwner
       ? null
       : normalizeGoogleAnalyticsClientId(analyticsClientId);
@@ -169,7 +171,7 @@ export async function POST(
     ].includes(status);
 
     if (isActiveOrder) {
-      if (!fullName || !phone || !email || !address) {
+      if (!fullName || !normalizedPhone || !email || !address) {
         throw ErrorFactory.InvalidRequest(
           "Faltan campos obligatorios para órdenes activas (nombre, teléfono, email, dirección)",
         );
@@ -488,7 +490,7 @@ export async function POST(
         guestId: !authenticatedUserId ? guestId : null,
         orderNumber,
         fullName,
-        phone,
+        phone: normalizedPhone,
         status:
           status ||
           (type === OrderType.QUOTATION

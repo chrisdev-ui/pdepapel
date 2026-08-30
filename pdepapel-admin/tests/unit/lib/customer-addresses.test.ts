@@ -53,6 +53,7 @@ describe("customer address book", () => {
         label: "Casa",
         isDefault: true,
         fullName: "Ana Gómez",
+        phone: "+573001234567",
         address: "Calle 10 # 20-30",
       }),
     });
