@@ -13,6 +13,7 @@ import {
 
 import { CldImage } from "@/components/ui/CldImage";
 import { Button } from "@/components/ui/button";
+import { useScrollPosition } from "@/hooks/use-scroll-position";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { trackCustomerEvent } from "@/lib/customer-analytics";
 import { cn, currencyFormatter } from "@/lib/utils";
@@ -57,6 +58,7 @@ export function CartPreviewProvider({
   children: React.ReactNode;
 }) {
   const [preview, setPreview] = useState<CartPreviewState | null>(null);
+  const scrollPosition = useScrollPosition();
   const previewRef = useRef<CartPreviewState | null>(null);
   const lastShownAtRef = useRef<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -145,7 +147,10 @@ export function CartPreviewProvider({
           aria-label="Producto agregado al carrito"
           data-presentation={preview.presentation}
           className={cn(
-            "fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+6.5rem)] z-[60] max-h-[calc(100dvh-env(safe-area-inset-bottom)-7.5rem)] overflow-y-auto overscroll-contain rounded-2xl border border-blue-baby bg-white shadow-2xl sm:inset-x-auto sm:bottom-auto sm:right-6 sm:top-32 sm:max-h-[calc(100dvh-9rem)] sm:w-[390px] sm:p-4 lg:top-40 lg:max-h-[calc(100dvh-11rem)]",
+            "fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+6.5rem)] z-[60] max-h-[calc(100dvh-env(safe-area-inset-bottom)-7.5rem)] overflow-y-auto overscroll-contain rounded-2xl border border-blue-baby bg-white shadow-2xl sm:inset-x-auto sm:bottom-auto sm:right-6 sm:top-32 sm:max-h-[calc(100dvh-9rem)] sm:w-[390px] sm:p-4",
+            scrollPosition > 120
+              ? "lg:top-[6.5rem] lg:max-h-[calc(100dvh-7.5rem)]"
+              : "lg:top-[9.5rem] lg:max-h-[calc(100dvh-10.5rem)]",
             preview.presentation === "compact" ? "p-3" : "p-4",
           )}
           onMouseEnter={clearTimer}

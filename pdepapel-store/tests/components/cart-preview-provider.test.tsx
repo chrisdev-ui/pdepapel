@@ -16,9 +16,14 @@ import {
 import type { Product } from "@/types";
 
 const analyticsMock = vi.hoisted(() => vi.fn());
+let scrollPositionMock = 0;
 
 vi.mock("@/lib/customer-analytics", () => ({
   trackCustomerEvent: analyticsMock,
+}));
+
+vi.mock("@/hooks/use-scroll-position", () => ({
+  useScrollPosition: () => scrollPositionMock,
 }));
 
 vi.mock("@/components/ui/CldImage", () => ({
@@ -67,6 +72,7 @@ describe("CartPreviewProvider", () => {
     cleanup();
     vi.useRealTimers();
     analyticsMock.mockReset();
+    scrollPositionMock = 0;
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
       value: originalMatchMedia,
@@ -102,6 +108,7 @@ describe("CartPreviewProvider", () => {
     });
     expect(preview).toHaveClass(
       "bottom-[calc(env(safe-area-inset-bottom)+6.5rem)]",
+      "lg:top-[9.5rem]",
       "z-[60]",
       "overscroll-contain",
     );
@@ -109,6 +116,23 @@ describe("CartPreviewProvider", () => {
     expect(
       screen.getByRole("button", { name: "Cerrar resumen del carrito" }),
     ).toHaveClass("h-11", "min-h-11", "w-11", "min-w-11", "touch-manipulation");
+  });
+
+  it("stays close to the compact desktop header after scrolling", () => {
+    scrollPositionMock = 121;
+    render(
+      <CartPreviewProvider>
+        <Trigger />
+      </CartPreviewProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Agregar" }));
+
+    expect(
+      screen.getByRole("complementary", {
+        name: "Producto agregado al carrito",
+      }),
+    ).toHaveClass("lg:top-[6.5rem]");
   });
 
   it("dismisses automatically after eight seconds", () => {
