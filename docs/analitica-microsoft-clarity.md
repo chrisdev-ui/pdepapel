@@ -30,6 +30,12 @@ El ID es público. La variable `NEXT_PUBLIC_CLARITY_ENABLED` es el interruptor d
 emergencia. Cambiarla a `true` solo después de completar la lista de activación.
 No se requiere ninguna variable en `pdepapel-admin`.
 
+Las variables públicas de GA4 y Clarity deben existir solo en **Production**.
+No configurarlas en Preview ni Development: las visitas de pruebas, E2E y ramas
+temporales contaminarían los mismos informes de producción. En
+`pdepapel-admin`, `GA4_MEASUREMENT_ID` y `GA4_API_SECRET` también deben limitarse
+a Production.
+
 ## Diseño técnico
 
 - El SDK oficial `@microsoft/clarity` se descarga en un fragmento separado.
@@ -42,6 +48,10 @@ No se requiere ninguna variable en `pdepapel-admin`.
 - No se usa la API `identify` ni se envían correo, teléfono, dirección, documento,
   número de pedido, token, SKU o identificadores de cliente.
 - Clarity recibe nombres cerrados de eventos, no los parámetros detallados de GA4.
+- `robots.txt` conserva privadas las rutas de pedido, cuenta y checkout, pero
+  permite específicamente a `Clarity-Bot` leer `/_next/static/` y
+  `/_next/image`. Esos recursos versionados son necesarios para reconstruir
+  estilos, fuentes e imágenes en las reproducciones.
 
 ## Alcance medido
 
@@ -70,7 +80,12 @@ Los eventos principales son:
 - carrito: `view_cart`, `checkout_initiated`;
 - compra: `begin_checkout`, `add_shipping_info`, `add_payment_info`,
   `checkout_stock_unavailable`, `checkout_order_submitted`,
-  `checkout_payment_redirect`;
+  `checkout_payment_redirect`, `checkout_validation_error`,
+  `checkout_submit_failed`, `checkout_payment_redirect_failed`,
+  `shipping_quote_requested`, `shipping_quote_succeeded`,
+  `shipping_quote_no_results`, `shipping_quote_failed`;
+- minicarrito: `cart_preview_view`, `cart_preview_action`,
+  `cart_preview_dismiss_manual`, `cart_preview_dismiss_auto`;
 - cuenta: `account_registration_cta_clicked`,
   `account_sign_in_cta_clicked`.
 
@@ -90,6 +105,74 @@ continúan midiéndose desde el backend mediante GA4 Measurement Protocol.
 6. No conectar Clarity con Microsoft Ads ni Google Ads para este objetivo.
 7. Verificar que la política pública de privacidad menciona Clarity, mapas de
    calor, reproducciones técnicas y la posibilidad de revocar el permiso.
+
+## Embudos que deben quedar guardados
+
+### GA4: descubrimiento y carrito
+
+Crear una exploración de embudo **abierto**, con seguimiento indirecto y
+desglose por `device category`:
+
+1. `view_item_list`
+2. `select_item`
+3. `view_item`
+4. `add_to_cart`
+5. `view_cart`
+
+Duplicarla con desglose por `session source / medium` para diferenciar tráfico
+orgánico, directo y campañas.
+
+### GA4: checkout confirmado
+
+Crear una exploración de embudo **cerrado**, dentro de la misma sesión, con:
+
+1. `begin_checkout`
+2. `add_shipping_info`
+3. `add_payment_info`
+4. `checkout_order_submitted`
+5. `purchase`
+
+`purchase` se envía únicamente desde Administración después de una transición
+real y verificada a `PAID`. El `transaction_id` evita confundir reintentos con
+ventas distintas. Si no existe una venta pagada real, cero compras es el
+resultado correcto; nunca generar una compra ficticia en producción.
+
+### Clarity: segmentos equivalentes
+
+Guardar segmentos por evento para `add_to_cart`, `begin_checkout`,
+`checkout_validation_error`, `shipping_quote_failed`,
+`checkout_submit_failed` y `checkout_payment_redirect_failed`. Combinar cada
+segmento con `Device = Mobile` y con la etiqueta `route_group` correspondiente.
+Clarity explica el patrón visual; GA4 conserva el conteo y la conversión.
+
+## Higiene de tráfico interno
+
+- La propietaria y quien haga pruebas deben rechazar analítica en su navegador
+  habitual de QA o usar un perfil dedicado sin consentimiento.
+- En GA4, definir tráfico interno solo para una IP fija y activar primero el
+  filtro en modo de prueba antes de excluirlo definitivamente.
+- En Clarity, usar **Settings → IP blocking** únicamente para IP fija. No
+  bloquear una red móvil o IP dinámica compartida.
+- Mantener activada la exclusión de bots y revisar sesiones anormalmente largas
+  antes de interpretar promedios.
+
+## Reproducciones que parecen no tener estilos
+
+Una reproducción de Clarity no es un video: reconstruye el DOM y vuelve a
+solicitar CSS, fuentes e imágenes. Si parece desordenada:
+
+1. Revisar **More details** y anotar URL, dispositivo, navegador, hora, LCP, INP,
+   CLS y errores JavaScript.
+2. Abrir la misma URL en un dispositivo equivalente. Si la navegación real es
+   correcta y la persona continúa interactuando normalmente, tratarlo primero
+   como artefacto de reproducción.
+3. Confirmar que la hoja `/_next/static/css/*`, una fuente
+   `/_next/static/media/*.woff2` y `/_next/image` responden `200` a
+   `User-Agent: Clarity-Bot`, con tipos `text/css`, `font/woff2` e imagen.
+4. Revisar el `robots.txt` publicado: el grupo específico `Clarity-Bot` debe
+   permitir los recursos de Next.js y seguir bloqueando rutas privadas.
+5. Si varias sesiones nuevas comparten la misma ruta, dispositivo y error,
+   correlacionar la hora con Vercel antes de concluir que fue solo el reproductor.
 
 ## Activación gradual
 
@@ -133,3 +216,12 @@ grande. Analizar por dispositivo y por `route_group`:
 
 No decidir con una grabación aislada ni interpretar movimientos del cursor como
 intención segura de compra.
+
+## Revisión semanal mínima
+
+1. Comparar móvil y escritorio en usuarios, engagement y pasos del embudo.
+2. Registrar la mayor caída del embudo de catálogo y del checkout.
+3. Revisar hasta 15 grabaciones del mismo evento o insight, no sesiones al azar.
+4. Separar errores técnicos de decisiones de compra y falta de intención.
+5. Priorizar JavaScript errors, checkout failures y dead clicks repetibles.
+6. Cambiar una hipótesis por entrega y comparar durante otros 7-14 días.

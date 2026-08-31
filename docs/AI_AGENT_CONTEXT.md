@@ -331,6 +331,10 @@ When creating a new customer-navigable route:
 - Clarity is loaded through the official package only after consent, only on the
   public commerce funnel, and during browser idle time. Its event allowlist sends
   event names without GA4 parameters. Never call Clarity `identify`.
+- Production analytics IDs and GA4 Measurement Protocol credentials must not be
+  configured in Vercel Preview or Development. `Clarity-Bot` may read versioned
+  `/_next/static/` and `/_next/image` resources for replay fidelity, while order,
+  account, API, quote, cart, and checkout routes remain disallowed in robots.
 - The cart preview records privacy-safe `cart_preview_view`,
   `cart_preview_action`, and `cart_preview_dismiss` events. Parameters are
   limited to the UI source, presentation (`full` or `compact`), generic action
