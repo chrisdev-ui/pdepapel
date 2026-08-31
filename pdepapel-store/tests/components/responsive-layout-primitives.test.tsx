@@ -2,6 +2,12 @@
 
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -71,5 +77,21 @@ describe("responsive layout primitives", () => {
     expect(screen.getByTestId("input")).toHaveClass("min-w-0");
     expect(screen.getByTestId("textarea")).toHaveClass("min-w-0");
     expect(screen.getByTestId("select")).toHaveClass("min-w-0");
+  });
+
+  it("can render default-open accordion content without a layout animation", () => {
+    render(
+      <Accordion type="single" defaultValue="filters">
+        <AccordionItem value="filters">
+          <AccordionTrigger>Filtros</AccordionTrigger>
+          <AccordionContent animate={false}>Opciones</AccordionContent>
+        </AccordionItem>
+      </Accordion>,
+    );
+
+    const content = screen.getByText("Opciones").parentElement;
+    expect(content).toHaveAttribute("data-state", "open");
+    expect(content).not.toHaveClass("data-[state=open]:animate-accordion-down");
+    expect(content).not.toHaveClass("data-[state=closed]:animate-accordion-up");
   });
 });

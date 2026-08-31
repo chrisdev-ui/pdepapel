@@ -101,7 +101,7 @@ const Filter: React.FC<FilterProps> = ({
             )}
           </span>
         </AccordionTrigger>
-        <AccordionContent>
+        <AccordionContent animate={false}>
           <div className="flex flex-col gap-3 pt-2">
             {/* Header Actions: Search & Clear */}
             <div className="flex flex-col gap-2">

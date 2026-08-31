@@ -90,22 +90,20 @@ const Features: React.FC<{}> = () => {
           </div>
         </div>
       </section>
-      <section className="hidden w-full flex-wrap items-center justify-between gap-y-6 sm:gap-y-0 lg:flex">
-        {features.map(({ title, description, icon }, index) => (
+      <section className="hidden w-full grid-cols-5 items-start gap-x-6 lg:grid">
+        {features.map(({ title, description, icon }) => (
           <div
             key={title}
-            className="flex flex-col-reverse items-center gap-3 md:w-[calc(100%/5_-_1.5rem)] lg:flex-row lg:gap-0"
+            className="flex min-w-0 items-start"
           >
-            <div className="flex grow-0 items-start justify-center self-stretch lg:self-auto lg:pr-3">
+            <div className="flex shrink-0 items-start justify-center pr-3">
               {icon}
             </div>
-            <div className="flex grow flex-col gap-2">
-              <span className="text-center font-serif text-sm font-semibold lg:text-left">
+            <div className="flex min-w-0 flex-col gap-2">
+              <span className="text-left font-serif text-sm font-semibold">
                 {title}
               </span>
-              <span className="hidden text-left text-xs lg:block">
-                {description}
-              </span>
+              <span className="text-left text-xs">{description}</span>
             </div>
           </div>
         ))}

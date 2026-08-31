@@ -10,7 +10,7 @@ describe("business location messaging", () => {
   afterEach(cleanup);
 
   it("explains the Medellín origin and national delivery coverage", () => {
-    render(
+    const { container } = render(
       <>
         <Features />
         <Footer />
@@ -27,6 +27,11 @@ describe("business location messaging", () => {
     expect(
       screen.getByText("Tienda online con envíos a todo el país"),
     ).toBeInTheDocument();
+
+    const desktopFeatures = container.querySelector("section.lg\\:grid");
+    expect(desktopFeatures).toHaveClass("grid-cols-5", "gap-x-6");
+    expect(desktopFeatures?.children).toHaveLength(5);
+    expect(desktopFeatures?.firstElementChild).toHaveClass("min-w-0");
   });
 
   it("renders an accessible, mobile-friendly footer structure", () => {
