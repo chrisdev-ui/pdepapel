@@ -772,10 +772,12 @@ export async function GET(
         const prices = g.products.map((p: any) => Number(p.price));
         const minP = prices.length ? Math.min(...prices) : 0;
         const maxP = prices.length ? Math.max(...prices) : 0;
+        const primaryProduct =
+          g.products.find((p: any) => p.stock > 0) || g.products[0];
         return {
-          id: g.products[0]?.id || g.id,
+          id: primaryProduct?.id || g.id,
           productGroupId: g.id,
-          slug: g.products[0]?.slug,
+          slug: primaryProduct?.slug,
           name: g.name,
           description: g.description,
           images: g.images,
@@ -785,8 +787,8 @@ export async function GET(
           minPrice: minP,
           maxPrice: maxP,
           variantCount: g.products.length,
-          category: g.products[0]?.category,
-          categoryId: g.products[0]?.categoryId || "",
+          category: primaryProduct?.category,
+          categoryId: primaryProduct?.categoryId || "",
           reviews: g.products.flatMap((p: any) => p.reviews),
           sku: "GROUP",
           createdAt: g.createdAt,
