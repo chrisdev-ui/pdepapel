@@ -96,7 +96,7 @@ export const BankTransferInstructions: React.FC<
         {/* Exact Amount Banner - Clean 2-row layout */}
         <div className="flex flex-col gap-3 rounded-2xl border border-purple-100 bg-white p-3.5 shadow-sm dark:border-purple-900/40 dark:bg-zinc-900">
           <div className="space-y-0.5">
-            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               Monto exacto a transferir:
             </span>
             <div className="font-quicksand text-2xl font-bold text-purple-950 dark:text-purple-100">
@@ -104,7 +104,7 @@ export const BankTransferInstructions: React.FC<
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 pt-1 border-t border-purple-50 dark:border-zinc-800">
+          <div className="grid grid-cols-2 gap-2 border-t border-purple-50 pt-1 dark:border-zinc-800">
             <Button
               type="button"
               variant="outline"
@@ -145,14 +145,14 @@ export const BankTransferInstructions: React.FC<
           <TabsList className="grid w-full grid-cols-2 rounded-xl bg-purple-100/70 p-1 dark:bg-purple-950/60">
             <TabsTrigger
               value="breb"
-              className="flex items-center justify-center h-9 rounded-lg font-sans text-xs font-bold text-purple-900 transition-all data-[state=active]:bg-white data-[state=active]:text-purple-950 data-[state=active]:shadow-sm dark:text-purple-200 dark:data-[state=active]:bg-zinc-900 dark:data-[state=active]:text-purple-100"
+              className="flex h-9 items-center justify-center rounded-lg font-sans text-xs font-bold text-purple-900 transition-all data-[state=active]:bg-white data-[state=active]:text-purple-950 data-[state=active]:shadow-sm dark:text-purple-200 dark:data-[state=active]:bg-zinc-900 dark:data-[state=active]:text-purple-100"
             >
               <Smartphone className="mr-1.5 h-3.5 w-3.5 shrink-0 text-pink-600" />
               Bre-B / Nequi / QR
             </TabsTrigger>
             <TabsTrigger
               value="bancolombia"
-              className="flex items-center justify-center h-9 rounded-lg font-sans text-xs font-bold text-purple-900 transition-all data-[state=active]:bg-white data-[state=active]:text-purple-950 data-[state=active]:shadow-sm dark:text-purple-200 dark:data-[state=active]:bg-zinc-900 dark:data-[state=active]:text-purple-100"
+              className="flex h-9 items-center justify-center rounded-lg font-sans text-xs font-bold text-purple-900 transition-all data-[state=active]:bg-white data-[state=active]:text-purple-950 data-[state=active]:shadow-sm dark:text-purple-200 dark:data-[state=active]:bg-zinc-900 dark:data-[state=active]:text-purple-100"
             >
               <Building2 className="mr-1.5 h-3.5 w-3.5 shrink-0 text-blue-600" />
               Bancolombia
@@ -225,11 +225,11 @@ export const BankTransferInstructions: React.FC<
 
               {/* Llave Bre-B Box - Removed "(INTEROPERABLE)" */}
               <div className="space-y-1.5">
-                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
                   Llave Bre-B:
                 </span>
                 <div className="flex items-center justify-between rounded-xl border border-purple-200 bg-purple-50/50 p-2.5 dark:border-purple-900/60 dark:bg-purple-950/30">
-                  <code className="font-mono text-sm font-bold text-purple-950 dark:text-purple-100 truncate pr-2">
+                  <code className="truncate pr-2 font-mono text-sm font-bold text-purple-950 dark:text-purple-100">
                     {breBKey}
                   </code>
                   <Button
@@ -277,11 +277,11 @@ export const BankTransferInstructions: React.FC<
               </div>
 
               <div className="space-y-1.5">
-                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
                   Número de Cuenta:
                 </span>
                 <div className="flex items-center justify-between rounded-xl border border-blue-200 bg-blue-50/50 p-2.5 dark:border-blue-900/60 dark:bg-blue-950/30">
-                  <code className="font-mono text-base font-bold text-blue-950 dark:text-blue-100 truncate pr-2">
+                  <code className="truncate pr-2 font-mono text-base font-bold text-blue-950 dark:text-blue-100">
                     {bancolombiaAccount}
                   </code>
                   <Button
@@ -317,27 +317,22 @@ export const BankTransferInstructions: React.FC<
                 <Icons.whatsapp className="mr-1.5 h-4 w-4 shrink-0 text-[#25D366]" />
                 Paso Final: Envía tu comprobante
               </span>
-              <p className="text-xs text-emerald-900/80 dark:text-emerald-300 leading-relaxed">
+              <p className="text-xs leading-relaxed text-emerald-900/80 dark:text-emerald-300">
                 Envía una foto o captura del comprobante al WhatsApp{" "}
                 <strong>313-258-2293</strong> para procesar tu pedido de
                 inmediato.
               </p>
             </div>
-            <a
-              href={whatsappUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full"
+            <Button
+              asChild
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#25D366] text-sm font-bold text-white shadow-md transition-[transform,background-color] duration-200 hover:bg-[#20bd5a] active:scale-[0.98]"
             >
-              <Button
-                type="button"
-                className="h-11 w-full bg-[#25D366] text-white font-bold hover:bg-[#20bd5a] active:scale-[0.98] shadow-md transition-all duration-200 flex items-center justify-center gap-2 rounded-xl text-sm"
-              >
+              <a href={whatsappUrl} target="_blank" rel="noopener noreferrer">
                 <Icons.whatsapp className="h-5 w-5 text-white" />
                 Enviar Comprobante por WhatsApp
                 <ExternalLink className="h-4 w-4 opacity-80" />
-              </Button>
-            </a>
+              </a>
+            </Button>
           </div>
         </div>
       </CardContent>

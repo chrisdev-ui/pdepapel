@@ -17,8 +17,9 @@ export const SlideIndicators: React.FC<SlideIndicatorsProps> = ({
       {Array.from({ length: total }).map((_, idx) => (
         <button
           key={idx}
+          type="button"
           onClick={() => onSelect(idx)}
-          className="group relative p-2"
+          className="group relative inline-flex h-11 w-11 touch-manipulation items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kawaii-pink focus-visible:ring-offset-2"
           aria-label={`Ir a la diapositiva ${idx + 1}`}
         >
           <motion.div

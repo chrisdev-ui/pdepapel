@@ -83,7 +83,7 @@ export function AccountPrompt({
                 size={isCompact ? "sm" : "default"}
                 className={cn(
                   "font-quicksand font-semibold",
-                  isCompact && "min-h-10 px-3",
+                  isCompact && "min-h-11 px-3",
                 )}
               >
                 <Link
@@ -100,12 +100,12 @@ export function AccountPrompt({
               </Button>
               <Link
                 href={signInHref}
-                className="inline-flex items-center gap-1 text-sm font-semibold underline underline-offset-4 transition-colors hover:text-purple-700"
+                className="inline-flex min-h-[44px] touch-manipulation items-center gap-1 rounded-sm px-1 text-sm font-semibold underline underline-offset-4 transition-colors hover:text-purple-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-600 focus-visible:ring-offset-2"
                 onClick={() =>
                   trackCustomerEvent("account_sign_in_cta_clicked", { source })
                 }
               >
-                <LogIn className="h-4 w-4" />
+                <LogIn aria-hidden="true" className="h-4 w-4" />
                 Iniciar sesión
               </Link>
             </div>

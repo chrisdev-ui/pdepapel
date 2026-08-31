@@ -8,6 +8,7 @@ import { QuantitySelector } from "@/components/ui/quantity-selector";
 import { useCart } from "@/hooks/use-cart";
 import { Product } from "@/types";
 import { productPath } from "@/lib/routes";
+import { getCustomerFacingProductOptions } from "@/lib/product-options";
 
 import { currencyFormatter } from "@/lib/utils";
 
@@ -68,11 +69,14 @@ export const CartItem: React.FC<CartItemProps> = ({ item }) => {
 
           <div className="mb-3 mt-1 flex flex-wrap text-sm text-gray-500 lg:mb-0">
             {item.color && <p>Color: {item.color.name}</p>}
-            {item.size && (
-              <p className="ml-4 border-l border-gray-200 pl-4">
-                Talla: {item.size.name}
+            {getCustomerFacingProductOptions(item).map((option) => (
+              <p
+                key={`${option.name}-${option.value}`}
+                className="ml-4 border-l border-gray-200 pl-4"
+              >
+                {option.name}: {option.value}
               </p>
-            )}
+            ))}
             {item.design && (
               <p className="ml-4 border-l border-gray-200 pl-4">
                 Diseño: {item.design.name}

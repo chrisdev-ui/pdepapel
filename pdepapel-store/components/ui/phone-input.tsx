@@ -104,8 +104,9 @@ const CountrySelect = ({
       <PopoverTrigger asChild>
         <Button
           type="button"
+          aria-label="Seleccionar país del teléfono"
           variant="outline"
-          className="flex h-9 gap-1 rounded-e-none rounded-s-lg border-r-0 px-3 focus:z-10"
+          className="flex h-11 gap-1 rounded-e-none rounded-s-lg border-r-0 px-3 focus:z-10"
           disabled={disabled}
         >
           <FlagComponent
@@ -137,7 +138,7 @@ const CountrySelect = ({
                 }
               }, 0);
             }}
-            placeholder="Buscar país..."
+            placeholder="Buscar país…"
           />
           <CommandList>
             <ScrollArea ref={scrollAreaRef} className="h-72">

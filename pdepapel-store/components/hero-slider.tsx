@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { DELAY } from "@/constants";
+import { canonicalStorefrontHref } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import { Billboard, Season } from "@/types";
 import {
@@ -73,7 +74,7 @@ const HeroSlider: React.FC<HeroSliderProps> = ({
 
   const handleNavigate = (url: string) => {
     if (!url) return;
-    router.push(url);
+    router.push(canonicalStorefrontHref(url));
   };
 
   if (!data?.length) return null;
@@ -94,13 +95,13 @@ const HeroSlider: React.FC<HeroSliderProps> = ({
       {isSpooky ? (
         <>
           <div
-            className="absolute left-6 top-6 z-10 hidden text-orange-400 opacity-85 sm:left-10 sm:top-10 sm:block"
+            className="opacity-85 absolute left-6 top-6 z-10 hidden text-orange-400 sm:left-10 sm:top-10 sm:block"
             aria-hidden="true"
           >
             <Moon className="h-4 w-4 fill-current sm:h-6 sm:w-6" />
           </div>
           <div
-            className="absolute right-8 top-12 z-10 hidden text-kawaii-lavender opacity-85 sm:right-16 sm:top-20 sm:block"
+            className="opacity-85 absolute right-8 top-12 z-10 hidden text-kawaii-lavender sm:right-16 sm:top-20 sm:block"
             aria-hidden="true"
           >
             <Sparkles className="h-3 w-3 fill-current sm:h-4 sm:w-4" />
@@ -121,7 +122,7 @@ const HeroSlider: React.FC<HeroSliderProps> = ({
             <Snowflake className="h-4 w-4 sm:h-6 sm:w-6" />
           </div>
           <div
-            className="absolute right-8 top-12 z-10 hidden text-red-400 opacity-85 sm:right-16 sm:top-20 sm:block"
+            className="opacity-85 absolute right-8 top-12 z-10 hidden text-red-400 sm:right-16 sm:top-20 sm:block"
             aria-hidden="true"
           >
             <Gift className="h-3.5 w-3.5 fill-red-100 sm:h-5 sm:w-5" />
@@ -187,10 +188,10 @@ const HeroSlider: React.FC<HeroSliderProps> = ({
           className={cn(
             "pointer-events-none absolute inset-0 z-0",
             isSpooky
-              ? "bg-gradient-to-br from-orange-100/45 via-transparent to-kawaii-lavender/25"
+              ? "from-orange-100/45 bg-gradient-to-br via-transparent to-kawaii-lavender/25"
               : isChristmas
-                ? "bg-gradient-to-br from-red-100/40 via-transparent to-blue-100/35"
-              : "bg-gradient-to-br from-kawaii-pink-light/20 via-transparent to-kawaii-blue-light/20",
+                ? "to-blue-100/35 bg-gradient-to-br from-red-100/40 via-transparent"
+                : "bg-gradient-to-br from-kawaii-pink-light/20 via-transparent to-kawaii-blue-light/20",
           )}
         />
 
@@ -202,7 +203,9 @@ const HeroSlider: React.FC<HeroSliderProps> = ({
             <span
               className={cn(
                 "inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-background/90 px-3 py-1 text-[10px] font-bold text-blue-yankees shadow-sm backdrop-blur-sm sm:text-xs",
-                isSpooky ? "border border-orange-200/80" : "border border-red-200/80",
+                isSpooky
+                  ? "border border-orange-200/80"
+                  : "border border-red-200/80",
               )}
             >
               {isSpooky ? (

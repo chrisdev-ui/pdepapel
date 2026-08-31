@@ -65,9 +65,12 @@ export default async function CheckoutPage({
         <div className="flex w-full flex-col items-center justify-between sm:flex-row">
           <h1 className="flex items-center justify-start font-serif text-3xl font-bold">
             {customOrder
-              ? "Finalizar Cotización"
-              : "Ya casi completas tu orden..."}
-            <CheckCircle className="h-8 w-8 text-green-500 sm:ml-2" />
+              ? "Finalizar cotización"
+              : "Ya casi completas tu orden…"}
+            <CheckCircle
+              aria-hidden="true"
+              className="h-8 w-8 text-green-500 sm:ml-2"
+            />
           </h1>
           <AccountPrompt
             className="mt-4 w-full sm:mt-0 sm:w-auto sm:max-w-md"

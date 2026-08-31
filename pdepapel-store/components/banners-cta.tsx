@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { CldImage } from "@/components/ui/CldImage";
 import { Container } from "@/components/ui/container";
+import { canonicalStorefrontHref } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import { Banner } from "@/types";
 
@@ -48,7 +49,7 @@ const BannersCta: React.FC<BannersCtaProps> = ({ banners }) => {
               },
             )}
             key={`mini-banner${index}`}
-            href={banner.callToAction ?? "#"}
+            href={canonicalStorefrontHref(banner.callToAction)}
           >
             <CldImage
               src={banner.imageUrl}

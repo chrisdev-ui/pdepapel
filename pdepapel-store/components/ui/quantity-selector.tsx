@@ -9,7 +9,7 @@ import { cva } from "class-variance-authority";
 type Sizes = "default" | "medium" | "large";
 
 const buttonLeftVariants = cva(
-  "group border-none bg-white py-2 font-sans font-semibold text-blue-yankees disabled:cursor-not-allowed",
+  "group flex min-h-11 min-w-11 touch-manipulation items-center justify-center border-none bg-white font-sans font-semibold text-blue-yankees focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-yankees disabled:cursor-not-allowed",
   {
     variants: {
       size: {
@@ -25,7 +25,7 @@ const buttonLeftVariants = cva(
 );
 
 const buttonRightVariants = cva(
-  "group border-none bg-white py-2 font-sans font-semibold text-blue-yankees disabled:cursor-not-allowed",
+  "group flex min-h-11 min-w-11 touch-manipulation items-center justify-center border-none bg-white font-sans font-semibold text-blue-yankees focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-yankees disabled:cursor-not-allowed",
   {
     variants: {
       size: {
@@ -107,12 +107,13 @@ const QuantitySelector = React.forwardRef<
           suppressHydrationWarning
         >
           <Minus
+            aria-hidden="true"
             className="h-3.5 w-3.5 group-disabled:text-gray-500"
             strokeWidth={3}
           />
         </button>
         <input
-          className="w-12 text-center text-sm"
+          className="h-11 w-12 text-center text-sm tabular-nums outline-none"
           type="text"
           aria-label={label}
           value={value}
@@ -127,6 +128,7 @@ const QuantitySelector = React.forwardRef<
           suppressHydrationWarning
         >
           <Plus
+            aria-hidden="true"
             className="h-3.5 w-3.5 group-disabled:text-gray-500"
             strokeWidth={3}
           />

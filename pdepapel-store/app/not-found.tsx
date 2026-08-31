@@ -28,14 +28,12 @@ export default function NotFound() {
         <p className="mt-2 text-center text-sm text-gray-600">
           La página que estás buscando pudo haber sido removida, su nombre ha
           cambiado, está temporalmente no disponible o no existe.
-          <br />
-          <br />
-          <Link href="/">
-            <Button className="bg-pink-froly font-serif font-semibold">
-              Ir al inicio
-            </Button>
-          </Link>
         </p>
+        <div className="text-center">
+          <Button asChild className="bg-pink-froly font-serif font-semibold">
+            <Link href="/">Ir al inicio</Link>
+          </Button>
+        </div>
       </div>
     </Container>
   );

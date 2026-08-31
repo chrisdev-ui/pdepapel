@@ -2,8 +2,12 @@ import { expect, test } from "@playwright/test";
 
 import { gotoPublicPage } from "./helpers/public-page";
 
-const analyticsEnabled =
-  process.env.E2E_ANALYTICS_EXPECTED_MODE === "enabled";
+const analyticsMode = process.env.E2E_ANALYTICS_EXPECTED_MODE;
+const baseUrl = process.env.E2E_BASE_URL || "https://papeleriapdepapel.com";
+const baseHostname = new URL(baseUrl).hostname;
+const analyticsEnabled = analyticsMode
+  ? analyticsMode === "enabled"
+  : !["localhost", "127.0.0.1"].includes(baseHostname);
 
 test("respeta la bandera local de analítica", async ({ page }) => {
   await gotoPublicPage(page, "/");
@@ -20,7 +24,10 @@ test("respeta la bandera local de analítica", async ({ page }) => {
 });
 
 test("no carga GA ni Clarity antes del consentimiento", async ({ page }) => {
-  test.skip(!analyticsEnabled, "Requiere la bandera local de analítica activa.");
+  test.skip(
+    !analyticsEnabled,
+    "Requiere la bandera local de analítica activa.",
+  );
 
   const analyticsRequests: string[] = [];
   await page.route(/(googletagmanager\.com|clarity\.ms)/, async (route) => {
@@ -37,10 +44,13 @@ test("no carga GA ni Clarity antes del consentimiento", async ({ page }) => {
   expect(analyticsRequests).toEqual([]);
 });
 
-test("carga los proveedores de prueba solo después de aceptar", async ({
+test("carga los proveedores configurados solo después de aceptar", async ({
   page,
 }) => {
-  test.skip(!analyticsEnabled, "Requiere la bandera local de analítica activa.");
+  test.skip(
+    !analyticsEnabled,
+    "Requiere la bandera local de analítica activa.",
+  );
 
   const analyticsRequests: string[] = [];
   await page.route(/(googletagmanager\.com|clarity\.ms)/, async (route) => {
@@ -55,17 +65,14 @@ test("carga los proveedores de prueba solo después de aceptar", async ({
     .poll(
       () =>
         analyticsRequests.some((url) =>
-          url.includes("googletagmanager.com/gtag/js?id=G-LOCALTEST"),
+          url.includes("googletagmanager.com/gtag/js?id="),
         ),
       { timeout: 8_000 },
     )
     .toBeTruthy();
   await expect
     .poll(
-      () =>
-        analyticsRequests.some((url) =>
-          url.includes("clarity.ms/tag/localtest123"),
-        ),
+      () => analyticsRequests.some((url) => url.includes("clarity.ms/tag/")),
       { timeout: 8_000 },
     )
     .toBeTruthy();
@@ -74,7 +81,10 @@ test("carga los proveedores de prueba solo después de aceptar", async ({
 test("rechazar opcionales mantiene ambos proveedores apagados", async ({
   page,
 }) => {
-  test.skip(!analyticsEnabled, "Requiere la bandera local de analítica activa.");
+  test.skip(
+    !analyticsEnabled,
+    "Requiere la bandera local de analítica activa.",
+  );
 
   const analyticsRequests: string[] = [];
   await page.route(/(googletagmanager\.com|clarity\.ms)/, async (route) => {

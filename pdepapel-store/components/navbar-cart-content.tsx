@@ -18,6 +18,7 @@ import { KAWAII_FACE_SAD } from "@/constants";
 import { useCart } from "@/hooks/use-cart";
 import { productPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import { toAnalyticsItem, trackCustomerEvent } from "@/lib/customer-analytics";
+import { getCustomerFacingProductOptions } from "@/lib/product-options";
 import { calculateTotals } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 
@@ -130,16 +131,21 @@ export const NavbarCartContent: React.FC<NavbarCartContentProps> = ({
                       {item.color && (
                         <span className="line-clamp-1 text-xs text-gray-400">{`Color: ${item.color.name}`}</span>
                       )}
-                      {item.size && (
-                        <span className="line-clamp-1 text-xs text-gray-400">{`Talla: ${item.size.name}`}</span>
-                      )}
+                      {getCustomerFacingProductOptions(item).map((option) => (
+                        <span
+                          key={`${option.name}-${option.value}`}
+                          className="line-clamp-1 text-xs text-gray-400"
+                        >
+                          {option.name}: {option.value}
+                        </span>
+                      ))}
                     </div>
                     <div className="flex items-center gap-1.5">
                       <Currency className="text-lg" value={item.price} />
                       {(item.hasDiscount ||
                         (item.originalPrice &&
                           item.originalPrice > Number(item.price))) && (
-                        <span className="animate-pulse rounded bg-pink-froly px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                        <span className="animate-pulse rounded bg-pink-froly px-1.5 py-0.5 text-[10px] font-semibold text-white motion-reduce:animate-none">
                           Oferta
                         </span>
                       )}
@@ -148,10 +154,10 @@ export const NavbarCartContent: React.FC<NavbarCartContentProps> = ({
                   <button
                     type="button"
                     aria-label={`Eliminar ${item.name} del carrito`}
-                    className="size-10 group flex shrink-0 items-center justify-center rounded-full bg-gray-200 text-blue-yankees/60 transition-colors hover:bg-blue-baby hover:text-blue-yankees focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kawaii-pink focus-visible:ring-offset-2"
+                    className="group flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full bg-gray-200 text-blue-yankees/60 transition-colors hover:bg-blue-baby hover:text-blue-yankees focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kawaii-pink focus-visible:ring-offset-2"
                     onClick={() => cart.removeItem(item.id)}
                   >
-                    <X className="m-auto h-4 w-4" />
+                    <X aria-hidden="true" className="m-auto h-4 w-4" />
                   </button>
                 </div>
               </div>

@@ -36,7 +36,7 @@ export async function generateMetadata({
   const variantAttributes = [
     product.design?.name,
     product.color?.name,
-    product.size?.name,
+    getStructuredProductSize(product),
   ]
     .filter(Boolean)
     .join(", ");

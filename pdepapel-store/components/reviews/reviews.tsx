@@ -132,11 +132,11 @@ export const Reviews: React.FC<ReviewsProps> = ({ title, reviews = [] }) => {
           </div>
         </SignedIn>
         <SignedOut>
-          <Link href={accountAccessPath(STOREFRONT_ROUTES.signIn, pathname)}>
-            <Button className="my-4">
+          <Button asChild className="my-4">
+            <Link href={accountAccessPath(STOREFRONT_ROUTES.signIn, pathname)}>
               Inicia sesión para dejar un comentario
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </SignedOut>
       </div>
     </div>

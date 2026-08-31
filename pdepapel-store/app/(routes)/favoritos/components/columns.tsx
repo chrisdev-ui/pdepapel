@@ -25,7 +25,6 @@ export type WishlistColumn = {
   offerLabel?: string | null;
   stock: string | number;
   createdAt: Date;
-  size?: string;
   color?: string;
   design?: string;
 };
@@ -94,9 +93,6 @@ export const columns: ColumnDef<WishlistColumn>[] = [
         )}
         {row.original.color && (
           <span className="text-xs text-gray-400">{`Color: ${row.original.color}`}</span>
-        )}
-        {row.original.size && (
-          <span className="text-xs text-gray-400">{`Talla: ${row.original.size}`}</span>
         )}
       </Link>
     ),

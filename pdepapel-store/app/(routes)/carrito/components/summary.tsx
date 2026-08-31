@@ -45,12 +45,10 @@ export const Summary: React.FC<SummaryProps> = ({ disabled }) => {
       <Button
         onClick={goToCheckout}
         disabled={items.length === 0 || disabled}
-        className="group relative mt-6 w-full overflow-hidden rounded-full bg-blue-yankees font-serif text-base font-bold uppercase text-white hover:bg-blue-yankees disabled:cursor-not-allowed disabled:opacity-50"
+        className="mt-6 h-11 w-full rounded-full bg-blue-yankees font-quicksand text-base font-semibold text-white transition-colors hover:bg-blue-yankees/90 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        <CreditCard className="absolute left-0 h-5 w-5 -translate-x-full transform transition-transform duration-500 ease-out group-hover:translate-x-64" />
-        <span className="transition-opacity duration-150 group-hover:opacity-0">
-          Completar pedido
-        </span>
+        <CreditCard aria-hidden="true" className="mr-2 h-5 w-5" />
+        Finalizar compra
       </Button>
     </div>
   );

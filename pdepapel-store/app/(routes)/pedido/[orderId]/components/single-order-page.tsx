@@ -34,6 +34,7 @@ import Link from "next/link";
 
 import axios from "axios";
 import { productPath } from "@/lib/routes";
+import { getCustomerFacingProductOptions } from "@/lib/product-options";
 import { Forbidden } from "@/components/forbidden";
 import { BankTransferInstructions } from "@/components/bank-transfer-instructions";
 import { BoldCheckoutButton } from "@/components/bold-checkout-button";
@@ -772,16 +773,16 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                                                 { locale: es },
                                               )
                                             : order.shipping?.createdAt
-                                            ? format(
-                                                new Date(
-                                                  order.shipping.createdAt,
-                                                ),
-                                                "EEEE d 'de' MMMM, yyyy",
-                                                { locale: es },
-                                              )
-                                            : isCurrent
-                                            ? "En proceso..."
-                                            : "Completado"}
+                                              ? format(
+                                                  new Date(
+                                                    order.shipping.createdAt,
+                                                  ),
+                                                  "EEEE d 'de' MMMM, yyyy",
+                                                  { locale: es },
+                                                )
+                                              : isCurrent
+                                                ? "En proceso..."
+                                                : "Completado"}
                                         </p>
                                       )}
                                     </div>
@@ -1003,7 +1004,9 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                           <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100 shadow-md">
                             {imageUrl ? (
                               product ? (
-                                <Link href={productPath(product.slug || product.id)}>
+                                <Link
+                                  href={productPath(product.slug || product.id)}
+                                >
                                   <CldImage
                                     src={imageUrl}
                                     alt={name}
@@ -1034,7 +1037,9 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                               <h3 className="text-lg font-bold leading-tight">
                                 {product ? (
                                   <Link
-                                    href={productPath(product.slug || product.id)}
+                                    href={productPath(
+                                      product.slug || product.id,
+                                    )}
                                     className="hover:underline"
                                   >
                                     {name}
@@ -1050,9 +1055,14 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                                 {product?.color && (
                                   <p>Color: {product.color.name}</p>
                                 )}
-                                {product?.size && (
-                                  <p>Talla: {product.size.name}</p>
-                                )}
+                                {product &&
+                                  getCustomerFacingProductOptions(product).map(
+                                    (option) => (
+                                      <p key={`${option.name}-${option.value}`}>
+                                        {option.name}: {option.value}
+                                      </p>
+                                    ),
+                                  )}
                                 <p>
                                   {(item.sku || product?.sku) && (
                                     <>#{item.sku || product?.sku} | </>

@@ -86,7 +86,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     <div className="relative">
       <div
         className={cn(
-          "relative w-[3.75rem] max-w-[3.75rem] rounded-[6px] bg-white py-2 transition-all duration-500 ease-in-out lg:px-2 xl:px-4",
+          "relative h-11 w-[3.75rem] max-w-[3.75rem] rounded-[6px] bg-white transition-[width,max-width,margin] duration-500 ease-in-out lg:px-2 xl:px-4",
           {
             "mr-10 w-[14rem] max-w-[14rem] md:w-[28rem] md:max-w-md lg:w-80 lg:max-w-xs xl:w-[28rem] xl:max-w-md":
               displaySearchbox,
@@ -98,13 +98,15 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         <Input
           ref={inputRef}
           type="text"
+          name="catalog-search"
+          autoComplete="off"
           className={cn(
             "relative h-full w-full rounded-[6px] border-none px-4 py-0 text-base font-normal text-blue-yankees shadow-none transition-all duration-500 ease-in-out",
             {
               "py-0 pl-16 pr-4 lg:pl-14": displaySearchbox,
             },
           )}
-          placeholder="Buscar un producto"
+          placeholder="Buscar un producto…"
           value={inputValue}
           onChange={handleInputChange}
           onFocus={() => setIsOpen(true)}
@@ -112,6 +114,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         />
 
         <button
+          type="button"
           aria-label="Buscar productos"
           className={cn(
             "absolute left-0 top-0 flex h-full w-[3.75rem] cursor-pointer items-center justify-center rounded-[6px] bg-white",
@@ -123,18 +126,23 @@ export const SearchBar: React.FC<SearchBarProps> = ({
             toggleSearch(true);
           }}
         >
-          <Search className="h-5 w-5" />
+          <Search aria-hidden="true" className="h-5 w-5" />
         </button>
-        <X
+        <button
+          type="button"
+          aria-label="Cerrar búsqueda"
           className={cn(
-            "pointer-events-none absolute -right-[45px] top-1/2 h-8 w-8 -translate-y-1/2 transform cursor-pointer p-[5px] text-blue-yankees opacity-0 transition-all duration-500 ease-in-out",
+            "pointer-events-none absolute -right-12 top-1/2 flex h-11 w-11 -translate-y-1/2 touch-manipulation items-center justify-center rounded-md text-blue-yankees opacity-0 transition-[transform,opacity] duration-500 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2",
             {
               "pointer-events-auto -translate-y-1/2 rotate-180 opacity-100":
                 displaySearchbox,
             },
           )}
           onClick={closeAll}
-        />
+          tabIndex={displaySearchbox ? 0 : -1}
+        >
+          <X aria-hidden="true" className="h-5 w-5" />
+        </button>
       </div>
       {displaySearchbox && isOpen ? (
         <SearchResults

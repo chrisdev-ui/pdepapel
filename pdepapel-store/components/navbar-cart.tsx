@@ -31,10 +31,7 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
   }, []);
 
   const totalQuantity = isMounted
-    ? cart.items.reduce(
-        (total, item) => total + Number(item.quantity ?? 1),
-        0,
-      )
+    ? cart.items.reduce((total, item) => total + Number(item.quantity ?? 1), 0)
     : 0;
 
   return (
@@ -45,12 +42,12 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
             totalQuantity === 1 ? "producto" : "productos"
           }`}
           className={cn(
-            "flex min-w-[5.5rem] items-center justify-center rounded-full border-transparent bg-blue-yankees px-4 py-2 font-semibold tabular-nums text-white transition hover:opacity-75 disabled:cursor-not-allowed disabled:opacity-50",
+            "flex h-11 min-w-[5.5rem] items-center justify-center rounded-full border-transparent bg-blue-yankees px-4 py-2 font-semibold tabular-nums text-white transition-opacity hover:opacity-75 disabled:cursor-not-allowed disabled:opacity-50",
             className,
           )}
           disabled={!isMounted}
         >
-          <ShoppingBag className="h-5 w-5" />
+          <ShoppingBag aria-hidden="true" className="h-5 w-5" />
           <span className="ml-2 flex font-sans text-base font-medium">
             {totalQuantity}
           </span>

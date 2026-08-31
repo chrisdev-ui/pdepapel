@@ -178,7 +178,7 @@ export const Footer: React.FC<FooterProps> = ({ season = Season.Default }) => {
           </section>
         </div>
       </div>
-      <div className="container mx-auto py-6 text-left text-sm text-muted-foreground sm:text-center">
+      <div className="container mx-auto pb-24 pt-6 text-left text-sm text-muted-foreground sm:py-6 sm:text-center">
         &copy; {new Date().getFullYear()} P de papel. Todos los derechos
         reservados.
       </div>

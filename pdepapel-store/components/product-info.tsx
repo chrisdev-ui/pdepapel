@@ -250,7 +250,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
                 %)
               </span>
               {data.offerLabel && (
-                <span className="mt-2 inline-block animate-bounce rounded bg-pink-froly px-2 py-1 font-quicksand text-xs font-semibold text-white">
+                <span className="mt-2 inline-block animate-bounce rounded bg-pink-froly px-2 py-1 font-quicksand text-xs font-semibold text-white motion-reduce:animate-none">
                   {data.offerLabel}
                 </span>
               )}
@@ -261,7 +261,11 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
         </div>
         <div className="flex items-center gap-2">
           {showReviews && (
-            <button onClick={goToReviews} className="text-sm underline">
+            <button
+              type="button"
+              onClick={goToReviews}
+              className="min-h-11 inline-flex touch-manipulation items-center rounded-sm text-sm underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2"
+            >
               {data.reviews?.length ?? 0} Opiniones
             </button>
           )}
@@ -305,7 +309,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
                         aria-pressed={isActive}
                         onClick={() => handleVariantChange("design", design.id)}
                         className={cn(
-                          "rounded-full border-2 px-4 py-2 text-sm font-medium transition-all",
+                          "min-h-11 rounded-full border-2 px-4 py-2 text-sm font-medium transition-colors",
                           isActive
                             ? "border-blue-yankees bg-blue-yankees text-white"
                             : "border-gray-200 text-gray-900 hover:border-gray-300",
@@ -345,7 +349,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
                         disabled={isLoading}
                         onClick={() => handleVariantChange("color", color.id)}
                         className={cn(
-                          "relative h-8 w-8 cursor-pointer rounded-full border-2 transition-all focus:outline-none focus:ring-2 focus:ring-blue-yankees focus:ring-offset-2 disabled:cursor-not-allowed",
+                          "relative h-11 w-11 cursor-pointer touch-manipulation rounded-full border-2 transition-[transform,border-color,opacity] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2 disabled:cursor-not-allowed motion-reduce:transform-none",
                           isActive
                             ? "border-blue-yankees ring-2 ring-blue-yankees ring-offset-2"
                             : "border-gray-200 hover:scale-110",
@@ -393,7 +397,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
                         aria-pressed={isActive}
                         onClick={() => handleVariantChange("size", size.id)}
                         className={cn(
-                          "min-w-[3rem] rounded-md border-2 px-3 py-1 text-sm font-medium transition-all",
+                          "min-h-11 min-w-[3rem] rounded-md border-2 px-3 py-1 text-sm font-medium transition-colors",
                           isActive
                             ? "border-blue-yankees bg-blue-yankees text-white"
                             : "border-gray-200 text-gray-900 hover:border-gray-300",
@@ -445,7 +449,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
 
         {isLoading && hasVariants && (
           <p className="text-sm text-muted-foreground" role="status">
-            Actualizando opción seleccionada...
+            Actualizando opción seleccionada…
           </p>
         )}
 
@@ -469,22 +473,30 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
       <div className="mt-10 flex flex-wrap items-center gap-x-3 gap-y-4 sm:gap-y-0">
         <Button
           disabled={isUnavailable || isLoading}
-          className="flex gap-2 rounded-full border-none bg-blue-yankees px-8 py-4 font-sans text-sm font-semibold text-white outline-none [transition:0.2s]"
+          className="min-h-11 flex gap-2 rounded-full border-none bg-blue-yankees px-8 py-4 font-sans text-sm font-semibold text-white outline-none [transition:0.2s]"
           onClick={handleAddToCart}
         >
           {isLoading
-            ? "Actualizando opción..."
+            ? "Actualizando opción…"
             : data.isArchived
               ? "No disponible"
               : "Agregar al carrito"}
-          {!isLoading && <ShoppingCart className="h-5 w-5" />}
+          {!isLoading && (
+            <ShoppingCart aria-hidden="true" className="h-5 w-5" />
+          )}
         </Button>
         <Button
           variant="outline"
+          aria-label={
+            isWishlistProduct
+              ? "Quitar de la lista de deseos"
+              : "Agregar a la lista de deseos"
+          }
           onClick={handleAddToWishlist}
-          className="flex gap-2 rounded-full border-2 border-blue-yankees px-6 py-4 font-sans text-sm font-semibold text-blue-yankees hover:bg-blue-yankees hover:text-white"
+          className="min-w-11 flex h-11 gap-2 rounded-full border-2 border-blue-yankees px-4 py-2 font-sans text-sm font-semibold text-blue-yankees hover:bg-blue-yankees hover:text-white"
         >
           <Heart
+            aria-hidden="true"
             className={cn("h-5 w-5", {
               "fill-current text-red-500": isWishlistProduct,
             })}

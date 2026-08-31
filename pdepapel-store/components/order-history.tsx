@@ -127,12 +127,11 @@ export const OrderHistory: React.FC<{}> = () => {
       <Container className="space-y-10">
         <NoResults message={`No hay ordenes a tu nombre ${KAWAII_FACE_SAD}`} />
         <div>
-          <Link href={STOREFRONT_ROUTES.shop}>
-            <Button className="w-full">
-              {" "}
+          <Button asChild className="w-full">
+            <Link href={STOREFRONT_ROUTES.shop}>
               <Store className="mr-2 h-5 w-5" /> Ir a la tienda
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </div>
       </Container>
     );
@@ -192,9 +191,9 @@ export const OrderHistory: React.FC<{}> = () => {
             </CardHeader>
             <CardFooter>
               <div className="w-full">
-                <Link href={orderPath(order.id)}>
-                  <Button className="w-full">Ver detalles</Button>
-                </Link>
+                <Button asChild className="w-full">
+                  <Link href={orderPath(order.id)}>Ver detalles</Link>
+                </Button>
               </div>
             </CardFooter>
           </Card>

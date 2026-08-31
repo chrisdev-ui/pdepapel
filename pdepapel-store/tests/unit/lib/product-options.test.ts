@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  getCustomerFacingProductOptions,
   getStructuredProductSize,
   isCustomerFacingLegacySize,
 } from "@/lib/product-options";
@@ -39,5 +40,17 @@ describe("customer-facing product options", () => {
     } as Product;
 
     expect(getStructuredProductSize(product)).toBe("A5");
+    expect(getCustomerFacingProductOptions(product)).toEqual([
+      { name: "Formato", value: "A5" },
+    ]);
+  });
+
+  it("does not expose an internal shipping size without public options", () => {
+    const product = {
+      size: { id: "internal", name: "S+", value: "S+" },
+      catalogOptionValues: [],
+    } as unknown as Product;
+
+    expect(getCustomerFacingProductOptions(product)).toEqual([]);
   });
 });

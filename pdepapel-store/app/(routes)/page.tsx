@@ -151,18 +151,18 @@ export default function HomePage() {
 
   return (
     <>
-      <Suspense fallback={<HeroSliderSkeleton />}>
-        <HomeHero season={season} />
-      </Suspense>
       <section className="bg-kawaii-pink-light/15 py-8 text-center">
-        <h1 className="font-serif text-3xl font-extrabold sm:text-4xl">
+        <h1 className="text-balance font-serif text-3xl font-extrabold sm:text-4xl">
           Papelería kawaii desde Medellín con envíos a toda Colombia
         </h1>
-        <p className="mx-auto mt-3 max-w-2xl px-6 text-muted-foreground">
+        <p className="text-pretty mx-auto mt-3 max-w-2xl px-6 text-muted-foreground">
           Somos una tienda online colombiana. Desde Medellín enviamos agendas,
           cuadernos, útiles escolares y regalos kawaii a todo el país.
         </p>
       </section>
+      <Suspense fallback={<HeroSliderSkeleton />}>
+        <HomeHero season={season} />
+      </Suspense>
       <Features />
       <Suspense fallback={<CategoryLinksSkeleton />}>
         <HomeCategoryLinks />

@@ -60,7 +60,7 @@ test("normaliza un teléfono colombiano guardado antes de mostrar el checkout", 
 
   await gotoPublicPage(page, "/finalizar-compra");
 
-  const phoneInput = page.getByPlaceholder("Tu número de teléfono");
+  const phoneInput = page.getByRole("textbox", { name: /Teléfono/ });
   await expect(phoneInput).toHaveValue(/300.*123.*4567/);
   expect(phoneWarnings).toEqual([]);
 });

@@ -53,7 +53,7 @@ export const StepNavigation = ({
           variant="outline"
           onClick={onBack}
           disabled={isLoading}
-          className="hover:bg-primary/15 group h-10 w-full border-primary/20 bg-primary/5 px-6 text-base backdrop-blur-md transition-all duration-300 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/20 sm:w-auto"
+          className="hover:bg-primary/15 group h-11 w-full border-primary/20 bg-primary/5 px-6 text-base backdrop-blur-md transition-[background-color,border-color,box-shadow] duration-300 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/20 sm:w-auto"
         >
           <ArrowLeft className="mr-2 h-4 w-4 transition-transform group-hover:-translate-x-1" />
           {getBackLabel()}
@@ -71,7 +71,7 @@ export const StepNavigation = ({
         }}
         disabled={isNextDisabled || isLoading}
         className={cn(
-          "group relative h-10 overflow-hidden bg-primary px-6 text-base shadow-lg transition-all duration-500 hover:scale-[1.03] hover:shadow-primary/50 sm:ml-auto",
+          "group relative h-11 overflow-hidden bg-primary px-6 text-base shadow-lg transition-[transform,box-shadow,background-color] duration-500 hover:scale-[1.03] hover:shadow-primary/50 motion-reduce:transform-none sm:ml-auto",
           {
             "w-full": true,
             "sm:w-auto": !isFirstStep,
@@ -82,7 +82,7 @@ export const StepNavigation = ({
         {isLoading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Procesando...
+            Procesando…
           </>
         ) : (
           <>

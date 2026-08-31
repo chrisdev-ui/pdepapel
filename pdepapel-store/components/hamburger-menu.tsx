@@ -29,7 +29,13 @@ export const HamburgerMenu: React.FC = () => {
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
-        <Menu className="h-6 w-6 md:h-10 md:w-10 lg:hidden" />
+        <button
+          type="button"
+          aria-label={open ? "Cerrar menú de navegación" : "Abrir menú de navegación"}
+          className="flex h-11 w-11 touch-manipulation items-center justify-center rounded-md text-blue-yankees transition-colors hover:bg-white/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2 focus-visible:ring-offset-blue-baby lg:hidden"
+        >
+          <Menu aria-hidden="true" className="h-6 w-6 md:h-7 md:w-7" />
+        </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-72" align="end" sideOffset={10}>
         <DropdownMenuItem

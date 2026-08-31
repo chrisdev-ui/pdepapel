@@ -1,5 +1,6 @@
 import {
   accountAccessPath,
+  canonicalStorefrontHref,
   getSafeStorefrontRedirectPath,
   STOREFRONT_ROUTES,
   categoryPath,
@@ -29,6 +30,21 @@ describe("customer-facing routes", () => {
     );
     expect(orderPath("order-123")).toBe("/pedido/order-123");
     expect(quotePath("quote-token")).toBe("/cotizacion/quote-token");
+  });
+
+  it("normalizes legacy shop calls to action without changing external links", () => {
+    expect(canonicalStorefrontHref("/shop")).toBe("/tienda");
+    expect(canonicalStorefrontHref("/shop?categoryId=123#productos")).toBe(
+      "/tienda?categoryId=123#productos",
+    );
+    expect(
+      canonicalStorefrontHref(
+        "https://papeleriapdepapel.com/shop?showOffers=true",
+      ),
+    ).toBe("/tienda?showOffers=true");
+    expect(canonicalStorefrontHref("https://example.com/shop")).toBe(
+      "https://example.com/shop",
+    );
   });
 
   it("keeps account redirects inside the storefront and out of auth loops", () => {

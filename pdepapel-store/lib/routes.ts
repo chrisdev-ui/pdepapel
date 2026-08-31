@@ -77,3 +77,31 @@ export const categoryPath = (slug: string) => `/categoria/${slug}`;
 export const orderPath = (orderId: string) => `/pedido/${orderId}`;
 
 export const quotePath = (token: string) => `/cotizacion/${token}`;
+
+export function canonicalStorefrontHref(
+  href: string | null | undefined,
+  fallback = STOREFRONT_ROUTES.home,
+): string {
+  const normalizedHref = href?.trim();
+
+  if (!normalizedHref) return fallback;
+
+  if (
+    normalizedHref === "/shop" ||
+    normalizedHref.startsWith("/shop?") ||
+    normalizedHref.startsWith("/shop#")
+  ) {
+    return `${STOREFRONT_ROUTES.shop}${normalizedHref.slice(5)}`;
+  }
+
+  try {
+    const url = new URL(normalizedHref);
+    if (url.origin === STOREFRONT_ORIGIN && url.pathname === "/shop") {
+      return `${STOREFRONT_ROUTES.shop}${url.search}${url.hash}`;
+    }
+  } catch {
+    return normalizedHref;
+  }
+
+  return normalizedHref;
+}

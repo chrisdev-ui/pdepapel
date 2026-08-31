@@ -97,11 +97,11 @@ const Cart: React.FC<{}> = () => {
               <p className="text-neutral-500">
                 No tienes productos en tu carrito. {KAWAII_FACE_SAD}
               </p>
-              <Link href={STOREFRONT_ROUTES.shop}>
-                <Button className="mt-4">
+              <Button asChild className="mt-4">
+                <Link href={STOREFRONT_ROUTES.shop}>
                   <ArrowLeft className="mr-2 h-5 w-5" /> Regresar a la tienda
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             </div>
           )}
           <ul>

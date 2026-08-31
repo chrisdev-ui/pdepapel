@@ -38,7 +38,8 @@ export const BasicInfoStep = ({ form, isLoading }: BasicInfoStepProps) => {
                 <Input
                   className="bg-blue-purple/20 invalid:bg-pink-froly/20"
                   disabled={isLoading}
-                  placeholder="Tu nombre"
+                  autoComplete="given-name"
+                  placeholder="Ej. Ana…"
                   {...field}
                 />
               </FormControl>
@@ -56,7 +57,8 @@ export const BasicInfoStep = ({ form, isLoading }: BasicInfoStepProps) => {
                 <Input
                   className="bg-blue-purple/20 invalid:bg-pink-froly/20"
                   disabled={isLoading}
-                  placeholder="Tus apellidos"
+                  autoComplete="family-name"
+                  placeholder="Ej. Torres…"
                   {...field}
                 />
               </FormControl>
@@ -76,7 +78,11 @@ export const BasicInfoStep = ({ form, isLoading }: BasicInfoStepProps) => {
                 <Input
                   className="bg-blue-purple/20 invalid:bg-pink-froly/20"
                   disabled={isLoading}
-                  placeholder="Tu correo electrónico"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  spellCheck={false}
+                  placeholder="Ej. ana@correo.com…"
                   {...field}
                 />
               </FormControl>
@@ -93,7 +99,8 @@ export const BasicInfoStep = ({ form, isLoading }: BasicInfoStepProps) => {
               <FormControl>
                 <PhoneInput
                   disabled={isLoading}
-                  placeholder="Tu número de teléfono"
+                  autoComplete="tel"
+                  placeholder="Ej. 300 123 4567…"
                   international={false}
                   defaultCountry="CO"
                   {...field}
@@ -115,7 +122,9 @@ export const BasicInfoStep = ({ form, isLoading }: BasicInfoStepProps) => {
                 <Input
                   className="bg-blue-purple/20 invalid:bg-pink-froly/20"
                   disabled={isLoading}
-                  placeholder="CC, DNI, Pasaporte, etc."
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder="Ej. CC 123456789…"
                   {...field}
                 />
               </FormControl>

@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { isCustomerFacingSizeValue } from "@/lib/product-options";
 import { currencyFormatter } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { ExternalLink, Package, Sparkles } from "lucide-react";
@@ -86,9 +87,9 @@ const QuoteItem = ({ item, index }: QuoteItemProps) => {
 
           {/* Variants Display instead of Description */}
           <div className="mt-1 flex flex-wrap gap-2">
-            {item.size && (
+            {isCustomerFacingSizeValue(item.size) && (
               <span className="inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10">
-                Talla: {item.size}
+                Tamaño: {item.size}
               </span>
             )}
             {item.color && (
@@ -106,7 +107,9 @@ const QuoteItem = ({ item, index }: QuoteItemProps) => {
           <div className="mt-2 flex items-center gap-3 text-sm">
             <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-gray-700">
               <Package className="h-3 w-3" />
-              <span className="font-quicksand font-semibold">x{item.quantity}</span>
+              <span className="font-quicksand font-semibold">
+                x{item.quantity}
+              </span>
             </span>
             {item.quantity > 1 && (
               <span className="font-quicksand font-medium text-gray-500">

@@ -3,6 +3,7 @@ import { MainBanner as MainBannerType } from "@/types";
 import Link from "next/link";
 
 import { CldImage } from "@/components/ui/CldImage";
+import { canonicalStorefrontHref } from "@/lib/routes";
 
 interface MainBannerProps {
   data: MainBannerType;
@@ -29,11 +30,14 @@ const MainBanner: React.FC<MainBannerProps> = ({ data }) => {
             {data?.label2 ?? ""}
           </div>
         )}
-        <Link href={data?.callToAction ?? "#"}>
-          <Button className="relative rounded border-none bg-pink-froly px-8 py-4 text-sm font-semibold text-blue-yankees outline-none transition duration-200 hover:bg-pink-shell">
+        <Button
+          asChild
+          className="relative rounded border-none bg-pink-froly px-8 py-4 text-sm font-semibold text-blue-yankees outline-none transition-colors duration-200 hover:bg-pink-shell"
+        >
+          <Link href={canonicalStorefrontHref(data?.callToAction)}>
             Explora
-          </Button>
-        </Link>
+          </Link>
+        </Button>
       </section>
     )
   );

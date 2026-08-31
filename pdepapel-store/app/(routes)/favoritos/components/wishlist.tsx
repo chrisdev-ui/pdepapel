@@ -43,7 +43,6 @@ export function Wishlist() {
     offerLabel: item.offerLabel,
     stock: item.stock,
     createdAt: item.addedOn,
-    size: item.size?.name,
     color: item.color?.name,
     design: item.design?.name,
   }));
@@ -61,10 +60,14 @@ export function Wishlist() {
               Guarda tus favoritos en todos tus dispositivos
             </p>
             <p className="mt-1">
-              Crea una cuenta o inicia sesión para conservar esta lista cuando cambies de celular o computador.
+              Crea una cuenta o inicia sesión para conservar esta lista cuando
+              cambies de celular o computador.
             </p>
             <Link
-              href={accountAccessPath(STOREFRONT_ROUTES.signUp, STOREFRONT_ROUTES.wishlist)}
+              href={accountAccessPath(
+                STOREFRONT_ROUTES.signUp,
+                STOREFRONT_ROUTES.wishlist,
+              )}
               className="mt-3 inline-block font-semibold text-purple-700 underline underline-offset-4"
             >
               Crear cuenta gratis
@@ -98,7 +101,10 @@ function WishlistSkeleton() {
       <Skeleton className="h-10 w-72" />
       <div className="space-y-4 rounded-xl border p-4">
         {Array.from({ length: 3 }, (_, index) => (
-          <div key={index} className="flex items-center gap-4 border-b py-3 last:border-0">
+          <div
+            key={index}
+            className="flex items-center gap-4 border-b py-3 last:border-0"
+          >
             <Skeleton className="h-16 w-16 shrink-0" />
             <div className="flex-1 space-y-2">
               <Skeleton className="h-5 w-2/3" />

@@ -31,7 +31,7 @@ const SheetOverlay = React.forwardRef<
 SheetOverlay.displayName = SheetPrimitive.Overlay.displayName;
 
 const sheetVariants = cva(
-  "fixed z-[9999] min-w-0 gap-4 overflow-y-auto bg-background p-6 shadow-lg transition ease-in-out [&>*]:min-w-0 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:duration-500",
+  "fixed z-[9999] min-w-0 gap-4 overflow-y-auto overscroll-contain bg-background p-6 shadow-lg transition ease-in-out [&>*]:min-w-0 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:duration-500",
   {
     variants: {
       side: {
@@ -67,14 +67,14 @@ const SheetContent = React.forwardRef<
     >
       {children}
       {variant === "cart" && (
-        <SheetPrimitive.Close className="absolute left-4 top-4 rounded-sm text-blue-yankees opacity-80 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
-          <ArrowLeft className="h-8 w-8" />
+        <SheetPrimitive.Close className="absolute left-2 top-2 flex h-11 w-11 touch-manipulation items-center justify-center rounded-md text-blue-yankees opacity-80 ring-offset-background transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary sm:left-4 sm:top-4">
+          <ArrowLeft aria-hidden="true" className="h-7 w-7" />
           <span className="sr-only">Atrás</span>
         </SheetPrimitive.Close>
       )}
       {variant === "default" && (
-        <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
-          <X className="h-4 w-4" />
+        <SheetPrimitive.Close className="absolute right-2 top-2 flex h-11 w-11 touch-manipulation items-center justify-center rounded-md opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary sm:right-4 sm:top-4">
+          <X aria-hidden="true" className="h-5 w-5" />
           <span className="sr-only">Cerrar</span>
         </SheetPrimitive.Close>
       )}

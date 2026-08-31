@@ -36,6 +36,7 @@ import {
   trackCustomerEvent,
 } from "@/lib/customer-analytics";
 import { normalizePhoneForInput } from "@/lib/phone";
+import { getCustomerFacingProductOptions } from "@/lib/product-options";
 import { orderPath, productPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import {
   CheckoutByOrderResponse,
@@ -913,12 +914,11 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
           <NoResults
             message={`No hay productos en el carrito ${KAWAII_FACE_SAD}`}
           />
-          <Link href={STOREFRONT_ROUTES.shop}>
-            <Button className="mt-4">
-              {" "}
+          <Button asChild className="mt-4">
+            <Link href={STOREFRONT_ROUTES.shop}>
               <ArrowLeft className="mr-2 h-5 w-5" /> Regresar a la tienda
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </div>
       )}
       {activeItems.length > 0 && (
@@ -1050,9 +1050,14 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                         {item.color && (
                           <span className="line-clamp-1 text-xs text-gray-400">{`Color: ${item.color.name}`}</span>
                         )}
-                        {item.size && (
-                          <span className="line-clamp-1 text-xs text-gray-400">{`Talla: ${item.size.name}`}</span>
-                        )}
+                        {getCustomerFacingProductOptions(item).map((option) => (
+                          <span
+                            key={`${option.name}-${option.value}`}
+                            className="line-clamp-1 text-xs text-gray-400"
+                          >
+                            {option.name}: {option.value}
+                          </span>
+                        ))}
                         {outOfStockItems.includes(item.id) && (
                           <span className="mt-1 font-bold text-destructive">
                             Sin Stock

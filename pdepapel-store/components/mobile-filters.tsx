@@ -33,9 +33,9 @@ const MobileFilters: React.FC<MobileFiltersProps> = ({
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <Button className="flex items-center gap-x-2 lg:hidden">
+        <Button className="flex h-11 items-center gap-x-2 lg:hidden">
           Filtros
-          <Plus className="h-5 w-5" />
+          <Plus aria-hidden="true" className="h-5 w-5" />
         </Button>
       </SheetTrigger>
       <SheetContent
