@@ -55,7 +55,10 @@ export const PreviewModal: React.FC<{}> = () => {
     <Modal open={previewModal.isOpen} onClose={previewModal.onClose}>
       <div className="flex w-full flex-col gap-4 md:grid md:grid-cols-12 md:items-start md:gap-x-6 lg:gap-x-8">
         <div className="w-full md:col-span-5">
-          <Gallery images={currentProduct.images} />
+          <Gallery
+            images={currentProduct.images}
+            productName={currentProduct.name}
+          />
         </div>
         <div className="w-full md:col-span-7">
           <ProductInfo

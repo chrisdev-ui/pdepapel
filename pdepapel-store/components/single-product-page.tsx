@@ -157,7 +157,11 @@ export const SingleProductPage: React.FC<SingleProductPageProps> = ({
           <Breadcrumb items={breadcrumbItems} />
         </div>
         <div className="lg:grid lg:grid-cols-2 lg:items-start lg:gap-x-8">
-          <Gallery key={selectedProduct.id} images={selectedProduct.images} />
+          <Gallery
+            key={selectedProduct.id}
+            images={selectedProduct.images}
+            productName={selectedProduct.name}
+          />
           <div className="mt-10 px-4 sm:mt-6 sm:px-0 lg:mt-0">
             <ProductInfo
               data={selectedProduct}

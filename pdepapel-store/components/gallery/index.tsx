@@ -1,16 +1,27 @@
 "use client";
 
-import { CldImage } from "@/components/ui/CldImage";
+import { cloudinaryImageLoader } from "@/lib/cloudinary-image-loader";
 import { cn } from "@/lib/utils";
 import { Image as ImageType } from "@/types";
+import Image from "next/image";
 import { useState } from "react";
 
 interface GalleryProps {
   images: ImageType[];
+  productName: string;
 }
 
-export const Gallery: React.FC<GalleryProps> = ({ images = [] }) => {
-  const [selectedIndex, setSelectedIndex] = useState(0);
+const PRODUCT_IMAGE_SIZES =
+  "(max-width: 639px) calc(100vw - 2rem), (max-width: 1023px) calc(100vw - 3rem), (max-width: 1279px) calc(50vw - 3rem), 608px";
+
+export const Gallery: React.FC<GalleryProps> = ({
+  images = [],
+  productName,
+}) => {
+  const mainImageIndex = images.findIndex((image) => image.isMain);
+  const [selectedIndex, setSelectedIndex] = useState(
+    mainImageIndex >= 0 ? mainImageIndex : 0,
+  );
 
   if (!images || images.length === 0) {
     return (
@@ -20,14 +31,17 @@ export const Gallery: React.FC<GalleryProps> = ({ images = [] }) => {
     );
   }
 
+  const selectedImage = images[selectedIndex] ?? images[0];
+
   return (
     <div className="flex flex-col gap-3">
       <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-muted sm:rounded-lg">
-        <CldImage
+        <Image
           fill
-          src={images[selectedIndex]?.url}
-          alt="Imagen principal del producto"
-          sizes="(max-width: 1024px) 100vw, 50vw"
+          loader={cloudinaryImageLoader}
+          src={selectedImage.url}
+          alt={productName}
+          sizes={PRODUCT_IMAGE_SIZES}
           priority
           className="object-cover object-center"
         />
@@ -45,10 +59,12 @@ export const Gallery: React.FC<GalleryProps> = ({ images = [] }) => {
                   : "border-transparent hover:border-gray-300",
               )}
             >
-              <CldImage
+              <Image
                 src={image.url}
-                alt={`Thumbnail ${index + 1}`}
+                alt={`Vista ${index + 1} de ${productName}`}
                 fill
+                loader={cloudinaryImageLoader}
+                sizes="64px"
                 className="object-cover object-center"
               />
             </button>

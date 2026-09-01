@@ -7,6 +7,7 @@ export const caudex = Caudex({
   display: "swap",
   style: ["italic", "normal"],
   variable: "--font-caudex",
+  preload: false,
 });
 export const beautifulEveryTime = localFont({
   src: "../../public/fonts/BeautifulEveryTime-Dg4m.woff2",

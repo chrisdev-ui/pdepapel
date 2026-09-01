@@ -1,4 +1,3 @@
-import { motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -17,14 +16,10 @@ export const KitContents: React.FC<KitContentsProps> = ({ components }) => {
     <div className="mt-8">
       <h3 className="mb-4 font-serif text-xl font-bold">Este Kit Incluye:</h3>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2">
-        {components.map((item, index) => (
-          <motion.div
-            key={index}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+        {components.map((item) => (
+          <div
+            key={item.component.id}
+            className="transition-transform duration-200 hover:scale-[1.02] active:scale-[0.98] motion-reduce:transition-none"
           >
             <Link
               href={productPath(item.component.slug || item.component.id)}
@@ -59,7 +54,7 @@ export const KitContents: React.FC<KitContentsProps> = ({ components }) => {
                 </CardContent>
               </Card>
             </Link>
-          </motion.div>
+          </div>
         ))}
       </div>
     </div>
