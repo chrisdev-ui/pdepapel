@@ -1,6 +1,7 @@
 "use client";
 
 import { ActionConfirmationDialog } from "@/components/modals/action-confirmation-dialog";
+import { BiMonthPicker } from "@/components/bi/bi-month-picker";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,10 @@ import {
   type BusinessCashPolicyInput,
 } from "@/lib/business-growth";
 import type { BusinessGrowthOverview } from "@/lib/business-growth-data";
+import {
+  getBusinessGrowthPeriodDateBounds,
+  getDefaultBusinessMovementDate,
+} from "@/lib/business-growth-period";
 import { cn, currencyFormatter } from "@/lib/utils";
 import {
   AlertTriangle,
@@ -118,7 +123,7 @@ const INITIAL_MOVEMENT_FORM: CashMovementForm = {
   type: "OPERATING_EXPENSE",
   amount: undefined,
   description: "",
-  occurredAt: new Date().toISOString().slice(0, 10),
+  occurredAt: "",
   reference: "",
   notes: "",
 };
@@ -233,9 +238,14 @@ export function BusinessGrowthClient({
   const refreshOverview = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      const response = await fetch(`/api/${storeId}/business-growth/overview`, {
-        cache: "no-store",
+      const query = new URLSearchParams({
+        month: String(overview.period.month),
+        year: String(overview.period.year),
       });
+      const response = await fetch(
+        `/api/${storeId}/business-growth/overview?${query.toString()}`,
+        { cache: "no-store" },
+      );
       if (!response.ok) throw new Error(await readError(response));
       const nextOverview = (await response.json()) as BusinessGrowthOverview;
       setOverview(nextOverview);
@@ -252,7 +262,7 @@ export function BusinessGrowthClient({
     } finally {
       setIsRefreshing(false);
     }
-  }, [storeId, toast]);
+  }, [overview.period.month, overview.period.year, storeId, toast]);
 
   const currentCashPlan = overview.cashPlan;
   const configuredPercent = useMemo(
@@ -293,7 +303,7 @@ export function BusinessGrowthClient({
     setEditingMovementId(null);
     setMovementForm({
       ...INITIAL_MOVEMENT_FORM,
-      occurredAt: new Date().toISOString().slice(0, 10),
+      occurredAt: getDefaultBusinessMovementDate(overview.period),
     });
     setIsMovementDialogOpen(true);
   };
@@ -482,20 +492,31 @@ export function BusinessGrowthClient({
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <Heading
             title="Negocio y crecimiento"
-            description={`Decisiones de caja y campañas para ${formatMonth(overview.period.label)}.`}
+            description={`Caja de ${formatMonth(overview.period.label)} y campañas basadas en la situación actual.`}
           />
-          <Button
-            variant="outline"
-            onClick={refreshOverview}
-            disabled={isRefreshing}
-          >
-            {isRefreshing ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="mr-2 h-4 w-4" />
-            )}
-            Actualizar datos
-          </Button>
+          <div className="flex flex-col gap-2 sm:items-end">
+            <span className="text-xs font-medium text-muted-foreground">
+              Período financiero
+            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <BiMonthPicker
+                activeYear={overview.period.year}
+                activeMonth={overview.period.month - 1}
+              />
+              <Button
+                variant="outline"
+                onClick={refreshOverview}
+                disabled={isRefreshing}
+              >
+                {isRefreshing ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
+                Actualizar datos
+              </Button>
+            </div>
+          </div>
         </div>
 
         <Alert variant="info">
@@ -508,6 +529,19 @@ export function BusinessGrowthClient({
             externo.
           </AlertDescription>
         </Alert>
+
+        {!overview.period.isCurrent && (
+          <Alert variant="info">
+            <CalendarDays className="h-4 w-4" />
+            <AlertTitle>Estás revisando un período histórico</AlertTitle>
+            <AlertDescription>
+              Las ventas, la utilidad y los movimientos corresponden a{" "}
+              {formatMonth(overview.period.label)}. La distribución se simula
+              con las reglas vigentes; las recomendaciones de campañas e
+              inventario conservan la situación actual.
+            </AlertDescription>
+          </Alert>
+        )}
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <CashPlanCard
@@ -557,7 +591,7 @@ export function BusinessGrowthClient({
               value="campaigns"
               className="border bg-background px-4 py-2.5"
             >
-              Campañas sociales
+              Campañas actuales
             </TabsTrigger>
           </TabsList>
 
@@ -634,11 +668,17 @@ export function BusinessGrowthClient({
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
                     <ClipboardList className="h-5 w-5" />
-                    Calidad de los datos
+                    Calidad actual de los datos
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4 text-sm text-muted-foreground">
                   <p>{overview.dataQuality.note}</p>
+                  {!overview.period.isCurrent && (
+                    <p>
+                      Este control revisa el catálogo activo hoy, no una copia
+                      histórica del catálogo.
+                    </p>
+                  )}
                   <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900">
                     <span className="font-semibold">
                       {overview.dataQuality.productsWithoutCost}
@@ -661,10 +701,11 @@ export function BusinessGrowthClient({
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <PencilLine className="h-5 w-5" />
-                    Reglas de distribución
+                    Reglas de distribución vigentes
                   </CardTitle>
                   <p className="text-sm text-muted-foreground">
-                    Ajusta los límites que quieres usar para decidir. La suma de
+                    Ajusta los límites que quieres usar para decidir. Estas
+                    reglas también recalculan períodos históricos y la suma de
                     reinversión y retiro no puede pasar del 100%.
                   </p>
                 </CardHeader>
@@ -889,11 +930,15 @@ export function BusinessGrowthClient({
           <TabsContent value="campaigns" className="space-y-5">
             <Alert variant="info">
               <Megaphone className="h-4 w-4" />
-              <AlertTitle>Sin anuncios ni cobros automáticos</AlertTitle>
+              <AlertTitle>
+                Recomendaciones actuales, sin anuncios automáticos
+              </AlertTitle>
               <AlertDescription>
-                Esta primera versión recomienda y guarda borradores con enlace
-                medible. Nunca publica, enciende, pausa ni cambia presupuestos
-                en Instagram o TikTok.
+                Estas sugerencias usan el stock, los riesgos y el presupuesto
+                del mes actual, aunque estés revisando otro período. Esta
+                primera versión guarda borradores con enlace medible, pero nunca
+                publica, enciende, pausa ni cambia presupuestos en Instagram o
+                TikTok.
               </AlertDescription>
             </Alert>
 
@@ -1110,6 +1155,8 @@ export function BusinessGrowthClient({
                 <Input
                   type="date"
                   value={movementForm.occurredAt}
+                  min={getBusinessGrowthPeriodDateBounds(overview.period).min}
+                  max={getBusinessGrowthPeriodDateBounds(overview.period).max}
                   onChange={(event) =>
                     setMovementForm((current) => ({
                       ...current,

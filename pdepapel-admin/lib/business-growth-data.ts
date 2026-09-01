@@ -60,7 +60,14 @@ function campaignValue(
 }
 
 export type BusinessGrowthOverview = {
-  period: { start: string; end: string; label: string };
+  period: {
+    start: string;
+    end: string;
+    label: string;
+    year: number;
+    month: number;
+    isCurrent: boolean;
+  };
   policy: BusinessCashPolicyInput & { isConfigured: boolean };
   financial: {
     netRevenue: number;
@@ -113,10 +120,14 @@ export async function getBusinessGrowthOverview(
   storeId: string,
   referenceDate = getColombiaDate(),
 ): Promise<BusinessGrowthOverview> {
+  const currentDate = getColombiaDate();
   const start = startOfMonth(referenceDate);
   const end = endOfMonth(referenceDate);
   const year = referenceDate.getFullYear();
   const month = referenceDate.getMonth() + 1;
+  const isCurrentPeriod =
+    year === currentDate.getFullYear() &&
+    month === currentDate.getMonth() + 1;
 
   const [
     financial,
@@ -193,6 +204,40 @@ export async function getBusinessGrowthOverview(
     policy,
     movements: cashMovements,
   });
+  let currentCampaignBudget = cashPlan.suggestedMarketingTestBudget;
+
+  if (!isCurrentPeriod) {
+    const currentStart = startOfMonth(currentDate);
+    const currentEnd = endOfMonth(currentDate);
+    const [currentFinancial, currentMovements] = await Promise.all([
+      getMonthlyFinancialSummary(
+        storeId,
+        currentDate.getFullYear(),
+        currentDate.getMonth() + 1,
+      ),
+      prismadb.businessCashMovement.findMany({
+        where: {
+          storeId,
+          occurredAt: { gte: currentStart, lte: currentEnd },
+        },
+        orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
+        take: 100,
+      }),
+    ]);
+    const currentCashPlan = calculateBusinessCashPlan({
+      operatingProfit: currentFinancial.total_net_profit,
+      policy,
+      movements: currentMovements.map((movement) => ({
+        type: movement.type as BusinessCashMovementType,
+        amount: Number(movement.amount),
+        description: movement.description,
+        occurredAt: movement.occurredAt.toISOString(),
+        reference: movement.reference,
+        notes: movement.notes,
+      })),
+    });
+    currentCampaignBudget = currentCashPlan.suggestedMarketingTestBudget;
+  }
 
   const profitByProductId = new Map(
     topProducts.map((product) => [product.productId, product]),
@@ -221,7 +266,7 @@ export async function getBusinessGrowthOverview(
       };
     }),
     policy,
-    testBudget: cashPlan.suggestedMarketingTestBudget,
+    testBudget: currentCampaignBudget,
   });
 
   return {
@@ -232,6 +277,9 @@ export async function getBusinessGrowthOverview(
         month: "long",
         year: "numeric",
       }),
+      year,
+      month,
+      isCurrent: isCurrentPeriod,
     },
     policy: { ...policy, isConfigured: Boolean(policyRecord) },
     financial: {
@@ -272,6 +320,6 @@ export async function getBusinessGrowthOverview(
           ? "Los productos sin costo no se recomiendan para pauta pagada hasta completar ese dato."
           : "Los cálculos usan las ventas netas registradas y los gastos que agregues en este panel.",
     },
-    season: getCommercialSeason(referenceDate),
+    season: getCommercialSeason(currentDate),
   };
 }

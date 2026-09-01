@@ -124,14 +124,18 @@ export const BiMonthPicker: React.FC<BiMonthPickerProps> = ({
         size="icon"
         onClick={handlePrevMonth}
         disabled={isMinMonth()}
-        className="h-8 w-8"
+        className="h-11 w-11"
+        aria-label="Mes anterior"
       >
         <ChevronLeft className="h-4 w-4" />
       </Button>
 
       <div className="flex items-center space-x-1">
         <Select value={activeMonthIdx.toString()} onValueChange={onMonthChange}>
-          <SelectTrigger className="h-8 w-[120px] font-medium capitalize">
+          <SelectTrigger
+            className="h-11 w-[120px] font-medium capitalize"
+            aria-label="Seleccionar mes"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -151,7 +155,10 @@ export const BiMonthPicker: React.FC<BiMonthPickerProps> = ({
         </Select>
 
         <Select value={activeYear.toString()} onValueChange={onYearChange}>
-          <SelectTrigger className="h-8 w-[80px] font-medium">
+          <SelectTrigger
+            className="h-11 w-[80px] font-medium"
+            aria-label="Seleccionar año"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -169,7 +176,8 @@ export const BiMonthPicker: React.FC<BiMonthPickerProps> = ({
         size="icon"
         onClick={handleNextMonth}
         disabled={isCurrentMonth()}
-        className="h-8 w-8"
+        className="h-11 w-11"
+        aria-label="Mes siguiente"
       >
         <ChevronRight className="h-4 w-4" />
       </Button>
