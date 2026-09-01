@@ -26,7 +26,14 @@ describe("BiMonthPicker", () => {
   });
 
   it("navigates to the previous month while preserving other parameters", () => {
-    render(<BiMonthPicker activeYear={2026} activeMonth={8} />);
+    const onLoadingChange = vi.fn();
+    render(
+      <BiMonthPicker
+        activeYear={2026}
+        activeMonth={8}
+        onLoadingChange={onLoadingChange}
+      />,
+    );
 
     const previousButton = screen.getByRole("button", {
       name: "Mes anterior",
@@ -38,6 +45,9 @@ describe("BiMonthPicker", () => {
     expect(mocks.push).toHaveBeenCalledWith(
       "/store-id/negocio?tab=cash&month=8&year=2026",
     );
+    expect(onLoadingChange).toHaveBeenLastCalledWith(true);
+    expect(previousButton).toBeDisabled();
+    expect(screen.getByLabelText("Seleccionar mes")).toBeDisabled();
   });
 
   it("prevents navigation beyond the current Colombia month", () => {

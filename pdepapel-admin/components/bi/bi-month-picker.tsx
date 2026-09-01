@@ -13,20 +13,35 @@ import { utcToZonedTime } from "date-fns-tz";
 import { es } from "date-fns/locale";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState, useTransition } from "react";
 
 interface BiMonthPickerProps {
   /** The active year (e.g. 2026). Plain number avoids Date serialization issues. */
   activeYear: number;
   /** The active month index (0-11). Plain number avoids Date serialization issues. */
   activeMonth: number;
+  /** Reports route-navigation state so the parent can explain stale data. */
+  onLoadingChange?: (isLoading: boolean) => void;
 }
 
 export const BiMonthPicker: React.FC<BiMonthPickerProps> = ({
   activeYear,
   activeMonth,
+  onLoadingChange,
 }) => {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const isLoading = isNavigating || isPending;
+
+  useEffect(() => {
+    setIsNavigating(false);
+  }, [activeMonth, activeYear]);
+
+  useEffect(() => {
+    onLoadingChange?.(isLoading);
+  }, [isLoading, onLoadingChange]);
 
   // Always use Colombia timezone for "today" so the picker limits match
   // the business timezone, regardless of browser or server timezone.
@@ -55,7 +70,10 @@ export const BiMonthPicker: React.FC<BiMonthPickerProps> = ({
     const search = current.toString();
     const query = search ? `?${search}` : "";
 
-    router.push(`${window.location.pathname}${query}`);
+    setIsNavigating(true);
+    startTransition(() => {
+      router.push(`${window.location.pathname}${query}`);
+    });
   };
 
   const handlePrevMonth = () => {
@@ -118,12 +136,12 @@ export const BiMonthPicker: React.FC<BiMonthPickerProps> = ({
   };
 
   return (
-    <div className="flex items-center space-x-2">
+    <div className="flex items-center space-x-2" aria-busy={isLoading}>
       <Button
         variant="outline"
         size="icon"
         onClick={handlePrevMonth}
-        disabled={isMinMonth()}
+        disabled={isLoading || isMinMonth()}
         className="h-11 w-11"
         aria-label="Mes anterior"
       >
@@ -131,7 +149,11 @@ export const BiMonthPicker: React.FC<BiMonthPickerProps> = ({
       </Button>
 
       <div className="flex items-center space-x-1">
-        <Select value={activeMonthIdx.toString()} onValueChange={onMonthChange}>
+        <Select
+          value={activeMonthIdx.toString()}
+          onValueChange={onMonthChange}
+          disabled={isLoading}
+        >
           <SelectTrigger
             className="h-11 w-[120px] font-medium capitalize"
             aria-label="Seleccionar mes"
@@ -154,7 +176,11 @@ export const BiMonthPicker: React.FC<BiMonthPickerProps> = ({
           </SelectContent>
         </Select>
 
-        <Select value={activeYear.toString()} onValueChange={onYearChange}>
+        <Select
+          value={activeYear.toString()}
+          onValueChange={onYearChange}
+          disabled={isLoading}
+        >
           <SelectTrigger
             className="h-11 w-[80px] font-medium"
             aria-label="Seleccionar año"
@@ -175,7 +201,7 @@ export const BiMonthPicker: React.FC<BiMonthPickerProps> = ({
         variant="outline"
         size="icon"
         onClick={handleNextMonth}
-        disabled={isCurrentMonth()}
+        disabled={isLoading || isCurrentMonth()}
         className="h-11 w-11"
         aria-label="Mes siguiente"
       >

@@ -219,6 +219,7 @@ export function BusinessGrowthClient({
     policyPayload(initialData.policy),
   );
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isChangingPeriod, setIsChangingPeriod] = useState(false);
   const [isSavingPolicy, setIsSavingPolicy] = useState(false);
   const [isSavingMovement, setIsSavingMovement] = useState(false);
   const [isSavingCampaign, setIsSavingCampaign] = useState(false);
@@ -488,7 +489,14 @@ export function BusinessGrowthClient({
 
   return (
     <div className="flex-col">
-      <div className="flex-1 space-y-6 p-4 pt-6 md:p-8 md:pt-6">
+      <div
+        className={cn(
+          "flex-1 space-y-6 p-4 pt-6 md:p-8 md:pt-6 [&>*:not(:first-child)]:transition-opacity [&>*:not(:first-child)]:duration-200",
+          isChangingPeriod &&
+            "[&>*:not(:first-child)]:pointer-events-none [&>*:not(:first-child)]:opacity-50",
+        )}
+        aria-busy={isChangingPeriod}
+      >
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <Heading
             title="Negocio y crecimiento"
@@ -502,18 +510,26 @@ export function BusinessGrowthClient({
               <BiMonthPicker
                 activeYear={overview.period.year}
                 activeMonth={overview.period.month - 1}
+                onLoadingChange={setIsChangingPeriod}
               />
               <Button
                 variant="outline"
                 onClick={refreshOverview}
-                disabled={isRefreshing}
+                disabled={isRefreshing || isChangingPeriod}
               >
-                {isRefreshing ? (
+                {isChangingPeriod ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <span role="status" aria-live="polite">
+                      Cargando período…
+                    </span>
+                  </>
+                ) : isRefreshing ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
                   <RefreshCw className="mr-2 h-4 w-4" />
                 )}
-                Actualizar datos
+                {!isChangingPeriod && "Actualizar datos"}
               </Button>
             </div>
           </div>
