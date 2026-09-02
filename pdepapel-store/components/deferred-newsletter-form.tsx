@@ -18,7 +18,7 @@ export function DeferredNewsletterForm() {
   });
 
   return (
-    <div ref={ref} className="min-h-10 z-10 w-full sm:w-80">
+    <div ref={ref} className="min-h-10 z-10 w-full lg:max-w-xl">
       {inView ? (
         <NewsletterForm />
       ) : (

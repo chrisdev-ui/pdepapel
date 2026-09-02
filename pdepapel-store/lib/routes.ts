@@ -12,6 +12,8 @@ export const STOREFRONT_ROUTES = {
   dataPolicy: "/politicas/privacidad",
   returnsPolicy: "/politicas/devoluciones",
   shippingPolicy: "/politicas/envios",
+  newsletterConfirm: "/suscripcion/confirmar",
+  newsletterUnsubscribe: "/suscripcion/cancelar",
 } as const;
 
 const STOREFRONT_ORIGIN = "https://papeleriapdepapel.com";

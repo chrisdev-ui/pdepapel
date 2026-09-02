@@ -29,6 +29,7 @@ import {
   LayoutDashboard,
   LineChart,
   ListChecks,
+  Mail,
   Megaphone,
   Menu,
   MessageSquare,
@@ -284,6 +285,13 @@ export function MainNav({
       active: pathname === dashboardPath("publicaciones"),
       group: "marketing",
       icon: Box,
+    },
+    {
+      href: dashboardPath("boletin"),
+      label: "Boletín y suscriptores",
+      active: pathname === dashboardPath("boletin"),
+      group: "marketing",
+      icon: Mail,
     },
     // Configuración
     {

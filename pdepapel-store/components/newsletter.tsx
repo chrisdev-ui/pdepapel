@@ -19,13 +19,13 @@ const Newsletter: React.FC = () => {
           className="-z-10 object-cover opacity-50"
           sizes="100vw"
         />
-        <div className="z-10">
-          <h4 className="font-serif text-3xl font-bold text-white">
-            Suscríbete para recibir nuestras novedades
-          </h4>
-          <p className="font-serif text-sm font-semibold text-blue-yankees">
-            Recibe actualizaciones por correo electrónico sobre nuestra tienda y
-            ofertas especiales.
+        <div className="z-10 max-w-2xl">
+          <h2 className="font-serif text-3xl font-bold text-white">
+            Entérate primero de lo nuevo en P de Papel
+          </h2>
+          <p className="mt-2 font-serif text-sm font-semibold text-blue-yankees">
+            Confirma tu correo para recibir lanzamientos, llegada de mercancía y
+            ofertas especiales. Máximo dos mensajes al mes.
           </p>
         </div>
         <DeferredNewsletterForm />

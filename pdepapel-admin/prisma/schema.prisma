@@ -75,6 +75,7 @@ model Store {
   invoices                       Invoice[]                       @relation("StoreToInvoice")
   taxPurchases                   TaxPurchase[]                   @relation("StoreToTaxPurchase")
   customerReactivations          CustomerReactivation[]          @relation("StoreToCustomerReactivation")
+  newsletterSubscribers          NewsletterSubscriber[]          @relation("StoreToNewsletterSubscriber")
   fairEvents                     FairEvent[]
   marketplaceConnections         MarketplaceConnection[]
   marketplaceOAuthStates         MarketplaceOAuthState[]
@@ -2068,6 +2069,34 @@ model CustomerReactivation {
   @@index([storeId, customerEmail])
 }
 
+model NewsletterSubscriber {
+  id                     String                     @id @default(uuid())
+  storeId                String
+  email                  String                     @db.VarChar(320)
+  emailNormalized        String                     @db.VarChar(320)
+  status                 NewsletterSubscriberStatus @default(PENDING)
+  source                 String?                    @db.VarChar(120)
+  consentText            String                     @db.VarChar(500)
+  consentVersion         String                     @db.VarChar(40)
+  consentedAt            DateTime                   @default(now())
+  confirmedAt            DateTime?
+  unsubscribedAt         DateTime?
+  confirmationTokenHash  String?                    @unique @db.VarChar(64)
+  confirmationExpiresAt  DateTime?
+  unsubscribeTokenHash   String?                    @unique @db.VarChar(64)
+  lastConfirmationSentAt DateTime?
+  lastWelcomeSentAt      DateTime?
+  createdAt              DateTime                   @default(now())
+  updatedAt              DateTime                   @updatedAt
+
+  store Store @relation("StoreToNewsletterSubscriber", fields: [storeId], references: [id])
+
+  @@unique([storeId, emailNormalized])
+  @@index([storeId, status, createdAt])
+  @@index([storeId, source])
+  @@index([emailNormalized])
+}
+
 enum InvoiceStatus {
   DRAFT
   GENERATED
@@ -2090,6 +2119,13 @@ enum ReactivationStatus {
   OPENED // Customer opened email
   CLICKED // Customer clicked CTA
   FAILED // Send failed
+}
+
+enum NewsletterSubscriberStatus {
+  PENDING
+  ACTIVE
+  UNSUBSCRIBED
+  SUPPRESSED
 }
 
 enum MarketplaceProvider {

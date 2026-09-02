@@ -5,6 +5,11 @@ import { defineConfig } from "vitest/config";
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
 
 export default defineConfig({
+  oxc: {
+    jsx: {
+      runtime: "automatic",
+    },
+  },
   resolve: {
     alias: {
       "@": path.resolve(rootDir),

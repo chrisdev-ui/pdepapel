@@ -101,6 +101,27 @@ export default function DataPolicyPage() {
             </li>
           </ul>
           <h3 className="font-serif text-lg font-semibold">
+            Novedades y comunicaciones de marketing:
+          </h3>
+          <ul className="list-disc space-y-3 pl-5">
+            <li>
+              Solo enviaremos novedades, lanzamientos y ofertas cuando la
+              persona marque la autorización del formulario y confirme que el
+              correo le pertenece mediante el enlace que recibe en su bandeja.
+            </li>
+            <li>
+              Registramos la fecha, el origen y la versión de esa autorización
+              para demostrar el consentimiento. La suscripción no es necesaria
+              para comprar y no se activa automáticamente al realizar un pedido.
+            </li>
+            <li>
+              Cada persona puede cancelar estos mensajes en cualquier momento,
+              sin iniciar sesión, desde el enlace incluido en los correos. La
+              cancelación no afecta las confirmaciones necesarias de pedidos,
+              pagos o envíos.
+            </li>
+          </ul>
+          <h3 className="font-serif text-lg font-semibold">
             Derechos de los titulares:
           </h3>
           <ul className="list-disc space-y-3 pl-5">
@@ -176,7 +197,7 @@ export default function DataPolicyPage() {
             personales.
           </p>
           <p className="text-sm text-muted-foreground">
-            Última actualización: 27 de agosto de 2026.
+            Última actualización: 1 de septiembre de 2026.
           </p>
         </div>
       </Container>
