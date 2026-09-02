@@ -445,6 +445,7 @@ Catalog changes in administration notify the public shop through `POST /api/reva
 - Revalidation alerts are rate-limited to at most one email per hour. Investigate admin/Vercel logs and ensure both Vercel projects use the same value if alerts appear.
 - After a catalog mutation, verify both the admin mutation and the public-page cache refresh. A successful DB update with a stale public page is still a customer-visible defect.
 - Public catalog fetches and catalog pages use a five-minute fallback cache. The authenticated revalidation endpoint invalidates the `products` and `catalog` tags plus affected paths immediately after a catalog, offer, category, or inventory mutation; do not reduce this cache window without measuring the additional server work.
+- Storefront requests for missing or archived product details intentionally remain real HTTP `404` responses. The admin API records these explicitly expected storefront misses as structured informational events with the product reference instead of error stacks; genuine admin-side or unexpected product lookup failures remain error-level logs. Sitemap generation uses the lightweight active-product index at `GET /api/[storeId]/products/sitemap` rather than loading full product/catalog payloads, and defensively excludes archived products even if an upstream response is malformed. Do not redirect archived products to unrelated categories or active products, because that creates soft-404 SEO behavior.
 
 See `docs/revalidacion-catalogo.md` and `docs/seguimiento-seo.md`.
 

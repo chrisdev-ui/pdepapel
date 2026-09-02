@@ -86,6 +86,8 @@ export const ErrorFactory = {
 
 export type ErrorHandlerOptions = {
   headers?: Record<string, string>;
+  expectedStatusCodes?: readonly number[];
+  logMetadata?: Record<string, string | number | boolean | null>;
 };
 
 export const handleErrorResponse = (
@@ -93,8 +95,19 @@ export const handleErrorResponse = (
   context?: string,
   options: ErrorHandlerOptions = {},
 ) => {
-  // Log the error context and error details to the console
-  console.error(`Error in [${context}]:`, error);
+  const isExpectedAppError =
+    error instanceof AppError &&
+    options.expectedStatusCodes?.includes(error.statusCode);
+
+  if (isExpectedAppError) {
+    console.info(`Expected response in [${context}]:`, {
+      statusCode: error.statusCode,
+      message: error.message,
+      ...options.logMetadata,
+    });
+  } else {
+    console.error(`Error in [${context}]:`, error);
+  }
 
   // Handle Prisma Known Request Errors
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -183,4 +196,3 @@ export const getErrorMessage = (error: unknown): string => {
   }
   return errorMessage;
 };
-

@@ -7,9 +7,11 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+const consoleInfo = vi.spyOn(console, "info").mockImplementation(() => {});
 
 afterEach(() => {
   consoleError.mockClear();
+  consoleInfo.mockClear();
 });
 
 describe("API error helpers", () => {
@@ -70,6 +72,42 @@ describe("API error helpers", () => {
     });
   });
 
+  it("logs explicitly expected application responses without an error stack", async () => {
+    const response = handleErrorResponse(
+      ErrorFactory.NotFound("Producto no encontrado"),
+      "PRODUCT_GET",
+      {
+        expectedStatusCodes: [404],
+        logMetadata: {
+          requestSource: "storefront",
+          productReference: "producto-archivado",
+        },
+      },
+    );
+
+    expect(response.status).toBe(404);
+    expect(consoleError).not.toHaveBeenCalled();
+    expect(consoleInfo).toHaveBeenCalledWith(
+      "Expected response in [PRODUCT_GET]:",
+      {
+        statusCode: 404,
+        message: "Producto no encontrado",
+        requestSource: "storefront",
+        productReference: "producto-archivado",
+      },
+    );
+  });
+
+  it("keeps unexpected not-found responses visible as errors", () => {
+    handleErrorResponse(
+      ErrorFactory.NotFound("Producto no encontrado"),
+      "PRODUCT_GET",
+    );
+
+    expect(consoleError).toHaveBeenCalledOnce();
+    expect(consoleInfo).not.toHaveBeenCalled();
+  });
+
   it("extracts useful messages from Axios and standard errors", () => {
     expect(
       getErrorMessage({
@@ -116,4 +154,3 @@ describe("API error helpers", () => {
     );
   });
 });
-

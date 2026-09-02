@@ -1,10 +1,8 @@
 import { getCategories } from "@/actions/get-categories";
-import { getProducts } from "@/actions/get-products";
+import { getSitemapProducts } from "@/actions/get-sitemap-products";
 import { BASE_URL } from "@/constants";
 import { categoryPath, productPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import { MetadataRoute } from "next";
-
-const SITEMAP_PAGE_SIZE = 500;
 
 const getLastModified = (updatedAt?: string) => {
   if (!updatedAt) return undefined;
@@ -18,25 +16,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   let categoryUrls: MetadataRoute.Sitemap = [];
 
   try {
-    const firstPage = await getProducts({
-      fromShop: true,
-      itemsPerPage: SITEMAP_PAGE_SIZE,
-    });
-    const remainingPages = await Promise.all(
-      Array.from(
-        { length: Math.max(firstPage.totalPages - 1, 0) },
-        (_, index) =>
-          getProducts({
-            fromShop: true,
-            itemsPerPage: SITEMAP_PAGE_SIZE,
-            page: index + 2,
-          }),
-      ),
+    const products = (await getSitemapProducts()).filter(
+      (product) => !product.isArchived,
     );
-    const products = [
-      ...firstPage.products,
-      ...remainingPages.flatMap((page) => page.products),
-    ];
 
     productsUrls = products.map((product) => ({
       url: `${BASE_URL}${productPath(product.slug || product.id)}`,

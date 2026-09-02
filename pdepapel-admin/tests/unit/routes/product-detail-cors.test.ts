@@ -13,18 +13,20 @@ vi.mock("@/lib/api-errors", () => ({
     NotFound: (message: string) =>
       Object.assign(new Error(message), { statusCode: 404 }),
   },
-  handleErrorResponse: (
-    error: unknown,
-    _context: string,
-    options?: { headers?: HeadersInit },
-  ) =>
-    new Response(null, {
-      status:
-        error && typeof error === "object" && "statusCode" in error
-          ? Number(error.statusCode)
-          : 500,
-      headers: options?.headers,
-    }),
+  handleErrorResponse: vi.fn(
+    (
+      error: unknown,
+      _context: string,
+      options?: { headers?: HeadersInit },
+    ) =>
+      new Response(null, {
+        status:
+          error && typeof error === "object" && "statusCode" in error
+            ? Number(error.statusCode)
+            : 500,
+        headers: options?.headers,
+      }),
+  ),
 }));
 vi.mock("@/lib/cache", () => ({ invalidateStoreProductsCache: vi.fn() }));
 vi.mock("@/lib/cloudinary", () => ({ default: {} }));
@@ -60,6 +62,7 @@ import {
   GET,
   OPTIONS,
 } from "@/app/api/[storeId]/products/[productId]/route";
+import { handleErrorResponse } from "@/lib/api-errors";
 
 describe("public product detail CORS", () => {
   beforeEach(() => {
@@ -135,6 +138,17 @@ describe("public product detail CORS", () => {
     expect(mocks.findProduct).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ isArchived: false }),
+      }),
+    );
+    expect(vi.mocked(handleErrorResponse)).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 404 }),
+      "PRODUCT_GET",
+      expect.objectContaining({
+        expectedStatusCodes: [404],
+        logMetadata: {
+          requestSource: "storefront",
+          productReference: "sello-archivado",
+        },
       }),
     );
   });

@@ -38,6 +38,8 @@ export async function GET(
   req: Request,
   { params }: { params: { storeId: string; productId: string } },
 ) {
+  const isStorefrontRequest =
+    new URL(req.url).searchParams.get("scope") === "storefront";
   const corsHeaders = {
     ...createCorsHeaders(req, { methods: "GET, OPTIONS" }),
     ...CACHE_HEADERS.DYNAMIC,
@@ -47,9 +49,6 @@ export async function GET(
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.productId)
       throw ErrorFactory.InvalidRequest("El ID del producto es requerido");
-
-    const isStorefrontRequest =
-      new URL(req.url).searchParams.get("scope") === "storefront";
 
     const productInclude = {
       images: true,
@@ -139,6 +138,13 @@ export async function GET(
   } catch (error) {
     return handleErrorResponse(error, "PRODUCT_GET", {
       headers: corsHeaders,
+      expectedStatusCodes: isStorefrontRequest ? [404] : undefined,
+      logMetadata: isStorefrontRequest
+        ? {
+            requestSource: "storefront",
+            productReference: params.productId,
+          }
+        : undefined,
     });
   }
 }
