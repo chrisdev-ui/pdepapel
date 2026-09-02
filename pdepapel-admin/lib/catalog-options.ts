@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 
+export { normalizeCatalogOptionKey } from "@/lib/catalog-option-key";
+
 export type CatalogAttributeSuggestion = {
   key: string;
   name: string;
@@ -71,16 +73,6 @@ function normalizeMeasurement(value: string) {
     .replace(",", ".")
     .replace(/\s*(mm|cm|ml|l|m)$/i, " $1")
     .replace(/\s+l$/i, " L");
-}
-
-export function normalizeCatalogOptionKey(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLocaleLowerCase("es-CO")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
 }
 
 export function splitTaxonomyIcon(value: string) {

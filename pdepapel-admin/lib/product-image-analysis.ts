@@ -2,6 +2,11 @@ import { createHash } from "node:crypto";
 
 import { normalizeProductNamePart } from "@/lib/product-naming";
 import { normalizeCatalogOptionKey } from "@/lib/catalog-options";
+import {
+  createPlainTextRichTextHtml,
+  richTextToPlainText,
+  sanitizeRichTextHtml,
+} from "@/lib/rich-text";
 import { z } from "zod";
 
 export const MAX_PRODUCT_IMAGE_ANALYSIS_IMAGES = 3;
@@ -28,7 +33,7 @@ export const productImageAnalysisOutputSchema = z.object({
     .array(z.string().max(120))
     .max(PRODUCT_IMAGE_ANALYSIS_NAME_OPTIONS_MAX)
     .default([]),
-  suggestedDescription: z.string().max(600).nullable(),
+  suggestedDescription: z.string().max(3000).nullable(),
   brand: z.string().max(120).nullable(),
   categoryName: z.string().max(120).nullable(),
   categoryIsDeterministic: z.boolean(),
@@ -114,6 +119,13 @@ export type ProductImageVariantCandidate = {
   evidence: string | null;
 };
 
+export type ProductCatalogAttribute = {
+  key: string;
+  name: string;
+  value: string;
+  evidence: string;
+};
+
 export type ProductImageAnalysis = Omit<
   ProductImageAnalysisOutput,
   "catalogAttributes" | "variantCandidates"
@@ -127,12 +139,7 @@ export type ProductImageAnalysis = Omit<
   designId: string | null;
   designSource: "existing" | "new" | "not_detected";
   variantCandidates: ProductImageVariantCandidate[];
-  catalogAttributes: Array<{
-    key: string;
-    name: string;
-    value: string;
-    evidence: string;
-  }>;
+  catalogAttributes: ProductCatalogAttribute[];
 };
 
 type TaxonomyOption = {
@@ -185,14 +192,17 @@ function getSuggestedNameOptions(output: ProductImageAnalysisOutput) {
 function cleanDescription(value?: string | null) {
   if (typeof value !== "string") return null;
 
-  const normalized = value
-    .replace(/\r\n?/g, "\n")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .join("\n");
+  const normalized = value.trim();
+  if (!normalized) return null;
 
-  return normalized && normalized.length <= 600 ? normalized : null;
+  const html = /<\/?[a-z][\s\S]*>/i.test(normalized)
+    ? sanitizeRichTextHtml(normalized)
+    : createPlainTextRichTextHtml(normalized);
+  const plainText = richTextToPlainText(html);
+
+  return plainText && plainText.length <= 1800 && html.length <= 3000
+    ? html
+    : null;
 }
 
 function cleanColorHex(value?: string | null) {
@@ -243,7 +253,7 @@ export function getProductImageAnalysisCacheKey(
   },
 ) {
   const normalizedInput = {
-    version: 5,
+    version: 6,
     imageUrls: [...input.imageUrls].sort(),
     categoryName: normalizeForMatching(input.categoryName),
     categories: [...input.categories]
@@ -516,7 +526,7 @@ Reglas obligatorias:
 - Prioriza el término comercial natural que buscaría una clienta en Colombia, con el tipo de producto al inicio y los detalles visibles después. Usa préstamos establecidos en su orden natural, por ejemplo "mouse pad" y nunca "pad mouse". No hagas traducciones palabra por palabra ni listes palabras clave separadas por barras.
 - Las opciones pueden variar solo en redacción; todas deben describir exactamente el mismo producto visible. Incluye descriptores generales que sí se vean y apliquen a todas las unidades, como "de personajes" o "diseños surtidos", pero no una marca, color, diseño particular, medida ni código cuando no sea determinístico para la unidad.
 - No incluyas marca, color, diseño de variante ni códigos internos en suggestedBaseName o suggestedNameOptions; deja esos datos en sus campos separados cuando correspondan.
-- suggestedDescription puede contener de una a tres frases breves, sin HTML, únicamente con detalles visibles y confirmables. Si las fotos no bastan para una descripción útil, usa null.
+  - suggestedDescription debe ser HTML semántico, seguro y fácil de escanear. Puede tener hasta 1.800 caracteres de texto y usar únicamente <p>, <h3>, <strong>, <ul>, <ol> y <li>. Empieza con un párrafo claro que explique qué es el producto y luego organiza los detalles visibles en una lista cuando ayude. No uses estilos, enlaces, emojis ni etiquetas distintas. No inventes beneficios, usos, materiales, medidas o contenido que las fotos no confirmen. Si las fotos no bastan para una descripción útil, usa null.
 - brand debe ser null si no se lee claramente en empaque o producto.
 - categoryName solo puede ser una categoría de la lista disponible: devuelve únicamente el nombre antes de los paréntesis, no el tipo. categoryIsDeterministic debe ser true únicamente cuando el producto encaja de forma clara. Nunca propongas ni inventes una categoría o tipo nuevo.
 - sizeName solo puede ser un tamaño de la lista disponible y sizeIsDeterministic debe ser true únicamente cuando la medida o formato se lee claramente. Nunca uses códigos internos ni inventes tamaños.

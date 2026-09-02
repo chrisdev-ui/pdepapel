@@ -66,7 +66,7 @@ describe("ProductNameAssistant visual analysis", () => {
     vi.unstubAllGlobals();
   });
 
-  it("keeps a visual proposal review-only until the administrator loads it", async () => {
+  it("shows one review workspace and applies only the selected proposal fields", async () => {
     const user = userEvent.setup();
     const onApply = vi.fn();
     const onApplyVisualAnalysis = vi.fn();
@@ -91,13 +91,30 @@ describe("ProductNameAssistant visual analysis", () => {
     await user.click(screen.getByRole("button", { name: "Analizar fotos" }));
 
     expect(
-      await screen.findByText("Propuesta visual para revisar"),
+      await screen.findByRole("heading", { name: "Revisa la propuesta de IA" }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("radio", { name: /Cuaderno argollado A5/ }),
+    ).toBeChecked();
+    expect(
+      screen.getByRole("checkbox", { name: "Marca o fabricante" }),
+    ).toBeChecked();
+    expect(
+      screen.queryByRole("button", { name: "Cargar propuesta" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Usar sugerencia" }),
+    ).not.toBeInTheDocument();
     expect(onApply).not.toHaveBeenCalled();
     expect(onApplyVisualAnalysis).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole("button", { name: "Cargar propuesta" }));
+    await user.click(
+      screen.getByRole("button", {
+        name: "Aplicar 5 campos seleccionados",
+      }),
+    );
 
+    expect(onApply).toHaveBeenCalledWith("Cuaderno argollado A5 Sanrio");
     expect(onApplyVisualAnalysis).toHaveBeenCalledWith(
       expect.objectContaining({
         suggestedBaseName: "Cuaderno argollado A5",
@@ -107,9 +124,13 @@ describe("ProductNameAssistant visual analysis", () => {
         colorId: "color-rosa",
       }),
     );
-    expect(onApply).not.toHaveBeenCalled();
     expect(
       screen.getByDisplayValue("Cuaderno argollado A5"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "5 campos aplicados al formulario. Aún debes guardar el producto.",
+      ),
     ).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/store-id/products/image-analysis",
@@ -156,7 +177,9 @@ describe("ProductNameAssistant visual analysis", () => {
 
     await user.click(screen.getByRole("button", { name: "Analizar fotos" }));
     await user.click(
-      await screen.findByRole("button", { name: "Crear y usar color" }),
+      await screen.findByRole("button", {
+        name: "Crear color y aprobarlo",
+      }),
     );
 
     expect(onCreateVisualAttribute).not.toHaveBeenCalled();
@@ -164,7 +187,7 @@ describe("ProductNameAssistant visual analysis", () => {
       screen.getByRole("heading", { name: "¿Crear color nuevo?" }),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Crear y usar" }));
+    await user.click(screen.getByRole("button", { name: "Crear y aprobar" }));
 
     expect(onCreateVisualAttribute).toHaveBeenCalledWith({
       type: "color",
@@ -204,8 +227,8 @@ describe("ProductNameAssistant visual analysis", () => {
 
     await user.click(screen.getByRole("button", { name: "Analizar fotos" }));
     await user.click(
-      await screen.findByRole("button", {
-        name: "Elegir nombre: Alfombrilla para mouse con personajes surtidos",
+      await screen.findByRole("radio", {
+        name: "Alfombrilla para mouse con personajes surtidos",
       }),
     );
 
@@ -216,16 +239,17 @@ describe("ProductNameAssistant visual analysis", () => {
     ).toBeInTheDocument();
   });
 
-  it("applies a description only when the administrator chooses its draft", async () => {
+  it("previews and applies a selected rich-text description", async () => {
     const user = userEvent.setup();
     const onApplyDescription = vi.fn();
+    const suggestedDescription =
+      "<p>Cuaderno <strong>argollado</strong> con portada floral.</p><h3>Detalles visibles</h3><ul><li>Formato A5</li></ul>";
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
         createAnalysisResponse(
           createVisualAnalysis({
-            suggestedDescription:
-              "Cuaderno argollado con portada floral y formato A5.",
+            suggestedDescription,
           }),
         ),
       ),
@@ -246,15 +270,91 @@ describe("ProductNameAssistant visual analysis", () => {
 
     await user.click(screen.getByRole("button", { name: "Analizar fotos" }));
     expect(onApplyDescription).not.toHaveBeenCalled();
+    expect(await screen.findByText("Detalles visibles")).toBeInTheDocument();
+    expect(screen.getByText("Formato A5")).toBeInTheDocument();
 
     await user.click(
       await screen.findByRole("button", {
-        name: "Usar borrador de descripción",
+        name: "Aplicar 6 campos seleccionados",
       }),
     );
 
-    expect(onApplyDescription).toHaveBeenCalledWith(
-      "Cuaderno argollado con portada floral y formato A5.",
+    expect(onApplyDescription).toHaveBeenCalledWith(suggestedDescription);
+  });
+
+  it("lets the administrator approve customer-visible features independently", async () => {
+    const user = userEvent.setup();
+    const onApplyVisualAnalysis = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        createAnalysisResponse(
+          createVisualAnalysis({
+            brand: null,
+            categoryName: null,
+            categoryIsDeterministic: false,
+            categoryId: null,
+            categorySource: "not_detected",
+            sizeName: null,
+            sizeIsDeterministic: false,
+            sizeId: null,
+            sizeSource: "not_detected",
+            colorName: null,
+            colorHex: null,
+            colorIsDeterministic: false,
+            colorId: null,
+            colorSource: "not_detected",
+            catalogAttributes: [
+              {
+                key: "formato",
+                name: "Formato",
+                value: "A5",
+                evidence: "El empaque indica A5.",
+              },
+              {
+                key: "cantidad",
+                name: "Cantidad",
+                value: "12 hojas",
+                evidence: "La etiqueta indica 12 hojas.",
+              },
+            ],
+          }),
+        ),
+      ),
+    );
+
+    render(
+      <ProductNameAssistant
+        currentName=""
+        storeId="store-id"
+        imageUrls={[
+          "https://res.cloudinary.com/pdepapel/image/upload/v1/cuaderno.webp",
+        ]}
+        onApply={vi.fn()}
+        onApplyVisualAnalysis={onApplyVisualAnalysis}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Analizar fotos" }));
+    const quantityFeature = await screen.findByRole("checkbox", {
+      name: /Cantidad: 12 hojas/,
+    });
+    expect(screen.getByRole("checkbox", { name: /Formato: A5/ })).toBeChecked();
+    expect(quantityFeature).toBeChecked();
+
+    await user.click(quantityFeature);
+    await user.click(
+      screen.getByRole("button", {
+        name: "Aplicar 2 campos seleccionados",
+      }),
+    );
+
+    expect(onApplyVisualAnalysis).toHaveBeenCalledWith(
+      expect.objectContaining({
+        catalogAttributes: [
+          expect.objectContaining({ key: "formato", value: "A5" }),
+        ],
+      }),
     );
   });
 

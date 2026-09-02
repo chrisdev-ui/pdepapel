@@ -11,7 +11,8 @@ import {
   type ProductVariantReviewPayload,
 } from "@/components/modals/review-product-variants-modal";
 import { PRODUCT_NAME_MAX_LENGTH } from "@/lib/product-naming";
-import type { ProductImageAnalysis } from "@/lib/product-image-analysis";
+import { type ProductImageAnalysis } from "@/lib/product-image-analysis";
+import { mergeProductCatalogAttributes } from "@/lib/product-catalog-attributes";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Eraser,
@@ -75,7 +76,6 @@ import { useFormPersist } from "@/hooks/use-form-persist";
 import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import { createPlainTextRichTextHtml } from "@/lib/rich-text";
 import { Color, Design, Size, Supplier } from "@prisma/client";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
@@ -1020,6 +1020,14 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 disabled={loading}
                 storeId={params.storeId}
                 imageUrls={watchedImages?.map((image) => image.url)}
+                visualFieldAvailability={{
+                  brand: true,
+                  category: !watchedGroupId || watchedGroupId === "none",
+                  size: !watchedGroupId || watchedGroupId === "none",
+                  color: !watchedGroupId || watchedGroupId === "none",
+                  design: !watchedGroupId || watchedGroupId === "none",
+                  catalogAttributes: true,
+                }}
                 onApply={(name) =>
                   form.setValue("name", name, {
                     shouldDirty: true,
@@ -1056,21 +1064,20 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   if (analysis.catalogAttributes.length > 0) {
                     form.setValue(
                       "catalogAttributes",
-                      analysis.catalogAttributes,
+                      mergeProductCatalogAttributes(
+                        form.getValues("catalogAttributes") || [],
+                        analysis.catalogAttributes,
+                      ),
                       options,
                     );
                   }
                 }}
                 onApplyDescription={(description) =>
-                  form.setValue(
-                    "description",
-                    createPlainTextRichTextHtml(description),
-                    {
-                      shouldDirty: true,
-                      shouldTouch: true,
-                      shouldValidate: true,
-                    },
-                  )
+                  form.setValue("description", description, {
+                    shouldDirty: true,
+                    shouldTouch: true,
+                    shouldValidate: true,
+                  })
                 }
                 onApplyVerifiedIdentifier={(type, identifier) => {
                   const options = {

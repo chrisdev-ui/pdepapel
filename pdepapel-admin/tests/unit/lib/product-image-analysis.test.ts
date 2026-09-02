@@ -11,6 +11,7 @@ import {
   sanitizeProductImageAnalysis,
   type ProductImageAnalysisOutput,
 } from "@/lib/product-image-analysis";
+import { mergeProductCatalogAttributes } from "@/lib/product-catalog-attributes";
 import { describe, expect, it } from "vitest";
 
 const taxonomy = {
@@ -136,7 +137,8 @@ describe("product image analysis helpers", () => {
 
     expect(analysis).toMatchObject({
       suggestedBaseName: "Troquel de figuras en maletín x8 de 1 cm",
-      suggestedDescription: "Incluye ocho troqueles dentro de un estuche.",
+      suggestedDescription:
+        "<p>Incluye ocho troqueles dentro de un estuche.</p>",
       brand: "Kawaii",
       categoryId: "category-notebooks",
       categoryName: "Cuadernos",
@@ -151,6 +153,78 @@ describe("product image analysis helpers", () => {
       designName: "Clásico",
       designSource: "existing",
     });
+  });
+
+  it("keeps safe rich description formatting and removes unsafe markup", () => {
+    const analysis = sanitizeProductImageAnalysis(
+      createOutput({
+        suggestedDescription:
+          '<p>Set de troqueles.</p><h3>Contenido visible</h3><ul><li><strong>8 piezas</strong></li></ul><script>alert("x")</script>',
+      }),
+      taxonomy,
+    );
+
+    expect(analysis.suggestedDescription).toContain(
+      "<h3>Contenido visible</h3>",
+    );
+    expect(analysis.suggestedDescription).toContain(
+      "<ul><li><strong>8 piezas</strong></li></ul>",
+    );
+    expect(analysis.suggestedDescription).not.toContain("<script");
+  });
+
+  it("merges approved customer features without deleting existing ones", () => {
+    expect(
+      mergeProductCatalogAttributes(
+        [
+          {
+            key: "material",
+            name: "Material",
+            value: "Plástico",
+            evidence: "Característica guardada en el catálogo",
+          },
+          {
+            key: "formato",
+            name: "Formato",
+            value: "Carta",
+            evidence: "Característica guardada en el catálogo",
+          },
+        ],
+        [
+          {
+            key: "Formato",
+            name: "Formato",
+            value: "A5",
+            evidence: "El empaque indica A5.",
+          },
+          {
+            key: "cantidad",
+            name: "Cantidad",
+            value: "12 hojas",
+            evidence: "La etiqueta indica 12 hojas.",
+          },
+        ],
+      ),
+    ).toEqual([
+      {
+        key: "material",
+        name: "Material",
+        value: "Plástico",
+        evidence: "Característica guardada en el catálogo",
+      },
+      {
+        key: "Formato",
+        name: "Formato",
+        value: "A5",
+        evidence: "El empaque indica A5.",
+      },
+      {
+        key: "cantidad",
+        name: "Cantidad",
+        value: "12 hojas",
+        evidence: "La etiqueta indica 12 hojas.",
+      },
+    ]);
   });
 
   it("does not apply an ambiguous or unknown category or size", () => {
@@ -365,5 +439,7 @@ describe("product image analysis helpers", () => {
     expect(prompt).toContain("variantRecommendation");
     expect(prompt).toContain("mouse pad");
     expect(prompt).toContain("suggestedNameOptions");
+    expect(prompt).toContain("HTML semántico");
+    expect(prompt).toContain("<ul>");
   });
 });

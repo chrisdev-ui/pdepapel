@@ -57,7 +57,6 @@ import { useFormPersist } from "@/hooks/use-form-persist";
 import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import { createPlainTextRichTextHtml } from "@/lib/rich-text";
 import {
   Category,
   Color,
@@ -1596,6 +1595,14 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                 disabled={loading}
                 storeId={params.storeId}
                 imageUrls={currentImages?.map((image) => image.url)}
+                visualFieldAvailability={{
+                  brand: true,
+                  category: !currentVariants?.some((variant) => variant.id),
+                  size: false,
+                  color: false,
+                  design: false,
+                  catalogAttributes: false,
+                }}
                 onApply={(name) =>
                   form.setValue("name", name, {
                     shouldDirty: true,
@@ -1622,15 +1629,11 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                   }
                 }}
                 onApplyDescription={(description) =>
-                  form.setValue(
-                    "description",
-                    createPlainTextRichTextHtml(description),
-                    {
-                      shouldDirty: true,
-                      shouldTouch: true,
-                      shouldValidate: true,
-                    },
-                  )
+                  form.setValue("description", description, {
+                    shouldDirty: true,
+                    shouldTouch: true,
+                    shouldValidate: true,
+                  })
                 }
               />
             </div>
