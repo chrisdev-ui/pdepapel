@@ -18,11 +18,20 @@ export function DeferredNewsletterForm() {
   });
 
   return (
-    <div ref={ref} className="min-h-10 z-10 w-full lg:max-w-xl">
+    <div
+      ref={ref}
+      className="z-10 min-h-[13rem] w-full sm:min-h-[6.25rem] lg:max-w-xl"
+    >
       {inView ? (
         <NewsletterForm />
       ) : (
-        <div className="h-10 w-full animate-pulse rounded bg-white/60" />
+        <div
+          aria-hidden="true"
+          className="min-h-[13rem] w-full sm:min-h-[6.25rem]"
+        >
+          <div className="h-24 w-full animate-pulse rounded bg-white/60 sm:h-11" />
+          <div className="mt-3 h-20 w-full animate-pulse rounded bg-white/40 sm:h-11" />
+        </div>
       )}
     </div>
   );
