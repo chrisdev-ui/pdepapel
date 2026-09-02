@@ -158,6 +158,12 @@ describe("product image analysis route", () => {
       reusedAnalysis: false,
     });
     expect(mocks.verifyStoreOwner).toHaveBeenCalledWith("owner-id", "store-id");
+    expect(mocks.categoryFindMany.mock.calls[0]?.[0]).not.toHaveProperty(
+      "take",
+    );
+    expect(mocks.sizeFindMany.mock.calls[0]?.[0]).not.toHaveProperty("take");
+    expect(mocks.colorFindMany.mock.calls[0]?.[0]).not.toHaveProperty("take");
+    expect(mocks.designFindMany.mock.calls[0]?.[0]).not.toHaveProperty("take");
     expect(mocks.generateText).toHaveBeenCalledTimes(1);
     expect(mocks.redisIncr).toHaveBeenCalledTimes(1);
     expect(mocks.redisSet).toHaveBeenCalledTimes(1);

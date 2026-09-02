@@ -21,7 +21,6 @@ import prismadb from "@/lib/prismadb";
 import { verifyStoreOwner } from "@/lib/utils";
 
 const RATE_LIMIT_EXPIRY_SECONDS = 60 * 60 * 48;
-const MAX_TAXONOMY_OPTIONS = 100;
 
 function getModelError(error: unknown) {
   const message = error instanceof Error ? error.message : "";
@@ -95,7 +94,6 @@ export async function POST(
       prismadb.category.findMany({
         where: { storeId: params.storeId },
         orderBy: { name: "asc" },
-        take: MAX_TAXONOMY_OPTIONS,
         select: {
           id: true,
           name: true,
@@ -105,19 +103,16 @@ export async function POST(
       prismadb.size.findMany({
         where: { storeId: params.storeId },
         orderBy: { name: "asc" },
-        take: MAX_TAXONOMY_OPTIONS,
         select: { id: true, name: true, value: true },
       }),
       prismadb.color.findMany({
         where: { storeId: params.storeId },
         orderBy: { name: "asc" },
-        take: MAX_TAXONOMY_OPTIONS,
         select: { id: true, name: true, value: true },
       }),
       prismadb.design.findMany({
         where: { storeId: params.storeId },
         orderBy: { name: "asc" },
-        take: MAX_TAXONOMY_OPTIONS,
         select: { id: true, name: true },
       }),
     ]);

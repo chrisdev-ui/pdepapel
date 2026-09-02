@@ -254,6 +254,34 @@ describe("product image analysis helpers", () => {
     expect(analysis.sizeSource).toBe("not_detected");
   });
 
+  it("matches an existing category beyond the first 100 taxonomy options", () => {
+    const categories = [
+      ...Array.from({ length: 103 }, (_, index) => ({
+        id: `category-${index}`,
+        name: `Categoría ${String(index).padStart(3, "0")}`,
+        typeName: "Catálogo",
+      })),
+      {
+        id: "category-dies",
+        name: "Troqueles",
+        typeName: "Journal / Scrap",
+      },
+    ];
+    const analysis = sanitizeProductImageAnalysis(
+      createOutput({
+        categoryName: "Troqueles",
+        categoryIsDeterministic: true,
+      }),
+      { ...taxonomy, categories },
+    );
+
+    expect(analysis).toMatchObject({
+      categoryId: "category-dies",
+      categoryName: "Troqueles",
+      categorySource: "existing",
+    });
+  });
+
   it("keeps a deterministic new color or design as a proposal without inventing an ID", () => {
     const analysis = sanitizeProductImageAnalysis(
       createOutput({
