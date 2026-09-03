@@ -1,14 +1,14 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
+import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { LogIn, MapPinned, PackageCheck, Store } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
 
 import { getOrders } from "@/actions/get-orders";
-import { Loader } from "@/components/loader";
+import { OrderHistorySkeleton } from "@/components/order-history-skeleton";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -26,37 +26,31 @@ import { Order } from "@/types";
 
 export const OrderHistory: React.FC<{}> = () => {
   const { userId, isLoaded, getToken } = useAuth();
-  const [orders, setOrders] = useState<Order[]>();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
 
-  useEffect(() => {
-    const getOrderHistory = async () => {
-      if (!isLoaded) return;
+  const {
+    data: orders,
+    isPending,
+    isError,
+    isFetching,
+    refetch,
+  } = useQuery({
+    queryKey: ["orders", userId],
+    queryFn: async () => {
+      const sessionToken = await getToken();
+      if (!sessionToken) throw new Error("No session token available");
 
-      if (!userId) {
-        setOrders([]);
-        setLoading(false);
-        return;
-      }
+      return getOrders(sessionToken);
+    },
+    enabled: isLoaded && Boolean(userId),
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
 
-      try {
-        const sessionToken = await getToken();
-        if (!sessionToken) throw new Error("No session token available");
-
-        const orders = await getOrders(sessionToken);
-        setOrders(orders);
-      } catch {
-        setError(true);
-      } finally {
-        setLoading(false);
-      }
-    };
-    getOrderHistory();
-  }, [getToken, isLoaded, userId]);
-
-  if (loading) {
-    return <Loader label="Cargando tus órdenes" />;
+  // Same skeleton the route-level loading state uses, so the transition from
+  // navigation to client fetch is seamless.
+  if (!isLoaded || (userId && isPending)) {
+    return <OrderHistorySkeleton />;
   }
 
   if (!userId) {
@@ -109,13 +103,17 @@ export const OrderHistory: React.FC<{}> = () => {
     );
   }
 
-  if (error) {
+  if (isError) {
     return (
       <Container className="space-y-6">
         <NoResults message="No pudimos cargar tus pedidos. Inténtalo de nuevo en unos minutos." />
         <div>
-          <Button className="w-full" onClick={() => window.location.reload()}>
-            Reintentar
+          <Button
+            className="w-full"
+            disabled={isFetching}
+            onClick={() => void refetch()}
+          >
+            {isFetching ? "Reintentando…" : "Reintentar"}
           </Button>
         </div>
       </Container>

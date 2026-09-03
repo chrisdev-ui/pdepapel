@@ -124,10 +124,12 @@
     @apply m-0 box-border h-full scroll-smooth p-0 font-sans text-blue-yankees;
   }
 
+  /* Column layout so short pages and loading states keep the footer below the
+     fold: the fixed header is offset by pt-36, <main> grows to fill the rest. */
   body {
-    @apply pt-36;
+    @apply flex min-h-full flex-col pt-36;
+    height: auto;
   }
-
 }
 
 @layer utilities {
@@ -169,7 +171,8 @@
   }
 
   .sparkle {
-    background-image: radial-gradient(
+    background-image:
+      radial-gradient(
         circle at 10% 20%,
         hsl(45 100% 75% / 0.6) 0%,
         transparent 8%

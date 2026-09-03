@@ -13,6 +13,11 @@ export function ClarityPrivacyBoundary({
   const shouldMask = shouldMaskClarityPage(pathname);
 
   return (
-    <main data-clarity-mask={shouldMask ? "true" : undefined}>{children}</main>
+    <main
+      className="flex flex-1 flex-col"
+      data-clarity-mask={shouldMask ? "true" : undefined}
+    >
+      {children}
+    </main>
   );
 }
