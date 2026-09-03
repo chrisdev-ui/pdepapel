@@ -38,6 +38,10 @@ export async function getProduct(id: string, storeId: string) {
       type: true,
     },
   });
+  const types = await prismadb.type.findMany({
+    where: { storeId },
+    orderBy: { name: "asc" },
+  });
   const sizes = await prismadb.size.findMany({
     where: {
       storeId,
@@ -138,6 +142,7 @@ export async function getProduct(id: string, storeId: string) {
   return {
     product,
     categories,
+    types,
     sizes,
     colors,
     designs,

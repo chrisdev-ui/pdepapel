@@ -250,8 +250,48 @@ describe("product image analysis helpers", () => {
 
     expect(analysis.categoryId).toBeNull();
     expect(analysis.categorySource).toBe("not_detected");
+    expect(analysis.categoryAlternatives).toEqual([]);
     expect(analysis.sizeId).toBeNull();
     expect(analysis.sizeSource).toBe("not_detected");
+    expect(analysis.sizeAlternatives).toEqual([
+      expect.objectContaining({ id: "size-a", name: "Grande" }),
+      expect.objectContaining({ id: "size-b", name: "Grande" }),
+    ]);
+  });
+
+  it("offers close existing taxonomy options before creating a new one", () => {
+    const analysis = sanitizeProductImageAnalysis(
+      createOutput({
+        categoryName: "Troquel",
+        categoryIsDeterministic: true,
+        designName: "Florales",
+        designIsDeterministic: true,
+      }),
+      {
+        ...taxonomy,
+        categories: [
+          {
+            id: "category-dies",
+            name: "Troqueles",
+            typeName: "Journal / Scrap",
+          },
+        ],
+        designs: [{ id: "design-floral", name: "Floral" }],
+      },
+    );
+
+    expect(analysis.categoryId).toBeNull();
+    expect(analysis.categoryAlternatives).toEqual([
+      {
+        id: "category-dies",
+        name: "Troqueles",
+        typeName: "Journal / Scrap",
+      },
+    ]);
+    expect(analysis.designId).toBeNull();
+    expect(analysis.designAlternatives).toEqual([
+      { id: "design-floral", name: "Floral" },
+    ]);
   });
 
   it("matches an existing category beyond the first 100 taxonomy options", () => {
@@ -469,5 +509,6 @@ describe("product image analysis helpers", () => {
     expect(prompt).toContain("suggestedNameOptions");
     expect(prompt).toContain("HTML semántico");
     expect(prompt).toContain("<ul>");
+    expect(prompt).toContain("puede proponer un nombre de subcategoría nuevo");
   });
 });

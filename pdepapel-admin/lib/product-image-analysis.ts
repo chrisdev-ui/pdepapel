@@ -126,6 +126,13 @@ export type ProductCatalogAttribute = {
   evidence: string;
 };
 
+export type ProductTaxonomyAlternative = {
+  id: string;
+  name: string;
+  value?: string;
+  typeName?: string;
+};
+
 export type ProductImageAnalysis = Omit<
   ProductImageAnalysisOutput,
   "catalogAttributes" | "variantCandidates"
@@ -138,6 +145,10 @@ export type ProductImageAnalysis = Omit<
   colorSource: "existing" | "new" | "not_detected";
   designId: string | null;
   designSource: "existing" | "new" | "not_detected";
+  categoryAlternatives?: ProductTaxonomyAlternative[];
+  sizeAlternatives?: ProductTaxonomyAlternative[];
+  colorAlternatives?: ProductTaxonomyAlternative[];
+  designAlternatives?: ProductTaxonomyAlternative[];
   variantCandidates: ProductImageVariantCandidate[];
   catalogAttributes: ProductCatalogAttribute[];
 };
@@ -253,7 +264,7 @@ export function getProductImageAnalysisCacheKey(
   },
 ) {
   const normalizedInput = {
-    version: 6,
+    version: 7,
     imageUrls: [...input.imageUrls].sort(),
     categoryName: normalizeForMatching(input.categoryName),
     categories: [...input.categories]
@@ -302,6 +313,100 @@ function findExactTaxonomyMatch(
   return matches.length === 1 ? matches[0] : null;
 }
 
+function getLevenshteinDistance(left: string, right: string) {
+  const previous = Array.from(
+    { length: right.length + 1 },
+    (_, index) => index,
+  );
+
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    const current = [leftIndex];
+
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      const substitutionCost =
+        left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1;
+      current[rightIndex] = Math.min(
+        current[rightIndex - 1] + 1,
+        previous[rightIndex] + 1,
+        previous[rightIndex - 1] + substitutionCost,
+      );
+    }
+
+    previous.splice(0, previous.length, ...current);
+  }
+
+  return previous[right.length];
+}
+
+function getTaxonomySimilarity(left: string, right: string) {
+  if (!left || !right) return 0;
+  if (left === right) return 1;
+
+  const longestLength = Math.max(left.length, right.length);
+  const editSimilarity =
+    longestLength === 0
+      ? 0
+      : 1 - getLevenshteinDistance(left, right) / longestLength;
+  const leftTokenList = left.split(" ").filter(Boolean);
+  const rightTokenList = right.split(" ").filter(Boolean);
+  const rightTokens = new Set(rightTokenList);
+  const sharedTokenCount = leftTokenList.filter((token) =>
+    rightTokens.has(token),
+  ).length;
+  const tokenUnionSize = new Set(leftTokenList.concat(rightTokenList)).size;
+  const tokenSimilarity = tokenUnionSize
+    ? sharedTokenCount / tokenUnionSize
+    : 0;
+  const containmentSimilarity =
+    Math.min(left.length, right.length) >= 4 &&
+    (left.includes(right) || right.includes(left))
+      ? 0.9
+      : 0;
+
+  return Math.max(editSimilarity, tokenSimilarity, containmentSimilarity);
+}
+
+function getTaxonomyAlternatives(
+  value: string | null,
+  options: (TaxonomyOption & { typeName?: string })[],
+): ProductTaxonomyAlternative[] {
+  const normalizedValue = normalizeForMatching(value);
+  if (!normalizedValue) return [];
+
+  const exactMatches = options.filter(
+    (option) => normalizeForMatching(option.name) === normalizedValue,
+  );
+  if (exactMatches.length === 1) return [];
+  if (exactMatches.length > 1) return exactMatches.slice(0, 3);
+
+  return options
+    .map((option) => ({
+      option,
+      score: getTaxonomySimilarity(
+        normalizedValue,
+        normalizeForMatching(option.name),
+      ),
+    }))
+    .filter(({ score }) => score >= 0.72)
+    .sort(
+      (left, right) =>
+        right.score - left.score ||
+        left.option.name.localeCompare(right.option.name, "es-CO"),
+    )
+    .slice(0, 3)
+    .map(({ option }) => option);
+}
+
+function hasExactTaxonomyName(value: string | null, options: TaxonomyOption[]) {
+  const normalizedValue = normalizeForMatching(value);
+  return Boolean(
+    normalizedValue &&
+    options.some(
+      (option) => normalizeForMatching(option.name) === normalizedValue,
+    ),
+  );
+}
+
 function sanitizeVariantCandidates(
   output: ProductImageAnalysisOutput,
   options: {
@@ -328,8 +433,17 @@ function sanitizeVariantCandidates(
     const design = findExactTaxonomyMatch(designName, options.designs);
     const size = findExactTaxonomyMatch(sizeName, options.sizes);
     const colorHex = color?.value ?? cleanColorHex(candidate.colorHex);
-    const canCreateColor = Boolean(colorName && colorHex && !color);
-    const canCreateDesign = Boolean(designName && !design);
+    const canCreateColor = Boolean(
+      colorName &&
+      colorHex &&
+      !color &&
+      !hasExactTaxonomyName(colorName, options.colors),
+    );
+    const canCreateDesign = Boolean(
+      designName &&
+      !design &&
+      !hasExactTaxonomyName(designName, options.designs),
+    );
     const hasConfirmedAttribute = Boolean(
       color || design || size || canCreateColor || canCreateDesign,
     );
@@ -450,27 +564,43 @@ export function sanitizeProductImageAnalysis(
     categoryIsDeterministic: Boolean(suggestedCategoryName),
     categoryId: category?.id ?? null,
     categorySource: category ? "existing" : "not_detected",
+    categoryAlternatives: getTaxonomyAlternatives(
+      suggestedCategoryName,
+      options.categories,
+    ),
     sizeName: size?.name ?? suggestedSizeName,
     sizeIsDeterministic: Boolean(suggestedSizeName),
     sizeId: size?.id ?? null,
     sizeSource: size ? "existing" : "not_detected",
+    sizeAlternatives: getTaxonomyAlternatives(suggestedSizeName, options.sizes),
     colorName: color?.name ?? suggestedColorName,
     colorHex: color?.value ?? colorHex,
     colorIsDeterministic: Boolean(suggestedColorName),
     colorId: color?.id ?? null,
     colorSource: color
       ? "existing"
-      : suggestedColorName && colorHex
+      : suggestedColorName &&
+          colorHex &&
+          !hasExactTaxonomyName(suggestedColorName, options.colors)
         ? "new"
         : "not_detected",
+    colorAlternatives: getTaxonomyAlternatives(
+      suggestedColorName,
+      options.colors,
+    ),
     designName: design?.name ?? suggestedDesignName,
     designIsDeterministic: Boolean(suggestedDesignName),
     designId: design?.id ?? null,
     designSource: design
       ? "existing"
-      : suggestedDesignName
+      : suggestedDesignName &&
+          !hasExactTaxonomyName(suggestedDesignName, options.designs)
         ? "new"
         : "not_detected",
+    designAlternatives: getTaxonomyAlternatives(
+      suggestedDesignName,
+      options.designs,
+    ),
     gtin: sanitizeIdentifierSuggestion(output.gtin, cleanGtin),
     mpn: sanitizeIdentifierSuggestion(output.mpn, cleanMpn),
     variantRecommendation: {
@@ -528,7 +658,7 @@ Reglas obligatorias:
 - No incluyas marca, color, diseño de variante ni códigos internos en suggestedBaseName o suggestedNameOptions; deja esos datos en sus campos separados cuando correspondan.
   - suggestedDescription debe ser HTML semántico, seguro y fácil de escanear. Puede tener hasta 1.800 caracteres de texto y usar únicamente <p>, <h3>, <strong>, <ul>, <ol> y <li>. Empieza con un párrafo claro que explique qué es el producto y luego organiza los detalles visibles en una lista cuando ayude. No uses estilos, enlaces, emojis ni etiquetas distintas. No inventes beneficios, usos, materiales, medidas o contenido que las fotos no confirmen. Si las fotos no bastan para una descripción útil, usa null.
 - brand debe ser null si no se lee claramente en empaque o producto.
-- categoryName solo puede ser una categoría de la lista disponible: devuelve únicamente el nombre antes de los paréntesis, no el tipo. categoryIsDeterministic debe ser true únicamente cuando el producto encaja de forma clara. Nunca propongas ni inventes una categoría o tipo nuevo.
+- categoryName debe usar una categoría disponible cuando exista una coincidencia adecuada. Si ninguna describe correctamente el producto, puede proponer un nombre de subcategoría nuevo, breve, reutilizable y específico; nunca propongas un tipo padre nuevo. Devuelve únicamente el nombre antes de los paréntesis. categoryIsDeterministic debe ser true únicamente cuando el producto encaja de forma clara.
 - sizeName solo puede ser un tamaño de la lista disponible y sizeIsDeterministic debe ser true únicamente cuando la medida o formato se lee claramente. Nunca uses códigos internos ni inventes tamaños.
 - colorName puede coincidir exactamente con un color disponible o proponer un nuevo nombre corto en español. Úsalo solo cuando la foto representa de forma determinística una variante de un único color. Si propones un color nuevo, colorHex debe ser su tono dominante en formato #RRGGBB. Si es multicolor, pastel, una foto de familia o no estás segura, usa null, colorHex null y colorIsDeterministic false.
 - designName puede coincidir exactamente con un diseño disponible o proponer un nuevo nombre corto en español. Úsalo solo cuando identifica de forma clara y determinística el producto. Si el diseño es genérico, de inventario o no visible, usa null y designIsDeterministic false.

@@ -72,11 +72,12 @@ import {
   INITIAL_TRANSPORTATION_COST,
   Models,
 } from "@/constants";
+import { generateSizeName, generateSizeValue } from "@/constants/sizes";
 import { useFormPersist } from "@/hooks/use-form-persist";
 import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import { Color, Design, Size, Supplier } from "@prisma/client";
+import { Color, Design, Size, Supplier, Type } from "@prisma/client";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -183,10 +184,15 @@ type ProductGroup = Awaited<ReturnType<typeof getProduct>>["productGroup"];
 type ProductGroups = Awaited<ReturnType<typeof getProduct>>["productGroups"];
 type CatalogColorOption = Pick<Color, "id" | "name" | "value">;
 type CatalogDesignOption = Pick<Design, "id" | "name">;
+type CatalogCategoryOption = Pick<
+  Categories,
+  "id" | "name" | "typeId" | "type"
+>;
 
 interface ProductFormProps {
   initialData: InitialData | null;
   categories: Categories[];
+  types: Type[];
   sizes: Size[];
   colors: Color[];
   designs: Design[];
@@ -200,6 +206,7 @@ interface ProductFormProps {
 export const ProductForm: React.FC<ProductFormProps> = ({
   initialData,
   categories,
+  types,
   sizes,
   colors,
   designs,
@@ -220,6 +227,10 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     useState<ProductImageAnalysis | null>(null);
   const [intakeOpen, setIntakeOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [recentCategories, setRecentCategories] = useState<
+    CatalogCategoryOption[]
+  >([]);
+  const [recentSizes, setRecentSizes] = useState<Size[]>([]);
   const [recentColors, setRecentColors] = useState<CatalogColorOption[]>([]);
   const [recentDesigns, setRecentDesigns] = useState<CatalogDesignOption[]>([]);
 
@@ -648,6 +659,25 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     [form.formState.isDirty, initialData, toast],
   );
 
+  const availableCategories = useMemo(
+    () => [
+      ...categories,
+      ...recentCategories.filter(
+        (recentCategory) =>
+          !categories.some((category) => category.id === recentCategory.id),
+      ),
+    ],
+    [categories, recentCategories],
+  );
+  const availableSizes = useMemo(
+    () => [
+      ...sizes,
+      ...recentSizes.filter(
+        (recentSize) => !sizes.some((size) => size.id === recentSize.id),
+      ),
+    ],
+    [recentSizes, sizes],
+  );
   const availableColors = useMemo(
     () => [
       ...colors,
@@ -670,13 +700,13 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 
   const selectOptions = useMemo(
     () => ({
-      categories: [...categories]
+      categories: [...availableCategories]
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((category) => ({
           value: category.id,
           label: category.name,
         })),
-      sizes: [...sizes]
+      sizes: [...availableSizes]
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((size) => ({
           value: size.id,
@@ -702,7 +732,94 @@ export const ProductForm: React.FC<ProductFormProps> = ({
           label: supplier.name,
         })),
     }),
-    [availableColors, availableDesigns, categories, sizes, suppliers],
+    [
+      availableCategories,
+      availableColors,
+      availableDesigns,
+      availableSizes,
+      suppliers,
+    ],
+  );
+
+  const createSuggestedCategory = useCallback(
+    async ({ name, typeId }: { name: string; typeId: string }) => {
+      const setValueOptions = {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      };
+      const existingCategory = availableCategories.find(
+        (category) =>
+          category.name.localeCompare(name, "es-CO", {
+            sensitivity: "base",
+          }) === 0,
+      );
+
+      if (existingCategory) {
+        form.setValue("categoryId", existingCategory.id, setValueOptions);
+        return existingCategory;
+      }
+
+      const selectedType = types.find((type) => type.id === typeId);
+      if (!selectedType) {
+        throw new Error("Selecciona un tipo válido para la subcategoría.");
+      }
+
+      const response = await axios
+        .post<
+          Pick<Categories, "id" | "name">
+        >(`/api/${params.storeId}/${Models.Categories}`, { name, typeId })
+        .catch((error) => {
+          throw new Error(getErrorMessage(error));
+        });
+      const createdCategory: CatalogCategoryOption = {
+        id: response.data.id,
+        name: response.data.name,
+        typeId,
+        type: selectedType,
+      };
+
+      setRecentCategories((current) => [...current, createdCategory]);
+      form.setValue("categoryId", createdCategory.id, setValueOptions);
+      toast({
+        description: `Subcategoría “${createdCategory.name}” creada y seleccionada.`,
+        variant: "success",
+      });
+      return createdCategory;
+    },
+    [availableCategories, form, params.storeId, toast, types],
+  );
+
+  const createSuggestedSize = useCallback(
+    async ({ dimension, weight }: { dimension: string; weight: string }) => {
+      const name = generateSizeName(dimension, weight);
+      const value = generateSizeValue(dimension, weight);
+      const setValueOptions = {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      };
+      const existingSize = availableSizes.find((size) => size.value === value);
+
+      if (existingSize) {
+        form.setValue("sizeId", existingSize.id, setValueOptions);
+        return existingSize;
+      }
+
+      const response = await axios
+        .post<Size>(`/api/${params.storeId}/${Models.Sizes}`, { name, value })
+        .catch((error) => {
+          throw new Error(getErrorMessage(error));
+        });
+      setRecentSizes((current) => [...current, response.data]);
+      form.setValue("sizeId", response.data.id, setValueOptions);
+      toast({
+        description: `Tamaño interno “${response.data.name}” creado y seleccionado.`,
+        variant: "success",
+      });
+      return response.data;
+    },
+    [availableSizes, form, params.storeId, toast],
   );
 
   const createVisualAttribute = useCallback(
@@ -817,7 +934,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             setVariantReviewAnalysis(null);
           }}
           onConfirm={onCreateReviewedVariants}
-          sizes={sizes}
+          sizes={availableSizes}
         />
       )}
       <div className="flex items-center justify-between">
@@ -999,7 +1116,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               <ProductNameAssistant
                 currentName={watchedName}
                 categoryName={
-                  categories.find(
+                  availableCategories.find(
                     (category) => category.id === watchedCategoryId,
                   )?.name
                 }
@@ -1013,9 +1130,12 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   availableColors.find((color) => color.id === watchedColorId)
                     ?.name
                 }
-                sizeName={sizes.find((size) => size.id === watchedSizeId)?.name}
+                sizeName={
+                  availableSizes.find((size) => size.id === watchedSizeId)?.name
+                }
                 sizeValue={
-                  sizes.find((size) => size.id === watchedSizeId)?.value
+                  availableSizes.find((size) => size.id === watchedSizeId)
+                    ?.value
                 }
                 disabled={loading}
                 storeId={params.storeId}
@@ -1102,6 +1222,20 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 onCreateVisualAttribute={
                   !watchedGroupId || watchedGroupId === "none"
                     ? createVisualAttribute
+                    : undefined
+                }
+                categoryTypes={types.map((type) => ({
+                  id: type.id,
+                  name: type.name,
+                }))}
+                onCreateSuggestedCategory={
+                  !watchedGroupId || watchedGroupId === "none"
+                    ? createSuggestedCategory
+                    : undefined
+                }
+                onCreateSuggestedSize={
+                  !watchedGroupId || watchedGroupId === "none"
+                    ? createSuggestedSize
                     : undefined
                 }
               />

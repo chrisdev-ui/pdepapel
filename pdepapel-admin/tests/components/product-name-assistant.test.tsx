@@ -4,7 +4,19 @@ import { ProductNameAssistant } from "@/components/products/product-name-assista
 import type { ProductImageAnalysis } from "@/lib/product-image-analysis";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+
+beforeAll(() => {
+  Object.defineProperties(HTMLElement.prototype, {
+    hasPointerCapture: { value: () => false, configurable: true },
+    releasePointerCapture: { value: () => undefined, configurable: true },
+    setPointerCapture: { value: () => undefined, configurable: true },
+  });
+  Object.defineProperty(Element.prototype, "scrollIntoView", {
+    value: () => undefined,
+    configurable: true,
+  });
+});
 
 function createVisualAnalysis(
   overrides: Partial<ProductImageAnalysis> = {},
@@ -193,6 +205,198 @@ describe("ProductNameAssistant visual analysis", () => {
       type: "color",
       name: "Rosa pastel",
       colorHex: "#F5B7C6",
+    });
+  });
+
+  it("lets the administrator reuse a close existing taxonomy option", async () => {
+    const user = userEvent.setup();
+    const onApplyVisualAnalysis = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        createAnalysisResponse(
+          createVisualAnalysis({
+            brand: null,
+            categoryName: "Troquel",
+            categoryId: null,
+            categorySource: "not_detected",
+            categoryAlternatives: [
+              {
+                id: "category-dies",
+                name: "Troqueles",
+                typeName: "Journal / Scrap",
+              },
+            ],
+            sizeName: null,
+            sizeId: null,
+            sizeSource: "not_detected",
+            colorName: null,
+            colorId: null,
+            colorSource: "not_detected",
+          }),
+        ),
+      ),
+    );
+
+    render(
+      <ProductNameAssistant
+        currentName=""
+        storeId="store-id"
+        imageUrls={[
+          "https://res.cloudinary.com/pdepapel/image/upload/v1/troquel.webp",
+        ]}
+        onApply={vi.fn()}
+        onApplyVisualAnalysis={onApplyVisualAnalysis}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Analizar fotos" }));
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Usar Troqueles · Journal / Scrap",
+      }),
+    );
+
+    expect(
+      screen.getByRole("checkbox", { name: "Subcategoría" }),
+    ).toBeChecked();
+    await user.click(
+      screen.getByRole("button", {
+        name: "Aplicar 2 campos seleccionados",
+      }),
+    );
+    expect(onApplyVisualAnalysis).toHaveBeenCalledWith(
+      expect.objectContaining({
+        categoryId: "category-dies",
+        categoryName: "Troqueles",
+        categorySource: "existing",
+      }),
+    );
+  });
+
+  it("requires a parent type before creating a proposed subcategory", async () => {
+    const user = userEvent.setup();
+    const onCreateSuggestedCategory = vi.fn().mockResolvedValue({
+      id: "category-dies",
+      name: "Troqueles",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        createAnalysisResponse(
+          createVisualAnalysis({
+            brand: null,
+            categoryName: "Troqueles",
+            categoryId: null,
+            categorySource: "not_detected",
+            categoryAlternatives: [],
+            sizeName: null,
+            sizeId: null,
+            sizeSource: "not_detected",
+            colorName: null,
+            colorId: null,
+            colorSource: "not_detected",
+          }),
+        ),
+      ),
+    );
+
+    render(
+      <ProductNameAssistant
+        currentName=""
+        storeId="store-id"
+        imageUrls={[
+          "https://res.cloudinary.com/pdepapel/image/upload/v1/troquel.webp",
+        ]}
+        categoryTypes={[{ id: "type-scrap", name: "Journal / Scrap" }]}
+        onApply={vi.fn()}
+        onApplyVisualAnalysis={vi.fn()}
+        onCreateSuggestedCategory={onCreateSuggestedCategory}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Analizar fotos" }));
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Crear subcategoría y aprobarla",
+      }),
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Crear y aprobar" }),
+    ).toBeDisabled();
+    await user.click(screen.getByRole("combobox", { name: "Tipo padre" }));
+    await user.click(
+      await screen.findByRole("option", { name: "Journal / Scrap" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Crear y aprobar" }));
+
+    expect(onCreateSuggestedCategory).toHaveBeenCalledWith({
+      name: "Troqueles",
+      typeId: "type-scrap",
+    });
+  });
+
+  it("requires explicit logistics choices before creating an internal size", async () => {
+    const user = userEvent.setup();
+    const onCreateSuggestedSize = vi.fn().mockResolvedValue({
+      id: "size-small-light",
+      name: "Pequeño liviano",
+      value: "S-L",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        createAnalysisResponse(
+          createVisualAnalysis({
+            brand: null,
+            categoryName: null,
+            categoryId: null,
+            categorySource: "not_detected",
+            sizeName: "A5",
+            sizeId: null,
+            sizeSource: "not_detected",
+            sizeAlternatives: [],
+            colorName: null,
+            colorId: null,
+            colorSource: "not_detected",
+          }),
+        ),
+      ),
+    );
+
+    render(
+      <ProductNameAssistant
+        currentName=""
+        storeId="store-id"
+        imageUrls={[
+          "https://res.cloudinary.com/pdepapel/image/upload/v1/cuaderno.webp",
+        ]}
+        onApply={vi.fn()}
+        onApplyVisualAnalysis={vi.fn()}
+        onCreateSuggestedSize={onCreateSuggestedSize}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Analizar fotos" }));
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Crear tamaño interno y aprobarlo",
+      }),
+    );
+    expect(
+      screen.getByRole("button", { name: "Crear y aprobar" }),
+    ).toBeDisabled();
+
+    await user.click(screen.getByRole("combobox", { name: "Dimensión" }));
+    await user.click(await screen.findByRole("option", { name: "Pequeño" }));
+    await user.click(screen.getByRole("combobox", { name: "Peso" }));
+    await user.click(await screen.findByRole("option", { name: "Liviano" }));
+    await user.click(screen.getByRole("button", { name: "Crear y aprobar" }));
+
+    expect(onCreateSuggestedSize).toHaveBeenCalledWith({
+      dimension: "S",
+      weight: "L",
     });
   });
 

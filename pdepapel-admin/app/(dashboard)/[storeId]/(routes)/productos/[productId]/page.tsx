@@ -9,6 +9,7 @@ export default async function ProductPage({
   const {
     product,
     categories,
+    types,
     sizes,
     colors,
     designs,
@@ -24,6 +25,7 @@ export default async function ProductPage({
       <div className="flex-1 space-y-4 p-8 pt-6">
         <ProductForm
           categories={categories}
+          types={types}
           sizes={sizes}
           colors={colors}
           designs={designs}

@@ -62,6 +62,19 @@ export async function POST(
     }
 
     const canonical = splitTaxonomyIcon(name);
+    const existingCategory = await prismadb.category.findFirst({
+      where: {
+        storeId: params.storeId,
+        name: canonical.name,
+      },
+      select: { id: true },
+    });
+    if (existingCategory) {
+      throw ErrorFactory.Conflict(
+        `Ya existe una subcategoría llamada "${canonical.name}" en esta tienda`,
+      );
+    }
+
     const slug = await getUniqueCategorySlug(prismadb, {
       storeId: params.storeId,
       baseSlug: slugify(canonical.name),

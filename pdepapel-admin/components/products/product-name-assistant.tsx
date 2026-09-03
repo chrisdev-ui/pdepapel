@@ -7,6 +7,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -21,7 +28,11 @@ import {
   PRODUCT_NAME_RECOMMENDED_MAX_LENGTH,
   buildProductNameSuggestion,
 } from "@/lib/product-naming";
-import type { ProductImageAnalysis } from "@/lib/product-image-analysis";
+import type {
+  ProductImageAnalysis,
+  ProductTaxonomyAlternative,
+} from "@/lib/product-image-analysis";
+import { DIMENSIONS, WEIGHTS } from "@/constants/sizes";
 import { cn } from "@/lib/utils";
 import {
   Barcode,
@@ -74,6 +85,19 @@ type PendingIdentifier = {
   evidence: string;
 };
 
+type CategoryTypeOption = {
+  id: string;
+  name: string;
+};
+
+type PendingCategory = {
+  name: string;
+};
+
+type PendingSize = {
+  name: string;
+};
+
 type ReviewSelection = Record<ReviewFieldKey, boolean>;
 
 type ProductNameAssistantProps = {
@@ -101,6 +125,15 @@ type ProductNameAssistantProps = {
   onCreateVisualAttribute?: (
     attribute: PendingVisualAttribute,
   ) => Promise<CreatedVisualAttribute>;
+  categoryTypes?: CategoryTypeOption[];
+  onCreateSuggestedCategory?: (input: {
+    name: string;
+    typeId: string;
+  }) => Promise<CreatedVisualAttribute>;
+  onCreateSuggestedSize?: (input: {
+    dimension: string;
+    weight: string;
+  }) => Promise<CreatedVisualAttribute>;
 };
 
 const EMPTY_REVIEW_SELECTION: ReviewSelection = {
@@ -215,6 +248,42 @@ function ReviewFieldCard({
   );
 }
 
+function ExistingTaxonomyAlternatives({
+  options,
+  onSelect,
+}: {
+  options: ProductTaxonomyAlternative[];
+  onSelect: (option: ProductTaxonomyAlternative) => void;
+}) {
+  if (options.length === 0) return null;
+
+  return (
+    <div className="mt-3 space-y-2">
+      <p className="text-xs font-medium text-muted-foreground">
+        Posibles coincidencias existentes
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {options.map((option) => (
+          <Button
+            key={option.id}
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-auto min-h-9 whitespace-normal text-left"
+            onClick={() => onSelect(option)}
+          >
+            <Check aria-hidden="true" className="mr-2 h-4 w-4 shrink-0" />
+            <span>
+              Usar {option.name}
+              {option.typeName ? ` · ${option.typeName}` : ""}
+            </span>
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function ProductNameAssistant({
   categoryName,
   currentName,
@@ -235,6 +304,9 @@ export function ProductNameAssistant({
   canReviewVariantRecommendation = false,
   onReviewVariantRecommendation,
   onCreateVisualAttribute,
+  categoryTypes = [],
+  onCreateSuggestedCategory,
+  onCreateSuggestedSize,
 }: ProductNameAssistantProps) {
   const [baseName, setBaseName] = useState(currentName || "");
   const [wasApplied, setWasApplied] = useState(false);
@@ -267,6 +339,14 @@ export function ProductNameAssistant({
     useState(false);
   const [pendingIdentifier, setPendingIdentifier] =
     useState<PendingIdentifier | null>(null);
+  const [pendingCategory, setPendingCategory] =
+    useState<PendingCategory | null>(null);
+  const [pendingSize, setPendingSize] = useState<PendingSize | null>(null);
+  const [selectedCategoryTypeId, setSelectedCategoryTypeId] = useState("");
+  const [selectedDimension, setSelectedDimension] = useState("");
+  const [selectedWeight, setSelectedWeight] = useState("");
+  const [isCreatingTaxonomyOption, setIsCreatingTaxonomyOption] =
+    useState(false);
 
   const fieldAvailability = useMemo(
     () => ({
@@ -558,6 +638,139 @@ export function ProductNameAssistant({
       );
     } finally {
       setIsCreatingVisualAttribute(false);
+    }
+  };
+
+  const selectExistingTaxonomyAlternative = (
+    field: "category" | "size" | "color" | "design",
+    option: ProductTaxonomyAlternative,
+  ) => {
+    setVisualAnalysis((current) => {
+      if (!current) return current;
+
+      if (field === "category") {
+        return {
+          ...current,
+          categoryId: option.id,
+          categoryName: option.name,
+          categorySource: "existing",
+          categoryAlternatives: [],
+        };
+      }
+      if (field === "size") {
+        return {
+          ...current,
+          sizeId: option.id,
+          sizeName: option.name,
+          sizeSource: "existing",
+          sizeAlternatives: [],
+        };
+      }
+      if (field === "color") {
+        return {
+          ...current,
+          colorId: option.id,
+          colorName: option.name,
+          colorHex: option.value ?? current.colorHex,
+          colorSource: "existing",
+          colorAlternatives: [],
+        };
+      }
+
+      return {
+        ...current,
+        designId: option.id,
+        designName: option.name,
+        designSource: "existing",
+        designAlternatives: [],
+      };
+    });
+    updateReviewSelection(field, true);
+  };
+
+  const createSuggestedCategory = async () => {
+    if (
+      !pendingCategory ||
+      !selectedCategoryTypeId ||
+      !onCreateSuggestedCategory
+    ) {
+      return;
+    }
+
+    setIsCreatingTaxonomyOption(true);
+    setVisualAnalysisError(null);
+
+    try {
+      const category = await onCreateSuggestedCategory({
+        name: pendingCategory.name,
+        typeId: selectedCategoryTypeId,
+      });
+      setVisualAnalysis((current) =>
+        current
+          ? {
+              ...current,
+              categoryId: category.id,
+              categoryName: category.name,
+              categorySource: "existing",
+              categoryAlternatives: [],
+            }
+          : current,
+      );
+      updateReviewSelection("category", true);
+      setPendingCategory(null);
+      setSelectedCategoryTypeId("");
+    } catch (error) {
+      setVisualAnalysisError(
+        error instanceof Error
+          ? error.message
+          : "No se pudo crear esta subcategoría.",
+      );
+    } finally {
+      setIsCreatingTaxonomyOption(false);
+    }
+  };
+
+  const createSuggestedSize = async () => {
+    if (
+      !pendingSize ||
+      !selectedDimension ||
+      !selectedWeight ||
+      !onCreateSuggestedSize
+    ) {
+      return;
+    }
+
+    setIsCreatingTaxonomyOption(true);
+    setVisualAnalysisError(null);
+
+    try {
+      const size = await onCreateSuggestedSize({
+        dimension: selectedDimension,
+        weight: selectedWeight,
+      });
+      setVisualAnalysis((current) =>
+        current
+          ? {
+              ...current,
+              sizeId: size.id,
+              sizeName: size.name,
+              sizeSource: "existing",
+              sizeAlternatives: [],
+            }
+          : current,
+      );
+      updateReviewSelection("size", true);
+      setPendingSize(null);
+      setSelectedDimension("");
+      setSelectedWeight("");
+    } catch (error) {
+      setVisualAnalysisError(
+        error instanceof Error
+          ? error.message
+          : "No se pudo crear este tamaño interno.",
+      );
+    } finally {
+      setIsCreatingTaxonomyOption(false);
     }
   };
 
@@ -924,7 +1137,9 @@ export function ProductNameAssistant({
                     status={
                       visualAnalysis.categoryId
                         ? "Opción existente"
-                        : "Revisión manual"
+                        : (visualAnalysis.categoryAlternatives?.length ?? 0) > 0
+                          ? "Coincidencias para revisar"
+                          : "Nueva propuesta"
                     }
                     checked={reviewSelection.category}
                     canApply={
@@ -935,12 +1150,41 @@ export function ProductNameAssistant({
                     helper={
                       visualAnalysis.categoryId
                         ? "Coincide exactamente con una subcategoría del catálogo."
-                        : "No coincide de forma única con una subcategoría existente; selecciónala manualmente."
+                        : onCreateSuggestedCategory
+                          ? "Reutiliza una coincidencia adecuada o crea la propuesta bajo el tipo correcto."
+                          : "No coincide de forma única; elige la subcategoría manualmente en el formulario."
                     }
                     onCheckedChange={(checked) =>
                       updateReviewSelection("category", checked)
                     }
-                  />
+                  >
+                    <ExistingTaxonomyAlternatives
+                      options={visualAnalysis.categoryAlternatives ?? []}
+                      onSelect={(option) =>
+                        selectExistingTaxonomyAlternative("category", option)
+                      }
+                    />
+                    {fieldAvailability.category &&
+                      !visualAnalysis.categoryId &&
+                      onCreateSuggestedCategory &&
+                      categoryTypes.length > 0 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="mt-3"
+                          disabled={disabled || isCreatingTaxonomyOption}
+                          onClick={() =>
+                            setPendingCategory({
+                              name: visualAnalysis.categoryName!,
+                            })
+                          }
+                        >
+                          <Plus aria-hidden="true" className="mr-2 h-4 w-4" />
+                          Crear subcategoría y aprobarla
+                        </Button>
+                      )}
+                  </ReviewFieldCard>
                 )}
                 {visualAnalysis.sizeName && (
                   <ReviewFieldCard
@@ -950,7 +1194,9 @@ export function ProductNameAssistant({
                     status={
                       visualAnalysis.sizeId
                         ? "Opción existente"
-                        : "Revisión manual"
+                        : (visualAnalysis.sizeAlternatives?.length ?? 0) > 0
+                          ? "Coincidencias para revisar"
+                          : "Revisión logística"
                     }
                     checked={reviewSelection.size}
                     canApply={
@@ -960,12 +1206,36 @@ export function ProductNameAssistant({
                     helper={
                       visualAnalysis.sizeId
                         ? "Coincide exactamente con una opción existente."
-                        : "No se aplicará porque no coincide de forma única con un tamaño existente."
+                        : "Este campo controla dimensión y peso internos. Los formatos visibles como A5 deben ir en Opciones visibles para clientes."
                     }
                     onCheckedChange={(checked) =>
                       updateReviewSelection("size", checked)
                     }
-                  />
+                  >
+                    <ExistingTaxonomyAlternatives
+                      options={visualAnalysis.sizeAlternatives ?? []}
+                      onSelect={(option) =>
+                        selectExistingTaxonomyAlternative("size", option)
+                      }
+                    />
+                    {fieldAvailability.size &&
+                      !visualAnalysis.sizeId &&
+                      onCreateSuggestedSize && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="mt-3"
+                          disabled={disabled || isCreatingTaxonomyOption}
+                          onClick={() =>
+                            setPendingSize({ name: visualAnalysis.sizeName! })
+                          }
+                        >
+                          <Plus aria-hidden="true" className="mr-2 h-4 w-4" />
+                          Crear tamaño interno y aprobarlo
+                        </Button>
+                      )}
+                  </ReviewFieldCard>
                 )}
                 {visualAnalysis.colorName && (
                   <ReviewFieldCard
@@ -975,7 +1245,9 @@ export function ProductNameAssistant({
                     status={
                       visualAnalysis.colorSource === "existing"
                         ? "Opción existente"
-                        : "Nueva propuesta"
+                        : (visualAnalysis.colorAlternatives?.length ?? 0) > 0
+                          ? "Coincidencias para revisar"
+                          : "Nueva propuesta"
                     }
                     checked={reviewSelection.color}
                     canApply={
@@ -985,12 +1257,18 @@ export function ProductNameAssistant({
                     helper={
                       visualAnalysis.colorId
                         ? "Coincide exactamente con un color del catálogo."
-                        : "Debes crear y confirmar este color antes de aplicarlo."
+                        : "Reutiliza una coincidencia o crea y confirma este color antes de aplicarlo."
                     }
                     onCheckedChange={(checked) =>
                       updateReviewSelection("color", checked)
                     }
                   >
+                    <ExistingTaxonomyAlternatives
+                      options={visualAnalysis.colorAlternatives ?? []}
+                      onSelect={(option) =>
+                        selectExistingTaxonomyAlternative("color", option)
+                      }
+                    />
                     {fieldAvailability.color &&
                       visualAnalysis.colorSource === "new" &&
                       visualAnalysis.colorHex &&
@@ -1023,7 +1301,9 @@ export function ProductNameAssistant({
                     status={
                       visualAnalysis.designSource === "existing"
                         ? "Opción existente"
-                        : "Nueva propuesta"
+                        : (visualAnalysis.designAlternatives?.length ?? 0) > 0
+                          ? "Coincidencias para revisar"
+                          : "Nueva propuesta"
                     }
                     checked={reviewSelection.design}
                     canApply={
@@ -1034,12 +1314,18 @@ export function ProductNameAssistant({
                     helper={
                       visualAnalysis.designId
                         ? "Coincide exactamente con un diseño del catálogo."
-                        : "Debes crear y confirmar este diseño antes de aplicarlo."
+                        : "Reutiliza una coincidencia o crea y confirma este diseño antes de aplicarlo."
                     }
                     onCheckedChange={(checked) =>
                       updateReviewSelection("design", checked)
                     }
                   >
+                    <ExistingTaxonomyAlternatives
+                      options={visualAnalysis.designAlternatives ?? []}
+                      onSelect={(option) =>
+                        selectExistingTaxonomyAlternative("design", option)
+                      }
+                    />
                     {fieldAvailability.design &&
                       visualAnalysis.designSource === "new" &&
                       onCreateVisualAttribute && (
@@ -1357,6 +1643,162 @@ export function ProductNameAssistant({
           </div>
         )}
       </div>
+
+      <AlertDialog
+        open={Boolean(pendingCategory)}
+        onOpenChange={(open) => {
+          if (!open && !isCreatingTaxonomyOption) {
+            setPendingCategory(null);
+            setSelectedCategoryTypeId("");
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Crear subcategoría nueva?</AlertDialogTitle>
+            <AlertDialogDescription>
+              La propuesta “{pendingCategory?.name}” no se aplicará hasta que
+              elijas su tipo padre. Revisa primero las coincidencias existentes
+              para evitar categorías duplicadas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2 py-2">
+            <label htmlFor="ai-category-type" className="text-sm font-medium">
+              Tipo padre
+            </label>
+            <Select
+              value={selectedCategoryTypeId}
+              disabled={isCreatingTaxonomyOption}
+              onValueChange={setSelectedCategoryTypeId}
+            >
+              <SelectTrigger id="ai-category-type">
+                <SelectValue placeholder="Selecciona el tipo correcto" />
+              </SelectTrigger>
+              <SelectContent>
+                {categoryTypes.map((type) => (
+                  <SelectItem key={type.id} value={type.id}>
+                    {type.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isCreatingTaxonomyOption}>
+              Revisar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isCreatingTaxonomyOption || !selectedCategoryTypeId}
+              onClick={(event) => {
+                event.preventDefault();
+                void createSuggestedCategory();
+              }}
+            >
+              {isCreatingTaxonomyOption && (
+                <Loader2
+                  aria-hidden="true"
+                  className="mr-2 h-4 w-4 animate-spin"
+                />
+              )}
+              {isCreatingTaxonomyOption ? "Creando…" : "Crear y aprobar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={Boolean(pendingSize)}
+        onOpenChange={(open) => {
+          if (!open && !isCreatingTaxonomyOption) {
+            setPendingSize(null);
+            setSelectedDimension("");
+            setSelectedWeight("");
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Crear tamaño interno</AlertDialogTitle>
+            <AlertDialogDescription>
+              La IA detectó “{pendingSize?.name}”, pero este campo controla la
+              logística interna. Elige manualmente dimensión y peso. Si es un
+              formato visible como A5, apruébalo en Opciones visibles para
+              clientes en lugar de crear un tamaño interno.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="grid gap-4 py-2 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label
+                htmlFor="ai-size-dimension"
+                className="text-sm font-medium"
+              >
+                Dimensión
+              </label>
+              <Select
+                value={selectedDimension}
+                disabled={isCreatingTaxonomyOption}
+                onValueChange={setSelectedDimension}
+              >
+                <SelectTrigger id="ai-size-dimension">
+                  <SelectValue placeholder="Selecciona" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DIMENSIONS.map((dimension) => (
+                    <SelectItem key={dimension.value} value={dimension.value}>
+                      {dimension.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="ai-size-weight" className="text-sm font-medium">
+                Peso
+              </label>
+              <Select
+                value={selectedWeight}
+                disabled={isCreatingTaxonomyOption}
+                onValueChange={setSelectedWeight}
+              >
+                <SelectTrigger id="ai-size-weight">
+                  <SelectValue placeholder="Selecciona" />
+                </SelectTrigger>
+                <SelectContent>
+                  {WEIGHTS.map((weight) => (
+                    <SelectItem key={weight.value} value={weight.value}>
+                      {weight.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isCreatingTaxonomyOption}>
+              Revisar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={
+                isCreatingTaxonomyOption ||
+                !selectedDimension ||
+                !selectedWeight
+              }
+              onClick={(event) => {
+                event.preventDefault();
+                void createSuggestedSize();
+              }}
+            >
+              {isCreatingTaxonomyOption && (
+                <Loader2
+                  aria-hidden="true"
+                  className="mr-2 h-4 w-4 animate-spin"
+                />
+              )}
+              {isCreatingTaxonomyOption ? "Creando…" : "Crear y aprobar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={Boolean(pendingVisualAttribute)}
