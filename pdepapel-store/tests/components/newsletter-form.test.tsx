@@ -52,6 +52,23 @@ describe("NewsletterForm", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("keeps the email input flush with the submit button", () => {
+    render(<NewsletterForm />);
+
+    const input = screen.getByRole("textbox", { name: "Correo electrónico" });
+    const button = screen.getByRole("button", {
+      name: "Quiero recibir novedades",
+    });
+
+    // Regression: the sr-only label is a sibling inside the field wrapper, so
+    // any vertical item spacing there pushes the input below the button.
+    expect(input.parentElement?.className).toMatch(/\bspace-y-0\b/);
+    expect(input.parentElement?.className).not.toMatch(/\bspace-y-[1-9]/);
+    expect(input.parentElement?.parentElement).toBe(button.parentElement);
+    expect(button.className).toMatch(/\bh-11\b/);
+    expect(input.className).toMatch(/\bh-11\b/);
+  });
+
   it("requests confirmation without sending the email address to analytics", async () => {
     const user = userEvent.setup();
     vi.mocked(fetch).mockResolvedValue(

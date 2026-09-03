@@ -93,12 +93,14 @@ export function NewsletterForm() {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="w-full space-y-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:gap-0">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-0">
           <FormField
             control={form.control}
             name="email"
             render={({ field }) => (
-              <FormItem className="min-w-0 flex-1 space-y-1">
+              // `space-y-0`: the sr-only label is still a flex child, so the
+              // default item spacing would push the input 4px below the button.
+              <FormItem className="min-w-0 flex-1 space-y-0">
                 <FormLabel className="sr-only">Correo electrónico</FormLabel>
                 <FormControl>
                   <Input
@@ -111,14 +113,14 @@ export function NewsletterForm() {
                     {...field}
                   />
                 </FormControl>
-                <FormMessage className="text-blue-yankees" />
+                <FormMessage className="mt-1 text-blue-yankees" />
               </FormItem>
             )}
           />
           <Button
             type="submit"
             disabled={loading}
-            className="h-11 whitespace-nowrap rounded border-none bg-blue-yankees px-5 text-sm font-medium text-white outline-none ring-offset-transparent sm:rounded-bl-none sm:rounded-tl-none"
+            className="h-11 shrink-0 whitespace-nowrap rounded border-none bg-blue-yankees px-5 text-sm font-medium text-white outline-none ring-offset-transparent sm:rounded-bl-none sm:rounded-tl-none"
           >
             {loading ? "Enviando…" : "Quiero recibir novedades"}
           </Button>
