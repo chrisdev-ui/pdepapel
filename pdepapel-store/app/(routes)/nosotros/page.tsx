@@ -192,7 +192,7 @@ export default function AboutPage() {
   return (
     <div className="bg-white">
       {/* --- Hero --- */}
-      <section className="sparkle bg-kawaii-pink-light/15 relative overflow-hidden px-4 py-10 sm:px-6 lg:px-8 lg:py-16">
+      <section className="sparkle bg-kawaii-pink-light/15 relative overflow-hidden py-10 lg:py-16">
         <div
           aria-hidden="true"
           className="pointer-events-none absolute -left-24 -top-24 h-80 w-80 rounded-full bg-kawaii-blue-light blur-3xl"
@@ -201,7 +201,7 @@ export default function AboutPage() {
           aria-hidden="true"
           className="pointer-events-none absolute -bottom-36 -right-16 h-80 w-80 rounded-full bg-kawaii-lavender-light blur-3xl"
         />
-        <div className="relative mx-auto grid max-w-screen-2xl items-center gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-16">
+        <div className="relative mx-auto grid max-w-screen-2xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-16 lg:px-8">
           <div className="flex flex-col items-center gap-5 text-center lg:items-start lg:text-left">
             <span className="bg-kawaii-pink-light/35 inline-flex items-center gap-2 rounded-full border border-kawaii-pink-light px-3.5 py-1.5 text-sm font-medium">
               <Sparkles
@@ -390,8 +390,8 @@ export default function AboutPage() {
       </Container>
 
       {/* --- Facts band --- */}
-      <section className="bg-kawaii-pink-light/15 px-4 py-7 sm:px-6 lg:px-8">
-        <ul className="mx-auto grid max-w-screen-2xl gap-4 sm:grid-cols-3 sm:gap-6">
+      <section className="bg-kawaii-pink-light/15 py-7">
+        <ul className="mx-auto grid max-w-screen-2xl gap-4 px-4 sm:px-6 md:grid-cols-3 md:gap-8 lg:px-8">
           {facts.map((fact) => (
             <li key={fact.id} className="flex items-start gap-3">
               <span className="shrink-0 text-pink-shell">{fact.icon}</span>
