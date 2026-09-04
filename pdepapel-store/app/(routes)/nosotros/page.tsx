@@ -148,13 +148,13 @@ const facts = [
     id: "medellin",
     title: "Operamos desde Medellín",
     description: "Atención y preparación de pedidos en Antioquia.",
-    icon: <MapPin className="h-10 w-10" aria-hidden="true" />,
+    icon: <MapPin className="h-7 w-7 xl:h-8 xl:w-8" aria-hidden="true" />,
   },
   {
     id: "envios",
     title: "Envíos a toda Colombia",
     description: "Ciudades y municipios con cobertura de transportadoras.",
-    icon: <Truck className="h-10 w-10" aria-hidden="true" />,
+    icon: <Truck className="h-7 w-7 xl:h-8 xl:w-8" aria-hidden="true" />,
   },
   {
     id: "horario",
@@ -165,7 +165,7 @@ const facts = [
         <Icons.flags.colombia className="h-3.5 w-3.5" aria-hidden="true" />
       </span>
     ),
-    icon: <Clock className="h-10 w-10" aria-hidden="true" />,
+    icon: <Clock className="h-7 w-7 xl:h-8 xl:w-8" aria-hidden="true" />,
   },
 ];
 
@@ -390,14 +390,26 @@ export default function AboutPage() {
       </Container>
 
       {/* --- Facts band --- */}
-      <section className="bg-kawaii-pink-light/15 py-7">
-        <ul className="mx-auto grid max-w-screen-2xl gap-4 px-4 sm:px-6 md:grid-cols-3 md:gap-8 lg:px-8">
+      <section
+        aria-label="Datos de la tienda"
+        className="bg-kawaii-pink-light/20 py-8 lg:py-10"
+      >
+        <ul className="mx-auto grid max-w-screen-2xl gap-4 px-4 sm:px-6 lg:grid-cols-3 lg:gap-6 lg:px-8 xl:gap-8">
           {facts.map((fact) => (
-            <li key={fact.id} className="flex items-start gap-3">
-              <span className="shrink-0 text-pink-shell">{fact.icon}</span>
-              <div>
-                <p className="font-serif text-sm font-bold">{fact.title}</p>
-                <p className="text-xs">{fact.description}</p>
+            <li
+              key={fact.id}
+              className="flex items-center gap-4 rounded-3xl border border-pink-shell/30 bg-white px-5 py-5 shadow-sm sm:px-6 xl:gap-5 xl:px-7 xl:py-6"
+            >
+              <span className="bg-kawaii-pink-light/40 inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-pink-shell xl:h-16 xl:w-16">
+                {fact.icon}
+              </span>
+              <div className="min-w-0">
+                <p className="font-serif text-base font-bold xl:text-lg">
+                  {fact.title}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {fact.description}
+                </p>
               </div>
             </li>
           ))}
