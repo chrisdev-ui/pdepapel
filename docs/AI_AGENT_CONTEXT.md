@@ -311,9 +311,12 @@ When creating a new customer-navigable route:
   keeps HTTP-set cookies; `readAnalyticsConsent` restores local storage from it
   and re-issues it when missing or stale. Bump the storage key and cookie name
   together (`ANALYTICS_CONSENT_VERSION`) whenever the consent scope changes so
-  every browser is asked exactly once. Preferences can be reopened from the
-  footer. Essential checkout and security functions do not depend on that
-  consent.
+  every browser is asked exactly once. The banner is fixed to the bottom of
+  the viewport, compact on phones, and reserves its own height in `body`
+  padding and `scroll-padding-bottom` while visible so it never leaves a
+  control unreachable (the mobile "Filtros" button was previously covered).
+  Preferences can be reopened from the footer. Essential checkout and
+  security functions do not depend on that consent.
 - GA4 client events use the shared `lib/customer-analytics.ts` helper. Track
   ecommerce events such as product-list views, product views, add-to-cart,
   cart view, checkout, shipping/payment steps, and checkout errors. Never put

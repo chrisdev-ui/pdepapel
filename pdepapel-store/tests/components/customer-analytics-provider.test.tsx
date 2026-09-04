@@ -125,6 +125,30 @@ describe("CustomerAnalyticsProvider", () => {
     expect(clarityMocks.initializeMicrosoftClarity).toHaveBeenCalledTimes(1);
   });
 
+  it("reserves space below the page while the banner is visible", async () => {
+    renderProvider();
+
+    expect(
+      await screen.findByRole("heading", { name: BANNER_HEADING }),
+    ).toBeInTheDocument();
+    expect(document.body.style.paddingBottom).toMatch(/^\d+px$/);
+    expect(document.documentElement.style.scrollPaddingBottom).toBe(
+      document.body.style.paddingBottom,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Rechazar opcionales" }),
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("heading", { name: BANNER_HEADING }),
+      ).not.toBeInTheDocument();
+    });
+    expect(document.body.style.paddingBottom).toBe("");
+    expect(document.documentElement.style.scrollPaddingBottom).toBe("");
+  });
+
   it("does not ask again a returning visitor who already accepted", async () => {
     window.localStorage.setItem(
       ANALYTICS_CONSENT_STORAGE_KEY,

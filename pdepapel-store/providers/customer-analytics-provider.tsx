@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 
 import {
@@ -71,9 +71,12 @@ export function CustomerAnalyticsProvider({
   const [isReady, setIsReady] = useState(false);
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
   const [draftPreferences, setDraftPreferences] = useState(initialPreferences);
+  const bannerRef = useRef<HTMLElement | null>(null);
 
   const hasClarity = Boolean(clarityEnabled && clarityProjectId);
   const hasOptionalAnalytics = Boolean(measurementId || hasClarity);
+  const showBanner =
+    hasOptionalAnalytics && isReady && !consent && !isPreferencesOpen;
 
   useEffect(() => {
     const persistedConsent = readAnalyticsConsent();
@@ -141,6 +144,38 @@ export function CustomerAnalyticsProvider({
     trackGooglePageView(pathname, document.title);
   }, [consent?.analytics, isReady, measurementId, pathname]);
 
+  // The banner is fixed to the bottom of the viewport. Reserve the same
+  // height below the page and in the scroll padding so controls near the
+  // bottom (for example the mobile "Filtros" button) can still be reached
+  // before the visitor decides.
+  useEffect(() => {
+    if (!showBanner) return;
+
+    const root = document.documentElement;
+    const body = document.body;
+    const apply = () => {
+      const height = bannerRef.current?.getBoundingClientRect().height ?? 0;
+      const offset = `${Math.ceil(height) + 24}px`;
+      body.style.paddingBottom = offset;
+      root.style.scrollPaddingBottom = offset;
+    };
+
+    apply();
+    const observer =
+      typeof ResizeObserver !== "undefined" && bannerRef.current
+        ? new ResizeObserver(apply)
+        : null;
+    if (bannerRef.current) observer?.observe(bannerRef.current);
+    window.addEventListener("resize", apply);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", apply);
+      body.style.paddingBottom = "";
+      root.style.scrollPaddingBottom = "";
+    };
+  }, [showBanner]);
+
   const persistPreferences = (preferences: typeof initialPreferences) => {
     const requiresReload = Boolean(
       consent?.analytics && !preferences.analytics,
@@ -159,34 +194,36 @@ export function CustomerAnalyticsProvider({
 
   return (
     <>
-      {isReady && !consent && !isPreferencesOpen && (
+      {showBanner && (
         <section
+          ref={bannerRef}
           aria-label="Preferencias de privacidad"
-          className="fixed inset-x-4 bottom-4 z-[10000] mx-auto max-w-2xl rounded-2xl border border-blue-baby bg-background p-5 shadow-xl sm:p-6"
+          className="fixed inset-x-2 bottom-2 z-[10000] mx-auto max-w-2xl rounded-2xl border border-blue-baby bg-background p-4 shadow-xl sm:inset-x-4 sm:bottom-4 sm:p-6"
         >
-          <h2 className="font-serif text-xl font-bold">
+          <h2 className="font-serif text-lg font-bold sm:text-xl">
             Tu privacidad, tus decisiones
           </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-1.5 text-xs text-muted-foreground sm:mt-2 sm:text-sm">
             Con tu permiso usamos métricas y reproducciones técnicas de la
             navegación para mejorar la tienda y entender qué dificulta una
             compra. Ocultamos los campos personales y nunca usamos estos datos
             para procesar tu pago.
           </p>
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4 sm:flex sm:justify-end">
             <Button
               type="button"
               variant="ghost"
-              onClick={() => persistPreferences(initialPreferences)}
+              className="order-last col-span-2 h-9 sm:order-none sm:col-span-1 sm:h-10"
+              onClick={() => setIsPreferencesOpen(true)}
             >
-              Rechazar opcionales
+              Personalizar
             </Button>
             <Button
               type="button"
               variant="outline"
-              onClick={() => setIsPreferencesOpen(true)}
+              onClick={() => persistPreferences(initialPreferences)}
             >
-              Personalizar
+              Rechazar opcionales
             </Button>
             <Button
               type="button"

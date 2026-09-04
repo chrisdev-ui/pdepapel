@@ -159,3 +159,31 @@ test("recuerda la decisión de quien vuelve, incluso si Safari borra el almacena
     )
     .toContain('"analytics":true');
 });
+
+test("el aviso de privacidad no bloquea los controles del catálogo en móvil", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    !analyticsEnabled,
+    "Requiere la bandera local de analítica activa.",
+  );
+  test.skip(
+    testInfo.project.name !== "mobile-chromium",
+    "Solo aplica al aviso fijo sobre la vista móvil.",
+  );
+
+  await page.route(/(googletagmanager\.com|clarity\.ms)/, (route) =>
+    route.abort(),
+  );
+  await gotoPublicPage(page, "/tienda");
+  await expect(
+    page.getByRole("heading", { name: "Tu privacidad, tus decisiones" }),
+  ).toBeVisible();
+
+  // The banner reserves its own height in the page's scroll padding, so
+  // controls beneath it can be scrolled into a clickable position.
+  await page.getByRole("button", { name: "Filtros" }).click({ timeout: 10_000 });
+  await expect(
+    page.getByRole("dialog", { name: "Filtros de productos" }),
+  ).toBeVisible();
+});
