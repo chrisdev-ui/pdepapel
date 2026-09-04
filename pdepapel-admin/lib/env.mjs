@@ -1,6 +1,8 @@
 import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
 
+import { requiredInProduction } from "./env-rules.mjs";
+
 export const env = createEnv({
   server: {
     NODE_ENV: z.enum(["development", "production"]),
@@ -32,11 +34,16 @@ export const env = createEnv({
     KV_REST_API_URL: z.string().url(),
     KV_REST_API_TOKEN: z.string().min(1),
     KV_REST_API_READ_ONLY_TOKEN: z.string().min(1).optional(),
-    GA4_MEASUREMENT_ID: z
-      .string()
-      .regex(/^G-[A-Z0-9]+$/, "Debe ser un ID de medición válido de GA4")
-      .optional(),
-    GA4_API_SECRET: z.string().min(1).optional(),
+    // GA4 Measurement Protocol credentials for server-side purchase events.
+    // Optional for local, CI, and Preview builds; mandatory for Vercel
+    // Production builds so a missing value fails the deploy instead of
+    // silently dropping the events (see lib/env-rules.mjs).
+    GA4_MEASUREMENT_ID: requiredInProduction(
+      z
+        .string()
+        .regex(/^G-[A-Z0-9]+$/, "Debe ser un ID de medición válido de GA4"),
+    ),
+    GA4_API_SECRET: requiredInProduction(z.string().min(1)),
     GEMINI_API_KEY: z.string().min(1).optional(),
   },
   client: {

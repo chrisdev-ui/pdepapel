@@ -724,8 +724,11 @@ Full configuration runbook: `pdepapel-admin/docs/mercadolibre.md`.
 - Shipping/data: EnvioClick, MiPaquete, Upstash Redis cache variables.
 - Store revalidation: `REVALIDATION_SECRET` (must equal public app value).
 - Mercado Libre/QStash values listed in Section 12.
-- GA4 server purchase tracking (optional): `GA4_MEASUREMENT_ID` and
-  `GA4_API_SECRET`. The API secret belongs only to the admin Vercel project.
+- GA4 server purchase tracking: `GA4_MEASUREMENT_ID` and `GA4_API_SECRET`.
+  The API secret belongs only to the admin Vercel project. Both are
+  **mandatory for Vercel Production builds** and optional for local, CI, and
+  Preview builds (`requiredInProduction` in `lib/env-rules.mjs`), so a
+  production deploy without them fails instead of silently dropping events.
 
 ### Public-shop baseline environment categories
 
@@ -734,11 +737,16 @@ Full configuration runbook: `pdepapel-admin/docs/mercadolibre.md`.
 - `NEXT_PUBLIC_API_URL` pointing to the admin API.
 - Legacy PayU public variables currently remain in the validated contract; do not remove them without removing or migrating dependent code/config.
 - `REVALIDATION_SECRET` server-side value matching admin.
-- Optional public analytics ID: `NEXT_PUBLIC_GA_MEASUREMENT_ID`. It is a public
-  identifier, not a secret.
-- Optional Microsoft Clarity values: `NEXT_PUBLIC_CLARITY_PROJECT_ID` (public)
-  and `NEXT_PUBLIC_CLARITY_ENABLED` (`true`/`false` kill switch). Configure them
-  only in the storefront project.
+- Public analytics identifiers: `NEXT_PUBLIC_GA_MEASUREMENT_ID` (GA4),
+  `NEXT_PUBLIC_CLARITY_PROJECT_ID`, and `NEXT_PUBLIC_CLARITY_ENABLED`
+  (`true`/`false` kill switch). They are public identifiers, not secrets, and
+  belong only to the storefront project. All three are **mandatory for Vercel
+  Production builds** and optional for local, CI, and Preview builds
+  (`requiredInProduction` in `lib/env-rules.mjs`). On 2026-08-31 they were
+  deleted from Vercel and the next production build shipped silently with
+  analytics off for four days; a missing value now fails the build so the last
+  good deployment stays live. Never delete Vercel variables to "scope" them;
+  re-add them for the intended environment instead.
 
 ### Local vs production
 
@@ -793,6 +801,7 @@ npx prisma generate
 - Each Prisma integration test must create and clean up its own data.
 - For any bug fix, first add a regression test that would have failed before the fix whenever practical.
 - After testing with a local server, explicitly stop it. After Docker integration tests, run `npm run test:db:down` to free memory and remove test data.
+- `public-health.yml` runs the store E2E after a successful production deployment. Vercel names GitHub deployment environments `Production – <project>`, so the job condition must match that prefix (`startsWith(..., 'production')`) and skip `pdepapel-admin`; an exact `== 'Production'` comparison silently skips every run, which is how the 2026-09-01 analytics outage went unnoticed.
 
 ### Current quality expectations
 

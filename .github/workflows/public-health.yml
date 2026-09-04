@@ -8,10 +8,15 @@ on:
 
 jobs:
   public-routes:
+    # Vercel names GitHub deployment environments "Production – <project>",
+    # so an exact match on "Production" never fired and every post-deploy run
+    # was skipped. Match the prefix (case-insensitive) and skip admin deploys,
+    # since this job only exercises the storefront.
     if: >-
       github.event_name != 'deployment_status' ||
       (github.event.deployment_status.state == 'success' &&
-      (github.event.deployment.environment == 'Production' || github.event.deployment.environment == 'production'))
+      startsWith(github.event.deployment.environment, 'production') &&
+      !contains(github.event.deployment.environment, 'pdepapel-admin'))
     runs-on: ubuntu-latest
     defaults:
       run:
