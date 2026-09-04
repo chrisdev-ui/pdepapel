@@ -45,6 +45,12 @@ a Production.
 - Rechazar o revocar analítica desactiva Clarity y GA4; comprar sigue funcionando.
 - El consentimiento cambió a versión `v2`, por lo que cada navegador volverá a
   preguntar una sola vez después del despliegue.
+- La decisión se guarda en `localStorage` y se replica en una cookie de un año
+  emitida por `POST /api/consent` (`pdepapel_analytics_consent_v2`). Safari e
+  iOS borran el almacenamiento escrito por scripts tras 7 días sin visitar el
+  sitio, pero conservan las cookies fijadas por el servidor, así que quien vuelve
+  no ve el aviso de nuevo. Al cambiar el alcance del consentimiento, sube
+  `ANALYTICS_CONSENT_VERSION` para renombrar ambos a la vez.
 - No se usa la API `identify` ni se envían correo, teléfono, dirección, documento,
   número de pedido, token, SKU o identificadores de cliente.
 - Clarity recibe nombres cerrados de eventos, no los parámetros detallados de GA4.

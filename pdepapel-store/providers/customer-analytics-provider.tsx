@@ -8,6 +8,7 @@ import {
   OPEN_PRIVACY_PREFERENCES_EVENT,
   readAnalyticsConsent,
   saveAnalyticsConsent,
+  syncAnalyticsConsentCookie,
 } from "@/lib/analytics-consent";
 import {
   disableGoogleAnalytics,
@@ -76,6 +77,7 @@ export function CustomerAnalyticsProvider({
 
   useEffect(() => {
     const persistedConsent = readAnalyticsConsent();
+    syncAnalyticsConsentCookie(persistedConsent);
     setConsent(persistedConsent);
     setDraftPreferences(
       persistedConsent

@@ -98,3 +98,64 @@ test("rechazar opcionales mantiene ambos proveedores apagados", async ({
 
   expect(analyticsRequests).toEqual([]);
 });
+
+test("recuerda la decisión de quien vuelve, incluso si Safari borra el almacenamiento local", async ({
+  context,
+  page,
+}) => {
+  test.skip(
+    !analyticsEnabled,
+    "Requiere la bandera local de analítica activa.",
+  );
+
+  const cookieName = "pdepapel_analytics_consent_v2";
+  const storageKey = "pdepapel:analytics-consent:v2";
+  const analyticsRequests: string[] = [];
+  await page.route(/(googletagmanager\.com|clarity\.ms)/, async (route) => {
+    analyticsRequests.push(route.request().url());
+    await route.abort();
+  });
+  const privacyHeading = page.getByRole("heading", {
+    name: "Tu privacidad, tus decisiones",
+  });
+  const gtagWasRequested = () =>
+    analyticsRequests.some((url) =>
+      url.includes("googletagmanager.com/gtag/js?id="),
+    );
+
+  await gotoPublicPage(page, "/");
+  await expect(privacyHeading).toBeVisible();
+
+  const consentResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/consent" &&
+      response.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: "Aceptar y continuar" }).click();
+  expect((await consentResponse).status()).toBe(200);
+
+  const consentCookie = (await context.cookies()).find(
+    (cookie) => cookie.name === cookieName,
+  );
+  expect(consentCookie).toBeDefined();
+  expect(consentCookie?.expires ?? 0).toBeGreaterThan(
+    Date.now() / 1000 + 300 * 24 * 60 * 60,
+  );
+
+  analyticsRequests.length = 0;
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect.poll(gtagWasRequested, { timeout: 8_000 }).toBeTruthy();
+  await expect(privacyHeading).toHaveCount(0);
+
+  // Simulate Safari's 7-day purge of script-written storage.
+  await page.evaluate((key) => window.localStorage.removeItem(key), storageKey);
+  analyticsRequests.length = 0;
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect.poll(gtagWasRequested, { timeout: 8_000 }).toBeTruthy();
+  await expect(privacyHeading).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.evaluate((key) => window.localStorage.getItem(key), storageKey),
+    )
+    .toContain('"analytics":true');
+});

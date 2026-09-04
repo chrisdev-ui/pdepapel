@@ -99,6 +99,11 @@ export default function DataPolicyPage() {
               aparece en el pie de página. Rechazarlas no impide comprar ni usar
               las funciones esenciales del sitio.
             </li>
+            <li>
+              Guardamos tu decisión en este navegador durante 12 meses, en el
+              almacenamiento local y en una cookie de preferencia sin
+              identificadores, para no volver a preguntarte en cada visita.
+            </li>
           </ul>
           <h3 className="font-serif text-lg font-semibold">
             Novedades y comunicaciones de marketing:

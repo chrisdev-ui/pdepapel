@@ -304,8 +304,16 @@ When creating a new customer-navigable route:
 
 - The public shop asks for explicit, revocable browser consent before loading
   Google Analytics 4 or Microsoft Clarity. Preferences are versioned in browser
-  local storage and can be reopened from the footer. Essential checkout and
-  security functions do not depend on that consent.
+  local storage and mirrored into a long-lived cookie set by the storefront
+  `POST /api/consent` route (`pdepapel_analytics_consent_<version>`, 1 year,
+  SameSite=Lax, not HttpOnly, no identifiers). The cookie exists because
+  Safari/iOS deletes script-written storage after 7 days without a visit but
+  keeps HTTP-set cookies; `readAnalyticsConsent` restores local storage from it
+  and re-issues it when missing or stale. Bump the storage key and cookie name
+  together (`ANALYTICS_CONSENT_VERSION`) whenever the consent scope changes so
+  every browser is asked exactly once. Preferences can be reopened from the
+  footer. Essential checkout and security functions do not depend on that
+  consent.
 - GA4 client events use the shared `lib/customer-analytics.ts` helper. Track
   ecommerce events such as product-list views, product views, add-to-cart,
   cart view, checkout, shipping/payment steps, and checkout errors. Never put
