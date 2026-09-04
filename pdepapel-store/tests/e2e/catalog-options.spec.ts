@@ -1,6 +1,6 @@
 import { expect, Page, test } from "@playwright/test";
 
-import { gotoPublicPage } from "./helpers/public-page";
+import { gotoPublicPage, skipPrivacyBanner } from "./helpers/public-page";
 
 const productSlug = process.env.E2E_PURCHASABLE_PRODUCT_SLUG;
 
@@ -15,6 +15,7 @@ async function expectNoHorizontalOverflow(page: Page) {
 }
 
 test("filtra el catálogo y oculta la talla logística", async ({ page }) => {
+  await skipPrivacyBanner(page);
   await gotoPublicPage(page, "/tienda");
   await expect(
     page.getByRole("button", { name: "Abrir carrito, 0 productos" }).first(),
@@ -54,6 +55,7 @@ test("muestra opciones públicas en el producto de prueba", async ({ page }) => 
     "Requiere E2E_PURCHASABLE_PRODUCT_SLUG y los datos locales de prueba.",
   );
 
+  await skipPrivacyBanner(page);
   await gotoPublicPage(page, `/producto/${productSlug}`);
   await expect(
     page.getByRole("heading", { name: "Producto feria E2E" }),
@@ -73,6 +75,7 @@ test("mantiene utilizables los controles del catálogo en tableta", async ({
     "Una sola pasada de tableta es suficiente.",
   );
   await page.setViewportSize({ width: 768, height: 1024 });
+  await skipPrivacyBanner(page);
   await gotoPublicPage(page, "/tienda");
   await expect(
     page.getByRole("button", { name: "Abrir carrito, 0 productos" }).first(),
