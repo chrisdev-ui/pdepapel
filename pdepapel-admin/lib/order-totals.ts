@@ -86,3 +86,30 @@ export function getEffectiveShippingCost(
   const freeShipping = qualifiesForFreeShipping(subtotal, threshold);
   return { shippingCost: freeShipping ? 0 : shippingCost, freeShipping };
 }
+
+export type ShippingChargeState = "charged" | "free" | "pending";
+
+/**
+ * Describes how the admin should label an order's shipping line.
+ * A positive cost is always charged. A zero cost is "free" when the product
+ * subtotal reaches the store threshold or when a carrier quote was saved with
+ * no charge (carriers never quote zero, so that only happens through the free
+ * shipping rule). Anything else is still pending a quote.
+ */
+export function getShippingChargeState({
+  shippingCost,
+  subtotal,
+  freeShippingThreshold,
+  hasQuote = false,
+}: {
+  shippingCost: number | null | undefined;
+  subtotal: number;
+  freeShippingThreshold?: number | null;
+  hasQuote?: boolean;
+}): ShippingChargeState {
+  const cost = Number(shippingCost) || 0;
+  if (cost > 0) return "charged";
+  if (qualifiesForFreeShipping(subtotal, freeShippingThreshold)) return "free";
+  if (hasQuote) return "free";
+  return "pending";
+}

@@ -1,4 +1,6 @@
 import { getDaneLocations } from "@/actions/get-dane-locations";
+import { getShippingChargeState } from "@/lib/order-totals";
+import prismadb from "@/lib/prismadb";
 import { OrderForm } from "./components/order-form";
 import { ShippingInfo } from "./components/shipping-info";
 import { getBoxes } from "./server/get-boxes";
@@ -14,14 +16,36 @@ export default async function OrderPage({
 }: {
   params: { orderId: string; storeId: string };
 }) {
-  const [{ order, products, categories }, coupons, users, locations, boxes] =
-    await Promise.all([
-      getOrder(params.orderId, params.storeId),
-      getCoupons(params.storeId),
-      getAvailableCustomers(params.storeId),
-      getDaneLocations(),
-      getBoxes(params.storeId),
-    ]);
+  const [
+    { order, products, categories },
+    coupons,
+    users,
+    locations,
+    boxes,
+    storeSettings,
+  ] = await Promise.all([
+    getOrder(params.orderId, params.storeId),
+    getCoupons(params.storeId),
+    getAvailableCustomers(params.storeId),
+    getDaneLocations(),
+    getBoxes(params.storeId),
+    prismadb.store
+      .findUnique({
+        where: { id: params.storeId },
+        select: { freeShippingThreshold: true },
+      })
+      .catch(() => null),
+  ]);
+
+  const freeShippingThreshold = storeSettings?.freeShippingThreshold ?? null;
+  const freeShipping = order
+    ? getShippingChargeState({
+        shippingCost: order.shipping?.cost ?? null,
+        subtotal: Number(order.subtotal) || 0,
+        freeShippingThreshold,
+        hasQuote: Boolean(order.shipping?.envioClickIdRate),
+      }) === "free"
+    : false;
 
   const formattedUsers = users;
 
@@ -36,10 +60,15 @@ export default async function OrderPage({
           users={formattedUsers}
           locations={locations}
           boxes={boxes}
+          freeShippingThreshold={freeShippingThreshold}
         />
 
         {order && (
-          <ShippingInfo shipping={order.shipping} orderStatus={order.status} />
+          <ShippingInfo
+            shipping={order.shipping}
+            orderStatus={order.status}
+            freeShipping={freeShipping}
+          />
         )}
       </div>
     </div>

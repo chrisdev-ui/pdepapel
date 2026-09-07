@@ -147,6 +147,7 @@ import {
 import { ENVIOCLICK_LIMITS, getCarrierInfo } from "@/constants/shipping";
 import { getErrorMessage } from "@/lib/api-errors";
 import { getAdminOrderPaymentOptions } from "@/lib/order-payment-options";
+import { getShippingChargeState } from "@/lib/order-totals";
 import { cn, currencyFormatter } from "@/lib/utils";
 import dynamic from "next/dynamic";
 import { getBoxes } from "../server/get-boxes";
@@ -405,6 +406,7 @@ interface OrderFormProps {
   categories: Category[];
   locations: LocationOption[];
   boxes: Awaited<ReturnType<typeof getBoxes>>;
+  freeShippingThreshold?: number | null;
 }
 
 export const OrderForm: React.FC<OrderFormProps> = ({
@@ -415,6 +417,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   users,
   locations,
   boxes,
+  freeShippingThreshold = null,
 }) => {
   const params = useParams();
   const router = useRouter();
@@ -818,6 +821,14 @@ export const OrderForm: React.FC<OrderFormProps> = ({
       total,
     };
   }, [watchedItems, discountType, discountAmount, coupon, shippingCost]);
+
+  const watchedRateId = form.watch("envioClickIdRate");
+  const shippingChargeState = getShippingChargeState({
+    shippingCost: Number(shippingCost) || 0,
+    subtotal: orderTotals.subtotal,
+    freeShippingThreshold,
+    hasQuote: Boolean(selectedRateId || watchedRateId),
+  });
 
   const onSubmit = async (data: OrderFormValues) => {
     try {
@@ -1828,11 +1839,17 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                       )}
                       <div className="flex justify-between text-muted-foreground">
                         <span>Envío</span>
-                        <span>
-                          {Number(shippingCost || 0) > 0
-                            ? `+ ${currencyFormatter(Number(shippingCost || 0))}`
-                            : "Por calcular"}
-                        </span>
+                        {shippingChargeState === "charged" ? (
+                          <span>
+                            + {currencyFormatter(Number(shippingCost || 0))}
+                          </span>
+                        ) : shippingChargeState === "free" ? (
+                          <span className="font-medium text-success">
+                            Gratis
+                          </span>
+                        ) : (
+                          <span>Por calcular</span>
+                        )}
                       </div>
                     </div>
                     <Separator />

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   getEffectiveShippingCost,
+  getShippingChargeState,
   qualifiesForFreeShipping,
 } from "@/lib/order-totals";
 import { parseFreeShippingThreshold } from "@/lib/store-settings";
@@ -50,5 +51,59 @@ describe("parseFreeShippingThreshold", () => {
         /umbral de envío gratis/,
       );
     }
+  });
+});
+
+describe("getShippingChargeState", () => {
+  it("charges any positive cost regardless of the threshold", () => {
+    expect(
+      getShippingChargeState({
+        shippingCost: 9074,
+        subtotal: 165000,
+        freeShippingThreshold: 120000,
+        hasQuote: true,
+      }),
+    ).toBe("charged");
+  });
+
+  it("labels a zero cost as free once the subtotal reaches the threshold", () => {
+    expect(
+      getShippingChargeState({
+        shippingCost: 0,
+        subtotal: 165000,
+        freeShippingThreshold: 120000,
+      }),
+    ).toBe("free");
+    expect(
+      getShippingChargeState({
+        shippingCost: null,
+        subtotal: 120000,
+        freeShippingThreshold: 120000,
+      }),
+    ).toBe("free");
+  });
+
+  it("labels a saved zero-charge quote as free even without a threshold", () => {
+    expect(
+      getShippingChargeState({
+        shippingCost: 0,
+        subtotal: 55000,
+        freeShippingThreshold: null,
+        hasQuote: true,
+      }),
+    ).toBe("free");
+  });
+
+  it("keeps a zero cost pending when nothing was quoted and the threshold is not met", () => {
+    expect(
+      getShippingChargeState({
+        shippingCost: 0,
+        subtotal: 55000,
+        freeShippingThreshold: 120000,
+      }),
+    ).toBe("pending");
+    expect(
+      getShippingChargeState({ shippingCost: undefined, subtotal: 55000 }),
+    ).toBe("pending");
   });
 });

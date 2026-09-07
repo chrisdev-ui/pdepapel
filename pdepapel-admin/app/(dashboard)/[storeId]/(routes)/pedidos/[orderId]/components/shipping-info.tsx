@@ -69,6 +69,8 @@ interface ShippingData {
 interface ShippingInfoProps {
   shipping?: ShippingData | null;
   orderStatus: string;
+  /** The order reached the store free-shipping threshold (or saved a zero-charge quote). */
+  freeShipping?: boolean;
 }
 
 interface ShippingState {
@@ -192,6 +194,7 @@ const getStatusConfig = (status: ShippingStatus) => {
 export const ShippingInfo: React.FC<ShippingInfoProps> = ({
   shipping,
   orderStatus,
+  freeShipping = false,
 }) => {
   const { toast } = useToast();
   const router = useRouter();
@@ -554,14 +557,25 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
         )}
 
         {/* Cost */}
-        {shipping.cost && (
+        {(freeShipping ||
+          (shipping.cost !== null && shipping.cost !== undefined)) && (
           <>
             <Separator />
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground">Costo de envío</p>
-              <p className="text-lg font-bold">
-                {currencyFormatter(shipping.cost)}
-              </p>
+              {freeShipping ? (
+                <div className="flex items-center gap-2">
+                  <Badge variant="success">Gratis</Badge>
+                  <p className="text-xs text-muted-foreground">
+                    El pedido alcanzó el monto de envío gratis; el flete lo
+                    asume la tienda.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-lg font-bold">
+                  {currencyFormatter(shipping.cost ?? 0)}
+                </p>
+              )}
             </div>
           </>
         )}
