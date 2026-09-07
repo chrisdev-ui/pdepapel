@@ -70,6 +70,7 @@ This section records the important recent decisions and must be updated after fu
 
 ### Current baseline
 
+- `pdepapel-admin/prisma/manual-migrations/20260907_add_store_free_shipping_threshold.sql` was applied to Railway on 2026-09-07 (single nullable column, no data changed) and validated locally against that database: the checkout API zeroed shipping for a 165000 COP subtotal and rejected a mismatched total without creating an order; the storefront summary shows "Gratis" above the threshold and the missing amount below it.
 - `pdepapel-admin/prisma/manual-migrations/20260901_add_newsletter_subscribers.sql` was applied to Railway on 2026-09-01 after full local unit, integration, build, and responsive browser validation. It adds the empty, store-scoped consent lifecycle table used by the double-opt-in newsletter flow; no existing customer, order, payment, inventory, or catalog record was changed.
 - `pdepapel-admin/prisma/manual-migrations/20260828_add_catalog_options.sql` was applied to Railway on 2026-08-30 after a verified production backup and local unit, integration, build, and E2E validation. It additively separates internal shipping/SKU sizes from customer-facing catalog options, stores taxonomy icons outside canonical names, preserves type aliases, and adds the reviewed bulk-migration queue.
 - Latest deployed Mercado Libre listing-content expansion was committed as `f9a88d6` (`feat(admin): enhance Mercado Libre listing management`) and its matching manual migration was applied to Railway.
@@ -430,7 +431,7 @@ Known manual migration references:
 - `20260824_add_business_growth.sql` — creates additive, store-scoped policy, cash-movement, and social-campaign-draft tables; applied to Railway on 2026-08-24. It has no foreign keys because `relationMode = "prisma"`.
 - `20260828_add_catalog_options.sql` — additive customer-option/shipping-profile/taxonomy-icon migration; applied to Railway on 2026-08-30. It preserves every legacy `Size`, SKU, product slug, stock, price, image, order, and marketplace link.
 - `20260901_add_newsletter_subscribers.sql` — additive store-scoped newsletter consent and lifecycle table; applied to Railway on 2026-09-01. It did not modify customers, orders, payments, inventory, or catalog records.
-- `20260907_add_store_free_shipping_threshold.sql` — additive nullable `Store.freeShippingThreshold` (COP). **Pending: apply to Railway before deploying the storefront header/checkout code that reads it**; until then the public settings endpoint fails safe (threshold `null`, no promise shown) and checkout charges shipping normally.
+- `20260907_add_store_free_shipping_threshold.sql` — additive nullable `Store.freeShippingThreshold` (COP); applied to Railway on 2026-09-07 with `prisma db execute` and verified through `information_schema`. The store's threshold was set to 120000 the same day (editable in Configuración). Both readers fail safe if the column is ever missing (threshold `null`, shipping charged normally).
 
 ## 8. Catalog, SEO, and revalidation
 

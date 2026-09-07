@@ -20,5 +20,5 @@ const COP_FORMATTER = new Intl.NumberFormat("es-CO", {
 
 /** "$ 120.000" — the same spelling the price components use. */
 export function formatCop(value: number): string {
-  return COP_FORMATTER.format(value).replace(/ /g, " ");
+  return COP_FORMATTER.format(value).replace(/[\u00a0\u202f]/g, " ");
 }
