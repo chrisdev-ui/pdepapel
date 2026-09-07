@@ -18,3 +18,7 @@ outputs/
 
 # PDF generados por scripts/generate-mercadolibre-guide-pdf.py
 output/
+
+# Local agent/tool scratch at the repo root (never commit)
+/Claude outputs/
+/_gitlock_trash/
