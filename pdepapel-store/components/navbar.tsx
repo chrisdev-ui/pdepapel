@@ -152,6 +152,9 @@ const Navbar: React.FC<NavbarProps> = ({
       <div className="hidden h-[52px] items-center gap-7 border-b border-border bg-white px-8 lg:flex xl:px-12">
         <MegaMenu types={types} featuredByType={featuredByType} />
         <ul className="flex items-center gap-6 whitespace-nowrap font-sans text-[15px] font-semibold">
+          <li>
+            <NavigationLink href={STOREFRONT_ROUTES.shop}>Tienda</NavigationLink>
+          </li>
           {types.slice(0, TOP_TYPES).map((type, index) => (
             <li
               key={type.id}

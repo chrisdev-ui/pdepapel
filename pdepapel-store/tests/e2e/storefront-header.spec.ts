@@ -57,6 +57,11 @@ test("el mega menú de escritorio abre y enlaza subcategorías", async ({ page }
 
   await page.keyboard.press("Escape");
   await expect(panel).toHaveCount(0);
+
+  // The full catalog is always one click away from the desktop header.
+  await expect(
+    page.locator("header").getByRole("link", { name: "Tienda", exact: true }),
+  ).toHaveAttribute("href", "/tienda");
 });
 
 test("buscar desde la cabecera abre los resultados en la tienda", async ({ page }) => {

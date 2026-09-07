@@ -70,6 +70,10 @@ describe("CategoryDrawer", () => {
       "href",
       "/tienda?typeId=t-esc",
     );
+    expect(screen.getByRole("link", { name: /Todos los productos/ })).toHaveAttribute(
+      "href",
+      "/tienda",
+    );
     expect(screen.getByRole("link", { name: "Ofertas" })).toHaveAttribute(
       "href",
       "/tienda?isOnSale=true",

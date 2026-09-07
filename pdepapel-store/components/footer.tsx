@@ -3,7 +3,7 @@ import { PrivacyPreferencesButton } from "@/components/privacy-preferences-butto
 import { SEASON_CONFIG } from "@/constants";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { Season } from "@/types";
-import { CalendarDays, Mail, MapPin, Phone } from "lucide-react";
+import { ArrowRight, CalendarDays, Mail, MapPin, Phone } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -51,6 +51,13 @@ export const Footer: React.FC<FooterProps> = ({ season = Season.Default }) => {
             Papelería kawaii en línea con operación desde Medellín y envíos a
             toda Colombia.
           </p>
+          <Link
+            href={STOREFRONT_ROUTES.shop}
+            className="mt-3 inline-flex min-h-[44px] items-center gap-2 rounded-md text-sm font-semibold text-blue-yankees hover:text-pink-shell focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-shell focus-visible:ring-offset-2"
+          >
+            Ver todos los productos
+            <ArrowRight aria-hidden="true" className="h-4 w-4" />
+          </Link>
         </div>
         <div className="grid min-w-0 grid-cols-1 gap-x-8 gap-y-10 text-sm sm:grid-cols-2 lg:grid-cols-3">
           <section

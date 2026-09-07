@@ -4,6 +4,7 @@ import { SignedIn, SignedOut } from "@clerk/nextjs";
 import {
   ArrowRight,
   Heart,
+  LayoutGrid,
   Mail,
   Menu,
   PackageOpen,
@@ -102,6 +103,14 @@ export function CategoryDrawer({ types, logoSrc }: CategoryDrawerProps) {
         </div>
 
         <nav aria-label="Categorías" className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <Link
+            href={STOREFRONT_ROUTES.shop}
+            className={cn(rowClass, "border-b border-border font-semibold")}
+          >
+            <LayoutGrid aria-hidden="true" className="h-6 w-6 shrink-0" />
+            <span className="flex-1">Todos los productos</span>
+            <ArrowRight aria-hidden="true" className="h-5 w-5 text-muted-foreground" />
+          </Link>
           <Accordion type="single" collapsible className="w-full">
             {types.map((type) =>
               type.subcategories.length === 0 ? (
