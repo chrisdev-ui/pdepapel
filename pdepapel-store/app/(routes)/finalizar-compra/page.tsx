@@ -6,6 +6,7 @@ import { AccountPrompt } from "@/components/account-prompt";
 import { BoldCheckoutSdk } from "@/components/bold-checkout-sdk";
 import { Container } from "@/components/ui/container";
 import { KAWAII_FACE_WELCOME } from "@/constants";
+import { getStorefrontSettings } from "@/actions/get-storefront-settings";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { MultiStepCheckoutForm } from "./components/multi-step-checkout-form";
 
@@ -42,7 +43,10 @@ export default async function CheckoutPage({
 }: {
   searchParams: { customOrderToken?: string };
 }) {
-  const user = await currentUser();
+  const [user, storefrontSettings] = await Promise.all([
+    currentUser(),
+    getStorefrontSettings(),
+  ]);
   const formattedUser = {
     firstName: user?.firstName,
     lastName: user?.lastName,
@@ -88,6 +92,7 @@ export default async function CheckoutPage({
           currentUser={formattedUser}
           season={currentSeason}
           customOrder={customOrder}
+          freeShippingThreshold={storefrontSettings.freeShippingThreshold}
         />
       </Container>
     </>

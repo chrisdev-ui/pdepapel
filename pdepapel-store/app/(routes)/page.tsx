@@ -5,6 +5,9 @@ import { Organization, WebSite } from "schema-dts";
 
 import { getBillboards } from "@/actions/get-billboards";
 import { getCategories } from "@/actions/get-categories";
+import { getTypes } from "@/actions/get-types";
+import { CategoryChips } from "@/components/category-chips";
+import { buildNavigationTypes } from "@/lib/catalog-navigation";
 import { CategoryLinksSection } from "@/components/category-links-section";
 import { BASE_URL } from "@/constants";
 import { getCurrentSeason } from "@/lib/date-utils";
@@ -137,6 +140,11 @@ async function HomeHero({ season }: { season: Season }) {
   return <HeroSlider data={billboards} season={season} />;
 }
 
+async function HomeCategoryChips() {
+  const [types, categories] = await Promise.all([getTypes(), getCategories()]);
+  return <CategoryChips types={buildNavigationTypes(types, categories)} />;
+}
+
 async function HomeCategoryLinks() {
   const categories = await getCategories();
   const seoCategories = categories.filter(
@@ -160,6 +168,9 @@ export default function HomePage() {
           cuadernos, útiles escolares y regalos kawaii a todo el país.
         </p>
       </section>
+      <Suspense fallback={null}>
+        <HomeCategoryChips />
+      </Suspense>
       <Suspense fallback={<HeroSliderSkeleton />}>
         <HomeHero season={season} />
       </Suspense>

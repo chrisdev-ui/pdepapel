@@ -192,6 +192,8 @@ interface CheckoutFormProps {
   currentUser?: CheckoutFormUser | null;
   season?: Season;
   customOrder?: UnifiedOrder | null;
+  /** Store free-shipping threshold (COP) on the product subtotal; null = off. */
+  freeShippingThreshold?: number | null;
 }
 
 export interface CouponState {
@@ -230,6 +232,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   currentUser,
   season = Season.Default,
   customOrder,
+  freeShippingThreshold = null,
 }) => {
   const { userId, getToken } = useAuth();
   const router = useRouter();
@@ -465,9 +468,22 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
 
   const shippingCost = form.watch("shipping.cost");
 
-  const { total, subtotal, couponDiscount, productSavings } = useMemo(
-    () => calculateTotals(activeItems, couponState.coupon, shippingCost),
-    [activeItems, couponState.coupon, shippingCost],
+  const {
+    total,
+    subtotal,
+    couponDiscount,
+    productSavings,
+    freeShipping,
+    freeShippingRemaining,
+  } = useMemo(
+    () =>
+      calculateTotals(
+        activeItems,
+        couponState.coupon,
+        shippingCost,
+        freeShippingThreshold,
+      ),
+    [activeItems, couponState.coupon, shippingCost, freeShippingThreshold],
   );
 
   const analyticsItems = useMemo(
@@ -887,7 +903,9 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       payment: {
         method: paymentMethod,
       },
-      shipping,
+      // The API re-applies the store rule; sending cost 0 keeps both sides
+      // and the stored shipping record consistent.
+      shipping: freeShipping ? { ...shipping, cost: 0 } : shipping,
       couponCode: couponState.coupon?.code ?? null,
       subtotal,
       total,
@@ -1117,11 +1135,28 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                   />
                 </div>
               ) : null}
-              {(shippingCost ?? 0) > 0 ? (
+              {freeShipping ? (
+                <div className="flex flex-1 items-center justify-between">
+                  <span className="text-lg">Envío</span>
+                  <span className="rounded-full bg-kawaii-mint-light px-3 py-1 font-sans text-sm font-bold text-blue-yankees">
+                    Gratis
+                  </span>
+                </div>
+              ) : (shippingCost ?? 0) > 0 ? (
                 <div className="flex flex-1 items-center justify-between">
                   <span className="text-lg">Envío</span>
                   <Currency className="text-lg" value={shippingCost} />
                 </div>
+              ) : null}
+              {!freeShipping && freeShippingRemaining > 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Te faltan{" "}
+                  <Currency
+                    className="inline text-sm font-bold text-blue-yankees"
+                    value={freeShippingRemaining}
+                  />{" "}
+                  en productos para tener envío gratis.
+                </p>
               ) : null}
               <Separator />
               <div className="flex flex-1 items-center justify-between">

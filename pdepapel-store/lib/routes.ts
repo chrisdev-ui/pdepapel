@@ -76,6 +76,13 @@ export const productPath = (slug: string) => `/producto/${slug}`;
 
 export const categoryPath = (slug: string) => `/categoria/${slug}`;
 
+/** Shop filtered by a catalog type ("Ver todo Escritura"). */
+export const typePath = (type: { id: string }) =>
+  `${STOREFRONT_ROUTES.shop}?typeId=${encodeURIComponent(type.id)}`;
+
+/** Shop showing only products on offer. */
+export const offersPath = `${STOREFRONT_ROUTES.shop}?isOnSale=true`;
+
 export const orderPath = (orderId: string) => `/pedido/${orderId}`;
 
 export const quotePath = (token: string) => `/cotizacion/${token}`;

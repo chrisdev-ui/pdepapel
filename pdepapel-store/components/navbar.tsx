@@ -1,70 +1,108 @@
 "use client";
 
-import { SEASON_CONFIG } from "@/constants";
-import { Season } from "@/types";
 import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import { FileSearch } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useCallback, useState } from "react";
 
-import { HamburgerMenu } from "@/components/hamburger-menu";
+import { AnnouncementBar } from "@/components/announcement-bar";
+import { CategoryDrawer } from "@/components/category-drawer";
 import { Icons } from "@/components/icons";
+import { MegaMenu } from "@/components/mega-menu";
 import { NavbarCart } from "@/components/navbar-cart";
 import { NavigationLink } from "@/components/navigation-link";
 import { OrderHistory } from "@/components/order-history";
 import { SearchBar } from "@/components/search-bar";
 import { WishlistButton } from "@/components/wishlist-button";
+import { SEASON_CONFIG } from "@/constants";
 import { useScrollPosition } from "@/hooks/use-scroll-position";
-import { accountAccessPath, STOREFRONT_ROUTES } from "@/lib/routes";
+import { FeaturedByType, NavigationType } from "@/lib/catalog-navigation";
+import { accountAccessPath, offersPath, STOREFRONT_ROUTES, typePath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
+import { Season } from "@/types";
 
 interface NavbarProps {
   season?: Season;
+  types: NavigationType[];
+  featuredByType: FeaturedByType;
+  freeShippingThreshold: number | null;
 }
 
-const Navbar: React.FC<NavbarProps> = ({ season = Season.Default }) => {
-  const scrollPosition = useScrollPosition();
+/** Desktop category row shows this many types before "Ofertas". */
+const TOP_TYPES = 6;
+
+/**
+ * Fixed storefront header. Phones and tablets: announcement bar (hidden once
+ * the visitor scrolls), a 64px bar with the category drawer, centered logo,
+ * favorites and cart, then an always-visible search field. Desktop: bar,
+ * 84px header with a wide search field and account actions, then the
+ * category row with the mega menu. Heights are mirrored in globals.css as
+ * --storefront-header-offset.
+ */
+const Navbar: React.FC<NavbarProps> = ({
+  season = Season.Default,
+  types,
+  featuredByType,
+  freeShippingThreshold,
+}) => {
+  const scrollPosition = useScrollPosition(8);
   const pathname = usePathname();
-
-  const [displaySearchbox, setDisplaySearchbox] = useState<boolean>(false);
-
   const seasonConfig = SEASON_CONFIG[season];
-
-  const toggleSearch = useCallback((open: boolean) => {
-    setDisplaySearchbox(open);
-  }, []);
+  const scrolled = scrollPosition > 80;
 
   return (
-    <header className="fixed left-0 top-0 z-50 mx-auto">
-      <nav className="flex w-screen items-center justify-between gap-4 bg-blue-baby">
-        <div
-          className={cn(
-            "flex items-center p-3 transition-all duration-300 md:w-full lg:py-6 xl:px-12",
-            {
-              "lg:py-0": scrollPosition > 120,
-              "w-0 px-0 lg:w-full lg:px-5": displaySearchbox,
-            },
-          )}
-        >
+    <header className="fixed inset-x-0 top-0 z-50">
+      <AnnouncementBar
+        freeShippingThreshold={freeShippingThreshold}
+        className={cn("transition-[height] duration-300", scrolled && "max-lg:hidden")}
+      />
+
+      <nav aria-label="Principal" className="bg-blue-baby">
+        {/* Phones and tablets */}
+        <div className="flex h-16 items-center justify-between gap-2 px-3 sm:px-6 lg:hidden">
+          <div className="flex w-[124px] items-center">
+            <CategoryDrawer types={types} logoSrc={seasonConfig.navbarText} />
+          </div>
           <Link
             href="/"
-            className={cn(
-              "relative hidden transition-all duration-500 ease-in-out md:block md:h-24 md:w-48",
-              {
-                "md:w-0 xl:w-48": displaySearchbox,
-              },
-            )}
+            aria-label="Papelería P de Papel, inicio"
+            className="relative h-12 w-24 shrink-0"
+          >
+            <Image
+              src={seasonConfig.navbarText}
+              alt="Logo Papelería P de Papel"
+              fill
+              sizes="96px"
+              priority
+              className="object-contain"
+            />
+          </Link>
+          <div className="flex w-[124px] items-center justify-end gap-2">
+            <WishlistButton className="flex h-11 w-11 items-center justify-center" />
+            <NavbarCart className="min-w-[4.5rem]" />
+          </div>
+        </div>
+        <div className="px-3 pb-2 sm:px-6 lg:hidden">
+          <SearchBar variant="inline" />
+        </div>
+
+        {/* Desktop */}
+        <div className="hidden h-[84px] items-center gap-10 px-8 lg:flex xl:px-12">
+          <Link
+            href="/"
+            aria-label="Papelería P de Papel, inicio"
+            className="relative h-16 w-32 shrink-0"
           >
             <Image
               src={seasonConfig.navbarText}
               alt="Logo Papelería P de Papel con nombre al lado"
               fill
-              sizes="(max-width: 768px) 1px, 200px"
-              quality="100"
+              sizes="128px"
+              priority
+              className="object-contain"
             />
-            {!displaySearchbox && seasonConfig.logoAccent && (
+            {seasonConfig.logoAccent ? (
               <Image
                 src={seasonConfig.logoAccent}
                 alt=""
@@ -74,52 +112,16 @@ const Navbar: React.FC<NavbarProps> = ({ season = Season.Default }) => {
                 sizes="80px"
                 className="pointer-events-none absolute -right-12 -top-3 h-auto w-20 max-w-none"
               />
-            )}
+            ) : null}
           </Link>
-          <Link
-            href="/"
-            className={cn(
-              "relative h-24 w-24 transition-all duration-500 ease-in-out md:hidden",
-              {
-                "w-0": displaySearchbox,
-              },
-            )}
-          >
-            <Image
-              src={seasonConfig.navbarNoText}
-              alt="Logo Papelería P de Papel"
-              fill
-              sizes="(min-width: 769px) 1px, 100px"
-              quality="100"
-            />
-          </Link>
-          <ul className="mx-auto hidden space-x-12 px-4 lg:flex">
-            <li>
-              <NavigationLink href="/">Inicio</NavigationLink>
-            </li>
-            <li>
-              <NavigationLink href={STOREFRONT_ROUTES.shop}>
-                Tienda
-              </NavigationLink>
-            </li>
-            <li>
-              <NavigationLink href={STOREFRONT_ROUTES.about}>
-                Nosotros
-              </NavigationLink>
-            </li>
-            <li>
-              <NavigationLink href={STOREFRONT_ROUTES.contact}>
-                Contacto
-              </NavigationLink>
-            </li>
-          </ul>
-          <div className="hidden items-center space-x-5 lg:flex">
+          <div className="flex flex-1 justify-center">
             <SearchBar
-              displaySearchbox={displaySearchbox}
-              toggleSearch={toggleSearch}
+              variant="desktop"
+              placeholder="Busca cuadernos, stickers, agendas, kits…"
             />
-            <WishlistButton />
-            <NavbarCart />
+          </div>
+          <div className="flex shrink-0 items-center gap-5">
+            <WishlistButton withLabel />
             <SignedIn>
               <UserButton afterSignOutUrl="/" userProfileMode="modal">
                 <UserButton.UserProfilePage
@@ -134,30 +136,51 @@ const Navbar: React.FC<NavbarProps> = ({ season = Season.Default }) => {
             <SignedOut>
               <Link
                 href={accountAccessPath(STOREFRONT_ROUTES.signIn, pathname)}
-                className="flex items-center gap-2 rounded-md px-2 py-1 font-semibold transition-opacity hover:opacity-75"
+                className="flex items-center gap-2 rounded-md font-sans font-semibold text-blue-yankees transition-opacity hover:opacity-75"
                 aria-label="Iniciar sesión o crear una cuenta"
               >
                 <Icons.user className="h-6 w-6" />
-                <span className="hidden 2xl:inline">Mi cuenta</span>
+                <span className="hidden xl:inline">Mi cuenta</span>
               </Link>
             </SignedOut>
+            <NavbarCart />
           </div>
         </div>
-        {/* Responsive navbar */}
-        <div
-          className={cn("flex items-center gap-3 px-6 lg:hidden", {
-            "gap-2 px-2": displaySearchbox,
-          })}
-        >
-          <SearchBar
-            displaySearchbox={displaySearchbox}
-            toggleSearch={toggleSearch}
-            className="flex lg:hidden"
-          />
-          <NavbarCart className="hidden self-center xs:flex lg:hidden" />
-          <HamburgerMenu />
-        </div>
       </nav>
+
+      {/* Desktop category row */}
+      <div className="hidden h-[52px] items-center gap-7 border-b border-border bg-white px-8 lg:flex xl:px-12">
+        <MegaMenu types={types} featuredByType={featuredByType} />
+        <ul className="flex items-center gap-6 whitespace-nowrap font-sans text-[15px] font-semibold">
+          {types.slice(0, TOP_TYPES).map((type, index) => (
+            <li
+              key={type.id}
+              className={cn(
+                "hidden",
+                index < 3 ? "lg:block" : index < 5 ? "xl:block" : "2xl:block",
+              )}
+            >
+              <NavigationLink href={typePath(type)}>{type.label}</NavigationLink>
+            </li>
+          ))}
+          <li>
+            <Link
+              href={offersPath}
+              className="text-pink-froly transition-opacity hover:opacity-75"
+            >
+              Ofertas
+            </Link>
+          </li>
+        </ul>
+        <ul className="ml-auto flex items-center gap-6 whitespace-nowrap font-sans text-sm font-semibold text-muted-foreground">
+          <li>
+            <NavigationLink href={STOREFRONT_ROUTES.about}>Nosotros</NavigationLink>
+          </li>
+          <li>
+            <NavigationLink href={STOREFRONT_ROUTES.contact}>Contacto</NavigationLink>
+          </li>
+        </ul>
+      </div>
     </header>
   );
 };

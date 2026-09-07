@@ -4,11 +4,19 @@ import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata } from "next";
 
+import { getCategories } from "@/actions/get-categories";
+import { getProducts } from "@/actions/get-products";
+import { getStorefrontSettings } from "@/actions/get-storefront-settings";
+import { getTypes } from "@/actions/get-types";
 import { Footer } from "@/components/footer";
 import { ClarityPrivacyBoundary } from "@/components/clarity-privacy-boundary";
 import { Spooky } from "@/components/spooky";
 import { getCurrentSeason } from "@/lib/date-utils";
 import { beautifulEveryTime, caudex, fredoka, quicksand } from "@/lib/fonts";
+import {
+  buildFeaturedByType,
+  buildNavigationTypes,
+} from "@/lib/catalog-navigation";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { ModalProvider } from "@/providers/modal-provider";
 import { ReactQueryProvider } from "@/providers/query-client-provider";
@@ -109,6 +117,16 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const currentSeason = getCurrentSeason();
+  // Header data: catalog tree for the drawer/mega menu, featured products for
+  // the mega menu tile, and the public store settings for the announcement bar.
+  const [types, categories, settings, featured] = await Promise.all([
+    getTypes(),
+    getCategories(),
+    getStorefrontSettings(),
+    getProducts({ isFeatured: true, limit: 60 }),
+  ]);
+  const navigationTypes = buildNavigationTypes(types, categories);
+  const featuredByType = buildFeaturedByType(featured.products);
 
   return (
     <ClerkProvider
@@ -128,7 +146,12 @@ export default async function RootLayout({
             <CartPreviewProvider>
               <ModalProvider />
               <WishlistSyncProvider />
-              <Navbar season={currentSeason} />
+              <Navbar
+                season={currentSeason}
+                types={navigationTypes}
+                featuredByType={featuredByType}
+                freeShippingThreshold={settings.freeShippingThreshold}
+              />
               <ClarityPrivacyBoundary>{children}</ClarityPrivacyBoundary>
               <Footer season={currentSeason} />
               {currentSeason === Season.Christmas && <Christmas />}

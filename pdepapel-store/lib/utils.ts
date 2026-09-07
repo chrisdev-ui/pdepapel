@@ -126,6 +126,8 @@ export const calculateTotals = (
   orderItems: Product[],
   coupon: Coupon | null,
   shippingCost: number = 0,
+  /** Store free-shipping threshold (COP) on the product subtotal; null/0 = off. */
+  freeShippingThreshold: number | null = null,
 ) => {
   // Calculate subtotal using discounted prices when available
   // Calculate subtotal using effective price
@@ -159,12 +161,26 @@ export const calculateTotals = (
         : Math.min(coupon.amount, subtotal);
   }
 
-  const total = Math.max(subtotal - couponDiscount + shippingCost, 0);
+  // Same rule the checkout API enforces: the product subtotal (before the
+  // coupon) must reach the store threshold for shipping to be free.
+  const freeShipping =
+    typeof freeShippingThreshold === "number" &&
+    freeShippingThreshold > 0 &&
+    subtotal >= freeShippingThreshold;
+  const effectiveShippingCost = freeShipping ? 0 : shippingCost;
+  const total = Math.max(subtotal - couponDiscount + effectiveShippingCost, 0);
 
   return {
     subtotal,
     total,
     couponDiscount,
     productSavings,
+    shippingCost: effectiveShippingCost,
+    freeShipping,
+    /** Amount still missing to unlock free shipping (0 when unlocked/off). */
+    freeShippingRemaining:
+      typeof freeShippingThreshold === "number" && freeShippingThreshold > 0
+        ? Math.max(freeShippingThreshold - subtotal, 0)
+        : 0,
   };
 };

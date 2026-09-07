@@ -5,6 +5,8 @@ import { SearchItemsSkeleton } from "./search-items-skeleton";
 import { ScrollArea } from "./ui/scroll-area";
 
 interface SearchResultsProps {
+  id?: string;
+  searchTerm?: string;
   products: SearchResult[];
   isSuccess?: boolean;
   isLoading?: boolean;
@@ -14,6 +16,8 @@ interface SearchResultsProps {
 }
 
 export const SearchResults: React.FC<SearchResultsProps> = ({
+  id,
+  searchTerm,
   products,
   isSuccess,
   isLoading,
@@ -22,8 +26,12 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
   closeAll,
 }) => {
   return (
-    <section className="absolute -left-10 z-10 mt-1 w-80 max-w-xs rounded-[6px] bg-white outline-none animate-in fade-in-0 zoom-in-95 xs:left-auto md:left-auto md:w-[28rem] md:max-w-md">
-      <ScrollArea className="max-h-96 overflow-y-auto overflow-x-hidden rounded px-2 py-2.5 ring-1 ring-slate-200">
+    <section
+      id={id}
+      aria-label={searchTerm ? `Resultados para ${searchTerm}` : "Resultados"}
+      className="absolute inset-x-0 top-full z-20 mt-2 rounded-xl bg-white shadow-[0_16px_40px_rgba(34,27,65,0.18)] outline-none animate-in fade-in-0 zoom-in-95"
+    >
+      <ScrollArea className="max-h-[min(24rem,60vh)] overflow-y-auto overflow-x-hidden rounded-xl px-2 py-2.5 ring-1 ring-slate-200">
         {isLoading ? <SearchItemsSkeleton items={3} /> : null}
         {isError ? (
           <div className="flex w-full items-center justify-center gap-2.5 rounded p-2.5">

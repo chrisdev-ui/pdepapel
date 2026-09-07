@@ -303,6 +303,11 @@ export interface ProductsResponse {
   };
 }
 
+export interface StorefrontSettings {
+  /** Product subtotal (COP) from which shipping is free; null = disabled. */
+  freeShippingThreshold: number | null;
+}
+
 export interface SearchResult {
   id: string;
   slug?: string;

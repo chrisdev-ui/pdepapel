@@ -22,7 +22,7 @@ describe("calculateTotals", () => {
       8000,
     );
 
-    expect(totals).toEqual({
+    expect(totals).toMatchObject({
       subtotal: 25000,
       productSavings: 10000,
       couponDiscount: 2500,
@@ -57,7 +57,7 @@ describe("calculateTotals", () => {
         [{ price: 5000, quantity: 1 }] as any,
         { isActive: true, type: "FIXED", amount: 8000 } as any,
       ),
-    ).toEqual({
+    ).toMatchObject({
       subtotal: 5000,
       productSavings: 0,
       couponDiscount: 5000,

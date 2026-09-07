@@ -125,9 +125,12 @@
   }
 
   /* Column layout so short pages and loading states keep the footer below the
-     fold: the fixed header is offset by pt-36, <main> grows to fill the rest. */
+     fold: the fixed header (announcement bar + header + search row on phones,
+     bar + header + category row on desktop) is offset by --storefront-header-offset,
+     <main> grows to fill the rest. */
   body {
-    @apply flex min-h-full flex-col pt-36;
+    @apply flex min-h-full flex-col;
+    padding-top: var(--storefront-header-offset);
     height: auto;
   }
 }
@@ -319,4 +322,50 @@
   .print\\:block {
     display: block !important;
   }
+}
+
+/* Storefront header: the fixed header's height on each breakpoint; the body
+   padding above reads it. Keep in sync with components/navbar.tsx. */
+:root {
+  --storefront-header-offset: 158px;
+}
+@media (min-width: 1024px) {
+  :root {
+    --storefront-header-offset: 172px;
+  }
+}
+
+/* Announcement bar: one message at a time, sliding horizontally. */
+@keyframes announcement-slide {
+  0%,
+  42% {
+    transform: translateX(0);
+  }
+  50%,
+  92% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(-200%);
+  }
+}
+.announcement-slide {
+  animation: announcement-slide 9s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+.announcement-bar:hover .announcement-slide,
+.announcement-bar:focus-within .announcement-slide {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .announcement-slide {
+    animation: none;
+  }
+}
+
+/* Category chips: horizontal scroll without a visible scrollbar. */
+.category-chips {
+  scrollbar-width: none;
+}
+.category-chips::-webkit-scrollbar {
+  display: none;
 }
