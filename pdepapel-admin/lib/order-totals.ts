@@ -60,3 +60,29 @@ export function calculateOrderTotals(
     total: round2(total),
   };
 }
+
+/**
+ * Free shipping rule shared by the storefront summary and the checkout
+ * validation: the product subtotal (after product-level discounts, before
+ * coupons and shipping) must reach the store threshold. `null`/`0` disables it.
+ */
+export function qualifiesForFreeShipping(
+  subtotal: number,
+  threshold: number | null | undefined,
+): boolean {
+  return (
+    typeof threshold === "number" &&
+    Number.isFinite(threshold) &&
+    threshold > 0 &&
+    subtotal >= threshold
+  );
+}
+
+export function getEffectiveShippingCost(
+  subtotal: number,
+  shippingCost: number,
+  threshold: number | null | undefined,
+): { shippingCost: number; freeShipping: boolean } {
+  const freeShipping = qualifiesForFreeShipping(subtotal, threshold);
+  return { shippingCost: freeShipping ? 0 : shippingCost, freeShipping };
+}

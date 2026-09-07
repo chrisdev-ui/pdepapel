@@ -32,6 +32,9 @@ vi.mock("@/lib/prismadb", () => ({
     },
     product: { findMany: mocks.findProducts },
     shippingQuote: { findMany: mocks.findShippingQuotes },
+    store: {
+      findUnique: vi.fn().mockResolvedValue({ freeShippingThreshold: null }),
+    },
   },
 }));
 vi.mock("@/lib/utils", () => ({
@@ -43,7 +46,8 @@ vi.mock("@/lib/utils", () => ({
   getLastOrderTimestamp: mocks.getLastOrderTimestamp,
   processOrderItemsInBatches: vi.fn(),
 }));
-vi.mock("@/lib/order-totals", () => ({
+vi.mock("@/lib/order-totals", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/order-totals")>()),
   calculateOrderTotals: mocks.calculateOrderTotals,
 }));
 vi.mock("@/lib/discount-engine", () => ({

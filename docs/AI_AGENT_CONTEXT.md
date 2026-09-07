@@ -209,6 +209,8 @@ Large forms require particularly careful, scoped changes: product forms, product
 
 Current externally significant handlers include:
 
+- `/api/[storeId]/public/storefront` (public, CORS-allowlisted, cached 5 min): store name and free-shipping threshold for the storefront header and checkout.
+
 - `/api/webhook/bold`
 - `/api/webhook/wompi`
 - `/api/webhook/mercadolibre`
@@ -270,6 +272,12 @@ When creating a new customer-navigable route:
 6. Storefront Clerk middleware runs only on routes that actually read authentication on the server (`/finalizar-compra`, sign-in, and sign-up, plus their legacy redirects). Public catalog routes bypass Clerk middleware so genuine `notFound()` responses retain HTTP `404` instead of becoming soft-404 `200` rewrites; client-side Clerk components still initialize through `ClerkProvider`.
 
 ### UX and rendering rules
+
+- **Header (2026-09):** fixed on every page; heights live in `--storefront-header-offset` (`globals.css`, 158 px phones/tablets, 172 px desktop) and `components/navbar.tsx` must stay in sync. Phones/tablets: `AnnouncementBar` (hidden after 80 px of scroll) → 64 px bar with `CategoryDrawer` (left Sheet: every type with a subcategory accordion, Ofertas, Nosotros, Contacto, account shortcuts), centered logo, favorites, cart → always-visible `SearchBar variant="inline"`. Desktop: bar → 84 px header with `SearchBar variant="desktop"` and account actions → 52 px category row with `MegaMenu` (types on the left, subcategories + one featured product tile on the right) and the top types by subcategory count. The home page adds `CategoryChips` under the header on small screens.
+- **Taxonomy labels never render emoji.** `lib/catalog-labels.ts#stripTaxonomyIcon` cleans legacy `Type`/`Category` names; icons come from `lib/type-icons.tsx` (Lucide, keyed by `Type.icon` when it holds a Lucide name, else slug/name keywords, else a neutral tag). Extend the map when a new type appears.
+- **Announcement bar** shows "Envíos a toda Colombia" and, when `Store.freeShippingThreshold` is set, "Envío gratis desde $X", sliding one message at a time (`announcement-slide` keyframes, paused on hover, disabled under `prefers-reduced-motion`), with a rounded Colombia flag fixed on the right. Data comes from `GET /api/[storeId]/public/storefront` via `actions/get-storefront-settings.ts` (5-minute cache, tag `storefront-settings`; the admin store PATCH revalidates it).
+- **Free shipping is a real rule, not copy.** `lib/utils.ts#calculateTotals` (storefront) and `lib/order-totals.ts#getEffectiveShippingCost` (admin checkout) both zero the shipping cost when the product subtotal (after product discounts, before coupons) reaches the threshold; the checkout summary shows "Gratis" and the amount still missing. Changing the rule requires changing both.
+- **Search** is one component for every breakpoint: live suggestions from two characters, Enter or "Buscar" navigates to `/tienda?search=`, Escape/outside tap closes, `role="combobox"` semantics, 44 px hit targets.
 
 - Prefer server data and route-level `loading.tsx`/skeleton UI over client-only fetches that leave a blank content area, except where an authentic pre-stream HTTP status is required (notably product-detail `404` responses).
 - Reuse the existing specialized admin form controls before adding a generic input: `CurrencyInput` for COP amounts, `PercentageInput` for percentages, `StockQuantityInput` for inventory, `CountInput` for bounded counts, `MeasurementInput` for dimensions, `QuantitySelector` for cart lines, `ImageUpload` for images, rich-text editor for product descriptions, and calendar/date controls for dates. If a domain-specific input does not exist, create one reusable component using the installed shadcn/Radix primitives instead of styling a one-off control inside a route.
@@ -422,6 +430,7 @@ Known manual migration references:
 - `20260824_add_business_growth.sql` — creates additive, store-scoped policy, cash-movement, and social-campaign-draft tables; applied to Railway on 2026-08-24. It has no foreign keys because `relationMode = "prisma"`.
 - `20260828_add_catalog_options.sql` — additive customer-option/shipping-profile/taxonomy-icon migration; applied to Railway on 2026-08-30. It preserves every legacy `Size`, SKU, product slug, stock, price, image, order, and marketplace link.
 - `20260901_add_newsletter_subscribers.sql` — additive store-scoped newsletter consent and lifecycle table; applied to Railway on 2026-09-01. It did not modify customers, orders, payments, inventory, or catalog records.
+- `20260907_add_store_free_shipping_threshold.sql` — additive nullable `Store.freeShippingThreshold` (COP). **Pending: apply to Railway before deploying the storefront header/checkout code that reads it**; until then the public settings endpoint fails safe (threshold `null`, no promise shown) and checkout charges shipping normally.
 
 ## 8. Catalog, SEO, and revalidation
 

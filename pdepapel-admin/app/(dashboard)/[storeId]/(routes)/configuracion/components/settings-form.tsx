@@ -12,6 +12,7 @@ import {
   Phone,
   Store as StoreIcon,
   Trash,
+  Truck,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import z from "zod";
@@ -29,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -76,6 +78,12 @@ const formSchema = z.object({
   facebook: z.string().optional(),
   twitter: z.string().optional(),
   pinterest: z.string().optional(),
+  freeShippingThreshold: z
+    .string()
+    .optional()
+    .refine((value) => !value || /^\d{1,9}$/.test(value.replace(/[.\s]/g, "")), {
+      message: "Escribe solo el valor en pesos, sin decimales",
+    }),
   policies: z
     .object({
       shipping: z.string().optional(),
@@ -110,6 +118,10 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
       twitter: initialData.twitter || "",
       youtube: initialData.youtube || "",
       pinterest: initialData.pinterest || "",
+      freeShippingThreshold:
+        initialData.freeShippingThreshold != null
+          ? String(initialData.freeShippingThreshold)
+          : "",
       policies:
         typeof initialData.policies === "string"
           ? JSON.parse(initialData.policies)
@@ -335,6 +347,41 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialData }) => {
                           {...field}
                         />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <Heading
+                title="Envíos"
+                description="Promesa de envío gratis que muestra la tienda en línea"
+              />
+              <div className="grid gap-8 md:grid-cols-3">
+                <FormField
+                  control={form.control}
+                  name="freeShippingThreshold"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-2">
+                        <Truck className="h-4 w-4" />
+                        Envío gratis desde (COP)
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          inputMode="numeric"
+                          disabled={loading}
+                          placeholder="120000"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Subtotal de productos desde el cual el envío es gratis.
+                        Se muestra en la barra superior y se aplica en el
+                        checkout. Déjalo vacío para desactivarlo.
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

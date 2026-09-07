@@ -26,7 +26,10 @@ import {
   getLastOrderTimestamp,
   processOrderItemsInBatches,
 } from "@/lib/utils";
-import { calculateOrderTotals } from "@/lib/order-totals";
+import {
+  calculateOrderTotals,
+  getEffectiveShippingCost,
+} from "@/lib/order-totals";
 import { auth, clerkClient } from "@clerk/nextjs";
 import { sendOrderEmail } from "@/lib/email";
 import { BATCH_SIZE } from "@/constants";
@@ -574,6 +577,41 @@ export async function POST(
         };
       },
     );
+
+    // Free shipping promise: the storefront applies the same rule on the
+    // product subtotal, so both sides agree on the total being validated.
+    // Fail safe: if the column has not been migrated yet, charge shipping
+    // normally instead of blocking the order.
+    const storeSettings = await prismadb.store
+      .findUnique({
+        where: { id: params.storeId },
+        select: { freeShippingThreshold: true },
+      })
+      .catch((error: unknown) => {
+        console.error("[ORDER_CHECKOUT] Could not read free-shipping threshold:", error);
+        return null;
+      });
+    const productSubtotal = itemsWithPrices.reduce(
+      (sum: number, item: { product: { price: number }; quantity: number }) =>
+        sum + Number(item.product.price) * item.quantity,
+      0,
+    );
+    const shippingRule = getEffectiveShippingCost(
+      productSubtotal,
+      Number(selectedQuote.totalCost) || 0,
+      storeSettings?.freeShippingThreshold,
+    );
+    if (shippingRule.freeShipping) {
+      console.log(
+        `🎁 Free shipping applied: subtotal ${currencyFormatter(productSubtotal)} reaches ${currencyFormatter(storeSettings?.freeShippingThreshold ?? 0)}`,
+      );
+      selectedQuote = {
+        ...selectedQuote,
+        totalCost: 0,
+        flete: 0,
+        freeShipping: true,
+      };
+    }
 
     const totals = calculateOrderTotals(itemsWithPrices, {
       coupon: coupon ? { type: coupon.type, amount: coupon.amount } : undefined,
