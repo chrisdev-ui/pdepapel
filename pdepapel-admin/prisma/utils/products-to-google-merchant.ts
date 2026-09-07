@@ -1,5 +1,5 @@
 /**
- * Google Merchant Center feed export.
+ * Google Merchant Center feed export (manual, file-based).
  *
  *   npm run export:products-merchant                 # verifies every product URL
  *   npm run export:products-merchant -- --skip-verify
@@ -9,20 +9,23 @@
  * previous exports so only the latest pair remains. Products whose storefront
  * page is not reachable are left out of the feed and listed in the report;
  * links that redirect (slug changes) are exported with their final URL.
+ *
+ * The rows come from `lib/google-merchant-feed.ts`, the same builder behind
+ * the hosted feed (`GET /api/[storeId]/google-merchant/feed`) that Merchant
+ * Center fetches on a schedule. Use this script for one-off audits or when a
+ * file upload is preferable.
  */
 import { PrismaClient } from "@prisma/client";
 import * as fs from "fs";
 import path from "path";
 import {
-  GOOGLE_MERCHANT_EXCLUDED_DESTINATIONS,
   GOOGLE_MERCHANT_STOREFRONT_URL,
-  getGoogleMerchantColor,
-  getGoogleMerchantDescription,
-  getGoogleMerchantPattern,
   getGoogleMerchantProductLink,
-  getGoogleMerchantSize,
-  toGoogleMerchantImageUrl,
 } from "../../lib/google-merchant";
+import {
+  GOOGLE_MERCHANT_FEED_PRODUCT_INCLUDE,
+  buildGoogleMerchantFeed,
+} from "../../lib/google-merchant-feed";
 
 const prismadb = new PrismaClient();
 const OUTPUT_DIR = process.cwd();
@@ -46,13 +49,6 @@ function generateTimestamp() {
   ].join("");
 
   return `${dateString}_${timeString}`;
-}
-
-function cleanText(value: string | null | undefined) {
-  return (value || "")
-    .replace(/[\t\n\r]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
 }
 
 function removePreviousExports() {
@@ -142,16 +138,7 @@ async function exportProductsToGoogleMerchant() {
 
     const products = await prismadb.product.findMany({
       where: { isArchived: false },
-      include: {
-        category: { include: { type: true } },
-        color: true,
-        design: true,
-        size: true,
-        productGroup: true,
-        images: {
-          orderBy: [{ isMain: "desc" }, { createdAt: "asc" }],
-        },
-      },
+      include: GOOGLE_MERCHANT_FEED_PRODUCT_INCLUDE,
       orderBy: { name: "asc" },
     });
 
@@ -160,42 +147,9 @@ async function exportProductsToGoogleMerchant() {
       return;
     }
 
-    const groupVariantCombinations = new Map<string, Set<string>>();
-    const groupsWithDuplicateVariants = new Set<string>();
-
-    for (const product of products) {
-      if (!product.productGroupId) continue;
-
-      const combination = [
-        product.sizeId,
-        product.colorId,
-        product.designId,
-      ].join("|");
-      const combinations = groupVariantCombinations.get(product.productGroupId);
-
-      if (combinations?.has(combination)) {
-        groupsWithDuplicateVariants.add(product.productGroupId);
-      } else if (combinations) {
-        combinations.add(combination);
-      } else {
-        groupVariantCombinations.set(
-          product.productGroupId,
-          new Set([combination]),
-        );
-      }
-    }
-
-    if (groupsWithDuplicateVariants.size > 0) {
-      console.warn(
-        `Excluded item_group_id for ${groupsWithDuplicateVariants.size} group(s) with duplicate variant attributes. Fix those variants in the admin before grouping them in Merchant.`,
-      );
-    }
-
     // --- Storefront link verification ---------------------------------------
     const unreachable: string[] = [];
     const redirected: string[] = [];
-    const rewrittenImages: string[] = [];
-    const missingImages: string[] = [];
     const linkByProductId = new Map<string, string>();
 
     for (const product of products) {
@@ -238,119 +192,35 @@ async function exportProductsToGoogleMerchant() {
       );
     }
 
-    const exportedProducts = products.filter((product) =>
-      linkByProductId.has(product.id),
-    );
-
-    // --- Rows ----------------------------------------------------------------
-    const headers = [
-      "id",
-      "title",
-      "description",
-      "link",
-      "image_link",
-      "additional_image_link",
-      "price",
-      "condition",
-      "availability",
-      "brand",
-      "gtin",
-      "mpn",
-      "identifier_exists",
-      "product_type",
-      "item_group_id",
-      "color",
-      "size",
-      "pattern",
-      "excluded_destination",
-    ];
-
-    const rows = exportedProducts.map((product) => {
-      const mainImage = product.images.find((image) => image.isMain);
-      const orderedImages = product.images
-        .filter((image) => image.url !== mainImage?.url)
-        .slice(0, 10);
-      const rawMainImage = mainImage?.url || product.images[0]?.url || "";
-      const imageLink = toGoogleMerchantImageUrl(rawMainImage);
-      const additionalImages = orderedImages.map((image) =>
-        toGoogleMerchantImageUrl(image.url),
-      );
-
-      if (!rawMainImage) {
-        missingImages.push(`${product.sku || product.id}\t${product.name}`);
-      } else if (imageLink !== rawMainImage) {
-        rewrittenImages.push(
-          `${product.sku || product.id}\t${rawMainImage} -> ${imageLink}`,
-        );
-      }
-      orderedImages.forEach((image, index) => {
-        if (additionalImages[index] !== image.url) {
-          rewrittenImages.push(
-            `${product.sku || product.id}\t${image.url} -> ${additionalImages[index]}`,
-          );
-        }
-      });
-
-      const brand = product.brand || product.productGroup?.brand || "";
-      const productType = [product.category?.type?.name, product.category?.name]
-        .filter(Boolean)
-        .join(" > ");
-      const identifierExists =
-        product.hasNoProductIdentifier ||
-        (!product.gtin && !(brand && product.mpn))
-          ? "no"
-          : "";
-      const itemGroupId = groupsWithDuplicateVariants.has(
-        product.productGroupId || "",
-      )
-        ? ""
-        : product.productGroupId || "";
-
-      return [
-        product.sku || product.id,
-        cleanText(product.name),
-        cleanText(
-          getGoogleMerchantDescription(product.description, product.name),
-        ),
-        linkByProductId.get(product.id)!,
-        imageLink,
-        additionalImages.join(","),
-        `${product.price} COP`,
-        "new",
-        product.stock > 0 ? "in_stock" : "out_of_stock",
-        cleanText(brand),
-        product.gtin || "",
-        product.mpn || "",
-        identifierExists,
-        cleanText(productType),
-        itemGroupId,
-        cleanText(getGoogleMerchantColor(product.name, product.color)),
-        cleanText(getGoogleMerchantSize(product.category?.name, product.size)),
-        cleanText(getGoogleMerchantPattern(product.name, product.design)),
-        GOOGLE_MERCHANT_EXCLUDED_DESTINATIONS.join(","),
-      ].join("\t");
+    // --- Rows (shared with the hosted feed) ---------------------------------
+    const { tsv, report } = buildGoogleMerchantFeed(products, {
+      links: linkByProductId,
     });
+
+    if (report.groupsWithDuplicateVariants.length > 0) {
+      console.warn(
+        `Excluded item_group_id for ${report.groupsWithDuplicateVariants.length} group(s) with duplicate variant attributes. Fix those variants in the admin before grouping them in Merchant.`,
+      );
+    }
 
     // --- Files ---------------------------------------------------------------
     const stamp = generateTimestamp();
     const feedPath = path.join(OUTPUT_DIR, `${FEED_PREFIX}_${stamp}.txt`);
     const reportPath = path.join(OUTPUT_DIR, `${REPORT_PREFIX}_${stamp}.txt`);
 
-    fs.writeFileSync(
-      feedPath,
-      `${headers.join("\t")}\n${rows.join("\n")}\n`,
-      "utf8",
-    );
+    fs.writeFileSync(feedPath, tsv, "utf8");
 
     const reportLines = [
-      `Google Merchant feed report — ${new Date().toISOString()}`,
-      `Active products in database: ${products.length}`,
-      `Products exported: ${exportedProducts.length}`,
+      `Google Merchant feed report — ${report.generatedAt}`,
+      `Active products in database: ${report.activeProducts}`,
+      `Products exported: ${report.exportedProducts}`,
       `Excluded (page not reachable): ${unreachable.length}`,
       `Links updated after redirect: ${redirected.length}`,
-      `Images converted to a supported format: ${rewrittenImages.length}`,
-      `Products without any image: ${missingImages.length}`,
-      `excluded_destination: ${GOOGLE_MERCHANT_EXCLUDED_DESTINATIONS.join(", ")}`,
+      `Images converted to a supported format: ${report.rewrittenImages.length}`,
+      `Products without any image: ${report.missingImages.length}`,
+      `Products without a product identifier: ${report.withoutIdentifier}`,
+      `Products out of stock: ${report.outOfStock}`,
+      `excluded_destination: ${report.excludedDestinations.join(", ")}`,
       "",
     ];
     const section = (title: string, lines: string[]) => {
@@ -362,14 +232,24 @@ async function exportProductsToGoogleMerchant() {
       unreachable,
     );
     section("Links updated after redirect (id\tname\told -> new)", redirected);
-    section("Images converted (id\told -> new)", rewrittenImages);
-    section("Products without any image (id\tname)", missingImages);
+    section(
+      "Images converted (id\told -> new)",
+      report.rewrittenImages.map((image) => `${image.id}\t${image.from} -> ${image.to}`),
+    );
+    section(
+      "Products without any image (id\tname)",
+      report.missingImages.map((product) => `${product.id}\t${product.name}`),
+    );
+    section(
+      "Groups exported without item_group_id (duplicate variant attributes)",
+      report.groupsWithDuplicateVariants,
+    );
     fs.writeFileSync(reportPath, `${reportLines.join("\n")}\n`, "utf8");
 
     console.log(`Google Merchant feed created at: ${feedPath}`);
     console.log(`Report created at: ${reportPath}`);
     console.log(
-      `Exported ${exportedProducts.length} of ${products.length} active products` +
+      `Exported ${report.exportedProducts} of ${report.activeProducts} active products` +
         (unreachable.length
           ? ` (${unreachable.length} excluded because their page is not reachable — see report)`
           : ""),

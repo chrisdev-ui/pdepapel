@@ -2,6 +2,7 @@ import prismadb from "@/lib/prismadb";
 import { auth } from "@clerk/nextjs";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { GoogleMerchantFeedCard } from "./components/google-merchant-feed-card";
 import { SettingsForm } from "./components/settings-form";
 
 interface SettingsPageProps {
@@ -30,6 +31,7 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
     <div className="flex-col">
       <div className="flex-1 space-y-4 p-8 pt-6">
         <SettingsForm initialData={store} />
+        <GoogleMerchantFeedCard storeId={store.id} />
       </div>
     </div>
   );

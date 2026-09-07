@@ -21,3 +21,23 @@ jobs:
           curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
             --header "Authorization: Bearer $ADMIN_CRON_SECRET" \
             "$ADMIN_BASE_URL/api/cron/mercadolibre-health"
+
+  google-merchant-feed:
+    name: Google Merchant feed refresh
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ADMIN_BASE_URL: https://admin.papeleriapdepapel.com
+      ADMIN_CRON_SECRET: ${{ secrets.PDEPAPEL_ADMIN_CRON_SECRET }}
+    steps:
+      - name: Verify protected secret
+        run: test -n "$ADMIN_CRON_SECRET"
+      # Rebuilds every store's hosted feed into the cache (read-only on the
+      # catalog). Vercel's plan allows two crons and both are taken, so this
+      # runs here at 13:00 UTC (8:00 a. m. Colombia); schedule the Merchant
+      # Center fetch after 8:30 a. m.
+      - name: Refresh Google Merchant feed
+        run: |
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
+            --header "Authorization: Bearer $ADMIN_CRON_SECRET" \
+            "$ADMIN_BASE_URL/api/cron/google-merchant-feed"
