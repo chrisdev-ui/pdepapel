@@ -413,7 +413,7 @@ export function MercadoLibreOperationsCenter({ storeId }: { storeId: string }) {
 
   return (
     <>
-      <Card>
+      <Card id="mercadolibre-operations">
         <CardHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <CardTitle className="flex items-center gap-2">

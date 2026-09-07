@@ -380,6 +380,7 @@ export default function MercadoLibreClient({
 
       <MercadoLibreListingManager
         storeId={storeId}
+        highlightedListingId={searchParams.get("listing")}
         canPublish={
           connection?.status === "CONNECTED" &&
           queueConfiguration.configured &&

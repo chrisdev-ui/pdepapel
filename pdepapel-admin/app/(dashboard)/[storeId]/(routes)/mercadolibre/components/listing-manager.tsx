@@ -1,6 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -387,9 +388,12 @@ function getErrorMessage(response: Response) {
 export function MercadoLibreListingManager({
   storeId,
   canPublish,
+  highlightedListingId = null,
 }: {
   storeId: string;
   canPublish: boolean;
+  /** Listing id from the daily email link; scrolled into view and outlined. */
+  highlightedListingId?: string | null;
 }) {
   const { requestConfirmation, confirmationDialog } = useActionConfirmation();
   const [listings, setListings] = useState<Listing[]>([]);
@@ -398,6 +402,19 @@ export function MercadoLibreListingManager({
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingListing, setEditingListing] = useState<Listing | null>(null);
   const [form, setForm] = useState<ListingForm>(emptyForm);
+
+  useEffect(() => {
+    if (
+      !highlightedListingId ||
+      isLoading ||
+      !listings.some((listing) => listing.id === highlightedListingId)
+    ) {
+      return;
+    }
+    document
+      .getElementById(`mercadolibre-listing-${highlightedListingId}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightedListingId, isLoading, listings]);
   const [suggestions, setSuggestions] = useState<CategorySuggestion[]>([]);
   const [isSearchingCategories, setIsSearchingCategories] = useState(false);
   const [categoryAttributes, setCategoryAttributes] = useState<
@@ -1908,7 +1925,7 @@ export function MercadoLibreListingManager({
   };
 
   return (
-    <Card>
+    <Card id="mercadolibre-listings">
       <CardHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <CardTitle className="flex items-center gap-2">
@@ -2190,7 +2207,12 @@ export function MercadoLibreListingManager({
               return (
                 <div
                   key={listing.id}
-                  className="flex flex-col gap-4 rounded-md border p-4 lg:flex-row lg:items-center lg:justify-between"
+                  id={`mercadolibre-listing-${listing.id}`}
+                  className={cn(
+                    "flex scroll-mt-6 flex-col gap-4 rounded-md border p-4 lg:flex-row lg:items-center lg:justify-between",
+                    listing.id === highlightedListingId &&
+                      "border-amber-400 bg-amber-50/40",
+                  )}
                 >
                   <div className="flex min-w-0 gap-3">
                     <Checkbox

@@ -21,6 +21,10 @@ export type MercadoLibreHealthIssue = {
   detail: string;
   listingId?: string;
   orderId?: string;
+  /** Local product behind a listing issue, for "adjust stock" style actions. */
+  productId?: string;
+  /** Public Mercado Libre URL of the listing, when it has been published. */
+  permalink?: string | null;
 };
 
 export type MercadoLibreHealthSummary = {
@@ -56,6 +60,8 @@ export async function getMercadoLibreHealthSummary(
           status: true,
           lastError: true,
           stockSafetyBuffer: true,
+          productId: true,
+          externalPermalink: true,
           metadata: true,
           product: {
             select: {
@@ -157,6 +163,8 @@ export async function getMercadoLibreHealthSummary(
         title,
         detail: listing.lastError ?? "La publicación necesita revisión manual.",
         listingId: listing.id,
+        productId: listing.productId,
+        permalink: listing.externalPermalink,
       });
     }
     if (
@@ -170,6 +178,8 @@ export async function getMercadoLibreHealthSummary(
         detail:
           "Falta categoría, precio o al menos una foto para publicar correctamente.",
         listingId: listing.id,
+        productId: listing.productId,
+        permalink: listing.externalPermalink,
       });
     }
     if (
@@ -181,6 +191,8 @@ export async function getMercadoLibreHealthSummary(
         title,
         detail: `Stock local ${listing.product.stock}; el colchón de seguridad es ${listing.stockSafetyBuffer}.`,
         listingId: listing.id,
+        productId: listing.productId,
+        permalink: listing.externalPermalink,
       });
     }
     if (
@@ -195,6 +207,8 @@ export async function getMercadoLibreHealthSummary(
         detail:
           "El precio no cubre el margen mínimo incluso antes de comisión, envío e impuestos.",
         listingId: listing.id,
+        productId: listing.productId,
+        permalink: listing.externalPermalink,
       });
     }
   }
