@@ -69,6 +69,14 @@ const nextConfig = {
       },
     ],
   },
+  experimental: {
+    // El manual del panel (app/manual) lee content/manual en tiempo de ejecución;
+    // Vercel debe incluir esos archivos en las funciones de esas rutas.
+    outputFileTracingIncludes: {
+      "/manual": ["./content/manual/manual.html"],
+      "/manual/img/[name]": ["./content/manual/img/*.jpg"],
+    },
+  },
   async redirects() {
     return [
       {

@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
+  BookOpen,
   ClipboardList,
   History,
   Home,
@@ -247,6 +248,14 @@ export const NAV_GROUPS: NavGroup[] = [
 
 export const FOOTER_ITEMS: NavItem[] = [
   {
+    id: "manual",
+    label: "Manual del panel",
+    icon: BookOpen,
+    // Ruta absoluta (fuera de /[storeId]): guía ilustrada, solo con sesión.
+    segment: "/manual",
+    exact: true,
+  },
+  {
     id: "ajustes",
     label: "Ajustes",
     icon: Settings,
@@ -289,9 +298,11 @@ export const QUICK_ACTIONS: QuickAction[] = [
   { id: "ajustar-inventario", label: "Ajustar inventario", hint: "Daños, conteos, usos internos", icon: History, segment: "movimientos-inventario", keywords: ["stock", "ajuste", "conteo", "daño", "inventario"] },
   { id: "reponer", label: "Reponer stock", hint: "Nueva orden de aprovisionamiento", icon: Package, segment: "aprovisionamiento/nuevo", keywords: ["reponer", "aprovisionar", "proveedor", "comprar"] },
   { id: "preguntas-ml", label: "Responder preguntas de Mercado Libre", icon: Store, segment: "mercadolibre?tab=preguntas", keywords: ["pregunta", "mercado libre", "reclamo"] },
+  { id: "manual", label: "Abrir el manual del panel", hint: "Guía paso a paso con capturas de cada pantalla", icon: BookOpen, segment: "/manual", keywords: ["manual", "ayuda", "guía", "guia", "cómo", "como", "instrucciones", "tutorial"] },
 ];
 
 const SEGMENT_LABELS: Record<string, string> = {
+  manual: "Manual del panel",
   pedidos: "Pedidos",
   cotizaciones: "Plantillas de cotización",
   "ventas-rapidas": "Punto de venta",
@@ -360,6 +371,8 @@ export function groupForSegment(segment: string): NavGroup | undefined {
 }
 
 export function dashboardHref(storeId: string, segment: string): string {
+  // Un segmento que empieza por "/" es una ruta absoluta del panel (p. ej. /manual).
+  if (segment.startsWith("/")) return segment;
   return segment ? `/${storeId}/${segment}` : `/${storeId}`;
 }
 

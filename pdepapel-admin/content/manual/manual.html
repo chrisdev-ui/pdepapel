@@ -1,0 +1,664 @@
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --ink: #221B41;
+    --ground: #FBF9FD;
+    --paper: #FFFFFF;
+    --line: #E6E1F0;
+    --muted: #6B6480;
+    --pink: #FEA4C3;
+    --lavender: #B2A4FE;
+    --mint: #5FC98D;
+    --star: #FFC105;
+    --tint-pink: #FFE9F0;
+    --tint-lavender: #EEEBFE;
+    --tint-mint: #E3F7EC;
+    --tint-cream: #FFF5D6;
+    --code-bg: #F1EEF8;
+    --shadow: 0 18px 40px -24px rgba(34, 27, 65, 0.35);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink: #F3F0FA;
+      --ground: #17132A;
+      --paper: #221B41;
+      --line: #35305A;
+      --muted: #A9A3C2;
+      --pink: #F58BB0;
+      --lavender: #A093F5;
+      --mint: #5FC98D;
+      --star: #F2B705;
+      --tint-pink: #3E2A3C;
+      --tint-lavender: #2E2A52;
+      --tint-mint: #213A32;
+      --tint-cream: #3E3521;
+      --code-bg: #2B2550;
+      --shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.7);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink: #F3F0FA;
+    --ground: #17132A;
+    --paper: #221B41;
+    --line: #35305A;
+    --muted: #A9A3C2;
+    --pink: #F58BB0;
+    --lavender: #A093F5;
+    --mint: #5FC98D;
+    --star: #F2B705;
+    --tint-pink: #3E2A3C;
+    --tint-lavender: #2E2A52;
+    --tint-mint: #213A32;
+    --tint-cream: #3E3521;
+    --code-bg: #2B2550;
+    --shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.7);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 24px; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "Atkinson Hyperlegible", "Helvetica Neue", Arial, sans-serif;
+    font-size: 17px;
+    line-height: 1.6;
+  }
+  a { color: inherit; }
+  a:focus-visible, button:focus-visible { outline: 3px solid var(--lavender); outline-offset: 2px; border-radius: 4px; }
+  code, kbd { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.88em; }
+  code { background: var(--code-bg); padding: 0.1em 0.4em; border-radius: 6px; }
+  kbd { background: var(--paper); border: 1px solid var(--line); border-bottom-width: 2px; padding: 0.05em 0.45em; border-radius: 6px; }
+
+  .page { display: grid; grid-template-columns: 1fr; gap: 0 48px; max-width: 1280px; margin: 0 auto; padding: 0 20px 96px; }
+  @media (min-width: 1024px) { .page { grid-template-columns: 250px minmax(0, 1fr); padding: 0 32px 120px; } }
+
+  /* ---- cover ---- */
+  .cover { grid-column: 1 / -1; padding: 56px 0 36px; display: grid; gap: 22px; border-bottom: 1px solid var(--line); margin-bottom: 40px; }
+  @media (min-width: 900px) { .cover { grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); align-items: end; } }
+  .eyebrow { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  .cover h1 { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: clamp(38px, 5vw, 62px); line-height: 1.02; margin: 10px 0 14px; text-wrap: balance; letter-spacing: -0.01em; }
+  .cover h1 em { font-style: italic; font-weight: 500; color: var(--pink); }
+  .cover p.lead { font-size: 19px; max-width: 62ch; margin: 0; color: var(--ink); }
+  .cover-meta { display: grid; gap: 10px; font-size: 15px; color: var(--muted); }
+  .cover-meta dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; }
+  .cover-meta dt { font-weight: 700; color: var(--ink); }
+  .cover-meta dd { margin: 0; }
+  .swatches { display: flex; gap: 8px; margin-top: 8px; }
+  .swatches span { width: 26px; height: 26px; border-radius: 50%; display: inline-block; border: 2px solid var(--paper); box-shadow: 0 0 0 1px var(--line); }
+
+  /* ---- toc ---- */
+  .toc { display: none; }
+  @media (min-width: 1024px) {
+    .toc { display: block; position: sticky; top: 24px; align-self: start; max-height: calc(100vh - 48px); overflow-y: auto; padding-right: 8px; font-size: 14px; }
+  }
+  .toc .eyebrow { margin-bottom: 10px; }
+  .toc ol { list-style: none; margin: 0 0 18px; padding: 0; }
+  .toc li { margin: 0; }
+  .toc a { display: block; padding: 6px 10px; border-radius: 8px; text-decoration: none; color: var(--muted); border-left: 2px solid transparent; }
+  .toc a:hover { color: var(--ink); background: var(--tint-lavender); }
+  .toc .group { font-weight: 700; color: var(--ink); margin: 14px 0 4px; padding-left: 10px; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; }
+  .toc-inline { grid-column: 1 / -1; background: var(--paper); border: 1px solid var(--line); border-radius: 16px; padding: 18px 22px; margin-bottom: 36px; }
+  @media (min-width: 1024px) { .toc-inline { display: none; } }
+  .toc-inline ol { columns: 2; column-gap: 28px; margin: 8px 0 0; padding-left: 20px; font-size: 15px; }
+  .toc-inline li { break-inside: avoid; padding: 2px 0; }
+
+  /* ---- content ---- */
+  main { min-width: 0; }
+  section.chapter { padding: 8px 0 40px; margin-bottom: 24px; border-bottom: 1px solid var(--line); }
+  section.chapter:last-of-type { border-bottom: 0; }
+  .chapter-head { display: grid; gap: 6px; margin-bottom: 18px; }
+  .chapter-head .area { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700; color: var(--muted); }
+  .chapter-head .area::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--dot, var(--lavender)); }
+  h2 { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: clamp(28px, 3.2vw, 38px); line-height: 1.12; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+  h3 { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 22px; line-height: 1.25; margin: 34px 0 10px; text-wrap: balance; }
+  h4 { font-size: 16px; margin: 22px 0 6px; letter-spacing: 0.02em; }
+  p, li { max-width: 72ch; }
+  p { margin: 0 0 14px; }
+  .route { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; margin: 4px 0 8px; }
+  .route code { background: var(--code-bg); }
+
+  ol.steps { counter-reset: step; list-style: none; padding: 0; margin: 14px 0 18px; display: grid; gap: 10px; max-width: 76ch; }
+  ol.steps > li { counter-increment: step; position: relative; padding: 12px 16px 12px 56px; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; }
+  ol.steps > li::before { content: counter(step); position: absolute; left: 14px; top: 11px; width: 28px; height: 28px; border-radius: 50%; background: var(--ink); color: var(--ground); font-weight: 700; font-size: 14px; display: grid; place-items: center; font-family: "JetBrains Mono", monospace; }
+  ol.steps > li strong { color: var(--ink); }
+  ul.list { padding-left: 20px; margin: 8px 0 16px; }
+  ul.list li { margin: 4px 0; }
+
+  figure.screen { margin: 22px 0 26px; }
+  figure.screen .frame { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
+  figure.screen .bar { height: 30px; display: flex; align-items: center; gap: 6px; padding: 0 12px; border-bottom: 1px solid var(--line); background: var(--ground); }
+  figure.screen .bar i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; background: var(--line); }
+  figure.screen .bar i:nth-child(1) { background: var(--pink); }
+  figure.screen .bar i:nth-child(2) { background: var(--star); }
+  figure.screen .bar i:nth-child(3) { background: var(--mint); }
+  figure.screen img { display: block; width: 100%; height: auto; }
+  figure.screen.phone { max-width: 320px; }
+  figure.screen figcaption { font-size: 14px; color: var(--muted); margin-top: 8px; max-width: 76ch; }
+  .screens { display: grid; gap: 22px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); align-items: start; }
+
+  .note { border-radius: 12px; padding: 14px 16px 14px 48px; margin: 16px 0; position: relative; max-width: 76ch; border: 1px solid transparent; }
+  .note::before { position: absolute; left: 14px; top: 12px; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 13px; color: var(--ink); background: var(--paper); }
+  .note.rule { background: var(--tint-mint); } .note.rule::before { content: "R"; }
+  .note.care { background: var(--tint-cream); } .note.care::before { content: "!"; }
+  .note.tip { background: var(--tint-lavender); } .note.tip::before { content: "i"; }
+  .note strong:first-child { display: block; margin-bottom: 2px; }
+  .note p:last-child { margin-bottom: 0; }
+
+  table.states { border-collapse: collapse; width: 100%; font-size: 15px; margin: 12px 0 20px; }
+  .table-wrap { overflow-x: auto; }
+  table.states th, table.states td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.states th { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 700; color: #221B41; white-space: nowrap; }
+  .pill.mint { background: #E3F7EC; } .pill.cream { background: #FFF5D6; } .pill.sky { background: #E5EEFF; } .pill.pink { background: #FFE9F0; } .pill.slate { background: #ECEAF3; } .pill.lav { background: #EEEBFE; }
+
+  .checklist { list-style: none; padding: 0; margin: 12px 0 18px; display: grid; gap: 8px; max-width: 76ch; }
+  .checklist li { padding: 10px 14px 10px 44px; position: relative; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; }
+  .checklist li::before { content: ""; position: absolute; left: 14px; top: 13px; width: 18px; height: 18px; border-radius: 5px; border: 2px solid var(--lavender); }
+
+  footer.colophon { grid-column: 1 / -1; margin-top: 30px; padding-top: 22px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+</style>
+<div class="page">
+  <header class="cover">
+    <div>
+      <div class="eyebrow">Papelería P de Papel · Administración</div>
+      <h1>Manual del panel <em>P de Papel</em></h1>
+      <p class="lead">Cómo se atiende la tienda desde el panel rediseñado: qué mirar primero cada día, cómo mover un pedido de pagado a entregado, cómo vender en mostrador o en una feria y cómo mantener el catálogo. Pensado para quien administra hoy y para quien se una al equipo mañana.</p>
+    </div>
+    <div class="cover-meta">
+      <dl>
+        <dt>Dirección</dt><dd><code>admin.papeleriapdepapel.com</code></dd>
+        <dt>Versión</dt><dd>Rediseño de septiembre de 2026</dd>
+        <dt>Idioma</dt><dd>Todo el panel y esta guía están en español</dd>
+        <dt>Capturas</dt><dd>Tomadas en una tienda de pruebas con datos ficticios</dd>
+      </dl>
+      <div class="swatches" aria-hidden="true"><span style="background:#221B41"></span><span style="background:#FEA4C3"></span><span style="background:#B2A4FE"></span><span style="background:#5FC98D"></span><span style="background:#FFC105"></span></div>
+    </div>
+  </header>
+
+  <nav class="toc" aria-label="Contenido">
+    <div class="eyebrow">Contenido</div>
+    <div class="group">Empezar</div>
+    <ol>
+      <li><a href="#acceso">1. Antes de empezar</a></li>
+      <li><a href="#recorrido">2. Cómo se recorre el panel</a></li>
+      <li><a href="#inicio">3. Inicio: el día de hoy</a></li>
+    </ol>
+    <div class="group">Ventas</div>
+    <ol>
+      <li><a href="#pedidos">4. Pedidos</a></li>
+      <li><a href="#pos">5. Punto de venta</a></li>
+      <li><a href="#ferias">6. Ferias</a></li>
+      <li><a href="#ml">7. Mercado Libre</a></li>
+      <li><a href="#envios">8. Envíos</a></li>
+      <li><a href="#clientes">9. Clientes y reseñas</a></li>
+    </ol>
+    <div class="group">Catálogo</div>
+    <ol>
+      <li><a href="#productos">10. Productos</a></li>
+      <li><a href="#atributos">11. Atributos</a></li>
+      <li><a href="#proveedores">12. Proveedores y aprovisionamiento</a></li>
+      <li><a href="#contenido">13. Contenido de la tienda</a></li>
+    </ol>
+    <div class="group">Inventario y marketing</div>
+    <ol>
+      <li><a href="#inventario">14. Inventario y movimientos</a></li>
+      <li><a href="#promociones">15. Promociones</a></li>
+      <li><a href="#boletin">16. Boletín</a></li>
+    </ol>
+    <div class="group">Reportes y ajustes</div>
+    <ol>
+      <li><a href="#reportes">17. Rendimiento y tributarios</a></li>
+      <li><a href="#ajustes">18. Ajustes</a></li>
+      <li><a href="#estados">19. Estados y vocabulario</a></li>
+      <li><a href="#problemas">20. Si algo no cuadra</a></li>
+      <li><a href="#primer-dia">21. Primer día en el equipo</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <div class="toc-inline">
+      <div class="eyebrow">Contenido</div>
+      <ol>
+        <li><a href="#acceso">Antes de empezar</a></li><li><a href="#recorrido">Cómo se recorre el panel</a></li><li><a href="#inicio">Inicio</a></li><li><a href="#pedidos">Pedidos</a></li><li><a href="#pos">Punto de venta</a></li><li><a href="#ferias">Ferias</a></li><li><a href="#ml">Mercado Libre</a></li><li><a href="#envios">Envíos</a></li><li><a href="#clientes">Clientes y reseñas</a></li><li><a href="#productos">Productos</a></li><li><a href="#atributos">Atributos</a></li><li><a href="#proveedores">Proveedores</a></li><li><a href="#contenido">Contenido de la tienda</a></li><li><a href="#inventario">Inventario</a></li><li><a href="#promociones">Promociones</a></li><li><a href="#boletin">Boletín</a></li><li><a href="#reportes">Reportes</a></li><li><a href="#ajustes">Ajustes</a></li><li><a href="#estados">Estados</a></li><li><a href="#problemas">Si algo no cuadra</a></li><li><a href="#primer-dia">Primer día</a></li>
+      </ol>
+    </div>
+
+    <!-- 1 -->
+    <section class="chapter" id="acceso" style="--dot:#FEA4C3">
+      <div class="chapter-head"><span class="area">Empezar</span><h2>1. Antes de empezar</h2></div>
+      <p>El panel es la parte privada de P de Papel. Desde aquí se atienden los pedidos de la tienda en línea, se registran las ventas presenciales y de feria, se mantiene el catálogo y se revisan los números. La tienda pública (<code>papeleriapdepapel.com</code>) lee todo lo que aquí se guarda: si un producto se archiva o cambia de precio, la tienda lo refleja sola en unos segundos.</p>
+      <h3>Entrar</h3>
+      <ol class="steps">
+        <li>Abre <code>admin.papeleriapdepapel.com</code> en el navegador. Funciona en computador, tablet y teléfono.</li>
+        <li>Inicia sesión con tu cuenta (correo o Google). La cuenta debe estar autorizada por la dueña de la tienda; si no lo está, el panel te llevará a una pantalla vacía de tiendas.</li>
+        <li>Al entrar verás <strong>Inicio</strong>, la pantalla del día. Desde la barra lateral llegas a todo lo demás.</li>
+      </ol>
+      <div class="note care"><strong>Cuida el acceso</strong><p>Cada acción queda registrada con tu usuario: pagos verificados, ajustes de inventario, respuestas a reseñas. No compartas tu sesión y cierra sesión en equipos ajenos desde el avatar de la esquina superior derecha.</p></div>
+      <h3>Vocabulario que usamos</h3>
+      <div class="table-wrap"><table class="states">
+        <tr><th>Término</th><th>Qué significa</th></tr>
+        <tr><td><strong>Tienda en línea</strong></td><td>La página pública donde compran los clientes.</td></tr>
+        <tr><td><strong>Panel / Administración</strong></td><td>Esta herramienta privada.</td></tr>
+        <tr><td><strong>Pedido</strong></td><td>Cualquier venta: de la tienda en línea, del punto de venta, de una feria, una cotización o un pedido personalizado. Todos viven en la misma lista.</td></tr>
+        <tr><td><strong>Punto de venta</strong></td><td>Ventas presenciales del día a día fuera de una feria.</td></tr>
+        <tr><td><strong>Feria</strong></td><td>Un evento presencial: se reserva inventario antes, se vende con el lector durante el evento y se concilia al volver.</td></tr>
+        <tr><td><strong>Cápsula sorpresa</strong></td><td>Producto aleatorio que se vende en feria con un QR único; por dentro siempre es un producto real del inventario.</td></tr>
+        <tr><td><strong>Publicación</strong></td><td>Un anuncio en Mercado Libre. No es una venta.</td></tr>
+        <tr><td><strong>Venta de Mercado Libre</strong></td><td>Un pedido pagado en Mercado Libre; se registra lo que realmente se cobra después de comisiones.</td></tr>
+        <tr><td><strong>Guía</strong></td><td>La etiqueta de envío con la transportadora y el número de seguimiento.</td></tr>
+      </table></div>
+    </section>
+
+    <!-- 2 -->
+    <section class="chapter" id="recorrido" style="--dot:#B2A4FE">
+      <div class="chapter-head"><span class="area">Empezar</span><h2>2. Cómo se recorre el panel</h2></div>
+      <p>Todas las pantallas comparten la misma estructura, así que al aprender una aprendes todas.</p>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/inicio" alt="La estructura común: barra lateral por grupos a la izquierda, buscador arriba, contenido con título y descripción, y el botón de acción principal a la derecha." loading="lazy" width="1440" height="900"></div><figcaption>La estructura común: barra lateral por grupos a la izquierda, buscador arriba, contenido con título y descripción, y el botón de acción principal a la derecha.</figcaption></figure>
+      <h3>La barra lateral</h3>
+      <p>Está ordenada por grupos: <strong>Ventas</strong> (Pedidos, Punto de venta, Ferias, Mercado Libre, Envíos, Clientes), <strong>Catálogo</strong> (Productos, Atributos, Proveedores, Contenido de la tienda), <strong>Inventario</strong> (Inventario, Movimientos, Aprovisionamiento), <strong>Marketing</strong> (Promociones, Boletín), <strong>Reportes</strong> (Rendimiento, Tributarios) y <strong>Ajustes</strong>. Los numeritos junto a Pedidos e Inventario avisan cuántas cosas esperan atención. El botón de la esquina superior izquierda contrae la barra a solo iconos.</p>
+      <h3>El buscador de acciones</h3>
+      <p>Escribe en la barra superior o pulsa <kbd>⌘</kbd> <kbd>K</kbd> (en Windows <kbd>Ctrl</kbd> <kbd>K</kbd>) y escribe lo que quieres hacer: «pedidos», «crear producto», «cupones». Llegas a cualquier pantalla sin recorrer menús.</p>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/paleta" alt="El buscador de acciones abierto con la palabra «pedidos»: propone la pantalla y sus pestañas." loading="lazy" width="1440" height="900"></div><figcaption>El buscador de acciones abierto con la palabra «pedidos»: propone la pantalla y sus pestañas.</figcaption></figure>
+      <h3>Pestañas y vistas</h3>
+      <p>Muchas pantallas tienen <strong>pestañas</strong> arriba (por ejemplo Clientes y Reseñas) y <strong>vistas</strong> con contadores (Por atender, Por verificar, En camino…). Cada vista es una lista de trabajo: si el contador está en cero no hay nada pendiente ahí. La vista queda guardada en la dirección, así que puedes copiar el enlace y compartirlo o dejarlo como marcador.</p>
+      <h3>Las tablas</h3>
+      <ul class="list">
+        <li><strong>Buscar</strong> filtra en todas las columnas a la vez.</li>
+        <li><strong>Columnas</strong> permite ocultar las que no uses; la elección se recuerda por tabla.</li>
+        <li>Al marcar la casilla de una o varias filas aparece la <strong>barra de selección</strong> con las acciones en lote (archivar, cambiar estado, lista de recogida…). Toda acción en lote pide confirmación.</li>
+        <li>El botón de tres puntos al final de cada fila abre el <strong>menú de la fila</strong> con las acciones individuales.</li>
+        <li>La columna <strong>Siguiente paso</strong>, cuando existe, muestra el botón que resuelve lo que ese registro necesita ahora.</li>
+      </ul>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/pedidos-seleccion" alt="Una fila marcada: abajo aparece la barra de selección con las acciones en lote." loading="lazy" width="1440" height="900"></div><figcaption>Una fila marcada: abajo aparece la barra de selección con las acciones en lote.</figcaption></figure>
+      <h3>Guardar y confirmar</h3>
+      <p>Los formularios largos (pedido, producto, ajustes) tienen una <strong>barra fija abajo</strong> con «Guardar cambios» y «Descartar cambios». Nada se aplica hasta guardar. Las acciones que no se pueden deshacer (eliminar, cerrar una feria, marcar pagado) abren un diálogo que dice exactamente qué va a pasar; el botón rojo confirma.</p>
+      <h3>En el teléfono</h3>
+      <p>El panel funciona igual en el celular. La barra lateral se convierte en una barra inferior con Inicio, Pedidos, <strong>Vender</strong> (el botón grande del centro abre el punto de venta), Inventario y Más. Las tablas se muestran como tarjetas.</p>
+      <div class="screens">
+        <figure class="screen phone"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/movil-inicio" alt="Inicio en el teléfono, con la barra inferior y el botón Vender al centro." loading="lazy" width="390" height="844"></div><figcaption>Inicio en el teléfono, con la barra inferior y el botón Vender al centro.</figcaption></figure>
+        <figure class="screen phone"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/movil-pedidos" alt="Pedidos en el teléfono: cada fila es una tarjeta con su siguiente paso." loading="lazy" width="390" height="844"></div><figcaption>Pedidos en el teléfono: cada fila es una tarjeta con su siguiente paso.</figcaption></figure>
+      </div>
+    </section>
+
+    <!-- 3 -->
+    <section class="chapter" id="inicio" style="--dot:#FFC105">
+      <div class="chapter-head"><span class="area">Empezar</span><h2>3. Inicio: el día de hoy</h2></div>
+      <div class="route">Ruta: <code>/inicio</code> · primera pantalla al entrar</div>
+      <p>Inicio responde una sola pregunta: <em>¿qué necesita mi atención ahora?</em> No es un tablero de gráficas; es la lista de lo urgente.</p>
+      <ol class="steps">
+        <li><strong>Las cuatro tarjetas</strong> resumen el día: ventas de hoy (con el ojo puedes ocultar la cifra si hay gente mirando), pedidos por despachar, pagos por verificar y productos con stock crítico. Cada tarjeta enlaza a la lista correspondiente.</li>
+        <li><strong>Pendientes de acción</strong> reúne, en orden de urgencia, lo que hay que hacer: verificar una transferencia, crear una guía, reponer un producto. El botón de cada fila te lleva justo al lugar donde se resuelve.</li>
+        <li><strong>Esta semana</strong> muestra lo vendido por día separando tienda en línea y presencial; <strong>Más vendidos</strong> lista los tres productos que más salieron en la última semana.</li>
+        <li><strong>Registrar venta presencial</strong> (arriba a la derecha) abre el punto de venta de inmediato.</li>
+        <li>Al final, <strong>Más análisis</strong> guarda las gráficas de ventas por año, el resumen de inventario y las analíticas para cuando quieras mirar tendencias.</li>
+      </ol>
+      <div class="note tip"><strong>Rutina sugerida</strong><p>Entra, vacía «Pendientes de acción» de arriba abajo y luego revisa Pedidos › Por atender. Con eso el día está cubierto; el resto del panel es para tareas puntuales.</p></div>
+    </section>
+
+    <!-- 4 -->
+    <section class="chapter" id="pedidos" style="--dot:#FEA4C3">
+      <div class="chapter-head"><span class="area">Ventas</span><h2>4. Pedidos</h2></div>
+      <div class="route">Ruta: <code>/pedidos</code> · cada pedido en <code>/pedidos/&lt;id&gt;</code></div>
+      <p>Todas las ventas están aquí, vengan de donde vengan: la columna <strong>Canal</strong> distingue Tienda, Presencial, Feria, Cotización o Mercado Libre. Las vistas de arriba son colas de trabajo.</p>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/pedidos" alt="La lista de pedidos en la vista «Por atender», con el siguiente paso de cada uno a la derecha." loading="lazy" width="1440" height="900"></div><figcaption>La lista de pedidos en la vista «Por atender», con el siguiente paso de cada uno a la derecha.</figcaption></figure>
+      <div class="table-wrap"><table class="states">
+        <tr><th>Vista</th><th>Qué contiene</th><th>Qué hacer</th></tr>
+        <tr><td><strong>Por atender</strong></td><td>Todo lo que necesita una acción tuya hoy.</td><td>Usa el botón de «Siguiente paso» de cada fila.</td></tr>
+        <tr><td><strong>Por verificar</strong></td><td>Transferencias bancarias que el cliente dice haber pagado.</td><td>Revisa el comprobante y marca como pagado.</td></tr>
+        <tr><td><strong>Por despachar</strong></td><td>Pagados sin guía de envío.</td><td>Crea la guía o registra el envío manual.</td></tr>
+        <tr><td><strong>En camino</strong></td><td>Con guía, aún no entregados.</td><td>Sigue el rastreo; el cliente recibe el enlace.</td></tr>
+        <tr><td><strong>Cotizaciones</strong></td><td>Propuestas enviadas que aún no son pedidos.</td><td>Espera la aceptación o conviértela.</td></tr>
+        <tr><td><strong>Todos</strong></td><td>Historial completo.</td><td>Buscar por número, cliente o teléfono.</td></tr>
+      </table></div>
+      <h3>La página de un pedido</h3>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/pedido-detalle" alt="La página de un pedido: título con insignias de estado, línea de tiempo, banner con el siguiente paso y las secciones del formulario debajo." loading="lazy" width="1440" height="900"></div><figcaption>La página de un pedido: título con insignias de estado, línea de tiempo, banner con el siguiente paso y las secciones del formulario debajo.</figcaption></figure>
+      <ul class="list">
+        <li>El <strong>título</strong> muestra el número, el canal, el estado de pago y el estado del envío. A la derecha, el teléfono abre WhatsApp con el cliente.</li>
+        <li>La <strong>línea de tiempo</strong> (Creado › Pagado › Guía › En camino › Entregado) dice en qué punto está y qué falta.</li>
+        <li>El <strong>banner de siguiente paso</strong> explica lo que toca hacer y su botón te lleva a la sección exacta del formulario.</li>
+        <li><strong>Links y Pagos</strong> genera el enlace de pago en línea o el cobro con datáfono; <strong>Descargar recibo</strong> produce el PDF para el cliente.</li>
+        <li>Debajo están las secciones: Productos, Cliente y datos del pedido, Estado de la orden, Descuentos y cupones, Envío y empaque, y al final la Zona de cuidado (eliminar).</li>
+      </ul>
+      <h3>Verificar una transferencia y marcar el pedido como pagado</h3>
+      <ol class="steps">
+        <li>Confirma en el banco que el dinero llegó y que el valor coincide con el total del pedido.</li>
+        <li>En la página del pedido pulsa <strong>Marcar como pagado</strong>. Te lleva a la sección «Estado de la orden».</li>
+        <li>Selecciona el paso <strong>Pagado</strong> en la línea de estados.</li>
+        <li>Pulsa <strong>Guardar cambios</strong> en la barra inferior. En ese momento se descuenta el inventario, se guarda la fecha de pago y el pedido pasa a «Por despachar».</li>
+      </ol>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/pedido-estado" alt="La sección «Estado de la orden»: la línea de estados donde se elige «Pagado» antes de guardar." loading="lazy" width="1440" height="900"></div><figcaption>La sección «Estado de la orden»: la línea de estados donde se elige «Pagado» antes de guardar.</figcaption></figure>
+      <div class="note rule"><strong>Regla</strong><p>Los pagos con Bold o Wompi se confirman solos cuando el proveedor avisa. Una transferencia bancaria <em>solo</em> se marca pagada a mano después de ver el comprobante. Nunca marques pagado «para adelantar»: el inventario se descuenta en ese instante y el cliente recibe la confirmación.</p></div>
+      <h3>Crear la guía de envío</h3>
+      <ol class="steps">
+        <li>Con el pedido pagado, pulsa <strong>Ir a envío</strong> en el banner.</li>
+        <li>Elige el tipo: <strong>Recoger en tienda</strong>, <strong>Transportadora integrada</strong> (cotiza con las transportadoras conectadas y crea la guía) o <strong>Envío manual</strong> (otra mensajería: escribe transportadora, número de guía y costo).</li>
+        <li>Revisa la caja y el costo. Guarda. La guía queda en el pedido, se puede imprimir desde Envíos y el cliente recibe el seguimiento.</li>
+      </ol>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/pedido-envio" alt="La sección «Envío y empaque» con los tres tipos de envío." loading="lazy" width="1440" height="900"></div><figcaption>La sección «Envío y empaque» con los tres tipos de envío.</figcaption></figure>
+      <h3>Crear un pedido a mano</h3>
+      <p>Para ventas por WhatsApp o encargos, usa <strong>Nuevo pedido</strong> (arriba a la derecha en cualquier pantalla). La página guía en cinco pasos: Productos, Cliente, Descuentos, Pago y Envío. Nada se descuenta del inventario hasta que el pedido se marque pagado.</p>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/pedido-nuevo" alt="El nuevo pedido con sus cinco pasos como accesos rápidos." loading="lazy" width="1440" height="900"></div><figcaption>El nuevo pedido con sus cinco pasos como accesos rápidos.</figcaption></figure>
+      <h3>Acciones desde la lista</h3>
+      <p>El menú de fila permite copiar el ID o el número, generar el link de pago (solo si aún no está pagado), abrir el datáfono (solo pedidos completados) y ver el detalle. Eliminar solo está disponible para pedidos que nunca fueron pagados. Las <strong>Plantillas de cotización</strong> (en el submenú de Pedidos) guardan textos y condiciones para cotizar rápido.</p>
+    </section>
+
+    <!-- 5 -->
+    <section class="chapter" id="pos" style="--dot:#5FC98D">
+      <div class="chapter-head"><span class="area">Ventas</span><h2>5. Punto de venta</h2></div>
+      <div class="route">Ruta: <code>/ventas-rapidas</code> · pestañas Vender y Etiquetas</div>
+      <p>Para vender en el mostrador. Cada venta queda como un pedido pagado y descuenta el inventario en el momento de confirmar.</p>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/pos-vender" alt="La pestaña Vender: a la izquierda cómo agregar productos y la venta actual; a la derecha el cobro y el cierre del día." loading="lazy" width="1440" height="900"></div><figcaption>La pestaña Vender: a la izquierda cómo agregar productos y la venta actual; a la derecha el cobro y el cierre del día.</figcaption></figure>
+      <h3>Registrar una venta</h3>
+      <ol class="steps">
+        <li>Agrega productos de una de tres formas: <strong>escanea</strong> la etiqueta con el lector o la cámara (botón Escanear), <strong>escribe el código</strong> (SKU o código de barras) y pulsa «Agregar código», o <strong>búscalo en el catálogo</strong> por nombre. Cada lectura suma una unidad.</li>
+        <li>En <strong>Venta actual</strong> ajusta cantidades con + y − o quita una línea con la papelera. El panel no deja vender más unidades de las que hay.</li>
+        <li>Elige el método de pago: <strong>Efectivo</strong> o <strong>Transferencia</strong>.</li>
+        <li>Pulsa <strong>Registrar pago</strong> y confirma en el diálogo. Se crea el pedido, se descuenta el inventario y aparece el número de pedido.</li>
+      </ol>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/pos-confirmar" alt="La confirmación antes de registrar: repite el total, el método y avisa que se descuenta el inventario." loading="lazy" width="1440" height="900"></div><figcaption>La confirmación antes de registrar: repite el total, el método y avisa que se descuenta el inventario.</figcaption></figure>
+      <p>La tarjeta <strong>Cierre del día</strong> suma las ventas presenciales de hoy por método de pago: es la referencia para cuadrar caja al cerrar.</p>
+      <h3>Etiquetas</h3>
+      <p>La pestaña <strong>Etiquetas</strong> arma una hoja de etiquetas con el código de barras o QR de cada producto para pegarlas en exhibidores o cajas. Elige el producto, la cantidad y el formato de hoja, agrega a la hoja y pulsa «Imprimir etiquetas». Una etiqueta se reutiliza: se escanea cada vez que se vende esa referencia.</p>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/pos-etiquetas" alt="La pestaña Etiquetas con el formato de hoja adhesiva A4." loading="lazy" width="1440" height="900"></div><figcaption>La pestaña Etiquetas con el formato de hoja adhesiva A4.</figcaption></figure>
+      <div class="note tip"><strong>Cuándo usar Ferias en lugar del punto de venta</strong><p>Dentro de un evento vende desde la feria (capítulo 6): allí solo se ofrece el inventario que reservaste para llevar y las cápsulas sorpresa. El punto de venta es para el mostrador del día a día.</p></div>
+    </section>
+
+    <!-- 6 -->
+    <section class="chapter" id="ferias" style="--dot:#B2A4FE">
+      <div class="chapter-head"><span class="area">Ventas</span><h2>6. Ferias</h2></div>
+      <div class="route">Ruta: <code>/ferias</code> · vistas Activas, Cerradas, Todas</div>
+      <p>Una feria tiene cuatro fases y el panel las muestra como pasos: <strong>Preparar</strong> (reservar inventario y armar cápsulas), <strong>Vender</strong> (registrar cada cobro), <strong>Conciliar</strong> (contar lo que volvió) y <strong>Cerrada</strong>.</p>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/ferias" alt="La lista de ferias como tarjetas: reservado, vendido, barra de avance y el botón de la fase actual." loading="lazy" width="1440" height="900"></div><figcaption>La lista de ferias como tarjetas: reservado, vendido, barra de avance y el botón de la fase actual.</figcaption></figure>
+      <h3>Crear y preparar</h3>
+      <ol class="steps">
+        <li>Pulsa <strong>Nueva feria</strong>, escribe nombre, lugar y fechas.</li>
+        <li>Abre la feria y, en <strong>Preparar</strong>, reserva las unidades de cada producto que vas a llevar. Esas unidades dejan de venderse en la tienda en línea mientras dura la feria.</li>
+        <li>Si vendes <strong>cápsulas sorpresa</strong>, arma cada una eligiendo el producto reservado que va dentro, la cantidad y el precio de venta. El panel valida el margen mínimo y genera un QR único por cápsula para imprimir.</li>
+        <li>Cuando estés en el evento, pulsa <strong>Abrir feria</strong>.</li>
+      </ol>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/ferias-nueva" alt="El diálogo de nueva feria." loading="lazy" width="1440" height="900"></div><figcaption>El diálogo de nueva feria.</figcaption></figure>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/feria-detalle" alt="La página de la feria: las cuatro fases arriba, el siguiente paso sugerido y las cifras del evento." loading="lazy" width="1440" height="900"></div><figcaption>La página de la feria: las cuatro fases arriba, el siguiente paso sugerido y las cifras del evento.</figcaption></figure>
+      <h3>Vender en la feria</h3>
+      <p>La sección <strong>Registrar venta</strong> es el mismo punto de venta del capítulo 5, pero solo ofrece los productos reservados y las cápsulas de esta feria. Escanea la etiqueta del producto o el QR de la cápsula, elige efectivo o transferencia y registra el pago. Cada venta queda como pedido pagado del canal Feria.</p>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/feria-vender" alt="Registrar venta dentro de la feria: escáner, producto reservado y cobro." loading="lazy" width="1440" height="900"></div><figcaption>Registrar venta dentro de la feria: escáner, producto reservado y cobro.</figcaption></figure>
+      <h3>Conciliar y cerrar</h3>
+      <ol class="steps">
+        <li>Al volver, en <strong>Conciliar y cerrar</strong> anota por producto cuántas unidades regresaron, cuántas se dañaron y cuántas se perdieron. «Por contar» te dice cuántas deberían haber vuelto.</li>
+        <li>Pulsa <strong>Conciliar y cerrar</strong>. Las unidades devueltas vuelven a la tienda en línea; daños y pérdidas quedan como movimientos de inventario con su motivo.</li>
+      </ol>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/feria-cierre" alt="La conciliación: por producto se cuenta lo devuelto, dañado y perdido." loading="lazy" width="1440" height="900"></div><figcaption>La conciliación: por producto se cuenta lo devuelto, dañado y perdido.</figcaption></figure>
+      <div class="note care"><strong>El cierre es irreversible</strong><p>Cuenta físicamente antes de confirmar. Si una feria anterior no se concilió a tiempo, usa «Conciliar feria anterior» en Movimientos: crea los movimientos correctos sin inventar ventas.</p></div>
+    </section>
+
+    <!-- 7 -->
+    <section class="chapter" id="ml" style="--dot:#FFC105">
+      <div class="chapter-head"><span class="area">Ventas</span><h2>7. Mercado Libre</h2></div>
+      <div class="route">Ruta: <code>/mercadolibre</code> · seis pestañas</div>
+      <p>Mercado Libre es un canal más: sus ventas aparecen en Pedidos y su stock se controla desde aquí. Las pestañas son <strong>Resumen</strong> (estado de la conexión y actividad), <strong>Publicaciones</strong> (anuncios, con su precio propio), <strong>Ventas</strong> (pedidos de Mercado Libre y su liquidación), <strong>Preguntas y reclamos</strong>, <strong>Envíos</strong> y <strong>Anuncios y videos</strong>.</p>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/mercadolibre" alt="El resumen cuando la cuenta aún no está conectada: el botón «Conectar Mercado Libre» inicia la autorización." loading="lazy" width="1440" height="900"></div><figcaption>El resumen cuando la cuenta aún no está conectada: el botón «Conectar Mercado Libre» inicia la autorización.</figcaption></figure>
+      <div class="note rule"><strong>Tres reglas que el panel hace cumplir</strong><p>El precio en Mercado Libre es independiente del de la tienda: nunca se copian solos. El inventario local es la fuente de verdad: la publicación muestra el stock menos una reserva de seguridad. Una venta de Mercado Libre registra lo que realmente se cobra (neto); si la liquidación aún no llega, queda «Liquidación pendiente» y se reintenta.</p></div>
+      <p>Lo urgente de Mercado Libre (preguntas sin responder, envíos por despachar, reclamos) también aparece en Inicio y llega en el correo diario de revisión.</p>
+    </section>
+
+    <!-- 8 -->
+    <section class="chapter" id="envios" style="--dot:#5FC98D">
+      <div class="chapter-head"><span class="area">Ventas</span><h2>8. Envíos</h2></div>
+      <div class="route">Ruta: <code>/envios</code> · vistas Por despachar, Despachados hoy, En camino, Con novedad, Entregados</div>
+      <p>Envíos es la mesa de despacho: qué hay que empacar hoy, qué salió y qué tiene novedad. El detalle de cada envío vive dentro de su pedido; aquí se trabaja en lote.</p>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/envios" alt="La vista «Por despachar» con la lista de recogida arriba a la derecha." loading="lazy" width="1440" height="900"></div><figcaption>La vista «Por despachar» con la lista de recogida arriba a la derecha.</figcaption></figure>
+      <ol class="steps">
+        <li>Empieza en <strong>Por despachar</strong>. Pulsa <strong>Lista de recogida</strong> para imprimir la hoja con todos los productos que hay que empacar (o marca solo algunos pedidos y usa el botón de la barra de selección).</li>
+        <li>Abre cada pedido con «Abrir en el pedido» para crear la guía si aún no la tiene.</li>
+        <li>Cuando la transportadora recoja, marca los envíos en lote: selecciona las filas y en <strong>Cambiar estado</strong> elige «Marcar como despachado». Lo mismo para recogido, en tránsito, entregado o incidencia.</li>
+        <li>El menú de tres puntos del encabezado permite <strong>Sincronizar con EnvioClick</strong> (actualiza estados automáticos), actualizar envíos manuales y <strong>Exportar CSV</strong>.</li>
+      </ol>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/envios-estado" alt="Cambiar el estado de varios envíos a la vez desde la barra de selección." loading="lazy" width="1440" height="900"></div><figcaption>Cambiar el estado de varios envíos a la vez desde la barra de selección.</figcaption></figure>
+      <div class="note tip"><strong>Con novedad</strong><p>Esta vista reúne entregas fallidas, devoluciones y excepciones. Revísala a diario: casi siempre hay que llamar al cliente o a la transportadora.</p></div>
+    </section>
+
+    <!-- 9 -->
+    <section class="chapter" id="clientes" style="--dot:#FEA4C3">
+      <div class="chapter-head"><span class="area">Ventas</span><h2>9. Clientes y reseñas</h2></div>
+      <div class="route">Ruta: <code>/clientes</code> · pestañas Clientes y Reseñas</div>
+      <p>Cada persona se arma con sus pedidos por número de teléfono. Los segmentos ayudan a decidir a quién escribirle.</p>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/clientes" alt="La lista de clientes con sus segmentos: VIP, Ocasional, Sin compra." loading="lazy" width="1440" height="900"></div><figcaption>La lista de clientes con sus segmentos: VIP, Ocasional, Sin compra.</figcaption></figure>
+      <div class="table-wrap"><table class="states">
+        <tr><th>Segmento</th><th>Quién entra</th></tr>
+        <tr><td><span class="pill mint">VIP</span></td><td>El 10 % de clientes que más gasta.</td></tr>
+        <tr><td><span class="pill sky">Recurrente</span></td><td>Dos o más compras pagadas.</td></tr>
+        <tr><td><span class="pill lav">Ocasional</span></td><td>Una compra.</td></tr>
+        <tr><td><span class="pill cream">Inactivo</span></td><td>Más de 90 días sin comprar; candidatos a un mensaje de reactivación.</td></tr>
+        <tr><td><span class="pill slate">Sin compra</span></td><td>Pedidos que nunca se pagaron.</td></tr>
+      </table></div>
+      <h3>La ficha de un cliente</h3>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/cliente-detalle" alt="La ficha: compras pagadas, gastado, unidades, última compra, sus pedidos y lo que más compra." loading="lazy" width="1440" height="900"></div><figcaption>La ficha: compras pagadas, gastado, unidades, última compra, sus pedidos y lo que más compra.</figcaption></figure>
+      <p>Desde la ficha puedes abrir <strong>WhatsApp</strong> con un clic, ver todos sus pedidos y saber qué compra más. El menú de la lista también permite copiar teléfono o correo.</p>
+      <h3>Reseñas</h3>
+      <p>La pestaña <strong>Reseñas</strong> muestra lo que los clientes escribieron en la tienda. Las vistas separan <strong>Sin responder</strong>, <strong>Por atender</strong> (dos estrellas o menos) y <strong>Ocultas</strong>.</p>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/resenas" alt="La pestaña Reseñas con sus contadores, vistas y estados." loading="lazy" width="1440" height="900"></div><figcaption>La pestaña Reseñas con sus contadores, vistas y estados.</figcaption></figure>
+      <ol class="steps">
+        <li><strong>Responder</strong>: desde el menú de la fila, escribe la respuesta de la tienda y publícala. Aparece bajo la reseña en la ficha del producto firmada como «Respuesta de P de Papel».</li>
+        <li><strong>Ocultar de la tienda</strong>: la reseña deja de verse en la tienda pero sigue aquí (para lenguaje inadecuado o datos personales). Se puede <strong>Publicar</strong> de nuevo cuando quieras.</li>
+        <li><strong>Eliminar</strong> la borra para siempre; úsalo solo cuando ocultar no sea suficiente.</li>
+      </ol>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/resenas-responder" alt="El diálogo para responder una reseña." loading="lazy" width="1440" height="900"></div><figcaption>El diálogo para responder una reseña.</figcaption></figure>
+    </section>
+
+    <!-- 10 -->
+    <section class="chapter" id="productos" style="--dot:#B2A4FE">
+      <div class="chapter-head"><span class="area">Catálogo</span><h2>10. Productos</h2></div>
+      <div class="route">Ruta: <code>/productos</code> · cada producto en <code>/productos/&lt;id&gt;</code></div>
+      <p>La lista de productos tiene vistas por lo que necesitan: <strong>Activos</strong>, <strong>Sin completar</strong> (les falta algo para venderse bien), <strong>Stock crítico</strong>, <strong>Agotados</strong>, <strong>Archivados</strong> y <strong>Todos</strong>. La columna <strong>Listo para vender</strong> resume qué falta en cada uno.</p>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/productos" alt="La lista de productos con forma, subcategoría, precio, stock y la columna «Listo para vender»." loading="lazy" width="1440" height="900"></div><figcaption>La lista de productos con forma, subcategoría, precio, stock y la columna «Listo para vender».</figcaption></figure>
+      <h3>Acciones en lote</h3>
+      <p>Marca varias filas y usa la barra de selección: <strong>Archivar</strong> (desaparecen de la tienda y responden «no encontrado», conservan historial), <strong>Restaurar</strong>, <strong>Destacar</strong> (salen primero en la portada) y <strong>Quitar destacado</strong>. Los cambios de precio o atributos en masa se hacen en <strong>Gestión masiva</strong>.</p>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/productos-seleccion" alt="La barra de selección con las acciones en lote de productos." loading="lazy" width="1440" height="900"></div><figcaption>La barra de selección con las acciones en lote de productos.</figcaption></figure>
+      <h3>La ficha de un producto</h3>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/producto-detalle" alt="La ficha: título con insignias, secciones a la derecha para saltar, y la lista «Listo para vender» que dice qué falta." loading="lazy" width="1440" height="900"></div><figcaption>La ficha: título con insignias, secciones a la derecha para saltar, y la lista «Listo para vender» que dice qué falta.</figcaption></figure>
+      <p>La ficha está dividida en secciones que puedes recorrer con el índice de la derecha:</p>
+      <ul class="list">
+        <li><strong>Imágenes</strong>: sube varias y marca la principal con la estrella. La tienda necesita al menos una.</li>
+        <li><strong>Modo Kit / Combo</strong>: un kit se compone de otros productos; su stock se calcula solo y al venderlo se descuentan los componentes.</li>
+        <li><strong>Información básica</strong>: nombre comercial claro (50 a 65 caracteres), marca y descripción. El asistente propone nombres consistentes.</li>
+        <li><strong>Precio y margen</strong>: precio de venta y costo de compra; el margen se calcula al momento.</li>
+        <li><strong>Inventario</strong>: la cantidad actual. Los cambios quedan como movimientos auditables.</li>
+        <li><strong>Identificadores</strong>: el <strong>SKU</strong> es el código interno que se escanea; el <strong>GTIN</strong> es el código de barras real del fabricante (nunca se inventa); el <strong>MPN</strong> es la referencia del fabricante. Si el producto no tiene GTIN ni MPN, marca «No tiene identificador global».</li>
+        <li><strong>Clasificación y atributos</strong>: subcategoría, tamaño, color, diseño y proveedor. Los selectores permiten buscar escribiendo.</li>
+        <li><strong>Visibilidad</strong>: Destacado (aparece en la portada) y Archivado (desaparece de la tienda).</li>
+        <li><strong>Descripción</strong>: editor con formato, sin emojis; se muestra en la tienda y en Google.</li>
+      </ul>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/producto-atributos" alt="Clasificación y atributos: los selectores con búsqueda y la muestra de cada color." loading="lazy" width="1440" height="900"></div><figcaption>Clasificación y atributos: los selectores con búsqueda y la muestra de cada color.</figcaption></figure>
+      <div class="note rule"><strong>Antes de guardar</strong><p>La lista «Listo para vender» de la derecha se pone verde cuando el producto tiene nombre claro, imagen, precio, costo, subcategoría, identificador y descripción. Google Merchant necesita imagen, precio e identificador para mostrarlo.</p></div>
+      <h3>Crear un producto nuevo</h3>
+      <p><strong>Nuevo producto</strong> abre la misma ficha vacía. Sube la foto primero: el asistente de imagen sugiere nombre, categoría, color y diseño a partir de la foto, y tú confirmas o corriges.</p>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/producto-nuevo" alt="La ficha de un producto nuevo con la lista de lo que falta para venderlo." loading="lazy" width="1440" height="900"></div><figcaption>La ficha de un producto nuevo con la lista de lo que falta para venderlo.</figcaption></figure>
+      <h3>Variantes y herramientas del submenú</h3>
+      <ul class="list">
+        <li><strong>Grupo con variantes</strong>: un mismo producto en varios colores o tamaños. Se crea desde «Grupo con variantes» o convirtiendo un producto existente con «Convertir en variantes».</li>
+        <li><strong>Gestión masiva</strong>: cambia precio, categoría, tamaño, color o diseño de muchos productos a la vez.</li>
+        <li><strong>Nombres para búsqueda</strong>: revisa y aprueba nombres propuestos para que los clientes encuentren los productos.</li>
+        <li><strong>Opciones para clientes</strong>: lo que el cliente ve como formato, medida o cantidad, separado del tamaño interno de envío.</li>
+      </ul>
+    </section>
+
+    <!-- 11 -->
+    <section class="chapter" id="atributos" style="--dot:#5FC98D">
+      <div class="chapter-head"><span class="area">Catálogo</span><h2>11. Atributos</h2></div>
+      <div class="route">Ruta: <code>/atributos</code> · pestañas Categorías, Subcategorías, Tamaños, Colores, Diseños, Opciones para clientes</div>
+      <p>Los atributos son las listas con las que se clasifica el catálogo. Las <strong>categorías</strong> son el menú principal de la tienda; cada <strong>subcategoría</strong> pertenece a una categoría y tiene su propia página. Tamaños, colores y diseños se usan en variantes y filtros.</p>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/atributos" alt="La pestaña Colores con su muestra, cuántos productos usan cada uno, el estado y el interruptor Activos / Archivados." loading="lazy" width="1440" height="900"></div><figcaption>La pestaña Colores con su muestra, cuántos productos usan cada uno, el estado y el interruptor Activos / Archivados.</figcaption></figure>
+      <h3>Archivar en lugar de eliminar</h3>
+      <ol class="steps">
+        <li>Un atributo que ya no quieres ofrecer se <strong>archiva</strong> desde el menú de su fila (o en lote). Deja de aparecer en los formularios y en la tienda, pero los productos que ya lo tenían siguen igual y se siguen vendiendo.</li>
+        <li>El interruptor <strong>Archivados</strong> muestra lo archivado; desde ahí se <strong>Restaura</strong> cuando haga falta.</li>
+        <li><strong>Eliminar</strong> solo está disponible cuando ningún producto usa el atributo.</li>
+      </ol>
+      <div class="screens">
+        <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/atributos-menu" alt="El menú de fila: Archivar disponible, Eliminar apagado porque el color tiene productos." loading="lazy" width="1440" height="900"></div><figcaption>El menú de fila: Archivar disponible, Eliminar apagado porque el color tiene productos.</figcaption></figure>
+        <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/atributos-archivados" alt="La vista de archivados; cada fila puede restaurarse." loading="lazy" width="1440" height="900"></div><figcaption>La vista de archivados; cada fila puede restaurarse.</figcaption></figure>
+      </div>
+      <div class="note rule"><strong>Reglas de archivo</strong><p>Una subcategoría con productos activos no se puede archivar: primero mueve o archiva esos productos. Una categoría con subcategorías activas tampoco. Restaurar siempre está permitido. Las direcciones antiguas de la tienda se conservan como alias, así los enlaces compartidos no se rompen.</p></div>
+      <div class="note care"><strong>Nombres sin emojis</strong><p>El icono de una categoría se guarda aparte del nombre. Escribe el nombre limpio; el icono se elige en el formulario.</p></div>
+    </section>
+
+    <!-- 12 -->
+    <section class="chapter" id="proveedores" style="--dot:#FFC105">
+      <div class="chapter-head"><span class="area">Catálogo</span><h2>12. Proveedores y aprovisionamiento</h2></div>
+      <div class="route">Rutas: <code>/proveedores</code> y <code>/aprovisionamiento</code></div>
+      <p><strong>Proveedores</strong> es la lista de a quién se le compra; cada producto puede tener el suyo. <strong>Aprovisionamiento</strong> registra los pedidos a proveedores: qué se encargó, cuánto se espera pagar y, al recibir, cuántas unidades entraron. Al recibir un pedido de aprovisionamiento, el inventario sube y queda un movimiento «Reposición recibida» con el costo.</p>
+      <div class="screens">
+        <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/proveedores" alt="La lista de proveedores y cuántos productos tiene cada uno." loading="lazy" width="1440" height="900"></div><figcaption>La lista de proveedores y cuántos productos tiene cada uno.</figcaption></figure>
+        <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/aprovisionamiento" alt="Los pedidos de aprovisionamiento; «Crear pedido» inicia uno nuevo." loading="lazy" width="1440" height="900"></div><figcaption>Los pedidos de aprovisionamiento; «Crear pedido» inicia uno nuevo.</figcaption></figure>
+      </div>
+      <div class="note tip"><strong>Facturas de compra</strong><p>Un pedido de aprovisionamiento no es una factura. Las facturas reales de proveedores se registran para los reportes tributarios (capítulo 17) con su número de factura.</p></div>
+    </section>
+
+    <!-- 13 -->
+    <section class="chapter" id="contenido" style="--dot:#FEA4C3">
+      <div class="chapter-head"><span class="area">Catálogo</span><h2>13. Contenido de la tienda</h2></div>
+      <div class="route">Ruta: <code>/contenido</code> · pestañas Portada, Banners, Redes en la tienda</div>
+      <p>Lo que la gente ve al entrar a la tienda. <strong>Portada</strong> son las diapositivas que rotan arriba (imagen horizontal, título y enlace). <strong>Banners</strong> tiene el banner principal (uno solo, con título y dos párrafos) y los banners con enlace repartidos por la tienda. <strong>Redes en la tienda</strong> son las publicaciones de Instagram u otras redes que se muestran en la página.</p>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/contenido" alt="La pestaña Portada con las diapositivas actuales." loading="lazy" width="1440" height="900"></div><figcaption>La pestaña Portada con las diapositivas actuales.</figcaption></figure>
+      <p>Cada cambio se refleja en la tienda al guardar. Usa imágenes horizontales y ligeras; el panel muestra la miniatura para comprobar que cargó.</p>
+    </section>
+
+    <!-- 14 -->
+    <section class="chapter" id="inventario" style="--dot:#B2A4FE">
+      <div class="chapter-head"><span class="area">Inventario</span><h2>14. Inventario y movimientos</h2></div>
+      <div class="route">Rutas: <code>/inventario</code> y <code>/movimientos-inventario</code></div>
+      <p><strong>Inventario</strong> es una sola lista con todo el stock activo valorado al costo de compra. Las tarjetas resumen el valor a costo, los productos activos, el stock crítico y los productos sin costo registrado (que no entran en la valorización). Las vistas separan <strong>Stock crítico</strong>, <strong>Agotados</strong>, <strong>Sin costo</strong> y <strong>Kits</strong>.</p>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/inventario" alt="La lista de inventario valorada al costo, con el último movimiento de cada producto." loading="lazy" width="1440" height="900"></div><figcaption>La lista de inventario valorada al costo, con el último movimiento de cada producto.</figcaption></figure>
+      <h3>Ajustar inventario</h3>
+      <ol class="steps">
+        <li>Pulsa <strong>Ajustar inventario</strong> (o «Ajustar» en el menú de una fila).</li>
+        <li>Elige el producto, la cantidad (positiva para entrar, negativa para salir) y el motivo: conteo físico, daño, pérdida, uso interno, promoción.</li>
+        <li>Guarda. El stock cambia y queda un movimiento con tu usuario, la fecha, el stock anterior y el nuevo.</li>
+      </ol>
+      <h3>Movimientos</h3>
+      <p><strong>Movimientos</strong> es el historial completo: cada venta, ajuste, reposición, asignación a feria y devolución con su tipo, cantidad, stock resultante, costo y motivo. Si un número no cuadra, aquí se ve por qué.</p>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/movimientos" alt="El historial de movimientos: ventas presenciales, ventas en línea y el inventario inicial." loading="lazy" width="1440" height="900"></div><figcaption>El historial de movimientos: ventas presenciales, ventas en línea y el inventario inicial.</figcaption></figure>
+      <div class="note rule"><strong>Nunca se edita el stock «por fuera»</strong><p>Todo cambio de inventario pasa por un movimiento. Así la valorización, el margen y los reportes siempre pueden explicarse.</p></div>
+    </section>
+
+    <!-- 15 -->
+    <section class="chapter" id="promociones" style="--dot:#FFC105">
+      <div class="chapter-head"><span class="area">Marketing</span><h2>15. Promociones</h2></div>
+      <div class="route">Ruta: <code>/promociones</code> · pestañas Ofertas y Cupones</div>
+      <p>Una <strong>oferta</strong> rebaja el precio de productos, subcategorías o grupos durante un periodo y se ve en la tienda como etiqueta («15 % OFF»). Un <strong>cupón</strong> es un código que la persona escribe al pagar. Las tarjetas cuentan cuántas están <strong>vigentes</strong>, <strong>programadas</strong>, <strong>vencidas</strong> y <strong>desactivadas</strong>; las vigencias se recalculan solas cada día.</p>
+      <div class="screens">
+        <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/promociones" alt="Ofertas: descuento, a qué aplica, estado y vigencia." loading="lazy" width="1440" height="900"></div><figcaption>Ofertas: descuento, a qué aplica, estado y vigencia.</figcaption></figure>
+        <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/cupones" alt="Cupones: código, descuento, usos sobre el máximo y vigencia." loading="lazy" width="1440" height="900"></div><figcaption>Cupones: código, descuento, usos sobre el máximo y vigencia.</figcaption></figure>
+      </div>
+      <ol class="steps">
+        <li><strong>Nueva oferta</strong>: nombre interno, etiqueta pública, tipo (porcentaje o valor fijo), monto, fechas y a qué aplica.</li>
+        <li><strong>Nuevo cupón</strong>: código, descuento, fechas, máximo de usos y compra mínima. <strong>Generar códigos</strong> crea varios de una vez para campañas.</li>
+        <li>Para pausar algo antes de que venza, desactívalo desde su formulario; una oferta vencida gana siempre sobre «activa».</li>
+      </ol>
+    </section>
+
+    <!-- 16 -->
+    <section class="chapter" id="boletin" style="--dot:#5FC98D">
+      <div class="chapter-head"><span class="area">Marketing</span><h2>16. Boletín</h2></div>
+      <div class="route">Ruta: <code>/boletin</code></div>
+      <p>Las personas que pidieron novedades desde la tienda. Solo las <strong>confirmadas</strong> (abrieron el correo de confirmación) se pueden exportar para escribirles; el envío del boletín se hace fuera del panel. <strong>Exportar confirmados</strong> descarga la lista y <strong>Dar de baja</strong> retira a alguien que lo pida.</p>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/boletin" alt="El boletín con sus contadores y la lista de confirmados." loading="lazy" width="1440" height="900"></div><figcaption>El boletín con sus contadores y la lista de confirmados.</figcaption></figure>
+    </section>
+
+    <!-- 17 -->
+    <section class="chapter" id="reportes" style="--dot:#B2A4FE">
+      <div class="chapter-head"><span class="area">Reportes</span><h2>17. Rendimiento y tributarios</h2></div>
+      <div class="route">Rutas: <code>/rendimiento</code> (pestañas Resumen y caja, Productos y riesgos, Envíos) y <code>/reportes-tributarios</code></div>
+      <p><strong>Rendimiento</strong> responde cuánto vendes, cuánto te cuesta y cuánto te queda, por mes. La pestaña <strong>Resumen y caja</strong> sugiere reserva para impuestos, reinversión y retiro; <strong>Productos y riesgos</strong> muestra ingresos contra beneficio, inventario muerto, riesgo de agotarse, clientes inactivos y VIP; <strong>Envíos</strong> resume costos y entregas.</p>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/rendimiento" alt="Rendimiento: ventas netas, utilidad estimada, gastos y retiro sugerido del mes." loading="lazy" width="1440" height="900"></div><figcaption>Rendimiento: ventas netas, utilidad estimada, gastos y retiro sugerido del mes.</figcaption></figure>
+      <div class="note care"><strong>Este panel decide, no mueve dinero</strong><p>Las cifras son guía. Registra gastos y retiros reales, valida impuestos con tu contador y conserva el banco como fuente final.</p></div>
+      <h3>Reportes tributarios</h3>
+      <p>Prepara el Excel de ventas y compras del periodo para el contador. Elige las fechas y cómo se determina la fecha de cada venta (fecha de pago o de venta). La tarjeta <strong>Revisión previa</strong> avisa si algo impide exportar. Incluye pedidos pagados o enviados, ventas de Mercado Libre con liquidación confirmada y las facturas de compra registradas.</p>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/tributarios" alt="Reportes tributarios: revisión previa, periodo y totales antes de descargar el Excel." loading="lazy" width="1440" height="900"></div><figcaption>Reportes tributarios: revisión previa, periodo y totales antes de descargar el Excel.</figcaption></figure>
+    </section>
+
+    <!-- 18 -->
+    <section class="chapter" id="ajustes" style="--dot:#FEA4C3">
+      <div class="chapter-head"><span class="area">Ajustes</span><h2>18. Ajustes</h2></div>
+      <div class="route">Ruta: <code>/configuracion</code> · pestañas Tienda, Envíos y empaques, Pagos, Integraciones, Avanzado</div>
+      <ul class="list">
+        <li><strong>Tienda</strong>: logo, nombre, contacto, redes sociales y políticas.</li>
+        <li><strong>Envíos y empaques</strong>: el umbral de envío gratis y las cajas con sus medidas (se usan para cotizar).</li>
+        <li><strong>Pagos</strong>: estado de cada medio. Bold cobra por defecto, Wompi entra como respaldo y la transferencia se confirma a mano. Aquí solo se ve si está configurado; las claves no se muestran.</li>
+        <li><strong>Integraciones</strong>: Mercado Libre, transportadoras, analítica, correos, imágenes y el feed de Google Merchant, con su estado.</li>
+        <li><strong>Avanzado</strong>: herramientas de mantenimiento (limpiar caché, limpiar imágenes) y la zona de cuidado. Rara vez se necesita.</li>
+      </ul>
+      <div class="screens">
+        <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/ajustes" alt="La pestaña Tienda." loading="lazy" width="1440" height="900"></div><figcaption>La pestaña Tienda.</figcaption></figure>
+        <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/ajustes-pagos" alt="Pagos: estado de Bold, Wompi, transferencia y efectivo." loading="lazy" width="1440" height="900"></div><figcaption>Pagos: estado de Bold, Wompi, transferencia y efectivo.</figcaption></figure>
+      </div>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/ajustes-integraciones" alt="Integraciones: qué servicio está conectado y cómo reconectarlo." loading="lazy" width="1440" height="900"></div><figcaption>Integraciones: qué servicio está conectado y cómo reconectarlo.</figcaption></figure>
+      <div class="note care"><strong>Zona de cuidado</strong><p>«Eliminar tienda» borra catálogo y pedidos y no se puede deshacer. Solo la dueña debería entrar a Avanzado.</p></div>
+    </section>
+
+    <!-- 19 -->
+    <section class="chapter" id="estados" style="--dot:#FFC105">
+      <div class="chapter-head"><span class="area">Referencia</span><h2>19. Estados y vocabulario</h2></div>
+      <h3>Estados de pago de un pedido</h3>
+      <div class="table-wrap"><table class="states">
+        <tr><th>Insignia</th><th>Significa</th><th>Siguiente paso</th></tr>
+        <tr><td><span class="pill cream">Pendiente</span></td><td>Creado, sin pago.</td><td>Esperar el pago en línea o enviar el link de pago.</td></tr>
+        <tr><td><span class="pill cream">Por verificar</span></td><td>El cliente dice que transfirió.</td><td>Revisar el comprobante y marcar pagado.</td></tr>
+        <tr><td><span class="pill mint">Pagado</span></td><td>Dinero confirmado; inventario descontado.</td><td>Crear la guía.</td></tr>
+        <tr><td><span class="pill sky">Enviado</span></td><td>Con guía, en manos de la transportadora.</td><td>Seguir el rastreo.</td></tr>
+        <tr><td><span class="pill mint">Entregado</span></td><td>El cliente lo recibió.</td><td>Nada; pedir reseña si quieres.</td></tr>
+        <tr><td><span class="pill slate">Cancelado</span></td><td>No se completó.</td><td>Si estaba pagado, el inventario volvió.</td></tr>
+      </table></div>
+      <h3>Estados de un envío</h3>
+      <p>Preparando › Despachado › Recogido › En tránsito › En reparto › Entregado. Con novedad: Entrega fallida, Devuelto, Cancelado, Incidencia.</p>
+      <h3>Fases de una feria</h3>
+      <p>Preparar › Vender › Conciliar › Cerrada. Una feria cancelada libera lo reservado.</p>
+      <h3>Insignias de atributos y productos</h3>
+      <p><span class="pill mint">Activo</span> se ofrece en formularios y tienda. <span class="pill slate">Archivado</span> retirado sin borrar. <span class="pill cream">Faltan N</span> en la columna «Listo para vender» indica cuántos datos le faltan al producto.</p>
+    </section>
+
+    <!-- 20 -->
+    <section class="chapter" id="problemas" style="--dot:#B2A4FE">
+      <div class="chapter-head"><span class="area">Referencia</span><h2>20. Si algo no cuadra</h2></div>
+      <div class="table-wrap"><table class="states">
+        <tr><th>Lo que ves</th><th>Qué revisar</th></tr>
+        <tr><td>Cambié un producto y la tienda sigue mostrando lo anterior.</td><td>Espera unos segundos y recarga. Si persiste, Ajustes › Avanzado › limpiar caché de la tienda.</td></tr>
+        <tr><td>Un pedido dice «Pagado» pero no bajó el stock.</td><td>Abre Movimientos y busca el número de pedido. Si no hay movimiento, avisa a soporte técnico antes de tocar el inventario a mano.</td></tr>
+        <tr><td>El cliente dice que pagó por transferencia y el pedido sigue pendiente.</td><td>Es normal: las transferencias se confirman a mano. Verifica en el banco y marca pagado (capítulo 4).</td></tr>
+        <tr><td>No aparece un color o categoría en el formulario del producto.</td><td>Está archivado. Atributos › pestaña correspondiente › Archivados › Restaurar.</td></tr>
+        <tr><td>El lector de códigos no agrega el producto.</td><td>Comprueba que el cursor esté en «Código de barras o QR» y que el SKU exista. Escríbelo a mano y pulsa «Agregar código».</td></tr>
+        <tr><td>Mercado Libre muestra «Sin conectar».</td><td>Mercado Libre › Resumen › Conectar Mercado Libre. Solo la dueña puede autorizar.</td></tr>
+        <tr><td>El formulario no guarda y aparece un aviso rojo.</td><td>Lee el aviso: casi siempre falta un dato obligatorio (teléfono válido, nombre, precio). Corrige y vuelve a guardar.</td></tr>
+        <tr><td>Veo «No tienes permisos para esta acción».</td><td>La acción es solo para la dueña de la tienda (pagos, integraciones, borrar). Pídele que la haga.</td></tr>
+      </table></div>
+    </section>
+
+    <!-- 21 -->
+    <section class="chapter" id="primer-dia" style="--dot:#5FC98D">
+      <div class="chapter-head"><span class="area">Referencia</span><h2>21. Primer día en el equipo</h2></div>
+      <p>Una lista corta para quien empieza. Al terminarla ya puedes atender la tienda un día completo.</p>
+      <ul class="checklist">
+        <li>Entrar al panel con tu cuenta y confirmar que ves la tienda P de Papel.</li>
+        <li>Recorrer Inicio y entender las cuatro tarjetas y los pendientes de acción.</li>
+        <li>Abrir Pedidos, cambiar de vista y abrir un pedido para reconocer la línea de tiempo y el banner de siguiente paso.</li>
+        <li>Verificar un pago de prueba con la dueña al lado: marcar pagado y guardar.</li>
+        <li>Crear una guía de envío manual en un pedido pagado y encontrarla luego en Envíos.</li>
+        <li>Registrar una venta en el punto de venta escaneando una etiqueta.</li>
+        <li>Buscar un cliente, abrir su ficha y localizar el botón de WhatsApp.</li>
+        <li>Abrir un producto, leer su lista «Listo para vender» y completar algo que falte.</li>
+        <li>Archivar y restaurar un color en Atributos para ver la diferencia con eliminar.</li>
+        <li>Leer los capítulos 19 y 20 para reconocer estados y saber qué hacer cuando algo no cuadra.</li>
+      </ul>
+      <div class="note tip"><strong>Dónde está la documentación técnica</strong><p>Quien mantenga el código encuentra las reglas de negocio y los procedimientos de despliegue en la carpeta <code>docs/</code> del repositorio, empezando por <code>AI_AGENT_CONTEXT.md</code>, y los manuales de feria, punto de venta y Mercado Libre en <code>pdepapel-admin/docs/</code>.</p></div>
+    </section>
+  </main>
+
+  <footer class="colophon">Manual del panel P de Papel · rediseño de septiembre de 2026 · Las capturas provienen de una tienda de pruebas; nombres, pedidos y cifras son ficticios.</footer>
+</div>
+
+
