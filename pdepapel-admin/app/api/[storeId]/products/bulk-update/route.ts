@@ -12,7 +12,7 @@ const RELATION_FIELDS = [
   "sizeId",
   "designId",
 ] as const;
-const FLAG_FIELDS = ["isArchived", "isFeatured"] as const;
+const FLAG_FIELDS = ["isArchived", "isFeatured", "hasNoProductIdentifier"] as const;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -69,7 +69,7 @@ export async function POST(
     }
     if (isFlag && typeof value !== "boolean") {
       throw ErrorFactory.InvalidRequest(
-        "Archivar o destacar requiere un valor verdadero o falso",
+        "Archivar, destacar o marcar sin identificador requiere un valor verdadero o falso",
       );
     }
 
@@ -104,6 +104,10 @@ export async function POST(
       },
       data: {
         [field]: value,
+        // «No tiene identificador global» excluye GTIN y MPN, igual que en la ficha.
+        ...(field === "hasNoProductIdentifier" && value === true
+          ? { gtin: null, mpn: null }
+          : {}),
       },
     });
 

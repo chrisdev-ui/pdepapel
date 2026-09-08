@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, ArchiveRestore, Star, StarOff } from "lucide-react";
+import { Archive, ArchiveRestore, Barcode, ScanBarcode, Star, StarOff } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import type { Table } from "@tanstack/react-table";
@@ -20,10 +20,11 @@ import { Button } from "@/components/ui/button";
 import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
+import { productLacksIdentifier } from "@/lib/product-readiness";
 
 import type { ProductColumn } from "./columns";
 
-type BulkField = "isArchived" | "isFeatured";
+type BulkField = "isArchived" | "isFeatured" | "hasNoProductIdentifier";
 
 interface PendingAction {
   field: BulkField;
@@ -64,6 +65,22 @@ const ACTIONS: Array<PendingAction & { icon: typeof Archive; show: (rows: Produc
     description: "Los productos dejan de aparecer en la portada; siguen en su categoría.",
     icon: StarOff,
     show: (rows) => rows.some((row) => row.isFeatured),
+  },
+  {
+    field: "hasNoProductIdentifier",
+    value: true,
+    label: "Marcar sin identificador",
+    description: "Para productos que de verdad no tienen código de barras del fabricante. Se marcan como «No tiene identificador global», se vacían GTIN y MPN, y Google Merchant los acepta así. Nunca inventes un GTIN.",
+    icon: Barcode,
+    show: (rows) => rows.some((row) => productLacksIdentifier(row)),
+  },
+  {
+    field: "hasNoProductIdentifier",
+    value: false,
+    label: "Quitar marca sin identificador",
+    description: "Los productos vuelven a pedir un GTIN real o la marca; úsalo si vas a registrar sus códigos de barras.",
+    icon: ScanBarcode,
+    show: (rows) => rows.some((row) => row.hasNoProductIdentifier),
   },
 ];
 

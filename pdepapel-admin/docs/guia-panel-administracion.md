@@ -173,12 +173,15 @@ la reseña como «Respuesta de P de Papel»), **Ocultar de la tienda** /
 
 ## 10. Productos (`/productos`, `/productos/<id>`)
 
-Vistas: Activos, Sin completar, Stock crítico, Agotados, Archivados, Todos.
-Columna «Listo para vender» resume qué falta.
+Vistas: Activos, Sin completar, Sin identificador (sin GTIN y sin la marca
+«No tiene identificador global»), Stock crítico, Agotados, Archivados, Todos.
+Columna «Listo para vender» resume qué falta; la columna GTIN muestra el
+código, «Sin identificador» o «Falta».
 
 Acciones en lote: Archivar (desaparece de la tienda, conserva historial),
-Restaurar, Destacar, Quitar destacado. Cambios de precio o atributos en masa:
-Gestión masiva.
+Restaurar, Destacar, Quitar destacado y Marcar sin identificador (para los que
+de verdad no tienen código de barras: se marcan y se vacían GTIN y MPN; nunca
+se inventa un GTIN). Cambios de precio o atributos en masa: Gestión masiva.
 
 Ficha por secciones: Imágenes (marca la principal), Modo Kit / Combo (stock
 calculado por componentes), Información básica (nombre 50–65 caracteres, sin

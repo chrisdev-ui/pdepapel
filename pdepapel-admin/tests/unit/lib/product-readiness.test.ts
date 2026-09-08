@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getListReadiness, getProductReadiness, getProductShape, productMatchesView } from "@/lib/product-readiness";
+import { getListReadiness, getProductReadiness, getProductShape, productLacksIdentifier, productMatchesView } from "@/lib/product-readiness";
 
 const complete = { name: "Cuaderno Snoopy A5", price: 32000, acqPrice: 18500, categoryId: "c1", images: [{ url: "a" }], gtin: "7701234567890", hasNoProductIdentifier: false, description: "<p>Cuaderno argollado de tapa dura y hojas de 90 g.</p>" };
 
@@ -38,5 +38,16 @@ describe("product readiness", () => {
     expect(productMatchesView(base, "sin-completar")).toBe(false);
     expect(productMatchesView({ ...base, isArchived: true }, "activos")).toBe(false);
     expect(productMatchesView({ ...base, isArchived: true }, "archivados")).toBe(true);
+  });
+
+  it("lists products without a GTIN and without the no-identifier flag", () => {
+    const { description: _omit, ...base } = complete;
+    const noGtin = { ...base, gtin: "", hasNoProductIdentifier: false, isArchived: false, stock: 3 };
+    expect(productLacksIdentifier(noGtin)).toBe(true);
+    expect(productLacksIdentifier({ ...noGtin, hasNoProductIdentifier: true })).toBe(false);
+    expect(productLacksIdentifier({ ...noGtin, gtin: "7701234567890" })).toBe(false);
+    expect(productMatchesView(noGtin, "sin-identificador")).toBe(true);
+    expect(productMatchesView({ ...noGtin, hasNoProductIdentifier: true }, "sin-identificador")).toBe(false);
+    expect(productMatchesView({ ...noGtin, isArchived: true }, "sin-identificador")).toBe(false);
   });
 });

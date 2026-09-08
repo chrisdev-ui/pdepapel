@@ -96,6 +96,18 @@ export const buildColumns = (storeId: string): ColumnDef<ProductColumn>[] => [
     enableGlobalFilter: false,
   },
   {
+    accessorKey: "gtin",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="GTIN" />,
+    cell: ({ row }) =>
+      row.original.gtin?.trim() ? (
+        <span className="font-mono text-xs tabular-nums">{row.original.gtin}</span>
+      ) : row.original.hasNoProductIdentifier ? (
+        <ProductTintBadge label="Sin identificador" tone="slate" title="Marcado como producto sin GTIN ni MPN" />
+      ) : (
+        <ProductTintBadge label="Falta" tone="cream" title="Sin GTIN y sin la marca «No tiene identificador global»" />
+      ),
+  },
+  {
     accessorKey: "createdAt",
     header: ({ column }) => <DataTableColumnHeader column={column} title="Creado" />,
     cell: ({ row }) => <DataTableCellDate date={row.original.createdAt} />,

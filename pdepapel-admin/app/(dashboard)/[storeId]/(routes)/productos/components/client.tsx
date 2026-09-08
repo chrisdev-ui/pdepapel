@@ -97,7 +97,7 @@ const ProductClient: React.FC<ProductClientProps> = ({ data, suppliers }) => {
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold tracking-tight text-primary">Productos</h1>
           <p className="text-sm text-muted-foreground">
-            {counts.activos} activos · {counts["sin-completar"]} sin completar · {counts["stock-critico"]} con stock crítico · {counts.archivados} archivados.
+            {counts.activos} activos · {counts["sin-completar"]} sin completar · {counts["sin-identificador"]} sin identificador · {counts["stock-critico"]} con stock crítico · {counts.archivados} archivados.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -194,7 +194,7 @@ const ProductClient: React.FC<ProductClientProps> = ({ data, suppliers }) => {
         emptyState={
           view === "todos" || view === "activos"
             ? { title: "Aún no hay productos", description: "Crea el primero o importa una hoja CSV.", action: <Button asChild><Link href={`/${storeId}/productos/nuevo`}>Nuevo producto</Link></Button> }
-            : { title: "Nada en esta vista", description: view === "sin-completar" ? "Todos los productos activos están listos para vender." : "Cuando un producto entre en este estado aparecerá aquí." }
+            : { title: "Nada en esta vista", description: view === "sin-completar" ? "Todos los productos activos están listos para vender." : view === "sin-identificador" ? "Todos los productos activos tienen GTIN o la marca «No tiene identificador global»." : "Cuando un producto entre en este estado aparecerá aquí." }
         }
       />
       <ProductBatchImportModal isOpen={isImportOpen} onClose={() => setIsImportOpen(false)} suppliers={suppliers} />

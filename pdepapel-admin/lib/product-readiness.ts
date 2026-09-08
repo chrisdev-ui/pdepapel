@@ -73,11 +73,12 @@ export function getProductShape(product: { isKit?: boolean | null; productGroupI
   return { id: "individual", label: "Individual" };
 }
 
-export type ProductView = "activos" | "sin-completar" | "stock-critico" | "agotados" | "archivados" | "todos";
+export type ProductView = "activos" | "sin-completar" | "sin-identificador" | "stock-critico" | "agotados" | "archivados" | "todos";
 
 export const PRODUCT_VIEWS: { id: ProductView; label: string }[] = [
   { id: "activos", label: "Activos" },
   { id: "sin-completar", label: "Sin completar" },
+  { id: "sin-identificador", label: "Sin identificador" },
   { id: "stock-critico", label: "Stock crítico" },
   { id: "agotados", label: "Agotados" },
   { id: "archivados", label: "Archivados" },
@@ -86,6 +87,14 @@ export const PRODUCT_VIEWS: { id: ProductView; label: string }[] = [
 
 export function isProductView(value: string | null | undefined): value is ProductView {
   return PRODUCT_VIEWS.some((v) => v.id === value);
+}
+
+/**
+ * Sin GTIN real y sin la marca «No tiene identificador global». Google Merchant
+ * exige una de las dos; nunca se inventa un GTIN.
+ */
+export function productLacksIdentifier(product: Pick<ReadinessInput, "gtin" | "hasNoProductIdentifier">): boolean {
+  return !product.gtin?.trim() && product.hasNoProductIdentifier !== true;
 }
 
 export function productMatchesView(
@@ -102,6 +111,8 @@ export function productMatchesView(
       return !product.isArchived;
     case "sin-completar":
       return !product.isArchived && !getListReadiness(product).complete;
+    case "sin-identificador":
+      return !product.isArchived && productLacksIdentifier(product);
     case "stock-critico":
       return !product.isArchived && product.stock > 0 && product.stock <= lowStockThreshold;
     case "agotados":
