@@ -4,6 +4,15 @@ import prismadb from "@/lib/prismadb";
 import { verifyStoreOwner } from "@/lib/utils";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { Redis } from "@upstash/redis";
+import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
+
+const RELATION_FIELDS = [
+  "categoryId",
+  "colorId",
+  "sizeId",
+  "designId",
+] as const;
+const FLAG_FIELDS = ["isArchived", "isFeatured"] as const;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,12 +59,18 @@ export async function POST(
     const body = await req.json();
     const { productIds, productGroupIds, field, value } = body;
 
-    if (!field || !value) {
+    const isRelation = RELATION_FIELDS.includes(field);
+    const isFlag = FLAG_FIELDS.includes(field);
+    if (!isRelation && !isFlag) {
+      throw ErrorFactory.InvalidRequest("Invalid field for update");
+    }
+    if (isRelation && (typeof value !== "string" || !value)) {
       throw ErrorFactory.InvalidRequest("Field and value are required");
     }
-
-    if (!["categoryId", "colorId", "sizeId", "designId"].includes(field)) {
-      throw ErrorFactory.InvalidRequest("Invalid field for update");
+    if (isFlag && typeof value !== "boolean") {
+      throw ErrorFactory.InvalidRequest(
+        "Archivar o destacar requiere un valor verdadero o falso",
+      );
     }
 
     const productsToUpdateIds = new Set<string>(productIds || []);
@@ -94,6 +109,13 @@ export async function POST(
 
     // Invalidate Cache
     await invalidateProductCache(params.storeId);
+    // Archivar o destacar cambia lo que la tienda muestra: refrescar sus páginas.
+    if (isFlag) {
+      await triggerStorefrontRevalidation({
+        paths: ["/", "/tienda"],
+        tags: ["products"],
+      });
+    }
 
     return NextResponse.json(
       { message: `Updated ${finalProductIds.length} products successfully` },

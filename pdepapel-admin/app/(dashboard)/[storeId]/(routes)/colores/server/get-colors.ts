@@ -12,6 +12,8 @@ export async function getColors(storeId: string) {
       name: true,
       value: true,
       createdAt: true,
+      isArchived: true,
+      archivedAt: true,
       _count: {
         select: {
           products: true,

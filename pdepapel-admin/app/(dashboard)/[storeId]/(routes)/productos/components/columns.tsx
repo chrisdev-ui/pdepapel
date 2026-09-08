@@ -1,190 +1,116 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
-import { DataTableCellColor } from "@/components/ui/data-table-cell-color";
 import { DataTableCellCurrency } from "@/components/ui/data-table-cell-currency";
 import { DataTableCellDate } from "@/components/ui/data-table-cell-date";
 import { DataTableCellImage } from "@/components/ui/data-table-cell-image";
-import { DataTableCellNumber } from "@/components/ui/data-table-cell-number";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
+import { getListReadiness, getProductShape } from "@/lib/product-readiness";
 import { ColumnDef } from "@tanstack/react-table";
+import Link from "next/link";
 import { getProducts } from "../server/get-products";
 import { CellAction } from "./cell-action";
+import { ProductTintBadge, ReadinessBadge, ShapeBadge, StockBadge } from "./product-badges";
 
 export type ProductColumn = Awaited<ReturnType<typeof getProducts>>[number];
 
-export const columns: ColumnDef<ProductColumn>[] = [
+export const productImage = (row: ProductColumn) =>
+  row.images.find((image) => image.isMain)?.url ?? row.images[0]?.url ?? "https://placehold.co/400";
+
+export const buildColumns = (storeId: string): ColumnDef<ProductColumn>[] => [
   {
     id: "image",
-    accessorFn: (row) =>
-      row.images.find((image) => image.isMain)?.url ??
-      row.images[0]?.url ??
-      "https://placehold.co/400",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Imagen" />
-    ),
+    accessorFn: (row) => productImage(row),
+    header: () => <span className="sr-only">Imagen</span>,
     cell: ({ row }) => (
-      <DataTableCellImage
-        src={
-          row.original.images.find((image) => image.isMain)?.url ??
-          row.original.images[0]?.url ??
-          "https://placehold.co/400"
-        }
-        alt={row.original.name}
-        ratio={1 / 1}
-        numberOfImages={row.original.images.length}
-      />
+      <DataTableCellImage src={productImage(row.original)} alt={row.original.name} ratio={1 / 1} numberOfImages={row.original.images.length} />
     ),
     enableSorting: false,
+    enableGlobalFilter: false,
   },
   {
-    accessorKey: "name",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Nombre" />
-    ),
+    id: "name",
+    accessorFn: (row) => [row.name, row.sku, row.productGroup?.name].filter(Boolean).join(" "),
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Producto" />,
     cell: ({ row }) => (
-      <div className="max-w-[280px] truncate" title={row.original.name}>
-        {row.original.name}
+      <div className="flex min-w-0 max-w-[300px] flex-col gap-0.5">
+        <Link href={`/${storeId}/productos/${row.original.id}`} className="truncate font-semibold text-primary hover:underline" title={row.original.name}>
+          {row.original.name}
+        </Link>
+        <span className="truncate text-xs text-muted-foreground">
+          {row.original.sku}
+          {row.original.productGroup ? ` · ${row.original.productGroup.name}` : ""}
+        </span>
       </div>
     ),
   },
   {
-    accessorKey: "productGroup.name",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Grupo" />
-    ),
-    cell: ({ row }) => (
-      <span
-        className="block max-w-[220px] truncate text-muted-foreground"
-        title={row.original.productGroup?.name}
-      >
-        {row.original.productGroup?.name || "-"}
-      </span>
-    ),
+    id: "shape",
+    accessorFn: (row) => getProductShape(row).label,
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Forma" />,
+    cell: ({ row }) => <ShapeBadge shape={getProductShape(row.original)} />,
+    filterFn: (row, id, filterValue: string[]) => !filterValue?.length || filterValue.includes(row.getValue(id) as string),
   },
   {
     id: "productGroupId",
     accessorFn: (row) => row.productGroup?.id ?? "",
     header: () => null,
     cell: () => null,
-    filterFn: (row, id, filterValue: string[]) => {
-      if (!filterValue || filterValue.length === 0) return true;
-      const groupId = row.getValue(id) as string;
-      return filterValue.includes(groupId);
-    },
+    filterFn: (row, id, filterValue: string[]) => !filterValue?.length || filterValue.includes(row.getValue(id) as string),
     enableHiding: false,
     enableSorting: false,
-  },
-  {
-    accessorKey: "price",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Precio" />
-    ),
-    cell: ({ row }) => {
-      const hasDiscount = row.original.hasDiscount;
-      const basePrice = row.original.price;
-      const discountedPrice = row.original.discountedPrice;
-
-      return (
-        <div className="flex flex-col gap-1">
-          {hasDiscount ? (
-            <>
-              <span className="text-xs text-muted-foreground line-through">
-                <DataTableCellCurrency value={basePrice} />
-              </span>
-              <span className="font-semibold text-green-600">
-                <DataTableCellCurrency value={discountedPrice} />
-              </span>
-            </>
-          ) : (
-            <DataTableCellCurrency value={basePrice} />
-          )}
-        </div>
-      );
-    },
-  },
-  {
-    id: "offer",
-    accessorKey: "offerLabel",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Oferta" />
-    ),
-    cell: ({ row }) =>
-      row.original.offerLabel ? (
-        <Badge variant="secondary" className="text-xs">
-          {row.original.offerLabel}
-        </Badge>
-      ) : (
-        <span className="text-xs text-muted-foreground">-</span>
-      ),
-  },
-  {
-    accessorKey: "stock",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Stock" />
-    ),
-    cell: ({ row }) => <DataTableCellNumber value={row.original.stock} />,
+    enableGlobalFilter: false,
   },
   {
     id: "category",
-    accessorKey: "category.name",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Sub-Categoría" />
-    ),
+    accessorFn: (row) => row.category?.name ?? "",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Subcategoría" />,
+    cell: ({ row }) => (row.original.category?.name ? <ProductTintBadge label={row.original.category.name} tone="lavender" /> : <span className="text-xs text-muted-foreground">—</span>),
+    filterFn: (row, id, filterValue: string[]) => !filterValue?.length || filterValue.includes(row.getValue(id) as string),
   },
   {
-    id: "size",
-    accessorKey: "size.name",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Tamaño" />
-    ),
-  },
-  {
-    id: "color",
-    accessorKey: "color.value",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Color" />
-    ),
-    cell: ({ row }) => <DataTableCellColor color={row.original.color.value} />,
-  },
-  {
-    id: "design",
-    accessorKey: "design.name",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Diseño" />
-    ),
-  },
-  {
-    accessorKey: "isArchived",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Archivado" />
-    ),
+    accessorKey: "price",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Precio" />,
     cell: ({ row }) => (
-      <Badge variant={row.original.isArchived ? "destructive" : "success"}>
-        {row.original.isArchived ? "Sí" : "No"}
-      </Badge>
+      <div className="flex flex-col items-end gap-0.5">
+        <DataTableCellCurrency value={row.original.discountedPrice} />
+        {row.original.hasDiscount && (
+          <span className="text-[11px] text-muted-foreground line-through">
+            <DataTableCellCurrency value={row.original.price} />
+          </span>
+        )}
+      </div>
     ),
+    enableGlobalFilter: false,
   },
   {
-    accessorKey: "isFeatured",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Destacado" />
-    ),
-    cell: ({ row }) => (
-      <Badge variant={row.original.isFeatured ? "success" : "outline"}>
-        {row.original.isFeatured ? "Sí" : "No"}
-      </Badge>
-    ),
+    accessorKey: "stock",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Stock" />,
+    cell: ({ row }) => <StockBadge stock={row.original.stock} isArchived={row.original.isArchived} />,
+    enableGlobalFilter: false,
+  },
+  {
+    id: "readiness",
+    accessorFn: (row) => (getListReadiness(row).complete ? "Listo" : "Sin completar"),
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Listo para vender" />,
+    cell: ({ row }) => <ReadinessBadge readiness={getListReadiness(row.original)} />,
+    enableGlobalFilter: false,
   },
   {
     accessorKey: "createdAt",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Fecha de creación" />
-    ),
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Creado" />,
     cell: ({ row }) => <DataTableCellDate date={row.original.createdAt} />,
+    enableGlobalFilter: false,
   },
   {
     id: "actions",
-    cell: ({ row }) => <CellAction data={row.original} />,
+    header: () => <span className="sr-only">Acciones</span>,
+    cell: ({ row }) => (
+      <div className="flex justify-end" data-no-row-click>
+        <CellAction data={row.original} />
+      </div>
+    ),
+    enableSorting: false,
+    enableHiding: false,
+    enableGlobalFilter: false,
   },
 ];

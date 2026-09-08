@@ -79,7 +79,7 @@ function ProductThumbnail({ product }: { product: AsyncProductOption }) {
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center bg-muted">
-          <Package className="h-4 w-4 text-muted-foreground" />
+          <Package className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         </div>
       )}
     </div>
@@ -248,7 +248,7 @@ export function AsyncProductSelect({
               {placeholder}
             </span>
           )}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" aria-hidden="true" />
         </Button>
         <CommandDialog
           open={open}
@@ -278,8 +278,7 @@ export function AsyncProductSelect({
                     className={cn(
                       "mr-2 h-4 w-4 shrink-0",
                       value === product.id ? "opacity-100" : "opacity-0",
-                    )}
-                  />
+                    )} aria-hidden="true" />
                   <div className="flex w-full min-w-0 items-center gap-2 overflow-hidden">
                     <ProductThumbnail product={product} />
                     <div className="min-w-0 flex-1">
@@ -342,7 +341,7 @@ export function AsyncProductSelect({
           ) : (
             <span className="text-muted-foreground">{placeholder}</span>
           )}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" aria-hidden="true" />
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -372,8 +371,7 @@ export function AsyncProductSelect({
                     className={cn(
                       "mr-2 h-4 w-4 shrink-0",
                       value === product.id ? "opacity-100" : "opacity-0",
-                    )}
-                  />
+                    )} aria-hidden="true" />
                   <div className="flex w-full min-w-0 items-center gap-2 overflow-hidden">
                     <ProductThumbnail product={product} />
                     <div className="min-w-0 flex-1">

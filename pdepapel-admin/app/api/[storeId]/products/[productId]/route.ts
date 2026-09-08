@@ -7,6 +7,7 @@ import { invalidateStoreProductsCache } from "@/lib/cache";
 import cloudinaryInstance from "@/lib/cloudinary";
 import { createCorsHeaders } from "@/lib/cors";
 import prismadb from "@/lib/prismadb";
+import { PUBLIC_REVIEW_INCLUDE } from "@/lib/review-moderation";
 import {
   CACHE_HEADERS,
   getPublicIdFromCloudinaryUrl,
@@ -61,9 +62,7 @@ export async function GET(
         include: { option: true, optionValue: true },
       },
       supplier: true,
-      reviews: {
-        orderBy: { createdAt: "desc" },
-      },
+      reviews: PUBLIC_REVIEW_INCLUDE,
       kitComponents: {
         include: {
           component: {

@@ -27,6 +27,7 @@
     "test:e2e:seed-admin": "node scripts/with-e2e-env.mjs node scripts/with-test-env.mjs tsx scripts/seed-e2e-admin-store.ts",
     "test:e2e:admin": "E2E_REQUIRE_CLERK=1 node scripts/with-e2e-env.mjs npx playwright test tests/e2e/authenticated-smoke.spec.ts",
     "test:e2e:fair-events": "E2E_REQUIRE_CLERK=1 node scripts/with-e2e-env.mjs npx playwright test tests/e2e/fair-events.spec.ts",
+    "test:e2e:shell": "E2E_REQUIRE_CLERK=1 node scripts/with-e2e-env.mjs npx playwright test tests/e2e/shell-navigation.spec.ts --workers=1",
     "lint": "next lint",
     "postinstall": "prisma generate",
     "format:prettier": "prettier --write \"./**/*.{js,jsx,mjs,cjs,ts,tsx,json}\"",

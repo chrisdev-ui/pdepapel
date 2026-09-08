@@ -1,5 +1,6 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { splitTaxonomyIcon } from "@/lib/catalog-options";
+import { ACTIVE_ATTRIBUTE_WHERE } from "@/lib/attribute-archive";
 import prismadb from "@/lib/prismadb";
 import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 import { slugify } from "@/lib/slugify";
@@ -26,6 +27,7 @@ export async function GET(
     let type = await prismadb.type.findFirst({
       where: {
         storeId: params.storeId,
+        ...ACTIVE_ATTRIBUTE_WHERE,
         OR: [{ id: params.typeId }, { slug: params.typeId }],
       },
     });
@@ -43,7 +45,7 @@ export async function GET(
 
       if (alias) {
         type = await prismadb.type.findFirst({
-          where: { id: alias.typeId, storeId: params.storeId },
+          where: { id: alias.typeId, storeId: params.storeId, ...ACTIVE_ATTRIBUTE_WHERE },
         });
       }
     }

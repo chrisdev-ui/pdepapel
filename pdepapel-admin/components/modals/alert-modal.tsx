@@ -1,42 +1,77 @@
-import { Button } from "@/components/ui/button";
-import { Modal } from "@/components/ui/modal";
-import { useEffect, useState } from "react";
+"use client";
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { cn } from "@/lib/utils";
 
 interface AlertModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void;
   loading: boolean;
+  /** Pregunta concreta: «¿Eliminar este producto?». */
+  title?: string;
+  /** Qué pasa después; menciona si se puede deshacer. */
+  description?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  /** Acción que borra o no se puede deshacer: botón rojo. */
+  destructive?: boolean;
 }
 
+/**
+ * Confirmación del kit (rediseño 2026-09). Usa el mismo AlertDialog que las
+ * confirmaciones nuevas: título como pregunta, consecuencia en la descripción,
+ * cancelar a la izquierda y la acción a la derecha. Conserva la API antigua
+ * (`isOpen`, `onClose`, `onConfirm`, `loading`) para no tocar cada llamada.
+ */
 export function AlertModal({
   isOpen,
   onClose,
   onConfirm,
   loading,
-}: AlertModalProps): JSX.Element | null {
-  const [isMounted, setIsMounted] = useState(false);
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
-  if (!isMounted) {
-    return null;
-  }
+  title = "¿Eliminar de forma definitiva?",
+  description = "Esta acción no se puede deshacer.",
+  confirmLabel = "Sí, eliminar",
+  cancelLabel = "Cancelar",
+  destructive = true,
+}: AlertModalProps) {
   return (
-    <Modal
-      title="¿Estás seguro?"
-      description="Esta acción no se puede deshacer."
-      isOpen={isOpen}
-      onClose={onClose}
+    <AlertDialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open && !loading) onClose();
+      }}
     >
-      <div className="flex w-full items-center justify-end space-x-2 pt-6">
-        <Button disabled={loading} variant="outline" onClick={onClose}>
-          Cancelar
-        </Button>
-        <Button disabled={loading} variant="destructive" onClick={onConfirm}>
-          Continuar
-        </Button>
-      </div>
-    </Modal>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={loading} onClick={onClose}>
+            {cancelLabel}
+          </AlertDialogCancel>
+          <AlertDialogAction
+            disabled={loading}
+            onClick={(event) => {
+              event.preventDefault();
+              onConfirm();
+            }}
+            className={cn(destructive && "bg-destructive text-destructive-foreground hover:bg-destructive/90")}
+          >
+            {loading ? "Procesando…" : confirmLabel}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

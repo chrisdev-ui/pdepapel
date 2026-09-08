@@ -1,4 +1,5 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { ACTIVE_ATTRIBUTE_WHERE } from "@/lib/attribute-archive";
 import prismadb from "@/lib/prismadb";
 import {
   CACHE_HEADERS,
@@ -51,7 +52,7 @@ export async function GET(
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
     const designs = await prismadb.design.findMany({
-      where: { storeId: params.storeId },
+      where: { storeId: params.storeId, ...ACTIVE_ATTRIBUTE_WHERE },
       select: {
         id: true,
         name: true,

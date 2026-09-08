@@ -140,8 +140,7 @@ export const StockQuantityInput: React.FC<StockQuantityInputProps> = ({
             isPressed === "minus" && "scale-90",
             sizes.icon,
           )}
-          strokeWidth={2.5}
-        />
+          strokeWidth={2.5} aria-hidden="true" />
       </button>
 
       {/* Input Field */}
@@ -199,8 +198,7 @@ export const StockQuantityInput: React.FC<StockQuantityInputProps> = ({
             isPressed === "plus" && "scale-90",
             sizes.icon,
           )}
-          strokeWidth={2.5}
-        />
+          strokeWidth={2.5} aria-hidden="true" />
       </button>
     </div>
   );

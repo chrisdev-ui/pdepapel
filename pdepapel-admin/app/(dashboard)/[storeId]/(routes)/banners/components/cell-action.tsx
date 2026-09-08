@@ -82,10 +82,10 @@ export const CellAction: React.FC<CellActionProps> = ({ data, source }) => {
           <DropdownMenuItem
             onClick={() => {
               if (source === Models.Banners) {
-                router.push(`/${params.storeId}/${Models.Banners}/${data.id}`);
+                router.push(`/${params.storeId}/banners/${data.id}`);
               } else {
                 router.push(
-                  `/${params.storeId}/${Models.Banners}/main/${data.id}`,
+                  `/${params.storeId}/banners/principal/${data.id}`,
                 );
               }
             }}

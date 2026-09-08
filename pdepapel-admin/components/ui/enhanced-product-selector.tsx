@@ -171,7 +171,7 @@ export function EnhancedProductSelector({
               ? `${Object.keys(selectedItems).length} productos seleccionados`
               : "Buscar productos..."}
           </span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" aria-hidden="true" />
         </Button>
       </DialogTrigger>
       {/* Maximized Dialog */}
@@ -179,7 +179,7 @@ export function EnhancedProductSelector({
         <DialogTitle className="sr-only">Buscar productos</DialogTitle>
         <div className="flex min-w-0 items-center justify-between border-b pl-4 pr-14 py-2">
           <div className="flex min-w-0 flex-1 items-center gap-2">
-            <Search className="h-5 w-5 text-muted-foreground" />
+            <Search className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
             <input
               className="flex h-12 w-full min-w-0 bg-transparent text-lg outline-none placeholder:text-muted-foreground"
               placeholder="Buscar productos..."
@@ -207,13 +207,13 @@ export function EnhancedProductSelector({
         >
           {isLoading && productsData.length === 0 && (
             <div className="flex h-40 items-center justify-center">
-              <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" />
+              <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" aria-hidden="true" />
             </div>
           )}
 
           {!isLoading && displayProducts.length === 0 && (
             <div className="flex h-60 flex-col items-center justify-center text-muted-foreground">
-              <Search className="mb-4 h-12 w-12 opacity-20" />
+              <Search className="mb-4 h-12 w-12 opacity-20" aria-hidden="true" />
               <p className="text-lg">No se encontraron productos.</p>
             </div>
           )}
@@ -340,7 +340,7 @@ export function EnhancedProductSelector({
                             "Sin Stock"
                           ) : (
                             <>
-                              <Plus className="mr-2 h-4 w-4" />
+                              <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
                               Agregar
                             </>
                           )}
@@ -353,7 +353,7 @@ export function EnhancedProductSelector({
                             className="h-8 w-8 rounded-sm hover:bg-muted"
                             onClick={() => handleDecrement(product)}
                           >
-                            <Minus className="h-4 w-4" />
+                            <Minus className="h-4 w-4" aria-hidden="true" />
                           </Button>
                           <span className="font-bold text-primary">
                             {quantity}
@@ -365,7 +365,7 @@ export function EnhancedProductSelector({
                             disabled={quantity >= product.stock}
                             onClick={() => handleIncrement(product)}
                           >
-                            <Plus className="h-4 w-4" />
+                            <Plus className="h-4 w-4" aria-hidden="true" />
                           </Button>
                         </div>
                       )}
@@ -379,7 +379,7 @@ export function EnhancedProductSelector({
           {/* Loading More Spinner */}
           {(isValidating || isLoading) && productsData.length > 0 && (
             <div className="flex justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-hidden="true" />
             </div>
           )}
         </div>

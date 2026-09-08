@@ -76,10 +76,8 @@ export default async function FairEventPage({
   };
 
   return (
-    <div className="flex-col">
-      <div className="flex-1 p-4 pt-6 sm:p-8 sm:pt-6">
-        <FairEventWorkspace event={event} />
-      </div>
+    <div className="flex flex-col gap-4 p-4 sm:p-8 sm:pt-6">
+      <FairEventWorkspace event={event} />
     </div>
   );
 }

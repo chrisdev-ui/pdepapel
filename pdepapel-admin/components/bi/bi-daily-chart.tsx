@@ -15,6 +15,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { CHART_COLORS } from "@/lib/chart-palette";
 
 interface BiDailyChartProps {
   data: DailyBreakdown[];
@@ -77,30 +78,46 @@ export const BiDailyChart: React.FC<BiDailyChartProps> = ({ data }) => {
             >
               <defs>
                 <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                  <stop
+                    offset="5%"
+                    stopColor={CHART_COLORS.primary}
+                    stopOpacity={0.3}
+                  />
+                  <stop
+                    offset="95%"
+                    stopColor={CHART_COLORS.primary}
+                    stopOpacity={0}
+                  />
                 </linearGradient>
                 <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                  <stop
+                    offset="5%"
+                    stopColor={CHART_COLORS.mint}
+                    stopOpacity={0.3}
+                  />
+                  <stop
+                    offset="95%"
+                    stopColor={CHART_COLORS.mint}
+                    stopOpacity={0}
+                  />
                 </linearGradient>
               </defs>
               <CartesianGrid
                 strokeDasharray="3 3"
                 vertical={false}
-                stroke="#e5e7eb"
+                stroke={CHART_COLORS.grid}
                 className="dark:stroke-gray-800"
               />
               <XAxis
                 dataKey="formattedDate"
-                stroke="#888888"
+                stroke={CHART_COLORS.axis}
                 fontSize={12}
                 tickLine={false}
                 axisLine={false}
                 dy={10}
               />
               <YAxis
-                stroke="#888888"
+                stroke={CHART_COLORS.axis}
                 fontSize={12}
                 tickLine={false}
                 axisLine={false}
@@ -113,7 +130,7 @@ export const BiDailyChart: React.FC<BiDailyChartProps> = ({ data }) => {
                 type="monotone"
                 dataKey="revenue"
                 name="Ingresos recibidos"
-                stroke="#3b82f6"
+                stroke={CHART_COLORS.primary}
                 strokeWidth={2}
                 fillOpacity={1}
                 fill="url(#colorRevenue)"
@@ -122,7 +139,7 @@ export const BiDailyChart: React.FC<BiDailyChartProps> = ({ data }) => {
                 type="monotone"
                 dataKey="profit"
                 name="Beneficio Neto"
-                stroke="#10b981"
+                stroke={CHART_COLORS.mint}
                 strokeWidth={2}
                 fillOpacity={1}
                 fill="url(#colorProfit)"

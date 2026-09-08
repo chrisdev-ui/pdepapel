@@ -158,7 +158,7 @@ export function DateRangePicker<T extends FieldValues>({
                 placeholder
               )}
             </span>
-            <CalendarDays className="ml-2 h-4 w-4 shrink-0" />
+            <CalendarDays className="ml-2 h-4 w-4 shrink-0" aria-hidden="true" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="start">

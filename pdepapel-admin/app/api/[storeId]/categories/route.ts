@@ -1,6 +1,7 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { splitTaxonomyIcon } from "@/lib/catalog-options";
 import { getUniqueCategorySlug } from "@/lib/category-slugs";
+import { ACTIVE_ATTRIBUTE_WHERE } from "@/lib/attribute-archive";
 import prismadb from "@/lib/prismadb";
 import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 import { slugify } from "@/lib/slugify";
@@ -129,7 +130,7 @@ export async function GET(
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
     const categories = await prismadb.category.findMany({
-      where: { storeId: params.storeId },
+      where: { storeId: params.storeId, ...ACTIVE_ATTRIBUTE_WHERE },
       select: {
         id: true,
         name: true,

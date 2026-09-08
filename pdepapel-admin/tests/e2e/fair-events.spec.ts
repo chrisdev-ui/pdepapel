@@ -16,11 +16,16 @@ const hasConfiguration = Boolean(
 );
 
 async function openFairCreationForm(page: Page) {
-  const formTitle = page.getByRole("heading", { name: "Crear feria" });
+  // Desde el rediseño (2026-09) el formulario vive en un diálogo «Nueva feria».
+  const formTitle = page.getByRole("heading", { name: "Nueva feria" });
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    await page.getByRole("button", { name: "Nueva feria" }).click();
-    if (await formTitle.isVisible()) return;
+    await page.getByRole("button", { name: "Nueva feria" }).first().click();
+    const opened = await formTitle
+      .waitFor({ state: "visible", timeout: 5_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (opened) return;
     await page.waitForTimeout(500);
   }
 
@@ -63,13 +68,13 @@ test.describe("ventas en feria", () => {
 
     const fairName = `E2E Feria ${Date.now()}`;
     await openFairCreationForm(page);
-    await page.getByLabel("Nombre de la feria").fill(fairName);
+    await page.getByLabel("Nombre", { exact: true }).fill(fairName);
     await page.getByLabel("Lugar").fill("Prueba automatizada");
     await Promise.all([
       page.waitForURL(new RegExp(`/${testStoreId}/ferias/[^/?]+$`), {
         timeout: 30_000,
       }),
-      page.getByRole("button", { name: "Crear y reservar inventario" }).click(),
+      page.getByRole("button", { name: "Crear feria" }).click(),
     ]);
 
     await expect(page.getByRole("heading", { name: fairName })).toBeVisible({
@@ -105,7 +110,9 @@ test.describe("ventas en feria", () => {
     await expect(
       page.getByText("Producto feria E2E", { exact: true }).last(),
     ).toBeVisible({ timeout: 30_000 });
-    await page.getByRole("button", { name: "Confirmar pago" }).click();
+    // La pantalla de venta compartida confirma en un diálogo antes de cobrar.
+    await page.getByRole("button", { name: "Registrar pago" }).click();
+    await page.getByRole("button", { name: "Sí, registrar pago" }).click();
     await expect(
       page.getByText("Venta registrada", { exact: true }),
     ).toBeVisible({

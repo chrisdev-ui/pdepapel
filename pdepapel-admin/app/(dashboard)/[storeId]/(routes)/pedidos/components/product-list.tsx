@@ -10,6 +10,8 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 
 interface ProductListProps {
+  /** Enlace de texto (“3 productos”) en vez de botón. */
+  compact?: boolean;
   products: {
     id: string;
     name: string;
@@ -19,7 +21,7 @@ interface ProductListProps {
   }[];
 }
 
-export const ProductList: React.FC<ProductListProps> = ({ products }) => {
+export const ProductList: React.FC<ProductListProps> = ({ products, compact = false }) => {
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
@@ -30,8 +32,14 @@ export const ProductList: React.FC<ProductListProps> = ({ products }) => {
 
   return (
     <Popover>
-      <PopoverTrigger>
-        <Button variant="outline">Ver productos</Button>
+      <PopoverTrigger asChild>
+        {compact ? (
+          <button type="button" className="text-xs font-medium text-muted-foreground underline-offset-2 hover:text-primary hover:underline" data-no-row-click>
+            {products.reduce((sum, product) => sum + product.quantity, 0)} {products.length === 1 && products[0].quantity === 1 ? "producto" : "productos"}
+          </button>
+        ) : (
+          <Button variant="outline">Ver productos</Button>
+        )}
       </PopoverTrigger>
       <PopoverContent>
         <div className="flex flex-col space-y-2">

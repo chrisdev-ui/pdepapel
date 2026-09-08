@@ -1,6 +1,7 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createCorsHeaders } from "@/lib/cors";
 import prismadb from "@/lib/prismadb";
+import { PUBLIC_REVIEW_SELECT, PUBLIC_REVIEW_WHERE } from "@/lib/review-moderation";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { auth, clerkClient } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
@@ -115,18 +116,25 @@ export async function GET(
       // Fetch reviews for ALL products in the group
       reviews = await prismadb.review.findMany({
         where: {
+          ...PUBLIC_REVIEW_WHERE,
           storeId: params.storeId,
           product: {
             productGroupId: product.productGroupId,
           },
         },
         orderBy: { createdAt: "desc" },
+        select: PUBLIC_REVIEW_SELECT,
       });
     } else {
       // Fetch reviews for this specific product only
       reviews = await prismadb.review.findMany({
-        where: { storeId: params.storeId, productId: params.productId },
+        where: {
+          ...PUBLIC_REVIEW_WHERE,
+          storeId: params.storeId,
+          productId: params.productId,
+        },
         orderBy: { createdAt: "desc" },
+        select: PUBLIC_REVIEW_SELECT,
       });
     }
 

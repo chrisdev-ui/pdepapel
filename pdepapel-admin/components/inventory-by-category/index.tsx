@@ -1,6 +1,7 @@
 "use client";
 
 import { yearColors } from "@/constants";
+import { CHART_COLORS } from "@/lib/chart-palette";
 import { numberFormatter } from "@/lib/utils";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
@@ -80,7 +81,7 @@ const renderActiveShape = (props: any) => {
         y={ey}
         dy={18}
         textAnchor={textAnchor}
-        fill="#999"
+        fill={CHART_COLORS.axis}
       >
         {`(${(percent * 100).toFixed(2)}% del total)`}
       </text>

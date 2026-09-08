@@ -4,6 +4,7 @@ import { DataTableCellDate } from "@/components/ui/data-table-cell-date";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { ColumnDef } from "@tanstack/react-table";
 import { getDesigns } from "../server/get-designs";
+import { AttributeStatusBadge } from "../../atributos/components/archive-actions";
 import { CellAction } from "./cell-action";
 
 export type DesignColumn = Awaited<ReturnType<typeof getDesigns>>[number];
@@ -24,6 +25,13 @@ export const columns: ColumnDef<DesignColumn>[] = [
         title="Productos con este diseño"
       />
     ),
+  },
+  {
+    accessorKey: "isArchived",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Estado" />
+    ),
+    cell: ({ row }) => <AttributeStatusBadge isArchived={row.original.isArchived} />,
   },
   {
     accessorKey: "createdAt",

@@ -39,7 +39,7 @@ export default function RootLayout({
             zIndex={1600}
             height={3}
           />
-          <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <ThemeProvider attribute="class" defaultTheme="light" forcedTheme="light" enableSystem={false}>
             <Toaster />
             <ModalProvider />
             {children}

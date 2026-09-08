@@ -11,6 +11,8 @@ export async function getDesigns(storeId: string) {
       id: true,
       name: true,
       createdAt: true,
+      isArchived: true,
+      archivedAt: true,
       _count: {
         select: {
           products: true,

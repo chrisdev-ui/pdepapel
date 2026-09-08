@@ -34,6 +34,7 @@ import { ConvertProductToVariantsModal } from "@/components/modals/convert-produ
 import { IntakeModal } from "@/components/modals/intake-modal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/ui/combobox";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { DataTable } from "@/components/ui/data-table";
@@ -182,12 +183,12 @@ type InitialData = Awaited<ReturnType<typeof getProduct>>["product"];
 
 type ProductGroup = Awaited<ReturnType<typeof getProduct>>["productGroup"];
 type ProductGroups = Awaited<ReturnType<typeof getProduct>>["productGroups"];
-type CatalogColorOption = Pick<Color, "id" | "name" | "value">;
-type CatalogDesignOption = Pick<Design, "id" | "name">;
+type CatalogColorOption = Pick<Color, "id" | "name" | "value"> & { isArchived?: boolean };
+type CatalogDesignOption = Pick<Design, "id" | "name"> & { isArchived?: boolean };
 type CatalogCategoryOption = Pick<
   Categories,
   "id" | "name" | "typeId" | "type"
->;
+> & { isArchived?: boolean };
 
 interface ProductFormProps {
   initialData: InitialData | null;
@@ -202,6 +203,10 @@ interface ProductFormProps {
   productGroups: ProductGroups;
   catalogOptions: CatalogOptionSuggestion[];
 }
+
+/** Un atributo archivado sigue seleccionable solo si el producto ya lo tenía. */
+const archivedLabel = (name: string, isArchived?: boolean) =>
+  isArchived ? `${name} · archivado` : name;
 
 export const ProductForm: React.FC<ProductFormProps> = ({
   initialData,
@@ -704,26 +709,26 @@ export const ProductForm: React.FC<ProductFormProps> = ({
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((category) => ({
           value: category.id,
-          label: category.name,
+          label: archivedLabel(category.name, category.isArchived),
         })),
       sizes: [...availableSizes]
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((size) => ({
           value: size.id,
-          label: size.name,
+          label: archivedLabel(size.name, size.isArchived),
         })),
       colors: [...availableColors]
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((color) => ({
           value: color.id,
-          label: color.name,
+          label: archivedLabel(color.name, color.isArchived),
           color: color.value,
         })),
       designs: [...availableDesigns]
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((design) => ({
           value: design.id,
-          label: design.name,
+          label: archivedLabel(design.name, design.isArchived),
         })),
       suppliers: [...suppliers]
         .sort((a, b) => a.name.localeCompare(b.name))
@@ -937,38 +942,35 @@ export const ProductForm: React.FC<ProductFormProps> = ({
           sizes={availableSizes}
         />
       )}
-      <div className="flex items-center justify-between">
-        <Heading title={title} description={description} />
-        <div className="flex items-center gap-2">
-          {initialData && !initialData.productGroupId && (
-            <Button
-              variant="outline"
-              size="sm"
-              type="button"
-              onClick={() => requestVariantConversion()}
-              disabled={loading}
-            >
-              <Package className="mr-2 h-4 w-4" />
-              Convertir en variantes
-            </Button>
-          )}
-          <Button variant="outline" size="sm" onClick={onClear} type="button">
-            <Eraser className="mr-2 h-4 w-4" />
-            Limpiar Formulario
-          </Button>
-          {initialData && (
-            <Button
-              disabled={loading}
-              variant="destructive"
-              size="sm"
-              onClick={() => setOpen(true)}
-            >
-              <Trash className="h-4 w-4" />
-            </Button>
-          )}
+      {(!initialData || !initialData.productGroupId) && (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+          <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+            {initialData && !initialData.productGroupId && (
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                onClick={() => requestVariantConversion()}
+                disabled={loading}
+              >
+                <Package className="mr-2 h-4 w-4" aria-hidden="true" />
+                Convertir en variantes
+              </Button>
+            )}
+            {!initialData && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onClear}
+                type="button"
+              >
+                <Eraser className="mr-2 h-4 w-4" aria-hidden="true" />
+                Limpiar formulario
+              </Button>
+            )}
+          </div>
         </div>
-      </div>
-      <Separator />
+      )}
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit(onSubmit)}
@@ -1038,7 +1040,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             )}
           />
 
-          <div className="mb-8">
+          <div id="imagenes" className="mb-8 scroll-mt-24">
             <FormField
               control={form.control}
               name="isKit"
@@ -1094,6 +1096,18 @@ export const ProductForm: React.FC<ProductFormProps> = ({
           </div>
 
           <div className="grid grid-cols-3 gap-8">
+            <div
+              id="informacion"
+              className="col-span-3 flex scroll-mt-24 flex-col gap-0.5 "
+            >
+              <h2 className="text-[15px] font-bold text-primary">
+                Información básica
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Nombre comercial claro (50–65 caracteres) y marca. La URL se
+                conserva aunque cambies el nombre.
+              </p>
+            </div>
             <FormField
               control={form.control}
               name="name"
@@ -1275,6 +1289,18 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 </FormItem>
               )}
             />
+            <div
+              id="precio"
+              className="col-span-3 flex scroll-mt-24 flex-col gap-0.5 border-t pt-6"
+            >
+              <h2 className="text-[15px] font-bold text-primary">
+                Precio y margen
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                El margen sale del costo de compra registrado; el precio de
+                Mercado Libre es independiente.
+              </p>
+            </div>
             <FormField
               control={form.control}
               name="acqPrice"
@@ -1408,6 +1434,15 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 </FormItem>
               )}
             />
+            <div
+              id="inventario"
+              className="col-span-3 flex scroll-mt-24 flex-col gap-0.5 border-t pt-6"
+            >
+              <h2 className="text-[15px] font-bold text-primary">Inventario</h2>
+              <p className="text-xs text-muted-foreground">
+                Cada cambio queda como movimiento auditable.
+              </p>
+            </div>
             <FormField
               control={form.control}
               name="stock"
@@ -1479,6 +1514,18 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               )}
             />
 
+            <div
+              id="identificadores"
+              className="col-span-3 flex scroll-mt-24 flex-col gap-0.5 border-t pt-6"
+            >
+              <h2 className="text-[15px] font-bold text-primary">
+                Identificadores
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                SKU interno, GTIN real del código de barras (nunca inventado) y
+                código del fabricante.
+              </p>
+            </div>
             <FormField
               control={form.control}
               name="gtin"
@@ -1562,46 +1609,38 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 }}
               />
             )}
+            <div
+              id="clasificacion"
+              className="col-span-3 flex scroll-mt-24 flex-col gap-0.5 border-t pt-6"
+            >
+              <h2 className="text-[15px] font-bold text-primary">
+                Clasificación y atributos
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Subcategoría, tamaño, color, diseño y proveedor.
+              </p>
+            </div>
             <FormField
               control={form.control}
               name="categoryId"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel isRequired>Sub-Categoría</FormLabel>
-                  <Select
-                    key={field.value}
-                    disabled={
-                      loading || (!!watchedGroupId && watchedGroupId !== "none")
-                    }
-                    onValueChange={field.onChange}
-                    value={field.value}
-                    defaultValue={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecciona una sub-categoría" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {categories?.length === 0 && (
-                        <button
-                          disabled
-                          className="relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
-                        >
-                          No hay resultados
-                        </button>
-                      )}
-                      {selectOptions.categories?.length > 0 &&
-                        selectOptions.categories.map((category) => (
-                          <SelectItem
-                            key={category.value}
-                            value={category.value}
-                          >
-                            {category.label}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <Combobox
+                      id="categoryId"
+                      options={selectOptions.categories ?? []}
+                      value={field.value || null}
+                      onChange={(value) => field.onChange(value ?? "")}
+                      placeholder="Selecciona una sub-categoría"
+                      searchPlaceholder="Escribe para buscar…"
+                      emptyText="No hay resultados"
+                      disabled={
+                        loading ||
+                        (!!watchedGroupId && watchedGroupId !== "none")
+                      }
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -1658,43 +1697,32 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel isRequired>Color</FormLabel>
-                  <Select
-                    key={field.value}
-                    disabled={
-                      loading || (!!watchedGroupId && watchedGroupId !== "none")
-                    }
-                    onValueChange={field.onChange}
-                    value={field.value}
-                    defaultValue={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecciona un color" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {selectOptions.colors?.length === 0 && (
-                        <button
-                          disabled
-                          className="relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
-                        >
-                          No hay resultados
-                        </button>
-                      )}
-                      {selectOptions.colors?.length > 0 &&
-                        selectOptions.colors.map((color) => (
-                          <SelectItem key={color.value} value={color.value}>
-                            <div className="flex items-start gap-2">
-                              <span
-                                className="h-5 w-5 rounded-full border"
-                                style={{ backgroundColor: color.color }}
-                              ></span>
-                              {color.label}
-                            </div>
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <Combobox
+                      id="colorId"
+                      options={(selectOptions.colors ?? []).map((color) => ({
+                        value: color.value,
+                        label: color.label,
+                        description: color.color,
+                        icon: (
+                          <span
+                            aria-hidden="true"
+                            className="mr-2 h-4 w-4 shrink-0 rounded-full border border-black/10"
+                            style={{ backgroundColor: color.color }}
+                          />
+                        ),
+                      }))}
+                      value={field.value || null}
+                      onChange={(value) => field.onChange(value ?? "")}
+                      placeholder="Selecciona un color"
+                      searchPlaceholder="Escribe para buscar…"
+                      emptyText="No hay resultados"
+                      disabled={
+                        loading ||
+                        (!!watchedGroupId && watchedGroupId !== "none")
+                      }
+                    />
+                  </FormControl>
 
                   {!!watchedGroupId && watchedGroupId !== "none" && (
                     <FormDescription>
@@ -1711,37 +1739,21 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel isRequired>Diseño</FormLabel>
-                  <Select
-                    key={field.value}
-                    disabled={
-                      loading || (!!watchedGroupId && watchedGroupId !== "none")
-                    }
-                    onValueChange={field.onChange}
-                    value={field.value}
-                    defaultValue={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecciona un diseño" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {selectOptions.designs?.length === 0 && (
-                        <button
-                          disabled
-                          className="relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
-                        >
-                          No hay resultados
-                        </button>
-                      )}
-                      {selectOptions.designs?.length > 0 &&
-                        selectOptions.designs.map((design) => (
-                          <SelectItem key={design.value} value={design.value}>
-                            {design.label}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <Combobox
+                      id="designId"
+                      options={selectOptions.designs ?? []}
+                      value={field.value || null}
+                      onChange={(value) => field.onChange(value ?? "")}
+                      placeholder="Selecciona un diseño"
+                      searchPlaceholder="Escribe para buscar…"
+                      emptyText="No hay resultados"
+                      disabled={
+                        loading ||
+                        (!!watchedGroupId && watchedGroupId !== "none")
+                      }
+                    />
+                  </FormControl>
 
                   {!!watchedGroupId && watchedGroupId !== "none" && (
                     <FormDescription>
@@ -1769,44 +1781,35 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Proveedor</FormLabel>
-                  <Select
-                    disabled={loading}
-                    onValueChange={(value) =>
-                      field.onChange(value === "none" ? "" : value)
-                    }
-                    value={field.value || "none"}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecciona un proveedor" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="none">-- Sin proveedor --</SelectItem>
-                      {selectOptions.suppliers?.length === 0 && (
-                        <button
-                          disabled
-                          className="relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
-                        >
-                          No hay resultados
-                        </button>
-                      )}
-                      {selectOptions.suppliers?.length > 0 &&
-                        selectOptions.suppliers.map((supplier) => (
-                          <SelectItem
-                            key={supplier.value}
-                            value={supplier.value}
-                          >
-                            {supplier.label}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <Combobox
+                      id="supplierId"
+                      options={selectOptions.suppliers ?? []}
+                      value={field.value || null}
+                      onChange={(value) => field.onChange(value ?? "")}
+                      placeholder="Sin proveedor"
+                      searchPlaceholder="Escribe para buscar…"
+                      emptyText="No hay resultados"
+                      disabled={loading}
+                    />
+                  </FormControl>
                   <FormDescription>Este campo es opcional</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
+            <div
+              id="visibilidad"
+              className="col-span-3 flex scroll-mt-24 flex-col gap-0.5 border-t pt-6"
+            >
+              <h2 className="text-[15px] font-bold text-primary">
+                Visibilidad
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Destacado en la portada o archivado (desaparece de la tienda; la
+                URL queda como alias).
+              </p>
+            </div>
             <FormField
               control={form.control}
               name="isFeatured"
@@ -1848,6 +1851,17 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 </FormItem>
               )}
             />
+            <div
+              id="descripcion"
+              className="col-span-3 flex scroll-mt-24 flex-col gap-0.5 border-t pt-6"
+            >
+              <h2 className="text-[15px] font-bold text-primary">
+                Descripción
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Se muestra en la tienda y en Google; sin emojis y con formato.
+              </p>
+            </div>
             <FormField
               control={form.control}
               name="description"
@@ -1901,16 +1915,68 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             {/* KIT PRICE SUGGESTION */}
             {form.watch("isKit") && <KitPriceCalculator form={form} />}
           </div>
-          <Button disabled={loading} className="ml-auto" type="submit">
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {pendingText}
-              </>
-            ) : (
-              action
-            )}
-          </Button>
+          {initialData && (
+            <section
+              id="zona-de-cuidado"
+              aria-labelledby="producto-cuidado-titulo"
+              className="space-y-3 rounded-xl border border-tint-pink bg-white p-5 shadow-sm"
+            >
+              <div className="flex flex-col gap-0.5">
+                <h2
+                  id="producto-cuidado-titulo"
+                  className="text-[15px] font-bold text-primary"
+                >
+                  Zona de cuidado
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Limpiar descarta lo escrito sin guardar. Eliminar borra el
+                  producto de la tienda; si tiene pedidos, prefiere archivarlo
+                  desde Visibilidad.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={onClear}
+                  disabled={loading}
+                >
+                  <Eraser className="h-4 w-4" aria-hidden="true" />
+                  Limpiar formulario
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={loading}
+                  onClick={() => setOpen(true)}
+                  className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash className="h-4 w-4" aria-hidden="true" />
+                  Eliminar producto
+                </Button>
+              </div>
+            </section>
+          )}
+          <div className="sticky bottom-[84px] z-20 flex flex-col gap-3 rounded-xl border bg-white/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between lg:bottom-4">
+            <p className="text-xs text-muted-foreground">
+              {initialData
+                ? "Los cambios se aplican al guardar y la tienda se actualiza sola."
+                : "Revisa nombre, imágenes, precio y stock; el producto se crea al guardar."}
+            </p>
+            <Button disabled={loading} type="submit" className="min-w-[180px]">
+              {loading ? (
+                <>
+                  <Loader2
+                    className="mr-2 h-4 w-4 animate-spin"
+                    aria-hidden="true"
+                  />
+                  {pendingText}
+                </>
+              ) : (
+                action
+              )}
+            </Button>
+          </div>
         </form>
       </Form>
       <Separator />

@@ -50,7 +50,7 @@ export function QuantitySelector({
         onClick={handleDecrement}
         disabled={disabled || value <= min}
       >
-        <Minus className="h-3 w-3" />
+        <Minus className="h-3 w-3" aria-hidden="true" />
       </Button>
       <Input
         type="number"
@@ -72,7 +72,7 @@ export function QuantitySelector({
         onClick={handleIncrement}
         disabled={disabled || (max !== undefined && value >= max)}
       >
-        <Plus className="h-3 w-3" />
+        <Plus className="h-3 w-3" aria-hidden="true" />
       </Button>
     </div>
   );

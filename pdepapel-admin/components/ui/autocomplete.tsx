@@ -203,7 +203,7 @@ export const AutoComplete = ({
                         )}
                       >
                         <div className="flex items-center gap-2">
-                          {isSelected && <Check className="w-4" />}
+                          {isSelected && <Check className="w-4" aria-hidden="true" />}
                           {option.image && (
                             <Image
                               src={option.image}
@@ -245,13 +245,13 @@ export const AutoComplete = ({
                                   variant="secondary"
                                   className="h-4 text-xs"
                                 >
-                                  <Archive className="mr-1 h-2 w-2" />
+                                  <Archive className="mr-1 h-2 w-2" aria-hidden="true" />
                                   Archivado
                                 </Badge>
                               )}
                               {option.offerLabel && (
                                 <Badge className="h-4 bg-green-600 text-xs hover:bg-green-700">
-                                  <Percent className="mr-1 h-2 w-2" />
+                                  <Percent className="mr-1 h-2 w-2" aria-hidden="true" />
                                   {option.offerLabel}
                                 </Badge>
                               )}
@@ -260,7 +260,7 @@ export const AutoComplete = ({
                                   variant="destructive"
                                   className="h-4 text-xs"
                                 >
-                                  <Package className="mr-1 h-2 w-2" />
+                                  <Package className="mr-1 h-2 w-2" aria-hidden="true" />
                                   Sin stock
                                 </Badge>
                               )}

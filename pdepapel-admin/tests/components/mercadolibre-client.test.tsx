@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("next/navigation", () => ({
   useParams: () => ({ storeId: "store-id" }),
   useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/store-id/mercadolibre",
 }));
 
 vi.mock("@/components/mercadolibre-logo", () => ({

@@ -25,6 +25,7 @@ import {
   QrLabelPrintSheet,
   type QrPrintLabel,
 } from "@/components/labels/qr-label-print-sheet";
+import { SellPanel, type SellSource } from "@/components/sales/sell-panel";
 import { AsyncProductSelect } from "@/components/ui/async-product-select";
 import {
   AlertDialog,
@@ -62,7 +63,7 @@ import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import { useToast } from "@/hooks/use-toast";
 import { LABEL_PRINT_FORMATS } from "@/lib/label-printing";
 
-import { BarcodeScanner } from "./barcode-scanner";
+import { FairPhaseHeader } from "./fair-phase-header";
 
 type FairStatus = "DRAFT" | "OPEN" | "RECONCILING" | "CLOSED" | "CANCELLED";
 
@@ -131,15 +132,6 @@ type PendingAllocation = {
   quantity: number;
 };
 
-type SaleCartItem = {
-  key: string;
-  productId: string;
-  name: string;
-  price: number;
-  quantity: number;
-  capsuleCode?: string;
-};
-
 type ReconciliationInput = {
   returnedQuantity: number;
   damagedQuantity: number;
@@ -204,13 +196,6 @@ function getAvailableFairStock(item: FairInventoryItem) {
   );
 }
 
-function createIdempotencyKey() {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return `fair-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
 export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
   const params = useParams();
   const router = useRouter();
@@ -224,15 +209,6 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
   >([]);
   const [isAllocating, setIsAllocating] = useState(false);
   const [isOpening, setIsOpening] = useState(false);
-  const [saleCart, setSaleCart] = useState<SaleCartItem[]>([]);
-  const [selectedSaleProductId, setSelectedSaleProductId] = useState("");
-  const [manualCode, setManualCode] = useState("");
-  const [isLookingUp, setIsLookingUp] = useState(false);
-  const [isSelling, setIsSelling] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "BankTransfer">(
-    "CASH",
-  );
-  const [idempotencyKey, setIdempotencyKey] = useState(createIdempotencyKey);
   const [capsuleProductId, setCapsuleProductId] = useState("");
   const [capsuleQuantity, setCapsuleQuantity] = useState(1);
   const [capsulePrice, setCapsulePrice] = useState(0);
@@ -404,189 +380,6 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
     }
   }
 
-  const getCartQuantity = useCallback(
-    (productId: string) =>
-      saleCart
-        .filter((item) => item.productId === productId && !item.capsuleCode)
-        .reduce((total, item) => total + item.quantity, 0),
-    [saleCart],
-  );
-
-  const addDirectProduct = useCallback(
-    (product: FairProduct) => {
-      const eventItem = eventItemsByProduct.get(product.id);
-      if (!eventItem) {
-        toast({
-          title: "Producto no asignado",
-          description:
-            "Solo puedes vender productos que fueron reservados para esta feria.",
-          variant: "destructive",
-        });
-        return;
-      }
-      const remaining =
-        getAvailableFairStock(eventItem) - getCartQuantity(product.id);
-      if (remaining <= 0) {
-        toast({
-          title: "No quedan unidades disponibles",
-          description:
-            "Actualiza el inventario de feria antes de agregar este producto.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      setSaleCart((current) => {
-        const existing = current.find(
-          (item) => item.productId === product.id && !item.capsuleCode,
-        );
-        if (!existing) {
-          return [
-            ...current,
-            {
-              key: `product-${product.id}`,
-              productId: product.id,
-              name: product.name,
-              price: product.price,
-              quantity: 1,
-            },
-          ];
-        }
-        return current.map((item) =>
-          item.key === existing.key
-            ? { ...item, quantity: item.quantity + 1 }
-            : item,
-        );
-      });
-    },
-    [eventItemsByProduct, getCartQuantity, toast],
-  );
-
-  const addCapsule = useCallback(
-    (code: string, salePrice: number) => {
-      const normalizedCode = code.trim().toUpperCase();
-      if (saleCart.some((item) => item.capsuleCode === normalizedCode)) {
-        toast({
-          title: "La cápsula ya está en la venta",
-          variant: "destructive",
-        });
-        return;
-      }
-      setSaleCart((current) => [
-        ...current,
-        {
-          key: `capsule-${normalizedCode}`,
-          productId: "",
-          name: "Cápsula sorpresa",
-          price: salePrice,
-          quantity: 1,
-          capsuleCode: normalizedCode,
-        },
-      ]);
-    },
-    [saleCart, toast],
-  );
-
-  const lookupCode = useCallback(
-    async (rawCode: string) => {
-      const code = rawCode.trim();
-      if (!code) return;
-      try {
-        setIsLookingUp(true);
-        const response = await axios.get(
-          `/api/${params.storeId}/fair-events/${event.id}/lookup`,
-          { params: { code } },
-        );
-        if (response.data.kind === "capsule") {
-          addCapsule(response.data.code, response.data.salePrice);
-          toast({ title: "Cápsula agregada", variant: "success" });
-        } else {
-          addDirectProduct(response.data.product);
-          toast({ title: "Producto agregado", variant: "success" });
-        }
-        setManualCode("");
-      } catch (error) {
-        toast({
-          title: "Código no disponible",
-          description: getErrorMessage(
-            error,
-            "Revisa el código y vuelve a intentar.",
-          ),
-          variant: "destructive",
-        });
-      } finally {
-        setIsLookingUp(false);
-      }
-    },
-    [addCapsule, addDirectProduct, event.id, params.storeId, toast],
-  );
-
-  function updateCartQuantity(key: string, quantity: number) {
-    const cartItem = saleCart.find((item) => item.key === key);
-    if (!cartItem || cartItem.capsuleCode) return;
-    const eventItem = eventItemsByProduct.get(cartItem.productId);
-    if (!eventItem) return;
-    const quantityForOtherLines = saleCart
-      .filter(
-        (item) => item.productId === cartItem.productId && item.key !== key,
-      )
-      .reduce((total, item) => total + item.quantity, 0);
-    if (quantity + quantityForOtherLines > getAvailableFairStock(eventItem)) {
-      toast({
-        title: "Cantidad no disponible",
-        description: `Solo quedan ${getAvailableFairStock(eventItem)} unidades para esta feria.`,
-        variant: "destructive",
-      });
-      return;
-    }
-    setSaleCart((current) =>
-      current.map((item) => (item.key === key ? { ...item, quantity } : item)),
-    );
-  }
-
-  async function registerSale() {
-    if (saleCart.length === 0) {
-      toast({ title: "Agrega productos a la venta", variant: "destructive" });
-      return;
-    }
-    try {
-      setIsSelling(true);
-      const response = await axios.post(
-        `/api/${params.storeId}/fair-events/${event.id}/sales`,
-        {
-          items: saleCart.map((item) =>
-            item.capsuleCode
-              ? { capsuleCode: item.capsuleCode }
-              : { productId: item.productId, quantity: item.quantity },
-          ),
-          paymentMethod,
-          idempotencyKey,
-        },
-      );
-      setSaleCart([]);
-      setIdempotencyKey(createIdempotencyKey());
-      toast({
-        title: response.data.duplicate
-          ? "Venta ya registrada"
-          : "Venta registrada",
-        description: `Pedido ${response.data.order.orderNumber} marcado como pagado.`,
-        variant: "success",
-      });
-      router.refresh();
-    } catch (error) {
-      toast({
-        title: "No se pudo registrar la venta",
-        description: getErrorMessage(
-          error,
-          "No se cobró la venta; revisa el inventario e intenta de nuevo.",
-        ),
-        variant: "destructive",
-      });
-    } finally {
-      setIsSelling(false);
-    }
-  }
-
   async function packCapsules() {
     if (!capsuleProductId || capsuleQuantity < 1 || capsulePrice <= 0) {
       toast({
@@ -698,53 +491,141 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
     }
   }
 
-  const saleTotal = saleCart.reduce(
-    (total, item) => total + item.price * item.quantity,
-    0,
-  );
   const canOperate = event.status === "DRAFT" || event.status === "OPEN";
+
+  // Fuente de la pantalla de venta compartida: solo productos reservados en la feria y cápsulas con QR.
+  const fairSellSource = useMemo<SellSource>(
+    () => ({
+      lookup: async (code) => {
+        const response = await axios.get(
+          `/api/${params.storeId}/fair-events/${event.id}/lookup`,
+          { params: { code } },
+        );
+        if (response.data.kind === "capsule") {
+          const capsuleCode = String(response.data.code).toUpperCase();
+          return {
+            key: `capsule-${capsuleCode}`,
+            productId: null,
+            name: "Cápsula sorpresa",
+            detail: capsuleCode,
+            price: Number(response.data.salePrice),
+            quantity: 1,
+            maxQuantity: 1,
+            fixedQuantity: true,
+          };
+        }
+        const product = response.data.product as FairProduct;
+        const eventItem = eventItemsByProduct.get(product.id);
+        return {
+          key: `product-${product.id}`,
+          productId: product.id,
+          name: product.name,
+          detail: `SKU ${product.sku} · ${eventItem ? getAvailableFairStock(eventItem) : 0} reservadas`,
+          price: Number(product.price),
+          quantity: 1,
+          maxQuantity: eventItem ? getAvailableFairStock(eventItem) : 0,
+          imageUrl: product.images?.[0]?.url ?? null,
+        };
+      },
+      submit: async ({ lines, paymentMethod, idempotencyKey }) => {
+        const response = await axios.post(
+          `/api/${params.storeId}/fair-events/${event.id}/sales`,
+          {
+            items: lines.map((line) =>
+              line.productId === null
+                ? { capsuleCode: line.detail }
+                : { productId: line.productId, quantity: line.quantity },
+            ),
+            paymentMethod,
+            idempotencyKey,
+          },
+        );
+        return {
+          orderNumber: response.data.order.orderNumber as string,
+          duplicate: Boolean(response.data.duplicate),
+        };
+      },
+      renderPicker: (add) => (
+        <Select
+          value=""
+          onValueChange={(productId) => {
+            const selected = eventItemsByProduct.get(productId);
+            if (!selected) return;
+            add({
+              key: `product-${selected.productId}`,
+              productId: selected.productId,
+              name: selected.product.name,
+              detail: `SKU ${selected.product.sku} · ${getAvailableFairStock(selected)} reservadas`,
+              price: selected.product.price,
+              quantity: 1,
+              maxQuantity: getAvailableFairStock(selected),
+              imageUrl: selected.product.images?.[0]?.url ?? null,
+            });
+          }}
+        >
+          <SelectTrigger id="fair-product" aria-label="Producto reservado">
+            <SelectValue placeholder="Seleccionar producto reservado" />
+          </SelectTrigger>
+          <SelectContent>
+            {availableItems.map((item) => (
+              <SelectItem key={item.id} value={item.productId}>
+                {item.product.name} ({getAvailableFairStock(item)} disponibles)
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ),
+      copy: {
+        addDescription:
+          "Escanea la etiqueta del producto o el QR de la cápsula. Solo se venden unidades reservadas para esta feria.",
+        pickerLabel: "Producto reservado",
+        scannerDescription:
+          "Apunta la cámara a la etiqueta del producto o al QR de la cápsula.",
+        confirmNote:
+          "Cada venta queda como pedido pagado. Si falta reserva, no se registra ni descuenta parcialmente.",
+      },
+    }),
+    [availableItems, event.id, eventItemsByProduct, params.storeId],
+  );
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-2">
-          <Button asChild variant="ghost" className="-ml-3 w-fit">
-            <Link href={`/${params.storeId}/ferias`}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Todas las ferias
-            </Link>
-          </Button>
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-3xl font-bold tracking-tight">{event.name}</h1>
-            <Badge variant={statusVariants[event.status]}>
-              {statusLabels[event.status]}
-            </Badge>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {[event.location, formatDate(event.startsAt), event.notes]
-              .filter(Boolean)
-              .join(" · ") || "Venta presencial"}
-          </p>
-        </div>
-        {event.status === "DRAFT" && (
-          <Button
-            onClick={openFair}
-            disabled={isOpening || event.inventoryItems.length === 0}
-          >
-            {isOpening ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <CheckCircle2 className="mr-2 h-4 w-4" />
-            )}
-            Abrir para ventas
-          </Button>
-        )}
-      </div>
+      <FairPhaseHeader
+        storeId={String(params.storeId)}
+        name={event.name}
+        status={event.status}
+        location={event.location}
+        startsAt={event.startsAt}
+        endsAt={event.endsAt}
+        allocated={totalAllocated}
+        sold={totalSold}
+        action={
+          event.status === "DRAFT" ? (
+            <Button
+              type="button"
+              onClick={openFair}
+              disabled={event.inventoryItems.length === 0}
+              isLoading={isOpening}
+            >
+              {!isOpening && (
+                <CheckCircle2 className="mr-2 h-4 w-4" aria-hidden="true" />
+              )}
+              Abrir para ventas
+            </Button>
+          ) : null
+        }
+      />
+      {event.notes && (
+        <p className="text-sm text-muted-foreground">{event.notes}</p>
+      )}
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardContent className="flex items-center gap-3 p-4">
-            <Boxes className="h-5 w-5 text-muted-foreground" />
+            <Boxes
+              className="h-5 w-5 text-muted-foreground"
+              aria-hidden="true"
+            />
             <div>
               <p className="text-2xl font-bold">{totalAllocated}</p>
               <p className="text-xs text-muted-foreground">
@@ -755,7 +636,10 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
         </Card>
         <Card>
           <CardContent className="flex items-center gap-3 p-4">
-            <PackageCheck className="h-5 w-5 text-muted-foreground" />
+            <PackageCheck
+              className="h-5 w-5 text-muted-foreground"
+              aria-hidden="true"
+            />
             <div>
               <p className="text-2xl font-bold">{totalSold}</p>
               <p className="text-xs text-muted-foreground">Unidades vendidas</p>
@@ -764,7 +648,10 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
         </Card>
         <Card>
           <CardContent className="flex items-center gap-3 p-4">
-            <CircleDollarSign className="h-5 w-5 text-muted-foreground" />
+            <CircleDollarSign
+              className="h-5 w-5 text-muted-foreground"
+              aria-hidden="true"
+            />
             <div>
               <p className="text-2xl font-bold">{formatCurrency(salesTotal)}</p>
               <p className="text-xs text-muted-foreground">
@@ -773,12 +660,24 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
             </div>
           </CardContent>
         </Card>
+        <Card>
+          <CardContent className="flex items-center gap-3 p-4">
+            <PackageCheck
+              className="h-5 w-5 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <div>
+              <p className="text-2xl font-bold">{event.capsules.length}</p>
+              <p className="text-xs text-muted-foreground">Cápsulas sorpresa</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {event.status === "DRAFT" && (
-        <Card>
+        <Card id="inventario" className="scroll-mt-24">
           <CardHeader>
-            <CardTitle>1. Reservar inventario</CardTitle>
+            <CardTitle>Reservar inventario</CardTitle>
             <CardDescription>
               Las unidades se descuentan ahora de la tienda en línea. Nunca
               lleves producto sin asignarlo primero a esta feria.
@@ -894,9 +793,9 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
       )}
 
       {canOperate && event.inventoryItems.length > 0 && (
-        <Card>
+        <Card id="capsulas" className="scroll-mt-24">
           <CardHeader>
-            <CardTitle>2. Cápsulas sorpresa (opcional)</CardTitle>
+            <CardTitle>Cápsulas sorpresa (opcional)</CardTitle>
             <CardDescription>
               Empaca productos ya reservados y genera un QR único. El costo y el
               margen mínimo se validan antes de crear cada cápsula.
@@ -1032,177 +931,28 @@ export function FairEventWorkspace({ event }: { event: FairEventDetail }) {
       )}
 
       {event.status === "OPEN" && (
-        <Card className="border-primary/30">
+        <Card id="ventas" className="scroll-mt-24 border-primary/30">
           <CardHeader>
-            <CardTitle>3. Registrar venta</CardTitle>
+            <CardTitle>Registrar venta</CardTitle>
             <CardDescription>
               Escanea el código, revisa el total y marca el pago. Cada venta se
               registra como pedido pagado en este momento.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
-              <div className="grid gap-2">
-                <Label htmlFor="fair-code">Código de barras o QR</Label>
-                <Input
-                  id="fair-code"
-                  value={manualCode}
-                  onChange={(input) => setManualCode(input.target.value)}
-                  onKeyDown={(keyboardEvent) => {
-                    if (keyboardEvent.key === "Enter") {
-                      keyboardEvent.preventDefault();
-                      void lookupCode(manualCode);
-                    }
-                  }}
-                  placeholder="Escanea o escribe el código"
-                />
-              </div>
-              <BarcodeScanner onDetected={lookupCode} />
-              <Button
-                onClick={() => void lookupCode(manualCode)}
-                disabled={isLookingUp || !manualCode.trim()}
-              >
-                {isLookingUp && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
-                Agregar código
-              </Button>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-              <div className="grid gap-2">
-                <Label htmlFor="fair-product">Producto reservado</Label>
-                <Select
-                  value={selectedSaleProductId}
-                  onValueChange={(productId) => {
-                    const selected = eventItemsByProduct.get(
-                      productId,
-                    );
-                    if (selected) {
-                      addDirectProduct(selected.product);
-                      setSelectedSaleProductId("");
-                    }
-                  }}
-                >
-                  <SelectTrigger id="fair-product">
-                    <SelectValue placeholder="Seleccionar producto" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableItems.map((item) => (
-                      <SelectItem key={item.id} value={item.productId}>
-                        {item.product.name} ({getAvailableFairStock(item)}{" "}
-                        disponibles)
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <p className="pb-2 text-sm text-muted-foreground">
-                Solo se muestran unidades reservadas para esta feria.
-              </p>
-            </div>
-
-            {saleCart.length === 0 ? (
-              <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-                Aún no hay productos en esta venta.
-              </div>
-            ) : (
-              <div className="space-y-2 rounded-lg border p-3">
-                {saleCart.map((item) => (
-                  <div key={item.key} className="flex items-center gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">{item.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {item.capsuleCode
-                          ? item.capsuleCode
-                          : formatCurrency(item.price)}
-                      </p>
-                    </div>
-                    {!item.capsuleCode && (
-                      <QuantitySelector
-                        min={1}
-                        value={item.quantity}
-                        onChange={(quantity) =>
-                          updateCartQuantity(
-                            item.key,
-                            quantity,
-                          )
-                        }
-                        className="h-9 w-14"
-                      />
-                    )}
-                    <span className="w-24 text-right text-sm font-semibold">
-                      {formatCurrency(item.price * item.quantity)}
-                    </span>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      onClick={() =>
-                        setSaleCart((current) =>
-                          current.filter(
-                            (cartItem) => cartItem.key !== item.key,
-                          ),
-                        )
-                      }
-                      aria-label={`Quitar ${item.name}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <Separator />
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-              <div className="grid gap-2">
-                <Label>Método de pago</Label>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant={paymentMethod === "CASH" ? "default" : "outline"}
-                    onClick={() => setPaymentMethod("CASH")}
-                  >
-                    <Banknote className="mr-2 h-4 w-4" />
-                    Efectivo
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={
-                      paymentMethod === "BankTransfer" ? "default" : "outline"
-                    }
-                    onClick={() => setPaymentMethod("BankTransfer")}
-                  >
-                    <CreditCard className="mr-2 h-4 w-4" />
-                    Transferencia
-                  </Button>
-                </div>
-              </div>
-              <div className="flex flex-col gap-2 sm:items-end">
-                <p className="text-2xl font-bold">
-                  Total: {formatCurrency(saleTotal)}
-                </p>
-                <Button
-                  size="lg"
-                  onClick={registerSale}
-                  disabled={isSelling || saleCart.length === 0}
-                >
-                  {isSelling && (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  )}
-                  <ReceiptText className="mr-2 h-4 w-4" />
-                  Confirmar pago
-                </Button>
-              </div>
-            </div>
+          <CardContent>
+            <SellPanel
+              source={fairSellSource}
+              embedded
+              submitErrorHint="No se cobró la venta; revisa el inventario de feria e intenta de nuevo."
+            />
           </CardContent>
         </Card>
       )}
 
       {event.status === "OPEN" && (
-        <Card>
+        <Card id="cierre" className="scroll-mt-24">
           <CardHeader>
-            <CardTitle>4. Conciliar y cerrar</CardTitle>
+            <CardTitle>Conciliar y cerrar</CardTitle>
             <CardDescription>
               Al terminar, cuenta todo lo no vendido. Solo las unidades
               devueltas se reintegran a la tienda en línea.

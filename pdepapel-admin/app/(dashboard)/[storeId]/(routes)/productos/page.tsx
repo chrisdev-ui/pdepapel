@@ -31,10 +31,8 @@ export default async function ProductsPage({
   ]);
 
   return (
-    <div className="flex-col">
-      <div className="flex-1 space-y-4 p-8 pt-6">
-        <ProductClient data={products} suppliers={suppliers} />
-      </div>
+    <div className="p-4 sm:p-8 sm:pt-6">
+      <ProductClient data={products} suppliers={suppliers} />
     </div>
   );
 }

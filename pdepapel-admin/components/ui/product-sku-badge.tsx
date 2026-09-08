@@ -31,12 +31,12 @@ export const ProductSkuBadge = ({ sku }: ProductSkuBadgeProps) => {
             onClick={onCopy}
             className="cursor-pointer rounded-sm bg-muted p-1 text-muted-foreground transition-colors hover:bg-muted-foreground/20 hover:text-foreground"
           >
-            <ScanBarcode className="h-4 w-4" />
+            <ScanBarcode className="h-4 w-4" aria-hidden="true" />
           </div>
         </TooltipTrigger>
         <TooltipContent side="top" className="flex items-center gap-2">
           <p className="font-mono text-xs">{sku}</p>
-          <Copy className="h-3 w-3 opacity-50" />
+          <Copy className="h-3 w-3 opacity-50" aria-hidden="true" />
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

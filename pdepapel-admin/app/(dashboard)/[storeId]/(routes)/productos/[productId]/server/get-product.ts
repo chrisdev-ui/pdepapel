@@ -1,5 +1,6 @@
 "use server";
 
+import { ACTIVE_ATTRIBUTE_WHERE, activeOrCurrentWhere } from "@/lib/attribute-archive";
 import prismadb from "@/lib/prismadb";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -30,31 +31,37 @@ export async function getProduct(id: string, storeId: string) {
       },
     },
   });
+  // Los formularios solo ofrecen atributos activos, pero conservan el que el
+  // producto ya tiene aunque esté archivado para no romper la edición.
   const categories = await prismadb.category.findMany({
     where: {
       storeId,
+      ...activeOrCurrentWhere(product?.categoryId),
     },
     include: {
       type: true,
     },
   });
   const types = await prismadb.type.findMany({
-    where: { storeId },
+    where: { storeId, ...ACTIVE_ATTRIBUTE_WHERE },
     orderBy: { name: "asc" },
   });
   const sizes = await prismadb.size.findMany({
     where: {
       storeId,
+      ...activeOrCurrentWhere(product?.sizeId),
     },
   });
   const colors = await prismadb.color.findMany({
     where: {
       storeId,
+      ...activeOrCurrentWhere(product?.colorId),
     },
   });
   const designs = await prismadb.design.findMany({
     where: {
       storeId,
+      ...activeOrCurrentWhere(product?.designId),
     },
   });
   const suppliers = await prismadb.supplier.findMany({
@@ -117,7 +124,9 @@ export async function getProduct(id: string, storeId: string) {
       userId: review.userId,
       rating: String(review.rating),
       comment: review.comment || "",
-      createdAt: format(product.createdAt, "dd 'de' MMMM 'de' yyyy", {
+      status: review.status,
+      reply: review.reply,
+      createdAt: format(review.createdAt, "dd 'de' MMMM 'de' yyyy", {
         locale: es,
       }),
     })) || [];

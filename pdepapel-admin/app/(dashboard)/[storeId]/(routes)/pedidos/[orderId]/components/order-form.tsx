@@ -1231,273 +1231,223 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           setConversionIndex(null);
         }}
       />
-      <div className="flex flex-col gap-y-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <Button variant="outline" size="icon" onClick={() => router.back()}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <Heading title={title} description={description} />
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" onClick={onClear} type="button">
-            {initialData ? (
-              <>
-                <RotateCcw className="mr-2 h-4 w-4" />
-                Descartar Cambios
-              </>
-            ) : (
-              <>
-                <Eraser className="mr-2 h-4 w-4" />
-                Limpiar Formulario
-              </>
-            )}
-          </Button>
+      {initialData && (
+        <div className="flex flex-col gap-y-4 sm:flex-row sm:items-center sm:justify-end">
+          <div className="flex flex-wrap items-center gap-2">
+            {initialData && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-purple-200 bg-purple-50 font-medium text-purple-700 hover:bg-purple-100 hover:text-purple-800"
+                    type="button"
+                  >
+                    <Sparkles className="mr-2 h-4 w-4 text-purple-600" />
+                    Links y Pagos
+                    <ChevronDown className="ml-2 h-4 w-4 text-purple-600" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-72">
+                  <DropdownMenuLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Enlaces & Métodos de Pago
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
 
-          {initialData && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="border-purple-200 bg-purple-50 font-medium text-purple-700 hover:bg-purple-100 hover:text-purple-800"
-                  type="button"
-                >
-                  <Sparkles className="mr-2 h-4 w-4 text-purple-600" />
-                  Links y Pagos
-                  <ChevronDown className="ml-2 h-4 w-4 text-purple-600" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-72">
-                <DropdownMenuLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Enlaces & Métodos de Pago
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-
-                <DropdownMenuItem
-                  onClick={() => {
-                    const storeUrl =
-                      process.env.NEXT_PUBLIC_FRONTEND_STORE_URL ||
-                      "https://papeleriapdepapel.com";
-                    const url = `${storeUrl}/pedido/${initialData.id}`;
-                    navigator.clipboard.writeText(url);
-                    toast({
-                      description: "URL de la orden copiada al portapapeles",
-                      variant: "success",
-                    });
-                  }}
-                  className="cursor-pointer py-2"
-                >
-                  <Copy className="mr-2 h-4 w-4 text-purple-600" />
-                  <span>Copiar URL de la Orden</span>
-                </DropdownMenuItem>
-
-                <DropdownMenuItem
-                  disabled={
-                    copyingWompi ||
-                    form.watch("status") === OrderStatus.PAID ||
-                    form.watch("status") === OrderStatus.SENT ||
-                    initialData?.status === OrderStatus.PAID ||
-                    initialData?.status === OrderStatus.SENT ||
-                    Boolean(
-                      initialData?.payment?.method &&
-                      initialData.payment.method !== PaymentMethod.Wompi,
-                    )
-                  }
-                  onClick={async () => {
-                    const isClosed =
-                      form.watch("status") === OrderStatus.PAID ||
-                      form.watch("status") === OrderStatus.SENT ||
-                      initialData?.status === OrderStatus.PAID ||
-                      initialData?.status === OrderStatus.SENT;
-                    if (isClosed) {
-                      toast({
-                        title: "Orden Cerrada",
-                        description:
-                          "Esta orden ya está cerrada (Pagada o Enviada). No es necesario ni posible generar un nuevo link de pago.",
-                        variant: "destructive",
-                      });
-                      return;
-                    }
-
-                    const isOffline =
-                      initialData?.payment?.method &&
-                      initialData.payment.method !== PaymentMethod.Wompi;
-                    if (isOffline) {
-                      toast({
-                        title: "Pago por Transferencia",
-                        description:
-                          "Esta orden fue registrada para transferencia directa o efectivo. Los enlaces de pago solo aplican para pagos en línea.",
-                        variant: "destructive",
-                      });
-                      return;
-                    }
-
-                    try {
-                      setCopyingWompi(true);
-                      const response = await axios.post(
-                        `/api/${params.storeId}/checkout/${initialData.id}`,
-                      );
-                      if (response.data?.url) {
-                        navigator.clipboard.writeText(response.data.url);
-                        toast({
-                          description: "Enlace de pago copiado al portapapeles",
-                          variant: "success",
-                        });
-                      } else {
-                        throw new Error("No se pudo obtener el link de pago");
-                      }
-                    } catch (error) {
-                      toast({
-                        description: getErrorMessage(error),
-                        variant: "destructive",
-                      });
-                    } finally {
-                      setCopyingWompi(false);
-                    }
-                  }}
-                  className="cursor-pointer py-2"
-                >
-                  <CreditCard className="mr-2 h-4 w-4 text-emerald-600" />
-                  <span>
-                    {form.watch("status") === OrderStatus.PAID ||
-                    form.watch("status") === OrderStatus.SENT ||
-                    initialData?.status === OrderStatus.PAID ||
-                    initialData?.status === OrderStatus.SENT
-                      ? "Orden cerrada (sin enlace de pago)"
-                      : initialData?.payment?.method &&
-                          initialData.payment.method !== PaymentMethod.Wompi
-                        ? "Transferencia directa (sin enlace de pago)"
-                        : "Copiar enlace de pago"}
-                  </span>
-                </DropdownMenuItem>
-
-                <DropdownMenuItem
-                  disabled={pushingBold || isCompletedOrder || !isBoldPayment}
-                  onClick={async () => {
-                    if (!initialData?.id) return;
-                    try {
-                      setPushingBold(true);
-                      const res = await axios.post(
-                        `/api/${params.storeId}/bold/terminal/${initialData.id}`,
-                      );
-                      toast({
-                        title: "Notificación enviada",
-                        description:
-                          res.data?.message ||
-                          "¡Cobro enviado al datáfono! (Si la pantalla del equipo está ocupada, presiona Cancelar 'X' en el datáfono para liberar la cola).",
-                        variant: "success",
-                      });
-                    } catch (err) {
-                      toast({
-                        title: "Error de datáfono",
-                        description: getErrorMessage(err),
-                        variant: "destructive",
-                      });
-                    } finally {
-                      setPushingBold(false);
-                    }
-                  }}
-                  className="cursor-pointer py-2"
-                >
-                  {pushingBold ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin text-emerald-600" />
-                  ) : (
-                    <Smartphone className="mr-2 h-4 w-4 text-emerald-600" />
-                  )}
-                  <span>
-                    {isCompletedOrder
-                      ? "Datáfono (Orden completada)"
-                      : !isBoldPayment
-                        ? "Datáfono (Solo para pagos en línea)"
-                        : "Cobrar en datáfono"}
-                  </span>
-                </DropdownMenuItem>
-
-                <DropdownMenuItem
-                  disabled={isCompletedOrder || !canCopyOnlinePaymentLink}
-                  onClick={() => {
-                    if (!initialData?.id) return;
-                    const storeUrl =
-                      process.env.NEXT_PUBLIC_FRONTEND_STORE_URL ||
-                      "https://papeleriapdepapel.com";
-                    const url = `${storeUrl}/pedido/${initialData.id}?autoPay=true`;
-                    navigator.clipboard.writeText(url);
-                    toast({
-                      title: "Enlace de pago copiado",
-                      description: "Se ha copiado el enlace directo de pago.",
-                      variant: "success",
-                    });
-                  }}
-                  className="cursor-pointer py-2"
-                >
-                  <Link2 className="mr-2 h-4 w-4 text-emerald-600" />
-                  <span>
-                    {isCompletedOrder
-                      ? "Orden cerrada (sin enlace de pago)"
-                      : canCopyOnlinePaymentLink
-                        ? "Copiar enlace de pago en línea"
-                        : "Guarda primero como Pago en línea"}
-                  </span>
-                </DropdownMenuItem>
-
-                {initialData.token && (
                   <DropdownMenuItem
                     onClick={() => {
                       const storeUrl =
                         process.env.NEXT_PUBLIC_FRONTEND_STORE_URL ||
-                        "http://localhost:3001";
-                      const url = `${storeUrl}/cotizacion/${initialData.token}`;
+                        "https://papeleriapdepapel.com";
+                      const url = `${storeUrl}/pedido/${initialData.id}`;
                       navigator.clipboard.writeText(url);
-                      toast({ description: "Link copiado al portapapeles" });
+                      toast({
+                        description: "URL de la orden copiada al portapapeles",
+                        variant: "success",
+                      });
                     }}
                     className="cursor-pointer py-2"
                   >
-                    <Copy className="mr-2 h-4 w-4 text-blue-600" />
-                    <span>Copiar Link Cotización</span>
+                    <Copy className="mr-2 h-4 w-4 text-purple-600" />
+                    <span>Copiar URL de la Orden</span>
                   </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
 
-          {initialData &&
-            form.watch("phone") &&
-            isValidPhoneNumber(form.watch("phone") || "") && (
-              <WhatsappButton
-                withText
-                variant="default"
-                className="bg-[#25D366] px-4 hover:bg-[#128C7E]"
-                order={{
-                  orderNumber: initialData.orderNumber,
-                  status: form.watch("status"),
-                  fullName: form.watch("fullName") || "Cliente",
-                  phone: form.watch("phone") || "",
-                  totalPrice: form.watch("total"),
-                  products: form.watch("orderItems").map((i: any) => ({
-                    name: i.name,
-                    quantity: i.quantity,
-                  })),
-                  token: initialData.token,
-                  trackingCode: form.watch("shipping.trackingCode"),
-                }}
-              />
+                  <DropdownMenuItem
+                    disabled={
+                      copyingWompi ||
+                      form.watch("status") === OrderStatus.PAID ||
+                      form.watch("status") === OrderStatus.SENT ||
+                      initialData?.status === OrderStatus.PAID ||
+                      initialData?.status === OrderStatus.SENT ||
+                      Boolean(
+                        initialData?.payment?.method &&
+                        initialData.payment.method !== PaymentMethod.Wompi,
+                      )
+                    }
+                    onClick={async () => {
+                      const isClosed =
+                        form.watch("status") === OrderStatus.PAID ||
+                        form.watch("status") === OrderStatus.SENT ||
+                        initialData?.status === OrderStatus.PAID ||
+                        initialData?.status === OrderStatus.SENT;
+                      if (isClosed) {
+                        toast({
+                          title: "Orden Cerrada",
+                          description:
+                            "Esta orden ya está cerrada (Pagada o Enviada). No es necesario ni posible generar un nuevo link de pago.",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
+
+                      const isOffline =
+                        initialData?.payment?.method &&
+                        initialData.payment.method !== PaymentMethod.Wompi;
+                      if (isOffline) {
+                        toast({
+                          title: "Pago por Transferencia",
+                          description:
+                            "Esta orden fue registrada para transferencia directa o efectivo. Los enlaces de pago solo aplican para pagos en línea.",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
+
+                      try {
+                        setCopyingWompi(true);
+                        const response = await axios.post(
+                          `/api/${params.storeId}/checkout/${initialData.id}`,
+                        );
+                        if (response.data?.url) {
+                          navigator.clipboard.writeText(response.data.url);
+                          toast({
+                            description:
+                              "Enlace de pago copiado al portapapeles",
+                            variant: "success",
+                          });
+                        } else {
+                          throw new Error("No se pudo obtener el link de pago");
+                        }
+                      } catch (error) {
+                        toast({
+                          description: getErrorMessage(error),
+                          variant: "destructive",
+                        });
+                      } finally {
+                        setCopyingWompi(false);
+                      }
+                    }}
+                    className="cursor-pointer py-2"
+                  >
+                    <CreditCard className="mr-2 h-4 w-4 text-emerald-600" />
+                    <span>
+                      {form.watch("status") === OrderStatus.PAID ||
+                      form.watch("status") === OrderStatus.SENT ||
+                      initialData?.status === OrderStatus.PAID ||
+                      initialData?.status === OrderStatus.SENT
+                        ? "Orden cerrada (sin enlace de pago)"
+                        : initialData?.payment?.method &&
+                            initialData.payment.method !== PaymentMethod.Wompi
+                          ? "Transferencia directa (sin enlace de pago)"
+                          : "Copiar enlace de pago"}
+                    </span>
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem
+                    disabled={pushingBold || isCompletedOrder || !isBoldPayment}
+                    onClick={async () => {
+                      if (!initialData?.id) return;
+                      try {
+                        setPushingBold(true);
+                        const res = await axios.post(
+                          `/api/${params.storeId}/bold/terminal/${initialData.id}`,
+                        );
+                        toast({
+                          title: "Notificación enviada",
+                          description:
+                            res.data?.message ||
+                            "¡Cobro enviado al datáfono! (Si la pantalla del equipo está ocupada, presiona Cancelar 'X' en el datáfono para liberar la cola).",
+                          variant: "success",
+                        });
+                      } catch (err) {
+                        toast({
+                          title: "Error de datáfono",
+                          description: getErrorMessage(err),
+                          variant: "destructive",
+                        });
+                      } finally {
+                        setPushingBold(false);
+                      }
+                    }}
+                    className="cursor-pointer py-2"
+                  >
+                    {pushingBold ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin text-emerald-600" />
+                    ) : (
+                      <Smartphone className="mr-2 h-4 w-4 text-emerald-600" />
+                    )}
+                    <span>
+                      {isCompletedOrder
+                        ? "Datáfono (Orden completada)"
+                        : !isBoldPayment
+                          ? "Datáfono (Solo para pagos en línea)"
+                          : "Cobrar en datáfono"}
+                    </span>
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem
+                    disabled={isCompletedOrder || !canCopyOnlinePaymentLink}
+                    onClick={() => {
+                      if (!initialData?.id) return;
+                      const storeUrl =
+                        process.env.NEXT_PUBLIC_FRONTEND_STORE_URL ||
+                        "https://papeleriapdepapel.com";
+                      const url = `${storeUrl}/pedido/${initialData.id}?autoPay=true`;
+                      navigator.clipboard.writeText(url);
+                      toast({
+                        title: "Enlace de pago copiado",
+                        description: "Se ha copiado el enlace directo de pago.",
+                        variant: "success",
+                      });
+                    }}
+                    className="cursor-pointer py-2"
+                  >
+                    <Link2 className="mr-2 h-4 w-4 text-emerald-600" />
+                    <span>
+                      {isCompletedOrder
+                        ? "Orden cerrada (sin enlace de pago)"
+                        : canCopyOnlinePaymentLink
+                          ? "Copiar enlace de pago en línea"
+                          : "Guarda primero como Pago en línea"}
+                    </span>
+                  </DropdownMenuItem>
+
+                  {initialData.token && (
+                    <DropdownMenuItem
+                      onClick={() => {
+                        const storeUrl =
+                          process.env.NEXT_PUBLIC_FRONTEND_STORE_URL ||
+                          "http://localhost:3001";
+                        const url = `${storeUrl}/cotizacion/${initialData.token}`;
+                        navigator.clipboard.writeText(url);
+                        toast({ description: "Link copiado al portapapeles" });
+                      }}
+                      className="cursor-pointer py-2"
+                    >
+                      <Copy className="mr-2 h-4 w-4 text-blue-600" />
+                      <span>Copiar Link Cotización</span>
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
 
-          {initialData && invoiceData && (
-            <InvoiceDownloadButton data={invoiceData} disabled={loading} />
-          )}
-          {initialData && (
-            <Button
-              disabled={loading}
-              variant="destructive"
-              size="sm"
-              onClick={() => setOpen(true)}
-            >
-              <Trash className="h-4 w-4" />
-            </Button>
-          )}
+            {initialData && invoiceData && (
+              <InvoiceDownloadButton data={invoiceData} disabled={loading} />
+            )}
+          </div>
         </div>
-      </div>
+      )}
       <Separator />
       <Form {...form}>
         <form
@@ -1505,1943 +1455,2092 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           className="w-full space-y-8"
           autoComplete="off"
         >
-          <h2 className="text-lg font-semibold">
-            Orden # {initialData?.orderNumber}
-          </h2>
+          {initialData?.orderNumber && (
+            <h2 className="sr-only">Orden # {initialData.orderNumber}</h2>
+          )}
 
           {/* Totals */}
           {/* Totals Section */}
           {/* New 2-Column Cart Layout */}
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
-            {/* Left Column: Product List (Cart) */}
-            <div className="lg:col-span-8">
-              <FormField
-                control={form.control}
-                name="orderItems"
-                render={({ field }) => (
-                  <FormItem className="col-span-full">
-                    <FormLabel isRequired className="flex items-center gap-2">
-                      <ShoppingCart className="h-4 w-4" />
-                      Carrito de Compras
-                    </FormLabel>
-                    <FormControl>
-                      <div className="flex w-full flex-col gap-4">
-                        <EnhancedProductSelector
-                          selectedItems={fields.reduce(
-                            (acc: Record<string, number>, item: any) => {
-                              if (item.productId)
-                                acc[item.productId] = item.quantity;
-                              return acc;
-                            },
-                            {} as Record<string, number>,
-                          )}
-                          selectedProductsList={fields
-                            .filter((f) => f.productId)
-                            .map((f: any) => ({
-                              id: f.productId,
-                              name: f.name,
-                              price: f.price,
-                              stock: f.stock || 9999,
-                              images: f.imageUrl ? [{ url: f.imageUrl }] : [],
-                              category: { name: "Seleccionado" },
-                              hasDiscount: false,
-                              productGroup: f.productGroup,
-                            }))}
-                          onClearSelection={() => {
-                            const realProductIndices = fields
-                              .map((field, index) =>
-                                field.productId ? index : -1,
-                              )
-                              .filter((index) => index !== -1)
-                              .sort((a, b) => b - a);
+          <section
+            id="productos"
+            aria-labelledby="productos-titulo"
+            className="scroll-mt-24 space-y-6 rounded-xl border bg-white p-5 shadow-sm"
+          >
+            <div className="flex flex-col gap-0.5">
+              <h2
+                id="productos-titulo"
+                className="text-[15px] font-bold text-primary"
+              >
+                Productos
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Cada línea se descuenta del inventario al marcar el pedido como
+                pagado.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
+              {/* Left Column: Product List (Cart) */}
+              <div className="lg:col-span-8">
+                <FormField
+                  control={form.control}
+                  name="orderItems"
+                  render={({ field }) => (
+                    <FormItem className="col-span-full">
+                      <FormLabel isRequired className="flex items-center gap-2">
+                        <ShoppingCart className="h-4 w-4" />
+                        Carrito de Compras
+                      </FormLabel>
+                      <FormControl>
+                        <div className="flex w-full flex-col gap-4">
+                          <EnhancedProductSelector
+                            selectedItems={fields.reduce(
+                              (acc: Record<string, number>, item: any) => {
+                                if (item.productId)
+                                  acc[item.productId] = item.quantity;
+                                return acc;
+                              },
+                              {} as Record<string, number>,
+                            )}
+                            selectedProductsList={fields
+                              .filter((f) => f.productId)
+                              .map((f: any) => ({
+                                id: f.productId,
+                                name: f.name,
+                                price: f.price,
+                                stock: f.stock || 9999,
+                                images: f.imageUrl ? [{ url: f.imageUrl }] : [],
+                                category: { name: "Seleccionado" },
+                                hasDiscount: false,
+                                productGroup: f.productGroup,
+                              }))}
+                            onClearSelection={() => {
+                              const realProductIndices = fields
+                                .map((field, index) =>
+                                  field.productId ? index : -1,
+                                )
+                                .filter((index) => index !== -1)
+                                .sort((a, b) => b - a);
 
-                            realProductIndices.forEach((index) =>
-                              remove(index),
-                            );
-                          }}
-                          onUpdate={(productId, quantity, product) => {
-                            const existingIndex = fields.findIndex(
-                              (field) => field.productId === productId,
-                            );
-
-                            if (quantity > 0) {
-                              const availableStock =
-                                product?.stock ??
-                                (fields[existingIndex] as any)?.stock ??
-                                9999;
-                              if (availableStock <= 0) {
-                                toast({
-                                  variant: "destructive",
-                                  title: "Producto sin stock",
-                                  description: `El producto "${product?.name || "seleccionado"}" está agotado.`,
-                                });
-                                return;
-                              }
-                              const validQuantity = Math.min(
-                                quantity,
-                                availableStock,
+                              realProductIndices.forEach((index) =>
+                                remove(index),
                               );
-                              if (existingIndex !== -1) {
-                                update(existingIndex, {
-                                  ...fields[existingIndex],
-                                  quantity: validQuantity,
-                                });
-                              } else if (product) {
-                                append({
-                                  productId,
-                                  quantity: validQuantity,
-                                  name: product.name,
-                                  price: product.originalPrice || product.price,
-                                  discountedPrice: product.discountedPrice,
-                                  sku: product.sku || "",
-                                  imageUrl: product.images?.[0]?.url || "",
-                                  isCustom: false,
-                                  stock: product.stock,
-                                  productGroup: product.productGroup,
-                                });
+                            }}
+                            onUpdate={(productId, quantity, product) => {
+                              const existingIndex = fields.findIndex(
+                                (field) => field.productId === productId,
+                              );
+
+                              if (quantity > 0) {
+                                const availableStock =
+                                  product?.stock ??
+                                  (fields[existingIndex] as any)?.stock ??
+                                  9999;
+                                if (availableStock <= 0) {
+                                  toast({
+                                    variant: "destructive",
+                                    title: "Producto sin stock",
+                                    description: `El producto "${product?.name || "seleccionado"}" está agotado.`,
+                                  });
+                                  return;
+                                }
+                                const validQuantity = Math.min(
+                                  quantity,
+                                  availableStock,
+                                );
+                                if (existingIndex !== -1) {
+                                  update(existingIndex, {
+                                    ...fields[existingIndex],
+                                    quantity: validQuantity,
+                                  });
+                                } else if (product) {
+                                  append({
+                                    productId,
+                                    quantity: validQuantity,
+                                    name: product.name,
+                                    price:
+                                      product.originalPrice || product.price,
+                                    discountedPrice: product.discountedPrice,
+                                    sku: product.sku || "",
+                                    imageUrl: product.images?.[0]?.url || "",
+                                    isCustom: false,
+                                    stock: product.stock,
+                                    productGroup: product.productGroup,
+                                  });
+                                }
+                              } else if (existingIndex !== -1) {
+                                remove(existingIndex);
                               }
-                            } else if (existingIndex !== -1) {
-                              remove(existingIndex);
-                            }
-                          }}
-                        />
+                            }}
+                          />
 
-                        <div className="space-y-4">
-                          {fields.map((field: any, index) => {
-                            if (!field.productId) {
-                              const itemValues = watchedItems?.[index] || field;
+                          <div className="space-y-4">
+                            {fields.map((field: any, index) => {
+                              if (!field.productId) {
+                                const itemValues =
+                                  watchedItems?.[index] || field;
 
-                              return (
-                                <div
-                                  key={field.id}
-                                  className="relative mb-4 rounded-md border border-dashed bg-muted/20 p-4"
-                                >
-                                  <div className="absolute right-2 top-2 flex gap-1">
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-6 w-6 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-                                      onClick={() => setConversionIndex(index)}
-                                      title="Convertir a Producto"
-                                    >
-                                      <Wand2 className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                                      onClick={() => remove(index)}
-                                    >
-                                      <Trash className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                  <div className="grid gap-4">
-                                    <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                                      <Package className="h-4 w-4" /> Item
-                                      Manual
+                                return (
+                                  <div
+                                    key={field.id}
+                                    className="relative mb-4 rounded-md border border-dashed bg-muted/20 p-4"
+                                  >
+                                    <div className="absolute right-2 top-2 flex gap-1">
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                                        onClick={() =>
+                                          setConversionIndex(index)
+                                        }
+                                        title="Convertir a Producto"
+                                      >
+                                        <Wand2 className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                        onClick={() => remove(index)}
+                                      >
+                                        <Trash className="h-4 w-4" />
+                                      </Button>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                      <div className="space-y-1">
-                                        <Label className="text-xs">
-                                          Nombre del producto
-                                        </Label>
-                                        <Input
-                                          {...form.register(
-                                            `orderItems.${index}.name`,
-                                          )}
-                                          placeholder="Nombre del item..."
-                                          className="h-8"
-                                        />
+                                    <div className="grid gap-4">
+                                      <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                                        <Package className="h-4 w-4" /> Item
+                                        Manual
                                       </div>
-                                      <div className="space-y-1">
-                                        <Label className="text-xs">
-                                          Precio Unitario
-                                        </Label>
-                                        <CurrencyInput
-                                          value={itemValues.price}
-                                          onChange={(val) =>
-                                            form.setValue(
-                                              `orderItems.${index}.price`,
-                                              Number(val),
-                                              { shouldValidate: true },
-                                            )
-                                          }
-                                          className="h-8"
-                                        />
-                                      </div>
-                                    </div>
-                                    <div className="grid grid-cols-[1fr_auto] items-end gap-4">
-                                      <div className="space-y-1">
-                                        <Label className="text-xs">
-                                          URL Imagen
-                                        </Label>
-                                        <div className="flex gap-2">
-                                          <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded border">
-                                            <Image
-                                              src={
-                                                itemValues.imageUrl ||
-                                                "/images/placeholder_1.png"
-                                              }
-                                              fill
-                                              alt="Preview"
-                                              className="object-cover"
-                                            />
-                                          </div>
+                                      <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-1">
+                                          <Label className="text-xs">
+                                            Nombre del producto
+                                          </Label>
                                           <Input
                                             {...form.register(
-                                              `orderItems.${index}.imageUrl`,
+                                              `orderItems.${index}.name`,
                                             )}
-                                            placeholder="https://..."
+                                            placeholder="Nombre del item..."
+                                            className="h-8"
+                                          />
+                                        </div>
+                                        <div className="space-y-1">
+                                          <Label className="text-xs">
+                                            Precio Unitario
+                                          </Label>
+                                          <CurrencyInput
+                                            value={itemValues.price}
+                                            onChange={(val) =>
+                                              form.setValue(
+                                                `orderItems.${index}.price`,
+                                                Number(val),
+                                                { shouldValidate: true },
+                                              )
+                                            }
                                             className="h-8"
                                           />
                                         </div>
                                       </div>
-                                      <div className="space-y-1">
-                                        <Label className="text-xs">
-                                          Cantidad
-                                        </Label>
-                                        <QuantitySelector
-                                          value={Number(itemValues.quantity)}
-                                          onChange={(val) =>
-                                            form.setValue(
-                                              `orderItems.${index}.quantity`,
-                                              Number(val),
-                                              { shouldValidate: true },
-                                            )
-                                          }
-                                          min={1}
-                                        />
+                                      <div className="grid grid-cols-[1fr_auto] items-end gap-4">
+                                        <div className="space-y-1">
+                                          <Label className="text-xs">
+                                            URL Imagen
+                                          </Label>
+                                          <div className="flex gap-2">
+                                            <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded border">
+                                              <Image
+                                                src={
+                                                  itemValues.imageUrl ||
+                                                  "/images/placeholder_1.png"
+                                                }
+                                                fill
+                                                alt="Preview"
+                                                className="object-cover"
+                                              />
+                                            </div>
+                                            <Input
+                                              {...form.register(
+                                                `orderItems.${index}.imageUrl`,
+                                              )}
+                                              placeholder="https://..."
+                                              className="h-8"
+                                            />
+                                          </div>
+                                        </div>
+                                        <div className="space-y-1">
+                                          <Label className="text-xs">
+                                            Cantidad
+                                          </Label>
+                                          <QuantitySelector
+                                            value={Number(itemValues.quantity)}
+                                            onChange={(val) =>
+                                              form.setValue(
+                                                `orderItems.${index}.quantity`,
+                                                Number(val),
+                                                { shouldValidate: true },
+                                              )
+                                            }
+                                            min={1}
+                                          />
+                                        </div>
                                       </div>
                                     </div>
                                   </div>
+                                );
+                              }
+
+                              return (
+                                <div key={field.id} className="relative">
+                                  <AdminCartItem
+                                    key={field.id}
+                                    hideStockWarning={isCompletedOrder}
+                                    item={{
+                                      id: field.productId || field.id,
+                                      name: field.name,
+                                      price: field.price,
+                                      discountedPrice: field.discountedPrice,
+                                      stock: field.stock || 9999,
+                                      images: field.imageUrl
+                                        ? [{ url: field.imageUrl }]
+                                        : [],
+                                      quantity: field.quantity,
+                                      productGroup: field.productGroup,
+                                    }}
+                                    onUpdateQuantity={(quantity) => {
+                                      if (quantity > 0) {
+                                        update(index, {
+                                          ...field,
+                                          quantity,
+                                        });
+                                      } else {
+                                        remove(index);
+                                      }
+                                    }}
+                                    onRemove={() => remove(index)}
+                                  />
                                 </div>
                               );
-                            }
+                            })}
+                          </div>
 
-                            return (
-                              <div key={field.id} className="relative">
-                                <AdminCartItem
-                                  key={field.id}
-                                  hideStockWarning={isCompletedOrder}
-                                  item={{
-                                    id: field.productId || field.id,
-                                    name: field.name,
-                                    price: field.price,
-                                    discountedPrice: field.discountedPrice,
-                                    stock: field.stock || 9999,
-                                    images: field.imageUrl
-                                      ? [{ url: field.imageUrl }]
-                                      : [],
-                                    quantity: field.quantity,
-                                    productGroup: field.productGroup,
-                                  }}
-                                  onUpdateQuantity={(quantity) => {
-                                    if (quantity > 0) {
-                                      update(index, {
-                                        ...field,
-                                        quantity,
-                                      });
-                                    } else {
-                                      remove(index);
-                                    }
-                                  }}
-                                  onRemove={() => remove(index)}
-                                />
-                              </div>
-                            );
-                          })}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="w-full border-2 border-dashed hover:bg-accent/50 hover:text-accent-foreground"
+                            onClick={() => {
+                              append({
+                                productId: null,
+                                quantity: 1,
+                                name: "Item Manual",
+                                price: 0,
+                                isCustom: true,
+                                imageUrl: "",
+                                stock: 9999,
+                                productGroup: undefined,
+                              });
+                            }}
+                          >
+                            <Plus className="mr-2 h-4 w-4" />
+                            Agregar Item Manual
+                          </Button>
                         </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="w-full border-2 border-dashed hover:bg-accent/50 hover:text-accent-foreground"
-                          onClick={() => {
-                            append({
-                              productId: null,
-                              quantity: 1,
-                              name: "Item Manual",
-                              price: 0,
-                              isCustom: true,
-                              imageUrl: "",
-                              stock: 9999,
-                              productGroup: undefined,
-                            });
-                          }}
-                        >
-                          <Plus className="mr-2 h-4 w-4" />
-                          Agregar Item Manual
-                        </Button>
+              {/* Right Column: Totals Card (Sticky) */}
+              <div className="lg:col-span-4">
+                <div className="sticky top-4 space-y-4">
+                  <Card className="overflow-hidden border-none shadow-md">
+                    <CardHeader className="bg-muted/50 pb-2 pt-4">
+                      <CardTitle className="text-sm font-medium">
+                        Resumen de Orden
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4 bg-muted/30 p-6">
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>Subtotal</span>
+                          <span>{currencyFormatter(orderTotals.subtotal)}</span>
+                        </div>
+                        {orderTotals.offerSavings > 0 && (
+                          <div className="flex justify-between text-success">
+                            <span>Ahorro por oferta</span>
+                            <span>
+                              - {currencyFormatter(orderTotals.offerSavings)}
+                            </span>
+                          </div>
+                        )}
+                        {orderTotals.discount > 0 && (
+                          <div className="flex justify-between text-destructive">
+                            <span className="flex items-center gap-1">
+                              Descuento
+                              {form.watch("discount.type") ===
+                                DiscountType.PERCENTAGE && (
+                                <span className="text-xs opacity-75">
+                                  ({form.watch("discount.amount")}%)
+                                </span>
+                              )}
+                            </span>
+                            <span>
+                              - {currencyFormatter(orderTotals.discount)}
+                            </span>
+                          </div>
+                        )}
+                        {orderTotals.couponDiscount > 0 && (
+                          <div className="flex justify-between text-success">
+                            <span className="flex items-center gap-1">
+                              Cupón
+                              {coupon?.type === DiscountType.PERCENTAGE && (
+                                <span className="text-xs opacity-75">
+                                  ({coupon.amount}%)
+                                </span>
+                              )}
+                            </span>
+                            <span>
+                              - {currencyFormatter(orderTotals.couponDiscount)}
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>Envío</span>
+                          {shippingChargeState === "charged" ? (
+                            <span>
+                              + {currencyFormatter(Number(shippingCost || 0))}
+                            </span>
+                          ) : shippingChargeState === "free" ? (
+                            <span className="font-medium text-success">
+                              Gratis
+                            </span>
+                          ) : (
+                            <span>Por calcular</span>
+                          )}
+                        </div>
+                      </div>
+                      <Separator />
+                      <div className="flex items-center justify-between text-lg font-bold">
+                        <span>Total</span>
+                        <span className="text-primary">
+                          {currencyFormatter(orderTotals.total)}
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section
+            id="cliente"
+            aria-labelledby="cliente-titulo"
+            className="scroll-mt-24 space-y-6 rounded-xl border bg-white p-5 shadow-sm"
+          >
+            <div className="flex flex-col gap-0.5">
+              <h2
+                id="cliente-titulo"
+                className="text-[15px] font-bold text-primary"
+              >
+                Cliente y datos del pedido
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Quién compra, a dónde va, tipo, estado y notas.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+              <FormField
+                control={form.control}
+                name="userId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel isRequired>Usuario</FormLabel>
+                    <FormControl>
+                      <UserCombobox
+                        options={users}
+                        value={field.value || form.watch("guestId")}
+                        onChange={(value, user) => {
+                          // RHF update
+                          field.onChange(value);
+                          // Logic update
+                          handleUserSelect(value, user);
+                        }}
+                        disabled={loading}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="guestId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Id de invitado</FormLabel>
+                    <FormControl>
+                      <Input
+                        disabled={loading}
+                        readOnly
+                        placeholder="Id de invitado"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="fullName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel isRequired>Nombre</FormLabel>
+                    <FormControl>
+                      <Input
+                        disabled={loading}
+                        placeholder="Nombre completo"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="documentId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Documento de identidad</FormLabel>
+                    <FormControl>
+                      <Input
+                        disabled={loading}
+                        placeholder="Documento de identidad"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel isRequired>Correo electrónico</FormLabel>
+                    <FormControl>
+                      <Input
+                        disabled={loading}
+                        placeholder="Correo electrónico"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel isRequired>Teléfono</FormLabel>
+                    <FormControl>
+                      <div className="flex items-center gap-x-1">
+                        {(initialData ||
+                          (field.value && field.value.length >= 10)) && (
+                          <WhatsappButton
+                            order={{
+                              orderNumber: initialData?.orderNumber ?? "",
+                              status:
+                                initialData?.status ?? OrderStatus.CREATED,
+                              fullName:
+                                initialData?.fullName ??
+                                form.watch("fullName") ??
+                                "",
+                              phone: field.value || "",
+                              totalPrice: orderTotals.total,
+                              products: form
+                                .watch("orderItems")
+                                .map((item) => ({
+                                  name: item.name,
+                                  quantity: item.quantity,
+                                })),
+                            }}
+                            size="md"
+                          />
+                        )}
+                        <PhoneInput
+                          disabled={loading}
+                          placeholder=""
+                          value={field.value}
+                          onChange={field.onChange}
+                          defaultCountry="CO"
+                        />
                       </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-            </div>
-
-            {/* Right Column: Totals Card (Sticky) */}
-            <div className="lg:col-span-4">
-              <div className="sticky top-4 space-y-4">
-                <Card className="overflow-hidden border-none shadow-md">
-                  <CardHeader className="bg-muted/50 pb-2 pt-4">
-                    <CardTitle className="text-sm font-medium">
-                      Resumen de Orden
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4 bg-muted/30 p-6">
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between text-muted-foreground">
-                        <span>Subtotal</span>
-                        <span>{currencyFormatter(orderTotals.subtotal)}</span>
-                      </div>
-                      {orderTotals.offerSavings > 0 && (
-                        <div className="flex justify-between text-success">
-                          <span>Ahorro por oferta</span>
-                          <span>
-                            - {currencyFormatter(orderTotals.offerSavings)}
-                          </span>
-                        </div>
-                      )}
-                      {orderTotals.discount > 0 && (
-                        <div className="flex justify-between text-destructive">
-                          <span className="flex items-center gap-1">
-                            Descuento
-                            {form.watch("discount.type") ===
-                              DiscountType.PERCENTAGE && (
-                              <span className="text-xs opacity-75">
-                                ({form.watch("discount.amount")}%)
-                              </span>
-                            )}
-                          </span>
-                          <span>
-                            - {currencyFormatter(orderTotals.discount)}
-                          </span>
-                        </div>
-                      )}
-                      {orderTotals.couponDiscount > 0 && (
-                        <div className="flex justify-between text-success">
-                          <span className="flex items-center gap-1">
-                            Cupón
-                            {coupon?.type === DiscountType.PERCENTAGE && (
-                              <span className="text-xs opacity-75">
-                                ({coupon.amount}%)
-                              </span>
-                            )}
-                          </span>
-                          <span>
-                            - {currencyFormatter(orderTotals.couponDiscount)}
-                          </span>
-                        </div>
-                      )}
-                      <div className="flex justify-between text-muted-foreground">
-                        <span>Envío</span>
-                        {shippingChargeState === "charged" ? (
-                          <span>
-                            + {currencyFormatter(Number(shippingCost || 0))}
-                          </span>
-                        ) : shippingChargeState === "free" ? (
-                          <span className="font-medium text-success">
-                            Gratis
-                          </span>
-                        ) : (
-                          <span>Por calcular</span>
-                        )}
-                      </div>
-                    </div>
-                    <Separator />
-                    <div className="flex items-center justify-between text-lg font-bold">
-                      <span>Total</span>
-                      <span className="text-primary">
-                        {currencyFormatter(orderTotals.total)}
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
-            <FormField
-              control={form.control}
-              name="userId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>Usuario</FormLabel>
-                  <FormControl>
-                    <UserCombobox
-                      options={users}
-                      value={field.value || form.watch("guestId")}
-                      onChange={(value, user) => {
-                        // RHF update
-                        field.onChange(value);
-                        // Logic update
-                        handleUserSelect(value, user);
-                      }}
-                      disabled={loading}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="guestId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Id de invitado</FormLabel>
-                  <FormControl>
-                    <Input
-                      disabled={loading}
-                      readOnly
-                      placeholder="Id de invitado"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="fullName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>Nombre</FormLabel>
-                  <FormControl>
-                    <Input
-                      disabled={loading}
-                      placeholder="Nombre completo"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="documentId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Documento de identidad</FormLabel>
-                  <FormControl>
-                    <Input
-                      disabled={loading}
-                      placeholder="Documento de identidad"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>Correo electrónico</FormLabel>
-                  <FormControl>
-                    <Input
-                      disabled={loading}
-                      placeholder="Correo electrónico"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="phone"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>Teléfono</FormLabel>
-                  <FormControl>
-                    <div className="flex items-center gap-x-1">
-                      {(initialData ||
-                        (field.value && field.value.length >= 10)) && (
-                        <WhatsappButton
-                          order={{
-                            orderNumber: initialData?.orderNumber ?? "",
-                            status: initialData?.status ?? OrderStatus.CREATED,
-                            fullName:
-                              initialData?.fullName ??
-                              form.watch("fullName") ??
-                              "",
-                            phone: field.value || "",
-                            totalPrice: orderTotals.total,
-                            products: form.watch("orderItems").map((item) => ({
-                              name: item.name,
-                              quantity: item.quantity,
-                            })),
-                          }}
-                          size="md"
-                        />
-                      )}
-                      <PhoneInput
-                        disabled={loading}
-                        placeholder=""
-                        value={field.value}
-                        onChange={field.onChange}
-                        defaultCountry="CO"
-                      />
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="daneCode"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>
-                    Ciudad y Departamento
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      (Requerido para cotización de envío)
-                    </span>
-                  </FormLabel>
-                  <FormControl>
-                    <LocationCombobox
-                      options={locations}
-                      value={field.value || ""}
-                      onChange={(value, location) => {
-                        field.onChange(value);
-                        if (location) {
-                          form.setValue("city", location.city);
-                          form.setValue("department", location.department);
-                        }
-                      }}
-                      disabled={loading}
-                      placeholder="Buscar ciudad..."
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="city"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Ciudad</FormLabel>
-                  <FormControl>
-                    <Input
-                      disabled={loading}
-                      placeholder="Ej: Bogotá"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="department"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Departamento</FormLabel>
-                  <FormControl>
-                    <Input
-                      disabled={loading}
-                      placeholder="Ej: Cundinamarca"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="address"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>Dirección</FormLabel>
-                  <FormControl>
-                    <Input
-                      disabled={loading}
-                      placeholder="Ej: Calle 123 #45-67"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="address2"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Dirección 2</FormLabel>
-                  <FormControl>
-                    <Input
-                      disabled={loading}
-                      placeholder="Ej: Apto 501, Torre B"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="neighborhood"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Barrio (Opcional)</FormLabel>
-                  <FormControl>
-                    <Input
-                      disabled={loading}
-                      placeholder="Ej: Laureles"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="addressReference"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Referencia de dirección</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      disabled={loading}
-                      placeholder="Ej: Frente al parque, edificio azul"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="company"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Empresa</FormLabel>
-                  <FormControl>
-                    <Input
-                      disabled={loading}
-                      placeholder="Ej: Acme Corp"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* Quote Requests List (Negotiation History) */}
-            {initialData && (initialData as any).quoteRequests && (
-              <div className="col-span-1 md:col-span-2 lg:col-span-3 xl:col-span-4">
-                <QuoteRequestsList
-                  requests={(initialData as any).quoteRequests}
-                />
-              </div>
-            )}
-
-            <FormField
-              control={form.control}
-              name="adminNotes"
-              render={({ field }) => (
-                <FormItem className="col-span-1 md:col-span-2 lg:col-span-3 xl:col-span-4">
-                  <FormLabel isRequired>Notas de Cotización</FormLabel>
-                  <FormControl>
-                    <RichTextEditor
-                      placeholder="Estas notas serán visibles como 'Descripción de la Cotización' para el cliente."
-                      value={field.value}
-                      onChange={field.onChange}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Información adicional o condiciones especiales para esta
-                    cotización.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="internalNotes"
-              render={({ field }) => (
-                <FormItem className="col-span-1 md:col-span-2 lg:col-span-3 xl:col-span-4">
-                  <FormLabel isRequired>Notas Internas</FormLabel>
-                  <FormControl>
-                    <RichTextEditor
-                      placeholder="Notas privadas para el equipo administrativo..."
-                      value={field.value}
-                      onChange={field.onChange}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Estas notas solo son visibles para administradores.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="type"
-              render={({ field }) => (
-                <FormItem className="col-span-1">
-                  <FormLabel>Tipo de Orden</FormLabel>
-                  <Select
-                    disabled={loading}
-                    onValueChange={field.onChange}
-                    value={field.value}
-                    defaultValue={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue
-                          defaultValue={field.value}
-                          placeholder="Seleccionar tipo"
-                        />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value={OrderType.STANDARD}>
-                        Estándar
-                      </SelectItem>
-                      <SelectItem value={OrderType.QUOTATION}>
-                        Cotización
-                      </SelectItem>
-                      <SelectItem value={OrderType.CUSTOM}>
-                        Personalizada
-                      </SelectItem>
-                      <SelectItem value={OrderType.FESTIVAL} disabled>
-                        Venta en feria
-                      </SelectItem>
-                      <SelectItem value={OrderType.POINT_OF_SALE} disabled>
-                        Venta presencial
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <FormItem className="col-span-1 md:col-span-2 lg:col-span-3 xl:col-span-4">
-                  <FormLabel isRequired>Estado de la orden</FormLabel>
-                  <FormDescription>
-                    Selecciona el estado actual de la orden
-                  </FormDescription>
-                  <FormControl>
-                    <OrderStatusSelector
-                      currentStatus={field.value}
-                      onStatusChange={(newStatus) => {
-                        if (newStatus === OrderStatus.SENT) {
-                          const trackingCode = form.getValues(
-                            "shipping.trackingCode",
-                          );
-                          const provider = form.getValues("shippingProvider");
-
-                          // If manual shipping, strict check.
-                          // If EnvioClick, it might be auto-filled, but we still expect it to be present if "Sent" is clicked.
-                          // If NO shipping (Pickup), maybe we don't need it?
-                          // User said "Trigger Notifications... Tracking Number".
-                          // Let's assume if Provider is NOT "NONE", we need tracking.
-
-                          if (
-                            provider !== ShippingProvider.NONE &&
-                            !trackingCode
-                          ) {
-                            toast({
-                              title: "Falta el número de guía",
-                              description:
-                                "Para marcar como Enviado, debes ingresar el número de guía (Tracking Code) en la sección de envío.",
-                              variant: "destructive",
-                            });
-                            return;
-                          }
-                        }
-                        field.onChange(newStatus);
-                      }}
-                      readOnly={loading}
-                      className="py-4"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* Expiration Date - Only visible for Quotations */}
-            {form.watch("type") === OrderType.QUOTATION && (
               <FormField
                 control={form.control}
-                name="expiresAt"
+                name="daneCode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel isRequired>
+                      Ciudad y Departamento
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        (Requerido para cotización de envío)
+                      </span>
+                    </FormLabel>
+                    <FormControl>
+                      <LocationCombobox
+                        options={locations}
+                        value={field.value || ""}
+                        onChange={(value, location) => {
+                          field.onChange(value);
+                          if (location) {
+                            form.setValue("city", location.city);
+                            form.setValue("department", location.department);
+                          }
+                        }}
+                        disabled={loading}
+                        placeholder="Buscar ciudad..."
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="city"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Ciudad</FormLabel>
+                    <FormControl>
+                      <Input
+                        disabled={loading}
+                        placeholder="Ej: Bogotá"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="department"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Departamento</FormLabel>
+                    <FormControl>
+                      <Input
+                        disabled={loading}
+                        placeholder="Ej: Cundinamarca"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="address"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel isRequired>Dirección</FormLabel>
+                    <FormControl>
+                      <Input
+                        disabled={loading}
+                        placeholder="Ej: Calle 123 #45-67"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="address2"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Dirección 2</FormLabel>
+                    <FormControl>
+                      <Input
+                        disabled={loading}
+                        placeholder="Ej: Apto 501, Torre B"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="neighborhood"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Barrio (Opcional)</FormLabel>
+                    <FormControl>
+                      <Input
+                        disabled={loading}
+                        placeholder="Ej: Laureles"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="addressReference"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Referencia de dirección</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        disabled={loading}
+                        placeholder="Ej: Frente al parque, edificio azul"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="company"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Empresa</FormLabel>
+                    <FormControl>
+                      <Input
+                        disabled={loading}
+                        placeholder="Ej: Acme Corp"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Quote Requests List (Negotiation History) */}
+              {initialData && (initialData as any).quoteRequests && (
+                <div className="col-span-1 md:col-span-2 lg:col-span-3 xl:col-span-4">
+                  <QuoteRequestsList
+                    requests={(initialData as any).quoteRequests}
+                  />
+                </div>
+              )}
+
+              <FormField
+                control={form.control}
+                name="adminNotes"
                 render={({ field }) => (
                   <FormItem className="col-span-1 md:col-span-2 lg:col-span-3 xl:col-span-4">
-                    <FormLabel>Válida Hasta</FormLabel>
+                    <FormLabel isRequired>Notas de Cotización</FormLabel>
                     <FormControl>
-                      <DatePicker
-                        name={field.name}
-                        control={form.control}
-                        disabled={loading}
-                        placeholder="Fecha de expiración"
+                      <RichTextEditor
+                        placeholder="Estas notas serán visibles como 'Descripción de la Cotización' para el cliente."
+                        value={field.value}
+                        onChange={field.onChange}
                       />
                     </FormControl>
                     <FormDescription>
-                      Fecha límite para aceptar esta cotización.
+                      Información adicional o condiciones especiales para esta
+                      cotización.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-            )}
-          </div>
-          <Separator />
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Descuentos y Cupones</h2>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                form.resetField("discount.type");
-                form.resetField("discount.amount", {
-                  defaultValue: 0,
-                });
-                form.resetField("discount.reason", {
-                  defaultValue: "",
-                });
-                toast({
-                  description: "Descuentos eliminados",
-                  variant: "success",
-                });
-              }}
-            >
-              <Trash className="mr-2 h-4 w-4" />
-              Limpiar descuentos
-            </Button>
-          </div>
-          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-3">
-            <FormField
-              control={form.control}
-              name="discount.type"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Tipo de descuento</FormLabel>
-                  <Select
-                    key={field.value}
-                    disabled={loading}
-                    onValueChange={field.onChange}
-                    value={field.value || ""}
-                    defaultValue={field.value || ""}
-                  >
+              <FormField
+                control={form.control}
+                name="internalNotes"
+                render={({ field }) => (
+                  <FormItem className="col-span-1 md:col-span-2 lg:col-span-3 xl:col-span-4">
+                    <FormLabel isRequired>Notas Internas</FormLabel>
                     <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar tipo" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value={DiscountType.PERCENTAGE}>
-                        {discountOptions[DiscountType.PERCENTAGE]}
-                      </SelectItem>
-                      <SelectItem value={DiscountType.FIXED}>
-                        {discountOptions[DiscountType.FIXED]}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="discount.amount"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Monto del descuento</FormLabel>
-                  <FormControl>
-                    {form.watch("discount.type") === DiscountType.PERCENTAGE ? (
-                      <PercentageInput
-                        disabled={loading || !form.watch("discount.type")}
-                        placeholder="10"
+                      <RichTextEditor
+                        placeholder="Notas privadas para el equipo administrativo..."
                         value={field.value}
                         onChange={field.onChange}
                       />
-                    ) : (
-                      <CurrencyInput
-                        placeholder="$ 10.000"
-                        disabled={loading || !form.watch("discount.type")}
-                        value={field.value}
-                        onChange={field.onChange}
-                      />
-                    )}
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="discount.reason"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Razón del descuento</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      disabled={loading || !form.watch("discount.type")}
-                      placeholder="Ej: Promoción especial"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="couponCode"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel className="flex items-center gap-2">
-                    Cupón
-                    {coupon && (
-                      <Badge
-                        variant="success"
-                        className="flex items-center gap-1"
-                      >
-                        <Check className="h-3 w-3" />
-                        Aplicado
-                      </Badge>
-                    )}
-                  </FormLabel>
-                  <div className="flex items-center gap-2">
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            disabled={validatingCoupon || loading}
-                            className={cn(
-                              "w-full justify-between",
-                              !field.value && "text-muted-foreground",
-                            )}
-                          >
-                            <div className="flex items-center gap-2 font-mono">
-                              <Ticket
-                                className={cn(
-                                  "h-4 w-4",
-                                  coupon
-                                    ? "text-success"
-                                    : "text-muted-foreground",
-                                )}
-                              />
-                              {field.value
-                                ? availableCoupons.find(
-                                    (c: Coupon) => c.code === field.value,
-                                  )?.code || field.value
-                                : availableCoupons.length > 0
-                                  ? "Seleccionar cupón"
-                                  : "No hay cupones disponibles"}
-                            </div>
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      {availableCoupons.length > 0 && (
-                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
-                          <Command>
-                            <CommandInput placeholder="Buscar cupón..." />
-                            <CommandEmpty>
-                              No se encontraron cupones.
-                            </CommandEmpty>
-                            <CommandGroup>
-                              {availableCoupons.map((c: Coupon) => (
-                                <CommandItem
-                                  key={c.code}
-                                  value={c.code}
-                                  onSelect={async () => {
-                                    try {
-                                      setValidatingCoupon(true);
-                                      if (
-                                        !initialData?.coupon ||
-                                        initialData.coupon.code !== c.code
-                                      ) {
-                                        const response = await axios.post(
-                                          `/api/${params.storeId}/coupons/validate`,
-                                          {
-                                            code: c.code,
-                                            subtotal: orderTotals.subtotal,
-                                          },
-                                        );
-                                        setCoupon(response.data);
-                                      } else {
-                                        setCoupon(initialData.coupon);
-                                      }
-                                      field.onChange(c.code);
-                                      toast({
-                                        description:
-                                          "Cupón aplicado correctamente",
-                                        variant: "success",
-                                      });
-                                    } catch (error) {
-                                      toast({
-                                        description: getErrorMessage(error),
-                                        variant: "destructive",
-                                      });
-                                      setCoupon(null);
-                                      field.onChange("");
-                                    } finally {
-                                      setValidatingCoupon(false);
-                                    }
-                                  }}
-                                >
-                                  <Check
-                                    className={cn(
-                                      "mr-2 h-4 w-4",
-                                      c.code === field.value
-                                        ? "opacity-100"
-                                        : "opacity-0",
-                                    )}
-                                  />
-                                  <div className="flex w-full items-center justify-between">
-                                    <span className="font-mono">{c.code}</span>
-                                    <span className="text-xs text-muted-foreground">
-                                      {c.type === DiscountType.PERCENTAGE
-                                        ? `${c.amount}% de descuento`
-                                        : `${currencyFormatter(Number(c.amount))} de descuento`}
-                                    </span>
-                                  </div>
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </Command>
-                        </PopoverContent>
-                      )}
-                    </Popover>
-                    {coupon && (
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="icon"
-                        className=""
-                        onClick={() => {
-                          setCoupon(null);
-                          field.onChange("");
-                          toast({
-                            description: "Cupón removido",
-                            variant: "success",
-                          });
-                        }}
-                      >
-                        <Trash className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-          <Separator />
-          <h2 className="flex items-center gap-2 text-lg font-semibold">
-            <Wallet className="h-5 w-5" />
-            Estado del pago{" "}
-            {initialData?.payment?.transactionId
-              ? `# (${initialData?.payment?.transactionId})`
-              : ""}
-          </h2>
-          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-3">
-            <FormField
-              control={form.control}
-              name="payment.method"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Método de pago</FormLabel>
-                  <Select
-                    disabled={loading}
-                    onValueChange={(val) => {
-                      field.onChange(val);
-                      form.setValue(
-                        "shipping.isCOD",
-                        val === PaymentMethod.COD,
-                        { shouldDirty: true },
-                      );
-                    }}
-                    value={field.value}
-                    defaultValue={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue
-                          defaultValue={field.value}
-                          placeholder="Selecciona un método de pago"
-                        />
-                      </SelectTrigger>
                     </FormControl>
-                    <SelectContent>
-                      {adminPaymentOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormDescription>
-                    Para enviar un enlace de pago, selecciona Pago en línea,
-                    guarda la orden y luego cópialo desde Links y Pagos.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="payment.transactionId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Número de la transacción</FormLabel>
-                  <FormControl>
-                    <Input
+                    <FormDescription>
+                      Estas notas solo son visibles para administradores.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="type"
+                render={({ field }) => (
+                  <FormItem className="col-span-1">
+                    <FormLabel>Tipo de Orden</FormLabel>
+                    <Select
                       disabled={loading}
-                      placeholder="000-000000-000"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            {initialData?.payment?.details && (
-              <FormItem className="flex w-full flex-col">
-                <FormLabel>Detalles del pago</FormLabel>
-                <Alert className="max-w-full">
-                  <AlertDescription>
-                    <div className="flex w-full flex-col">
-                      {Object.entries(parsedDetails).map(([key, value]) => {
-                        const currentPaymentMethodObject =
-                          paymentMethodsByOption[
-                            initialData?.payment?.method as PaymentMethod
-                          ];
-                        return (
-                          <div
-                            key={key}
-                            className="flex w-full flex-col text-sm"
-                          >
-                            <span className="font-semibold">
-                              {detailsTitleOptions[key] || key}
-                            </span>
-                            <span>
-                              {currentPaymentMethodObject?.[String(value)] ||
-                                String(value)}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </AlertDescription>
-                </Alert>
-              </FormItem>
-            )}
-          </div>
-          <Separator />
-          <h2 className="flex items-center gap-2 text-lg font-semibold">
-            <Package className="h-5 w-5" />
-            Información de envío{" "}
-            {initialData?.shipping?.envioClickIdOrder
-              ? `# (${initialData?.shipping?.envioClickIdOrder})`
-              : ""}
-          </h2>
-          <div className="grid grid-cols-1 gap-8">
-            <FormField
-              control={form.control}
-              name="shippingProvider"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>Tipo de Envío</FormLabel>
-                  <FormControl>
-                    <RadioGroup
-                      key={field.value}
                       onValueChange={field.onChange}
                       value={field.value}
                       defaultValue={field.value}
-                      className="grid grid-cols-1 gap-4 md:grid-cols-3"
-                      disabled={
-                        loading || !!initialData?.shipping?.envioClickIdOrder
-                      }
                     >
-                      {/* NONE - Store Pickup */}
-                      <Label
-                        htmlFor="none"
-                        className={cn("cursor-pointer transition-all")}
-                      >
-                        <Card className="h-full hover:border-primary/50">
-                          <CardContent className="flex items-start gap-3 p-5">
-                            <RadioGroupItem
-                              value={ShippingProvider.NONE}
-                              id="none"
-                              className="mt-0.5"
-                            />
-                            <div className="flex flex-1 flex-col gap-1">
-                              <div className="flex items-center gap-2">
-                                <Store className="h-5 w-5 text-primary" />
-                                <span className="font-semibold">
-                                  Recoger en tienda
-                                </span>
-                              </div>
-                              <span className="text-xs text-muted-foreground">
-                                El cliente recogerá el pedido en la ubicación
-                                física
-                              </span>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </Label>
-
-                      {/* ENVIOCLICK - Integrated Shipping */}
-                      <Label
-                        htmlFor="envioclick"
-                        className={cn(
-                          "cursor-pointer transition-all",
-                          field.value === ShippingProvider.ENVIOCLICK &&
-                            "ring-2 ring-white ring-offset-2",
-                        )}
-                      >
-                        <Card className="h-full overflow-hidden hover:border-blue-400">
-                          <CardContent className="flex items-start gap-3 rounded-md p-5 text-white [background:linear-gradient(135deg,#010019,#020a47)]">
-                            <RadioGroupItem
-                              value={ShippingProvider.ENVIOCLICK}
-                              id="envioclick"
-                              className="mt-0.5 border-white text-white"
-                            />
-                            <div className="flex flex-1 flex-col gap-2">
-                              <div className="flex items-center gap-2">
-                                <Image
-                                  src="https://www.envioclickpro.com.co/img/register/logo_solo.svg"
-                                  alt="EnvíoClick"
-                                  width={100}
-                                  height={32}
-                                  className="h-8 w-auto object-contain"
-                                />
-                              </div>
-                              <span className="text-xs text-blue-100">
-                                Transportadora integrada para envíos nacionales
-                                con múltiples opciones
-                              </span>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </Label>
-
-                      {/* MANUAL - Other Carriers */}
-                      <Label
-                        htmlFor="manual"
-                        className={cn(
-                          "cursor-pointer transition-all",
-                          field.value === ShippingProvider.MANUAL &&
-                            "ring-2 ring-primary ring-offset-2",
-                        )}
-                      >
-                        <Card className="h-full hover:border-primary/50">
-                          <CardContent className="flex items-start gap-3 p-5">
-                            <RadioGroupItem
-                              value={ShippingProvider.MANUAL}
-                              id="manual"
-                              className="mt-0.5"
-                            />
-                            <div className="flex flex-1 flex-col gap-1">
-                              <div className="flex items-center gap-2">
-                                <Truck className="h-5 w-5 text-primary" />
-                                <span className="font-semibold">
-                                  Envío Manual
-                                </span>
-                              </div>
-                              <span className="text-xs text-muted-foreground">
-                                Usar otra transportadora o servicio de
-                                mensajería personalizado
-                              </span>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </Label>
-                    </RadioGroup>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* Store Pickup Status Section */}
-            {form.watch("shippingProvider") === ShippingProvider.NONE && (
-              <div className="space-y-4 rounded-lg bg-muted/50 p-4">
-                <Alert>
-                  <Store className="h-4 w-4" />
-                  <AlertDescription>
-                    El cliente recogerá el pedido en tienda. Actualiza el estado
-                    para informar al cliente sobre el progreso de su orden.
-                  </AlertDescription>
-                </Alert>
-
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <FormField
-                    control={form.control}
-                    name="shipping.status"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Estado del Pedido</FormLabel>
-                        <Select
-                          disabled={loading}
-                          onValueChange={field.onChange}
-                          value={field.value}
-                          defaultValue={field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecciona un estado" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {Object.entries(shippingOptions).map(
-                              ([key, label]) => (
-                                <SelectItem key={key} value={key}>
-                                  {label}
-                                </SelectItem>
-                              ),
-                            )}
-                          </SelectContent>
-                        </Select>
-                        <FormDescription>
-                          Estado actual del pedido para recogida
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="shipping.cost"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Costo Adicional</FormLabel>
-                        <FormControl>
-                          <CurrencyInput
-                            placeholder="$ 0"
-                            disabled={loading}
-                            value={field.value}
-                            onChange={field.onChange}
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          Costo adicional si aplica
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <FormField
-                  control={form.control}
-                  name="shipping.notes"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Notas para el cliente</FormLabel>
                       <FormControl>
-                        <Textarea
-                          disabled={loading}
-                          placeholder="Ej: Su pedido estará listo para recoger mañana después de las 2pm"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            )}
-
-            {/* EnvioClick Quotation Section */}
-            {form.watch("shippingProvider") === ShippingProvider.ENVIOCLICK && (
-              <div className="space-y-4">
-                {/* Box Selector UI for EnvioClick - Pre Quote */}
-                <div className="space-y-4 rounded-md border bg-muted/20 p-4">
-                  <h3 className="font-medium">Configuración de Empaque</h3>
-                  <div className="flex flex-wrap items-end gap-4">
-                    <div className="min-w-[200px] space-y-2">
-                      <Label>Seleccionar Caja Manual</Label>
-                      <Select
-                        value={form.watch("shipping.boxId") || "auto"}
-                        onValueChange={(val) => handleBoxChange(val)}
-                      >
                         <SelectTrigger>
-                          <SelectValue placeholder="Automático (Recomendado)" />
+                          <SelectValue
+                            defaultValue={field.value}
+                            placeholder="Seleccionar tipo"
+                          />
                         </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="auto">
-                            Automático (Recomendado)
-                          </SelectItem>
-                          {boxes?.map((box: Box) => (
-                            <SelectItem key={box.id} value={box.id}>
-                              {box.name} ({box.width}x{box.height}x{box.length}
-                              cm)
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Quote Button */}
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        onClick={onGetShippingQuotes}
-                        disabled={
-                          loadingQuotes ||
-                          !form.watch("city") ||
-                          !form.watch("daneCode") ||
-                          !!initialData?.shipping?.envioClickIdOrder
-                        }
-                        className="w-auto border border-input bg-white text-black hover:bg-accent hover:text-accent-foreground"
-                      >
-                        {loadingQuotes ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Image
-                            src="https://www.envioclick.com/img/home/shipSmarter.svg"
-                            alt="EnvioClick"
-                            width={100}
-                            height={24}
-                            className="h-6 w-auto"
-                          />
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Obtener Cotizaciones de Envío</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-
-                {/* Rates Display */}
-                {shippingQuotes.length > 0 && (
-                  <div className="space-y-3">
-                    {/* Box Used Info */}
-                    {recommendedBox && (
-                      <Alert className="bg-blue-50">
-                        <Package className="h-4 w-4" />
-                        <AlertDescription>
-                          <strong>Caja Utilizada para Cotización:</strong>{" "}
-                          {recommendedBox.name} ({recommendedBox.width}x
-                          {recommendedBox.height}x{recommendedBox.length}cm)
-                        </AlertDescription>
-                      </Alert>
-                    )}
-
-                    <div className="flex items-center justify-between">
-                      <Label>Selecciona una tarifa:</Label>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={onGetShippingQuotes}
-                        disabled={loadingQuotes}
-                      >
-                        <RefreshCw className="h-4 w-4" />
-                      </Button>
-                    </div>
-
-                    <RadioGroup
-                      key={selectedRateId?.toString() || "no-rate"}
-                      value={selectedRateId?.toString() || ""}
-                      defaultValue={selectedRateId?.toString() || undefined}
-                      onValueChange={(value) => {
-                        const quote = shippingQuotes.find(
-                          (q) => q.idRate === parseInt(value),
-                        );
-                        if (quote) handleSelectRate(quote);
-                      }}
-                      className="space-y-3"
-                    >
-                      {shippingQuotes.map((quote) => {
-                        const carrierInfo = getCarrierInfo(quote.carrier);
-                        const bgColor = carrierInfo?.color || "#FFFFFF";
-                        return (
-                          <div key={quote.idRate} className="relative">
-                            <RadioGroupItem
-                              value={quote.idRate.toString()}
-                              id={`rate-${quote.idRate}`}
-                              className="peer sr-only"
-                              disabled={
-                                !!initialData?.shipping?.envioClickIdOrder
-                              }
-                            />
-                            <Label
-                              htmlFor={`rate-${quote.idRate}`}
-                              className={cn(
-                                "flex cursor-pointer flex-col rounded-lg border-2 p-4 transition-all",
-                                selectedRateId === quote.idRate
-                                  ? "border-primary bg-primary/5"
-                                  : "border-border hover:border-primary/50",
-                                !!initialData?.shipping?.envioClickIdOrder &&
-                                  "cursor-not-allowed opacity-50",
-                              )}
-                            >
-                              <div className="flex items-start justify-between gap-4">
-                                {/* Carrier Logo with Brand Color */}
-                                <div className="flex flex-1 items-center gap-3">
-                                  {carrierInfo && (
-                                    <div
-                                      className="flex h-12 w-20 flex-shrink-0 items-center justify-center rounded-md p-2"
-                                      style={{ backgroundColor: bgColor }}
-                                    >
-                                      <Image
-                                        src={carrierInfo.logoUrl}
-                                        alt={carrierInfo.comercialName}
-                                        width={64}
-                                        height={32}
-                                        className="h-full w-full object-contain"
-                                      />
-                                    </div>
-                                  )}
-
-                                  <div className="flex-1 space-y-1">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      <span className="font-semibold">
-                                        {quote.carrier}
-                                      </span>
-                                      {quote.isCOD ? (
-                                        <Badge
-                                          variant="outline"
-                                          className="rounded-full border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600"
-                                        >
-                                          ✓ Admite contraentrega
-                                        </Badge>
-                                      ) : (
-                                        <Badge
-                                          variant="secondary"
-                                          className="rounded-full px-2 py-0.5 text-[10px] font-medium text-muted-foreground/80"
-                                        >
-                                          ✗ Solo pago online
-                                        </Badge>
-                                      )}
-                                    </div>
-                                    <p className="text-sm text-muted-foreground">
-                                      {quote.product}
-                                    </p>
-                                    <div className="flex items-center gap-4 text-sm">
-                                      <span className="text-muted-foreground">
-                                        Entrega aprox. {quote.deliveryDays}{" "}
-                                        {quote.deliveryDays === 1
-                                          ? "día"
-                                          : "días"}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                                {/* Price Section */}
-                                <div className="flex-shrink-0 space-y-1 text-right">
-                                  <p className="text-2xl font-bold">
-                                    {currencyFormatter(quote.totalCost)}
-                                  </p>
-                                  <div className="space-y-0.5 text-xs text-muted-foreground">
-                                    <p>
-                                      Flete: {currencyFormatter(quote.flete)}
-                                    </p>
-                                    <p>
-                                      Seguro:{" "}
-                                      {currencyFormatter(
-                                        quote.minimumInsurance,
-                                      )}
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                            </Label>
-                          </div>
-                        );
-                      })}
-                    </RadioGroup>
-
-                    {selectedRateId && (
-                      <Alert>
-                        <AlertDescription>
-                          <Check className="inline h-4 w-4 text-green-500" />{" "}
-                          Tarifa seleccionada.{" "}
-                          {form.watch("status") === "PAID"
-                            ? "Al guardar se creará automáticamente la guía de envío."
-                            : "Cambia el estado a PAGADO para crear la guía de envío."}
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                  </div>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value={OrderType.STANDARD}>
+                          Estándar
+                        </SelectItem>
+                        <SelectItem value={OrderType.QUOTATION}>
+                          Cotización
+                        </SelectItem>
+                        <SelectItem value={OrderType.CUSTOM}>
+                          Personalizada
+                        </SelectItem>
+                        <SelectItem value={OrderType.FESTIVAL} disabled>
+                          Venta en feria
+                        </SelectItem>
+                        <SelectItem value={OrderType.POINT_OF_SALE} disabled>
+                          Venta presencial
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
                 )}
+              />
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem
+                    id="estado"
+                    className="col-span-1 scroll-mt-24 md:col-span-2 lg:col-span-3 xl:col-span-4"
+                  >
+                    <FormLabel isRequired>Estado de la orden</FormLabel>
+                    <FormDescription>
+                      Selecciona el estado actual de la orden
+                    </FormDescription>
+                    <FormControl>
+                      <OrderStatusSelector
+                        currentStatus={field.value}
+                        onStatusChange={(newStatus) => {
+                          if (newStatus === OrderStatus.SENT) {
+                            const trackingCode = form.getValues(
+                              "shipping.trackingCode",
+                            );
+                            const provider = form.getValues("shippingProvider");
 
-                {/* Guide already created warning */}
-                {initialData?.shipping?.envioClickIdOrder && (
-                  <Alert>
-                    <AlertDescription>
-                      Esta orden ya tiene una guía de EnvioClick creada. Los
-                      datos de envío no se pueden modificar.
-                    </AlertDescription>
-                  </Alert>
+                            // If manual shipping, strict check.
+                            // If EnvioClick, it might be auto-filled, but we still expect it to be present if "Sent" is clicked.
+                            // If NO shipping (Pickup), maybe we don't need it?
+                            // User said "Trigger Notifications... Tracking Number".
+                            // Let's assume if Provider is NOT "NONE", we need tracking.
+
+                            if (
+                              provider !== ShippingProvider.NONE &&
+                              !trackingCode
+                            ) {
+                              toast({
+                                title: "Falta el número de guía",
+                                description:
+                                  "Para marcar como Enviado, debes ingresar el número de guía (Tracking Code) en la sección de envío.",
+                                variant: "destructive",
+                              });
+                              return;
+                            }
+                          }
+                          field.onChange(newStatus);
+                        }}
+                        readOnly={loading}
+                        className="py-4"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
                 )}
-              </div>
-            )}
+              />
 
-            {/* Manual Shipping Info */}
-            {form.watch("shippingProvider") === "MANUAL" && (
-              <div className="space-y-4 rounded-lg bg-muted/50 p-4">
-                <Alert>
-                  <AlertDescription>
-                    Completa los datos del envío con una transportadora que no
-                    está en EnvioClick.
-                  </AlertDescription>
-                </Alert>
-
-                {/* Box Selector UI for Manual */}
-                <div className="space-y-4 rounded-md border bg-white p-4">
-                  <h3 className="font-medium">Configuración de Empaque</h3>
-                  <div className="flex flex-wrap items-end gap-4">
-                    <div className="min-w-[200px] space-y-2">
-                      <Label>Seleccionar Caja Manual</Label>
-                      <Select
-                        value={form.watch("shipping.boxId") || "auto"}
-                        onValueChange={handleBoxChange}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Automático (Recomendado)" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="auto">
-                            Automático (Recomendado)
-                          </SelectItem>
-                          {boxes?.map((box: Box) => (
-                            <SelectItem key={box.id} value={box.id}>
-                              {box.name} ({box.width}x{box.height}x{box.length}
-                              cm)
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Carrier Name */}
+              {/* Expiration Date - Only visible for Quotations */}
+              {form.watch("type") === OrderType.QUOTATION && (
                 <FormField
                   control={form.control}
-                  name="shipping.carrierName"
+                  name="expiresAt"
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel isRequired>Transportadora</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Ej: Servientrega, TCC, Coordinadora"
-                          disabled={loading}
-                          {...field}
-                          value={field.value || ""}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Tracking Code */}
-                <FormField
-                  control={form.control}
-                  name="shipping.trackingCode"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Número de Guía</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Ej: SER123456789"
-                          disabled={loading}
-                          {...field}
-                          value={field.value || ""}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Código de seguimiento de la transportadora
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Tracking URL */}
-                <FormField
-                  control={form.control}
-                  name="shipping.trackingUrl"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>URL de Rastreo</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Ej: https://..."
-                          disabled={loading}
-                          {...field}
-                          value={field.value || ""}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Guide URL */}
-                <FormField
-                  control={form.control}
-                  name="shipping.guideUrl"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>URL de la Guía (PDF)</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Ej: https://..."
-                          disabled={loading}
-                          {...field}
-                          value={field.value || ""}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Cost and Status in Grid */}
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="shipping.cost"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Costo del Envío</FormLabel>
-                        <FormControl>
-                          <CurrencyInput
-                            placeholder="$ 15.000"
-                            disabled={loading}
-                            value={field.value}
-                            onChange={field.onChange}
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          Cantidad que el cliente pagará por el envío
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="shipping.status"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Estado del Envío</FormLabel>
-                        <Select
-                          disabled={loading}
-                          onValueChange={field.onChange}
-                          value={field.value}
-                          defaultValue={field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecciona un estado" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {Object.entries(shippingOptions).map(
-                              ([key, label]) => (
-                                <SelectItem key={key} value={key}>
-                                  {label}
-                                </SelectItem>
-                              ),
-                            )}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="shipping.deliveryDays"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Días de entrega</FormLabel>
-                        <FormControl>
-                          <CountInput
-                            min={0}
-                            disabled={loading}
-                            value={Number(field.value || 0)}
-                            onChange={field.onChange}
-                            ariaLabel="Días de entrega"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="shipping.isCOD"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                        <FormControl>
-                          <Checkbox
-                            checked={field.value}
-                            onCheckedChange={(checked) => {
-                              field.onChange(checked);
-                              if (checked) {
-                                form.setValue(
-                                  "payment.method",
-                                  PaymentMethod.COD,
-                                  { shouldDirty: true },
-                                );
-                              } else {
-                                if (
-                                  form.getValues("payment.method") ===
-                                  PaymentMethod.COD
-                                ) {
-                                  form.setValue(
-                                    "payment.method",
-                                    PaymentMethod.BankTransfer,
-                                    { shouldDirty: true },
-                                  );
-                                }
-                              }
-                            }}
-                          />
-                        </FormControl>
-                        <div className="space-y-1 leading-none">
-                          <FormLabel>Pago Contra Entrega</FormLabel>
-                          <FormDescription>
-                            ¿Este envío es con recaudo?
-                          </FormDescription>
-                        </div>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <FormField
-                  control={form.control}
-                  name="shipping.estimatedDeliveryDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Fecha de Entrega Estimada</FormLabel>
+                    <FormItem className="col-span-1 md:col-span-2 lg:col-span-3 xl:col-span-4">
+                      <FormLabel>Válida Hasta</FormLabel>
                       <FormControl>
                         <DatePicker
                           name={field.name}
                           control={form.control}
                           disabled={loading}
-                          placeholder="Selecciona una fecha"
+                          placeholder="Fecha de expiración"
                         />
                       </FormControl>
+                      <FormDescription>
+                        Fecha límite para aceptar esta cotización.
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-
-                <FormField
-                  control={form.control}
-                  name="shipping.notes"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Notas adicionales para el envío</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          disabled={loading}
-                          placeholder="Ej: Entregar en la portería"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Show carrier logo if available */}
-                {carrierInfo && (
-                  <div className="flex items-center gap-3 rounded-md border p-3">
-                    <div
-                      className="flex h-12 w-20 flex-shrink-0 items-center justify-center rounded-md p-2"
-                      style={{
-                        backgroundColor: carrierInfo.color || "#FFFFFF",
-                      }}
+              )}
+            </div>
+          </section>
+          <section
+            id="descuentos"
+            aria-labelledby="descuentos-titulo"
+            className="scroll-mt-24 space-y-6 rounded-xl border bg-white p-5 shadow-sm"
+          >
+            <div className="flex flex-col gap-0.5">
+              <h2
+                id="descuentos-titulo"
+                className="text-[15px] font-bold text-primary"
+              >
+                Descuentos y cupones
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Se aplican sobre el subtotal de productos.
+              </p>
+            </div>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Descuentos y Cupones</h2>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  form.resetField("discount.type");
+                  form.resetField("discount.amount", {
+                    defaultValue: 0,
+                  });
+                  form.resetField("discount.reason", {
+                    defaultValue: "",
+                  });
+                  toast({
+                    description: "Descuentos eliminados",
+                    variant: "success",
+                  });
+                }}
+              >
+                <Trash className="mr-2 h-4 w-4" />
+                Limpiar descuentos
+              </Button>
+            </div>
+            <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-3">
+              <FormField
+                control={form.control}
+                name="discount.type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tipo de descuento</FormLabel>
+                    <Select
+                      key={field.value}
+                      disabled={loading}
+                      onValueChange={field.onChange}
+                      value={field.value || ""}
+                      defaultValue={field.value || ""}
                     >
-                      <Image
-                        src={carrierInfo.logoUrl}
-                        alt={carrierInfo.comercialName}
-                        width={64}
-                        height={32}
-                        className="h-full w-full object-contain"
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar tipo" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value={DiscountType.PERCENTAGE}>
+                          {discountOptions[DiscountType.PERCENTAGE]}
+                        </SelectItem>
+                        <SelectItem value={DiscountType.FIXED}>
+                          {discountOptions[DiscountType.FIXED]}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="discount.amount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Monto del descuento</FormLabel>
+                    <FormControl>
+                      {form.watch("discount.type") ===
+                      DiscountType.PERCENTAGE ? (
+                        <PercentageInput
+                          disabled={loading || !form.watch("discount.type")}
+                          placeholder="10"
+                          value={field.value}
+                          onChange={field.onChange}
+                        />
+                      ) : (
+                        <CurrencyInput
+                          placeholder="$ 10.000"
+                          disabled={loading || !form.watch("discount.type")}
+                          value={field.value}
+                          onChange={field.onChange}
+                        />
+                      )}
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="discount.reason"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Razón del descuento</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        disabled={loading || !form.watch("discount.type")}
+                        placeholder="Ej: Promoción especial"
+                        {...field}
                       />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="couponCode"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel className="flex items-center gap-2">
+                      Cupón
+                      {coupon && (
+                        <Badge
+                          variant="success"
+                          className="flex items-center gap-1"
+                        >
+                          <Check className="h-3 w-3" />
+                          Aplicado
+                        </Badge>
+                      )}
+                    </FormLabel>
+                    <div className="flex items-center gap-2">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              disabled={validatingCoupon || loading}
+                              className={cn(
+                                "w-full justify-between",
+                                !field.value && "text-muted-foreground",
+                              )}
+                            >
+                              <div className="flex items-center gap-2 font-mono">
+                                <Ticket
+                                  className={cn(
+                                    "h-4 w-4",
+                                    coupon
+                                      ? "text-success"
+                                      : "text-muted-foreground",
+                                  )}
+                                />
+                                {field.value
+                                  ? availableCoupons.find(
+                                      (c: Coupon) => c.code === field.value,
+                                    )?.code || field.value
+                                  : availableCoupons.length > 0
+                                    ? "Seleccionar cupón"
+                                    : "No hay cupones disponibles"}
+                              </div>
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        {availableCoupons.length > 0 && (
+                          <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+                            <Command>
+                              <CommandInput placeholder="Buscar cupón..." />
+                              <CommandEmpty>
+                                No se encontraron cupones.
+                              </CommandEmpty>
+                              <CommandGroup>
+                                {availableCoupons.map((c: Coupon) => (
+                                  <CommandItem
+                                    key={c.code}
+                                    value={c.code}
+                                    onSelect={async () => {
+                                      try {
+                                        setValidatingCoupon(true);
+                                        if (
+                                          !initialData?.coupon ||
+                                          initialData.coupon.code !== c.code
+                                        ) {
+                                          const response = await axios.post(
+                                            `/api/${params.storeId}/coupons/validate`,
+                                            {
+                                              code: c.code,
+                                              subtotal: orderTotals.subtotal,
+                                            },
+                                          );
+                                          setCoupon(response.data);
+                                        } else {
+                                          setCoupon(initialData.coupon);
+                                        }
+                                        field.onChange(c.code);
+                                        toast({
+                                          description:
+                                            "Cupón aplicado correctamente",
+                                          variant: "success",
+                                        });
+                                      } catch (error) {
+                                        toast({
+                                          description: getErrorMessage(error),
+                                          variant: "destructive",
+                                        });
+                                        setCoupon(null);
+                                        field.onChange("");
+                                      } finally {
+                                        setValidatingCoupon(false);
+                                      }
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        c.code === field.value
+                                          ? "opacity-100"
+                                          : "opacity-0",
+                                      )}
+                                    />
+                                    <div className="flex w-full items-center justify-between">
+                                      <span className="font-mono">
+                                        {c.code}
+                                      </span>
+                                      <span className="text-xs text-muted-foreground">
+                                        {c.type === DiscountType.PERCENTAGE
+                                          ? `${c.amount}% de descuento`
+                                          : `${currencyFormatter(Number(c.amount))} de descuento`}
+                                      </span>
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </Command>
+                          </PopoverContent>
+                        )}
+                      </Popover>
+                      {coupon && (
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="icon"
+                          className=""
+                          onClick={() => {
+                            setCoupon(null);
+                            field.onChange("");
+                            toast({
+                              description: "Cupón removido",
+                              variant: "success",
+                            });
+                          }}
+                        >
+                          <Trash className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
-                    <div>
-                      <p className="text-sm font-medium">
-                        {carrierInfo.comercialName}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Transportadora registrada
-                      </p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </section>
+          <section
+            id="pago-seccion"
+            aria-labelledby="pago-seccion-titulo"
+            className="scroll-mt-24 space-y-6 rounded-xl border bg-white p-5 shadow-sm"
+          >
+            <div className="flex flex-col gap-0.5">
+              <h2
+                id="pago-seccion-titulo"
+                className="text-[15px] font-bold text-primary"
+              >
+                Pago
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Método, estado y comprobante. Para cobrar en línea, elige Pago
+                en línea y usa Links y Pagos.
+              </p>
+            </div>
+            <h2
+              id="pago"
+              className="flex scroll-mt-24 items-center gap-2 text-lg font-semibold"
+            >
+              <Wallet className="h-5 w-5" />
+              Estado del pago{" "}
+              {initialData?.payment?.transactionId
+                ? `# (${initialData?.payment?.transactionId})`
+                : ""}
+            </h2>
+            <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-3">
+              <FormField
+                control={form.control}
+                name="payment.method"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Método de pago</FormLabel>
+                    <Select
+                      disabled={loading}
+                      onValueChange={(val) => {
+                        field.onChange(val);
+                        form.setValue(
+                          "shipping.isCOD",
+                          val === PaymentMethod.COD,
+                          { shouldDirty: true },
+                        );
+                      }}
+                      value={field.value}
+                      defaultValue={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue
+                            defaultValue={field.value}
+                            placeholder="Selecciona un método de pago"
+                          />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {adminPaymentOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Para enviar un enlace de pago, selecciona Pago en línea,
+                      guarda la orden y luego cópialo desde Links y Pagos.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="payment.transactionId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Número de la transacción</FormLabel>
+                    <FormControl>
+                      <Input
+                        disabled={loading}
+                        placeholder="000-000000-000"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {initialData?.payment?.details && (
+                <FormItem className="flex w-full flex-col">
+                  <FormLabel>Detalles del pago</FormLabel>
+                  <Alert className="max-w-full">
+                    <AlertDescription>
+                      <div className="flex w-full flex-col">
+                        {Object.entries(parsedDetails).map(([key, value]) => {
+                          const currentPaymentMethodObject =
+                            paymentMethodsByOption[
+                              initialData?.payment?.method as PaymentMethod
+                            ];
+                          return (
+                            <div
+                              key={key}
+                              className="flex w-full flex-col text-sm"
+                            >
+                              <span className="font-semibold">
+                                {detailsTitleOptions[key] || key}
+                              </span>
+                              <span>
+                                {currentPaymentMethodObject?.[String(value)] ||
+                                  String(value)}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                </FormItem>
+              )}
+            </div>
+          </section>
+          <section
+            id="envio-seccion"
+            aria-labelledby="envio-seccion-titulo"
+            className="scroll-mt-24 space-y-6 rounded-xl border bg-white p-5 shadow-sm"
+          >
+            <div className="flex flex-col gap-0.5">
+              <h2
+                id="envio-seccion-titulo"
+                className="text-[15px] font-bold text-primary"
+              >
+                Envío y empaque
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Transportadora, cotización, caja y guía. La guía se crea al
+                guardar el pedido como pagado.
+              </p>
+            </div>
+            <h2
+              id="envio"
+              className="flex scroll-mt-24 items-center gap-2 text-lg font-semibold"
+            >
+              <Package className="h-5 w-5" />
+              Información de envío{" "}
+              {initialData?.shipping?.envioClickIdOrder
+                ? `# (${initialData?.shipping?.envioClickIdOrder})`
+                : ""}
+            </h2>
+            <div className="grid grid-cols-1 gap-8">
+              <FormField
+                control={form.control}
+                name="shippingProvider"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel isRequired>Tipo de Envío</FormLabel>
+                    <FormControl>
+                      <RadioGroup
+                        key={field.value}
+                        onValueChange={field.onChange}
+                        value={field.value}
+                        defaultValue={field.value}
+                        className="grid grid-cols-1 gap-4 md:grid-cols-3"
+                        disabled={
+                          loading || !!initialData?.shipping?.envioClickIdOrder
+                        }
+                      >
+                        {/* NONE - Store Pickup */}
+                        <Label
+                          htmlFor="none"
+                          className={cn("cursor-pointer transition-all")}
+                        >
+                          <Card className="h-full hover:border-primary/50">
+                            <CardContent className="flex items-start gap-3 p-5">
+                              <RadioGroupItem
+                                value={ShippingProvider.NONE}
+                                id="none"
+                                className="mt-0.5"
+                              />
+                              <div className="flex flex-1 flex-col gap-1">
+                                <div className="flex items-center gap-2">
+                                  <Store className="h-5 w-5 text-primary" />
+                                  <span className="font-semibold">
+                                    Recoger en tienda
+                                  </span>
+                                </div>
+                                <span className="text-xs text-muted-foreground">
+                                  El cliente recogerá el pedido en la ubicación
+                                  física
+                                </span>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </Label>
+
+                        {/* ENVIOCLICK - Integrated Shipping */}
+                        <Label
+                          htmlFor="envioclick"
+                          className={cn(
+                            "cursor-pointer transition-all",
+                            field.value === ShippingProvider.ENVIOCLICK &&
+                              "ring-2 ring-white ring-offset-2",
+                          )}
+                        >
+                          <Card className="h-full overflow-hidden hover:border-blue-400">
+                            <CardContent className="flex items-start gap-3 rounded-md p-5 text-white [background:linear-gradient(135deg,#010019,#020a47)]">
+                              <RadioGroupItem
+                                value={ShippingProvider.ENVIOCLICK}
+                                id="envioclick"
+                                className="mt-0.5 border-white text-white"
+                              />
+                              <div className="flex flex-1 flex-col gap-2">
+                                <div className="flex items-center gap-2">
+                                  <Image
+                                    src="https://www.envioclickpro.com.co/img/register/logo_solo.svg"
+                                    alt="EnvíoClick"
+                                    width={100}
+                                    height={32}
+                                    className="h-8 w-auto object-contain"
+                                  />
+                                </div>
+                                <span className="text-xs text-blue-100">
+                                  Transportadora integrada para envíos
+                                  nacionales con múltiples opciones
+                                </span>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </Label>
+
+                        {/* MANUAL - Other Carriers */}
+                        <Label
+                          htmlFor="manual"
+                          className={cn(
+                            "cursor-pointer transition-all",
+                            field.value === ShippingProvider.MANUAL &&
+                              "ring-2 ring-primary ring-offset-2",
+                          )}
+                        >
+                          <Card className="h-full hover:border-primary/50">
+                            <CardContent className="flex items-start gap-3 p-5">
+                              <RadioGroupItem
+                                value={ShippingProvider.MANUAL}
+                                id="manual"
+                                className="mt-0.5"
+                              />
+                              <div className="flex flex-1 flex-col gap-1">
+                                <div className="flex items-center gap-2">
+                                  <Truck className="h-5 w-5 text-primary" />
+                                  <span className="font-semibold">
+                                    Envío Manual
+                                  </span>
+                                </div>
+                                <span className="text-xs text-muted-foreground">
+                                  Usar otra transportadora o servicio de
+                                  mensajería personalizado
+                                </span>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </Label>
+                      </RadioGroup>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Store Pickup Status Section */}
+              {form.watch("shippingProvider") === ShippingProvider.NONE && (
+                <div className="space-y-4 rounded-lg bg-muted/50 p-4">
+                  <Alert>
+                    <Store className="h-4 w-4" />
+                    <AlertDescription>
+                      El cliente recogerá el pedido en tienda. Actualiza el
+                      estado para informar al cliente sobre el progreso de su
+                      orden.
+                    </AlertDescription>
+                  </Alert>
+
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <FormField
+                      control={form.control}
+                      name="shipping.status"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Estado del Pedido</FormLabel>
+                          <Select
+                            disabled={loading}
+                            onValueChange={field.onChange}
+                            value={field.value}
+                            defaultValue={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecciona un estado" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {Object.entries(shippingOptions).map(
+                                ([key, label]) => (
+                                  <SelectItem key={key} value={key}>
+                                    {label}
+                                  </SelectItem>
+                                ),
+                              )}
+                            </SelectContent>
+                          </Select>
+                          <FormDescription>
+                            Estado actual del pedido para recogida
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="shipping.cost"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Costo Adicional</FormLabel>
+                          <FormControl>
+                            <CurrencyInput
+                              placeholder="$ 0"
+                              disabled={loading}
+                              value={field.value}
+                              onChange={field.onChange}
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            Costo adicional si aplica
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <FormField
+                    control={form.control}
+                    name="shipping.notes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Notas para el cliente</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            disabled={loading}
+                            placeholder="Ej: Su pedido estará listo para recoger mañana después de las 2pm"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
+
+              {/* EnvioClick Quotation Section */}
+              {form.watch("shippingProvider") ===
+                ShippingProvider.ENVIOCLICK && (
+                <div className="space-y-4">
+                  {/* Box Selector UI for EnvioClick - Pre Quote */}
+                  <div className="space-y-4 rounded-md border bg-muted/20 p-4">
+                    <h3 className="font-medium">Configuración de Empaque</h3>
+                    <div className="flex flex-wrap items-end gap-4">
+                      <div className="min-w-[200px] space-y-2">
+                        <Label>Seleccionar Caja Manual</Label>
+                        <Select
+                          value={form.watch("shipping.boxId") || "auto"}
+                          onValueChange={(val) => handleBoxChange(val)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Automático (Recomendado)" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="auto">
+                              Automático (Recomendado)
+                            </SelectItem>
+                            {boxes?.map((box: Box) => (
+                              <SelectItem key={box.id} value={box.id}>
+                                {box.name} ({box.width}x{box.height}x
+                                {box.length}
+                                cm)
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   </div>
-                )}
+
+                  {/* Quote Button */}
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          onClick={onGetShippingQuotes}
+                          disabled={
+                            loadingQuotes ||
+                            !form.watch("city") ||
+                            !form.watch("daneCode") ||
+                            !!initialData?.shipping?.envioClickIdOrder
+                          }
+                          className="w-auto border border-input bg-white text-black hover:bg-accent hover:text-accent-foreground"
+                        >
+                          {loadingQuotes ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Image
+                              src="https://www.envioclick.com/img/home/shipSmarter.svg"
+                              alt="EnvioClick"
+                              width={100}
+                              height={24}
+                              className="h-6 w-auto"
+                            />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Obtener Cotizaciones de Envío</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+
+                  {/* Rates Display */}
+                  {shippingQuotes.length > 0 && (
+                    <div className="space-y-3">
+                      {/* Box Used Info */}
+                      {recommendedBox && (
+                        <Alert className="bg-blue-50">
+                          <Package className="h-4 w-4" />
+                          <AlertDescription>
+                            <strong>Caja Utilizada para Cotización:</strong>{" "}
+                            {recommendedBox.name} ({recommendedBox.width}x
+                            {recommendedBox.height}x{recommendedBox.length}cm)
+                          </AlertDescription>
+                        </Alert>
+                      )}
+
+                      <div className="flex items-center justify-between">
+                        <Label>Selecciona una tarifa:</Label>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={onGetShippingQuotes}
+                          disabled={loadingQuotes}
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                        </Button>
+                      </div>
+
+                      <RadioGroup
+                        key={selectedRateId?.toString() || "no-rate"}
+                        value={selectedRateId?.toString() || ""}
+                        defaultValue={selectedRateId?.toString() || undefined}
+                        onValueChange={(value) => {
+                          const quote = shippingQuotes.find(
+                            (q) => q.idRate === parseInt(value),
+                          );
+                          if (quote) handleSelectRate(quote);
+                        }}
+                        className="space-y-3"
+                      >
+                        {shippingQuotes.map((quote) => {
+                          const carrierInfo = getCarrierInfo(quote.carrier);
+                          const bgColor = carrierInfo?.color || "#FFFFFF";
+                          return (
+                            <div key={quote.idRate} className="relative">
+                              <RadioGroupItem
+                                value={quote.idRate.toString()}
+                                id={`rate-${quote.idRate}`}
+                                className="peer sr-only"
+                                disabled={
+                                  !!initialData?.shipping?.envioClickIdOrder
+                                }
+                              />
+                              <Label
+                                htmlFor={`rate-${quote.idRate}`}
+                                className={cn(
+                                  "flex cursor-pointer flex-col rounded-lg border-2 p-4 transition-all",
+                                  selectedRateId === quote.idRate
+                                    ? "border-primary bg-primary/5"
+                                    : "border-border hover:border-primary/50",
+                                  !!initialData?.shipping?.envioClickIdOrder &&
+                                    "cursor-not-allowed opacity-50",
+                                )}
+                              >
+                                <div className="flex items-start justify-between gap-4">
+                                  {/* Carrier Logo with Brand Color */}
+                                  <div className="flex flex-1 items-center gap-3">
+                                    {carrierInfo && (
+                                      <div
+                                        className="flex h-12 w-20 flex-shrink-0 items-center justify-center rounded-md p-2"
+                                        style={{ backgroundColor: bgColor }}
+                                      >
+                                        <Image
+                                          src={carrierInfo.logoUrl}
+                                          alt={carrierInfo.comercialName}
+                                          width={64}
+                                          height={32}
+                                          className="h-full w-full object-contain"
+                                        />
+                                      </div>
+                                    )}
+
+                                    <div className="flex-1 space-y-1">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <span className="font-semibold">
+                                          {quote.carrier}
+                                        </span>
+                                        {quote.isCOD ? (
+                                          <Badge
+                                            variant="outline"
+                                            className="rounded-full border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600"
+                                          >
+                                            ✓ Admite contraentrega
+                                          </Badge>
+                                        ) : (
+                                          <Badge
+                                            variant="secondary"
+                                            className="rounded-full px-2 py-0.5 text-[10px] font-medium text-muted-foreground/80"
+                                          >
+                                            ✗ Solo pago online
+                                          </Badge>
+                                        )}
+                                      </div>
+                                      <p className="text-sm text-muted-foreground">
+                                        {quote.product}
+                                      </p>
+                                      <div className="flex items-center gap-4 text-sm">
+                                        <span className="text-muted-foreground">
+                                          Entrega aprox. {quote.deliveryDays}{" "}
+                                          {quote.deliveryDays === 1
+                                            ? "día"
+                                            : "días"}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  {/* Price Section */}
+                                  <div className="flex-shrink-0 space-y-1 text-right">
+                                    <p className="text-2xl font-bold">
+                                      {currencyFormatter(quote.totalCost)}
+                                    </p>
+                                    <div className="space-y-0.5 text-xs text-muted-foreground">
+                                      <p>
+                                        Flete: {currencyFormatter(quote.flete)}
+                                      </p>
+                                      <p>
+                                        Seguro:{" "}
+                                        {currencyFormatter(
+                                          quote.minimumInsurance,
+                                        )}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </Label>
+                            </div>
+                          );
+                        })}
+                      </RadioGroup>
+
+                      {selectedRateId && (
+                        <Alert>
+                          <AlertDescription>
+                            <Check className="inline h-4 w-4 text-green-500" />{" "}
+                            Tarifa seleccionada.{" "}
+                            {form.watch("status") === "PAID"
+                              ? "Al guardar se creará automáticamente la guía de envío."
+                              : "Cambia el estado a PAGADO para crear la guía de envío."}
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Guide already created warning */}
+                  {initialData?.shipping?.envioClickIdOrder && (
+                    <Alert>
+                      <AlertDescription>
+                        Esta orden ya tiene una guía de EnvioClick creada. Los
+                        datos de envío no se pueden modificar.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+              )}
+
+              {/* Manual Shipping Info */}
+              {form.watch("shippingProvider") === "MANUAL" && (
+                <div className="space-y-4 rounded-lg bg-muted/50 p-4">
+                  <Alert>
+                    <AlertDescription>
+                      Completa los datos del envío con una transportadora que no
+                      está en EnvioClick.
+                    </AlertDescription>
+                  </Alert>
+
+                  {/* Box Selector UI for Manual */}
+                  <div className="space-y-4 rounded-md border bg-white p-4">
+                    <h3 className="font-medium">Configuración de Empaque</h3>
+                    <div className="flex flex-wrap items-end gap-4">
+                      <div className="min-w-[200px] space-y-2">
+                        <Label>Seleccionar Caja Manual</Label>
+                        <Select
+                          value={form.watch("shipping.boxId") || "auto"}
+                          onValueChange={handleBoxChange}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Automático (Recomendado)" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="auto">
+                              Automático (Recomendado)
+                            </SelectItem>
+                            {boxes?.map((box: Box) => (
+                              <SelectItem key={box.id} value={box.id}>
+                                {box.name} ({box.width}x{box.height}x
+                                {box.length}
+                                cm)
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Carrier Name */}
+                  <FormField
+                    control={form.control}
+                    name="shipping.carrierName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel isRequired>Transportadora</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Ej: Servientrega, TCC, Coordinadora"
+                            disabled={loading}
+                            {...field}
+                            value={field.value || ""}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Tracking Code */}
+                  <FormField
+                    control={form.control}
+                    name="shipping.trackingCode"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Número de Guía</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Ej: SER123456789"
+                            disabled={loading}
+                            {...field}
+                            value={field.value || ""}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Código de seguimiento de la transportadora
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Tracking URL */}
+                  <FormField
+                    control={form.control}
+                    name="shipping.trackingUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>URL de Rastreo</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Ej: https://..."
+                            disabled={loading}
+                            {...field}
+                            value={field.value || ""}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Guide URL */}
+                  <FormField
+                    control={form.control}
+                    name="shipping.guideUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>URL de la Guía (PDF)</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Ej: https://..."
+                            disabled={loading}
+                            {...field}
+                            value={field.value || ""}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Cost and Status in Grid */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="shipping.cost"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Costo del Envío</FormLabel>
+                          <FormControl>
+                            <CurrencyInput
+                              placeholder="$ 15.000"
+                              disabled={loading}
+                              value={field.value}
+                              onChange={field.onChange}
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            Cantidad que el cliente pagará por el envío
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="shipping.status"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Estado del Envío</FormLabel>
+                          <Select
+                            disabled={loading}
+                            onValueChange={field.onChange}
+                            value={field.value}
+                            defaultValue={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecciona un estado" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {Object.entries(shippingOptions).map(
+                                ([key, label]) => (
+                                  <SelectItem key={key} value={key}>
+                                    {label}
+                                  </SelectItem>
+                                ),
+                              )}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="shipping.deliveryDays"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Días de entrega</FormLabel>
+                          <FormControl>
+                            <CountInput
+                              min={0}
+                              disabled={loading}
+                              value={Number(field.value || 0)}
+                              onChange={field.onChange}
+                              ariaLabel="Días de entrega"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="shipping.isCOD"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={(checked) => {
+                                field.onChange(checked);
+                                if (checked) {
+                                  form.setValue(
+                                    "payment.method",
+                                    PaymentMethod.COD,
+                                    { shouldDirty: true },
+                                  );
+                                } else {
+                                  if (
+                                    form.getValues("payment.method") ===
+                                    PaymentMethod.COD
+                                  ) {
+                                    form.setValue(
+                                      "payment.method",
+                                      PaymentMethod.BankTransfer,
+                                      { shouldDirty: true },
+                                    );
+                                  }
+                                }
+                              }}
+                            />
+                          </FormControl>
+                          <div className="space-y-1 leading-none">
+                            <FormLabel>Pago Contra Entrega</FormLabel>
+                            <FormDescription>
+                              ¿Este envío es con recaudo?
+                            </FormDescription>
+                          </div>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <FormField
+                    control={form.control}
+                    name="shipping.estimatedDeliveryDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Fecha de Entrega Estimada</FormLabel>
+                        <FormControl>
+                          <DatePicker
+                            name={field.name}
+                            control={form.control}
+                            disabled={loading}
+                            placeholder="Selecciona una fecha"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="shipping.notes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Notas adicionales para el envío</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            disabled={loading}
+                            placeholder="Ej: Entregar en la portería"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Show carrier logo if available */}
+                  {carrierInfo && (
+                    <div className="flex items-center gap-3 rounded-md border p-3">
+                      <div
+                        className="flex h-12 w-20 flex-shrink-0 items-center justify-center rounded-md p-2"
+                        style={{
+                          backgroundColor: carrierInfo.color || "#FFFFFF",
+                        }}
+                      >
+                        <Image
+                          src={carrierInfo.logoUrl}
+                          alt={carrierInfo.comercialName}
+                          width={64}
+                          height={32}
+                          className="h-full w-full object-contain"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">
+                          {carrierInfo.comercialName}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Transportadora registrada
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
+          {initialData && (
+            <section
+              id="zona-de-cuidado"
+              aria-labelledby="cuidado-titulo"
+              className="space-y-3 rounded-xl border border-tint-pink bg-white p-5 shadow-sm"
+            >
+              <div className="flex flex-col gap-0.5">
+                <h2
+                  id="cuidado-titulo"
+                  className="text-[15px] font-bold text-primary"
+                >
+                  Zona de cuidado
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Eliminar borra el pedido de forma definitiva. Si ya estaba
+                  pagado, el stock vuelve con un movimiento de inventario.
+                </p>
               </div>
-            )}
+              <Button
+                type="button"
+                variant="outline"
+                disabled={loading}
+                onClick={() => setOpen(true)}
+                className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash className="h-4 w-4" aria-hidden="true" />
+                Eliminar pedido
+              </Button>
+            </section>
+          )}
+          <div className="sticky bottom-[84px] z-20 flex flex-col gap-3 rounded-xl border bg-white/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between lg:bottom-4">
+            <p className="text-xs text-muted-foreground">
+              {initialData
+                ? "Los cambios se aplican al guardar. Cambiar el estado descuenta inventario, crea la guía o avisa al cliente según corresponda."
+                : "Revisa productos, cliente y pago; el pedido se crea al guardar."}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onClear}
+                disabled={loading}
+              >
+                Descartar cambios
+              </Button>
+              <Button
+                disabled={loading}
+                type="submit"
+                isLoading={loading}
+                loadingText={pendingText}
+                className="min-w-[180px]"
+              >
+                {action}
+              </Button>
+            </div>
           </div>
-          <Button
-            disabled={loading}
-            className="mt-8 h-12 w-full text-lg font-bold shadow-lg transition-all hover:scale-[1.01]"
-            type="submit"
-            size="lg"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {pendingText}
-              </>
-            ) : (
-              action
-            )}
-          </Button>
         </form>
       </Form>
     </>

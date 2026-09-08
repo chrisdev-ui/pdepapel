@@ -5,6 +5,7 @@ import { DataTableCellNumber } from "@/components/ui/data-table-cell-number";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { ColumnDef } from "@tanstack/react-table";
 import { getTypes } from "../server/get-types";
+import { AttributeStatusBadge } from "../../atributos/components/archive-actions";
 import { CellAction } from "./cell-action";
 
 export type TypeColumn = Awaited<ReturnType<typeof getTypes>>[number];
@@ -28,6 +29,13 @@ export const columns: ColumnDef<TypeColumn>[] = [
     cell: ({ row }) => (
       <DataTableCellNumber value={row.original._count.categories} />
     ),
+  },
+  {
+    accessorKey: "isArchived",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Estado" />
+    ),
+    cell: ({ row }) => <AttributeStatusBadge isArchived={row.original.isArchived} />,
   },
   {
     accessorKey: "createdAt",

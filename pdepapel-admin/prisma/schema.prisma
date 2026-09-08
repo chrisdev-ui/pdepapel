@@ -182,12 +182,15 @@ model Type {
   icon        String?         @db.VarChar(32)
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
+  isArchived Boolean   @default(false)
+  archivedAt DateTime?
   store       Store           @relation("StoreToType", fields: [storeId], references: [id])
   categories  Category[]
   slugAliases TypeSlugAlias[]
 
   @@index([storeId])
   @@index([storeId, slug])
+  @@index([storeId, isArchived])
 }
 
 model Category {
@@ -205,6 +208,8 @@ model Category {
   imageUrl                       String?                         @db.Text
   createdAt                      DateTime                        @default(now())
   updatedAt                      DateTime                        @updatedAt
+  isArchived Boolean   @default(false)
+  archivedAt DateTime?
   store                          Store                           @relation("StoreToCategory", fields: [storeId], references: [id])
   type                           Type                            @relation(fields: [typeId], references: [id])
   products                       Product[]                       @relation("CategoryToProduct")
@@ -216,6 +221,7 @@ model Category {
   @@unique([storeId, slug])
   @@index([storeId])
   @@index([typeId])
+  @@index([storeId, isArchived])
 }
 
 model Size {
@@ -225,11 +231,14 @@ model Size {
   value     String
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+  isArchived Boolean   @default(false)
+  archivedAt DateTime?
   store     Store     @relation("StoreToSize", fields: [storeId], references: [id])
   products  Product[]
 
   @@unique([storeId, value])
   @@index([storeId])
+  @@index([storeId, isArchived])
 }
 
 model ShippingProfile {
@@ -326,10 +335,13 @@ model Color {
   value     String
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+  isArchived Boolean   @default(false)
+  archivedAt DateTime?
   store     Store     @relation("StoreToColor", fields: [storeId], references: [id])
   products  Product[]
 
   @@index([storeId])
+  @@index([storeId, isArchived])
 }
 
 model Design {
@@ -338,10 +350,13 @@ model Design {
   name      String
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+  isArchived Boolean   @default(false)
+  archivedAt DateTime?
   store     Store     @relation("StoreToDesign", fields: [storeId], references: [id])
   products  Product[]
 
   @@index([storeId])
+  @@index([storeId, isArchived])
 }
 
 model ProductGroup {
@@ -825,20 +840,37 @@ model Banner {
 }
 
 model Review {
-  id        String   @id @default(uuid())
-  productId String
-  userId    String
-  rating    Float
-  comment   String?  @db.Text
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  storeId   String
-  name      String
-  store     Store    @relation("StoreToReview", fields: [storeId], references: [id])
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  id             String       @id @default(uuid())
+  productId      String
+  userId         String
+  rating         Float
+  comment        String?      @db.Text
+  /// Moderación de la tienda (2026-09): PUBLISHED se muestra en la tienda, HIDDEN solo en el panel.
+  status         ReviewStatus @default(PUBLISHED)
+  moderatedAt    DateTime?
+  moderatedBy    String?      @db.VarChar(128)
+  moderationNote String?      @db.VarChar(300)
+  /// Respuesta pública de la tienda; se muestra bajo la reseña en la ficha del producto.
+  reply          String?      @db.Text
+  repliedAt      DateTime?
+  repliedBy      String?      @db.VarChar(128)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  storeId        String
+  name           String
+  store          Store        @relation("StoreToReview", fields: [storeId], references: [id])
+  product        Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId])
   @@index([storeId])
+  @@index([storeId, status])
+  @@index([productId, status])
+}
+
+enum ReviewStatus {
+  PUBLISHED
+  HIDDEN
+  PENDING
 }
 
 model Shipping {

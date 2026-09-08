@@ -2,6 +2,7 @@ import { SORT_OPTIONS, SortOption } from "@/constants";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import cloudinaryInstance from "@/lib/cloudinary";
 import prismadb from "@/lib/prismadb";
+import { PUBLIC_REVIEW_INCLUDE, PUBLIC_REVIEW_WHERE } from "@/lib/review-moderation";
 import {
   Prisma,
   Product,
@@ -745,6 +746,7 @@ export async function GET(
                 design: true,
                 isFeatured: true,
                 reviews: {
+                  where: PUBLIC_REVIEW_WHERE,
                   select: {
                     rating: true,
                   },
@@ -1128,9 +1130,7 @@ export async function GET(
           size: true,
           productGroup: true,
           supplier: includeSupplier ? true : undefined,
-          reviews: {
-            orderBy: { createdAt: "desc" },
-          },
+          reviews: PUBLIC_REVIEW_INCLUDE,
         },
         orderBy: {
           createdAt: "desc",
@@ -1212,7 +1212,7 @@ export async function GET(
             design: true,
             size: true,
             supplier: includeSupplier ? true : undefined,
-            reviews: { orderBy: { createdAt: "desc" } },
+            reviews: PUBLIC_REVIEW_INCLUDE,
           },
           orderBy: { createdAt: "desc" }, // Secondary sort
         });
@@ -1237,7 +1237,7 @@ export async function GET(
             design: true,
             size: true,
             supplier: includeSupplier ? true : undefined,
-            reviews: { orderBy: { createdAt: "desc" } },
+            reviews: PUBLIC_REVIEW_INCLUDE,
           },
           orderBy: { createdAt: "desc" }, // Secondary sort
         });
@@ -1353,9 +1353,7 @@ export async function GET(
                 },
               },
             },
-            reviews: {
-              orderBy: { createdAt: "desc" },
-            },
+            reviews: PUBLIC_REVIEW_INCLUDE,
           },
           orderBy: SORT_OPTIONS[sortOption as SortOption],
           skip: fromShop ? (page - 1) * itemsPerPage : undefined,

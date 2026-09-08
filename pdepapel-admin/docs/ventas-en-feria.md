@@ -18,7 +18,7 @@ Este módulo mantiene separado el inventario llevado a una feria del inventario 
 1. Abre la misma feria desde el teléfono en `admin.papeleriapdepapel.com` e inicia sesión con la cuenta propietaria de la tienda.
 2. Permite el uso de la cámara si usarás **Escanear**. También funciona un lector Bluetooth: enfoca el campo de código y escanea; o escribe el SKU, GTIN o QR de la cápsula.
 3. Revisa los productos agregados y las cantidades antes de cobrar.
-4. Selecciona **Efectivo** o **Transferencia** y pulsa **Confirmar pago** una sola vez.
+4. Selecciona **Efectivo** o **Transferencia**, pulsa **Registrar pago** y confirma en el diálogo una sola vez. Es la misma pantalla del Punto de venta, pero solo ofrece lo reservado para la feria.
 5. Espera el mensaje de venta registrada antes de entregar el producto. El sistema evita cobrar dos veces un mismo envío del formulario y no permite superar el inventario reservado.
 6. Para una cápsula, escanea únicamente su QR. El pedido se muestra como **Cápsula sorpresa** y la relación interna conserva el producto real y su costo.
 

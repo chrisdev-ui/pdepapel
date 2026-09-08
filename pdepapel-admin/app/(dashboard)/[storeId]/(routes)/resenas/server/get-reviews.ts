@@ -10,8 +10,10 @@ export async function getReviews(storeId: string) {
     },
     include: {
       product: {
-        include: {
-          images: true,
+        select: {
+          name: true,
+          slug: true,
+          images: { select: { url: true, isMain: true } },
         },
       },
     },
@@ -22,7 +24,7 @@ export async function getReviews(storeId: string) {
 
   if (!reviews.length) return [];
 
-  const users = await clerkClient.users.getUserList();
+  const users = await clerkClient.users.getUserList().catch(() => []);
 
   return reviews.map((review) => {
     const user = users.find((user) => user.id === review.userId);
@@ -30,9 +32,10 @@ export async function getReviews(storeId: string) {
     return {
       id: review.id,
       productId: review.productId,
+      productSlug: review.product.slug,
       productImage:
         review.product.images.find((image) => image.isMain)?.url ??
-        review.product.images[0].url ??
+        review.product.images[0]?.url ??
         "https://placehold.co/400",
       productName: review.product.name,
       userId: review.userId,
@@ -40,6 +43,10 @@ export async function getReviews(storeId: string) {
       name: review.name,
       rating: review.rating,
       comment: review.comment,
+      status: review.status,
+      moderationNote: review.moderationNote,
+      reply: review.reply,
+      repliedAt: review.repliedAt,
       createdAt: review.createdAt,
     };
   });

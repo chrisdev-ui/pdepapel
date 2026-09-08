@@ -1,112 +1,84 @@
 "use client";
 
-import { DataTableCellDate } from "@/components/ui/data-table-cell-date";
-import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
-import { currencyFormatter } from "@/lib/utils";
-import { DiscountType } from "@prisma/client";
 import { ColumnDef } from "@tanstack/react-table";
+import Link from "next/link";
+
+import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
+import { PROMOTION_STATUS, formatDiscount, getPromotionStatus } from "@/lib/promotion-status";
+import { currencyFormatter } from "@/lib/utils";
+
+import { TintBadge } from "../../pedidos/components/order-badges";
 import { getOffers } from "../server/get-offers";
 import { CellAction } from "./cell-action";
 
 export type OfferColumn = Awaited<ReturnType<typeof getOffers>>[number];
 
-export const columns: ColumnDef<OfferColumn>[] = [
-  {
-    accessorKey: "name",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Nombre" />
-    ),
-  },
-  {
-    accessorKey: "type",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Tipo" />
-    ),
-    cell: ({ row }) => (
-      <div>
-        {row.original.type === DiscountType.PERCENTAGE
-          ? "Porcentaje"
-          : "Monto fijo"}
-      </div>
-    ),
-  },
-  {
-    accessorKey: "amount",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Valor" />
-    ),
-    cell: ({ row }) => (
-      <div>
-        {row.original.type === DiscountType.PERCENTAGE
-          ? `${row.original.amount}%`
-          : currencyFormatter(row.original.amount)}
-      </div>
-    ),
-  },
-  {
-    accessorKey: "scope",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Alcance" />
-    ),
-    cell: ({ row }) => {
-      const counts = row.original._count;
-      return (
-        <div className="flex gap-2">
-          {counts.products > 0 && (
-            <div className="flex items-center gap-1 rounded-md border bg-muted px-2 py-1 text-xs">
-              <span className="font-medium">{counts.products}</span> Prods
-            </div>
-          )}
-          {counts.categories > 0 && (
-            <div className="flex items-center gap-1 rounded-md border bg-muted px-2 py-1 text-xs">
-              <span className="font-medium">{counts.categories}</span> Cats
-            </div>
-          )}
-          {counts.productGroups > 0 && (
-            <div className="flex items-center gap-1 rounded-md border bg-muted px-2 py-1 text-xs">
-              <span className="font-medium">{counts.productGroups}</span> Grupos
-            </div>
-          )}
-          {counts.products === 0 &&
-            counts.categories === 0 &&
-            counts.productGroups === 0 && (
-              <span className="text-xs text-muted-foreground">-</span>
-            )}
+const SHORT_DATE = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short", year: "numeric", timeZone: "America/Bogota" });
+
+export function offerScope(offer: OfferColumn): string {
+  const parts: string[] = [];
+  if (offer._count.products > 0) parts.push(`${offer._count.products} producto${offer._count.products === 1 ? "" : "s"}`);
+  if (offer._count.categories > 0) parts.push(`${offer._count.categories} categoría${offer._count.categories === 1 ? "" : "s"}`);
+  if (offer._count.productGroups > 0) parts.push(`${offer._count.productGroups} grupo${offer._count.productGroups === 1 ? "" : "s"}`);
+  return parts.join(" · ") || "Sin productos";
+}
+
+export function OfferStatusBadge({ offer }: { offer: OfferColumn }) {
+  const status = PROMOTION_STATUS[getPromotionStatus(offer)];
+  return <TintBadge label={status.label} tone={status.tone} />;
+}
+
+export function buildOfferColumns(storeId: string): ColumnDef<OfferColumn>[] {
+  return [
+    {
+      id: "name",
+      accessorFn: (row) => `${row.name} ${row.label ?? ""}`,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Oferta" />,
+      cell: ({ row }) => (
+        <div className="flex min-w-0 flex-col">
+          <Link
+            href={`/${storeId}/ofertas/${row.original.id}`}
+            className="truncate text-sm font-semibold text-primary underline-offset-4 hover:underline"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {row.original.name}
+          </Link>
+          <span className="truncate text-xs text-muted-foreground">{row.original.label ? `Etiqueta pública: ${row.original.label}` : offerScope(row.original)}</span>
         </div>
-      );
+      ),
     },
-  },
-  {
-    accessorKey: "isActive",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Estado" />
-    ),
-    cell: ({ row }) => (
-      <div
-        className={
-          row.original.isActive ? "font-medium text-green-600" : "text-red-600"
-        }
-      >
-        {row.original.isActive ? "Activa" : "Inactiva"}
-      </div>
-    ),
-  },
-  {
-    accessorKey: "startDate",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Inicio" />
-    ),
-    cell: ({ row }) => <DataTableCellDate date={row.original.startDate} />,
-  },
-  {
-    accessorKey: "endDate",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Fin" />
-    ),
-    cell: ({ row }) => <DataTableCellDate date={row.original.endDate} />,
-  },
-  {
-    id: "actions",
-    cell: ({ row }) => <CellAction data={row.original} />,
-  },
-];
+    {
+      id: "discount",
+      accessorKey: "amount",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Descuento" />,
+      cell: ({ row }) => <span className="text-sm font-semibold tabular-nums">{formatDiscount(row.original.type, row.original.amount, currencyFormatter)}</span>,
+    },
+    {
+      id: "scope",
+      accessorFn: (row) => offerScope(row),
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Aplica a" />,
+      cell: ({ row }) => <span className="text-sm">{offerScope(row.original)}</span>,
+      enableSorting: false,
+    },
+    {
+      id: "status",
+      accessorFn: (row) => getPromotionStatus(row),
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      cell: ({ row }) => <OfferStatusBadge offer={row.original} />,
+      filterFn: (row, _id, value: string[]) => value.length === 0 || value.includes(getPromotionStatus(row.original)),
+    },
+    {
+      accessorKey: "startDate",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Vigencia" />,
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap text-xs text-muted-foreground">
+          {SHORT_DATE.format(new Date(row.original.startDate))} – {SHORT_DATE.format(new Date(row.original.endDate))}
+        </span>
+      ),
+    },
+    {
+      id: "actions",
+      cell: ({ row }) => <CellAction data={row.original} />,
+    },
+  ];
+}

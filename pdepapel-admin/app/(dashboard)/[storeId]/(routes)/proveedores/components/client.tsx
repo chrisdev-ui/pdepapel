@@ -1,6 +1,5 @@
 "use client";
 
-import { ApiList } from "@/components/ui/api-list";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Heading } from "@/components/ui/heading";
@@ -19,7 +18,7 @@ const SupplierClient: React.FC<SupplierClientProps> = ({ data }) => {
   const params = useParams();
   return (
     <>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <Heading
           title={`Proveedores (${data.length})`}
           description="Maneja los proveedores de tu tienda"
@@ -40,9 +39,6 @@ const SupplierClient: React.FC<SupplierClientProps> = ({ data }) => {
         columns={columns}
         data={data}
       />
-      <Heading title="API" description="API calls para los proveedores" />
-      <Separator />
-      <ApiList entityName={Models.Suppliers} entityIdName="supplierId" />
     </>
   );
 };

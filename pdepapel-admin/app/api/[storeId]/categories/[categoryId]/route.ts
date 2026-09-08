@@ -4,6 +4,7 @@ import {
   getUniqueCategorySlug,
   preserveCategorySlugAlias,
 } from "@/lib/category-slugs";
+import { ACTIVE_ATTRIBUTE_WHERE } from "@/lib/attribute-archive";
 import prismadb from "@/lib/prismadb";
 import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 import { slugify } from "@/lib/slugify";
@@ -30,6 +31,7 @@ export async function GET(
     let category = await prismadb.category.findFirst({
       where: {
         storeId: params.storeId,
+        ...ACTIVE_ATTRIBUTE_WHERE,
         OR: [{ id: params.categoryId }, { slug: params.categoryId }],
       },
       select: {
@@ -60,7 +62,7 @@ export async function GET(
 
       if (alias) {
         category = await prismadb.category.findFirst({
-          where: { id: alias.categoryId, storeId: params.storeId },
+          where: { id: alias.categoryId, storeId: params.storeId, ...ACTIVE_ATTRIBUTE_WHERE },
           select: {
             id: true,
             name: true,

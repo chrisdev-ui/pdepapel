@@ -1,211 +1,108 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
-import { DataTableCellCurrency } from "@/components/ui/data-table-cell-currency";
-import { DataTableCellDate } from "@/components/ui/data-table-cell-date";
-import { DataTableCellNumber } from "@/components/ui/data-table-cell-number";
-
-import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { WhatsappButton } from "@/components/whatsapp-button";
 import { ColumnDef } from "@tanstack/react-table";
-import { User } from "lucide-react";
-import { CustomerData } from "../server/get-customers";
+import Link from "next/link";
+
+import { DataTableCellCurrency } from "@/components/ui/data-table-cell-currency";
+import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
+import { SEGMENT_LABELS } from "@/lib/customer-views";
+
+import { TintBadge } from "../../pedidos/components/order-badges";
+import { relativeDate } from "../../pedidos/components/columns";
+import type { CustomerRow } from "../server/get-customers";
 import { CellAction } from "./cell-action";
 
-// Define the FavoriteProduct type if not imported from elsewhere
-type FavoriteProduct = {
-  name: string;
-  count: number;
-};
+export type CustomerColumn = CustomerRow;
 
-export type CustomerColumn = CustomerData;
+export function formatPhone(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  const local = digits.length === 12 && digits.startsWith("57") ? digits.slice(2) : digits;
+  return local.length === 10 ? `${local.slice(0, 3)} ${local.slice(3, 6)} ${local.slice(6)}` : phone;
+}
 
-export const columns: ColumnDef<CustomerColumn>[] = [
-  {
-    accessorKey: "fullName",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Cliente" />
-    ),
-    cell: ({ row }) => (
-      <div className="flex items-center space-x-2">
-        <User className="h-4 w-4 text-muted-foreground" />
-        <div>
-          <div className="font-medium">{row.original.fullName}</div>
-          {row.original.email && (
-            <div className="text-sm text-muted-foreground">
-              {row.original.email}
-            </div>
-          )}
+export function buildColumns(storeId: string): ColumnDef<CustomerColumn>[] {
+  return [
+    {
+      id: "customer",
+      accessorFn: (row) => `${row.fullName} ${row.phone} ${row.email ?? ""} ${row.city ?? ""}`,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Cliente" />,
+      cell: ({ row }) => (
+        <div className="flex min-w-0 flex-col">
+          <Link
+            href={`/${storeId}/clientes/${row.original.id}`}
+            className="truncate text-sm font-semibold text-primary underline-offset-4 hover:underline"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {row.original.fullName}
+          </Link>
+          <span className="truncate text-xs text-muted-foreground">
+            {formatPhone(row.original.phone)}
+            {row.original.city ? ` · ${row.original.city}` : ""}
+          </span>
         </div>
-      </div>
-    ),
-  },
-  {
-    accessorKey: "phone",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Teléfono" />
-    ),
-    cell: ({ row }) => (
-      <WhatsappButton
-        customer={{
-          fullName: row.original.fullName,
-          phone: row.original.phone,
-          totalOrders: row.original.totalOrders,
-          totalSpent: row.original.totalSpent,
-          recentOrders: row.original.recentOrders,
-        }}
-        withText
-      />
-    ),
-  },
-  {
-    accessorKey: "totalOrders",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Total órdenes" />
-    ),
-    cell: ({ row }) => (
-      <div className="flex items-center space-x-2">
-        <DataTableCellNumber value={row.original.totalOrders} />
-        <div className="flex space-x-1">
-          {row.original.paidOrders > 0 && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger>
-                  <Badge variant="success" className="text-xs">
-                    {row.original.paidOrders}
-                  </Badge>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Órdenes pagadas</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
+      ),
+    },
+    {
+      id: "segment",
+      accessorKey: "segment",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Segmento" />,
+      cell: ({ row }) => {
+        const badge = SEGMENT_LABELS[row.original.segment];
+        return <TintBadge label={badge.label} tone={badge.tone} />;
+      },
+      filterFn: (row, _id, value: string[]) => value.length === 0 || value.includes(row.original.segment),
+    },
+    {
+      accessorKey: "paidOrders",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Compras" />,
+      cell: ({ row }) => (
+        <span className="text-sm tabular-nums">
+          {row.original.paidOrders}
           {row.original.pendingOrders > 0 && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger>
-                  <Badge variant="secondary" className="text-xs">
-                    {row.original.pendingOrders}
-                  </Badge>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Órdenes pendientes</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <span className="text-xs text-muted-foreground"> · {row.original.pendingOrders} pendiente{row.original.pendingOrders === 1 ? "" : "s"}</span>
           )}
-          {row.original.cancelledOrders > 0 && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger>
-                  <Badge variant="destructive" className="text-xs">
-                    {row.original.cancelledOrders}
-                  </Badge>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Órdenes canceladas</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-        </div>
-      </div>
-    ),
-  },
-  {
-    accessorKey: "totalSpent",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Total gastado" />
-    ),
-    cell: ({ row }) => (
-      <DataTableCellCurrency value={row.original.totalSpent} />
-    ),
-  },
-  {
-    accessorKey: "averageOrderValue",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Valor promedio" />
-    ),
-    cell: ({ row }) => (
-      <DataTableCellCurrency value={row.original.averageOrderValue} />
-    ),
-  },
-  {
-    accessorKey: "totalItems",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Items comprados" />
-    ),
-    cell: ({ row }) => <DataTableCellNumber value={row.original.totalItems} />,
-  },
-  {
-    accessorKey: "favoriteProducts",
-    header: "Productos favoritos",
-    cell: ({ row }) => (
-      <div className="max-w-xs">
-        {row.original.favoriteProducts.length > 0 ? (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger>
-                <div className="text-sm">
-                  {row.original.favoriteProducts[0].name}
-                  {row.original.favoriteProducts.length > 1 && (
-                    <span className="text-muted-foreground">
-                      {" "}
-                      y {row.original.favoriteProducts.length - 1} más
-                    </span>
-                  )}
-                </div>
-              </TooltipTrigger>
-              <TooltipContent className="max-w-xs">
-                <div className="space-y-1">
-                  {row.original.favoriteProducts.map(
-                    (product: FavoriteProduct, index: number) => (
-                      <div key={index} className="text-xs">
-                        <span className="font-medium">{product.name}</span>
-                        <span className="text-muted-foreground">
-                          {" "}
-                          ({product.count} unidades)
-                        </span>
-                      </div>
-                    ),
-                  )}
-                </div>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        ) : (
-          <span className="text-sm text-muted-foreground">Sin compras</span>
-        )}
-      </div>
-    ),
-    enableSorting: false,
-  },
-  {
-    accessorKey: "firstOrderDate",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Primera orden" />
-    ),
-    cell: ({ row }) => (
-      <DataTableCellDate date={row.original.firstOrderDate!} />
-    ),
-  },
-  {
-    accessorKey: "lastOrderDate",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Última orden" />
-    ),
-    cell: ({ row }) => <DataTableCellDate date={row.original.lastOrderDate!} />,
-  },
-
-  {
-    id: "actions",
-    cell: ({ row }) => <CellAction data={row.original} />,
-  },
-];
+        </span>
+      ),
+    },
+    {
+      accessorKey: "totalSpent",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Gastado" />,
+      cell: ({ row }) => <DataTableCellCurrency value={row.original.totalSpent} />,
+    },
+    {
+      accessorKey: "averageOrderValue",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Ticket" />,
+      cell: ({ row }) =>
+        row.original.averageOrderValue > 0 ? <DataTableCellCurrency value={row.original.averageOrderValue} /> : <span className="text-xs text-muted-foreground">—</span>,
+    },
+    {
+      id: "favorite",
+      accessorFn: (row) => row.favoriteProducts[0]?.name ?? "",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Lo que más compra" />,
+      cell: ({ row }) => {
+        const [first, ...rest] = row.original.favoriteProducts;
+        if (!first) return <span className="text-xs text-muted-foreground">Sin compras</span>;
+        return (
+          <span className="block max-w-[220px] truncate text-sm" title={row.original.favoriteProducts.map((product) => `${product.name} (${product.count})`).join(", ")}>
+            {first.name}
+            {rest.length > 0 && <span className="text-muted-foreground"> y {rest.length} más</span>}
+          </span>
+        );
+      },
+      enableSorting: false,
+    },
+    {
+      accessorKey: "lastPaidAt",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Última compra" />,
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap text-xs text-muted-foreground">
+          {row.original.lastPaidAt ? relativeDate(row.original.lastPaidAt) : "Nunca"}
+        </span>
+      ),
+    },
+    {
+      id: "actions",
+      cell: ({ row }) => <CellAction data={row.original} />,
+    },
+  ];
+}

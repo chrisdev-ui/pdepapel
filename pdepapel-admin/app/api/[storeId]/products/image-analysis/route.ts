@@ -17,6 +17,7 @@ import {
   productImageAnalysisRequestSchema,
   sanitizeProductImageAnalysis,
 } from "@/lib/product-image-analysis";
+import { ACTIVE_ATTRIBUTE_WHERE } from "@/lib/attribute-archive";
 import prismadb from "@/lib/prismadb";
 import { verifyStoreOwner } from "@/lib/utils";
 
@@ -92,7 +93,7 @@ export async function POST(
 
     const [categories, sizes, colors, designs] = await Promise.all([
       prismadb.category.findMany({
-        where: { storeId: params.storeId },
+        where: { storeId: params.storeId, ...ACTIVE_ATTRIBUTE_WHERE },
         orderBy: { name: "asc" },
         select: {
           id: true,
@@ -101,17 +102,17 @@ export async function POST(
         },
       }),
       prismadb.size.findMany({
-        where: { storeId: params.storeId },
+        where: { storeId: params.storeId, ...ACTIVE_ATTRIBUTE_WHERE },
         orderBy: { name: "asc" },
         select: { id: true, name: true, value: true },
       }),
       prismadb.color.findMany({
-        where: { storeId: params.storeId },
+        where: { storeId: params.storeId, ...ACTIVE_ATTRIBUTE_WHERE },
         orderBy: { name: "asc" },
         select: { id: true, name: true, value: true },
       }),
       prismadb.design.findMany({
-        where: { storeId: params.storeId },
+        where: { storeId: params.storeId, ...ACTIVE_ATTRIBUTE_WHERE },
         orderBy: { name: "asc" },
         select: { id: true, name: true },
       }),

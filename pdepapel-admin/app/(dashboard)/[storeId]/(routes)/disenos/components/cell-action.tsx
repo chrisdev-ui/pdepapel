@@ -16,6 +16,7 @@ import axios from "axios";
 import { Copy, Edit, MoreHorizontal, Trash } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
+import { ArchiveMenuItem } from "../../atributos/components/archive-actions";
 import { DesignColumn } from "./columns";
 
 interface CellActionProps {
@@ -86,7 +87,13 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
             <Edit className="mr-2 h-4 w-4" />
             Actualizar
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setOpen(true)}>
+          <ArchiveMenuItem kind="designs" row={data} />
+          <DropdownMenuItem
+            onClick={() => setOpen(true)}
+            disabled={data._count.products > 0}
+            title={data._count.products > 0 ? "Tiene productos; archívalo en su lugar" : undefined}
+            className="text-destructive focus:text-destructive"
+          >
             <Trash className="mr-2 h-4 w-4" />
             Eliminar
           </DropdownMenuItem>

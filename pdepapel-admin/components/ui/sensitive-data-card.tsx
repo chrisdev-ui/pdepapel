@@ -20,7 +20,7 @@ export const SensitiveDataCard: React.FC<SensitiveDataCardProps> = ({
   title,
   value,
   format = "currency",
-  icon = <DollarSign className="h-4 w-4 text-muted-foreground" />,
+  icon = <DollarSign className="h-4 w-4 text-muted-foreground" aria-hidden="true" />,
 }) => {
   const { cards, toggleVisibility } = useSensitiveDataStore();
   const isVisible = useMemo(() => cards[id]?.isVisible ?? true, [cards, id]);
@@ -46,12 +46,12 @@ export const SensitiveDataCard: React.FC<SensitiveDataCardProps> = ({
               formattedValue
             ) : (
               <div className="flex">
-                <Asterisk className="h-4 w-4" />
-                <Asterisk className="h-4 w-4" />
-                <Asterisk className="h-4 w-4" />
-                <Asterisk className="h-4 w-4" />
-                <Asterisk className="h-4 w-4" />
-                <Asterisk className="h-4 w-4" />
+                <Asterisk className="h-4 w-4" aria-hidden="true" />
+                <Asterisk className="h-4 w-4" aria-hidden="true" />
+                <Asterisk className="h-4 w-4" aria-hidden="true" />
+                <Asterisk className="h-4 w-4" aria-hidden="true" />
+                <Asterisk className="h-4 w-4" aria-hidden="true" />
+                <Asterisk className="h-4 w-4" aria-hidden="true" />
               </div>
             )}
           </div>
@@ -61,9 +61,9 @@ export const SensitiveDataCard: React.FC<SensitiveDataCardProps> = ({
             onClick={() => toggleVisibility(id)}
           >
             {isVisible ? (
-              <EyeOff className="h-4 w-4" />
+              <EyeOff className="h-4 w-4" aria-hidden="true" />
             ) : (
-              <Eye className="h-4 w-4" />
+              <Eye className="h-4 w-4" aria-hidden="true" />
             )}
             <span className="sr-only">
               {isVisible ? "Esconde" : "Muestra"} la información sensible

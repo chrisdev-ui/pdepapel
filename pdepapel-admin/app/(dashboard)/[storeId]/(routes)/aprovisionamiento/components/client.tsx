@@ -1,6 +1,5 @@
 "use client";
 
-import { ApiList } from "@/components/ui/api-list";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Heading } from "@/components/ui/heading";
@@ -25,12 +24,12 @@ export const RestockOrderClient: React.FC<RestockOrderClientProps> = ({
 
   return (
     <>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <Heading
           title={`Pedidos de Aprovisionamiento (${data.length})`}
           description="Gestiona tus pedidos a proveedores"
         />
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <RefreshButton />
           <Button
             onClick={() => router.push(`/${params.storeId}/aprovisionamiento/new`)}
@@ -48,9 +47,6 @@ export const RestockOrderClient: React.FC<RestockOrderClientProps> = ({
         columns={columns}
         data={data}
       />
-      <Heading title="API" description="API calls para aprovisionamiento" />
-      <Separator />
-      <ApiList entityName={Models.RestockOrders} entityIdName="orderId" />
     </>
   );
 };

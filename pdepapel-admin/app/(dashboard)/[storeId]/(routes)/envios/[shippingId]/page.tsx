@@ -1,32 +1,22 @@
 import { redirect } from "next/navigation";
 
-import { Models } from "@/constants";
-import { ShipmentDetailClient } from "./components/shipment-detail-client";
-import { getShipmentDetail } from "./server/get-shipment-detail";
+import prismadb from "@/lib/prismadb";
 
 export const revalidate = 0;
 
 interface ShipmentDetailPageProps {
-  params: {
-    storeId: string;
-    shippingId: string;
-  };
+  params: { storeId: string; shippingId: string };
 }
 
-export default async function ShipmentDetailPage({
-  params,
-}: ShipmentDetailPageProps) {
-  try {
-    const shipment = await getShipmentDetail(params.storeId, params.shippingId);
-
-    return (
-      <div className="flex-col">
-        <div className="flex-1 space-y-4 p-8 pt-6">
-          <ShipmentDetailClient shipment={shipment} />
-        </div>
-      </div>
-    );
-  } catch (error) {
-    redirect(`/${params.storeId}/${Models.Shipments}`);
-  }
+/**
+ * El detalle de un envío vive en la sección Envío de su pedido (rediseño
+ * 2026-09). Esta ruta se conserva solo para no romper enlaces guardados.
+ */
+export default async function ShipmentDetailPage({ params }: ShipmentDetailPageProps) {
+  const shipment = await prismadb.shipping.findFirst({
+    where: { id: params.shippingId, storeId: params.storeId },
+    select: { orderId: true },
+  });
+  if (!shipment) redirect(`/${params.storeId}/envios`);
+  redirect(`/${params.storeId}/pedidos/${shipment.orderId}#envio`);
 }

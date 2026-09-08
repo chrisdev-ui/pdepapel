@@ -105,8 +105,7 @@ const CountrySelect = ({
             className={cn(
               "-mr-2 size-4 opacity-50",
               disabled ? "hidden" : "opacity-100",
-            )}
-          />
+            )} aria-hidden="true" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[300px] p-0">
@@ -153,8 +152,7 @@ const CountrySelectOption = ({
       <span className="flex-1 text-sm">{countryName}</span>
       <span className="text-sm text-foreground/50">{`+${RPNInput.getCountryCallingCode(country)}`}</span>
       <CheckIcon
-        className={`ml-auto size-4 ${country === selectedCountry ? "opacity-100" : "opacity-0"}`}
-      />
+        className={`ml-auto size-4 ${country === selectedCountry ? "opacity-100" : "opacity-0"}`} aria-hidden="true" />
     </CommandItem>
   );
 };

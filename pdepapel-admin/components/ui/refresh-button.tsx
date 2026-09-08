@@ -40,8 +40,7 @@ export const RefreshButton: React.FC<RefreshButtonProps> = ({ className }) => {
         className={cn("h-4 w-4 transition-transform duration-300", {
           "animate-spin": isLoading,
           "group-hover:rotate-180": !isLoading,
-        })}
-      />
+        })} aria-hidden="true" />
       <span className="sr-only">Actualizar</span>
     </Button>
   );

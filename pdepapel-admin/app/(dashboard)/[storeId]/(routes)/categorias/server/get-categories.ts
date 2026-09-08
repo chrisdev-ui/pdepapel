@@ -13,6 +13,8 @@ export async function getCategories(storeId: string) {
       seoEnabled: true,
       seoFeatured: true,
       createdAt: true,
+      isArchived: true,
+      archivedAt: true,
       type: {
         select: {
           name: true,

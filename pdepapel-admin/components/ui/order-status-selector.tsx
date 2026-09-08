@@ -39,7 +39,7 @@ const STATUS_CONFIG: Record<OrderStatusKey, StatusConfig> = {
   DRAFT: {
     id: "DRAFT",
     label: "Borrador",
-    icon: <FileText className="h-5 w-5" />,
+    icon: <FileText className="h-5 w-5" aria-hidden="true" />,
     color: "text-slate-500",
     bgColor: "bg-slate-100",
     emoji: "📝",
@@ -49,7 +49,7 @@ const STATUS_CONFIG: Record<OrderStatusKey, StatusConfig> = {
   QUOTATION: {
     id: "QUOTATION",
     label: "Cotización",
-    icon: <Sparkles className="h-5 w-5" />,
+    icon: <Sparkles className="h-5 w-5" aria-hidden="true" />,
     color: "text-violet-400",
     bgColor: "bg-violet-100",
     emoji: "📄",
@@ -59,7 +59,7 @@ const STATUS_CONFIG: Record<OrderStatusKey, StatusConfig> = {
   VIEWED: {
     id: "VIEWED",
     label: "Visto",
-    icon: <Sparkles className="h-5 w-5" />,
+    icon: <Sparkles className="h-5 w-5" aria-hidden="true" />,
     color: "text-blue-400",
     bgColor: "bg-blue-100",
     emoji: "👀",
@@ -69,7 +69,7 @@ const STATUS_CONFIG: Record<OrderStatusKey, StatusConfig> = {
   ACCEPTED: {
     id: "ACCEPTED",
     label: "Aceptada",
-    icon: <ThumbsUp className="h-5 w-5" />,
+    icon: <ThumbsUp className="h-5 w-5" aria-hidden="true" />,
     color: "text-emerald-400",
     bgColor: "bg-emerald-100",
     emoji: "👍",
@@ -79,7 +79,7 @@ const STATUS_CONFIG: Record<OrderStatusKey, StatusConfig> = {
   REJECTED: {
     id: "REJECTED",
     label: "Rechazada",
-    icon: <Ban className="h-5 w-5" />,
+    icon: <Ban className="h-5 w-5" aria-hidden="true" />,
     color: "text-red-400",
     bgColor: "bg-red-100",
     emoji: "💔",
@@ -90,7 +90,7 @@ const STATUS_CONFIG: Record<OrderStatusKey, StatusConfig> = {
   CREATED: {
     id: "CREATED",
     label: "Creada",
-    icon: <Gift className="h-5 w-5" />,
+    icon: <Gift className="h-5 w-5" aria-hidden="true" />,
     color: "text-pink-400",
     bgColor: "bg-pink-100",
     emoji: "🎀",
@@ -100,7 +100,7 @@ const STATUS_CONFIG: Record<OrderStatusKey, StatusConfig> = {
   PENDING: {
     id: "PENDING",
     label: "Pendiente",
-    icon: <CreditCard className="h-5 w-5" />,
+    icon: <CreditCard className="h-5 w-5" aria-hidden="true" />,
     color: "text-orange-400",
     bgColor: "bg-orange-100",
     emoji: "💳",
@@ -110,7 +110,7 @@ const STATUS_CONFIG: Record<OrderStatusKey, StatusConfig> = {
   PAID: {
     id: "PAID",
     label: "Pagado",
-    icon: <CheckCircle className="h-5 w-5" />,
+    icon: <CheckCircle className="h-5 w-5" aria-hidden="true" />,
     color: "text-emerald-500",
     bgColor: "bg-emerald-100",
     emoji: "💸",
@@ -121,7 +121,7 @@ const STATUS_CONFIG: Record<OrderStatusKey, StatusConfig> = {
   SENT: {
     id: "SENT",
     label: "Enviado",
-    icon: <Truck className="h-5 w-5" />,
+    icon: <Truck className="h-5 w-5" aria-hidden="true" />,
     color: "text-cyan-500",
     bgColor: "bg-cyan-100",
     emoji: "🚚",
@@ -131,7 +131,7 @@ const STATUS_CONFIG: Record<OrderStatusKey, StatusConfig> = {
   CANCELLED: {
     id: "CANCELLED",
     label: "Cancelado",
-    icon: <XCircle className="h-5 w-5" />,
+    icon: <XCircle className="h-5 w-5" aria-hidden="true" />,
     color: "text-red-500",
     bgColor: "bg-red-100",
     emoji: "🚫",
@@ -348,7 +348,7 @@ export function OrderStatusSelector({
                           }}
                           className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-400 shadow-sm"
                         >
-                          <CheckCircle className="h-3 w-3 text-white" />
+                          <CheckCircle className="h-3 w-3 text-white" aria-hidden="true" />
                         </motion.div>
                       )}
                     </AnimatePresence>

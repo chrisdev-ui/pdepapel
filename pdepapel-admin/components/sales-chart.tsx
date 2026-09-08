@@ -20,6 +20,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { CHART_COLORS } from "@/lib/chart-palette";
 
 type SalesDataPoint = Awaited<ReturnType<typeof getSalesData>>[number];
 
@@ -67,14 +68,14 @@ export const SalesChart: React.FC<SalesChartProps> = ({ data }) => {
               {currencyFormatter(dataPoint.marketplaceRevenue)}
             </p>
           ) : null}
-          <p className="font-semibold text-[#a5c3ff]">
+          <p className="font-semibold text-kawaii-baby">
             Ingresos recibidos: {currencyFormatter(dataPoint.revenue)}
           </p>
         </div>
 
         {/* Orders Section */}
         <div className="space-y-1 border-t pt-2">
-          <p className="text-[#fea4c3]">
+          <p className="text-kawaii-shell">
             Órdenes: {numberFormatter.format(dataPoint.orders)}
           </p>
           <p className="text-sm text-gray-600">
@@ -121,7 +122,7 @@ export const SalesChart: React.FC<SalesChartProps> = ({ data }) => {
           {/* Revenue Bars */}
           <Bar
             dataKey="revenue"
-            fill="#a5c3ff"
+            fill={CHART_COLORS.sky}
             yAxisId="revenue"
             name="Ingresos recibidos"
             radius={[4, 4, 0, 0]}
@@ -132,7 +133,7 @@ export const SalesChart: React.FC<SalesChartProps> = ({ data }) => {
           <Line
             type="monotone"
             dataKey="orders"
-            stroke="#fea4c3"
+            stroke={CHART_COLORS.pink}
             strokeWidth={2}
             yAxisId="orders"
             name="Número de órdenes"

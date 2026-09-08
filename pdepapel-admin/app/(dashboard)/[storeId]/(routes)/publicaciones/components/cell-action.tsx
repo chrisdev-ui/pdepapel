@@ -40,7 +40,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const onDelete = async () => {
     try {
       setLoading(true);
-      await axios.delete(`/api/${params.storeId}/${Models.Posts}}/${data.id}`);
+      await axios.delete(`/api/${params.storeId}/${Models.Posts}/${data.id}`);
       router.refresh();
       toast({
         description: "Post eliminado",
@@ -80,7 +80,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() =>
-              router.push(`/${params.storeId}/${Models.Posts}}/${data.id}`)
+              router.push(`/${params.storeId}/publicaciones/${data.id}`)
             }
           >
             <Edit className="mr-2 h-4 w-4" />

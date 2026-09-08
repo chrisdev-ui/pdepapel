@@ -172,6 +172,10 @@ export interface Review {
   name: string;
   rating: number;
   comment: string;
+  /** Respuesta pública de la tienda; llega solo para reseñas publicadas. */
+  reply?: string | null;
+  repliedAt?: string | null;
+  createdAt?: string;
 }
 
 export interface Coupon {

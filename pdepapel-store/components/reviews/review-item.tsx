@@ -24,6 +24,17 @@ export const ReviewItem: React.FC<ReviewItemProps> = ({ review }) => {
         </span>
       </div>
       <p className="text-sm">{review.comment}</p>
+      {review.reply && (
+        <div
+          className="mt-1 rounded-md border-l-4 border-blue-yankees/40 bg-white/70 p-3"
+          data-testid="review-reply"
+        >
+          <p className="font-serif text-sm font-semibold">
+            Respuesta de P de Papel
+          </p>
+          <p className="text-sm">{review.reply}</p>
+        </div>
+      )}
     </div>
   );
 };

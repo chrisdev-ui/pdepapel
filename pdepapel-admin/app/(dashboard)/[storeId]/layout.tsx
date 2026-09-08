@@ -1,5 +1,6 @@
-import { Navbar } from "@/components/navbar";
+import { AppShell } from "@/components/shell/app-shell";
 import { StoreInitializer } from "@/components/store-initializer";
+import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
 import { auth } from "@clerk/nextjs";
 import { redirect } from "next/navigation";
@@ -25,11 +26,29 @@ export default async function DashboardLayout({
     redirect("/");
   }
 
+  const [stores, pendingOrders, lowStock] = await Promise.all([
+    prismadb.store.findMany({ where: { userId } }),
+    prismadb.order
+      .count({ where: { storeId: params.storeId, status: "PENDING" } })
+      .catch(() => 0),
+    prismadb.product
+      .count({
+        where: { storeId: params.storeId, isArchived: false, stock: { lte: 2 } },
+      })
+      .catch(() => 0),
+  ]);
+
   return (
     <>
       <StoreInitializer logoUrl={store.logoUrl} />
-      <Navbar />
-      {children}
+      <AppShell
+        storeId={params.storeId}
+        stores={stores}
+        storeUrl={env.FRONTEND_STORE_URL}
+        counts={{ pendingOrders, lowStock }}
+      >
+        {children}
+      </AppShell>
     </>
   );
 }

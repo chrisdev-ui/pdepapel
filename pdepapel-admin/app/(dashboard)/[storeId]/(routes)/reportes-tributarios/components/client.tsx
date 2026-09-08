@@ -1,5 +1,7 @@
 "use client";
 
+import type { TaxReadiness } from "@/lib/tax-readiness";
+
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -16,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { useActionConfirmation } from "@/hooks/use-action-confirmation";
+import { DateField } from "@/components/ui/date-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -120,7 +123,9 @@ function getErrorMessage(response: Response) {
     .then((message) => message || "No fue posible completar la solicitud");
 }
 
-export default function TaxReportsClient() {
+const READINESS_TONE: Record<string, string> = { cream: "bg-tint-cream", pink: "bg-tint-pink", sky: "bg-tint-sky" };
+
+export default function TaxReportsClient({ readiness }: { readiness?: TaxReadiness }) {
   const { requestConfirmation, confirmationDialog } = useActionConfirmation();
   const params = useParams<{ storeId: string }>();
   const storeId = params.storeId;
@@ -323,6 +328,38 @@ export default function TaxReportsClient() {
         </Button>
       </div>
 
+      {readiness && (
+        <section aria-labelledby="revision-previa" className="rounded-xl border bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-2">
+            <h2 id="revision-previa" className="text-[15px] font-bold text-primary">
+              Revisión previa · {readiness.year}
+            </h2>
+            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold text-primary ${readiness.ready ? "bg-tint-mint" : "bg-tint-cream"}`}>
+              {readiness.ready ? "Listo para exportar" : `${readiness.items.length} ${readiness.items.length === 1 ? "cosa por revisar" : "cosas por revisar"}`}
+            </span>
+          </div>
+          {readiness.ready ? (
+            <p className="mt-2 text-sm text-muted-foreground">
+              Ventas con fecha de pago, ventas de Mercado Libre liquidadas y facturas de compra al día. Rendimiento usa estimaciones para decidir; este reporte usa documentos para declarar, así que sus totales pueden diferir.
+            </p>
+          ) : (
+            <ul className="mt-3 flex flex-col gap-2">
+              {readiness.items.map((item) => (
+                <li key={item.id} className={`flex flex-col gap-2 rounded-lg p-3 sm:flex-row sm:items-center sm:justify-between ${READINESS_TONE[item.tone]}`}>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-semibold text-primary">{item.title}</span>
+                    <span className="text-xs text-primary/80">{item.detail}</span>
+                  </div>
+                  <Button asChild variant="outline" size="sm" className="shrink-0 bg-white">
+                    <a href={item.href}>Revisar</a>
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>Período del reporte</CardTitle>
@@ -338,22 +375,24 @@ export default function TaxReportsClient() {
           >
             <div className="grid flex-1 gap-2">
               <Label htmlFor="report-start-date">Desde</Label>
-              <Input
+              <DateField
                 id="report-start-date"
-                type="date"
                 value={startDate}
-                onChange={(event) => setStartDate(event.target.value)}
+                onChange={setStartDate}
+                max={endDate || undefined}
                 required
+                presets={false}
               />
             </div>
             <div className="grid flex-1 gap-2">
               <Label htmlFor="report-end-date">Hasta</Label>
-              <Input
+              <DateField
                 id="report-end-date"
-                type="date"
                 value={endDate}
-                onChange={(event) => setEndDate(event.target.value)}
+                onChange={setEndDate}
+                min={startDate || undefined}
                 required
+                presets={false}
               />
             </div>
             <div className="grid flex-1 gap-2">
@@ -643,14 +682,13 @@ export default function TaxReportsClient() {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="purchase-issued-at">Fecha</Label>
-                <Input
+                <DateField
                   id="purchase-issued-at"
-                  type="date"
                   value={purchaseForm.issuedAt}
-                  onChange={(event) =>
+                  onChange={(issuedAt) =>
                     setPurchaseForm((current) => ({
                       ...current,
-                      issuedAt: event.target.value,
+                      issuedAt,
                     }))
                   }
                   required

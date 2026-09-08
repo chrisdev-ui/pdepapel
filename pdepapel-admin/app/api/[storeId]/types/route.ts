@@ -1,5 +1,6 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { splitTaxonomyIcon } from "@/lib/catalog-options";
+import { ACTIVE_ATTRIBUTE_WHERE } from "@/lib/attribute-archive";
 import prismadb from "@/lib/prismadb";
 import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 import { slugify } from "@/lib/slugify";
@@ -75,6 +76,7 @@ export async function GET(
     const types = await prismadb.type.findMany({
       where: {
         storeId: params.storeId,
+        ...ACTIVE_ATTRIBUTE_WHERE,
       },
       orderBy: {
         createdAt: "desc",

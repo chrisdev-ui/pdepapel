@@ -54,6 +54,7 @@ export function BarcodeScanner({
   const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(
     null,
   );
+  const [detectedCode, setDetectedCode] = useState<string | null>(null);
 
   useEffect(() => {
     onDetectedRef.current = onDetected;
@@ -83,6 +84,7 @@ export function BarcodeScanner({
     }
 
     detectedRef.current = false;
+    setDetectedCode(null);
     setError(null);
     setIsStarting(true);
     setOpen(true);
@@ -115,9 +117,12 @@ export function BarcodeScanner({
         if (!isActive || !result || detectedRef.current) return;
 
         detectedRef.current = true;
+        const code = result.getText().trim();
+        setDetectedCode(code);
         stopScanner();
-        onDetectedRef.current(result.getText().trim());
-        setOpen(false);
+        onDetectedRef.current(code);
+        // Deja ver «Código leído» un instante antes de cerrar.
+        window.setTimeout(() => setOpen(false), 350);
       })
       .then((controls) => {
         controlsRef.current = controls;
@@ -161,7 +166,7 @@ export function BarcodeScanner({
         variant="outline"
         onClick={() => void requestCamera()}
       >
-        <Camera className="mr-2 h-4 w-4" />
+        <Camera className="mr-2 h-4 w-4" aria-hidden="true" />
         {label}
       </Button>
       <DialogContent className="max-w-md">
@@ -171,24 +176,44 @@ export function BarcodeScanner({
         </DialogHeader>
         <div className="relative aspect-square overflow-hidden rounded-lg bg-muted">
           {cameraStream ? (
-            <video
-              ref={setVideoElement}
-              className="h-full w-full object-cover"
-              autoPlay
-              muted
-              playsInline
-            />
+            <>
+              <video
+                ref={setVideoElement}
+                className="h-full w-full object-cover"
+                autoPlay
+                muted
+                playsInline
+              />
+              <div
+                className="pointer-events-none absolute inset-6 rounded-xl border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.25)]"
+                aria-hidden="true"
+              />
+              <p
+                className="pointer-events-none absolute inset-x-0 bottom-3 text-center text-xs font-medium text-white drop-shadow"
+                aria-live="polite"
+              >
+                {detectedCode
+                  ? `Código leído: ${detectedCode}`
+                  : isStarting
+                    ? "Enfocando…"
+                    : "Encuadra el código: se agrega solo al leerlo."}
+              </p>
+            </>
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-sm text-muted-foreground">
               {isStarting ? (
                 <>
-                  <Loader2 className="h-6 w-6 animate-spin" />
+                  <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />
                   <span>Solicitando acceso a la cámara…</span>
                 </>
               ) : (
                 <>
-                  <Camera className="h-7 w-7" />
-                  <span>La vista de la cámara aparecerá aquí.</span>
+                  <Camera className="h-7 w-7" aria-hidden="true" />
+                  <span>
+                    {error
+                      ? "Sin cámara por ahora. Puedes escribir el código en la casilla."
+                      : "La vista de la cámara aparecerá aquí."}
+                  </span>
                 </>
               )}
             </div>
@@ -199,21 +224,26 @@ export function BarcodeScanner({
             className="flex items-center gap-2 text-sm text-muted-foreground"
             aria-live="polite"
           >
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
             Iniciando cámara…
           </p>
         )}
         {error && (
           <div className="space-y-3" role="alert">
             <p className="text-sm text-destructive">{error}</p>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => void requestCamera()}
-            >
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Intentar de nuevo
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void requestCamera()}
+              >
+                <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
+                Intentar de nuevo
+              </Button>
+              <Button type="button" variant="ghost" onClick={closeScanner}>
+                Escribir el código
+              </Button>
+            </div>
           </div>
         )}
       </DialogContent>

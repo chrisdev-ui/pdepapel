@@ -11,6 +11,8 @@ export async function getTypes(storeId: string) {
       id: true,
       name: true,
       createdAt: true,
+      isArchived: true,
+      archivedAt: true,
       _count: {
         select: {
           categories: true,

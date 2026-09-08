@@ -57,12 +57,12 @@ export const InventoryMovementClient: React.FC<
           router.refresh();
         }}
       />
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <Heading
           title={`Movimientos de Inventario (${data.length})`}
           description="Historial completo de cambios en el stock."
         />
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={() => setReconciliationOpen(true)}>
             <FileSpreadsheet className="mr-2 h-4 w-4" />
             Conciliar feria anterior

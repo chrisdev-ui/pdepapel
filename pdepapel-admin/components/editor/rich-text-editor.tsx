@@ -215,7 +215,8 @@ export function RichTextEditor({
         <ToggleGroup type="multiple" size="sm" variant="outline">
           <ToggleGroupItem
             value="bold"
-            aria-label="Toggle bold"
+            aria-label="Negrita"
+            title="Negrita"
             onClick={() => editor.chain().focus().toggleBold().run()}
             disabled={!editor.can().chain().focus().toggleBold().run()}
             data-state={editor.isActive("bold") ? "on" : "off"}
@@ -224,7 +225,8 @@ export function RichTextEditor({
           </ToggleGroupItem>
           <ToggleGroupItem
             value="strike"
-            aria-label="Toggle strikethrough"
+            aria-label="Tachado"
+            title="Tachado"
             onClick={() => editor.chain().focus().toggleStrike().run()}
             disabled={!editor.can().chain().focus().toggleStrike().run()}
             data-state={editor.isActive("strike") ? "on" : "off"}
@@ -233,7 +235,8 @@ export function RichTextEditor({
           </ToggleGroupItem>
           <ToggleGroupItem
             value="italic"
-            aria-label="Toggle italic"
+            aria-label="Cursiva"
+            title="Cursiva"
             onClick={() => editor.chain().focus().toggleItalic().run()}
             disabled={!editor.can().chain().focus().toggleItalic().run()}
             data-state={editor.isActive("italic") ? "on" : "off"}
@@ -242,7 +245,8 @@ export function RichTextEditor({
           </ToggleGroupItem>
           <ToggleGroupItem
             value="underline"
-            aria-label="Toggle underline"
+            aria-label="Subrayado"
+            title="Subrayado"
             onClick={() => editor.chain().focus().toggleUnderline().run()}
             disabled={!editor.can().chain().focus().toggleUnderline().run()}
             data-state={editor.isActive("underline") ? "on" : "off"}
@@ -251,7 +255,8 @@ export function RichTextEditor({
           </ToggleGroupItem>
           <ToggleGroupItem
             value="code"
-            aria-label="Toggle code"
+            aria-label="Código"
+            title="Código"
             onClick={() => editor.chain().focus().toggleCode().run()}
             disabled={!editor.can().chain().focus().toggleCode().run()}
             data-state={editor.isActive("code") ? "on" : "off"}
@@ -260,7 +265,8 @@ export function RichTextEditor({
           </ToggleGroupItem>
           <ToggleGroupItem
             value="highlight"
-            aria-label="Toggle highlight"
+            aria-label="Resaltar"
+            title="Resaltar"
             onClick={() => editor.chain().focus().toggleHighlight().run()}
             disabled={!editor.can().chain().focus().toggleHighlight().run()}
             data-state={editor.isActive("highlight") ? "on" : "off"}
@@ -269,7 +275,8 @@ export function RichTextEditor({
           </ToggleGroupItem>
           <ToggleGroupItem
             value="clear"
-            aria-label="Clear formatting"
+            aria-label="Quitar formato"
+            title="Quitar formato"
             onClick={() =>
               editor.chain().focus().clearNodes().unsetAllMarks().run()
             }
@@ -362,7 +369,8 @@ export function RichTextEditor({
         <ToggleGroup type="single" size="sm" variant="outline">
           <ToggleGroupItem
             value="h2"
-            aria-label="Heading 2"
+            aria-label="Título grande"
+            title="Título grande"
             onClick={() =>
               editor.chain().focus().toggleHeading({ level: 2 }).run()
             }
@@ -375,7 +383,8 @@ export function RichTextEditor({
           </ToggleGroupItem>
           <ToggleGroupItem
             value="h3"
-            aria-label="Heading 3"
+            aria-label="Título mediano"
+            title="Título mediano"
             onClick={() =>
               editor.chain().focus().toggleHeading({ level: 3 }).run()
             }
@@ -388,7 +397,8 @@ export function RichTextEditor({
           </ToggleGroupItem>
           <ToggleGroupItem
             value="h4"
-            aria-label="Heading 4"
+            aria-label="Título pequeño"
+            title="Título pequeño"
             onClick={() =>
               editor.chain().focus().toggleHeading({ level: 4 }).run()
             }
@@ -404,7 +414,8 @@ export function RichTextEditor({
         <ToggleGroup type="multiple" size="sm" variant="outline">
           <ToggleGroupItem
             value="blockquote"
-            aria-label="Toggle blockquote"
+            aria-label="Cita"
+            title="Cita"
             onClick={() => editor.chain().focus().toggleBlockquote().run()}
             disabled={!editor.can().chain().focus().toggleBlockquote().run()}
             data-state={editor.isActive("blockquote") ? "on" : "off"}
@@ -413,7 +424,8 @@ export function RichTextEditor({
           </ToggleGroupItem>
           <ToggleGroupItem
             value="bulletList"
-            aria-label="Toggle bullet list"
+            aria-label="Lista con viñetas"
+            title="Lista con viñetas"
             onClick={() => editor.chain().focus().toggleBulletList().run()}
             disabled={!editor.can().chain().focus().toggleBulletList().run()}
             data-state={editor.isActive("bulletList") ? "on" : "off"}
@@ -422,7 +434,8 @@ export function RichTextEditor({
           </ToggleGroupItem>
           <ToggleGroupItem
             value="orderedList"
-            aria-label="Toggle ordered list"
+            aria-label="Lista numerada"
+            title="Lista numerada"
             onClick={() => editor.chain().focus().toggleOrderedList().run()}
             disabled={!editor.can().chain().focus().toggleOrderedList().run()}
             data-state={editor.isActive("orderedList") ? "on" : "off"}
@@ -431,7 +444,8 @@ export function RichTextEditor({
           </ToggleGroupItem>
           <ToggleGroupItem
             value="horizontalRule"
-            aria-label="Add horizontal rule"
+            aria-label="Línea separadora"
+            title="Línea separadora"
             onClick={() => editor.chain().focus().setHorizontalRule().run()}
             disabled={!editor.can().chain().focus().setHorizontalRule().run()}
             data-state="off"
@@ -440,7 +454,8 @@ export function RichTextEditor({
           </ToggleGroupItem>
           <ToggleGroupItem
             value="superscript"
-            aria-label="Toggle superscript"
+            aria-label="Superíndice"
+            title="Superíndice"
             onClick={() => editor.chain().focus().toggleSuperscript().run()}
             disabled={!editor.can().chain().focus().toggleSuperscript().run()}
             data-state={editor.isActive("superscript") ? "on" : "off"}
@@ -449,7 +464,8 @@ export function RichTextEditor({
           </ToggleGroupItem>
           <ToggleGroupItem
             value="subscript"
-            aria-label="Toggle subscript"
+            aria-label="Subíndice"
+            title="Subíndice"
             onClick={() => editor.chain().focus().toggleSubscript().run()}
             disabled={!editor.can().chain().focus().toggleSubscript().run()}
             data-state={editor.isActive("subscript") ? "on" : "off"}
@@ -486,7 +502,8 @@ export function RichTextEditor({
         <ToggleGroup type="single" size="sm" variant="outline">
           <ToggleGroupItem
             value="left"
-            aria-label="Align left"
+            aria-label="Alinear a la izquierda"
+            title="Alinear a la izquierda"
             onClick={() => editor.chain().focus().setTextAlign("left").run()}
             disabled={!editor.can().chain().focus().setTextAlign("left").run()}
             data-state={editor.isActive({ textAlign: "left" }) ? "on" : "off"}
@@ -495,7 +512,8 @@ export function RichTextEditor({
           </ToggleGroupItem>
           <ToggleGroupItem
             value="center"
-            aria-label="Align center"
+            aria-label="Centrar"
+            title="Centrar"
             onClick={() => editor.chain().focus().setTextAlign("center").run()}
             disabled={
               !editor.can().chain().focus().setTextAlign("center").run()
@@ -506,7 +524,8 @@ export function RichTextEditor({
           </ToggleGroupItem>
           <ToggleGroupItem
             value="right"
-            aria-label="Align right"
+            aria-label="Alinear a la derecha"
+            title="Alinear a la derecha"
             onClick={() => editor.chain().focus().setTextAlign("right").run()}
             disabled={!editor.can().chain().focus().setTextAlign("right").run()}
             data-state={editor.isActive({ textAlign: "right" }) ? "on" : "off"}
@@ -515,7 +534,8 @@ export function RichTextEditor({
           </ToggleGroupItem>
           <ToggleGroupItem
             value="justify"
-            aria-label="Align justify"
+            aria-label="Justificar"
+            title="Justificar"
             onClick={() => editor.chain().focus().setTextAlign("justify").run()}
             disabled={
               !editor.can().chain().focus().setTextAlign("justify").run()
@@ -531,7 +551,8 @@ export function RichTextEditor({
         <ToggleGroup type="single" size="sm" variant="outline">
           <ToggleGroupItem
             value="undo"
-            aria-label="Undo"
+            aria-label="Deshacer"
+            title="Deshacer"
             onClick={() => editor.chain().focus().undo().run()}
             disabled={!editor.can().chain().focus().undo().run()}
           >
@@ -539,7 +560,8 @@ export function RichTextEditor({
           </ToggleGroupItem>
           <ToggleGroupItem
             value="redo"
-            aria-label="Redo"
+            aria-label="Rehacer"
+            title="Rehacer"
             onClick={() => editor.chain().focus().redo().run()}
             disabled={!editor.can().chain().focus().redo().run()}
           >

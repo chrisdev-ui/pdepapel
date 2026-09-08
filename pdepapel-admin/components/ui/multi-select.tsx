@@ -943,8 +943,7 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
                                   "h-3 w-3",
                                   responsiveSettings.compactMode &&
                                     "h-2.5 w-2.5",
-                                )}
-                              />
+                                )} aria-hidden="true" />
                             </div>
                           </Badge>
                         );
@@ -1002,7 +1001,7 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
                       aria-label={`Clear all ${selectedValues.length} selected options`}
                       className="mx-2 flex h-4 w-4 cursor-pointer items-center justify-center rounded-sm text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
                     >
-                      <XIcon className="h-4 w-4" />
+                      <XIcon className="h-4 w-4" aria-hidden="true" />
                     </div>
                     <Separator
                       orientation="vertical"
@@ -1019,7 +1018,7 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
                   <span className="mx-3 min-w-0 flex-1 truncate text-sm font-normal text-muted-foreground">
                     {placeholder}
                   </span>
-                  <ChevronDown className="mx-2 h-4 cursor-pointer text-muted-foreground" />
+                  <ChevronDown className="mx-2 h-4 cursor-pointer text-muted-foreground" aria-hidden="true" />
                 </div>
               )}
             </Button>
@@ -1101,7 +1100,7 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
                         )}
                         aria-hidden="true"
                       >
-                        <CheckIcon className="h-4 w-4" />
+                        <CheckIcon className="h-4 w-4" aria-hidden="true" />
                       </div>
                       <span>
                         (Seleccionar todas
@@ -1149,7 +1148,7 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
                               )}
                               aria-hidden="true"
                             >
-                              <CheckIcon className="h-4 w-4" />
+                              <CheckIcon className="h-4 w-4" aria-hidden="true" />
                             </div>
                             {option.icon && (
                               <option.icon
@@ -1193,7 +1192,7 @@ export const MultiSelect = React.forwardRef<MultiSelectRef, MultiSelectProps>(
                             )}
                             aria-hidden="true"
                           >
-                            <CheckIcon className="h-4 w-4" />
+                            <CheckIcon className="h-4 w-4" aria-hidden="true" />
                           </div>
                           {option.icon && (
                             <option.icon

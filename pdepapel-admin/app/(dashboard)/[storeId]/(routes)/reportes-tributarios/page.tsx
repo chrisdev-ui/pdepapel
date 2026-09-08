@@ -1,3 +1,4 @@
+import { getTaxReadiness } from "@/lib/tax-readiness";
 import type { Metadata } from "next";
 
 import TaxReportsClient from "./components/client";
@@ -9,11 +10,12 @@ export const metadata: Metadata = {
   description: "Exporta las ventas y compras para declaraciones tributarias",
 };
 
-export default function TaxReportsPage() {
+export default async function TaxReportsPage({ params }: { params: { storeId: string } }) {
+  const readiness = await getTaxReadiness(params.storeId);
   return (
     <div className="flex-col">
-      <div className="flex-1 space-y-4 p-8 pt-6">
-        <TaxReportsClient />
+      <div className="flex-1 space-y-4 p-4 sm:p-8 sm:pt-6">
+        <TaxReportsClient readiness={readiness} />
       </div>
     </div>
   );

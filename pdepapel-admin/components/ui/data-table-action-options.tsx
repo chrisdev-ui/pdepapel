@@ -399,7 +399,7 @@ export function DataTableActionOptions<TData>({
         <DropdownMenuTrigger asChild>
           {isLoading ? (
             <Button variant="outline" className="ml-auto" disabled>
-              <Loader className="h-4 w-4 animate-spin" />
+              <Loader className="h-4 w-4 animate-spin" aria-hidden="true" />
               <span className="sr-only">Ejecutando operación...</span>
             </Button>
           ) : (
@@ -411,7 +411,7 @@ export function DataTableActionOptions<TData>({
                 isLoading
               }
             >
-              Acciones <ChevronDown className="ml-2 h-4 w-4" />
+              Acciones <ChevronDown className="ml-2 h-4 w-4" aria-hidden="true" />
             </Button>
           )}
         </DropdownMenuTrigger>
@@ -432,7 +432,7 @@ export function DataTableActionOptions<TData>({
               onClick={() => setAction("delete")}
             >
               Eliminar
-              <Trash className="h-4 w-4" />
+              <Trash className="h-4 w-4" aria-hidden="true" />
             </DropdownMenuItem>
           )}
           {routeActions.includes("archive") && (
@@ -446,7 +446,7 @@ export function DataTableActionOptions<TData>({
               onClick={() => handleAction("archive")}
             >
               Archivar
-              <Archive className="h-4 w-4" />
+              <Archive className="h-4 w-4" aria-hidden="true" />
             </DropdownMenuItem>
           )}
           {routeActions.includes("unarchive") && (
@@ -460,7 +460,7 @@ export function DataTableActionOptions<TData>({
               onClick={() => handleAction("unarchive")}
             >
               Desarchivar
-              <ArchiveRestore className="h-4 w-4" />
+              <ArchiveRestore className="h-4 w-4" aria-hidden="true" />
             </DropdownMenuItem>
           )}
           {routeActions.includes("export") && (
@@ -474,7 +474,7 @@ export function DataTableActionOptions<TData>({
               onClick={() => handleAction("export")}
             >
               Exportar
-              <Download className="h-4 w-4" />
+              <Download className="h-4 w-4" aria-hidden="true" />
             </DropdownMenuItem>
           )}
           {routeActions.includes("feature") && (
@@ -488,7 +488,7 @@ export function DataTableActionOptions<TData>({
               onClick={() => handleAction("feature")}
             >
               Destacar
-              <Star className="h-4 w-4" />
+              <Star className="h-4 w-4" aria-hidden="true" />
             </DropdownMenuItem>
           )}
           {routeActions.includes("unfeature") && (
@@ -502,7 +502,7 @@ export function DataTableActionOptions<TData>({
               onClick={() => handleAction("unfeature")}
             >
               Quitar destacado
-              <StarOff className="h-4 w-4" />
+              <StarOff className="h-4 w-4" aria-hidden="true" />
             </DropdownMenuItem>
           )}
           {routeActions.includes("clear-images") && (
@@ -516,7 +516,7 @@ export function DataTableActionOptions<TData>({
               onClick={() => setAction("clear-images")}
             >
               Eliminar imágenes
-              <ImageOff className="h-4 w-4" />
+              <ImageOff className="h-4 w-4" aria-hidden="true" />
             </DropdownMenuItem>
           )}
           {routeActions.includes("invalidate") && (
@@ -530,7 +530,7 @@ export function DataTableActionOptions<TData>({
               onClick={() => setAction("invalidate")}
             >
               Invalidar
-              <Ban className="h-4 w-4" />
+              <Ban className="h-4 w-4" aria-hidden="true" />
             </DropdownMenuItem>
           )}
           {model === Models.Orders && (

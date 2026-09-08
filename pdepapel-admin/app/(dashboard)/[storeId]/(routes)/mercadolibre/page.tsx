@@ -43,14 +43,12 @@ export default async function MercadoLibrePage({
     },
   });
   return (
-    <div className="flex-col">
-      <div className="flex-1 space-y-6 p-6 md:p-8">
-        <MercadoLibreClient
-          configuration={getMercadoLibreConfigurationStatus()}
-          queueConfiguration={getMercadoLibreQueueConfigurationStatus()}
-          connection={connection}
-        />
-      </div>
+    <div className="flex flex-col gap-4 p-4 sm:p-8 sm:pt-6">
+      <MercadoLibreClient
+        configuration={getMercadoLibreConfigurationStatus()}
+        queueConfiguration={getMercadoLibreQueueConfigurationStatus()}
+        connection={connection}
+      />
     </div>
   );
 }

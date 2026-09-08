@@ -129,9 +129,11 @@ export const INITIAL_PERCENTAGE_INCREASE = 100;
 export const INITIAL_TRANSPORTATION_COST = 500;
 export const INITIAL_MISC_COST = 500;
 
+// Colores por año para la gráfica de inventario: lila y azul bebé de la paleta del panel (lib/chart-palette.ts).
 export const yearColors = {
-  2025: "#AD8FE1",
-  default: "#3498DB",
+  2025: "#B2A4FE",
+  2026: "#221B41",
+  default: "#A4C3FE",
 };
 
 export const CAPSULAS_SORPRESA_ID = "3825ae1d-be71-493f-aaf3-32916c2d18b9";
@@ -179,6 +181,7 @@ export enum Models {
   BulkProducts = "bulk-products",
   Quotations = "quotations",
   CustomOrders = "custom-orders",
+  NewsletterSubscribers = "newsletter-subscribers",
 }
 
 export const ModelLabels: Record<Models, string> = {
@@ -209,6 +212,7 @@ export const ModelLabels: Record<Models, string> = {
   [Models.BulkProducts]: "Gestor Masivo",
   [Models.Quotations]: "Cotizaciones",
   [Models.CustomOrders]: "Personalizadas",
+  [Models.NewsletterSubscribers]: "Suscriptores del boletín",
 };
 
 export const ModelsColumns: Record<Models, { [key: string]: string }> = {
@@ -412,6 +416,12 @@ export const ModelsColumns: Record<Models, { [key: string]: string }> = {
     status: "Estado",
     totalPrice: "Total",
     createdAt: "Fecha",
+  },
+  [Models.NewsletterSubscribers]: {
+    email: "Correo",
+    status: "Estado",
+    consentedAt: "Se suscribió",
+    confirmedAt: "Confirmó",
   },
 };
 

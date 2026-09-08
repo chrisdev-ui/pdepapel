@@ -82,7 +82,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() =>
-              router.push(`/${params.storeId}/${Models.Billboards}/${data.id}`)
+              router.push(`/${params.storeId}/diapositivas/${data.id}`)
             }
           >
             <Edit className="mr-2 h-4 w-4" />

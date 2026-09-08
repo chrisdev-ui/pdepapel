@@ -1,25 +1,6 @@
-import type { Metadata } from "next";
-import { ReviewsClient } from "./components/client";
-import { getReviews } from "./server/get-reviews";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "Reseñas | PdePapel Admin",
-  description: "Gestión de reseñas de clientes",
-};
-export default async function ReviewsPage({
-  params,
-}: {
-  params: {
-    storeId: string;
-  };
-}) {
-  const reviews = await getReviews(params.storeId);
-
-  return (
-    <div className="flex-col">
-      <div className="flex-1 space-y-4 p-8 pt-6">
-        <ReviewsClient data={reviews} />
-      </div>
-    </div>
-  );
+/** Las reseñas viven como pestaña de Clientes (rediseño 2026-09). */
+export default function ReviewsPage({ params }: { params: { storeId: string } }) {
+  redirect(`/${params.storeId}/clientes?tab=resenas`);
 }

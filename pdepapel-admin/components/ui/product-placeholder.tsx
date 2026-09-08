@@ -66,8 +66,7 @@ const ProductPlaceholder = forwardRef<HTMLDivElement, ProductPlaceholderProps>(
       >
         {showIcon && (
           <Package
-            className={cn("text-muted-foreground/60", iconSizes[size])}
-          />
+            className={cn("text-muted-foreground/60", iconSizes[size])} aria-hidden="true" />
         )}
         {showText && (
           <span

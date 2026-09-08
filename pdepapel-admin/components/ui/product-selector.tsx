@@ -73,7 +73,7 @@ export function ProductSelector({
               ? formattedProducts.find((product) => product.id === value)?.label
               : "Buscar producto..."}
           </span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" aria-hidden="true" />
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -140,8 +140,7 @@ export function ProductSelector({
                       className={cn(
                         "ml-auto h-4 w-4",
                         value === product.id ? "opacity-100" : "opacity-0",
-                      )}
-                    />
+                      )} aria-hidden="true" />
                   </div>
                 </CommandItem>
               ))}

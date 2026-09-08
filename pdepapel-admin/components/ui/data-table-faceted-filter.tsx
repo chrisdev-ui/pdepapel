@@ -63,7 +63,7 @@ export function DataTableFacetedFilter<TData, TValue>({
           variant="outline"
           className="h-10 shrink-0 whitespace-nowrap border-dashed px-3"
         >
-          <PlusCircle className="mr-2 h-4 w-4 shrink-0" />
+          <PlusCircle className="mr-2 h-4 w-4 shrink-0" aria-hidden="true" />
           <span className="shrink-0">{title}</span>
           {selectedValues?.size > 0 && (
             <>
@@ -132,7 +132,7 @@ export function DataTableFacetedFilter<TData, TValue>({
                           : "opacity-50 [&_svg]:invisible",
                       )}
                     >
-                      <Check className={cn("h-4 w-4")} />
+                      <Check className={cn("h-4 w-4")} aria-hidden="true" />
                     </div>
                     {option.icon && (
                       <option.icon className="mr-2 h-4 w-4 text-muted-foreground" />

@@ -38,9 +38,9 @@ export function DataTableColumnHeader<TData, TValue>({
           >
             <span>{title}</span>
             {column.getIsSorted() === "desc" ? (
-              <ArrowDownIcon className="ml-2 h-4 w-4" />
+              <ArrowDownIcon className="ml-2 h-4 w-4" aria-hidden="true" />
             ) : column.getIsSorted() === "asc" ? (
-              <ArrowUpIcon className="ml-2 h-4 w-4" />
+              <ArrowUpIcon className="ml-2 h-4 w-4" aria-hidden="true" />
             ) : (
               <Icons.sortUpDownIcon className="ml-2 h-4 w-4" />
             )}
@@ -48,20 +48,20 @@ export function DataTableColumnHeader<TData, TValue>({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
           <DropdownMenuItem onClick={() => column.toggleSorting(false)}>
-            <ArrowUpIcon className="mr-2 h-3.5 w-3.5 text-muted-foreground/70" />
+            <ArrowUpIcon className="mr-2 h-3.5 w-3.5 text-muted-foreground/70" aria-hidden="true" />
             Asc
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => column.toggleSorting(true)}>
-            <ArrowDownIcon className="mr-2 h-3.5 w-3.5 text-muted-foreground/70" />
+            <ArrowDownIcon className="mr-2 h-3.5 w-3.5 text-muted-foreground/70" aria-hidden="true" />
             Desc
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => column.clearSorting()}>
-            <RotateCw className="mr-2 h-3.5 w-3.5 text-muted-foreground/70" />
+            <RotateCw className="mr-2 h-3.5 w-3.5 text-muted-foreground/70" aria-hidden="true" />
             Reset
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => column.toggleVisibility(false)}>
-            <EyeOffIcon className="mr-2 h-3.5 w-3.5 text-muted-foreground/70" />
+            <EyeOffIcon className="mr-2 h-3.5 w-3.5 text-muted-foreground/70" aria-hidden="true" />
             Hide
           </DropdownMenuItem>
         </DropdownMenuContent>

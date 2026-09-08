@@ -5,6 +5,7 @@ import { DataTableCellNumber } from "@/components/ui/data-table-cell-number";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { ColumnDef } from "@tanstack/react-table";
 import { getSizes } from "../server/get-sizes";
+import { AttributeStatusBadge } from "../../atributos/components/archive-actions";
 import { CellAction } from "./cell-action";
 
 export type SizeColumn = Awaited<ReturnType<typeof getSizes>>[number];
@@ -34,6 +35,13 @@ export const columns: ColumnDef<SizeColumn>[] = [
     cell: ({ row }) => (
       <DataTableCellNumber value={row.original._count.products} />
     ),
+  },
+  {
+    accessorKey: "isArchived",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Estado" />
+    ),
+    cell: ({ row }) => <AttributeStatusBadge isArchived={row.original.isArchived} />,
   },
   {
     accessorKey: "createdAt",

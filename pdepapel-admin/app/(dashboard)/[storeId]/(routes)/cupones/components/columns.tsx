@@ -1,130 +1,79 @@
 "use client";
 
-import { CouponBadge } from "@/components/coupon-badge";
-import { Badge } from "@/components/ui/badge";
-import { DataTableCellCurrency } from "@/components/ui/data-table-cell-currency";
-import { DataTableCellDate } from "@/components/ui/data-table-cell-date";
-import { DataTableCellNumber } from "@/components/ui/data-table-cell-number";
+import { Coupon } from "@prisma/client";
+import { ColumnDef } from "@tanstack/react-table";
+import Link from "next/link";
+
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { UsageCount } from "@/components/usage-count";
-import { discountOptions, Models, ModelsColumns } from "@/constants";
-import { Coupon, DiscountType } from "@prisma/client";
-import { ColumnDef } from "@tanstack/react-table";
+import { PROMOTION_STATUS, formatDiscount, getPromotionStatus } from "@/lib/promotion-status";
+import { currencyFormatter } from "@/lib/utils";
+
+import { TintBadge } from "../../pedidos/components/order-badges";
 import { CellAction } from "./cell-action";
 
 export type CouponColumn = Coupon;
 
-const columnNames = ModelsColumns[Models.Coupons];
+const SHORT_DATE = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short", year: "numeric", timeZone: "America/Bogota" });
 
-export const columns: ColumnDef<CouponColumn>[] = [
-  {
-    accessorKey: "code",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title={columnNames.code} />
-    ),
-    cell: ({ row }) => (
-      <CouponBadge
-        code={row.original.code}
-        startDate={row.original.startDate}
-        endDate={row.original.endDate}
-      />
-    ),
-  },
-  {
-    accessorKey: "type",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title={columnNames.type} />
-    ),
-    cell: ({ row }) => (
-      <Badge variant="outline">{discountOptions[row.original.type]}</Badge>
-    ),
-  },
-  {
-    accessorKey: "amount",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title={columnNames.amount} />
-    ),
-    cell: ({ row }) => {
-      const amount = row.original.amount;
-      const type = row.original.type;
-      return type === DiscountType.FIXED ? (
-        <DataTableCellCurrency value={amount} />
-      ) : (
-        <DataTableCellNumber value={amount} isPercentage />
-      );
-    },
-  },
-  {
-    accessorKey: "minOrderValue",
-    header: ({ column }) => (
-      <DataTableColumnHeader
-        column={column}
-        title={columnNames.minOrderValue}
-      />
-    ),
-    cell: ({ row }) => (
-      <DataTableCellCurrency value={row.original.minOrderValue ?? 0} />
-    ),
-  },
-  {
-    accessorKey: "usedCount",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title={columnNames.usedCount} />
-    ),
-    cell: ({ row }) => (
-      <UsageCount
-        used={row.original.usedCount}
-        limit={row.original.maxUses as number}
-      />
-    ),
-  },
-  {
-    accessorKey: "isWelcomeBenefit",
-    header: "Bienvenida",
-    cell: ({ row }) =>
-      row.original.isWelcomeBenefit ? (
-        <Badge variant="secondary">Solo cuentas nuevas</Badge>
-      ) : (
-        <span className="text-muted-foreground">—</span>
+export function CouponStatusBadge({ coupon }: { coupon: CouponColumn }) {
+  const status = PROMOTION_STATUS[getPromotionStatus(coupon)];
+  return <TintBadge label={status.label} tone={status.tone} />;
+}
+
+export function buildCouponColumns(storeId: string): ColumnDef<CouponColumn>[] {
+  return [
+    {
+      accessorKey: "code",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Código" />,
+      cell: ({ row }) => (
+        <div className="flex min-w-0 flex-col">
+          <Link
+            href={`/${storeId}/cupones/${row.original.id}`}
+            className="font-mono text-sm font-semibold text-primary underline-offset-4 hover:underline"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {row.original.code}
+          </Link>
+          {row.original.isWelcomeBenefit && <span className="text-xs text-muted-foreground">Solo cuentas nuevas</span>}
+        </div>
       ),
-  },
-  {
-    accessorKey: "isActive",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title={columnNames.isActive} />
-    ),
-    cell: ({ row }) => {
-      const isActive = row.original.isActive;
-      return (
-        <Badge variant={isActive ? "success" : "destructive"}>
-          {isActive ? "Activo" : "Inactivo"}
-        </Badge>
-      );
     },
-  },
-  {
-    accessorKey: "startDate",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title={columnNames.startDate} />
-    ),
-    cell: ({ row }) => <DataTableCellDate date={row.original.startDate} />,
-  },
-  {
-    accessorKey: "endDate",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title={columnNames.endDate} />
-    ),
-    cell: ({ row }) => <DataTableCellDate date={row.original.endDate} />,
-  },
-  {
-    accessorKey: "createdAt",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title={columnNames.createdAt} />
-    ),
-    cell: ({ row }) => <DataTableCellDate date={row.original.createdAt} />,
-  },
-  {
-    id: "actions",
-    cell: ({ row }) => <CellAction data={row.original} />,
-  },
-];
+    {
+      id: "discount",
+      accessorKey: "amount",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Descuento" />,
+      cell: ({ row }) => (
+        <div className="flex flex-col">
+          <span className="text-sm font-semibold tabular-nums">{formatDiscount(row.original.type, row.original.amount, currencyFormatter)}</span>
+          {row.original.minOrderValue ? <span className="text-xs text-muted-foreground">Mínimo {currencyFormatter(row.original.minOrderValue)}</span> : null}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "usedCount",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Usos" />,
+      cell: ({ row }) => <UsageCount used={row.original.usedCount} limit={row.original.maxUses as number} />,
+    },
+    {
+      id: "status",
+      accessorFn: (row) => getPromotionStatus(row),
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      cell: ({ row }) => <CouponStatusBadge coupon={row.original} />,
+      filterFn: (row, _id, value: string[]) => value.length === 0 || value.includes(getPromotionStatus(row.original)),
+    },
+    {
+      accessorKey: "startDate",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Vigencia" />,
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap text-xs text-muted-foreground">
+          {SHORT_DATE.format(new Date(row.original.startDate))} – {SHORT_DATE.format(new Date(row.original.endDate))}
+        </span>
+      ),
+    },
+    {
+      id: "actions",
+      cell: ({ row }) => <CellAction data={row.original} />,
+    },
+  ];
+}

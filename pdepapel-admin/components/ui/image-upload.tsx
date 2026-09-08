@@ -100,7 +100,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
                 variant="destructive"
                 size="icon"
               >
-                <Trash className="h-4 w-4" />
+                <Trash className="h-4 w-4" aria-hidden="true" />
               </Button>
             </div>
             <Image
@@ -126,8 +126,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
                     "fill-yellow-500 text-yellow-500":
                       image.url === mainImageUrl,
                     "text-gray-500": image.url !== mainImageUrl,
-                  })}
-                />
+                  })} aria-hidden="true" />
               </Button>
             </div>
             {isDeleting && (
@@ -168,7 +167,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
               variant="secondary"
               onClick={onClick}
             >
-              <ImagePlus className="mr-2 h-4 w-4" />
+              <ImagePlus className="mr-2 h-4 w-4" aria-hidden="true" />
               Cargar una imagen
             </Button>
           );

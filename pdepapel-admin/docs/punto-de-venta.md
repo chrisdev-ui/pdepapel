@@ -7,10 +7,10 @@ Usa **Punto de venta** cuando vendas en el local, por una visita o en cualquier 
 ## Antes de empezar: preparar etiquetas
 
 1. Entra a **Ventas → Punto de venta**.
-2. Baja a **Imprimir etiquetas de productos**.
+2. Abre la pestaña **Etiquetas**.
 3. Busca un producto por nombre, SKU o código.
 4. Escribe cuántas etiquetas quieres imprimir. Para un producto idéntico basta **una sola etiqueta**.
-5. Pulsa **Agregar** y luego **Imprimir etiquetas**.
+5. Pulsa **Agregar a la hoja** y luego **Imprimir etiquetas**.
 6. Pega la etiqueta en la caja, bandeja o exhibidor donde guardas ese producto. Imprime más solo si quieres tener la misma etiqueta en varios lugares.
 
 Cada etiqueta de producto se puede reutilizar. No necesitas crear una etiqueta nueva después de cada venta ni una por cada unidad. Si cambia el color, tamaño, diseño o SKU, usa la etiqueta correspondiente a esa variante.
@@ -59,6 +59,10 @@ No borres una venta presencial desde **Pedidos**. Para que las cuentas y el inve
 1. Ve a **Inventario → Movimientos de inventario**.
 2. Registra una devolución, ajuste, daño o pérdida según lo que ocurrió realmente.
 3. Escribe una nota corta, por ejemplo: `Devolución de venta presencial ORD-...`.
+
+## Cierre del día
+
+En la pestaña **Vender**, bajo el cobro, la tarjeta **Cierre del día** muestra lo vendido hoy en el punto de venta separado por **Efectivo** y **Transferencia**, con el total, las unidades y las últimas ventas. Úsala al terminar la jornada para contrastar el efectivo en caja y las transferencias recibidas. Es una lectura: no mueve dinero ni inventario.
 
 ## Dónde ver las ventas
 

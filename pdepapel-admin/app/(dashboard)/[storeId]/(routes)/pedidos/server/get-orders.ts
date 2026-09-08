@@ -16,10 +16,13 @@ export async function getOrders(storeId: string) {
       fullName: true,
       phone: true,
       address: true,
+      city: true,
       documentId: true,
       total: true,
       status: true,
       createdAt: true,
+      paidAt: true,
+      expiresAt: true,
       orderItems: {
         select: {
           product: {
@@ -41,6 +44,8 @@ export async function getOrders(storeId: string) {
       shipping: {
         select: {
           status: true,
+          trackingCode: true,
+          courier: true,
         },
       },
       payment: {

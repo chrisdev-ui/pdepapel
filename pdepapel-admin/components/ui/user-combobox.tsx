@@ -173,7 +173,7 @@ export const UserCombobox: React.FC<UserComboboxProps> = ({
                 <Avatar className="h-6 w-6 shrink-0">
                   <AvatarImage src={selectedUser.image} />
                   <AvatarFallback>
-                    <UserCircle2 className="h-4 w-4" />
+                    <UserCircle2 className="h-4 w-4" aria-hidden="true" />
                   </AvatarFallback>
                 </Avatar>
                 <span className="min-w-0 truncate">{selectedUser.label}</span>
@@ -181,7 +181,7 @@ export const UserCombobox: React.FC<UserComboboxProps> = ({
             ) : (
               "Seleccionar usuario..."
             )}
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" aria-hidden="true" />
           </Button>
         </PopoverTrigger>
         <PopoverContent
@@ -227,7 +227,7 @@ export const UserCombobox: React.FC<UserComboboxProps> = ({
                           <Avatar className="h-6 w-6 shrink-0">
                             <AvatarImage src={user.image} />
                             <AvatarFallback>
-                              <UserCircle2 className="h-4 w-4" />
+                              <UserCircle2 className="h-4 w-4" aria-hidden="true" />
                             </AvatarFallback>
                           </Avatar>
                           <div className="flex min-w-0 flex-1 flex-col">
@@ -247,15 +247,14 @@ export const UserCombobox: React.FC<UserComboboxProps> = ({
                           className={cn(
                             "ml-auto h-4 w-4 shrink-0",
                             value === user.value ? "opacity-100" : "opacity-0",
-                          )}
-                        />
+                          )} aria-hidden="true" />
                       </CommandItem>
                     </div>
                   );
                 })}
                 {isLoading && page > 1 && (
                   <div className="flex justify-center p-2 text-xs text-muted-foreground">
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
                     Cargando más...
                   </div>
                 )}

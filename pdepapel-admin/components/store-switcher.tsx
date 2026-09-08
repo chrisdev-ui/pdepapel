@@ -34,10 +34,13 @@ type PopoverTriggerProps = React.ComponentPropsWithoutRef<
 
 interface StoreSwitcherProps extends PopoverTriggerProps {
   items: Store[];
+  /** Solo el icono (barra lateral contraída). */
+  compact?: boolean;
 }
 
 export function StoreSwitcher({
   className,
+  compact = false,
   items = [],
   ...props
 }: StoreSwitcherProps) {
@@ -65,17 +68,25 @@ export function StoreSwitcher({
       <PopoverTrigger asChild>
         <Button
           variant="outline"
-          size="sm"
+          size={compact ? "icon" : "sm"}
           role="combobox"
           aria-expanded={open}
-          aria-label="Select a store"
-          className={cn("w-[220px] justify-between", className)}
+          aria-label={`Tienda: ${currentStore?.label || "sin seleccionar"}`}
+          title={compact ? currentStore?.label : undefined}
+          className={cn(
+            compact ? "h-10 w-10" : "w-[220px] justify-between",
+            className,
+          )}
         >
-          <StoreIcon className="mr-2 h-4 w-4" />
-          <span className="w-full truncate">
-            {currentStore?.label || "Selecciona una tienda"}
-          </span>
-          <ChevronsUpDown className="ml-auto h-4 w-4 shrink-0 opacity-50" />
+          <StoreIcon className={cn("h-4 w-4", !compact && "mr-2")} aria-hidden="true" />
+          {!compact && (
+            <>
+              <span className="w-full truncate">
+                {currentStore?.label || "Selecciona una tienda"}
+              </span>
+              <ChevronsUpDown className="ml-auto h-4 w-4 shrink-0 opacity-50" aria-hidden="true" />
+            </>
+          )}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[220px] p-0">

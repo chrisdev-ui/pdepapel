@@ -129,11 +129,11 @@ export const AdminCartItem: React.FC<AdminCartItemProps> = ({
               className="text-blue-600 hover:bg-blue-50 hover:text-blue-700"
               title="Convertir a Producto"
             >
-              <Wand2 className="h-4 w-4" />
+              <Wand2 className="h-4 w-4" aria-hidden="true" />
             </Button>
           )}
           <Button variant="ghost" size="icon" onClick={onRemove} type="button">
-            <X className="h-4 w-4" />
+            <X className="h-4 w-4" aria-hidden="true" />
           </Button>
         </div>
       </div>

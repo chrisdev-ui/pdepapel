@@ -19,6 +19,7 @@ import {
   NameType,
   ValueType,
 } from "recharts/types/component/DefaultTooltipContent";
+import { CHART_COLORS } from "@/lib/chart-palette";
 
 type GraphData = Awaited<ReturnType<typeof getGraphRevenue>>[number];
 
@@ -97,25 +98,25 @@ export const Overview: React.FC<OverviewProps> = ({ data, year }) => {
       {
         dataKey: "subtotal",
         name: "Tienda en línea antes de descuentos",
-        fill: "#fea4c3",
+        fill: CHART_COLORS.pink,
         radius: [4, 4, 0, 0],
       },
       {
         dataKey: "discounts",
         name: "Descuentos",
-        fill: "#ef4444",
+        fill: CHART_COLORS.coral,
         radius: [4, 4, 0, 0],
       },
       {
         dataKey: "couponDiscounts",
         name: "Cupones",
-        fill: "#ffc105",
+        fill: CHART_COLORS.yellow,
         radius: [4, 4, 0, 0],
       },
       {
         dataKey: "marketplaceRevenue",
         name: "Mercado Libre (neto)",
-        fill: "#3b82f6",
+        fill: CHART_COLORS.sky,
         radius: [4, 4, 0, 0],
       },
       {
@@ -145,13 +146,13 @@ export const Overview: React.FC<OverviewProps> = ({ data, year }) => {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis
                 dataKey="name"
-                stroke="#888888"
+                stroke={CHART_COLORS.axis}
                 fontSize={12}
                 tickLine={false}
                 axisLine={false}
               />
               <YAxis
-                stroke="#888888"
+                stroke={CHART_COLORS.axis}
                 fontSize={12}
                 tickLine={false}
                 axisLine={false}

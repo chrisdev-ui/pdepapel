@@ -31,7 +31,7 @@ export const DataTableCellUrl = ({ url }: DataTableCellUrlProps) => {
       onClick={(e) => e.stopPropagation()}
     >
       <span>{displayUrl}</span>
-      <ExternalLink className="h-3 w-3 shrink-0" />
+      <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
     </a>
   );
 };

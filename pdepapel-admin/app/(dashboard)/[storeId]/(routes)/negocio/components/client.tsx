@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { Heading } from "@/components/ui/heading";
+import { DateField } from "@/components/ui/date-field";
 import { Input } from "@/components/ui/input";
 import { PercentageInput } from "@/components/ui/percentage-input";
 import {
@@ -209,9 +210,12 @@ function CashPlanCard({
 export function BusinessGrowthClient({
   storeId,
   initialData,
+  embedded = false,
 }: {
   storeId: string;
   initialData: BusinessGrowthOverview;
+  /** Dentro de Reportes › Rendimiento la cabecera la pone la página. */
+  embedded?: boolean;
 }) {
   const { toast } = useToast();
   const [overview, setOverview] = useState(initialData);
@@ -498,10 +502,16 @@ export function BusinessGrowthClient({
         aria-busy={isChangingPeriod}
       >
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <Heading
-            title="Negocio y crecimiento"
-            description={`Caja de ${formatMonth(overview.period.label)} y campañas basadas en la situación actual.`}
-          />
+          {embedded ? (
+            <p className="text-sm text-muted-foreground">
+              Caja de {formatMonth(overview.period.label)} y campañas basadas en la situación actual.
+            </p>
+          ) : (
+            <Heading
+              title="Negocio y crecimiento"
+              description={`Caja de ${formatMonth(overview.period.label)} y campañas basadas en la situación actual.`}
+            />
+          )}
           <div className="flex flex-col gap-2 sm:items-end">
             <span className="text-xs font-medium text-muted-foreground">
               Período financiero
@@ -1168,15 +1178,15 @@ export function BusinessGrowthClient({
               </label>
               <label className="space-y-2 text-sm font-medium">
                 Fecha
-                <Input
-                  type="date"
+                <DateField
+                  aria-label="Fecha del movimiento"
                   value={movementForm.occurredAt}
                   min={getBusinessGrowthPeriodDateBounds(overview.period).min}
                   max={getBusinessGrowthPeriodDateBounds(overview.period).max}
-                  onChange={(event) =>
+                  onChange={(occurredAt) =>
                     setMovementForm((current) => ({
                       ...current,
-                      occurredAt: event.target.value,
+                      occurredAt,
                     }))
                   }
                 />

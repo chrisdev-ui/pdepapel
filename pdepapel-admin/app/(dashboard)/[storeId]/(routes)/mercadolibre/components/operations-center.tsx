@@ -145,7 +145,53 @@ function getQuestionStatusLabel(status: string) {
   return status === "ANSWERED" ? "Respondida" : "Por responder";
 }
 
-export function MercadoLibreOperationsCenter({ storeId }: { storeId: string }) {
+export type OperationsSection =
+  | "resumen"
+  | "preguntas"
+  | "envios"
+  | "reclamos"
+  | "rentabilidad";
+
+const SECTION_TITLES: Record<
+  OperationsSection,
+  { title: string; description: string }
+> = {
+  resumen: {
+    title: "Centro de operaciones",
+    description:
+      "Publicaciones, preguntas, envíos y reclamos de hoy. Las decisiones sensibles se toman a mano.",
+  },
+  preguntas: {
+    title: "Preguntas y reclamos",
+    description:
+      "Cada pregunta sin responder es un pendiente; los reclamos muestran su estado.",
+  },
+  envios: {
+    title: "Envíos de Mercado Libre",
+    description:
+      "La etiqueta es de Mercado Libre y el estado llega por notificación.",
+  },
+  reclamos: {
+    title: "Reclamos",
+    description: "Reclamos y devoluciones abiertos en Mercado Libre.",
+  },
+  rentabilidad: {
+    title: "Rentabilidad por publicación",
+    description: "Neto cobrado frente al costo del producto vinculado.",
+  },
+};
+
+export function MercadoLibreOperationsCenter({
+  storeId,
+  sections,
+}: {
+  storeId: string;
+  /** Qué bloques mostrar; sin el prop se muestra todo (comportamiento original). */
+  sections?: OperationsSection[];
+}) {
+  const show = (section: OperationsSection) =>
+    !sections || sections.includes(section);
+  const heading = SECTION_TITLES[sections?.[0] ?? "resumen"];
   const { requestConfirmation, confirmationDialog } = useActionConfirmation();
   const [health, setHealth] = useState<HealthSummary | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -418,12 +464,9 @@ export function MercadoLibreOperationsCenter({ storeId }: { storeId: string }) {
           <div>
             <CardTitle className="flex items-center gap-2">
               <MercadoLibreLogo variant="mark" className="h-6 w-6" />
-              Centro de operaciones
+              {heading.title}
             </CardTitle>
-            <CardDescription>
-              Revisa ventas, preguntas, envíos y reclamos. Las decisiones
-              sensibles se toman manualmente.
-            </CardDescription>
+            <CardDescription>{heading.description}</CardDescription>
           </div>
           <Button
             type="button"
@@ -450,7 +493,7 @@ export function MercadoLibreOperationsCenter({ storeId }: { storeId: string }) {
               {notice}
             </p>
           ) : null}
-          {health ? (
+          {show("resumen") && health ? (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <SummaryCard
                 icon={<ClipboardCheck className="h-4 w-4" />}
@@ -475,7 +518,7 @@ export function MercadoLibreOperationsCenter({ storeId }: { storeId: string }) {
             </div>
           ) : null}
 
-          {health?.issues.length ? (
+          {!show("resumen") ? null : health?.issues.length ? (
             <div className="rounded-md border border-amber-300 bg-amber-50/60 p-4">
               <p className="flex items-center gap-2 font-medium text-amber-900">
                 <AlertTriangle className="h-4 w-4" /> Alertas del día
@@ -496,326 +539,338 @@ export function MercadoLibreOperationsCenter({ storeId }: { storeId: string }) {
             </p>
           ) : null}
 
-          <section className="space-y-3 rounded-md border p-4">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <p className="flex items-center gap-2 font-semibold">
-                  <MessageCircleQuestion className="h-4 w-4" /> Preguntas de
-                  compradores
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  La sugerencia es un borrador: revísala y ajusta antes de
-                  enviarla.
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void refreshQuestions()}
-                disabled={isRefreshingQuestions}
-              >
-                {isRefreshingQuestions ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                )}
-                Actualizar preguntas
-              </Button>
-            </div>
-            {questions.filter((question) => question.status !== "ANSWERED")
-              .length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No hay preguntas pendientes.
-              </p>
-            ) : (
-              <div className="grid gap-3">
-                {questions
-                  .filter((question) => question.status !== "ANSWERED")
-                  .map((question) => (
-                    <div
-                      key={question.id}
-                      className="rounded-md bg-muted/40 p-3"
-                    >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-medium">
-                          {question.product?.name ??
-                            "Publicación sin producto vinculado"}
-                        </p>
-                        <Badge variant="secondary">
-                          {getQuestionStatusLabel(question.status)}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {formatDate(question.askedAt)}
-                        </span>
-                      </div>
-                      <p className="mt-2 text-sm">{question.question}</p>
-                      <Textarea
-                        className="mt-3 min-h-24"
-                        value={drafts[question.id] ?? ""}
-                        onChange={(event) =>
-                          setDrafts((current) => ({
-                            ...current,
-                            [question.id]: event.target.value,
-                          }))
-                        }
-                      />
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            setDrafts((current) => ({
-                              ...current,
-                              [question.id]: question.suggestedAnswer,
-                            }))
-                          }
-                        >
-                          Usar sugerencia
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() => void answerQuestion(question)}
-                          disabled={answeringQuestionId === question.id}
-                        >
-                          {answeringQuestionId === question.id ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <Send className="mr-2 h-4 w-4" />
-                          )}
-                          Enviar respuesta
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            )}
-          </section>
-
-          <section className="grid gap-4 xl:grid-cols-2">
-            <OperationsList
-              title="Envíos y despachos"
-              icon={<Truck className="h-4 w-4" />}
-              empty="No hay envíos recibidos todavía."
-              action={
+          {show("preguntas") && (
+            <section className="space-y-3 rounded-md border p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="flex items-center gap-2 font-semibold">
+                    <MessageCircleQuestion className="h-4 w-4" /> Preguntas de
+                    compradores
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    La sugerencia es un borrador: revísala y ajusta antes de
+                    enviarla.
+                  </p>
+                </div>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => void refreshShipments()}
-                  disabled={
-                    isRefreshingShipments || refreshingShipmentId !== null
-                  }
-                  title="Mercado Libre solo avisa por notificación; usa esto si un estado quedó desactualizado."
+                  onClick={() => void refreshQuestions()}
+                  disabled={isRefreshingQuestions}
                 >
-                  {isRefreshingShipments ? (
+                  {isRefreshingQuestions ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
                     <RefreshCw className="mr-2 h-4 w-4" />
                   )}
-                  Actualizar envíos
+                  Actualizar preguntas
                 </Button>
-              }
-            >
-              {shipments.slice(0, 10).map((shipment) => {
-                const status = getShipmentStatusMeta(shipment.status);
-                const isRefreshingThis =
-                  refreshingShipmentId === shipment.externalShipmentId;
-
-                return (
-                  <div
-                    key={shipment.id}
-                    className="rounded-md bg-muted/40 p-3 text-sm"
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium">
-                        Envío {shipment.externalShipmentId}
-                      </span>
-                      <Badge variant={status.variant}>{status.label}</Badge>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="ml-auto h-7 px-2"
-                        onClick={() =>
-                          void refreshShipments(shipment.externalShipmentId)
-                        }
-                        disabled={
-                          isRefreshingShipments || refreshingShipmentId !== null
-                        }
-                        aria-label={`Actualizar el envío ${shipment.externalShipmentId} desde Mercado Libre`}
-                      >
-                        {isRefreshingThis ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <RefreshCw className="h-3 w-3" />
-                        )}
-                      </Button>
-                    </div>
-                    <p className="mt-1 text-muted-foreground">
-                      Pedido{" "}
-                      {shipment.marketplaceOrder?.externalOrderId ??
-                        "sin vincular"}
-                      {shipment.trackingNumber
-                        ? ` · Guía ${shipment.trackingNumber}`
-                        : ""}
-                    </p>
-                  </div>
-                );
-              })}
-            </OperationsList>
-            <OperationsList
-              title="Reclamos"
-              icon={<ShieldAlert className="h-4 w-4" />}
-              empty="No hay reclamos recibidos todavía."
-            >
-              {claims.slice(0, 10).map((claim) => {
-                const status = getClaimStatusMeta(claim.status);
-
-                return (
-                  <div
-                    key={claim.id}
-                    className="rounded-md bg-muted/40 p-3 text-sm"
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium">
-                        {claim.title ?? `Reclamo ${claim.externalClaimId}`}
-                      </span>
-                      <Badge variant={status.variant}>{status.label}</Badge>
-                    </div>
-                    <p className="mt-1 text-muted-foreground">
-                      Pedido{" "}
-                      {claim.marketplaceOrder?.externalOrderId ??
-                        "sin vincular"}{" "}
-                      · Fecha límite {formatDate(claim.dueAt)}
-                    </p>
-                  </div>
-                );
-              })}
-            </OperationsList>
-          </section>
-
-          <section className="space-y-3 rounded-md border p-4">
-            <div>
-              <p className="flex items-center gap-2 font-semibold">
-                <BarChart3 className="h-4 w-4" /> Ganancia real por publicación
-              </p>
-              <p className="text-sm text-muted-foreground">
-                El valor neto es lo que Mercado Libre reportó que recibiste; se
-                descuenta el costo de adquisición registrado en P de Papel.
-                Cuando ese costo no se puede establecer se muestra «—» en vez de
-                cero, para no reportar una ganancia mayor a la real.
-              </p>
-            </div>
-            {profitability.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Aparecerá al existir ventas pagadas con liquidación de Mercado
-                Libre.
-              </p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[44rem] text-left text-sm">
-                  <thead className="border-b text-xs text-muted-foreground">
-                    <tr>
-                      <th className="pb-2 pr-4">Publicación</th>
-                      <th className="pb-2 pr-4">Unidades</th>
-                      <th className="pb-2 pr-4">Neto recibido</th>
-                      <th className="pb-2 pr-4">Costo producto</th>
-                      <th className="pb-2 pr-4">Ganancia</th>
-                      <th className="pb-2">Margen</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {profitability.slice(0, 20).map((item) => {
-                      const costIssue =
-                        item.costStatus === "AVAILABLE"
-                          ? null
-                          : COST_STATUS_MESSAGES[item.costStatus];
-                      const orderToResync = item.pendingOrderIds[0] ?? null;
-                      return (
-                        <tr
-                          key={item.listingId ?? item.title}
-                          className="border-b align-top last:border-0"
-                        >
-                          <td className="py-3 pr-4">
-                            <p className="font-medium">{item.title}</p>
-                            {item.productName ? (
-                              <p className="text-xs text-muted-foreground">
-                                {item.productName}
-                              </p>
-                            ) : null}
-                            {costIssue ? (
-                              <div className="mt-2 space-y-1">
-                                <Badge
-                                  variant="outline"
-                                  className="border-amber-300 bg-amber-50 text-amber-900"
-                                >
-                                  <AlertTriangle className="mr-1 h-3 w-3" />
-                                  {costIssue.label}
-                                </Badge>
-                                <p className="max-w-md text-xs text-muted-foreground">
-                                  {costIssue.detail}
-                                </p>
-                                {item.costStatus === "UNLINKED_PRODUCT" &&
-                                orderToResync ? (
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="mt-1"
-                                    onClick={() =>
-                                      void resyncOrder(orderToResync)
-                                    }
-                                    disabled={resyncingOrderId !== null}
-                                  >
-                                    {resyncingOrderId === orderToResync ? (
-                                      <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                                    ) : (
-                                      <RefreshCw className="mr-2 h-3 w-3" />
-                                    )}
-                                    Re-sincronizar venta {orderToResync}
-                                  </Button>
-                                ) : null}
-                              </div>
-                            ) : null}
-                          </td>
-                          <td className="py-3 pr-4">{item.unitsSold}</td>
-                          <td className="py-3 pr-4">
-                            {currencyFormatter.format(item.netCollected)}
-                          </td>
-                          <td className="py-3 pr-4">
-                            {item.productCost === null
-                              ? "—"
-                              : currencyFormatter.format(item.productCost)}
-                          </td>
-                          <td
-                            className={`py-3 pr-4 font-medium ${
-                              item.netProfit === null
-                                ? "text-muted-foreground"
-                                : item.netProfit < 0
-                                  ? "text-destructive"
-                                  : "text-success"
-                            }`}
-                          >
-                            {item.netProfit === null
-                              ? "—"
-                              : currencyFormatter.format(item.netProfit)}
-                          </td>
-                          <td className="py-3">
-                            {item.marginPercentage === null
-                              ? "—"
-                              : `${item.marginPercentage.toFixed(1)}%`}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
               </div>
-            )}
-          </section>
+              {questions.filter((question) => question.status !== "ANSWERED")
+                .length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No hay preguntas pendientes.
+                </p>
+              ) : (
+                <div className="grid gap-3">
+                  {questions
+                    .filter((question) => question.status !== "ANSWERED")
+                    .map((question) => (
+                      <div
+                        key={question.id}
+                        className="rounded-md bg-muted/40 p-3"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium">
+                            {question.product?.name ??
+                              "Publicación sin producto vinculado"}
+                          </p>
+                          <Badge variant="secondary">
+                            {getQuestionStatusLabel(question.status)}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {formatDate(question.askedAt)}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-sm">{question.question}</p>
+                        <Textarea
+                          className="mt-3 min-h-24"
+                          value={drafts[question.id] ?? ""}
+                          onChange={(event) =>
+                            setDrafts((current) => ({
+                              ...current,
+                              [question.id]: event.target.value,
+                            }))
+                          }
+                        />
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              setDrafts((current) => ({
+                                ...current,
+                                [question.id]: question.suggestedAnswer,
+                              }))
+                            }
+                          >
+                            Usar sugerencia
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => void answerQuestion(question)}
+                            disabled={answeringQuestionId === question.id}
+                          >
+                            {answeringQuestionId === question.id ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <Send className="mr-2 h-4 w-4" />
+                            )}
+                            Enviar respuesta
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          {(show("envios") || show("reclamos")) && (
+            <section className="grid gap-4 xl:grid-cols-2">
+              {show("envios") && (
+                <OperationsList
+                  title="Envíos y despachos"
+                  icon={<Truck className="h-4 w-4" />}
+                  empty="No hay envíos recibidos todavía."
+                  action={
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void refreshShipments()}
+                      disabled={
+                        isRefreshingShipments || refreshingShipmentId !== null
+                      }
+                      title="Mercado Libre solo avisa por notificación; usa esto si un estado quedó desactualizado."
+                    >
+                      {isRefreshingShipments ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                      )}
+                      Actualizar envíos
+                    </Button>
+                  }
+                >
+                  {shipments.slice(0, 10).map((shipment) => {
+                    const status = getShipmentStatusMeta(shipment.status);
+                    const isRefreshingThis =
+                      refreshingShipmentId === shipment.externalShipmentId;
+
+                    return (
+                      <div
+                        key={shipment.id}
+                        className="rounded-md bg-muted/40 p-3 text-sm"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">
+                            Envío {shipment.externalShipmentId}
+                          </span>
+                          <Badge variant={status.variant}>{status.label}</Badge>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="ml-auto h-7 px-2"
+                            onClick={() =>
+                              void refreshShipments(shipment.externalShipmentId)
+                            }
+                            disabled={
+                              isRefreshingShipments ||
+                              refreshingShipmentId !== null
+                            }
+                            aria-label={`Actualizar el envío ${shipment.externalShipmentId} desde Mercado Libre`}
+                          >
+                            {isRefreshingThis ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-3 w-3" />
+                            )}
+                          </Button>
+                        </div>
+                        <p className="mt-1 text-muted-foreground">
+                          Pedido{" "}
+                          {shipment.marketplaceOrder?.externalOrderId ??
+                            "sin vincular"}
+                          {shipment.trackingNumber
+                            ? ` · Guía ${shipment.trackingNumber}`
+                            : ""}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </OperationsList>
+              )}
+              {show("reclamos") && (
+                <OperationsList
+                  title="Reclamos"
+                  icon={<ShieldAlert className="h-4 w-4" />}
+                  empty="No hay reclamos recibidos todavía."
+                >
+                  {claims.slice(0, 10).map((claim) => {
+                    const status = getClaimStatusMeta(claim.status);
+
+                    return (
+                      <div
+                        key={claim.id}
+                        className="rounded-md bg-muted/40 p-3 text-sm"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">
+                            {claim.title ?? `Reclamo ${claim.externalClaimId}`}
+                          </span>
+                          <Badge variant={status.variant}>{status.label}</Badge>
+                        </div>
+                        <p className="mt-1 text-muted-foreground">
+                          Pedido{" "}
+                          {claim.marketplaceOrder?.externalOrderId ??
+                            "sin vincular"}{" "}
+                          · Fecha límite {formatDate(claim.dueAt)}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </OperationsList>
+              )}
+            </section>
+          )}
+
+          {show("rentabilidad") && (
+            <section className="space-y-3 rounded-md border p-4">
+              <div>
+                <p className="flex items-center gap-2 font-semibold">
+                  <BarChart3 className="h-4 w-4" /> Ganancia real por
+                  publicación
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  El valor neto es lo que Mercado Libre reportó que recibiste;
+                  se descuenta el costo de adquisición registrado en P de Papel.
+                  Cuando ese costo no se puede establecer se muestra «—» en vez
+                  de cero, para no reportar una ganancia mayor a la real.
+                </p>
+              </div>
+              {profitability.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Aparecerá al existir ventas pagadas con liquidación de Mercado
+                  Libre.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[44rem] text-left text-sm">
+                    <thead className="border-b text-xs text-muted-foreground">
+                      <tr>
+                        <th className="pb-2 pr-4">Publicación</th>
+                        <th className="pb-2 pr-4">Unidades</th>
+                        <th className="pb-2 pr-4">Neto recibido</th>
+                        <th className="pb-2 pr-4">Costo producto</th>
+                        <th className="pb-2 pr-4">Ganancia</th>
+                        <th className="pb-2">Margen</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {profitability.slice(0, 20).map((item) => {
+                        const costIssue =
+                          item.costStatus === "AVAILABLE"
+                            ? null
+                            : COST_STATUS_MESSAGES[item.costStatus];
+                        const orderToResync = item.pendingOrderIds[0] ?? null;
+                        return (
+                          <tr
+                            key={item.listingId ?? item.title}
+                            className="border-b align-top last:border-0"
+                          >
+                            <td className="py-3 pr-4">
+                              <p className="font-medium">{item.title}</p>
+                              {item.productName ? (
+                                <p className="text-xs text-muted-foreground">
+                                  {item.productName}
+                                </p>
+                              ) : null}
+                              {costIssue ? (
+                                <div className="mt-2 space-y-1">
+                                  <Badge
+                                    variant="outline"
+                                    className="border-amber-300 bg-amber-50 text-amber-900"
+                                  >
+                                    <AlertTriangle className="mr-1 h-3 w-3" />
+                                    {costIssue.label}
+                                  </Badge>
+                                  <p className="max-w-md text-xs text-muted-foreground">
+                                    {costIssue.detail}
+                                  </p>
+                                  {item.costStatus === "UNLINKED_PRODUCT" &&
+                                  orderToResync ? (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="mt-1"
+                                      onClick={() =>
+                                        void resyncOrder(orderToResync)
+                                      }
+                                      disabled={resyncingOrderId !== null}
+                                    >
+                                      {resyncingOrderId === orderToResync ? (
+                                        <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                                      ) : (
+                                        <RefreshCw className="mr-2 h-3 w-3" />
+                                      )}
+                                      Re-sincronizar venta {orderToResync}
+                                    </Button>
+                                  ) : null}
+                                </div>
+                              ) : null}
+                            </td>
+                            <td className="py-3 pr-4">{item.unitsSold}</td>
+                            <td className="py-3 pr-4">
+                              {currencyFormatter.format(item.netCollected)}
+                            </td>
+                            <td className="py-3 pr-4">
+                              {item.productCost === null
+                                ? "—"
+                                : currencyFormatter.format(item.productCost)}
+                            </td>
+                            <td
+                              className={`py-3 pr-4 font-medium ${
+                                item.netProfit === null
+                                  ? "text-muted-foreground"
+                                  : item.netProfit < 0
+                                    ? "text-destructive"
+                                    : "text-success"
+                              }`}
+                            >
+                              {item.netProfit === null
+                                ? "—"
+                                : currencyFormatter.format(item.netProfit)}
+                            </td>
+                            <td className="py-3">
+                              {item.marginPercentage === null
+                                ? "—"
+                                : `${item.marginPercentage.toFixed(1)}%`}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          )}
         </CardContent>
       </Card>
       {confirmationDialog}
