@@ -331,7 +331,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             brand: "",
             gtin: "",
             mpn: "",
-            hasNoProductIdentifier: false,
+            // Los productos nuevos nacen sin identificador; se desmarca al tener un GTIN real.
+            hasNoProductIdentifier: true,
             isFeatured: false,
             isArchived: false,
             percentageIncrease: INITIAL_PERCENTAGE_INCREASE,

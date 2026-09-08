@@ -194,7 +194,8 @@ pone verde cuando todo está completo; Google Merchant exige imagen, precio e
 identificador.
 
 Nuevo producto: sube la foto primero; el asistente sugiere nombre, categoría,
-color y diseño. Submenú: Grupo con variantes, Gestión masiva, Nombres para
+color y diseño. Nace marcado «No tiene identificador global»; si el empaque
+trae código de barras, desmarca la casilla y escribe el GTIN real. Submenú: Grupo con variantes, Gestión masiva, Nombres para
 búsqueda, Opciones para clientes.
 
 ## 11. Atributos (`/atributos`)

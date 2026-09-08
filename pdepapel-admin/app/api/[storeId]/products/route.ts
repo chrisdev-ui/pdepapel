@@ -178,6 +178,7 @@ export async function POST(
         gtin,
         mpn,
         hasNoProductIdentifier,
+        defaultNoIdentifierWhenEmpty: true,
       });
     } catch (error) {
       throw ErrorFactory.InvalidRequest(
