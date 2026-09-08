@@ -5,9 +5,11 @@ mover un pedido de pagado a entregado, cómo vender en mostrador o en una
 feria y cómo mantener el catálogo. Pensada para quien administra hoy y para
 quien se una al equipo mañana.
 
-La versión ilustrada, con capturas de cada pantalla, está publicada como
-página privada: **[Manual del panel P de Papel](https://claude.ai/code/artifact/b68ef35b-55ce-44d9-920d-8a980d49a5fa)**. Este archivo
-es la misma guía en texto, versionada junto al código.
+La versión ilustrada, con capturas de cada pantalla, es un PDF de 50 páginas
+que cualquier persona del equipo puede abrir sin iniciar sesión:
+**https://admin.papeleriapdepapel.com/manual-panel-p-de-papel.pdf**
+(el archivo vive en `pdepapel-admin/public/manual-panel-p-de-papel.pdf`).
+Este archivo es la misma guía en texto, versionada junto al código.
 
 > Las capturas del manual provienen de una tienda de pruebas; nombres,
 > pedidos y cifras son ficticios.
