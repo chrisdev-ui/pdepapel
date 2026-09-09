@@ -4,7 +4,7 @@ import { useFormPersist } from "@/hooks/use-form-persist";
 import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Category, Type } from "@prisma/client";
-import { Eraser, Loader2, Trash } from "lucide-react";
+import { Eraser, Loader2, Sparkles, Trash } from "lucide-react";
 import { useForm } from "react-hook-form";
 import z from "zod";
 
@@ -182,6 +182,31 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
       setLoading(false);
     }
   };
+  const [generating, setGenerating] = useState(false);
+  const onGenerateAssets = async () => {
+    try {
+      setGenerating(true);
+      const { data } = await axios.post<{ imageUrl: string | null; seoIntro: string | null; generated: string[] }>(
+        `/api/${params.storeId}/${Models.Categories}/${params.categoryId}/cover`,
+        { force: true },
+      );
+      if (data.imageUrl) form.setValue("imageUrl", data.imageUrl, { shouldDirty: true, shouldValidate: true });
+      if (data.seoIntro) form.setValue("seoIntro", data.seoIntro, { shouldDirty: true, shouldValidate: true });
+      router.refresh();
+      toast({
+        description: "Portada e intro generadas y guardadas. Revísalas y ajusta lo que quieras.",
+        variant: "success",
+      });
+    } catch (error) {
+      toast({
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const onDelete = async () => {
     try {
       setLoading(true);
@@ -219,6 +244,19 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
             <Eraser className="mr-2 h-4 w-4" />
             Limpiar Formulario
           </Button>
+          {initialData && (
+            <Button
+              disabled={loading || generating}
+              variant="secondary"
+              size="sm"
+              type="button"
+              onClick={onGenerateAssets}
+              title="Genera una foto de portada y una intro con IA, en el estilo de las demás categorías"
+            >
+              {generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+              {generating ? "Generando..." : "Generar portada e intro con IA"}
+            </Button>
+          )}
           {initialData && (
             <Button
               disabled={loading}

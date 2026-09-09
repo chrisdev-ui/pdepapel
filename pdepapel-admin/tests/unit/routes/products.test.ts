@@ -569,4 +569,27 @@ describe("GET /api/[storeId]/products", () => {
       expect.arrayContaining([{ name: { contains: "libreta" } }, { name: { contains: "cuaderno" } }]),
     );
   });
+
+  it("corrects a misspelled search when no name matches and reports it", async () => {
+    mocks.countProducts.mockResolvedValueOnce(0);
+
+    const response = await GET(
+      new Request("https://admin.example.com/api/store-id/products?groupBy=parents&search=resaltadres&skipCache=true"),
+      { params: { storeId: "store-id" } },
+    );
+    const body = await response.json();
+
+    expect(body.searchCorrection).toEqual({ original: "resaltadres", corrected: "resaltadores" });
+    const standaloneWhere = mocks.findProducts.mock.calls.at(-1)?.[0].where;
+    expect(standaloneWhere.OR).toEqual(expect.arrayContaining([{ name: { contains: "resaltadores" } }]));
+  });
+
+  it("keeps the literal search when exact=true", async () => {
+    mocks.countProducts.mockResolvedValueOnce(0);
+    const response = await GET(
+      new Request("https://admin.example.com/api/store-id/products?groupBy=parents&search=resaltadres&exact=true&skipCache=true"),
+      { params: { storeId: "store-id" } },
+    );
+    expect((await response.json()).searchCorrection).toBeNull();
+  });
 });

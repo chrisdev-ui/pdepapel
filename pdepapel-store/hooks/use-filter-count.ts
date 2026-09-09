@@ -19,6 +19,7 @@ export function filtersToQuery(filters: ProductFilters, fixedCategoryId?: string
     minPrice: filters.minPrice,
     maxPrice: filters.maxPrice,
     search: filters.search || undefined,
+    exact: filters.exact || undefined,
     isOnSale: filters.isOnSale,
     sortOption: filters.sortOption || undefined,
     fromShop: true,

@@ -6,7 +6,7 @@ const complete = { name: "Cuaderno Snoopy A5", price: 32000, acqPrice: 18500, ca
 
 describe("product readiness", () => {
   it("passes a complete product and lists what is missing otherwise", () => {
-    expect(getProductReadiness(complete)).toMatchObject({ complete: true, done: 7, total: 7, missing: [] });
+    expect(getProductReadiness(complete)).toMatchObject({ complete: true, done: 8, total: 8, missing: [] });
     const partial = getProductReadiness({ ...complete, images: [], gtin: "", hasNoProductIdentifier: false, description: "corto" });
     expect(partial.complete).toBe(false);
     expect(partial.missing).toEqual(["imagen", "identificador", "descripción"]);
@@ -36,6 +36,9 @@ describe("product readiness", () => {
     expect(productMatchesView({ ...base, stock: 0 }, "agotados")).toBe(true);
     expect(productMatchesView({ ...base, gtin: "", hasNoProductIdentifier: false }, "sin-completar")).toBe(true);
     expect(productMatchesView(base, "sin-completar")).toBe(false);
+    expect(productMatchesView({ ...base, brokenImages: 1 }, "imagen-rota")).toBe(true);
+    expect(productMatchesView(base, "imagen-rota")).toBe(false);
+    expect(getListReadiness({ ...base, brokenImages: 2 }).missing).toContain("imagen rota");
     expect(productMatchesView({ ...base, isArchived: true }, "activos")).toBe(false);
     expect(productMatchesView({ ...base, isArchived: true }, "archivados")).toBe(true);
     expect(productMatchesView({ ...base, availableAt: "2999-01-01T05:00:00.000Z" }, "proximamente")).toBe(true);

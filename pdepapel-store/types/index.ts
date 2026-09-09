@@ -331,6 +331,8 @@ export interface ProductsResponse {
   totalPages: number;
   totalItems: number;
   isUnavailable?: boolean;
+  /** Búsqueda corregida por la API cuando el texto original no coincidía con nada. */
+  searchCorrection?: { original: string; corrected: string } | null;
   facets?: {
     colors: { id: string; count: number }[];
     formattedSizes: { id: string; count: number }[];

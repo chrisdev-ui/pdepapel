@@ -101,6 +101,7 @@ export function removeFilterChip(filters: ProductFilters, chip: ActiveFilterChip
     next.isOnSale = false;
   } else if (chip.key === "search") {
     next.search = null;
+    next.exact = false;
   } else if (chip.value !== null) {
     const key = chip.key as FilterListKey;
     next[key] = filters[key].filter((value) => value !== chip.value);
@@ -121,6 +122,7 @@ export const EMPTY_FILTERS: ProductFilters = {
   page: 1,
   search: null,
   isOnSale: false,
+  exact: false,
 };
 
 /** «Mostrando 1–24 de 1.980 productos». */

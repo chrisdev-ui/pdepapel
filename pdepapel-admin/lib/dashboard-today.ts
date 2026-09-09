@@ -28,7 +28,7 @@ const SHIPPABLE_TYPES: OrderType[] = [OrderType.STANDARD, OrderType.CUSTOM, Orde
 export type SalesChannel = "tienda" | "presencial" | "feria" | "mercadolibre";
 
 export interface TodayPendingAction {
-  kind: "verify-payment" | "create-guide" | "answer-question" | "restock" | "expiring-quote";
+  kind: "verify-payment" | "create-guide" | "answer-question" | "restock" | "expiring-quote" | "broken-image";
   title: string;
   meta: string;
   href: string;
@@ -87,6 +87,8 @@ export interface TodayRawInput {
   lowStockProducts: { id: string; name: string; stock: number }[];
   lowStockCount: number;
   outOfStockCount: number;
+  /** Productos activos con alguna imagen que ya no existe en Cloudinary. */
+  brokenImageProducts?: number;
   unansweredQuestions: { id: string; question: string; productName: string | null; askedAt: Date | null }[];
   unansweredCount: number;
   expiringQuotes: { id: string; orderNumber: string; fullName: string; total: number; expiresAt: Date | null }[];
@@ -166,6 +168,17 @@ export function buildTodaySummary(input: TodayRawInput, storeId: string): TodayS
       href: `/${storeId}/productos/${product.id}`,
       action: "Aprovisionar",
       weight: 4,
+    });
+  }
+  if ((input.brokenImageProducts ?? 0) > 0) {
+    const count = input.brokenImageProducts ?? 0;
+    pending.push({
+      kind: "broken-image",
+      title: `${count} ${count === 1 ? "producto con imagen rota" : "productos con imagen rota"}`,
+      meta: "La foto ya no existe en Cloudinary: la tienda muestra un hueco. Sube la imagen de nuevo.",
+      href: `/${storeId}/productos?vista=imagen-rota`,
+      action: "Revisar",
+      weight: 2,
     });
   }
   pending.sort((a, b) => a.weight - b.weight);
@@ -266,6 +279,7 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
     weekMarketplace,
     previousWeekMarketplace,
     weekItems,
+    brokenImageProducts,
   ] = await Promise.all([
     prismadb.order.findMany({ where: { storeId, status: { in: PAID_STATUSES }, ...paidWithin(dayStart, dayEnd) }, select: { total: true } }),
     prismadb.marketplaceOrder.findMany({ where: createSettledMarketplaceSalesWhere(storeId, { start: dayStart, end: dayEnd }), select: { netAmount: true } }),
@@ -312,6 +326,7 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
       where: { order: { storeId, status: { in: PAID_STATUSES }, ...paidWithin(weekStart, dayEnd) } },
       select: { productId: true, name: true, quantity: true },
     }),
+    prismadb.product.count({ where: { storeId, isArchived: false, images: { some: { brokenAt: { not: null } } } } }),
   ]);
 
   return buildTodaySummary(
@@ -333,6 +348,7 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
       weekMarketplace,
       previousWeekMarketplaceNet: previousWeekMarketplace.reduce((sum, o) => sum + Number(o.netAmount ?? 0), 0),
       weekItems,
+      brokenImageProducts,
     },
     storeId,
   );

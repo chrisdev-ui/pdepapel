@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import type { TodayPendingAction } from "@/lib/dashboard-today";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, CheckCircle2, Clock, CreditCard, ListChecks, MessageCircle, Truck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, CreditCard, ImageOff, ListChecks, MessageCircle, Truck } from "lucide-react";
 import Link from "next/link";
 
 const ICONS: Record<TodayPendingAction["kind"], { icon: React.ReactNode; tint: string }> = {
@@ -10,6 +10,7 @@ const ICONS: Record<TodayPendingAction["kind"], { icon: React.ReactNode; tint: s
   "answer-question": { icon: <MessageCircle className="h-[18px] w-[18px]" aria-hidden="true" />, tint: "bg-tint-lavender" },
   restock: { icon: <AlertTriangle className="h-[18px] w-[18px]" aria-hidden="true" />, tint: "bg-tint-pink" },
   "expiring-quote": { icon: <Clock className="h-[18px] w-[18px]" aria-hidden="true" />, tint: "bg-muted" },
+  "broken-image": { icon: <ImageOff className="h-[18px] w-[18px]" aria-hidden="true" />, tint: "bg-tint-pink" },
 };
 
 interface PendingActionsProps {

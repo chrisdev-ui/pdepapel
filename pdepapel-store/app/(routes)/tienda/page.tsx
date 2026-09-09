@@ -90,6 +90,7 @@ interface ShopPageProps {
     page: number;
     itemsPerPage: number;
     search: string;
+    exact?: string;
   };
 }
 
@@ -112,6 +113,7 @@ async function ShopContentWrapper({ searchParams }: { searchParams: ShopPageProp
       page: searchParams.page,
       itemsPerPage: LIMIT_SHOP_ITEMS,
       search: searchParams.search,
+      exact: searchParams.exact === "true",
       isOnSale: searchParams.isOnSale === "true",
       groupBy: "parents",
     }),

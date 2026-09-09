@@ -59,6 +59,7 @@ model Store {
   coupons                        Coupon[]                        @relation("StoreToCoupons")
   customerAddresses              CustomerAddress[]               @relation("StoreToCustomerAddress")
   customerWishlistItems          CustomerWishlistItem[]          @relation("StoreToCustomerWishlistItem")
+  customerSavedSearches          CustomerSavedSearch[]           @relation("StoreToCustomerSavedSearch")
   couponRedemptions              CouponRedemption[]              @relation("StoreToCouponRedemption")
   shippingQuotes                 ShippingQuote[]                 @relation("StoreToShippingQuotes")
   offers                         Offer[]                         @relation("StoreToOffer")
@@ -598,9 +599,12 @@ model Image {
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
   isMain         Boolean       @default(false)
+  /// Fecha en que el cron diario vio que el archivo ya no existe; null si está bien.
+  brokenAt       DateTime?
 
   @@index([productId])
   @@index([productGroupId])
+  @@index([brokenAt])
 }
 
 model Order {
@@ -733,6 +737,22 @@ model CustomerAddress {
 
   @@index([storeId, userId, isDefault, updatedAt])
   @@index([storeId, userId])
+}
+
+/// Búsqueda guardada por una clienta con sesión: el nombre que le puso y la
+/// query string de /tienda tal cual (filtros, orden y texto).
+model CustomerSavedSearch {
+  id        String   @id @default(uuid())
+  storeId   String
+  userId    String   @db.VarChar(128)
+  name      String   @db.VarChar(80)
+  query     String   @db.VarChar(1000)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store Store @relation("StoreToCustomerSavedSearch", fields: [storeId], references: [id])
+
+  @@index([storeId, userId, createdAt])
 }
 
 model CustomerWishlistItem {

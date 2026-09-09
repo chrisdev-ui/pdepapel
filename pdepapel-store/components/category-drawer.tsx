@@ -1,18 +1,7 @@
 "use client";
 
 import { SignedIn, SignedOut } from "@clerk/nextjs";
-import {
-  ArrowRight,
-  Heart,
-  LayoutGrid,
-  Mail,
-  Menu,
-  PackageOpen,
-  Store,
-  Tag,
-  User,
-  X,
-} from "lucide-react";
+import { ArrowRight, Bookmark, Heart, LayoutGrid, Mail, Menu, PackageOpen, Store, Tag, User, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -200,6 +189,15 @@ export function CategoryDrawer({ types, logoSrc }: CategoryDrawerProps) {
             >
               <PackageOpen aria-hidden="true" className="h-[18px] w-[18px]" />
               Mis pedidos
+            </Link>
+          </SignedIn>
+          <SignedIn>
+            <Link
+              href={STOREFRONT_ROUTES.savedSearches}
+              className="col-span-2 flex h-11 items-center justify-center gap-2 rounded-md border-[1.5px] border-blue-yankees font-sans text-sm font-semibold text-blue-yankees transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2"
+            >
+              <Bookmark aria-hidden="true" className="h-[18px] w-[18px]" />
+              Mis búsquedas
             </Link>
           </SignedIn>
           <Link

@@ -19,6 +19,8 @@ const filterParsers = {
   page: parseAsInteger.withDefault(1),
   search: parseAsString.withDefault(""),
   isOnSale: parseAsBoolean.withDefault(false),
+  /** Buscar el texto tal cual, sin corrección ortográfica. */
+  exact: parseAsBoolean.withDefault(false),
 };
 
 export interface ProductFilters {
@@ -34,6 +36,7 @@ export interface ProductFilters {
   page: number;
   search: string | null;
   isOnSale: boolean;
+  exact: boolean;
 }
 
 export function useProductFilters() {

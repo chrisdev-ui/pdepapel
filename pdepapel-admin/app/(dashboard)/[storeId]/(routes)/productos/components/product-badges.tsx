@@ -19,8 +19,14 @@ export function ShapeBadge({ shape }: { shape: { id: ProductShape; label: string
 }
 
 export function ReadinessBadge({ readiness }: { readiness: Readiness }) {
+  const brokenImage = readiness.checks.some((check) => check.id === "image-health" && !check.ok);
   if (readiness.complete) return <ProductTintBadge label="Listo" tone="mint" />;
-  return <ProductTintBadge label={`Faltan ${readiness.total - readiness.done}`} tone="cream" title={`Falta: ${readiness.missing.join(", ")}`} />;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1">
+      <ProductTintBadge label={`Faltan ${readiness.total - readiness.done}`} tone="cream" title={`Falta: ${readiness.missing.join(", ")}`} />
+      {brokenImage && <ProductTintBadge label="Imagen rota" tone="pink" title="La foto ya no existe en Cloudinary; súbela de nuevo." />}
+    </span>
+  );
 }
 
 export function StockBadge({ stock, isArchived, availableAt }: { stock: number; isArchived: boolean; availableAt?: Date | string | null }) {

@@ -2,7 +2,8 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createCorsHeaders } from "@/lib/cors";
 import { getProductsPrices } from "@/lib/discount-engine";
 import prismadb from "@/lib/prismadb";
-import { expandSearchTerms } from "@/lib/search-terms";
+import { getStoreVocabulary, suggestQuery } from "@/lib/search-suggestions";
+import { expandSearchTerms, normalizeSearchTerm, productNameSearchWhere } from "@/lib/search-terms";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
@@ -24,7 +25,14 @@ export async function GET(
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
-    const search = req.nextUrl.searchParams.get("search") || "";
+    let search = req.nextUrl.searchParams.get("search") || "";
+    if (search && req.nextUrl.searchParams.get("exact") !== "true") {
+      const matches = await prismadb.product.count({ where: { storeId: params.storeId, isArchived: false, OR: productNameSearchWhere(search) } });
+      if (matches === 0) {
+        const suggestion = suggestQuery(search, await getStoreVocabulary(params.storeId));
+        if (suggestion && suggestion !== normalizeSearchTerm(search)) search = suggestion;
+      }
+    }
     const page = Number(req.nextUrl.searchParams.get("page")) || 1;
     const limit = Number(req.nextUrl.searchParams.get("limit")) || 10;
     const skip = (page - 1) * limit;

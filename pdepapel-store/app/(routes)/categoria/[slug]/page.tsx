@@ -32,6 +32,7 @@ interface CategoryPageProps {
     maxPrice?: string;
     page?: string;
     search?: string;
+    exact?: string;
     isOnSale?: string;
   };
 }
@@ -94,6 +95,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
       page: searchParams.page ? parseInt(searchParams.page, 10) : undefined,
       itemsPerPage: LIMIT_SHOP_ITEMS,
       search: searchParams.search,
+      exact: searchParams.exact === "true",
       isOnSale: searchParams.isOnSale === "true",
       groupBy: "parents",
     }),

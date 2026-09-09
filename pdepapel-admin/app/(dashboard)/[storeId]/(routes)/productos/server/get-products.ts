@@ -41,6 +41,9 @@ export async function getProducts(storeId: string) {
           isMain: "desc",
         },
       },
+      _count: {
+        select: { images: { where: { brokenAt: { not: null } } } },
+      },
       category: {
         select: {
           name: true,
@@ -90,6 +93,7 @@ export async function getProducts(storeId: string) {
 
     return {
       ...product,
+      brokenImages: product._count.images,
       stock: effectiveStock,
       discountedPrice: priceInfo?.price ?? product.price,
       offerLabel: priceInfo?.offerLabel,

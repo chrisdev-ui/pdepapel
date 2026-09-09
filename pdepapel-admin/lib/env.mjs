@@ -45,6 +45,7 @@ export const env = createEnv({
     ),
     GA4_API_SECRET: requiredInProduction(z.string().min(1)),
     GEMINI_API_KEY: z.string().min(1).optional(),
+    OPENAI_API_KEY: z.string().min(1).optional(),
     // Signs the store-bound token in the hosted Google Merchant feed URL.
     // Optional: without it the feed route answers 404 and nothing is exposed.
     GOOGLE_MERCHANT_FEED_SECRET: z.string().min(16).optional(),

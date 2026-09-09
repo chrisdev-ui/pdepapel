@@ -7,7 +7,8 @@ import {
 } from "@/lib/product-availability";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { PRICE_RANGE_BUCKETS, priceBucketWhere, typeFacetsFromCategories, type ProductFacets } from "@/lib/catalog-facets";
-import { productGroupNameSearchWhere, productNameSearchWhere } from "@/lib/search-terms";
+import { getStoreVocabulary, suggestQuery } from "@/lib/search-suggestions";
+import { normalizeSearchTerm, productGroupNameSearchWhere, productNameSearchWhere } from "@/lib/search-terms";
 import cloudinaryInstance from "@/lib/cloudinary";
 import prismadb from "@/lib/prismadb";
 import { PUBLIC_REVIEW_INCLUDE, PUBLIC_REVIEW_WHERE } from "@/lib/review-moderation";
@@ -376,7 +377,8 @@ export async function GET(
     const includeSupplier = searchParams.get("includeSupplier") || false;
     const onlyNew = searchParams.get("onlyNew") || undefined;
     const fromShop = searchParams.get("fromShop") || undefined;
-    const search = searchParams.get("search") || "";
+    let search = searchParams.get("search") || "";
+    const exactSearch = searchParams.get("exact") === "true";
     const requestedSortOption = searchParams.get("sortOption") || "default";
     const sortOption =
       requestedSortOption === "isOnSale" ||
@@ -445,6 +447,22 @@ export async function GET(
       }
     } catch (error) {
       console.error("Redis get error:", error);
+    }
+
+    // «¿Quisiste decir…?»: si el texto no aparece en ningún nombre, se corrige
+    // con el vocabulario de la tienda y se avisa en la respuesta.
+    let searchCorrection: { original: string; corrected: string } | null = null;
+    if (search && !exactSearch) {
+      const matches = await prismadb.product.count({
+        where: { storeId: params.storeId, isArchived: false, OR: productNameSearchWhere(search) },
+      });
+      if (matches === 0) {
+        const suggestion = suggestQuery(search, await getStoreVocabulary(params.storeId));
+        if (suggestion && suggestion !== normalizeSearchTerm(search)) {
+          searchCorrection = { original: search, corrected: suggestion };
+          search = suggestion;
+        }
+      }
     }
 
     // Resolve categoryId if provided (supports both UUIDs and Slugs)
@@ -1087,6 +1105,7 @@ export async function GET(
         totalItems,
         totalPages,
         facets: groupFacets,
+        searchCorrection,
       };
 
       // Cache the response

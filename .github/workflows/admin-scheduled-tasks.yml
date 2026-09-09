@@ -41,3 +41,21 @@ jobs:
           curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
             --header "Authorization: Bearer $ADMIN_CRON_SECRET" \
             "$ADMIN_BASE_URL/api/cron/google-merchant-feed"
+
+  image-health:
+    name: Product image health
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ADMIN_BASE_URL: https://admin.papeleriapdepapel.com
+      ADMIN_CRON_SECRET: ${{ secrets.PDEPAPEL_ADMIN_CRON_SECRET }}
+    steps:
+      - name: Verify protected secret
+        run: test -n "$ADMIN_CRON_SECRET"
+      # Marks product images whose file no longer exists at Cloudinary so the
+      # panel lists them under Productos › «Imagen rota» and on Inicio.
+      - name: Check product images
+        run: |
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
+            --header "Authorization: Bearer $ADMIN_CRON_SECRET" \
+            "$ADMIN_BASE_URL/api/cron/image-health"

@@ -7,6 +7,7 @@ export const STOREFRONT_ROUTES = {
   checkout: "/finalizar-compra",
   wishlist: "/favoritos",
   myOrders: "/mis-pedidos",
+  savedSearches: "/mis-busquedas",
   signIn: "/iniciar-sesion",
   signUp: "/crear-cuenta",
   dataPolicy: "/politicas/privacidad",

@@ -50,10 +50,12 @@ interface ShopToolbarProps {
   rangeText: string;
   /** Campo de búsqueda dentro de la categoría (solo en categorías). */
   searchSlot?: ReactNode;
+  /** Acción contextual, como guardar la búsqueda (solo con filtros activos). */
+  actionSlot?: ReactNode;
 }
 
 /** Escritorio: chips o rango a la izquierda, búsqueda de categoría y orden a la derecha. */
-export function ShopToolbar({ chips, onRemoveChip, onClearAll, rangeText, searchSlot }: ShopToolbarProps) {
+export function ShopToolbar({ chips, onRemoveChip, onClearAll, rangeText, searchSlot, actionSlot }: ShopToolbarProps) {
   return (
     <div className="hidden min-h-11 items-center justify-between gap-4 lg:flex">
       <div className="min-w-0 flex-1">
@@ -66,6 +68,7 @@ export function ShopToolbar({ chips, onRemoveChip, onClearAll, rangeText, search
         )}
       </div>
       <div className="flex shrink-0 items-center gap-2.5">
+        {actionSlot}
         {searchSlot}
         <SortSelector />
       </div>

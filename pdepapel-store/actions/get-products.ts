@@ -24,6 +24,8 @@ interface Query {
   maxPrice?: number | null;
   excludeProducts?: string;
   search?: string;
+  /** Sin corrección ortográfica de la búsqueda. */
+  exact?: boolean;
   groupBy?: string;
   productGroupId?: string;
   isOnSale?: boolean;
@@ -104,6 +106,7 @@ export const getProducts = async (query: Query): Promise<ProductsResponse> => {
   if (query.fromShop !== undefined)
     url.searchParams.append("fromShop", String(query.fromShop));
   if (query.search) url.searchParams.append("search", query.search);
+  if (query.exact) url.searchParams.append("exact", "true");
   if (query.isOnSale) url.searchParams.append("isOnSale", "true");
   if (query.ids) url.searchParams.append("ids", query.ids);
   if (query.availability)

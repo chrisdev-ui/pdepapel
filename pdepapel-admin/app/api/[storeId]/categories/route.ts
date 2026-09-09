@@ -1,6 +1,7 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { splitTaxonomyIcon } from "@/lib/catalog-options";
-import { getUniqueCategorySlug } from "@/lib/category-slugs";
+import { ensureCategoryAssets, isCategoryCoverConfigured } from "@/lib/category-covers";
+import { getCategoryRevalidationPaths, getUniqueCategorySlug } from "@/lib/category-slugs";
 import { ACTIVE_ATTRIBUTE_WHERE } from "@/lib/attribute-archive";
 import prismadb from "@/lib/prismadb";
 import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
@@ -12,13 +13,6 @@ import {
 } from "@/lib/utils";
 import { auth } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
-
-const getCategoryRevalidationPaths = (...slugs: string[]) => [
-  "/",
-  "/tienda",
-  "/sitemap.xml",
-  ...slugs.filter(Boolean).map((slug) => `/categoria/${slug}`),
-];
 
 export async function POST(
   req: Request,
@@ -114,9 +108,22 @@ export async function POST(
       tags: ["categories", "products"],
     });
 
-    return NextResponse.json(category, {
-      headers: CACHE_HEADERS.NO_CACHE,
-    });
+    let assetsWarning: string | null = null;
+    if (isCategoryCoverConfigured() && (!category.imageUrl || !category.seoIntro)) {
+      try {
+        const assets = await ensureCategoryAssets(params.storeId, category.id);
+        category.imageUrl = assets.imageUrl;
+        category.seoIntro = assets.seoIntro;
+      } catch (error) {
+        console.error("[CATEGORIES_POST] cover generation failed", error);
+        assetsWarning = "La categoría se creó, pero no se pudo generar la portada. Puedes intentarlo desde el formulario.";
+      }
+    }
+
+    return NextResponse.json(
+      { ...category, assetsWarning },
+      { headers: CACHE_HEADERS.NO_CACHE },
+    );
   } catch (error) {
     return handleErrorResponse(error, "CATEGORIES_POST");
   }

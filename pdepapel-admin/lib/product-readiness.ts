@@ -16,10 +16,12 @@ export interface ReadinessInput {
   description?: string | null;
   isKit?: boolean | null;
   availableAt?: Date | string | null;
+  /** Imágenes cuyo archivo ya no existe (cron de salud de imágenes). */
+  brokenImages?: number | null;
 }
 
 export interface ReadinessCheck {
-  id: "name" | "image" | "price" | "cost" | "category" | "identifier" | "description";
+  id: "name" | "image" | "image-health" | "price" | "cost" | "category" | "identifier" | "description";
   label: string;
   ok: boolean;
   /** Etiqueta corta de lo que falta, para la lista. */
@@ -40,11 +42,13 @@ const stripHtml = (value: string) => value.replace(/<[^>]*>/g, "").trim();
 
 export function getProductReadiness(product: ReadinessInput): Readiness {
   const imageCount = typeof product.images === "number" ? product.images : (product.images?.length ?? 0);
+  const brokenImages = product.brokenImages ?? 0;
   const name = (product.name ?? "").trim();
   const description = product.description ? stripHtml(product.description) : "";
   const checks: ReadinessCheck[] = [
     { id: "name", label: "Nombre claro y sin emojis", ok: name.length >= 3 && !EMOJI.test(name), missing: "nombre" },
     { id: "image", label: imageCount > 0 ? `Al menos 1 imagen (tiene ${imageCount})` : "Al menos 1 imagen", ok: imageCount > 0, missing: "imagen" },
+    { id: "image-health", label: brokenImages > 0 ? `${brokenImages} ${brokenImages === 1 ? "imagen ya no existe" : "imágenes ya no existen"} en Cloudinary` : "Todas las imágenes se ven", ok: brokenImages === 0, missing: "imagen rota", hint: brokenImages > 0 ? "Sube la foto de nuevo y borra la rota." : undefined },
     { id: "price", label: "Precio de venta", ok: Number(product.price) > 0, missing: "precio" },
     { id: "cost", label: "Costo de compra (para el margen)", ok: Number(product.acqPrice) > 0, missing: "costo", hint: product.isKit ? "En un kit el costo sale de sus componentes" : undefined },
     { id: "category", label: "Subcategoría", ok: Boolean(product.categoryId), missing: "categoría" },
@@ -76,12 +80,13 @@ export function getProductShape(product: { isKit?: boolean | null; productGroupI
   return { id: "individual", label: "Individual" };
 }
 
-export type ProductView = "activos" | "sin-completar" | "sin-identificador" | "proximamente" | "stock-critico" | "agotados" | "archivados" | "todos";
+export type ProductView = "activos" | "sin-completar" | "sin-identificador" | "imagen-rota" | "proximamente" | "stock-critico" | "agotados" | "archivados" | "todos";
 
 export const PRODUCT_VIEWS: { id: ProductView; label: string }[] = [
   { id: "activos", label: "Activos" },
   { id: "sin-completar", label: "Sin completar" },
   { id: "sin-identificador", label: "Sin identificador" },
+  { id: "imagen-rota", label: "Imagen rota" },
   { id: "proximamente", label: "Próximamente" },
   { id: "stock-critico", label: "Stock crítico" },
   { id: "agotados", label: "Agotados" },
@@ -117,6 +122,8 @@ export function productMatchesView(
       return !product.isArchived && !getListReadiness(product).complete;
     case "sin-identificador":
       return !product.isArchived && productLacksIdentifier(product);
+    case "imagen-rota":
+      return !product.isArchived && (product.brokenImages ?? 0) > 0;
     case "proximamente":
       return !product.isArchived && isComingSoon(product);
     case "stock-critico":

@@ -2,13 +2,16 @@
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { getProducts } from "@/actions/get-products";
+import { SaveSearchButton } from "@/components/shop/save-search-button";
 import { MobileToolbar, ShopToolbar } from "@/components/shop/shop-toolbar";
 import { ShopSidebar } from "@/components/shop/shop-sidebar";
 import { NoResultsPanel, SuggestionChip } from "@/components/ui/no-results";
 import { LIMIT_SHOP_ITEMS } from "@/constants";
+import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { filtersToQuery } from "@/hooks/use-filter-count";
 import { ProductFilters, useProductFilters } from "@/hooks/use-product-filters";
 import { toAnalyticsItem, trackCustomerEvent } from "@/lib/customer-analytics";
@@ -134,6 +137,11 @@ export const ShopContent: React.FC<ShopContentProps> = ({
   const isCatalogUnavailable = Boolean(data?.isUnavailable);
   const products = data?.products ?? [];
   const rangeText = formatResultRange(filters.page, LIMIT_SHOP_ITEMS, totalItems);
+  const correction = data?.searchCorrection ?? null;
+
+  const canSaveSearch = activeCount > 0 || Boolean(filters.search);
+  const suggestedSearchName = [filters.search ? `«${filters.search}»` : null, ...chips.map((chip) => chip.label)].filter(Boolean).join(" · ") || heading;
+  const saveSearchSlot = canSaveSearch ? <SaveSearchButton suggestedName={suggestedSearchName} fixedCategoryId={fixedCategoryId} /> : null;
 
   const clearFilters = () => setFilters({ ...EMPTY_FILTERS, sortOption: filters.sortOption, page: 1 });
   const removeChip = (chip: (typeof chips)[number]) => setFilters(removeFilterChip(filters, chip));
@@ -188,7 +196,20 @@ export const ShopContent: React.FC<ShopContentProps> = ({
           onClearAll={clearFilters}
           rangeText={rangeText}
           searchSlot={fixedCategoryId ? <ShopSearchBar className="w-60 xl:w-72" placeholder={searchPlaceholder} /> : null}
+          actionSlot={saveSearchSlot}
         />
+        {saveSearchSlot && <div className="flex justify-end lg:hidden">{saveSearchSlot}</div>}
+        {correction && (
+          <p role="status" className="rounded-xl bg-kawaii-yellow-light/60 px-4 py-2.5 font-sans text-sm text-blue-yankees">
+            Mostrando resultados para <strong>«{correction.corrected}»</strong>.{" "}
+            <Link
+              href={`${STOREFRONT_ROUTES.shop}?search=${encodeURIComponent(correction.original)}&exact=true`}
+              className="font-semibold underline underline-offset-4"
+            >
+              Buscar «{correction.original}» tal cual
+            </Link>
+          </p>
+        )}
         <section
           id="catalog-results"
           tabIndex={-1}

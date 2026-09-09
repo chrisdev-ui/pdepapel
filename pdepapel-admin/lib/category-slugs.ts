@@ -86,3 +86,11 @@ export async function preserveCategorySlugAlias(
     data: { storeId, categoryId, slug },
   });
 }
+
+/** Rutas de la tienda que cambian cuando una categoría se crea, edita o borra. */
+export const getCategoryRevalidationPaths = (...slugs: (string | null | undefined)[]) => [
+  "/",
+  "/tienda",
+  "/sitemap.xml",
+  ...slugs.filter((slug): slug is string => Boolean(slug)).map((slug) => `/categoria/${slug}`),
+];
