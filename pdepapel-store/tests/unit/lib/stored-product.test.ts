@@ -22,7 +22,7 @@ const full = {
 
 describe("slimStoredProduct", () => {
   it("keeps what lists and checkout need and drops the heavy fields", () => {
-    const slim = slimStoredProduct(full) as Record<string, unknown>;
+    const slim = slimStoredProduct(full) as unknown as Record<string, unknown>;
     expect(slim.description).toBe("");
     expect(slim.reviews).toEqual([]);
     expect(slim.kitComponents).toBeUndefined();
