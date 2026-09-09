@@ -9,6 +9,8 @@ import { Product } from "@/types";
 
 export interface WishlistProduct extends Product {
   addedOn: Date;
+  /** Precio que vio la clienta al guardar (cuenta); para avisar si bajó. */
+  savedPrice?: number | null;
 }
 
 interface WishlistStore {

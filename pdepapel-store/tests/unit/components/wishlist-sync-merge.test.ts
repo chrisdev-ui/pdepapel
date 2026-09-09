@@ -7,12 +7,22 @@ import { mergeAccountProducts } from "@/components/wishlist-sync-provider";
 import type { Product } from "@/types";
 
 describe("mergeAccountProducts", () => {
-  it("keeps the date a product was saved instead of stamping today on every sign-in", () => {
-    const addedOn = new Date("2026-07-01T12:00:00Z");
+  it("uses the server saved date and price, and keeps a known date when the server has none", () => {
+    const known = new Date("2026-07-01T12:00:00Z");
     const products = [{ id: "a", name: "A" }, { id: "b", name: "B" }] as Product[];
-    const merged = mergeAccountProducts(["b", "a", "missing"], products, [{ id: "a", addedOn }]);
+    const merged = mergeAccountProducts(
+      [
+        { productId: "b", savedPrice: 15000, createdAt: "2026-08-15T12:00:00Z" },
+        { productId: "a", savedPrice: null, createdAt: "" },
+        { productId: "missing", savedPrice: null, createdAt: "2026-08-15T12:00:00Z" },
+      ],
+      products,
+      [{ id: "a", addedOn: known }],
+    );
     expect(merged.map((item) => item.id)).toEqual(["b", "a"]);
-    expect(merged[1].addedOn).toEqual(addedOn);
-    expect(merged[0].addedOn).toBeInstanceOf(Date);
+    expect(merged[0].addedOn).toEqual(new Date("2026-08-15T12:00:00Z"));
+    expect(merged[0].savedPrice).toBe(15000);
+    expect(merged[1].addedOn).toEqual(known);
+    expect(merged[1].savedPrice).toBeNull();
   });
 });

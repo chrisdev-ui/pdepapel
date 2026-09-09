@@ -5,6 +5,7 @@ import axios from "axios";
 import { useEffect, useRef } from "react";
 
 import {
+  AccountWishlistItem,
   getAccountWishlist,
   syncAccountWishlist,
 } from "@/actions/account-wishlist";
@@ -14,24 +15,42 @@ import { Product } from "@/types";
 
 const getItemsKey = (productIds: string[]) => [...productIds].sort().join(",");
 
-/** Fecha de guardado que ya se conocía, para no perderla al sincronizar. */
-export function mergeAccountProducts(productIds: string[], products: Product[], known: Pick<WishlistProduct, "id" | "addedOn">[]): WishlistProduct[] {
-  const productsById = new Map(products.map((product) => [product.id, product]));
+/**
+ * Une los ids de la cuenta con los productos del catálogo: fecha y precio de
+ * guardado vienen del servidor; si faltan, se conserva lo que ya se conocía.
+ */
+export function mergeAccountProducts(
+  remote: AccountWishlistItem[],
+  products: Product[],
+  known: Pick<WishlistProduct, "id" | "addedOn">[],
+): WishlistProduct[] {
+  const productsById = new Map(
+    products.map((product) => [product.id, product]),
+  );
   const addedOnById = new Map(known.map((item) => [item.id, item.addedOn]));
-  return productIds.flatMap((productId) => {
-    const product = productsById.get(productId);
-    return product ? [{ ...product, addedOn: addedOnById.get(productId) ?? new Date() }] : [];
+  return remote.flatMap((entry) => {
+    const product = productsById.get(entry.productId);
+    if (!product) return [];
+    const serverDate = entry.createdAt ? new Date(entry.createdAt) : null;
+    const addedOn =
+      serverDate && !Number.isNaN(serverDate.getTime())
+        ? serverDate
+        : (addedOnById.get(entry.productId) ?? new Date());
+    return [{ ...product, addedOn, savedPrice: entry.savedPrice ?? null }];
   });
 }
 
-async function getProducts(productIds: string[], known: Pick<WishlistProduct, "id" | "addedOn">[]): Promise<WishlistProduct[]> {
-  if (productIds.length === 0) return [];
+async function getProducts(
+  remote: AccountWishlistItem[],
+  known: Pick<WishlistProduct, "id" | "addedOn">[],
+): Promise<WishlistProduct[]> {
+  if (remote.length === 0) return [];
 
   const response = await axios.get<Product[]>(
     `${env.NEXT_PUBLIC_API_URL}/products`,
-    { params: { ids: productIds.join(",") } },
+    { params: { ids: remote.map((entry) => entry.productId).join(",") } },
   );
-  return mergeAccountProducts(productIds, response.data, known);
+  return mergeAccountProducts(remote, response.data, known);
 }
 
 export function WishlistSyncProvider() {
@@ -62,22 +81,28 @@ export function WishlistSyncProvider() {
         const sessionToken = await getToken();
         if (!sessionToken) return;
 
-        const remoteProductIds = await getAccountWishlist(sessionToken);
+        const remoteItems = await getAccountWishlist(sessionToken);
         const guestProductIds = guestItems.map((item) => item.id);
-        const productIds = guestProductIds.length
+        const remote = guestProductIds.length
           ? await syncAccountWishlist({
               sessionToken,
               productIds: guestProductIds,
               mode: "merge",
             })
-          : remoteProductIds;
-        const accountItems = await getProducts(productIds, [...useWishlist.getState().items, ...guestItems]);
+          : remoteItems;
+        const accountItems = await getProducts(remote, [
+          ...useWishlist.getState().items,
+          ...guestItems,
+        ]);
 
         if (!isCurrent) return;
         setAccountItems(accountItems, userId);
-        lastSyncedKey.current = `${userId}:${getItemsKey(productIds)}`;
+        lastSyncedKey.current = `${userId}:${getItemsKey(remote.map((entry) => entry.productId))}`;
       } catch (error) {
-        console.warn("No se pudieron sincronizar los favoritos de la cuenta", error);
+        console.warn(
+          "No se pudieron sincronizar los favoritos de la cuenta",
+          error,
+        );
         if (isCurrent) activateGuestWishlist();
       }
     };
@@ -109,24 +134,39 @@ export function WishlistSyncProvider() {
         const sessionToken = await getToken();
         if (!sessionToken) return;
 
-        const syncedProductIds = await syncAccountWishlist({
+        const synced = await syncAccountWishlist({
           sessionToken,
           productIds,
           mode: "replace",
         });
+        const syncedProductIds = synced.map((entry) => entry.productId);
         lastSyncedKey.current = `${userId}:${getItemsKey(syncedProductIds)}`;
 
         if (getItemsKey(syncedProductIds) !== getItemsKey(productIds)) {
-          const accountItems = await getProducts(syncedProductIds, useWishlist.getState().items);
+          const accountItems = await getProducts(
+            synced,
+            useWishlist.getState().items,
+          );
           setAccountItems(accountItems, userId);
         }
       } catch (error) {
-        console.warn("No se pudieron guardar los favoritos de la cuenta", error);
+        console.warn(
+          "No se pudieron guardar los favoritos de la cuenta",
+          error,
+        );
       }
     }, 400);
 
     return () => window.clearTimeout(timeout);
-  }, [accountUserId, getToken, isHydrated, isLoaded, items, setAccountItems, userId]);
+  }, [
+    accountUserId,
+    getToken,
+    isHydrated,
+    isLoaded,
+    items,
+    setAccountItems,
+    userId,
+  ]);
 
   return null;
 }

@@ -756,12 +756,14 @@ model CustomerSavedSearch {
 }
 
 model CustomerWishlistItem {
-  id        String   @id @default(uuid())
-  storeId   String
-  userId    String   @db.VarChar(128)
-  productId String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(uuid())
+  storeId    String
+  userId     String   @db.VarChar(128)
+  productId  String
+  /// Precio efectivo (con oferta) que vio la clienta al guardar; sirve para avisar «bajó de precio».
+  savedPrice Float?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   store   Store   @relation("StoreToCustomerWishlistItem", fields: [storeId], references: [id])
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
