@@ -3,6 +3,10 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createCorsHeaders } from "@/lib/cors";
 import { getProductsPrices } from "@/lib/discount-engine";
 import { sendOrderEmail } from "@/lib/email";
+import {
+  assertCouponMinimumOrderValue,
+  resolveCouponForOrderUpdate,
+} from "@/lib/order-coupons";
 import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
 import {
@@ -20,8 +24,10 @@ import { calculateOrderFinancials } from "@/lib/financial";
 import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import {
+  assertWelcomeBenefitEligibility,
   markWelcomeBenefitRedeemed,
   releaseWelcomeBenefitReservation,
+  reserveWelcomeBenefit,
 } from "@/lib/customer-benefits";
 import { auth, clerkClient } from "@clerk/nextjs";
 import {
@@ -35,9 +41,12 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 
 export async function OPTIONS(req: Request) {
-  return NextResponse.json({}, {
-    headers: createCorsHeaders(req, { methods: "GET, OPTIONS" }),
-  });
+  return NextResponse.json(
+    {},
+    {
+      headers: createCorsHeaders(req, { methods: "GET, OPTIONS" }),
+    },
+  );
 }
 
 export async function GET(
@@ -95,6 +104,10 @@ export async function PATCH(
       throw ErrorFactory.InvalidRequest("Se requiere el ID de la orden");
 
     const body = await req.json();
+    const couponCodeProvided = Object.prototype.hasOwnProperty.call(
+      body,
+      "couponCode",
+    );
     const {
       fullName,
       phone,
@@ -247,6 +260,24 @@ export async function PATCH(
       }
     }
 
+    const targetCoupon = await resolveCouponForOrderUpdate({
+      storeId: params.storeId,
+      couponCode,
+      couponCodeProvided,
+      existingCoupon: order.coupon,
+    });
+    const couponChanged = targetCoupon?.id !== order.coupon?.id;
+
+    if (couponChanged && targetCoupon?.isWelcomeBenefit) {
+      await assertWelcomeBenefitEligibility({
+        coupon: targetCoupon,
+        storeId: params.storeId,
+        userId: verifiedUserId,
+        checkoutEmail: email || order.email,
+        database: prismadb,
+      });
+    }
+
     // Generate Token & Expiration for Custom/Quote orders if missing
     let tokenUpdate = {};
     if (
@@ -270,6 +301,16 @@ export async function PATCH(
 
     // Validate Required Fields for Active Orders
     const targetStatus = status || order.status;
+
+    if (
+      couponChanged &&
+      order.status === OrderStatus.PAID &&
+      targetStatus === OrderStatus.PAID
+    ) {
+      throw ErrorFactory.Conflict(
+        "No se puede cambiar el cupón de una orden pagada sin revertir primero su estado de pago",
+      );
+    }
     const isActiveStatus = [
       OrderStatus.CREATED,
       OrderStatus.PENDING,
@@ -385,6 +426,10 @@ export async function PATCH(
         }
       });
 
+      const authoritativeSubtotal =
+        calculateOrderTotals(itemsWithPrices).subtotal;
+      assertCouponMinimumOrderValue(targetCoupon, authoritativeSubtotal);
+
       // Calculate totals (including shipping cost)
       const totals = calculateOrderTotals(itemsWithPrices, {
         discount:
@@ -394,13 +439,12 @@ export async function PATCH(
                 amount: discount.amount,
               }
             : undefined,
-        coupon:
-          order.coupon && subtotal >= Number(order.coupon.minOrderValue ?? 0)
-            ? {
-                type: order.coupon.type as DiscountType,
-                amount: order.coupon.amount,
-              }
-            : undefined,
+        coupon: targetCoupon
+          ? {
+              type: targetCoupon.type as DiscountType,
+              amount: targetCoupon.amount,
+            }
+          : undefined,
         shippingCost:
           shipping?.cost !== undefined
             ? Number(shipping.cost)
@@ -528,7 +572,12 @@ export async function PATCH(
           discount: totals.discount,
           discountType: discount?.type as DiscountType,
           discountReason: discount?.reason,
-          couponDiscount: order.coupon ? totals.couponDiscount : 0,
+          coupon: targetCoupon
+            ? { connect: { id: targetCoupon.id } }
+            : order.coupon
+              ? { disconnect: true }
+              : undefined,
+          couponDiscount: targetCoupon ? totals.couponDiscount : 0,
           total: totals.total,
           ...(status && { status }),
           ...(type && { type }),
@@ -630,6 +679,25 @@ export async function PATCH(
       // Handle stock changes with batching
       wasPaid = order.status === OrderStatus.PAID;
       isNowPaid = updated.status === OrderStatus.PAID;
+
+      if (couponChanged) {
+        if (order.coupon?.isWelcomeBenefit) {
+          await releaseWelcomeBenefitReservation(tx, {
+            couponId: order.coupon.id,
+            userId: order.userId,
+            orderId: order.id,
+          });
+        }
+
+        if (updated.coupon?.isWelcomeBenefit && updated.userId) {
+          await reserveWelcomeBenefit(tx, {
+            couponId: updated.coupon.id,
+            storeId: params.storeId,
+            userId: updated.userId,
+            orderId: updated.id,
+          });
+        }
+      }
 
       if (
         isNowPaid &&
@@ -756,21 +824,17 @@ export async function PATCH(
         await invalidateStoreProductsCache(params.storeId);
 
         // CRITICAL FIX: Decrement coupon usage when PAID order becomes unpaid
-        if (updated.coupon) {
-          await tx.coupon.update({
-            where: { id: updated.coupon.id },
-            data: {
-              usedCount: {
-                decrement: 1,
-              },
-            },
+        if (order.coupon) {
+          await tx.coupon.updateMany({
+            where: { id: order.coupon.id, usedCount: { gt: 0 } },
+            data: { usedCount: { decrement: 1 } },
           });
 
-          if (updated.coupon.isWelcomeBenefit) {
+          if (order.coupon.isWelcomeBenefit) {
             await releaseWelcomeBenefitReservation(tx, {
-              couponId: updated.coupon.id,
-              userId: updated.userId,
-              orderId: updated.id,
+              couponId: order.coupon.id,
+              userId: order.userId,
+              orderId: order.id,
             });
           }
         }
@@ -786,7 +850,10 @@ export async function PATCH(
       try {
         await recordPaidOrderInGoogleAnalytics(updatedOrder.id);
       } catch (analyticsError) {
-        console.error("[ORDER_PATCH] GA4 purchase tracking failed:", analyticsError);
+        console.error(
+          "[ORDER_PATCH] GA4 purchase tracking failed:",
+          analyticsError,
+        );
       }
     }
 

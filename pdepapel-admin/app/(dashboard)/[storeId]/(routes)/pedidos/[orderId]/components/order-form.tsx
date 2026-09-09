@@ -548,7 +548,9 @@ export const OrderForm: React.FC<OrderFormProps> = ({
 
   const [showGuideConfirmation, setShowGuideConfirmation] = useState(false);
 
-  const [coupon, setCoupon] = useState<Coupon | null>(null);
+  const [coupon, setCoupon] = useState<Coupon | null>(
+    initialData?.coupon ?? null,
+  );
 
   const [conversionIndex, setConversionIndex] = useState<number | null>(null);
 
@@ -702,6 +704,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
 
   useEffect(() => {
     form.reset(defaultValues);
+    setCoupon(initialData?.coupon ?? null);
   }, [initialData, form, defaultValues]);
 
   const { fields, append, remove, update } = useFieldArray({
