@@ -117,9 +117,13 @@ export function DataTable<TData, TValue>({
     columnVisibility: {},
   };
 
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(
-    tableState.columnFilters,
-  );
+  // Solo se restauran filtros que tengan un control visible; los que quedaron
+  // guardados de versiones anteriores (búsqueda por columna) ocultarían filas
+  // sin forma de quitarlos.
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(() => {
+    const restorable = new Set((filters ?? []).map((filter) => filter.columnKey));
+    return tableState.columnFilters.filter((filter) => restorable.has(filter.id));
+  });
   const [globalFilter, setGlobalFilter] = useState("");
   const [sorting, setSorting] = useState<SortingState>(tableState.sorting);
   const [internalRowSelection, setInternalRowSelection] =

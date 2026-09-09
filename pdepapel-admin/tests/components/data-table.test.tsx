@@ -65,6 +65,24 @@ describe("DataTable", () => {
     expect(screen.getByText("1–25 de 30")).toBeInTheDocument();
   });
 
+  it("ignores stored column filters that have no visible control", () => {
+    useTableStore.setState({
+      tables: {
+        [Models.Products]: {
+          pagination: { pageIndex: 0, pageSize: 25 },
+          sorting: [],
+          columnFilters: [{ id: "name", value: "jou" }],
+          columnVisibility: {},
+        },
+      },
+    });
+
+    render(<DataTable columns={columns} data={rows} tableKey={Models.Products} />);
+
+    expect(screen.getByText("1–25 de 30")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Limpiar" })).not.toBeInTheDocument();
+  });
+
   it("renders empty, loading, and error states with their actions", () => {
     const onRetry = vi.fn();
     const { rerender } = render(
