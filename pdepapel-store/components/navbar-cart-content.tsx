@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
 import { AccountPrompt } from "@/components/account-prompt";
+import { FreeShippingProgress } from "@/components/free-shipping-progress";
 import { CldImage } from "@/components/ui/CldImage";
 import { Currency } from "@/components/ui/currency";
 import { NoResults } from "@/components/ui/no-results";
@@ -21,6 +22,7 @@ import { productPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import { toAnalyticsItem, trackCustomerEvent } from "@/lib/customer-analytics";
 import { getCustomerFacingProductOptions } from "@/lib/product-options";
 import { calculateTotals } from "@/lib/utils";
+import { useStorefrontSettings } from "@/providers/storefront-settings-provider";
 import { useRouter } from "next/navigation";
 
 interface NavbarCartContentProps {
@@ -34,9 +36,10 @@ export const NavbarCartContent: React.FC<NavbarCartContentProps> = ({
   const router = useRouter();
   const hasTrackedCartViewRef = useRef(false);
   const highlightId = useCartSheet((state) => state.highlightId);
-  const { total } = useMemo(
-    () => calculateTotals(cart.items, null),
-    [cart.items],
+  const { freeShippingThreshold } = useStorefrontSettings();
+  const { total, subtotal } = useMemo(
+    () => calculateTotals(cart.items, null, 0, freeShippingThreshold),
+    [cart.items, freeShippingThreshold],
   );
 
   useEffect(() => {
@@ -184,6 +187,9 @@ export const NavbarCartContent: React.FC<NavbarCartContentProps> = ({
         )}
       </div>
       <footer className="flex max-h-[60dvh] w-full shrink-0 flex-col gap-3 overflow-y-auto overscroll-contain border-t border-blue-purple/40 bg-background px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 sm:px-6">
+        {cart.items.length > 0 && (
+          <FreeShippingProgress subtotal={subtotal} threshold={freeShippingThreshold} />
+        )}
         <div className="flex w-full items-center justify-between font-quicksand text-lg font-semibold">
           <span>Subtotal</span>
           <Currency value={total} />

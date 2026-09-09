@@ -22,6 +22,7 @@ import { ModalProvider } from "@/providers/modal-provider";
 import { ReactQueryProvider } from "@/providers/query-client-provider";
 import { CustomerAnalyticsProvider } from "@/providers/customer-analytics-provider";
 import { CartPreviewProvider } from "@/providers/cart-preview-provider";
+import { StorefrontSettingsProvider } from "@/providers/storefront-settings-provider";
 import { Toaster } from "@/providers/toaster";
 import { WishlistSyncProvider } from "@/components/wishlist-sync-provider";
 import { Season } from "@/types";
@@ -143,6 +144,7 @@ export default async function RootLayout({
           <link rel="dns-prefetch" href="https://res.cloudinary.com" />
           <link rel="preconnect" href="https://res.cloudinary.com" />
           <ReactQueryProvider>
+            <StorefrontSettingsProvider value={{ freeShippingThreshold: settings.freeShippingThreshold }}>
             <CartPreviewProvider>
               <ModalProvider />
               <WishlistSyncProvider />
@@ -157,6 +159,7 @@ export default async function RootLayout({
               {currentSeason === Season.Christmas && <Christmas />}
               {currentSeason === Season.Spooky && <Spooky />}
             </CartPreviewProvider>
+            </StorefrontSettingsProvider>
             <Toaster />
             <CustomerAnalyticsProvider
               measurementId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID}

@@ -3,9 +3,11 @@
 import { AccountPrompt } from "@/components/account-prompt";
 import { Button } from "@/components/ui/button";
 import { Currency } from "@/components/ui/currency";
+import { FreeShippingProgress } from "@/components/free-shipping-progress";
 import { useCart } from "@/hooks/use-cart";
 import { calculateTotals } from "@/lib/utils";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
+import { useStorefrontSettings } from "@/providers/storefront-settings-provider";
 import { CreditCard } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo } from "react";
@@ -17,19 +19,21 @@ interface SummaryProps {
 export const Summary: React.FC<SummaryProps> = ({ disabled }) => {
   const router = useRouter();
   const items = useCart((state) => state.items);
+  const { freeShippingThreshold } = useStorefrontSettings();
 
   const goToCheckout = () => {
     router.push(STOREFRONT_ROUTES.checkout);
   };
 
-  const { total, productSavings } = useMemo(
-    () => calculateTotals(items, null),
-    [items],
+  const { total, subtotal, productSavings } = useMemo(
+    () => calculateTotals(items, null, 0, freeShippingThreshold),
+    [items, freeShippingThreshold],
   );
 
   return (
     <div className="mt-16 rounded-lg bg-blue-baby/20 px-4 py-6 sm:p-6 lg:col-span-5 lg:mt-0 lg:p-8">
       <h2 className="font-serif text-lg font-medium">Resumen del pedido</h2>
+      <FreeShippingProgress subtotal={subtotal} threshold={freeShippingThreshold} className="mt-4" />
       <div className="mt-6 space-y-4">
         <SavingsRow formattedSavings={productSavings} />
         <div className="flex items-center justify-between border-t border-gray-200 pt-4">

@@ -53,11 +53,34 @@ vi.mock("@/lib/customer-analytics", () => ({
 }));
 
 import { NavbarCartContent } from "@/components/navbar-cart-content";
+import { StorefrontSettingsProvider } from "@/providers/storefront-settings-provider";
 
 describe("NavbarCartContent", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+  });
+
+  it("shows how much is missing for free shipping when the store has a threshold", () => {
+    render(
+      <StorefrontSettingsProvider value={{ freeShippingThreshold: 120000 }}>
+        <Sheet open>
+          <NavbarCartContent onClose={onClose} />
+        </Sheet>
+      </StorefrontSettingsProvider>,
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent(/Te faltan \$\s?95\.000 para el envío gratis/);
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "21");
+  });
+
+  it("hides the free-shipping progress without a threshold", () => {
+    render(
+      <Sheet open>
+        <NavbarCartContent onClose={onClose} />
+      </Sheet>,
+    );
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
 
   it("keeps account access and cart actions in a vertical responsive footer", () => {

@@ -184,6 +184,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
   const productInCart = cart.items.find((item) => item.id === data.id);
   const comingSoon = isComingSoon(data) && !earlyAccess;
   const isUnavailable = Boolean(data.isArchived || data.stock === 0 || comingSoon);
+  const soldOut = !data.isArchived && !comingSoon && data.stock === 0;
 
   const handleAddToCart = () => {
     if (isUnavailable) return;
@@ -475,12 +476,16 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
           </div>
         )}
       </div>
-      {comingSoon && (
+      {(comingSoon || soldOut) && (
         <div className="mt-8">
-          <NotifyMeForm productId={data.id} arrivalLabel={data.availableAt ? `Llega el ${formatArrivalDate(data.availableAt)}` : null} />
+          <NotifyMeForm
+            productId={data.id}
+            variant={comingSoon ? "coming-soon" : "sold-out"}
+            arrivalLabel={comingSoon && data.availableAt ? `Llega el ${formatArrivalDate(data.availableAt)}` : null}
+          />
         </div>
       )}
-      <div className={cn("mt-10 flex flex-wrap items-center gap-x-3 gap-y-4 sm:gap-y-0", comingSoon && "mt-4")}>
+      <div className={cn("mt-10 flex flex-wrap items-center gap-x-3 gap-y-4 sm:gap-y-0", (comingSoon || soldOut) && "mt-4")}>
         <Button
           disabled={isUnavailable || isLoading}
           className="min-h-11 flex gap-2 rounded-full border-none bg-blue-yankees px-8 py-4 font-sans text-sm font-semibold text-white outline-none [transition:0.2s]"
@@ -517,10 +522,6 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
         {data.isArchived ? (
           <span className="text-xs text-muted-foreground">
             Este producto ya no está disponible para la venta.
-          </span>
-        ) : data.stock === 0 ? (
-          <span className="animate-pulse text-xs text-red-500">
-            Este producto está agotado por el momento
           </span>
         ) : null}
       </div>
