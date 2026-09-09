@@ -20,9 +20,14 @@ const NavbarCartContent = dynamic(
 
 interface NavbarCartProps {
   className?: string;
+  /**
+   * El panel se monta una sola vez aunque el botón se repita (teléfono y
+   * escritorio): dos paneles abiertos se ocultan mutuamente para el lector.
+   */
+  withSheet?: boolean;
 }
 
-export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
+export const NavbarCart: React.FC<NavbarCartProps> = ({ className, withSheet = true }) => {
   const cart = useCart();
   const [isMounted, setIsMounted] = useState(false);
   const isSheetOpen = useCartSheet((state) => state.isOpen);
@@ -55,7 +60,7 @@ export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
           </span>
         </Button>
       </SheetTrigger>
-      {isMounted && isSheetOpen && (
+      {withSheet && isMounted && isSheetOpen && (
         <NavbarCartContent onClose={() => setIsSheetOpen(false)} />
       )}
     </Sheet>

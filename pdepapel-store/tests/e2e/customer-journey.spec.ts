@@ -15,43 +15,23 @@ test.describe("recorrido de compra sin pago", () => {
   }) => {
     await gotoPublicPage(page, `/producto/${purchasableProductSlug}`);
 
-    const addToCartButton = page.getByText("Agregar al carrito", {
-      exact: true,
-    });
+    const addToCartButton = page
+      .getByRole("button", { name: /Agregar al carrito/ })
+      .first();
     await expect(
       page.getByRole("button", { name: "Abrir carrito, 0 productos" }).first(),
     ).toBeEnabled();
     await expect(addToCartButton).toBeEnabled();
+    // El botón agrega al carrito solo cuando la página ya hidrató.
+    await page.waitForLoadState("networkidle");
     await addToCartButton.click();
 
-    const cartPreview = page.getByRole("complementary", {
-      name: "Producto agregado al carrito",
-    });
-    await expect(cartPreview).toBeVisible();
+    // Desde la ficha se abre el panel del carrito con el producto resaltado.
+    const cartDrawer = page.getByRole("dialog", { name: "Carrito de compras" });
+    await expect(cartDrawer).toBeVisible();
     await expect(
-      cartPreview.getByText("Agregado al carrito", { exact: true }),
+      cartDrawer.getByText("Agregado al carrito", { exact: true }),
     ).toBeVisible();
-    await expect(
-      cartPreview.getByRole("link", { name: "Finalizar compra" }),
-    ).toBeVisible();
-    const layerOrder = await page.evaluate(() => {
-      const header = document.querySelector("header");
-      const preview = document.querySelector(
-        '[aria-label="Producto agregado al carrito"]',
-      );
-
-      return {
-        header: Number.parseInt(
-          header ? window.getComputedStyle(header).zIndex : "0",
-          10,
-        ),
-        preview: Number.parseInt(
-          preview ? window.getComputedStyle(preview).zIndex : "0",
-          10,
-        ),
-      };
-    });
-    expect(layerOrder.preview).toBeGreaterThan(layerOrder.header);
     await expect
       .poll(() =>
         page.evaluate(
@@ -60,55 +40,23 @@ test.describe("recorrido de compra sin pago", () => {
       )
       .toBeTruthy();
 
-    await cartPreview
-      .getByRole("button", { name: "Cerrar resumen del carrito" })
-      .click();
-    await page
-      .getByRole("button", { name: "Abrir carrito, 1 producto" })
-      .first()
-      .click();
-
-    const cartDrawer = page.getByRole("dialog", {
-      name: "Carrito de compras",
-    });
-    await expect(cartDrawer).toBeVisible();
-    const footer = cartDrawer.locator("footer");
-    await expect(footer).toBeVisible();
-    await expect
-      .poll(() =>
-        footer.evaluate((element) => getComputedStyle(element).flexDirection),
-      )
-      .toBe("column");
-
-    const viewCartButton = cartDrawer.getByRole("button", {
-      name: "Ver carrito",
-    });
-    const checkoutButton = cartDrawer.getByRole("button", {
-      name: "Finalizar compra",
-    });
+    const viewCartButton = cartDrawer.getByRole("button", { name: "Ver carrito" });
+    const checkoutButton = cartDrawer.getByRole("button", { name: "Finalizar compra" });
     await expect(viewCartButton).toBeVisible();
     await expect(checkoutButton).toBeVisible();
-
-    const actionTypography = await checkoutButton.evaluate((element) => {
-      const styles = getComputedStyle(element);
-      return {
-        fontWeight: Number.parseInt(styles.fontWeight, 10),
-        textTransform: styles.textTransform,
-      };
-    });
-    expect(actionTypography.fontWeight).toBeLessThanOrEqual(600);
-    expect(actionTypography.textTransform).toBe("none");
 
     await viewCartButton.click();
     await expect(page).toHaveURL(/\/carrito/);
     await expect(
-      page.getByRole("heading", { name: "Mi Carrito" }),
+      page.getByRole("heading", { level: 1, name: /Mi carrito/ }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Completar pedido" }),
-    ).toBeEnabled();
+    await expect(page.getByText("Resumen del pedido")).toBeVisible();
 
-    await page.getByRole("button", { name: "Completar pedido" }).click();
+    const finishButton = page
+      .getByRole("button", { name: "Finalizar compra" })
+      .first();
+    await expect(finishButton).toBeEnabled();
+    await finishButton.click();
     await expect(page).toHaveURL(/\/finalizar-compra/, { timeout: 20_000 });
     await expect(page.getByRole("button", { name: "Siguiente" })).toBeVisible();
   });

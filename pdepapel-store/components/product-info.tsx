@@ -1,48 +1,61 @@
 "use client";
 
-import { KitContents } from "./kit-contents";
-import { NotifyMeForm } from "@/components/notify-me-form";
-import { formatArrivalDate, isComingSoon } from "@/lib/product-card";
+import {
+  Award,
+  Heart,
+  ShieldCheck,
+  ShoppingCart,
+  Star,
+  Truck,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+import { RefObject, useEffect, useMemo } from "react";
 
-import { Award, Heart, ShieldCheck, ShoppingCart, Truck } from "lucide-react";
-
+import { ProductDetailsAccordion } from "@/components/product-details-accordion";
+import { ProductSignals } from "@/components/product-signals";
+import { REVIEWS_SECTION_ID } from "@/components/reviews/reviews";
+import { ShareButton } from "@/components/share-button";
 import { Button } from "@/components/ui/button";
-import { Currency } from "@/components/ui/currency";
-import { LowStockNotice } from "@/components/ui/low-stock-notice";
 import { QuantitySelector } from "@/components/ui/quantity-selector";
-import { Separator } from "@/components/ui/separator";
-import { StarRating } from "@/components/ui/star-rating";
+import { useAddProductToCart } from "@/hooks/use-add-product-to-cart";
 import { useCart } from "@/hooks/use-cart";
-import { useCartSheet } from "@/hooks/use-cart-sheet";
-import { toast } from "@/hooks/use-toast";
 import { useWishlist } from "@/hooks/use-wishlist";
-import { productPath } from "@/lib/routes";
-import { isCustomerFacingLegacySize } from "@/lib/product-options";
 import {
   getAnalyticsValue,
   toAnalyticsItem,
   trackCustomerEvent,
 } from "@/lib/customer-analytics";
-import { calculateAverageRating, cn } from "@/lib/utils";
+import { getProductAvailability } from "@/lib/product-availability";
+import { getAverageRating, getProductCardPrice } from "@/lib/product-card";
+import { isCustomerFacingLegacySize } from "@/lib/product-options";
 import { getStableProductVariants } from "@/lib/product-variants";
-import { useCartPreview } from "@/providers/cart-preview-provider";
+import { productPath } from "@/lib/routes";
+import { cn, currencyFormatter } from "@/lib/utils";
 import { Color, Design, Product, ProductVariant, Size } from "@/types";
-import { useRouter } from "next/navigation";
-import { RefObject, useEffect, useMemo, useState } from "react";
-import { RichTextDisplay } from "./ui/rich-text-display";
 
 interface ProductInfoProps {
   data: Product;
   siblings?: ProductVariant[];
+  /** Vista rápida: sin acordeón ni compartir. */
   showDescription?: boolean;
   onAddedToCart?: () => void;
   showReviews?: boolean;
-  reviewsRef?: RefObject<HTMLDivElement | null>;
   onVariantChange?: (variant: Product | ProductVariant) => void;
   isLoading?: boolean;
   /** Cookie de acceso anticipado: deja comprar productos «Próximamente». */
   earlyAccess?: boolean;
+  /** Cantidad controlada por la ficha para compartirla con la barra fija. */
+  quantity?: number;
+  onQuantityChange?: (quantity: number) => void;
+  /** Fila del botón principal; la barra fija aparece cuando sale de pantalla. */
+  ctaRef?: RefObject<HTMLDivElement>;
 }
+
+const CTA_CLASS =
+  "order-last flex min-h-[52px] basis-full items-center justify-center gap-2 whitespace-nowrap rounded-full px-5 font-sans text-base font-semibold sm:order-none sm:basis-auto sm:flex-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60";
+const OPTION_LABEL = "font-serif text-sm font-semibold text-blue-yankees";
+const OPTION_CHIP =
+  "min-h-11 rounded-full border-2 px-4 py-2 font-sans text-sm font-medium transition-colors";
 
 export const ProductInfo: React.FC<ProductInfoProps> = ({
   data,
@@ -50,24 +63,20 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
   showDescription = true,
   onAddedToCart,
   showReviews = true,
-  reviewsRef,
   onVariantChange,
   isLoading = false,
   earlyAccess = false,
+  quantity: controlledQuantity,
+  onQuantityChange,
+  ctaRef,
 }) => {
-  const [quantity, setQuantity] = useState<number>();
-  const cart = useCart();
-  const { markCartTouched } = useCartPreview();
-  const openCartSheet = useCartSheet((state) => state.open);
   const router = useRouter();
+  const addProductToCart = useAddProductToCart("product_detail");
+  const productInCart = useCart((state) =>
+    state.items.find((item) => item.id === data.id),
+  );
+  const quantity = controlledQuantity ?? productInCart?.quantity ?? 1;
 
-  const goToReviews = () => {
-    reviewsRef?.current?.scrollIntoView({
-      behavior: "smooth",
-    });
-  };
-
-  // --- Variant Logic ---
   const allVariants = useMemo(
     () => getStableProductVariants(data, siblings),
     [data, siblings],
@@ -83,32 +92,23 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
     });
   }, [data]);
 
-  useEffect(() => {
-    setQuantity(undefined);
-  }, [data.id]);
-
-  // 1. Unique Designs
   const uniqueDesigns = useMemo(() => {
     const designs = new Map<string, Design>();
-    allVariants.forEach((v) => {
-      if (v.design) designs.set(v.design.id, v.design);
-    });
+    allVariants.forEach((v) => v.design && designs.set(v.design.id, v.design));
     return Array.from(designs.values());
   }, [allVariants]);
 
-  // 2. Available Colors (dependent on current Design)
   const availableColors = useMemo(() => {
     const colors = new Map<string, Color>();
-
-    allVariants.forEach((v) => {
-      if (v.design?.id === data.design?.id && v.color) {
-        colors.set(v.color.id, v.color);
-      }
-    });
+    allVariants.forEach(
+      (v) =>
+        v.design?.id === data.design?.id &&
+        v.color &&
+        colors.set(v.color.id, v.color),
+    );
     return Array.from(colors.values());
   }, [allVariants, data.design?.id]);
 
-  // 3. Available Sizes (dependent on current Design + Color)
   const availableSizes = useMemo(() => {
     const sizes = new Map<string, Size>();
     allVariants.forEach((v) => {
@@ -117,9 +117,8 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
         v.color?.id === data.color?.id &&
         v.size &&
         isCustomerFacingLegacySize(v.size)
-      ) {
+      )
         sizes.set(v.size.id, v.size);
-      }
     });
     return Array.from(sizes.values());
   }, [allVariants, data.design?.id, data.color?.id]);
@@ -129,12 +128,9 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
     id: string,
   ) => {
     if (isLoading) return;
-
-    let targetVariant: Product | ProductVariant | undefined;
-
+    let target: Product | ProductVariant | undefined;
     if (type === "design") {
-      // Find variant with new Design, trying to keep same Color & Size
-      targetVariant =
+      target =
         allVariants.find(
           (v) =>
             v.design?.id === id &&
@@ -146,8 +142,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
         ) ||
         allVariants.find((v) => v.design?.id === id);
     } else if (type === "color") {
-      // Find variant with new Color (keeping same Design), same Size if possible
-      targetVariant =
+      target =
         allVariants.find(
           (v) =>
             v.design?.id === data.design?.id &&
@@ -157,155 +152,188 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
         allVariants.find(
           (v) => v.design?.id === data.design?.id && v.color?.id === id,
         );
-    } else if (type === "size") {
-      // Find variant with new Size (keeping same Design & Color)
-      targetVariant = allVariants.find(
+    } else {
+      target = allVariants.find(
         (v) =>
           v.design?.id === data.design?.id &&
           v.color?.id === data.color?.id &&
           v.size?.id === id,
       );
     }
-
-    if (targetVariant) {
-      trackCustomerEvent("select_item_variant", {
-        product_slug: targetVariant.slug || targetVariant.id,
-        variant_type: type,
-      });
-
-      if (onVariantChange) {
-        onVariantChange(targetVariant);
-        return;
-      }
-      router.push(productPath(targetVariant.slug || targetVariant.id));
-    }
+    if (!target) return;
+    trackCustomerEvent("select_item_variant", {
+      product_slug: target.slug || target.id,
+      variant_type: type,
+    });
+    if (onVariantChange) return onVariantChange(target);
+    router.push(productPath(target.slug || target.id));
   };
 
-  const productInCart = cart.items.find((item) => item.id === data.id);
-  const comingSoon = isComingSoon(data) && !earlyAccess;
-  const isUnavailable = Boolean(data.isArchived || data.stock === 0 || comingSoon);
-  const soldOut = !data.isArchived && !comingSoon && data.stock === 0;
+  const availability = getProductAvailability(data, { earlyAccess });
+  const needsOption = Boolean(
+    data.isGroup && hasVariants && !data.design && !data.color && !data.size,
+  );
+  const canBuy = availability.canBuy && !needsOption;
+  const price = getProductCardPrice(data);
+  const rating = getAverageRating(data.reviews);
+  const eyebrow = [data.category?.name, data.design?.name]
+    .filter(Boolean)
+    .join(" · ");
 
   const handleAddToCart = () => {
-    if (isUnavailable) return;
+    if (!canBuy) return;
+    addProductToCart(data, quantity, onAddedToCart);
+  };
 
-    const requestedQuantity = quantity ?? 1;
-    const result = productInCart
-      ? cart.updateQuantity(data.id, requestedQuantity)
-      : cart.addItem(data, requestedQuantity);
-
-    if (!result.ok) {
-      toast({
-        description:
-          result.status === "stock_limit"
-            ? "La cantidad solicitada supera el stock disponible."
-            : "Este producto no está disponible en este momento.",
-        variant: "warning",
-      });
-      return;
-    }
-
-    const item = toAnalyticsItem(data, requestedQuantity);
-    trackCustomerEvent("add_to_cart", {
-      currency: "COP",
-      items: [item],
-      source: "product_detail",
-      value: getAnalyticsValue([item]),
-    });
-    markCartTouched();
-    onAddedToCart?.();
-    openCartSheet(result.item.id);
+  const focusNotifyForm = () => {
+    const input = document.querySelector<HTMLInputElement>(
+      `[data-product-signals="${data.id}"] input[type="email"]`,
+    );
+    input?.focus();
+    input?.scrollIntoView({ block: "center", behavior: "smooth" });
   };
 
   const wishlist = useWishlist();
   const isWishlistProduct = wishlist.items.some((item) => item.id === data.id);
-
-  const handleAddToWishlist = () => {
-    wishlist.addItem(data);
-  };
+  const toggleWishlist = () =>
+    isWishlistProduct ? wishlist.removeItem(data.id) : wishlist.addItem(data);
 
   return (
-    <div>
-      <h1 className="font-sans text-3xl font-bold">{data?.name}</h1>
-      <div className="mt-3 flex items-end justify-between">
-        <div className="flex flex-col gap-1 text-2xl">
-          {data.hasDiscount ||
-          (data.originalPrice && data.originalPrice > Number(data.price)) ? (
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between gap-3">
+          {eyebrow ? (
+            <p className="font-sans text-[11px] font-bold uppercase tracking-[0.08em] text-gray-500">
+              {eyebrow}
+            </p>
+          ) : (
+            <span />
+          )}
+          {showDescription && (
+            <ShareButton
+              title={data.name}
+              path={productPath(data.slug || data.id)}
+            />
+          )}
+        </div>
+        <h1 className="font-serif text-3xl font-bold leading-tight text-blue-yankees sm:text-[34px]">
+          {data.name}
+        </h1>
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 font-sans text-sm text-blue-yankees">
+          {rating ? (
             <>
-              <div className="flex items-center gap-3">
-                <Currency value={data.price} />
-                <Currency
-                  value={data.originalPrice}
-                  className="text-lg text-gray-500 line-through"
-                />
-              </div>
-              <span className="font-quicksand text-sm font-semibold text-success">
-                Ahorra{" "}
-                {new Intl.NumberFormat("es-CO", {
-                  style: "currency",
-                  currency: "COP",
-                  minimumFractionDigits: 0,
-                  maximumFractionDigits: 0,
-                }).format(Number(data.originalPrice) - Number(data.price))}{" "}
-                (
-                {Math.round(
-                  ((Number(data.originalPrice) - Number(data.price)) /
-                    Number(data.originalPrice)) *
-                    100,
-                )}
-                %)
+              <span
+                role="img"
+                aria-label={`Calificación ${rating.average} de 5`}
+                className="inline-flex gap-0.5"
+              >
+                {[1, 2, 3, 4, 5].map((step) => (
+                  <Star
+                    key={step}
+                    aria-hidden="true"
+                    className={cn(
+                      "h-4 w-4",
+                      step <= Math.round(rating.average)
+                        ? "fill-yellow-star text-yellow-star"
+                        : "text-gray-300",
+                    )}
+                  />
+                ))}
               </span>
-              {data.offerLabel && (
-                <span className="mt-2 inline-block animate-bounce rounded bg-pink-froly px-2 py-1 font-quicksand text-xs font-semibold text-white motion-reduce:animate-none">
-                  {data.offerLabel}
+              <span className="font-quicksand font-bold">
+                {rating.average.toLocaleString("es-CO", {
+                  minimumFractionDigits: 1,
+                  maximumFractionDigits: 1,
+                })}
+              </span>
+              {showReviews ? (
+                <a
+                  href={`#${REVIEWS_SECTION_ID}`}
+                  className="underline underline-offset-4"
+                >
+                  {rating.count} {rating.count === 1 ? "reseña" : "reseñas"}
+                </a>
+              ) : (
+                <span className="text-gray-500">
+                  {rating.count} {rating.count === 1 ? "reseña" : "reseñas"}
                 </span>
               )}
             </>
-          ) : (
-            <Currency value={data?.price} />
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {showReviews && (
-            <button
-              type="button"
-              onClick={goToReviews}
-              className="min-h-11 inline-flex touch-manipulation items-center rounded-sm text-sm underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2"
+          ) : showReviews ? (
+            <a
+              href="#escribir-resena"
+              className="text-gray-500 underline underline-offset-4"
             >
-              {data.reviews?.length ?? 0} Opiniones
-            </button>
+              Sé la primera en opinar
+            </a>
+          ) : null}
+          {data.sku && (
+            <>
+              <span aria-hidden="true" className="text-gray-400">
+                ·
+              </span>
+              <span className="text-gray-500">Ref. {data.sku}</span>
+            </>
           )}
-          <StarRating
-            currentRating={calculateAverageRating(data?.reviews)}
-            isDisabled
-          />
         </div>
       </div>
-      <LowStockNotice stock={data.stock} variant="detail" />
-      <Separator className="my-4" />
-      <div className="flex flex-col gap-y-6">
+
+      <div className="flex flex-wrap items-end gap-x-3 gap-y-1 font-quicksand">
+        {price.prefix && (
+          <span className="pb-1 font-sans text-sm text-gray-500">
+            {price.prefix}
+          </span>
+        )}
+        <span className="text-[32px] font-bold leading-none tracking-tight text-blue-yankees">
+          {price.current}
+        </span>
+        {price.original && (
+          <s className="text-lg text-gray-500">{price.original}</s>
+        )}
+        {price.savings && (
+          <span className="pb-0.5 text-sm font-bold text-green-700">
+            {price.savings}
+            {price.percent !== null && ` (${price.percent} %)`}
+          </span>
+        )}
+        {data.offerLabel && (
+          <span className="inline-flex h-6 items-center rounded-full bg-pink-froly px-2.5 font-sans text-xs font-bold text-white">
+            {data.offerLabel}
+          </span>
+        )}
+      </div>
+
+      <div className="h-px bg-border" />
+
+      <div className="flex flex-col gap-5">
         {isLoading && data.isGroup ? (
-          <div className="flex flex-col gap-y-3">
-            <div className="h-6 w-32 animate-pulse rounded bg-gray-200" />
+          <div className="flex flex-col gap-3" aria-hidden="true">
+            <div className="h-5 w-32 animate-pulse rounded bg-gray-200" />
             <div className="flex gap-2">
-              <div className="h-8 w-16 animate-pulse rounded border bg-gray-100" />
-              <div className="h-8 w-16 animate-pulse rounded border bg-gray-100" />
-              <div className="h-8 w-16 animate-pulse rounded border bg-gray-100" />
+              <div className="h-11 w-20 animate-pulse rounded-full bg-gray-100" />
+              <div className="h-11 w-20 animate-pulse rounded-full bg-gray-100" />
             </div>
           </div>
         ) : hasVariants ? (
           <>
-            {/* Design Selector */}
             {uniqueDesigns.length > 0 && (
-              <div className="flex flex-col gap-y-3">
-                <h3 className="font-serif font-semibold">Diseño:</h3>
+              <div className="flex flex-col gap-2.5">
+                <p className={OPTION_LABEL}>
+                  <span>Diseño:</span>{" "}
+                  <span className="font-sans font-medium">
+                    {needsOption ? (
+                      <span className="text-amber-700">elige uno</span>
+                    ) : (
+                      data.design?.name
+                    )}
+                  </span>
+                </p>
                 <div className="flex flex-wrap gap-2">
-                  {uniqueDesigns.map((design: Design) => {
+                  {uniqueDesigns.map((design) => {
                     const isActive = data.design?.id === design.id;
                     const isOutOfStock = !allVariants.some(
                       (v) => v.design?.id === design.id && v.stock > 0,
                     );
-
                     return (
                       <Button
                         type="button"
@@ -315,27 +343,33 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
                         aria-pressed={isActive}
                         onClick={() => handleVariantChange("design", design.id)}
                         className={cn(
-                          "min-h-11 rounded-full border-2 px-4 py-2 text-sm font-medium transition-colors",
+                          OPTION_CHIP,
                           isActive
-                            ? "border-blue-yankees bg-blue-yankees text-white"
-                            : "border-gray-200 text-gray-900 hover:border-gray-300",
+                            ? "border-blue-yankees bg-blue-yankees text-white hover:bg-blue-yankees"
+                            : "border-gray-200 bg-white text-gray-900 hover:border-gray-300",
                           isOutOfStock && "line-through opacity-50",
                         )}
                       >
                         {design.name}
+                        {isOutOfStock && (
+                          <span className="sr-only"> (agotado)</span>
+                        )}
                       </Button>
                     );
                   })}
                 </div>
               </div>
             )}
-
-            {/* Color Selector */}
             {availableColors.length > 0 && (
-              <div className="flex flex-col gap-y-3">
-                <h3 className="font-serif font-semibold">Color:</h3>
-                <div className="flex flex-wrap gap-2">
-                  {availableColors.map((color: Color) => {
+              <div className="flex flex-col gap-2.5">
+                <p className={OPTION_LABEL}>
+                  <span>Color:</span>{" "}
+                  <span className="font-sans font-medium">
+                    {data.color?.name}
+                  </span>
+                </p>
+                <div className="flex flex-wrap gap-2.5">
+                  {availableColors.map((color) => {
                     const isActive = data.color?.id === color.id;
                     const isOutOfStock = !allVariants.some(
                       (v) =>
@@ -343,34 +377,31 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
                         v.color?.id === color.id &&
                         v.stock > 0,
                     );
-
                     return (
                       <button
                         type="button"
                         key={color.id}
-                        aria-label={`Seleccionar color ${color.name}${
-                          isOutOfStock ? " (Agotado)" : ""
-                        }`}
+                        aria-label={`Seleccionar color ${color.name}${isOutOfStock ? " (agotado)" : ""}`}
                         aria-pressed={isActive}
                         disabled={isLoading}
                         onClick={() => handleVariantChange("color", color.id)}
                         className={cn(
-                          "relative h-11 w-11 cursor-pointer touch-manipulation rounded-full border-2 transition-[transform,border-color,opacity] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2 disabled:cursor-not-allowed motion-reduce:transform-none",
+                          "relative h-11 w-11 touch-manipulation rounded-full border-2 transition-[transform,border-color,opacity] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2 disabled:cursor-not-allowed motion-reduce:transform-none",
                           isActive
                             ? "border-blue-yankees ring-2 ring-blue-yankees ring-offset-2"
                             : "border-gray-200 hover:scale-110",
                           (isOutOfStock || isLoading) && "opacity-50",
                         )}
                         style={{ backgroundColor: color.value }}
-                        title={`${color.name}${
-                          isOutOfStock ? " (Agotado)" : ""
-                        }`}
+                        title={`${color.name}${isOutOfStock ? " (agotado)" : ""}`}
                       >
                         {isOutOfStock && (
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="h-0.5 w-full rotate-45 bg-red-500" />
-                            <div className="h-0.5 w-full -rotate-45 bg-red-500" />
-                          </div>
+                          <span
+                            aria-hidden="true"
+                            className="absolute inset-0 flex items-center justify-center"
+                          >
+                            <span className="h-0.5 w-full rotate-45 bg-red-500" />
+                          </span>
                         )}
                       </button>
                     );
@@ -378,13 +409,16 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
                 </div>
               </div>
             )}
-
-            {/* Size Selector */}
             {availableSizes.length > 0 && (
-              <div className="flex flex-col gap-y-3">
-                <h3 className="font-serif font-semibold">Tamaño:</h3>
+              <div className="flex flex-col gap-2.5">
+                <p className={OPTION_LABEL}>
+                  <span>Tamaño:</span>{" "}
+                  <span className="font-sans font-medium">
+                    {data.size?.name}
+                  </span>
+                </p>
                 <div className="flex flex-wrap gap-2">
-                  {availableSizes.map((size: Size) => {
+                  {availableSizes.map((size) => {
                     const isActive = data.size?.id === size.id;
                     const isOutOfStock = !allVariants.some(
                       (v) =>
@@ -393,7 +427,6 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
                         v.size?.id === size.id &&
                         v.stock > 0,
                     );
-
                     return (
                       <Button
                         type="button"
@@ -403,14 +436,17 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
                         aria-pressed={isActive}
                         onClick={() => handleVariantChange("size", size.id)}
                         className={cn(
-                          "min-h-11 min-w-[3rem] rounded-md border-2 px-3 py-1 text-sm font-medium transition-colors",
+                          "min-h-11 min-w-[3rem] rounded-lg border-2 px-3 py-1 font-sans text-sm font-medium transition-colors",
                           isActive
-                            ? "border-blue-yankees bg-blue-yankees text-white"
-                            : "border-gray-200 text-gray-900 hover:border-gray-300",
+                            ? "border-blue-yankees bg-blue-yankees text-white hover:bg-blue-yankees"
+                            : "border-gray-200 bg-white text-gray-900 hover:border-gray-300",
                           isOutOfStock && "line-through opacity-50",
                         )}
                       >
                         {size.name}
+                        {isOutOfStock && (
+                          <span className="sr-only"> (agotado)</span>
+                        )}
                       </Button>
                     );
                   })}
@@ -419,146 +455,151 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
             )}
           </>
         ) : (
-          <>
-            {data?.size && isCustomerFacingLegacySize(data.size) && (
-              <div className="flex items-center gap-x-4">
-                <h3 className="font-serif font-semibold">Tamaño:</h3>
-                <div>{data.size.name}</div>
-              </div>
+          <div className="flex flex-wrap gap-x-6 gap-y-2">
+            {data.size && isCustomerFacingLegacySize(data.size) && (
+              <p className={OPTION_LABEL}>
+                <span>Tamaño:</span>{" "}
+                <span className="font-sans font-medium">{data.size.name}</span>
+              </p>
             )}
-            {data?.color && (
-              <div className="flex items-center gap-x-4">
-                <h3 className="font-serif font-semibold">Color:</h3>
-                <div
-                  className="h-6 w-6 rounded-full border border-gray-600"
-                  style={{
-                    backgroundColor: data.color.value,
-                  }}
+            {data.color && (
+              <p className={cn(OPTION_LABEL, "inline-flex items-center gap-2")}>
+                <span>Color:</span>
+                <span
+                  aria-hidden="true"
+                  className="h-5 w-5 rounded-full border border-gray-400"
+                  style={{ backgroundColor: data.color.value }}
                 />
-              </div>
+                <span className="font-sans font-medium">{data.color.name}</span>
+              </p>
             )}
-            {data?.design && (
-              <div className="flex items-center gap-x-4">
-                <h3 className="font-serif font-semibold">Diseño:</h3>
-                <div>{data.design.name}</div>
-              </div>
+            {data.design && (
+              <p className={OPTION_LABEL}>
+                <span>Diseño:</span>{" "}
+                <span className="font-sans font-medium">
+                  {data.design.name}
+                </span>
+              </p>
             )}
-          </>
-        )}
-
-        {data.catalogOptionValues?.map(({ option, optionValue }) => (
-          <div key={option.id} className="flex items-center gap-x-4">
-            <h3 className="font-serif font-semibold">{option.name}:</h3>
-            <div>{optionValue.name}</div>
           </div>
+        )}
+        {data.catalogOptionValues?.map(({ option, optionValue }) => (
+          <p key={option.id} className={OPTION_LABEL}>
+            <span>{option.name}:</span>{" "}
+            <span className="font-sans font-medium">{optionValue.name}</span>
+          </p>
         ))}
-
         {isLoading && hasVariants && (
-          <p className="text-sm text-muted-foreground" role="status">
+          <p className="font-sans text-sm text-muted-foreground" role="status">
             Actualizando opción seleccionada…
           </p>
         )}
-
-        {!data.isArchived && !comingSoon && !soldOut && (
-          <div className="flex items-center gap-x-4">
-            <h3 className="font-sans font-semibold">Cantidad:</h3>
-            <div>
-              <QuantitySelector
-                key={data.id}
-                max={data.stock}
-                initialValue={productInCart?.quantity || 1}
-                size="medium"
-                onValueChange={(value) => {
-                  setQuantity(value);
-                }}
-              />
-            </div>
-          </div>
-        )}
       </div>
-      {(comingSoon || soldOut) && (
-        <div className="mt-8">
-          <NotifyMeForm
-            productId={data.id}
-            variant={comingSoon ? "coming-soon" : "sold-out"}
-            arrivalLabel={comingSoon && data.availableAt ? `Llega el ${formatArrivalDate(data.availableAt)}` : null}
+
+      <div ref={ctaRef} className="flex flex-wrap items-center gap-3">
+        {canBuy && (
+          <QuantitySelector
+            key={data.id}
+            max={data.stock}
+            initialValue={quantity}
+            size="medium"
+            onValueChange={(value) => onQuantityChange?.(value)}
           />
-        </div>
-      )}
-      <div className={cn("mt-10 flex flex-wrap items-center gap-x-3 gap-y-4 sm:gap-y-0", (comingSoon || soldOut) && "mt-4")}>
-        <Button
-          disabled={isUnavailable || isLoading}
-          className="min-h-11 flex gap-2 rounded-full border-none bg-blue-yankees px-8 py-4 font-sans text-sm font-semibold text-white outline-none [transition:0.2s]"
-          onClick={handleAddToCart}
-        >
-          {isLoading
-            ? "Actualizando opción…"
-            : data.isArchived
-              ? "No disponible"
-              : comingSoon
-                ? "Llega pronto"
-                : "Agregar al carrito"}
-          {!isLoading && (
+        )}
+        {canBuy ? (
+          <Button
+            disabled={isLoading}
+            onClick={handleAddToCart}
+            className={cn(
+              CTA_CLASS,
+              "bg-blue-yankees text-white hover:bg-blue-yankees/90",
+            )}
+          >
             <ShoppingCart aria-hidden="true" className="h-5 w-5" />
-          )}
-        </Button>
+            {isLoading ? (
+              "Actualizando opción…"
+            ) : (
+              <span>
+                {availability.ctaLabel}
+                <span className="sm:hidden xl:inline">
+                  {" "}
+                  · {currencyFormatter.format(Number(data.price) * quantity)}
+                </span>
+              </span>
+            )}
+          </Button>
+        ) : needsOption ? (
+          <Button
+            disabled
+            className={cn(CTA_CLASS, "bg-gray-200 text-gray-600")}
+          >
+            Elige una opción para continuar
+          </Button>
+        ) : availability.status === "archived" ? (
+          <Button
+            disabled
+            className={cn(CTA_CLASS, "bg-gray-200 text-gray-600")}
+          >
+            {availability.ctaLabel}
+          </Button>
+        ) : (
+          <Button
+            variant="outline"
+            onClick={focusNotifyForm}
+            className={cn(
+              CTA_CLASS,
+              "border-2 border-blue-yankees bg-white text-blue-yankees hover:bg-blue-yankees hover:text-white",
+            )}
+          >
+            {availability.ctaLabel}
+          </Button>
+        )}
         <Button
           variant="outline"
+          aria-pressed={isWishlistProduct}
           aria-label={
-            isWishlistProduct
-              ? "Quitar de la lista de deseos"
-              : "Agregar a la lista de deseos"
+            isWishlistProduct ? "Quitar de favoritos" : "Agregar a favoritos"
           }
-          onClick={handleAddToWishlist}
-          className="min-w-11 flex h-11 gap-2 rounded-full border-2 border-blue-yankees px-4 py-2 font-sans text-sm font-semibold text-blue-yankees hover:bg-blue-yankees hover:text-white"
+          onClick={toggleWishlist}
+          className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full border-2 border-blue-yankees bg-white p-0 text-blue-yankees hover:bg-blue-yankees hover:text-white"
         >
           <Heart
             aria-hidden="true"
-            className={cn("h-5 w-5", {
-              "fill-current text-red-500": isWishlistProduct,
-            })}
+            className={cn(
+              "h-5 w-5",
+              isWishlistProduct && "fill-current text-rose-600",
+            )}
           />
         </Button>
-        {data.isArchived ? (
-          <span className="text-xs text-muted-foreground">
-            Este producto ya no está disponible para la venta.
-          </span>
-        ) : null}
       </div>
 
-      {/* 🔒 High-Trust Product Guarantee Banner */}
-      <div className="mt-6 grid grid-cols-3 gap-2 rounded-2xl border border-purple-100 bg-purple-50/50 p-3 text-center text-xs font-semibold text-purple-950 dark:border-purple-900/40 dark:bg-purple-950/20 dark:text-purple-200">
-        <div className="flex flex-col items-center gap-1">
-          <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />
-          <span>Compra Segura</span>
-        </div>
-        <div className="flex flex-col items-center gap-1">
-          <Truck className="h-4 w-4 shrink-0 text-purple-600" />
-          <span>Envíos Colombia</span>
-        </div>
-        <div className="flex flex-col items-center gap-1">
-          <Award className="h-4 w-4 shrink-0 text-amber-500" />
-          <span>Calidad P de Papel</span>
-        </div>
+      <div id="avisame" data-product-signals={data.id} className="scroll-mt-40">
+        <ProductSignals
+          product={data}
+          availability={availability}
+          quantity={quantity}
+        />
       </div>
-      {showDescription && data?.description && (
-        <>
-          <Separator className="my-4" />
-          <div className="flex flex-col items-start">
-            <h3 className="font-sans font-semibold">
-              Descripción del producto
-            </h3>
-            <RichTextDisplay content={data?.description} />
-          </div>
-        </>
-      )}
 
-      {data.isKit && data.kitComponents && (
-        <>
-          <Separator className="my-4" />
-          <KitContents components={data.kitComponents} />
-        </>
-      )}
+      <div className="grid grid-cols-3 gap-2 rounded-2xl border border-purple-100 bg-purple-50/50 p-3 text-center font-sans text-xs font-semibold text-purple-950">
+        <span className="flex flex-col items-center gap-1">
+          <ShieldCheck
+            aria-hidden="true"
+            className="h-4 w-4 text-emerald-600"
+          />
+          Compra segura
+        </span>
+        <span className="flex flex-col items-center gap-1">
+          <Truck aria-hidden="true" className="h-4 w-4 text-purple-600" />
+          Envíos a toda Colombia
+        </span>
+        <span className="flex flex-col items-center gap-1">
+          <Award aria-hidden="true" className="h-4 w-4 text-amber-500" />
+          Calidad P de Papel
+        </span>
+      </div>
+
+      {showDescription && <ProductDetailsAccordion product={data} />}
     </div>
   );
 };

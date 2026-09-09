@@ -58,3 +58,32 @@ describe("Gallery", () => {
     expect(screen.getAllByAltText("Cuaderno Snoopy")).toHaveLength(1);
   });
 });
+
+describe("Gallery navigation", () => {
+  it("moves between photos with the keyboard and a swipe, and announces the position", () => {
+    render(<Gallery images={images} productName="Cuaderno Snoopy" />);
+
+    const carousel = screen.getByRole("group", { name: "Fotos de Cuaderno Snoopy" });
+    expect(screen.getByText("2 / 2")).toBeInTheDocument();
+
+    fireEvent.keyDown(carousel, { key: "ArrowRight" });
+    expect(screen.getByAltText("Cuaderno Snoopy")).toHaveAttribute("src", images[0].url);
+    expect(screen.getByText("1 / 2")).toBeInTheDocument();
+
+    fireEvent.pointerDown(carousel, { clientX: 200 });
+    fireEvent.pointerUp(carousel, { clientX: 120 });
+    expect(screen.getByAltText("Cuaderno Snoopy")).toHaveAttribute("src", images[1].url);
+  });
+
+  it("marks the selected thumbnail as the active tab", () => {
+    render(<Gallery images={images} productName="Cuaderno Snoopy" />);
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs[1]).toHaveAttribute("aria-selected", "true");
+    expect(tabs[0]).toHaveAttribute("aria-selected", "false");
+  });
+
+  it("does not request the main photo with priority in the quick view", () => {
+    render(<Gallery images={images} productName="Cuaderno Snoopy" priority={false} />);
+    expect(screen.getByAltText("Cuaderno Snoopy")).not.toHaveAttribute("data-priority");
+  });
+});

@@ -4,6 +4,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import { ToastIcon } from "@/components/ui/toast-icon";
 import { toast } from "@/hooks/use-toast";
 import { isComingSoon } from "@/lib/product-card";
+import { slimStoredProduct } from "@/lib/stored-product";
 import { Product } from "@/types";
 
 export type CartMutationResult =
@@ -19,6 +20,8 @@ interface CartStore {
   addItem: (item: Product, quantity?: number) => CartMutationResult;
   updateQuantity: (id: string, quantity: number) => CartMutationResult;
   updateStock: (id: string, stock: number) => void;
+  /** Refresca stock y precio con el catálogo actual; la cantidad se ajusta al stock. */
+  syncProduct: (product: Product) => void;
   removeItem: (id: string) => void;
   removeAll: () => void;
 }
@@ -101,6 +104,26 @@ export const useCart = create(
           });
         }
       },
+      syncProduct: (product: Product) => {
+        const currentItems = get().items;
+        const item = currentItems.find((i) => i.id === product.id);
+        if (!item) return;
+        const quantity = item.quantity && item.quantity > product.stock ? Math.max(0, product.stock) : item.quantity;
+        const updatedItem: Product = {
+          ...item,
+          stock: product.stock,
+          price: product.price,
+          originalPrice: product.originalPrice,
+          discountedPrice: product.discountedPrice,
+          hasDiscount: product.hasDiscount,
+          offerLabel: product.offerLabel,
+          isArchived: product.isArchived,
+          availableAt: product.availableAt,
+          images: product.images?.length ? product.images : item.images,
+          quantity,
+        };
+        set({ items: currentItems.map((currentItem) => (currentItem.id === product.id ? updatedItem : currentItem)) });
+      },
       removeItem: (id: string) => {
         set({ items: [...get().items.filter((i) => i.id !== id)] });
         toast({
@@ -114,6 +137,15 @@ export const useCart = create(
     {
       name: "cart-storage",
       storage: createJSONStorage(() => localStorage),
+      version: 1,
+      partialize: (state) => ({ items: state.items.map(slimStoredProduct) }) as unknown as CartStore,
+      migrate: (persisted, version) => {
+        const state = persisted as Partial<CartStore>;
+        if (version < 1 && Array.isArray(state.items)) {
+          return { ...state, items: state.items.map(slimStoredProduct) } as CartStore;
+        }
+        return state as CartStore;
+      },
     },
   ),
 );

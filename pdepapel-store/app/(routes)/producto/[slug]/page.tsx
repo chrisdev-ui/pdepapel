@@ -1,157 +1,64 @@
 import { Metadata } from "next";
 import { cookies } from "next/headers";
 import { notFound, permanentRedirect } from "next/navigation";
+import { Suspense } from "react";
 
 import { getProduct } from "@/actions/get-product";
 import { getProducts } from "@/actions/get-products";
-import { EARLY_ACCESS_COOKIE } from "@/lib/early-access";
-import { isComingSoon } from "@/lib/product-card";
 import Newsletter from "@/components/newsletter";
 import { RelatedProducts } from "@/components/related-products";
 import { RelatedProductsSkeleton } from "@/components/related-products-skeleton";
 import { SingleProductPage } from "@/components/single-product-page";
 import { Container } from "@/components/ui/container";
 import { BASE_URL } from "@/constants";
-import { createRichTextExcerpt } from "@/lib/rich-text";
+import { EARLY_ACCESS_COOKIE } from "@/lib/early-access";
 import { getStructuredProductSize } from "@/lib/product-options";
+import { buildProductBreadcrumbJsonLd, buildProductJsonLd } from "@/lib/product-schema";
+import { createRichTextExcerpt } from "@/lib/rich-text";
 import { categoryPath, productPath } from "@/lib/routes";
-import { Product } from "@/types";
-import { Suspense } from "react";
+import { stripTaxonomyIcon } from "@/lib/catalog-labels";
 
 interface ProductPageProps {
-  params: {
-    slug: string;
-  };
+  params: { slug: string };
 }
 
-export async function generateMetadata({
-  params,
-}: ProductPageProps): Promise<Metadata> {
+export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
   const product = await getProduct(params.slug);
+  if (!product) notFound();
 
-  if (!product) {
-    notFound();
-  }
-
-  const canonicalSlug = product.slug || product.id;
-  const canonicalPath = productPath(canonicalSlug);
-  const images = product.images?.map((image) => image.url);
-  const variantAttributes = [
-    product.design?.name,
-    product.color?.name,
-    getStructuredProductSize(product),
-  ]
-    .filter(Boolean)
-    .join(", ");
-  const title = variantAttributes
-    ? `${product.name} - ${variantAttributes}`
-    : product.name;
+  const canonicalPath = productPath(product.slug || product.id);
+  const images = (product.images ?? []).map((image, index) => ({
+    url: image.url,
+    alt: index === 0 ? product.name : `${product.name}, vista ${index + 1}`,
+  }));
+  const variantAttributes = [product.design?.name, product.color?.name, getStructuredProductSize(product)].filter(Boolean).join(", ");
+  const title = variantAttributes ? `${product.name} - ${variantAttributes}` : product.name;
   const description = createRichTextExcerpt(
     product.description,
-    `Descubre ${product.name} en Papelería P de Papel. Este artículo kawaii/oficina es perfecto para añadir un toque especial a tu espacio. Detalles, especificaciones, y todo lo que necesitas saber para tomar la mejor decisión. Calidad y diseño se unen para ofrecerte lo mejor en papelería.`,
+    `Descubre ${product.name} en Papelería P de Papel. Papelería kawaii y de oficina con envío a toda Colombia.`,
   );
 
   return {
     title: { absolute: title },
     description,
-    alternates: {
-      canonical: canonicalPath,
-    },
-    robots: product.isArchived
-      ? {
-          index: false,
-          follow: true,
-        }
-      : undefined,
-    openGraph: {
-      title,
-      description,
-      url: `${BASE_URL}${canonicalPath}`,
-      siteName: "Papelería P de Papel",
-      images,
-    },
-    twitter: {
-      title,
-      description,
-      card: "summary_large_image",
-      site: "Papelería P de Papel",
-      images,
-    },
+    alternates: { canonical: canonicalPath },
+    robots: product.isArchived ? { index: false, follow: true } : undefined,
+    openGraph: { title, description, url: `${BASE_URL}${canonicalPath}`, siteName: "Papelería P de Papel", locale: "es_CO", type: "website", images },
+    twitter: { title, description, card: "summary_large_image", site: "Papelería P de Papel", images },
   };
 }
 
 export const revalidate = 300;
 
-function buildProductSchema(product: Product, includeGroupReference = true) {
-  const slug = product.slug || product.id;
-  const path = productPath(slug);
-  const brand = product.brand || product.productGroup?.brand;
-
-  return {
-    "@type": "Product",
-    name: product.name,
-    description: createRichTextExcerpt(
-      product.description,
-      `Descubre ${product.name} en Papelería P de Papel.`,
-    ),
-    url: `${BASE_URL}${path}`,
-    image: product.images?.map((image) => image.url) || [],
-    sku: product.sku || product.id,
-    ...(brand
-      ? {
-          brand: {
-            "@type": "Brand",
-            name: brand,
-          },
-        }
-      : {}),
-    ...(product.gtin ? { gtin: product.gtin } : {}),
-    ...(product.mpn ? { mpn: product.mpn } : {}),
-    ...(product.color?.name ? { color: product.color.name } : {}),
-    ...(getStructuredProductSize(product)
-      ? { size: getStructuredProductSize(product) }
-      : {}),
-    ...(product.design?.name ? { pattern: product.design.name } : {}),
-    ...(includeGroupReference && product.productGroupId
-      ? { inProductGroupWithID: product.productGroupId }
-      : {}),
-    offers: {
-      "@type": "Offer",
-      url: `${BASE_URL}${path}`,
-      priceCurrency: "COP",
-      price: product.price,
-      itemCondition: "https://schema.org/NewCondition",
-      availability: isComingSoon(product)
-        ? "https://schema.org/PreOrder"
-        : product.stock > 0
-          ? "https://schema.org/InStock"
-          : "https://schema.org/OutOfStock",
-      ...(isComingSoon(product) && product.availableAt
-        ? { availabilityStarts: product.availableAt }
-        : {}),
-    },
-  };
-}
-
 export default async function ProductPage({ params }: ProductPageProps) {
   const product = await getProduct(params.slug);
-
   if (!product) return notFound();
 
   const canonicalSlug = product.slug || product.id;
-  if (params.slug !== canonicalSlug) {
-    permanentRedirect(productPath(canonicalSlug));
-  }
+  if (params.slug !== canonicalSlug) permanentRedirect(productPath(canonicalSlug));
 
-  const siblingsPromise = product.productGroupId
-    ? getProducts({ productGroupId: product.productGroupId })
-    : Promise.resolve({ products: [] });
-  const suggestedProductsPromise = getProducts({
-    categoryId: product.category?.id,
-    excludeProducts: product.id,
-    groupBy: "parents",
-    limit: 4,
-  });
+  const siblingsPromise = product.productGroupId ? getProducts({ productGroupId: product.productGroupId }) : Promise.resolve({ products: [] });
+  const suggestedProductsPromise = getProducts({ categoryId: product.category?.id, excludeProducts: product.id, groupBy: "parents", limit: 4 });
   const siblingsResponse = await siblingsPromise;
   const siblings = siblingsResponse.products.map((variant) => ({
     id: variant.id,
@@ -161,103 +68,26 @@ export default async function ProductPage({ params }: ProductPageProps) {
     design: variant.design,
     stock: variant.stock,
   }));
-  const canonicalPath = productPath(canonicalSlug);
   const hasEarlyAccess = Boolean(cookies().get(EARLY_ACCESS_COOKIE)?.value);
-  const seenVariantCombinations = new Set<string>();
-  const hasDuplicateVariantCombination = siblingsResponse.products.some(
-    (variant) => {
-      const combination = [
-        variant.size?.id,
-        variant.color?.id,
-        variant.design?.id,
-      ].join("|");
-
-      if (seenVariantCombinations.has(combination)) return true;
-
-      seenVariantCombinations.add(combination);
-      return false;
-    },
-  );
-  const hasVariants = Boolean(
-    product.productGroupId &&
-    siblingsResponse.products.length > 1 &&
-    !hasDuplicateVariantCombination,
-  );
-  const productSchema = buildProductSchema(product, hasVariants);
-  const jsonLd = hasVariants
-    ? {
-        "@context": "https://schema.org",
-        "@type": "ProductGroup",
-        name: product.productGroup?.name || product.name,
-        description: createRichTextExcerpt(
-          product.description,
-          `Descubre ${product.name} en Papelería P de Papel.`,
-        ),
-        productGroupID: product.productGroupId,
-        variesBy: [
-          "https://schema.org/color",
-          "https://schema.org/size",
-          "https://schema.org/pattern",
-        ],
-        hasVariant: siblingsResponse.products.map((variant) =>
-          buildProductSchema(variant),
-        ),
-      }
-    : {
-        "@context": "https://schema.org",
-        ...productSchema,
-      };
-  const breadcrumbJsonLd = {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    itemListElement: [
-      {
-        "@type": "ListItem",
-        position: 1,
-        name: "Inicio",
-        item: BASE_URL,
-      },
-      {
-        "@type": "ListItem",
-        position: 2,
-        name: "Tienda",
-        item: `${BASE_URL}/tienda`,
-      },
-      ...(product.category
-        ? [
-            {
-              "@type": "ListItem",
-              position: 3,
-              name: product.category.name,
-              item: `${BASE_URL}${categoryPath(product.category.slug || product.category.id)}`,
-            },
-          ]
-        : []),
-      {
-        "@type": "ListItem",
-        position: product.category ? 4 : 3,
-        name: product.name,
-        item: `${BASE_URL}${canonicalPath}`,
-      },
-    ],
-  };
+  const categoryName = product.category ? stripTaxonomyIcon(product.category.name) : null;
 
   return (
     <>
       {!product.isArchived && (
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
+        <>
+          <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(buildProductJsonLd(product, siblingsResponse.products)) }} />
+          <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(buildProductBreadcrumbJsonLd(product)) }} />
+        </>
       )}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
-      />
       <SingleProductPage product={product} siblings={siblings} earlyAccess={hasEarlyAccess} />
-      <Container className="max-w-7xl px-4 pb-10 sm:px-6 lg:px-8">
+      <Container className="max-w-7xl px-4 pb-12 sm:px-6 lg:px-8">
         <Suspense fallback={<RelatedProductsSkeleton />}>
-          <RelatedProducts productsPromise={suggestedProductsPromise} />
+          <RelatedProducts
+            productsPromise={suggestedProductsPromise}
+            eyebrow="Completa tu set"
+            title={categoryName ? `Combinan con este producto` : "También te puede gustar"}
+            action={product.category ? { label: `Ver ${categoryName}`, href: categoryPath(product.category.slug || product.category.id) } : undefined}
+          />
         </Suspense>
       </Container>
       <Newsletter />

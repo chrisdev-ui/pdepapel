@@ -14,19 +14,24 @@ import { Product } from "@/types";
 
 const getItemsKey = (productIds: string[]) => [...productIds].sort().join(",");
 
-async function getProducts(productIds: string[]): Promise<WishlistProduct[]> {
+/** Fecha de guardado que ya se conocía, para no perderla al sincronizar. */
+export function mergeAccountProducts(productIds: string[], products: Product[], known: Pick<WishlistProduct, "id" | "addedOn">[]): WishlistProduct[] {
+  const productsById = new Map(products.map((product) => [product.id, product]));
+  const addedOnById = new Map(known.map((item) => [item.id, item.addedOn]));
+  return productIds.flatMap((productId) => {
+    const product = productsById.get(productId);
+    return product ? [{ ...product, addedOn: addedOnById.get(productId) ?? new Date() }] : [];
+  });
+}
+
+async function getProducts(productIds: string[], known: Pick<WishlistProduct, "id" | "addedOn">[]): Promise<WishlistProduct[]> {
   if (productIds.length === 0) return [];
 
   const response = await axios.get<Product[]>(
     `${env.NEXT_PUBLIC_API_URL}/products`,
     { params: { ids: productIds.join(",") } },
   );
-  const productsById = new Map(response.data.map((product) => [product.id, product]));
-
-  return productIds.flatMap((productId) => {
-    const product = productsById.get(productId);
-    return product ? [{ ...product, addedOn: new Date() }] : [];
-  });
+  return mergeAccountProducts(productIds, response.data, known);
 }
 
 export function WishlistSyncProvider() {
@@ -66,7 +71,7 @@ export function WishlistSyncProvider() {
               mode: "merge",
             })
           : remoteProductIds;
-        const accountItems = await getProducts(productIds);
+        const accountItems = await getProducts(productIds, [...useWishlist.getState().items, ...guestItems]);
 
         if (!isCurrent) return;
         setAccountItems(accountItems, userId);
@@ -112,7 +117,7 @@ export function WishlistSyncProvider() {
         lastSyncedKey.current = `${userId}:${getItemsKey(syncedProductIds)}`;
 
         if (getItemsKey(syncedProductIds) !== getItemsKey(productIds)) {
-          const accountItems = await getProducts(syncedProductIds);
+          const accountItems = await getProducts(syncedProductIds, useWishlist.getState().items);
           setAccountItems(accountItems, userId);
         }
       } catch (error) {

@@ -11,7 +11,8 @@ import { useScrollPosition } from "@/hooks/use-scroll-position";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { calculateTotals, cn, currencyFormatter } from "@/lib/utils";
 
-const HIDDEN_ON = [STOREFRONT_ROUTES.cart, STOREFRONT_ROUTES.checkout];
+/** En la ficha de producto manda la barra del propio producto. */
+const HIDDEN_ON = [STOREFRONT_ROUTES.cart, STOREFRONT_ROUTES.checkout, "/producto/"];
 
 /**
  * Barra fija del carrito en teléfonos y tabletas: aparece cuando la cabecera se

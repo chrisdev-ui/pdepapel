@@ -72,6 +72,11 @@ const QuantitySelector = React.forwardRef<
     const disableDec = value <= min;
     const disableInc = value + step > max;
 
+    // Si el padre cambia la cantidad (por ejemplo al ajustar el stock), el control la refleja.
+    React.useEffect(() => {
+      setValue(initialValue);
+    }, [initialValue]);
+
     const increment = () => {
       if (value + step <= max) {
         const newValue = value + step;
@@ -115,9 +120,22 @@ const QuantitySelector = React.forwardRef<
         <input
           className="h-11 w-12 text-center text-sm tabular-nums outline-none"
           type="text"
+          role="spinbutton"
           aria-label={label}
+          aria-valuemin={min}
+          aria-valuemax={max}
+          aria-valuenow={value}
           value={value}
           readOnly
+          onKeyDown={(event) => {
+            if (event.key === "ArrowUp") {
+              event.preventDefault();
+              increment();
+            } else if (event.key === "ArrowDown") {
+              event.preventDefault();
+              decrement();
+            }
+          }}
         />
         <button
           type="button"

@@ -80,7 +80,7 @@ const Navbar: React.FC<NavbarProps> = ({
           </Link>
           <div className="flex w-[124px] items-center justify-end gap-2">
             <WishlistButton className="flex h-11 w-11 items-center justify-center" />
-            <NavbarCart className="min-w-[4.5rem]" />
+            <NavbarCart className="min-w-[4.5rem]" withSheet={false} />
           </div>
         </div>
         <div className="px-3 pb-2 sm:px-6 lg:hidden">

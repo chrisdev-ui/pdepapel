@@ -87,7 +87,7 @@ export function EarlyAccessForm({ label, source, productId, className, open = fa
           id={inputId}
           type="email"
           required
-          autoFocus
+          autoFocus={!open}
           inputMode="email"
           autoComplete="email"
           placeholder="tu@correo.com"

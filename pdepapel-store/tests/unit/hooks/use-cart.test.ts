@@ -83,3 +83,26 @@ describe("cart mutations", () => {
     expect(useCart.getState().items[0].quantity).toBe(3);
   });
 });
+
+describe("syncProduct", () => {
+  it("refreshes price and stock from the catalog and clamps the quantity", async () => {
+    const { useCart } = await import("@/hooks/use-cart");
+    useCart.setState({ items: [{ id: "p1", name: "A", price: "10000", stock: 5, quantity: 4, images: [], reviews: [] } as never] });
+    useCart.getState().syncProduct({ id: "p1", name: "A", price: "9000", stock: 2, originalPrice: 12000, hasDiscount: true, images: [], reviews: [] } as never);
+    const item = useCart.getState().items[0];
+    expect(item.price).toBe("9000");
+    expect(item.stock).toBe(2);
+    expect(item.quantity).toBe(2);
+    expect(item.hasDiscount).toBe(true);
+  });
+});
+
+describe("persisted cart shape", () => {
+  it("migrates an old stored cart to the slim shape", async () => {
+    const { useCart } = await import("@/hooks/use-cart");
+    const options = (useCart as unknown as { persist: { getOptions: () => { migrate: (state: unknown, version: number) => { items: Record<string, unknown>[] } } } }).persist.getOptions();
+    const migrated = options.migrate({ items: [{ id: "p1", name: "A", price: "1", stock: 1, description: "x".repeat(500), reviews: [{}], images: [] }] }, 0);
+    expect(migrated.items[0].description).toBe("");
+    expect(migrated.items[0].reviews).toEqual([]);
+  });
+});
