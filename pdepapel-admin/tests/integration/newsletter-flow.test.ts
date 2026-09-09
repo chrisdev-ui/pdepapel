@@ -70,6 +70,35 @@ describe("newsletter subscription flow with MySQL", () => {
     expect(subscribers[0].lastConfirmationSentAt).toBeInstanceOf(Date);
   });
 
+  it("issues a single-use welcome coupon when the subscription is confirmed", async () => {
+    fixture = await createInventoryFixture();
+    await requestNewsletterSubscription({
+      storeId: fixture.store.id,
+      email: "bienvenida@ejemplo.com",
+      source: "portada-pie",
+      interestProductId: fixture.component.id,
+    });
+    const pending = await testPrisma.newsletterSubscriber.findFirstOrThrow({
+      where: { storeId: fixture.store.id },
+    });
+    expect(pending.interestProductId).toBe(fixture.component.id);
+
+    const token = "confirmation-token-for-welcome-coupon-789";
+    await testPrisma.newsletterSubscriber.update({
+      where: { id: pending.id },
+      data: { confirmationTokenHash: hashNewsletterToken(token) },
+    });
+    const result = await confirmNewsletterSubscription(fixture.store.id, token);
+    expect(result.status).toBe("confirmed");
+
+    const confirmed = await testPrisma.newsletterSubscriber.findUniqueOrThrow({ where: { id: pending.id } });
+    expect(confirmed.welcomeCouponId).toBeTruthy();
+    const coupon = await testPrisma.coupon.findUniqueOrThrow({ where: { id: confirmed.welcomeCouponId! } });
+    expect(coupon).toMatchObject({ storeId: fixture.store.id, type: "PERCENTAGE", amount: 10, maxUses: 1, isActive: true });
+    expect(coupon.code).toMatch(/^BIENVENIDA-[0-9A-F]{6}$/);
+    await testPrisma.coupon.delete({ where: { id: coupon.id } });
+  });
+
   it("keeps confirmation and unsubscribe tokens isolated by store", async () => {
     fixture = await createInventoryFixture();
     secondFixture = await createInventoryFixture();

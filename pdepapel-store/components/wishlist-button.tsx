@@ -29,7 +29,7 @@ export const WishlistButton: React.FC<{
         "relative flex items-center gap-2 font-sans font-semibold text-blue-yankees hover:opacity-75",
         className,
       )}
-      aria-label="Ver lista de deseos"
+      aria-label="Favoritos: ver lista de deseos"
     >
       <Icons.heart className="h-6 w-6" isFilled={totalItems > 0} />
       {withLabel ? <span className="hidden xl:inline">Favoritos</span> : null}

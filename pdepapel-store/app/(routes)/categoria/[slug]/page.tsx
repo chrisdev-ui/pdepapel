@@ -7,7 +7,7 @@ import { getCategories } from "@/actions/get-categories";
 import { getColors } from "@/actions/get-colors";
 import { getDesigns } from "@/actions/get-designs";
 import { getProducts } from "@/actions/get-products";
-import { CategoryLinksSection } from "@/components/category-links-section";
+import { CategoryRail } from "@/components/home/category-rail";
 import { CategorySeoContent } from "@/components/category-seo-content";
 import { ShopContent } from "@/components/shop-content";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
@@ -231,11 +231,7 @@ export default async function CategoryPage({
         />
         <CategorySeoContent categoryName={category.name} />
       </Container>
-      <CategoryLinksSection
-        categories={relatedCategories}
-        title="Sigue explorando"
-        description="Descubre más categorías de papelería creativa que tenemos para ti."
-      />
+      <CategoryRail categories={relatedCategories} title="Sigue explorando" moreHref={null} />
     </>
   );
 }

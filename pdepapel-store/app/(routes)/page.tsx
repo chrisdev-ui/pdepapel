@@ -1,20 +1,24 @@
 import { Metadata } from "next";
-import dynamic from "next/dynamic";
 import { Suspense } from "react";
 import { Organization, WebSite } from "schema-dts";
 
-import { getBillboards } from "@/actions/get-billboards";
 import { getCategories } from "@/actions/get-categories";
+import { getHomeContent } from "@/actions/get-home-content";
+import { getStorefrontSettings } from "@/actions/get-storefront-settings";
 import { getTypes } from "@/actions/get-types";
 import { CategoryChips } from "@/components/category-chips";
-import { buildNavigationTypes } from "@/lib/catalog-navigation";
-import { CategoryLinksSection } from "@/components/category-links-section";
+import { CampaignBanner } from "@/components/home/campaign-banner";
+import { CategoryRail } from "@/components/home/category-rail";
+import { FavoritesGrid, loadFavorites } from "@/components/home/favorites-section";
+import { Hero } from "@/components/home/hero";
+import { NewArrivalsRail } from "@/components/home/new-arrivals-rail";
+import { ReviewsCarousel } from "@/components/home/reviews-carousel";
+import { ProductRowSkeleton, RailSkeleton } from "@/components/home/skeletons";
+import { Newsletter } from "@/components/newsletter";
 import { BASE_URL } from "@/constants";
+import { buildNavigationTypes } from "@/lib/catalog-navigation";
 import { getCurrentSeason } from "@/lib/date-utils";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
-import { Season } from "@/types";
-
-import Features from "@/components/features";
 
 export const revalidate = 300;
 
@@ -96,13 +100,13 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "/images/no-text-lightpink-bg.webp", // Using logo/brand image
+        url: "/images/no-text-lightpink-bg.webp",
         width: 800,
         height: 600,
         alt: "Logo Papelería P de Papel",
       },
       {
-        url: "/opengraph-image.png", // Fallback to general OG image
+        url: "/opengraph-image.png",
         width: 1200,
         height: 630,
         alt: "Papelería P de Papel",
@@ -118,79 +122,59 @@ export const metadata: Metadata = {
   },
 };
 
-import HeroSlider from "@/components/hero-slider";
-const Newsletter = dynamic(() => import("@/components/newsletter"));
-
-import { BannersCtaSection } from "@/components/banners-cta-section";
-import { FeaturedProductsSection } from "@/components/featured-products-section";
-import {
-  BannersCtaSkeleton,
-  CategoryLinksSkeleton,
-  FeaturedProductsSkeleton,
-  HeroSliderSkeleton,
-  MainBannerSkeleton,
-  NewArrivalsSkeleton,
-} from "@/components/home-skeletons";
-import { MainBannerSection } from "@/components/main-banner-section";
-import { NewArrivalsSection } from "@/components/new-arrivals-section";
-
-async function HomeHero({ season }: { season: Season }) {
-  const billboards = await getBillboards();
-
-  return <HeroSlider data={billboards} season={season} />;
-}
-
 async function HomeCategoryChips() {
   const [types, categories] = await Promise.all([getTypes(), getCategories()]);
   return <CategoryChips types={buildNavigationTypes(types, categories)} />;
 }
 
-async function HomeCategoryLinks() {
+async function HomeCategories() {
   const categories = await getCategories();
-  const seoCategories = categories.filter(
+  const featured = categories.filter(
     (category) => category.seoEnabled && category.seoFeatured && category.slug,
   );
-
-  return <CategoryLinksSection categories={seoCategories} />;
+  return <CategoryRail categories={featured} />;
 }
 
-export default function HomePage() {
+async function HomeProducts() {
   const season = getCurrentSeason();
+  const favorites = await loadFavorites();
+  const campaign = getHomeContent().then((content) => content.campaign);
 
   return (
     <>
-      <section className="bg-kawaii-pink-light/15 py-8 text-center">
-        <h1 className="text-balance font-serif text-3xl font-extrabold sm:text-4xl">
-          Papelería kawaii desde Medellín con envíos a toda Colombia
-        </h1>
-        <p className="text-pretty mx-auto mt-3 max-w-2xl px-6 text-muted-foreground">
-          Somos una tienda online colombiana. Desde Medellín enviamos agendas,
-          cuadernos, útiles escolares y regalos kawaii a todo el país.
-        </p>
-      </section>
+      <FavoritesGrid products={favorites} season={season} />
+      <Suspense fallback={null}>
+        <CampaignBanner campaign={await campaign} />
+      </Suspense>
+      <Suspense fallback={<RailSkeleton count={5} tile="h-72 w-56" />}>
+        <NewArrivalsRail favorites={favorites} />
+      </Suspense>
+    </>
+  );
+}
+
+export default async function HomePage() {
+  const [content, settings] = await Promise.all([
+    getHomeContent(),
+    getStorefrontSettings(),
+  ]);
+
+  return (
+    <>
       <Suspense fallback={null}>
         <HomeCategoryChips />
       </Suspense>
-      <Suspense fallback={<HeroSliderSkeleton />}>
-        <HomeHero season={season} />
+      <Hero content={content.hero} freeShippingThreshold={settings.freeShippingThreshold} />
+      <Suspense fallback={<RailSkeleton count={6} tile="h-44 w-44 rounded-full" />}>
+        <HomeCategories />
       </Suspense>
-      <Features />
-      <Suspense fallback={<CategoryLinksSkeleton />}>
-        <HomeCategoryLinks />
+      <Suspense fallback={<ProductRowSkeleton />}>
+        <HomeProducts />
       </Suspense>
-      <Suspense fallback={<FeaturedProductsSkeleton />}>
-        <FeaturedProductsSection season={season} />
+      <Suspense fallback={null}>
+        <ReviewsCarousel />
       </Suspense>
-      <Suspense fallback={<MainBannerSkeleton />}>
-        <MainBannerSection />
-      </Suspense>
-      <Suspense fallback={<NewArrivalsSkeleton />}>
-        <NewArrivalsSection />
-      </Suspense>
-      <Suspense fallback={<BannersCtaSkeleton />}>
-        <BannersCtaSection />
-      </Suspense>
-      <Newsletter />
+      <Newsletter source="portada-pie" />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}

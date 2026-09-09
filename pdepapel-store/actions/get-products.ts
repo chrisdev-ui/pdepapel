@@ -28,6 +28,8 @@ interface Query {
   productGroupId?: string;
   isOnSale?: boolean;
   ids?: string;
+  /** Por defecto el API omite los productos «Próximamente». */
+  availability?: "available" | "coming-soon" | "all";
 }
 
 const EMPTY_RESPONSE: ProductsResponse = {
@@ -104,6 +106,8 @@ export const getProducts = async (query: Query): Promise<ProductsResponse> => {
   if (query.search) url.searchParams.append("search", query.search);
   if (query.isOnSale) url.searchParams.append("isOnSale", "true");
   if (query.ids) url.searchParams.append("ids", query.ids);
+  if (query.availability)
+    url.searchParams.append("availability", query.availability);
 
   try {
     const response = await fetch(url, CATALOG_FETCH_CACHE);

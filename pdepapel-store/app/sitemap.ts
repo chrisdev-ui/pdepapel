@@ -64,6 +64,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     {
       url: `${BASE_URL}${STOREFRONT_ROUTES.shop}`,
     },
+    {
+      url: `${BASE_URL}${STOREFRONT_ROUTES.comingSoon}`,
+    },
     ...categoryUrls,
     ...productsUrls,
   ];

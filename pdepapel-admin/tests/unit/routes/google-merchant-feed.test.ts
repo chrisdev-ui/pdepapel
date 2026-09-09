@@ -145,7 +145,9 @@ describe("hosted Google Merchant feed", () => {
     expect(body.split("\n")[1]).toContain("CUAD-1\tCuaderno\tRayado\thttps://papeleriapdepapel.com/producto/cuaderno");
     expect(body).toContain("\tin_stock\t");
     expect(mocks.findProducts).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { storeId, isArchived: false } }),
+      expect.objectContaining({
+        where: expect.objectContaining({ storeId, isArchived: false, OR: expect.any(Array) }),
+      }),
     );
     expect(mocks.redisSet).toHaveBeenCalledWith(
       `store:${storeId}:google-merchant:feed`,

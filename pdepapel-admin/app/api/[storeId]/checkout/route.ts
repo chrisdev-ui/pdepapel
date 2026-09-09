@@ -16,6 +16,8 @@ import { generateBoldCheckoutData } from "@/lib/bold";
 import { getColombiaDate } from "@/lib/date-utils";
 import { getProductsPrices } from "@/lib/discount-engine";
 import prismadb from "@/lib/prismadb";
+import { verifyEarlyAccessToken } from "@/lib/early-access";
+import { formatAvailableAt, isComingSoon } from "@/lib/product-availability";
 import {
   CACHE_HEADERS,
   checkIfStoreOwner,
@@ -108,6 +110,7 @@ export async function POST(
       guestId,
       payment,
       couponCode,
+      earlyAccessToken,
       subtotal,
       total,
       // ⭐ New fields
@@ -409,12 +412,22 @@ export async function POST(
       requested: number;
     }[] = [];
 
+    const hasEarlyAccess = Boolean(
+      verifyEarlyAccessToken(params.storeId, typeof earlyAccessToken === "string" ? earlyAccessToken : null),
+    );
+
     products.forEach((product) => {
       const requiredQuantity = neededQuantities[product.id];
 
       if (!product || product.isArchived) {
         throw ErrorFactory.InvalidRequest(
           `El producto "${product?.name || "Desconocido"}" no está disponible`,
+        );
+      }
+
+      if (isComingSoon(product) && !hasEarlyAccess) {
+        throw ErrorFactory.InvalidRequest(
+          `"${product.name}" llega el ${formatAvailableAt(product.availableAt!)}; aún no se puede comprar`,
         );
       }
 

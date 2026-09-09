@@ -294,6 +294,14 @@ const config: Config = {
       },
     },
   },
-  plugins: [require("tailwindcss-animate"), require("@tailwindcss/typography")],
+  plugins: [
+    require("tailwindcss-animate"),
+    require("@tailwindcss/typography"),
+    // Hover-only affordances (quick actions, second image) vs. touch screens.
+    require("tailwindcss/plugin")(({ addVariant }: { addVariant: (name: string, definition: string) => void }) => {
+      addVariant("can-hover", "@media (hover: hover) and (pointer: fine)");
+      addVariant("no-hover", "@media (hover: none), (pointer: coarse)");
+    }),
+  ],
 };
 export default config;

@@ -43,7 +43,7 @@ describe("NewsletterForm", () => {
       "cliente@example.com",
     );
     await user.click(
-      screen.getByRole("button", { name: "Quiero recibir novedades" }),
+      screen.getByRole("button", { name: "Suscribirme" }),
     );
 
     expect(
@@ -57,7 +57,7 @@ describe("NewsletterForm", () => {
 
     const input = screen.getByRole("textbox", { name: "Correo electrónico" });
     const button = screen.getByRole("button", {
-      name: "Quiero recibir novedades",
+      name: "Suscribirme",
     });
 
     // Regression: the sr-only label is a sibling inside the field wrapper, so
@@ -89,7 +89,7 @@ describe("NewsletterForm", () => {
       screen.getByRole("checkbox", { name: /Autorizo hasta dos correos/i }),
     );
     await user.click(
-      screen.getByRole("button", { name: "Quiero recibir novedades" }),
+      screen.getByRole("button", { name: "Suscribirme" }),
     );
 
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));

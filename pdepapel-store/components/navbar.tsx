@@ -67,15 +67,15 @@ const Navbar: React.FC<NavbarProps> = ({
           <Link
             href="/"
             aria-label="Papelería P de Papel, inicio"
-            className="relative h-12 w-24 shrink-0"
+            className="flex h-11 w-[7.5rem] shrink-0 items-center"
           >
             <Image
               src={seasonConfig.navbarText}
               alt="Logo Papelería P de Papel"
-              fill
-              sizes="96px"
+              width={120}
+              height={44}
               priority
-              className="object-contain"
+              className="h-11 w-auto max-w-full object-contain"
             />
           </Link>
           <div className="flex w-[124px] items-center justify-end gap-2">
@@ -92,15 +92,15 @@ const Navbar: React.FC<NavbarProps> = ({
           <Link
             href="/"
             aria-label="Papelería P de Papel, inicio"
-            className="relative h-16 w-32 shrink-0"
+            className="relative flex h-14 w-40 shrink-0 items-center"
           >
             <Image
               src={seasonConfig.navbarText}
               alt="Logo Papelería P de Papel con nombre al lado"
-              fill
-              sizes="128px"
+              width={160}
+              height={58}
               priority
-              className="object-contain"
+              className="h-14 w-auto max-w-full object-contain"
             />
             {seasonConfig.logoAccent ? (
               <Image
@@ -137,7 +137,7 @@ const Navbar: React.FC<NavbarProps> = ({
               <Link
                 href={accountAccessPath(STOREFRONT_ROUTES.signIn, pathname)}
                 className="flex items-center gap-2 rounded-md font-sans font-semibold text-blue-yankees transition-opacity hover:opacity-75"
-                aria-label="Iniciar sesión o crear una cuenta"
+                aria-label="Mi cuenta: iniciar sesión o crear una cuenta"
               >
                 <Icons.user className="h-6 w-6" />
                 <span className="hidden xl:inline">Mi cuenta</span>
@@ -169,7 +169,7 @@ const Navbar: React.FC<NavbarProps> = ({
           <li>
             <Link
               href={offersPath}
-              className="text-pink-froly transition-opacity hover:opacity-75"
+              className="text-rose-700 transition-opacity hover:opacity-75"
             >
               Ofertas
             </Link>

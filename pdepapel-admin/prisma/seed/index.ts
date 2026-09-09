@@ -1,11 +1,9 @@
 import { PrismaClient } from "@prisma/client";
 import { clearDB } from "./clear-db";
-import { seedBanners } from "./seed-banners";
-import { seedBillboards } from "./seed-billboards";
 import { seedCategories } from "./seed-categories";
 import { seedColors } from "./seed-colors";
 import { seedDesigns } from "./seed-designs";
-import { seedMainBanner } from "./seed-main-banner";
+import { seedHomeContent } from "./seed-home-content";
 import { seedOrders } from "./seed-orders";
 import { seedPosts } from "./seed-posts";
 import { seedProducts } from "./seed-products";
@@ -30,7 +28,7 @@ async function main() {
   });
   const STORE_ID = store?.id as string;
   await clearDB(STORE_ID, prismadb);
-  await seedBillboards(STORE_ID, prismadb);
+  await seedHomeContent(STORE_ID, prismadb);
   await seedPosts(STORE_ID, prismadb);
   await seedTypes(STORE_ID, prismadb);
   await seedCategories(STORE_ID, prismadb);
@@ -39,8 +37,6 @@ async function main() {
   await seedDesigns(STORE_ID, prismadb);
   await seedSuppliers(STORE_ID, prismadb);
   await seedProducts(STORE_ID, prismadb);
-  await seedMainBanner(STORE_ID, prismadb);
-  await seedBanners(STORE_ID, prismadb);
   await seedReviews(STORE_ID, prismadb);
   await seedCoupons(STORE_ID, prismadb);
   await seedBoxes(prismadb, STORE_ID);

@@ -2,7 +2,6 @@ import million from "million/compiler";
 import "./lib/env.mjs";
 
 const dashboardRoutePairs = [
-  ["billboards", "diapositivas"],
   ["boxes", "cajas"],
   ["business-intelligence", "inteligencia-negocio"],
   ["categories", "categorias"],
@@ -29,7 +28,6 @@ const dashboardRoutePairs = [
 ];
 
 const newDashboardRoutePairs = [
-  ["billboards", "diapositivas"],
   ["boxes", "cajas"],
   ["categories", "categorias"],
   ["colors", "colores"],
@@ -102,18 +100,23 @@ const nextConfig = {
         },
       ]),
       {
-        source: "/:storeId/banners/main/new",
-        destination: "/:storeId/banners/principal/nuevo",
+        source: "/:storeId/(billboards|diapositivas|banners)",
+        destination: "/:storeId/contenido",
         permanent: true,
       },
       {
-        source: "/:storeId/banners/principal/new",
-        destination: "/:storeId/banners/principal/nuevo",
+        source: "/:storeId/(billboards|diapositivas|banners)/:path*",
+        destination: "/:storeId/contenido",
         permanent: true,
       },
       {
-        source: "/:storeId/banners/new",
-        destination: "/:storeId/banners/nuevo",
+        source: "/:storeId/portada",
+        destination: "/:storeId/contenido",
+        permanent: true,
+      },
+      {
+        source: "/:storeId/portada/new",
+        destination: "/:storeId/portada/nuevo",
         permanent: true,
       },
       {
@@ -129,11 +132,6 @@ const nextConfig = {
       {
         source: "/:storeId/products/group/:productGroupId",
         destination: "/:storeId/productos/grupo/:productGroupId",
-        permanent: true,
-      },
-      {
-        source: "/:storeId/banners/main/:mainBannerId",
-        destination: "/:storeId/banners/principal/:mainBannerId",
         permanent: true,
       },
       ...dashboardRoutePairs.flatMap(([sourceSegment, destinationSegment]) => [

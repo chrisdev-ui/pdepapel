@@ -11,26 +11,20 @@ const NewsletterForm = dynamic(
   { ssr: false },
 );
 
-export function DeferredNewsletterForm() {
+export function DeferredNewsletterForm({ source }: { source?: string }) {
   const { ref, inView } = useInView({
     rootMargin: "300px",
     triggerOnce: true,
   });
 
   return (
-    <div
-      ref={ref}
-      className="z-10 min-h-[13rem] w-full sm:min-h-[6.25rem] lg:max-w-xl"
-    >
+    <div ref={ref} className="min-h-[7.5rem] w-full sm:min-h-[5.25rem] lg:max-w-xl">
       {inView ? (
-        <NewsletterForm />
+        <NewsletterForm source={source} />
       ) : (
-        <div
-          aria-hidden="true"
-          className="min-h-[13rem] w-full sm:min-h-[6.25rem]"
-        >
-          <div className="h-24 w-full animate-pulse rounded bg-white/60 sm:h-11" />
-          <div className="mt-3 h-20 w-full animate-pulse rounded bg-white/40 sm:h-11" />
+        <div aria-hidden="true" className="min-h-[7.5rem] w-full sm:min-h-[5.25rem]">
+          <div className="h-11 w-full animate-pulse rounded-full bg-white/60" />
+          <div className="mt-3 h-5 w-full animate-pulse rounded bg-white/40" />
         </div>
       )}
     </div>

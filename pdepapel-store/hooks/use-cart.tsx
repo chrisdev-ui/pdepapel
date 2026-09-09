@@ -3,6 +3,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 import { ToastIcon } from "@/components/ui/toast-icon";
 import { toast } from "@/hooks/use-toast";
+import { isComingSoon } from "@/lib/product-card";
 import { Product } from "@/types";
 
 export type CartMutationResult =
@@ -31,7 +32,7 @@ export const useCart = create(
         const existingItem = currentItems.find((i) => i.id === item.id);
         const requestedQuantity = Math.max(1, Math.floor(quantity));
 
-        if (item.isArchived || item.stock <= 0) {
+        if (item.isArchived || item.stock <= 0 || isComingSoon(item)) {
           return { ok: false, status: "unavailable", item };
         }
 

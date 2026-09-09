@@ -16,10 +16,10 @@ describe("DeferredNewsletterForm", () => {
     const container = rendered.firstElementChild!;
     const placeholder = container.firstElementChild;
 
-    expect(container).toHaveClass("min-h-[13rem]", "sm:min-h-[6.25rem]");
+    expect(container).toHaveClass("min-h-[7.5rem]", "sm:min-h-[5.25rem]");
     expect(placeholder).toHaveClass(
-      "min-h-[13rem]",
-      "sm:min-h-[6.25rem]",
+      "min-h-[7.5rem]",
+      "sm:min-h-[5.25rem]",
     );
     expect(placeholder).toHaveAttribute("aria-hidden", "true");
   });

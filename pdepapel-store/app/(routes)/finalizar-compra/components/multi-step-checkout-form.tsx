@@ -14,6 +14,7 @@ import { NoResults } from "@/components/ui/no-results";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { KAWAII_FACE_SAD, PaymentMethod } from "@/constants";
+import { readEarlyAccessCookie } from "@/lib/early-access";
 import { useCart } from "@/hooks/use-cart";
 import useCheckout from "@/hooks/use-checkout";
 import { useCheckoutStore } from "@/hooks/use-checkout-store";
@@ -162,6 +163,7 @@ const formSchema = z
       .optional()
       .or(z.literal("")),
     couponCode: z.string().optional().or(z.literal("")),
+    newsletterOptIn: z.boolean().default(false),
     paymentMethod: z
       .nativeEnum(PaymentMethod)
       .default(PaymentMethod.BankTransfer),
@@ -185,6 +187,19 @@ const formSchema = z
   });
 
 export type CheckoutFormValue = z.infer<typeof formSchema>;
+
+async function subscribeFromCheckout(email: string) {
+  try {
+    await fetch("/api/newsletter", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, consent: true, source: "pago", company: "" }),
+    });
+  } catch {
+    // La suscripción no bloquea el pedido.
+  }
+}
+
 
 import { Season } from "@/types";
 
@@ -352,6 +367,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
           savedAddressId: "",
           addressLabel: "",
           couponCode: "",
+          newsletterOptIn: false,
           paymentMethod: PaymentMethod.BankTransfer,
           shippingProvider: "ENVIOCLICK",
           shippingOptionType: "ENVIOCLICK",
@@ -387,6 +403,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         savedAddressId: "",
         addressLabel: "",
         couponCode: storedFormData.couponCode ?? "",
+        newsletterOptIn: storedFormData.newsletterOptIn ?? false,
         shippingProvider: storedFormData.shippingProvider ?? "ENVIOCLICK",
         shippingOptionType: storedFormData.shippingOptionType ?? "ENVIOCLICK",
         envioClickIdRate: storedFormData.envioClickIdRate ?? 0,
@@ -742,6 +759,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         trackCustomerEvent("checkout_payment_redirect", {
           payment_type: PaymentMethod.Wompi,
         });
+        if (form.getValues("newsletterOptIn")) void subscribeFromCheckout(form.getValues("email"));
         window.location.href = url;
       }
       // Check for Bold response
@@ -757,6 +775,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
           variant: "success",
         });
 
+        if (form.getValues("newsletterOptIn")) void subscribeFromCheckout(form.getValues("email"));
         cart.removeAll();
         form.reset();
         resetCheckout();
@@ -791,6 +810,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
           description: `Tu orden #${order.id} ha sido creada exitosamente`,
           variant: "success",
         });
+        if (form.getValues("newsletterOptIn")) void subscribeFromCheckout(form.getValues("email"));
         setCompletedOrderPath(orderPath(order.id));
       }
     },
@@ -907,6 +927,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       // and the stored shipping record consistent.
       shipping: freeShipping ? { ...shipping, cost: 0 } : shipping,
       couponCode: couponState.coupon?.code ?? null,
+      earlyAccessToken: readEarlyAccessCookie(),
       subtotal,
       total,
       customOrderToken: customOrder?.token, // Include token for conversion

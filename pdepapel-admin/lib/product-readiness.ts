@@ -3,6 +3,8 @@
  * tienda y en Google Merchant. Puro y testeable.
  */
 
+import { isComingSoon } from "@/lib/product-availability";
+
 export interface ReadinessInput {
   name?: string | null;
   price?: number | null;
@@ -13,6 +15,7 @@ export interface ReadinessInput {
   hasNoProductIdentifier?: boolean | null;
   description?: string | null;
   isKit?: boolean | null;
+  availableAt?: Date | string | null;
 }
 
 export interface ReadinessCheck {
@@ -73,12 +76,13 @@ export function getProductShape(product: { isKit?: boolean | null; productGroupI
   return { id: "individual", label: "Individual" };
 }
 
-export type ProductView = "activos" | "sin-completar" | "sin-identificador" | "stock-critico" | "agotados" | "archivados" | "todos";
+export type ProductView = "activos" | "sin-completar" | "sin-identificador" | "proximamente" | "stock-critico" | "agotados" | "archivados" | "todos";
 
 export const PRODUCT_VIEWS: { id: ProductView; label: string }[] = [
   { id: "activos", label: "Activos" },
   { id: "sin-completar", label: "Sin completar" },
   { id: "sin-identificador", label: "Sin identificador" },
+  { id: "proximamente", label: "Próximamente" },
   { id: "stock-critico", label: "Stock crítico" },
   { id: "agotados", label: "Agotados" },
   { id: "archivados", label: "Archivados" },
@@ -113,6 +117,8 @@ export function productMatchesView(
       return !product.isArchived && !getListReadiness(product).complete;
     case "sin-identificador":
       return !product.isArchived && productLacksIdentifier(product);
+    case "proximamente":
+      return !product.isArchived && isComingSoon(product);
     case "stock-critico":
       return !product.isArchived && product.stock > 0 && product.stock <= lowStockThreshold;
     case "agotados":

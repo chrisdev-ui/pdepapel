@@ -457,7 +457,7 @@
       <p>La lista de productos tiene vistas por lo que necesitan: <strong>Activos</strong>, <strong>Sin completar</strong> (les falta algo para venderse bien), <strong>Sin identificador</strong> (sin GTIN y sin la marca «No tiene identificador global»), <strong>Stock crítico</strong>, <strong>Agotados</strong>, <strong>Archivados</strong> y <strong>Todos</strong>. La columna <strong>Listo para vender</strong> resume qué falta en cada uno.</p>
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/productos" alt="La lista de productos con forma, subcategoría, precio, stock y la columna «Listo para vender»." loading="lazy" width="1440" height="900"></div><figcaption>La lista de productos con forma, subcategoría, precio, stock y la columna «Listo para vender».</figcaption></figure>
       <h3>Acciones en lote</h3>
-      <p>Marca varias filas y usa la barra de selección: <strong>Archivar</strong> (desaparecen de la tienda y responden «no encontrado», conservan historial), <strong>Restaurar</strong>, <strong>Destacar</strong> (salen primero en la portada), <strong>Quitar destacado</strong> y <strong>Marcar sin identificador</strong> (para productos que de verdad no tienen código de barras: quedan marcados «No tiene identificador global», se vacían GTIN y MPN y Google Merchant los acepta así; nunca inventes un GTIN). Los cambios de precio o atributos en masa se hacen en <strong>Gestión masiva</strong>.</p>
+      <p>Marca varias filas y usa la barra de selección: <strong>Archivar</strong> (desaparecen de la tienda y responden «no encontrado», conservan historial), <strong>Restaurar</strong>, <strong>Destacar</strong> (salen primero en la portada), <strong>Quitar destacado</strong>, <strong>Marcar sin identificador</strong> (para productos que de verdad no tienen código de barras: quedan marcados «No tiene identificador global», se vacían GTIN y MPN y Google Merchant los acepta así; nunca inventes un GTIN) y <strong>Marcar próximamente</strong> (eliges la fecha de llegada: la tienda los muestra como «Llega el…» sin botón de compra y las clientas pueden pedir aviso; <strong>Quitar próximamente</strong> los pone a la venta). Los cambios de precio o atributos en masa se hacen en <strong>Gestión masiva</strong>.</p>
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/productos-seleccion" alt="La barra de selección con las acciones en lote de productos." loading="lazy" width="1440" height="900"></div><figcaption>La barra de selección con las acciones en lote de productos.</figcaption></figure>
       <h3>La ficha de un producto</h3>
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/producto-detalle" alt="La ficha: título con insignias, secciones a la derecha para saltar, y la lista «Listo para vender» que dice qué falta." loading="lazy" width="1440" height="900"></div><figcaption>La ficha: título con insignias, secciones a la derecha para saltar, y la lista «Listo para vender» que dice qué falta.</figcaption></figure>
@@ -470,7 +470,7 @@
         <li><strong>Inventario</strong>: la cantidad actual. Los cambios quedan como movimientos auditables.</li>
         <li><strong>Identificadores</strong>: el <strong>SKU</strong> es el código interno que se escanea; el <strong>GTIN</strong> es el código de barras real del fabricante (nunca se inventa); el <strong>MPN</strong> es la referencia del fabricante. Si el producto no tiene GTIN ni MPN, marca «No tiene identificador global».</li>
         <li><strong>Clasificación y atributos</strong>: subcategoría, tamaño, color, diseño y proveedor. Los selectores permiten buscar escribiendo.</li>
-        <li><strong>Visibilidad</strong>: Destacado (aparece en la portada) y Archivado (desaparece de la tienda).</li>
+        <li><strong>Visibilidad</strong>: Destacado (aparece en la portada), Archivado (desaparece de la tienda) y <strong>Disponible desde</strong>: con una fecha futura el producto se ve como «Llega el…» sin botón de compra hasta ese día; vacío se vende ya.</li>
         <li><strong>Descripción</strong>: editor con formato, sin emojis; se muestra en la tienda y en Google.</li>
       </ul>
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/producto-atributos" alt="Clasificación y atributos: los selectores con búsqueda y la muestra de cada color." loading="lazy" width="1440" height="900"></div><figcaption>Clasificación y atributos: los selectores con búsqueda y la muestra de cada color.</figcaption></figure>
@@ -522,9 +522,19 @@
     <!-- 13 -->
     <section class="chapter" id="contenido" style="--dot:#FEA4C3">
       <div class="chapter-head"><span class="area">Catálogo</span><h2>13. Contenido de la tienda</h2></div>
-      <div class="route">Ruta: <code>/contenido</code> · pestañas Portada, Banners, Redes en la tienda</div>
-      <p>Lo que la gente ve al entrar a la tienda. <strong>Portada</strong> son las diapositivas que rotan arriba (imagen horizontal, título y enlace). <strong>Banners</strong> tiene el banner principal (uno solo, con título y dos párrafos) y los banners con enlace repartidos por la tienda. <strong>Redes en la tienda</strong> son las publicaciones de Instagram u otras redes que se muestran en la página.</p>
-      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/contenido" alt="La pestaña Portada con las diapositivas actuales." loading="lazy" width="1440" height="900"></div><figcaption>La pestaña Portada con las diapositivas actuales.</figcaption></figure>
+      <div class="route">Ruta: <code>/contenido</code> · pestañas Portada y Redes en la tienda</div>
+      <p>Lo que la gente ve al entrar a la tienda. <strong>Portada</strong> tiene dos ubicaciones: el <strong>hero</strong> (el primer pantallazo: título, texto, botones e imagen) y el <strong>banner de campaña</strong>, un bloque promocional que solo aparece mientras está vigente. <strong>Redes en la tienda</strong> son las publicaciones de Instagram u otras redes que se muestran en la página.</p>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/contenido" alt="La pestaña Portada con el hero y las campañas." loading="lazy" width="1440" height="900"></div><figcaption>La pestaña Portada con el hero y las campañas, cada una con su estado.</figcaption></figure>
+      <h3>Crear o editar una entrada</h3>
+      <ol class="steps">
+        <li>Pulsa <strong>Nueva entrada</strong> y elige la ubicación: <strong>Hero</strong> o <strong>Banner de campaña</strong>. En una campaña elige también el tipo: temporada, cargamento nuevo, colección u oferta.</li>
+        <li>Escribe la etiqueta corta (opcional), el título y la descripción. En el hero el título es el H1 de la portada: di qué vendes y desde dónde.</li>
+        <li>Pon el texto y el enlace del botón principal (y del secundario si lo quieres). Un enlace puede ser una ruta de la tienda (<code>/tienda</code>) o una URL completa.</li>
+        <li>Sube la imagen (horizontal, sin texto dentro) y escribe su texto alternativo.</li>
+        <li>Define <strong>Desde</strong> y, si aplica, <strong>Hasta</strong>. Al cumplirse la fecha de fin la entrada pasa a <strong>Vencida</strong> sola y desaparece de la tienda.</li>
+      </ol>
+      <p>En un banner de tipo <strong>Cargamento nuevo</strong> puedes elegir hasta tres productos marcados «Próximamente»: la tienda los muestra con la etiqueta «Llega pronto» y el botón pide el correo para el acceso anticipado.</p>
+      <div class="note rule"><strong>Solo hay una entrada en vivo por ubicación</strong><p>Si varias coinciden en fechas, la tienda muestra la de inicio más reciente. Sin hero en vivo, la portada usa el texto por defecto; sin banner de campaña en vivo, esa sección no se muestra.</p></div>
       <p>Cada cambio se refleja en la tienda al guardar. Usa imágenes horizontales y ligeras; el panel muestra la miniatura para comprobar que cargó.</p>
     </section>
 
@@ -567,6 +577,7 @@
       <div class="chapter-head"><span class="area">Marketing</span><h2>16. Boletín</h2></div>
       <div class="route">Ruta: <code>/boletin</code></div>
       <p>Las personas que pidieron novedades desde la tienda. Solo las <strong>confirmadas</strong> (abrieron el correo de confirmación) se pueden exportar para escribirles; el envío del boletín se hace fuera del panel. <strong>Exportar confirmados</strong> descarga la lista y <strong>Dar de baja</strong> retira a alguien que lo pida.</p>
+      <p>Al confirmar, cada suscriptora recibe un <strong>cupón de bienvenida</strong> del 10 % (un solo uso, 30 días) en el correo de bienvenida. Las suscripciones llegan desde la portada, la ficha de un producto «Próximamente» (con el producto de interés), la casilla del pago y el banner de cargamento. Desde un banner de campaña de tipo <strong>Cargamento nuevo</strong> (Contenido de la tienda › Portada) se envían, una sola vez cada uno, el correo de <strong>acceso anticipado</strong> (un enlace firmado para comprar los productos «Próximamente» antes de su fecha) y el aviso de <strong>«Ya llegó»</strong>.</p>
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/boletin" alt="El boletín con sus contadores y la lista de confirmados." loading="lazy" width="1440" height="900"></div><figcaption>El boletín con sus contadores y la lista de confirmados.</figcaption></figure>
     </section>
 

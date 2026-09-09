@@ -5,6 +5,7 @@ import { verifyStoreOwner } from "@/lib/utils";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { Redis } from "@upstash/redis";
 import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
+import { parseAvailableAt } from "@/lib/product-availability";
 
 const RELATION_FIELDS = [
   "categoryId",
@@ -13,6 +14,7 @@ const RELATION_FIELDS = [
   "designId",
 ] as const;
 const FLAG_FIELDS = ["isArchived", "isFeatured", "hasNoProductIdentifier"] as const;
+const DATE_FIELDS = ["availableAt"] as const;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -61,7 +63,8 @@ export async function POST(
 
     const isRelation = RELATION_FIELDS.includes(field);
     const isFlag = FLAG_FIELDS.includes(field);
-    if (!isRelation && !isFlag) {
+    const isDate = DATE_FIELDS.includes(field);
+    if (!isRelation && !isFlag && !isDate) {
       throw ErrorFactory.InvalidRequest("Invalid field for update");
     }
     if (isRelation && (typeof value !== "string" || !value)) {
@@ -71,6 +74,15 @@ export async function POST(
       throw ErrorFactory.InvalidRequest(
         "Archivar, destacar o marcar sin identificador requiere un valor verdadero o falso",
       );
+    }
+
+    let dateValue: Date | null = null;
+    if (isDate) {
+      try {
+        dateValue = parseAvailableAt(value);
+      } catch (error) {
+        throw ErrorFactory.InvalidRequest(error instanceof Error ? error.message : "Fecha inválida");
+      }
     }
 
     const productsToUpdateIds = new Set<string>(productIds || []);
@@ -103,7 +115,7 @@ export async function POST(
         id: { in: finalProductIds },
       },
       data: {
-        [field]: value,
+        [field]: isDate ? dateValue : value,
         // «No tiene identificador global» excluye GTIN y MPN, igual que en la ficha.
         ...(field === "hasNoProductIdentifier" && value === true
           ? { gtin: null, mpn: null }
@@ -114,7 +126,7 @@ export async function POST(
     // Invalidate Cache
     await invalidateProductCache(params.storeId);
     // Archivar o destacar cambia lo que la tienda muestra: refrescar sus páginas.
-    if (isFlag) {
+    if (isFlag || isDate) {
       await triggerStorefrontRevalidation({
         paths: ["/", "/tienda"],
         tags: ["products"],

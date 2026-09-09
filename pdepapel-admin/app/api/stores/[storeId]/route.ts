@@ -215,9 +215,8 @@ export async function DELETE(
         },
       };
 
-      await tx.mainBanner.deleteMany(where);
-      await tx.banner.deleteMany(where);
-      await tx.billboard.deleteMany(where);
+      await tx.homeContentProduct.deleteMany({ where: { homeContent: { storeId: params.storeId } } });
+      await tx.homeContent.deleteMany(where);
       await tx.post.deleteMany(where);
       await tx.review.deleteMany(where);
       await tx.paymentDetails.deleteMany(where);

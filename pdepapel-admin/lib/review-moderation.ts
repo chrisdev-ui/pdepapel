@@ -155,5 +155,5 @@ export async function moderateReview(
 
 /** Rutas de la tienda que cambian cuando se modera una reseña. */
 export function reviewRevalidationPaths(productSlug: string | null | undefined): string[] {
-  return productSlug ? [`/producto/${productSlug}`] : [];
+  return productSlug ? [`/producto/${productSlug}`, "/"] : ["/"];
 }

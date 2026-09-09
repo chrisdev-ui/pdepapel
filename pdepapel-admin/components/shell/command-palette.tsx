@@ -40,7 +40,7 @@ const defaultSearchProducts =
   (storeId: string) =>
   async (query: string): Promise<ProductHit[]> => {
     const response = await fetch(
-      `/api/${storeId}/products?search=${encodeURIComponent(query)}&limit=5&page=1`,
+      `/api/${storeId}/products?search=${encodeURIComponent(query)}&limit=5&page=1&availability=all`,
       { headers: { Accept: "application/json" } },
     );
     if (!response.ok) return [];

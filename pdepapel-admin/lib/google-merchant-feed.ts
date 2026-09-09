@@ -1,3 +1,4 @@
+import { productAvailabilityWhere } from "@/lib/product-availability";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 import type { Prisma } from "@prisma/client";
@@ -75,7 +76,7 @@ export type GoogleMerchantFeedProduct = Prisma.ProductGetPayload<{
 
 export function getGoogleMerchantFeedProductArgs(storeId: string) {
   return {
-    where: { storeId, isArchived: false },
+    where: { storeId, isArchived: false, ...productAvailabilityWhere("available") },
     include: GOOGLE_MERCHANT_FEED_PRODUCT_INCLUDE,
     orderBy: { name: "asc" as const },
   } satisfies Prisma.ProductFindManyArgs;

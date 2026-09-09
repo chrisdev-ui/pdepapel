@@ -14,14 +14,6 @@ export interface SeasonConfig {
   logoAccent?: string;
 }
 
-export interface Billboard {
-  id: string;
-  label: string;
-  imageUrl: string;
-  title: string | null;
-  redirectUrl: string | null;
-}
-
 export interface Type {
   id: string;
   categories: Category[];
@@ -61,6 +53,9 @@ export interface Product {
   gtin?: string | null;
   mpn?: string | null;
   hasNoProductIdentifier?: boolean;
+  /** Fecha desde la que se puede comprar; en el futuro = «Próximamente». */
+  availableAt?: string | null;
+  createdAt?: string;
   quantity?: number;
   updatedAt?: string;
   // Discount fields
@@ -151,19 +146,56 @@ export interface Image {
   isMain: boolean;
 }
 
-export interface MainBanner {
+export type HomeContentPlacement = "HERO" | "CAMPAIGN";
+export type HomeCampaignType = "SEASON" | "SHIPMENT" | "COLLECTION" | "OFFER";
+
+export interface HomeContentProduct {
   id: string;
-  title: string;
-  label1: string;
-  label2: string;
-  highlight: string;
-  imageUrl: string;
-  callToAction: string;
+  name: string;
+  slug: string;
+  price: number;
+  stock: number;
+  imageUrl: string | null;
 }
 
-export interface Banner {
-  imageUrl: string;
-  callToAction: string;
+export interface HomeContent {
+  id: string;
+  placement: HomeContentPlacement;
+  campaignType: HomeCampaignType | null;
+  eyebrow: string | null;
+  title: string;
+  subtitle: string | null;
+  primaryLabel: string | null;
+  primaryUrl: string | null;
+  secondaryLabel: string | null;
+  secondaryUrl: string | null;
+  imageUrl: string | null;
+  imageAlt: string | null;
+  startsAt: string;
+  endsAt: string | null;
+  products: HomeContentProduct[];
+}
+
+export interface LiveHomeContent {
+  hero: HomeContent | null;
+  campaign: HomeContent | null;
+}
+
+export interface HomeReview {
+  id: string;
+  productId: string;
+  name: string;
+  rating: number;
+  comment: string | null;
+  reply: string | null;
+  repliedAt: string | null;
+  createdAt: string;
+  product: { id: string; name: string; slug: string; imageUrl: string | null };
+}
+
+export interface HomeReviewsResponse {
+  reviews: HomeReview[];
+  summary: { average: number | null; count: number };
 }
 
 export interface Review {

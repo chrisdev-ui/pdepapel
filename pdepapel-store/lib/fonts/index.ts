@@ -17,13 +17,13 @@ export const beautifulEveryTime = localFont({
 });
 export const fredoka = Fredoka({
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
+  weight: ["400", "500", "600", "700"],
   display: "swap",
   variable: "--font-fredoka",
 });
 export const quicksand = Quicksand({
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
+  weight: ["400", "500", "600", "700"],
   display: "swap",
   variable: "--font-quicksand",
   preload: false,

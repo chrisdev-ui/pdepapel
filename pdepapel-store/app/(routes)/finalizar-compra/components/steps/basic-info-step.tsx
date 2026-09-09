@@ -5,6 +5,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { UseFormReturn } from "react-hook-form";
@@ -87,6 +88,25 @@ export const BasicInfoStep = ({ form, isLoading }: BasicInfoStepProps) => {
                 />
               </FormControl>
               <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="newsletterOptIn"
+          render={({ field }) => (
+            <FormItem className="flex items-start gap-2 space-y-0">
+              <FormControl>
+                <Checkbox
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  disabled={isLoading}
+                  className="mt-0.5 h-5 w-5 border-blue-yankees bg-white"
+                />
+              </FormControl>
+              <FormLabel className="text-xs font-medium leading-5 text-foreground/80">
+                Quiero enterarme de lo nuevo por correo (máximo dos correos al mes; puedo cancelar cuando quiera).
+              </FormLabel>
             </FormItem>
           )}
         />

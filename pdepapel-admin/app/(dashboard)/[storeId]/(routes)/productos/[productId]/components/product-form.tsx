@@ -36,6 +36,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DateField } from "@/components/ui/date-field";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { DataTable } from "@/components/ui/data-table";
 import {
@@ -61,6 +62,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import { Switch } from "@/components/ui/switch";
+import { availableAtToInput } from "@/lib/product-availability";
 import {
   Tooltip,
   TooltipContent,
@@ -158,6 +160,7 @@ const formSchema = z.object({
   hasNoProductIdentifier: z.boolean().default(false).optional(),
   isFeatured: z.boolean().default(false).optional(),
   isArchived: z.boolean().default(false).optional(),
+  availableAt: z.string().optional(),
   productGroupId: z.string().optional(),
   isKit: z.boolean().default(false).optional(),
   components: z
@@ -278,6 +281,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             gtin: initialData.gtin || "",
             mpn: initialData.mpn || "",
             hasNoProductIdentifier: initialData.hasNoProductIdentifier || false,
+            availableAt: availableAtToInput(initialData.availableAt),
             images: initialData.images.map(
               (image: { url: string }, idx: number) => ({
                 ...image,
@@ -335,6 +339,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             hasNoProductIdentifier: true,
             isFeatured: false,
             isArchived: false,
+            availableAt: "",
             percentageIncrease: INITIAL_PERCENTAGE_INCREASE,
             transportationCost: INITIAL_TRANSPORTATION_COST,
             miscCost: INITIAL_MISC_COST,
@@ -1807,10 +1812,34 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 Visibilidad
               </h2>
               <p className="text-xs text-muted-foreground">
-                Destacado en la portada o archivado (desaparece de la tienda; la
-                URL queda como alias).
+                Destacado en la portada, archivado (desaparece de la tienda; la
+                URL queda como alias) o próximamente (se ve sin botón de compra
+                hasta la fecha).
               </p>
             </div>
+            <FormField
+              control={form.control}
+              name="availableAt"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Disponible desde</FormLabel>
+                  <FormControl>
+                    <DateField
+                      value={field.value ?? ""}
+                      onChange={field.onChange}
+                      clearable
+                      placeholder="Ya disponible"
+                      aria-label="Fecha desde la que se puede comprar"
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Con una fecha futura el producto aparece como «Llega el…»
+                    y las clientas pueden pedir aviso. Vacío: se vende ya.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name="isFeatured"

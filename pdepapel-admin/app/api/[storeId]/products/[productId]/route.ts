@@ -16,6 +16,7 @@ import {
 } from "@/lib/utils";
 import { generateSemanticSKU } from "@/lib/variant-generator";
 import { generateProductSlug } from "@/lib/slugify";
+import { parseAvailableAt } from "@/lib/product-availability";
 import { normalizeProductIdentifiers } from "@/lib/product-identifiers";
 import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import {
@@ -180,6 +181,7 @@ export async function PATCH(
       images,
       isArchived,
       isFeatured,
+      availableAt,
       productGroupId,
       preserveSlug = false,
 
@@ -357,6 +359,7 @@ export async function PATCH(
           ...productIdentifiers,
           isArchived,
           isFeatured,
+          availableAt: parseAvailableAt(availableAt),
           productGroupId: targetProductGroupId,
           description: sanitizedDescription,
           // [NEW] Update Kit info

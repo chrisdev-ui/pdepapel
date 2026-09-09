@@ -6,7 +6,8 @@ export async function clearDB(storeId: string, prismadb: PrismaClient) {
       storeId,
     },
   };
-  await prismadb.billboard.deleteMany(where);
+  await prismadb.homeContentProduct.deleteMany({ where: { homeContent: { storeId } } });
+  await prismadb.homeContent.deleteMany(where);
   await prismadb.post.deleteMany(where);
   await prismadb.orderItem.deleteMany({});
   await prismadb.paymentDetails.deleteMany(where);
@@ -20,7 +21,5 @@ export async function clearDB(storeId: string, prismadb: PrismaClient) {
   await prismadb.type.deleteMany(where);
   await prismadb.supplier.deleteMany(where);
   await prismadb.review.deleteMany(where);
-  await prismadb.mainBanner.deleteMany(where);
-  await prismadb.banner.deleteMany(where);
   console.log("Database cleared successfully!");
 }

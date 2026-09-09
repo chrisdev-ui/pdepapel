@@ -7,7 +7,7 @@ import { getColors } from "@/actions/get-colors";
 import { getDesigns } from "@/actions/get-designs";
 import { getProducts } from "@/actions/get-products";
 import { getTypes } from "@/actions/get-types";
-import Features from "@/components/features";
+import { TrustStrip } from "@/components/trust-strip";
 import Newsletter from "@/components/newsletter";
 import { ShopContent } from "@/components/shop-content";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
@@ -220,7 +220,7 @@ async function ShopContentWrapper({
 export default async function ShopPage({ searchParams }: ShopPageProps) {
   return (
     <>
-      <Features />
+      <TrustStrip />
       <Container className="flex flex-col gap-y-8">
         <Suspense fallback={<ShopContentSkeleton />}>
           <ShopContentWrapper searchParams={searchParams} />

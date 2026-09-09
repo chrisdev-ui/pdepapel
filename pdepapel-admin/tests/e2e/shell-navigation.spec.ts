@@ -97,7 +97,7 @@ test.describe("armazón del panel (rediseño 2026-09)", () => {
       ["resenas", /\/clientes\?tab=resenas$/],
       ["cajas", /\/configuracion\?tab=envios$/],
       ["diapositivas", /\/contenido$/],
-      ["banners", /\/contenido\?tab=banners$/],
+      ["banners", /\/contenido$/],
       ["publicaciones", /\/contenido\?tab=redes$/],
     ];
     for (const [oldPath, target] of redirects) {

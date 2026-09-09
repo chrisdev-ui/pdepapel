@@ -24,6 +24,7 @@ const Reviews = dynamic(
 interface SingleProductPageProps {
   product: Product;
   siblings?: ProductVariant[];
+  earlyAccess?: boolean;
 }
 
 const ReviewsPlaceholder = () => (
@@ -36,6 +37,7 @@ const ReviewsPlaceholder = () => (
 export const SingleProductPage: React.FC<SingleProductPageProps> = ({
   product,
   siblings,
+  earlyAccess = false,
 }) => {
   const [selectedProduct, setSelectedProduct] = useState(product);
   const [isVariantLoading, setIsVariantLoading] = useState(false);
@@ -169,6 +171,7 @@ export const SingleProductPage: React.FC<SingleProductPageProps> = ({
               siblings={variants as ProductVariant[]}
               onVariantChange={selectVariant}
               isLoading={isVariantLoading}
+              earlyAccess={earlyAccess}
             />
           </div>
         </div>

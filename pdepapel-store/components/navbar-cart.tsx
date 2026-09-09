@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetTrigger } from "@/components/ui/sheet";
 import { useCart } from "@/hooks/use-cart";
+import { useCartSheet } from "@/hooks/use-cart-sheet";
 import { cn } from "@/lib/utils";
 
 const NavbarCartContent = dynamic(
@@ -24,7 +25,8 @@ interface NavbarCartProps {
 export const NavbarCart: React.FC<NavbarCartProps> = ({ className }) => {
   const cart = useCart();
   const [isMounted, setIsMounted] = useState(false);
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const isSheetOpen = useCartSheet((state) => state.isOpen);
+  const setIsSheetOpen = useCartSheet((state) => state.setOpen);
 
   useEffect(() => {
     setIsMounted(true);

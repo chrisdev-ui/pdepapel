@@ -1,37 +1,26 @@
-"use client";
-
-import Image from "next/image";
-
 import { DeferredNewsletterForm } from "@/components/deferred-newsletter-form";
-import { Container } from "@/components/ui/container";
 
-const Newsletter: React.FC = () => {
+interface NewsletterProps {
+  source?: string;
+}
+
+/** Franja del pie: incentivo, qué llega al correo y el formulario. */
+export function Newsletter({ source }: NewsletterProps) {
   return (
-    <Container
-      component="section"
-      className="mx-0 my-6 max-w-full p-0 sm:p-0 lg:p-0"
-    >
-      <div className="relative flex w-full flex-wrap items-center justify-between gap-5 overflow-hidden bg-pink-shell px-2 py-10 sm:px-20 xl:gap-0">
-        <Image
-          src="/images/pdp-signup.png"
-          alt="Fondo de la sección de suscripción"
-          fill
-          className="-z-10 object-cover opacity-50"
-          sizes="100vw"
-        />
-        <div className="z-10 max-w-2xl">
-          <h2 className="font-serif text-3xl font-bold text-white">
-            Entérate primero de lo nuevo en P de Papel
+    <section aria-labelledby="newsletter-title" className="bg-pink-shell">
+      <div className="mx-auto flex max-w-screen-2xl flex-col gap-5 px-4 py-7 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:gap-10 lg:px-8">
+        <div className="flex max-w-xl flex-col gap-1.5">
+          <h2 id="newsletter-title" className="text-balance font-serif text-xl font-bold text-blue-yankees sm:text-2xl">
+            Suscríbete y recibe 10 % en tu primera compra
           </h2>
-          <p className="mt-2 font-serif text-sm font-semibold text-blue-yankees">
-            Confirma tu correo para recibir lanzamientos, llegada de mercancía y
-            ofertas especiales. Máximo dos mensajes al mes.
+          <p className="font-sans text-sm text-blue-yankees/90 sm:text-[15px]">
+            Novedades, lanzamientos y ofertas exclusivas, directo a tu correo.
           </p>
         </div>
-        <DeferredNewsletterForm />
+        <DeferredNewsletterForm source={source} />
       </div>
-    </Container>
+    </section>
   );
-};
+}
 
 export default Newsletter;

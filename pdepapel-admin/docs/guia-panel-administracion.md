@@ -179,9 +179,11 @@ Columna «Listo para vender» resume qué falta; la columna GTIN muestra el
 código, «Sin identificador» o «Falta».
 
 Acciones en lote: Archivar (desaparece de la tienda, conserva historial),
-Restaurar, Destacar, Quitar destacado y Marcar sin identificador (para los que
+Restaurar, Destacar, Quitar destacado, Marcar sin identificador (para los que
 de verdad no tienen código de barras: se marcan y se vacían GTIN y MPN; nunca
-se inventa un GTIN). Cambios de precio o atributos en masa: Gestión masiva.
+se inventa un GTIN) y Marcar/Quitar próximamente (fecha de llegada: la tienda
+los muestra «Llega el…» sin botón de compra). Cambios de precio o atributos en
+masa: Gestión masiva.
 
 Ficha por secciones: Imágenes (marca la principal), Modo Kit / Combo (stock
 calculado por componentes), Información básica (nombre 50–65 caracteres, sin
@@ -189,7 +191,7 @@ emojis), Precio y margen, Inventario (cambios auditables), Identificadores
 (**SKU** interno escaneable; **GTIN** código de barras real, nunca inventado;
 **MPN** referencia del fabricante; o «No tiene identificador global»),
 Clasificación y atributos (selectores con búsqueda), Visibilidad (Destacado,
-Archivado), Descripción (editor con formato). La lista «Listo para vender» se
+Archivado, Disponible desde), Descripción (editor con formato). La lista «Listo para vender» se
 pone verde cuando todo está completo; Google Merchant exige imagen, precio e
 identificador.
 
@@ -220,9 +222,16 @@ registran para tributarios con su número.
 
 ## 13. Contenido de la tienda (`/contenido`)
 
-Pestañas Portada (diapositivas), Banners (banner principal único y banners con
-enlace) y Redes en la tienda (publicaciones sociales). Imágenes horizontales y
-ligeras; los cambios se reflejan al guardar.
+Pestañas Portada y Redes en la tienda (publicaciones sociales). Portada tiene
+dos ubicaciones: el hero (primer pantallazo: etiqueta corta, título, texto,
+botones e imagen) y el banner de campaña (temporada, cargamento nuevo,
+colección u oferta), cada entrada con fechas Desde/Hasta y estado En vivo,
+Programada, Vencida o Borrador. Solo hay una entrada en vivo por ubicación (la
+de inicio más reciente); sin hero la portada usa el texto por defecto y sin
+campaña vigente esa sección no se muestra. Un banner «Cargamento nuevo» puede
+llevar hasta tres productos «Próximamente» y pide el correo para el acceso
+anticipado. Imágenes horizontales, sin texto dentro; los cambios se reflejan al
+guardar.
 
 ## 14. Inventario y movimientos (`/inventario`, `/movimientos-inventario`)
 
@@ -242,7 +251,11 @@ vencida gana sobre «activa».
 ## 16. Boletín (`/boletin`)
 
 Solo las confirmadas se exportan («Exportar confirmados»); «Dar de baja»
-retira a quien lo pida. El envío del boletín se hace fuera del panel.
+retira a quien lo pida. Al confirmar, cada suscriptora recibe un cupón de
+bienvenida del 10 % (un uso, 30 días). Desde un banner «Cargamento nuevo»
+(Contenido › Portada) se envían una sola vez el acceso anticipado (enlace
+firmado para comprar lo «Próximamente» antes de su fecha) y el aviso «Ya
+llegó». El boletín general se envía fuera del panel.
 
 ## 17. Rendimiento y tributarios (`/rendimiento`, `/reportes-tributarios`)
 

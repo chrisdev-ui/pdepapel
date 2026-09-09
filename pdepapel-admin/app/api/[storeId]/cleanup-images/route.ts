@@ -22,9 +22,7 @@ export async function GET(
     // 1. Fetch ALL active image URLs from database
     const [
       store,
-      billboards,
-      mainBanner,
-      banners,
+      homeContents,
       categories,
       productImages,
       shippings,
@@ -35,15 +33,7 @@ export async function GET(
         where: { id: params.storeId },
         select: { logoUrl: true, policies: true },
       }),
-      prismadb.billboard.findMany({
-        where: { storeId: params.storeId },
-        select: { imageUrl: true },
-      }),
-      prismadb.mainBanner.findUnique({
-        where: { storeId: params.storeId },
-        select: { imageUrl: true },
-      }),
-      prismadb.banner.findMany({
+      prismadb.homeContent.findMany({
         where: { storeId: params.storeId },
         select: { imageUrl: true },
       }),
@@ -78,9 +68,9 @@ export async function GET(
     const activeUrls = new Set<string>();
 
     if (store?.logoUrl) activeUrls.add(store.logoUrl);
-    if (mainBanner?.imageUrl) activeUrls.add(mainBanner.imageUrl);
-    billboards.forEach((b) => activeUrls.add(b.imageUrl));
-    banners.forEach((b) => activeUrls.add(b.imageUrl));
+    homeContents.forEach((entry) => {
+      if (entry.imageUrl) activeUrls.add(entry.imageUrl);
+    });
     categories.forEach((category) => {
       if (category.imageUrl) activeUrls.add(category.imageUrl);
     });

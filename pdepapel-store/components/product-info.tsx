@@ -1,6 +1,8 @@
 "use client";
 
 import { KitContents } from "./kit-contents";
+import { NotifyMeForm } from "@/components/notify-me-form";
+import { formatArrivalDate, isComingSoon } from "@/lib/product-card";
 
 import { Award, Heart, ShieldCheck, ShoppingCart, Truck } from "lucide-react";
 
@@ -11,6 +13,7 @@ import { QuantitySelector } from "@/components/ui/quantity-selector";
 import { Separator } from "@/components/ui/separator";
 import { StarRating } from "@/components/ui/star-rating";
 import { useCart } from "@/hooks/use-cart";
+import { useCartSheet } from "@/hooks/use-cart-sheet";
 import { toast } from "@/hooks/use-toast";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { productPath } from "@/lib/routes";
@@ -37,6 +40,8 @@ interface ProductInfoProps {
   reviewsRef?: RefObject<HTMLDivElement | null>;
   onVariantChange?: (variant: Product | ProductVariant) => void;
   isLoading?: boolean;
+  /** Cookie de acceso anticipado: deja comprar productos «Próximamente». */
+  earlyAccess?: boolean;
 }
 
 export const ProductInfo: React.FC<ProductInfoProps> = ({
@@ -48,10 +53,12 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
   reviewsRef,
   onVariantChange,
   isLoading = false,
+  earlyAccess = false,
 }) => {
   const [quantity, setQuantity] = useState<number>();
   const cart = useCart();
-  const { showCartPreview } = useCartPreview();
+  const { markCartTouched } = useCartPreview();
+  const openCartSheet = useCartSheet((state) => state.open);
   const router = useRouter();
 
   const goToReviews = () => {
@@ -175,7 +182,8 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
   };
 
   const productInCart = cart.items.find((item) => item.id === data.id);
-  const isUnavailable = Boolean(data.isArchived || data.stock === 0);
+  const comingSoon = isComingSoon(data) && !earlyAccess;
+  const isUnavailable = Boolean(data.isArchived || data.stock === 0 || comingSoon);
 
   const handleAddToCart = () => {
     if (isUnavailable) return;
@@ -203,12 +211,9 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
       source: "product_detail",
       value: getAnalyticsValue([item]),
     });
-    showCartPreview({
-      product: result.item,
-      quantity: result.item.quantity ?? requestedQuantity,
-      source: "product_detail",
-    });
+    markCartTouched();
     onAddedToCart?.();
+    openCartSheet(result.item.id);
   };
 
   const wishlist = useWishlist();
@@ -453,7 +458,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
           </p>
         )}
 
-        {!data.isArchived && (
+        {!data.isArchived && !comingSoon && (
           <div className="flex items-center gap-x-4">
             <h3 className="font-sans font-semibold">Cantidad:</h3>
             <div>
@@ -470,7 +475,12 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
           </div>
         )}
       </div>
-      <div className="mt-10 flex flex-wrap items-center gap-x-3 gap-y-4 sm:gap-y-0">
+      {comingSoon && (
+        <div className="mt-8">
+          <NotifyMeForm productId={data.id} arrivalLabel={data.availableAt ? `Llega el ${formatArrivalDate(data.availableAt)}` : null} />
+        </div>
+      )}
+      <div className={cn("mt-10 flex flex-wrap items-center gap-x-3 gap-y-4 sm:gap-y-0", comingSoon && "mt-4")}>
         <Button
           disabled={isUnavailable || isLoading}
           className="min-h-11 flex gap-2 rounded-full border-none bg-blue-yankees px-8 py-4 font-sans text-sm font-semibold text-white outline-none [transition:0.2s]"
@@ -480,7 +490,9 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
             ? "Actualizando opción…"
             : data.isArchived
               ? "No disponible"
-              : "Agregar al carrito"}
+              : comingSoon
+                ? "Llega pronto"
+                : "Agregar al carrito"}
           {!isLoading && (
             <ShoppingCart aria-hidden="true" className="h-5 w-5" />
           )}

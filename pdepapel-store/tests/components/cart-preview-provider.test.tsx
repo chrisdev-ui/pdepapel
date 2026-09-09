@@ -107,7 +107,7 @@ describe("CartPreviewProvider", () => {
       name: "Producto agregado al carrito",
     });
     expect(preview).toHaveClass(
-      "bottom-[calc(env(safe-area-inset-bottom)+6.5rem)]",
+      "bottom-[calc(env(safe-area-inset-bottom)+5.5rem)]",
       "lg:top-[9.5rem]",
       "z-[60]",
       "overscroll-contain",
@@ -135,21 +135,30 @@ describe("CartPreviewProvider", () => {
     ).toHaveClass("lg:top-[6.5rem]");
   });
 
-  it("dismisses automatically after eight seconds", () => {
+  it("stays until the visitor scrolls away instead of closing on a timer", () => {
     vi.useFakeTimers();
-    render(
+    scrollPositionMock = 0;
+    const { rerender } = render(
       <CartPreviewProvider>
         <Trigger />
       </CartPreviewProvider>,
     );
     fireEvent.click(screen.getByRole("button", { name: "Agregar" }));
 
-    act(() => vi.advanceTimersByTime(8_000));
+    act(() => vi.advanceTimersByTime(30_000));
+    expect(screen.getByLabelText("Producto agregado al carrito")).toBeInTheDocument();
+
+    scrollPositionMock = 400;
+    rerender(
+      <CartPreviewProvider>
+        <Trigger />
+      </CartPreviewProvider>,
+    );
 
     expect(screen.queryByLabelText("Producto agregado al carrito")).toBeNull();
     expect(analyticsMock).toHaveBeenCalledWith("cart_preview_dismiss", {
       presentation: "full",
-      reason: "auto",
+      reason: "scroll",
       source: "product_detail",
     });
   });

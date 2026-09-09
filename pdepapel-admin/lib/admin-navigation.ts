@@ -179,7 +179,6 @@ export const NAV_GROUPS: NavGroup[] = [
         segment: "contenido",
         children: [
           { label: "Portada", segment: "contenido" },
-          { label: "Banners", segment: "contenido?tab=banners" },
           { label: "Redes en la tienda", segment: "contenido?tab=redes" },
         ],
       },
@@ -326,9 +325,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   disenos: "Diseños",
   proveedores: "Proveedores",
   contenido: "Contenido de la tienda",
-  diapositivas: "Portada",
-  banners: "Banners",
-  principal: "Banner principal",
+  portada: "Portada",
   publicaciones: "Redes en la tienda",
   inventario: "Inventario",
   "stock-bajo": "Stock bajo",

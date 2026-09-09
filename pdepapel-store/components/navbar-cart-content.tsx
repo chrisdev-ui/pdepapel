@@ -1,6 +1,6 @@
 "use client";
 
-import { CreditCard, ShoppingBag, ShoppingCart, X } from "lucide-react";
+import { Check, CreditCard, ShoppingBag, ShoppingCart, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef } from "react";
 
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/sheet";
 import { KAWAII_FACE_SAD } from "@/constants";
 import { useCart } from "@/hooks/use-cart";
+import { useCartSheet } from "@/hooks/use-cart-sheet";
 import { productPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import { toAnalyticsItem, trackCustomerEvent } from "@/lib/customer-analytics";
 import { getCustomerFacingProductOptions } from "@/lib/product-options";
@@ -32,6 +33,7 @@ export const NavbarCartContent: React.FC<NavbarCartContentProps> = ({
   const cart = useCart();
   const router = useRouter();
   const hasTrackedCartViewRef = useRef(false);
+  const highlightId = useCartSheet((state) => state.highlightId);
   const { total } = useMemo(
     () => calculateTotals(cart.items, null),
     [cart.items],
@@ -79,6 +81,12 @@ export const NavbarCartContent: React.FC<NavbarCartContentProps> = ({
       <SheetDescription className="sr-only">
         Resumen de tu carrito de compras
       </SheetDescription>
+      {highlightId && (
+        <p role="status" className="flex shrink-0 items-center gap-2 bg-emerald-50 px-4 py-2.5 font-sans text-sm font-semibold text-emerald-700 sm:px-6">
+          <Check aria-hidden="true" className="h-4 w-4" />
+          Agregado al carrito
+        </p>
+      )}
       <div className="flex min-h-0 flex-1 flex-col justify-between overflow-y-auto overflow-x-hidden overscroll-contain px-4 py-5 sm:px-6">
         <div className="flex w-full flex-col gap-5">
           {cart.items.length === 0 && (

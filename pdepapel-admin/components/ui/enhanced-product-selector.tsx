@@ -68,7 +68,7 @@ export function EnhancedProductSelector({
     if (!open) return null; // Don't fetch if closed
     if (previousPageData && !previousPageData.products?.length) return null; // reached the end
     // Page is 1-based in API
-    return `/api/${params.storeId}/products?search=${debouncedSearch}&limit=20&isArchived=false&page=${pageIndex + 1}&fromShop=true&skipCache=true`;
+    return `/api/${params.storeId}/products?search=${debouncedSearch}&limit=20&isArchived=false&availability=all&page=${pageIndex + 1}&fromShop=true&skipCache=true`;
   };
 
   const { data, size, setSize, isLoading, isValidating, mutate } =

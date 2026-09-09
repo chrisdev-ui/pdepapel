@@ -20,6 +20,7 @@ export async function getProducts(storeId: string) {
       color: true,
       isArchived: true,
       isFeatured: true,
+      availableAt: true,
       productGroupId: true,
       isKit: true,
       kitComponents: {

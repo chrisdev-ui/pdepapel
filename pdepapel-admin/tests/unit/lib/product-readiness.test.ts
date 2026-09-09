@@ -38,6 +38,8 @@ describe("product readiness", () => {
     expect(productMatchesView(base, "sin-completar")).toBe(false);
     expect(productMatchesView({ ...base, isArchived: true }, "activos")).toBe(false);
     expect(productMatchesView({ ...base, isArchived: true }, "archivados")).toBe(true);
+    expect(productMatchesView({ ...base, availableAt: "2999-01-01T05:00:00.000Z" }, "proximamente")).toBe(true);
+    expect(productMatchesView(base, "proximamente")).toBe(false);
   });
 
   it("lists products without a GTIN and without the no-identifier flag", () => {

@@ -25,7 +25,7 @@ export const Footer: React.FC<FooterProps> = ({ season = Season.Default }) => {
             aria-label="Ir al inicio de Papelería P de Papel"
             className="flex w-fit rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-shell focus-visible:ring-offset-2"
           >
-            <div className="relative h-24 w-56 sm:h-28 sm:w-64">
+            <div className="relative h-20 w-56 sm:h-24 sm:w-64">
               <Image
                 src={seasonConfig.navbarText}
                 alt="Logo Papelería P de Papel con nombre al lado"

@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, ArchiveRestore, Barcode, ScanBarcode, Star, StarOff } from "lucide-react";
+import { Archive, ArchiveRestore, Barcode, CalendarClock, CalendarX2, ScanBarcode, Star, StarOff } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import type { Table } from "@tanstack/react-table";
@@ -17,18 +17,20 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { DateField } from "@/components/ui/date-field";
 import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
+import { isComingSoon } from "@/lib/product-availability";
 import { productLacksIdentifier } from "@/lib/product-readiness";
 
 import type { ProductColumn } from "./columns";
 
-type BulkField = "isArchived" | "isFeatured" | "hasNoProductIdentifier";
+type BulkField = "isArchived" | "isFeatured" | "hasNoProductIdentifier" | "availableAt";
 
 interface PendingAction {
   field: BulkField;
-  value: boolean;
+  value: boolean | string | null;
   label: string;
   description: string;
 }
@@ -82,27 +84,49 @@ const ACTIONS: Array<PendingAction & { icon: typeof Archive; show: (rows: Produc
     icon: ScanBarcode,
     show: (rows) => rows.some((row) => row.hasNoProductIdentifier),
   },
+  {
+    field: "availableAt",
+    value: "",
+    label: "Marcar próximamente",
+    description: "Los productos se ven en la tienda como «Llega el…» sin botón de compra hasta la fecha que elijas. Úsalo para el cargamento que viene.",
+    icon: CalendarClock,
+    show: (rows) => rows.some((row) => !isComingSoon(row)),
+  },
+  {
+    field: "availableAt",
+    value: null,
+    label: "Quitar próximamente",
+    description: "Los productos vuelven a venderse desde ya con su stock actual.",
+    icon: CalendarX2,
+    show: (rows) => rows.some((row) => isComingSoon(row)),
+  },
 ];
 
-/** Acciones en lote del listado de productos: archivar, restaurar, destacar. Cambios de atributo siguen en Gestión masiva. */
 export function ProductBulkActions({ table }: { table: Table<ProductColumn> }) {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
   const [pending, setPending] = useState<PendingAction | null>(null);
+  const [date, setDate] = useState("");
   const [loading, setLoading] = useState(false);
 
   const selected = table.getFilteredSelectedRowModel().rows.map((row) => row.original);
   if (selected.length === 0) return null;
 
+  const needsDate = pending?.field === "availableAt" && pending.value !== null;
+
   const run = async () => {
     if (!pending) return;
+    if (needsDate && !date) {
+      toast({ description: "Elige la fecha de llegada", variant: "destructive" });
+      return;
+    }
     try {
       setLoading(true);
       const response = await axios.post<{ message: string }>(`/api/${params.storeId}/${Models.Products}/bulk-update`, {
         productIds: selected.map((product) => product.id),
         field: pending.field,
-        value: pending.value,
+        value: needsDate ? date : pending.value,
       });
       toast({ title: `${pending.label}: listo`, description: response.data.message, variant: "success" });
       table.resetRowSelection();
@@ -119,7 +143,7 @@ export function ProductBulkActions({ table }: { table: Table<ProductColumn> }) {
     <>
       <div className="flex flex-wrap items-center gap-2">
         {ACTIONS.filter((action) => action.show(selected)).map((action) => (
-          <Button key={`${action.field}-${action.value}`} type="button" variant="ghost" size="sm" onClick={() => setPending(action)} disabled={loading}>
+          <Button key={`${action.field}-${String(action.value)}`} type="button" variant="ghost" size="sm" onClick={() => { setDate(""); setPending(action); }} disabled={loading}>
             <action.icon className="mr-2 h-4 w-4" aria-hidden="true" />
             {action.label}
           </Button>
@@ -133,6 +157,9 @@ export function ProductBulkActions({ table }: { table: Table<ProductColumn> }) {
             </AlertDialogTitle>
             <AlertDialogDescription>{pending?.description}</AlertDialogDescription>
           </AlertDialogHeader>
+          {needsDate && (
+            <DateField value={date} onChange={setDate} aria-label="Fecha de llegada" placeholder="¿Cuándo llega?" />
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={loading}>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={run} disabled={loading}>

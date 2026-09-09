@@ -1,5 +1,6 @@
-import { NewsletterSubscriberStatus } from "@prisma/client";
-import { addHours, subMinutes } from "date-fns";
+import { DiscountType, NewsletterSubscriberStatus } from "@prisma/client";
+import { addDays, addHours, subMinutes } from "date-fns";
+import { randomBytes } from "node:crypto";
 import { z } from "zod";
 
 import { NewsletterConfirmation } from "@/emails/newsletter-confirmation";
@@ -19,6 +20,9 @@ export const NEWSLETTER_CONSENT_TEXT =
   "Autorizo a P de Papel a enviarme hasta dos correos al mes con novedades, lanzamientos y ofertas. Puedo cancelar mi suscripción cuando quiera.";
 const CONFIRMATION_COOLDOWN_MINUTES = 5;
 const CONFIRMATION_EXPIRY_HOURS = 48;
+export const NEWSLETTER_WELCOME_DISCOUNT_PERCENT = 10;
+export const NEWSLETTER_WELCOME_COUPON_DAYS = 30;
+const WELCOME_COUPON_PREFIX = "BIENVENIDA";
 
 export const newsletterSubscriptionSchema = z.object({
   email: z
@@ -30,6 +34,7 @@ export const newsletterSubscriptionSchema = z.object({
     errorMap: () => ({ message: "Debes autorizar el envío de novedades" }),
   }),
   source: z.string().trim().max(120).optional(),
+  productId: z.string().trim().max(64).optional(),
   company: z.string().max(0).optional(),
 });
 
@@ -65,6 +70,7 @@ async function sendWelcomeEmail(
   storeId: string,
   email: string,
   unsubscribeToken: string,
+  coupon: { code: string; endDate: Date } | null,
 ) {
   if (env.NODE_ENV === "development") return;
 
@@ -80,8 +86,21 @@ async function sendWelcomeEmail(
     from: "P de Papel <novedades@papeleriapdepapel.com>",
     to: [email],
     subject: "Tu suscripción a P de Papel está lista",
-    react: NewsletterWelcome({ shopUrl, unsubscribeUrl }) as React.ReactElement,
-    text: `Tu suscripción está confirmada. Explora la tienda: ${shopUrl}\n\nCancelar suscripción: ${unsubscribeUrl}`,
+    react: NewsletterWelcome({
+      shopUrl,
+      unsubscribeUrl,
+      couponCode: coupon?.code ?? null,
+      couponPercent: NEWSLETTER_WELCOME_DISCOUNT_PERCENT,
+      couponEndsAt: coupon?.endDate ?? null,
+    }) as React.ReactElement,
+    text: [
+      "Tu suscripción está confirmada.",
+      coupon ? `Tu código de ${NEWSLETTER_WELCOME_DISCOUNT_PERCENT} % en tu primera compra: ${coupon.code} (vence el ${formatEmailDate(coupon.endDate)}).` : null,
+      `Explora la tienda: ${shopUrl}`,
+      `Cancelar suscripción: ${unsubscribeUrl}`,
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
     headers: {
       "List-Unsubscribe": `<${oneClickUnsubscribeUrl}>`,
       "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
@@ -91,10 +110,51 @@ async function sendWelcomeEmail(
   if (error) throw new Error(error.message);
 }
 
+export function formatEmailDate(value: Date): string {
+  return new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "long", timeZone: "America/Bogota" }).format(value);
+}
+
+function welcomeCouponCode(): string {
+  return `${WELCOME_COUPON_PREFIX}-${randomBytes(3).toString("hex").toUpperCase()}`;
+}
+
+async function issueWelcomeCoupon(storeId: string, subscriberId: string) {
+  const now = new Date();
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      return await prismadb.$transaction(async (tx) => {
+        const coupon = await tx.coupon.create({
+          data: {
+            storeId,
+            code: welcomeCouponCode(),
+            type: DiscountType.PERCENTAGE,
+            amount: NEWSLETTER_WELCOME_DISCOUNT_PERCENT,
+            startDate: now,
+            endDate: addDays(now, NEWSLETTER_WELCOME_COUPON_DAYS),
+            maxUses: 1,
+            minOrderValue: 0,
+          },
+          select: { id: true, code: true, endDate: true },
+        });
+        await tx.newsletterSubscriber.update({
+          where: { id: subscriberId },
+          data: { welcomeCouponId: coupon.id },
+        });
+        return coupon;
+      });
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (code !== "P2002" || attempt === 4) throw error;
+    }
+  }
+  return null;
+}
+
 export async function requestNewsletterSubscription(input: {
   storeId: string;
   email: string;
   source?: string;
+  interestProductId?: string | null;
 }) {
   const emailNormalized = normalizeNewsletterEmail(input.email);
   const existing = await prismadb.newsletterSubscriber.findUnique({
@@ -121,6 +181,7 @@ export async function requestNewsletterSubscription(input: {
       email: input.email.trim(),
       emailNormalized,
       source: normalizeNewsletterSource(input.source),
+      interestProductId: input.interestProductId ?? null,
       consentText: NEWSLETTER_CONSENT_TEXT,
       consentVersion: NEWSLETTER_CONSENT_VERSION,
       consentedAt: now,
@@ -128,6 +189,7 @@ export async function requestNewsletterSubscription(input: {
     update: {
       email: input.email.trim(),
       source: normalizeNewsletterSource(input.source),
+      ...(input.interestProductId ? { interestProductId: input.interestProductId } : {}),
       consentText: NEWSLETTER_CONSENT_TEXT,
       consentVersion: NEWSLETTER_CONSENT_VERSION,
       consentedAt: now,
@@ -222,11 +284,21 @@ export async function confirmNewsletterSubscription(
 
   if (confirmed.count === 0) return { status: "invalid" as const };
 
+  let coupon: { code: string; endDate: Date } | null = null;
+  if (!subscriber.welcomeCouponId) {
+    try {
+      coupon = await issueWelcomeCoupon(subscriber.storeId, subscriber.id);
+    } catch (error) {
+      console.error("[NEWSLETTER_WELCOME_COUPON]", error);
+    }
+  }
+
   try {
     await sendWelcomeEmail(
       subscriber.storeId,
       subscriber.email,
       unsubscribeToken,
+      coupon,
     );
   } catch (error) {
     await prismadb.newsletterSubscriber.updateMany({
@@ -264,6 +336,28 @@ export async function unsubscribeFromNewsletter(
     },
   });
 
+  return { status: "unsubscribed" as const };
+}
+
+export async function unsubscribeNewsletterByHash(storeId: string, hash: string) {
+  if (!/^[a-f0-9]{64}$/.test(hash)) return { status: "invalid" as const };
+  const subscriber = await prismadb.newsletterSubscriber.findFirst({
+    where: { storeId, unsubscribeTokenHash: hash },
+    select: { id: true, status: true },
+  });
+  if (!subscriber) return { status: "invalid" as const };
+  if (subscriber.status === NewsletterSubscriberStatus.UNSUBSCRIBED) {
+    return { status: "unsubscribed" as const };
+  }
+  await prismadb.newsletterSubscriber.update({
+    where: { id: subscriber.id },
+    data: {
+      status: NewsletterSubscriberStatus.UNSUBSCRIBED,
+      unsubscribedAt: new Date(),
+      confirmationTokenHash: null,
+      confirmationExpiresAt: null,
+    },
+  });
   return { status: "unsubscribed" as const };
 }
 

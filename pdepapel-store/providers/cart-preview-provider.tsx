@@ -13,10 +13,12 @@ import {
 
 import { CldImage } from "@/components/ui/CldImage";
 import { Button } from "@/components/ui/button";
+import { useCart } from "@/hooks/use-cart";
 import { useScrollPosition } from "@/hooks/use-scroll-position";
+import { markCartTouched } from "@/lib/cart-session";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { trackCustomerEvent } from "@/lib/customer-analytics";
-import { cn, currencyFormatter } from "@/lib/utils";
+import { calculateTotals, cn, currencyFormatter } from "@/lib/utils";
 import { Product } from "@/types";
 
 type CartPreviewSource = "product_card" | "product_detail";
@@ -29,19 +31,21 @@ type CartPreviewInput = {
 
 type CartPreviewContextValue = {
   showCartPreview: (input: CartPreviewInput) => void;
+  markCartTouched: () => void;
 };
 
 type CartPreviewPresentation = "full" | "compact";
 
 type CartPreviewState = CartPreviewInput & {
   presentation: CartPreviewPresentation;
+  scrollAt: number;
 };
 
-type CartPreviewDismissReason = "action" | "auto" | "manual";
+type CartPreviewDismissReason = "action" | "scroll" | "manual";
 
 const CartPreviewContext = createContext<CartPreviewContextValue | null>(null);
-const AUTO_DISMISS_MS = 8_000;
 const RAPID_ADD_WINDOW_MS = 20_000;
+const SCROLL_DISMISS_PX = 160;
 const MOBILE_VIEWPORT_QUERY = "(max-width: 639px)";
 
 function isMobileViewport() {
@@ -52,6 +56,10 @@ function isMobileViewport() {
   return window.innerWidth < 640;
 }
 
+/**
+ * Confirmación no modal al agregar desde una tarjeta. Se queda hasta que la
+ * clienta la cierra, actúa o se desplaza; nunca se cierra sola por tiempo.
+ */
 export function CartPreviewProvider({
   children,
 }: {
@@ -59,38 +67,23 @@ export function CartPreviewProvider({
 }) {
   const [preview, setPreview] = useState<CartPreviewState | null>(null);
   const scrollPosition = useScrollPosition();
+  const cartItems = useCart((state) => state.items);
   const previewRef = useRef<CartPreviewState | null>(null);
   const lastShownAtRef = useRef<number | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const clearTimer = useCallback(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = null;
+  const dismiss = useCallback((reason: CartPreviewDismissReason) => {
+    const currentPreview = previewRef.current;
+    previewRef.current = null;
+    setPreview(null);
+
+    if (currentPreview && reason !== "action") {
+      trackCustomerEvent("cart_preview_dismiss", {
+        presentation: currentPreview.presentation,
+        reason,
+        source: currentPreview.source,
+      });
+    }
   }, []);
-
-  const dismiss = useCallback(
-    (reason: CartPreviewDismissReason) => {
-      const currentPreview = previewRef.current;
-      clearTimer();
-      previewRef.current = null;
-      setPreview(null);
-
-      if (currentPreview && reason !== "action") {
-        trackCustomerEvent("cart_preview_dismiss", {
-          presentation: currentPreview.presentation,
-          reason,
-          source: currentPreview.source,
-        });
-      }
-    },
-    [clearTimer],
-  );
-
-  const scheduleDismiss = useCallback(() => {
-    if (!previewRef.current) return;
-    clearTimer();
-    timerRef.current = setTimeout(() => dismiss("auto"), AUTO_DISMISS_MS);
-  }, [clearTimer, dismiss]);
 
   const showCartPreview = useCallback(
     (input: CartPreviewInput) => {
@@ -104,21 +97,27 @@ export function CartPreviewProvider({
         elapsedSinceLastPreview <= RAPID_ADD_WINDOW_MS
           ? "compact"
           : "full";
-      const nextPreview = { ...input, presentation };
+      const nextPreview = { ...input, presentation, scrollAt: scrollPosition };
 
       lastShownAtRef.current = now;
       previewRef.current = nextPreview;
       setPreview(nextPreview);
-      scheduleDismiss();
+      markCartTouched();
       trackCustomerEvent("cart_preview_view", {
         presentation,
         source: input.source,
       });
     },
-    [scheduleDismiss],
+    [scrollPosition],
   );
 
-  useEffect(() => clearTimer, [clearTimer]);
+  useEffect(() => {
+    const current = previewRef.current;
+    if (!current) return;
+    if (Math.abs(scrollPosition - current.scrollAt) >= SCROLL_DISMISS_PX) {
+      dismiss("scroll");
+    }
+  }, [dismiss, scrollPosition]);
 
   const handleAction = useCallback(
     (action: "checkout" | "view_cart") => {
@@ -138,29 +137,23 @@ export function CartPreviewProvider({
   const image =
     preview?.product.images.find((item) => item.isMain) ??
     preview?.product.images[0];
+  const itemCount = cartItems.reduce((total, item) => total + Number(item.quantity ?? 1), 0);
+  const subtotal = calculateTotals(cartItems, null).total;
 
   return (
-    <CartPreviewContext.Provider value={{ showCartPreview }}>
+    <CartPreviewContext.Provider value={{ showCartPreview, markCartTouched }}>
       {children}
       {preview && (
         <aside
           aria-label="Producto agregado al carrito"
           data-presentation={preview.presentation}
           className={cn(
-            "fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+6.5rem)] z-[60] max-h-[calc(100dvh-env(safe-area-inset-bottom)-7.5rem)] overflow-y-auto overscroll-contain rounded-2xl border border-blue-baby bg-white shadow-2xl sm:inset-x-auto sm:bottom-auto sm:right-6 sm:top-32 sm:max-h-[calc(100dvh-9rem)] sm:w-[390px] sm:p-4",
+            "fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-[60] max-h-[calc(100dvh-env(safe-area-inset-bottom)-7.5rem)] overflow-y-auto overscroll-contain rounded-2xl border border-blue-baby bg-white shadow-2xl sm:inset-x-auto sm:bottom-auto sm:right-6 sm:top-32 sm:max-h-[calc(100dvh-9rem)] sm:w-[390px] sm:p-4",
             scrollPosition > 120
               ? "lg:top-[6.5rem] lg:max-h-[calc(100dvh-7.5rem)]"
               : "lg:top-[9.5rem] lg:max-h-[calc(100dvh-10.5rem)]",
             preview.presentation === "compact" ? "p-3" : "p-4",
           )}
-          onMouseEnter={clearTimer}
-          onMouseLeave={scheduleDismiss}
-          onFocusCapture={clearTimer}
-          onBlurCapture={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget)) {
-              scheduleDismiss();
-            }
-          }}
         >
           <p role="status" className="sr-only">
             {preview.product.name} se agregó al carrito.
@@ -182,7 +175,7 @@ export function CartPreviewProvider({
                   {preview.product.name}
                 </p>
                 <p className="mt-0.5 text-xs text-gray-600">
-                  Cantidad: {preview.quantity} ·{" "}
+                  {itemCount} {itemCount === 1 ? "producto" : "productos"} · {currencyFormatter.format(subtotal)} ·{" "}
                   <span className="font-semibold text-blue-yankees underline decoration-blue-purple/60 underline-offset-2 group-hover:decoration-blue-yankees">
                     Ver carrito
                   </span>
@@ -241,7 +234,13 @@ export function CartPreviewProvider({
                   </p>
                 </div>
               </div>
-              <div className="mt-4 grid grid-cols-1 gap-2 xxs:grid-cols-2">
+              <p className="mt-3 flex items-center justify-between border-t border-gray-100 pt-3 text-xs text-gray-600">
+                <span>
+                  {itemCount} {itemCount === 1 ? "producto" : "productos"} en el carrito
+                </span>
+                <strong className="font-quicksand text-sm text-blue-yankees">{currencyFormatter.format(subtotal)}</strong>
+              </p>
+              <div className="mt-3 grid grid-cols-1 gap-2 xxs:grid-cols-2">
                 <Button
                   asChild
                   variant="outline"

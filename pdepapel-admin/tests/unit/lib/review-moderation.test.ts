@@ -73,7 +73,7 @@ describe("public review shape", () => {
   });
 
   it("revalidates the product page when the slug is known", () => {
-    expect(reviewRevalidationPaths("agenda-kawaii")).toEqual(["/producto/agenda-kawaii"]);
-    expect(reviewRevalidationPaths(null)).toEqual([]);
+    expect(reviewRevalidationPaths("agenda-kawaii")).toEqual(["/producto/agenda-kawaii", "/"]);
+    expect(reviewRevalidationPaths(null)).toEqual(["/"]);
   });
 });

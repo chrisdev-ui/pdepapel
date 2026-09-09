@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import type { ProductShape, Readiness } from "@/lib/product-readiness";
+import { formatAvailableAt, isComingSoon } from "@/lib/product-availability";
 import { cn } from "@/lib/utils";
 
 const TONES: Record<string, string> = { mint: "bg-tint-mint", cream: "bg-tint-cream", sky: "bg-tint-sky", slate: "bg-muted", pink: "bg-tint-pink", lavender: "bg-tint-lavender" };
@@ -22,8 +23,9 @@ export function ReadinessBadge({ readiness }: { readiness: Readiness }) {
   return <ProductTintBadge label={`Faltan ${readiness.total - readiness.done}`} tone="cream" title={`Falta: ${readiness.missing.join(", ")}`} />;
 }
 
-export function StockBadge({ stock, isArchived }: { stock: number; isArchived: boolean }) {
+export function StockBadge({ stock, isArchived, availableAt }: { stock: number; isArchived: boolean; availableAt?: Date | string | null }) {
   if (isArchived) return <ProductTintBadge label="Archivado" tone="slate" />;
+  if (availableAt && isComingSoon({ availableAt })) return <ProductTintBadge label={`Llega el ${formatAvailableAt(availableAt)}`} tone="lavender" title="Próximamente: se muestra en la tienda sin botón de compra" />;
   if (stock <= 0) return <ProductTintBadge label="Agotado" tone="pink" />;
   if (stock <= 5) return <ProductTintBadge label={`${stock} und`} tone="cream" title="Stock crítico" />;
   return <span className="text-sm font-semibold tabular-nums text-primary">{stock}</span>;

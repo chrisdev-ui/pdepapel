@@ -16,11 +16,20 @@ import {
 interface NewsletterWelcomeProps {
   shopUrl: string;
   unsubscribeUrl: string;
+  couponCode?: string | null;
+  couponPercent?: number;
+  couponEndsAt?: Date | null;
 }
+
+const formatDate = (value: Date) =>
+  new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "long", timeZone: "America/Bogota" }).format(value);
 
 export function NewsletterWelcome({
   shopUrl,
   unsubscribeUrl,
+  couponCode = null,
+  couponPercent = 10,
+  couponEndsAt = null,
 }: NewsletterWelcomeProps) {
   return (
     <Html>
@@ -42,6 +51,18 @@ export function NewsletterWelcome({
             Te contaremos sobre productos nuevos, la llegada de mercancía y
             ofertas especiales. Enviaremos como máximo dos correos al mes.
           </Text>
+          {couponCode && (
+            <Section style={couponBox}>
+              <Text style={couponLabel}>
+                Tu {couponPercent} % en la primera compra
+              </Text>
+              <Text style={couponCodeStyle}>{couponCode}</Text>
+              <Text style={couponHint}>
+                Escríbelo al pagar. Un solo uso
+                {couponEndsAt ? `, hasta el ${formatDate(couponEndsAt)}` : ""}.
+              </Text>
+            </Section>
+          )}
           <Section style={buttonSection}>
             <Button href={shopUrl} style={button}>
               Explorar la tienda
@@ -89,6 +110,17 @@ const paragraph = {
   lineHeight: "1.6",
   textAlign: "center" as const,
 };
+const couponBox = {
+  backgroundColor: "#fff4f8",
+  border: "1px dashed #f9789a",
+  borderRadius: "12px",
+  margin: "22px 0 4px",
+  padding: "14px 16px",
+  textAlign: "center" as const,
+};
+const couponLabel = { fontSize: "13px", fontWeight: "600", margin: "0 0 4px", textTransform: "uppercase" as const, letterSpacing: "0.06em" };
+const couponCodeStyle = { fontSize: "26px", fontWeight: "700", letterSpacing: "0.08em", margin: "0" };
+const couponHint = { color: "#667085", fontSize: "12px", margin: "6px 0 0" };
 const buttonSection = { margin: "26px 0", textAlign: "center" as const };
 const button = {
   backgroundColor: "#17152f",

@@ -32,9 +32,15 @@ const formSchema = z.object({
 
 type NewsletterFormValues = z.infer<typeof formSchema>;
 
-export function NewsletterForm() {
+interface NewsletterFormProps {
+  source?: string;
+  productId?: string;
+}
+
+export function NewsletterForm({ source, productId }: NewsletterFormProps = {}) {
   const { toast } = useToast();
   const pathname = usePathname();
+  const signupSource = source ?? pathname;
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const form = useForm<NewsletterFormValues>({
@@ -50,11 +56,11 @@ export function NewsletterForm() {
     try {
       setLoading(true);
       setSuccessMessage(null);
-      trackCustomerEvent("newsletter_signup_submitted", { source: pathname });
+      trackCustomerEvent("newsletter_signup_submitted", { source: signupSource });
       const response = await fetch("/api/newsletter", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...values, source: pathname }),
+        body: JSON.stringify({ ...values, source: signupSource, productId }),
       });
       const result = (await response.json().catch(() => null)) as {
         message?: string;
@@ -69,7 +75,7 @@ export function NewsletterForm() {
       setSuccessMessage(message);
       form.reset();
       trackCustomerEvent("newsletter_confirmation_requested", {
-        source: pathname,
+        source: signupSource,
       });
       toast({
         title: "Revisa tu correo",
@@ -93,7 +99,7 @@ export function NewsletterForm() {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="w-full space-y-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-0">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-2">
           <FormField
             control={form.control}
             name="email"
@@ -108,7 +114,7 @@ export function NewsletterForm() {
                     autoComplete="email"
                     inputMode="email"
                     disabled={loading}
-                    className="h-11 w-full rounded border border-solid border-transparent bg-white px-4 text-base sm:rounded-br-none sm:rounded-tr-none"
+                    className="h-11 w-full rounded-full border border-solid border-transparent bg-white px-4 text-base"
                     placeholder="tu@correo.com"
                     {...field}
                   />
@@ -120,9 +126,9 @@ export function NewsletterForm() {
           <Button
             type="submit"
             disabled={loading}
-            className="h-11 shrink-0 whitespace-nowrap rounded border-none bg-blue-yankees px-5 text-sm font-medium text-white outline-none ring-offset-transparent sm:rounded-bl-none sm:rounded-tl-none"
+            className="h-11 shrink-0 whitespace-nowrap rounded-full border-none bg-blue-yankees px-6 text-sm font-semibold text-white outline-none ring-offset-transparent"
           >
-            {loading ? "Enviando…" : "Quiero recibir novedades"}
+            {loading ? "Enviando…" : "Suscribirme"}
           </Button>
         </div>
 

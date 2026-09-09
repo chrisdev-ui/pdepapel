@@ -31,11 +31,11 @@ model Store {
   defaultPackageHeight           Float?                          @default(10.0) // Alto por defecto (cm)
   defaultPackageWidth            Float?                          @default(10.0) // Ancho por defecto (cm)
   defaultPackageLength           Float?                          @default(10.0) // Largo por defecto (cm)
-  freeShippingThreshold          Int?                            // Subtotal (COP) desde el cual el envío es gratis; null = desactivado
+  freeShippingThreshold          Int? // Subtotal (COP) desde el cual el envío es gratis; null = desactivado
   createdAt                      DateTime                        @default(now())
   updatedAt                      DateTime                        @updatedAt
   types                          Type[]                          @relation("StoreToType")
-  billboards                     Billboard[]                     @relation("StoreToBillboard")
+  homeContents                   HomeContent[]                   @relation("StoreToHomeContent")
   posts                          Post[]                          @relation("StoreToPost")
   categories                     Category[]                      @relation("StoreToCategory")
   sizes                          Size[]                          @relation("StoreToSize")
@@ -52,8 +52,6 @@ model Store {
   categorySlugAliases            CategorySlugAlias[]
   typeSlugAliases                TypeSlugAlias[]
   orders                         Order[]                         @relation("StoreToOrder")
-  mainBanner                     MainBanner?                     @relation("StoreToMainBanner")
-  banners                        Banner[]                        @relation("StoreToBanner")
   reviews                        Review[]                        @relation("StoreToReview")
   shippings                      Shipping[]                      @relation("StoreToShipping")
   payments                       PaymentDetails[]                @relation("StoreToPaymentDetails")
@@ -86,22 +84,6 @@ model Store {
   businessCashPolicy             BusinessCashPolicy?
   businessCashMovements          BusinessCashMovement[]
   growthCampaigns                GrowthCampaign[]
-}
-
-model Billboard {
-  id          String   @id @default(uuid())
-  storeId     String
-  label       String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  imageUrl    String
-  redirectUrl String?
-  title       String?
-  buttonLabel String?
-
-  store Store @relation("StoreToBillboard", fields: [storeId], references: [id])
-
-  @@index([storeId])
 }
 
 model Offer {
@@ -182,8 +164,8 @@ model Type {
   icon        String?         @db.VarChar(32)
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
-  isArchived Boolean   @default(false)
-  archivedAt DateTime?
+  isArchived  Boolean         @default(false)
+  archivedAt  DateTime?
   store       Store           @relation("StoreToType", fields: [storeId], references: [id])
   categories  Category[]
   slugAliases TypeSlugAlias[]
@@ -208,8 +190,8 @@ model Category {
   imageUrl                       String?                         @db.Text
   createdAt                      DateTime                        @default(now())
   updatedAt                      DateTime                        @updatedAt
-  isArchived Boolean   @default(false)
-  archivedAt DateTime?
+  isArchived                     Boolean                         @default(false)
+  archivedAt                     DateTime?
   store                          Store                           @relation("StoreToCategory", fields: [storeId], references: [id])
   type                           Type                            @relation(fields: [typeId], references: [id])
   products                       Product[]                       @relation("CategoryToProduct")
@@ -225,16 +207,16 @@ model Category {
 }
 
 model Size {
-  id        String    @id @default(uuid())
-  storeId   String
-  name      String
-  value     String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id         String    @id @default(uuid())
+  storeId    String
+  name       String
+  value      String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
   isArchived Boolean   @default(false)
   archivedAt DateTime?
-  store     Store     @relation("StoreToSize", fields: [storeId], references: [id])
-  products  Product[]
+  store      Store     @relation("StoreToSize", fields: [storeId], references: [id])
+  products   Product[]
 
   @@unique([storeId, value])
   @@index([storeId])
@@ -329,31 +311,31 @@ model ProductCatalogOptionValue {
 }
 
 model Color {
-  id        String    @id @default(uuid())
-  storeId   String
-  name      String
-  value     String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id         String    @id @default(uuid())
+  storeId    String
+  name       String
+  value      String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
   isArchived Boolean   @default(false)
   archivedAt DateTime?
-  store     Store     @relation("StoreToColor", fields: [storeId], references: [id])
-  products  Product[]
+  store      Store     @relation("StoreToColor", fields: [storeId], references: [id])
+  products   Product[]
 
   @@index([storeId])
   @@index([storeId, isArchived])
 }
 
 model Design {
-  id        String    @id @default(uuid())
-  storeId   String
-  name      String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id         String    @id @default(uuid())
+  storeId    String
+  name       String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
   isArchived Boolean   @default(false)
   archivedAt DateTime?
-  store     Store     @relation("StoreToDesign", fields: [storeId], references: [id])
-  products  Product[]
+  store      Store     @relation("StoreToDesign", fields: [storeId], references: [id])
+  products   Product[]
 
   @@index([storeId])
   @@index([storeId, isArchived])
@@ -393,6 +375,7 @@ model Product {
   acqPrice                    Float?                       @default(0)
   isFeatured                  Boolean                      @default(false)
   isArchived                  Boolean                      @default(false)
+  availableAt                 DateTime?
   sizeId                      String
   shippingProfileId           String?
   colorId                     String
@@ -434,6 +417,7 @@ model Product {
   growthCampaignProducts      GrowthCampaignProduct[]
   catalogOptionValues         ProductCatalogOptionValue[]
   catalogMigrationSuggestions CatalogMigrationSuggestion[]
+  homeContents                HomeContentProduct[]
 
   // -- KIT / COMBO FIELDS --
   isKit         Boolean      @default(false)
@@ -453,6 +437,7 @@ model Product {
   @@index([designId])
   @@index([supplierId])
   @@index([storeId, isArchived, isFeatured])
+  @@index([storeId, availableAt])
   @@index([storeId, categoryId, isArchived])
   @@index([storeId, createdAt, isArchived])
   @@index([storeId, price, isArchived])
@@ -811,32 +796,58 @@ model OrderItem {
   @@index([productId, orderId, quantity])
 }
 
-model MainBanner {
-  id           String   @id @default(uuid())
-  storeId      String   @unique
-  title        String?  @default("")
-  label1       String?  @default("")
-  highlight    String?  @default("")
-  label2       String?  @default("")
-  imageUrl     String
-  callToAction String   @db.Text
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  store        Store    @relation("StoreToMainBanner", fields: [storeId], references: [id])
-
-  @@index([storeId])
+enum HomeContentPlacement {
+  HERO
+  CAMPAIGN
 }
 
-model Banner {
-  id           String   @id @default(uuid())
-  storeId      String
-  imageUrl     String
-  callToAction String   @db.Text
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  store        Store    @relation("StoreToBanner", fields: [storeId], references: [id])
+enum HomeCampaignType {
+  SEASON
+  SHIPMENT
+  COLLECTION
+  OFFER
+}
 
-  @@index([storeId])
+/// Hero y banner de campaña de la portada, con vigencia.
+model HomeContent {
+  id                String               @id @default(uuid())
+  storeId           String
+  placement         HomeContentPlacement
+  campaignType      HomeCampaignType?
+  eyebrow           String?              @db.VarChar(80)
+  title             String               @db.VarChar(191)
+  subtitle          String?              @db.VarChar(300)
+  primaryLabel      String?              @db.VarChar(40)
+  primaryUrl        String?              @db.VarChar(500)
+  secondaryLabel    String?              @db.VarChar(40)
+  secondaryUrl      String?              @db.VarChar(500)
+  imageUrl          String?              @db.VarChar(500)
+  imageAlt          String?              @db.VarChar(160)
+  isActive          Boolean              @default(true)
+  startsAt          DateTime             @default(now())
+  endsAt            DateTime?
+  earlyAccessSentAt DateTime?
+  arrivalSentAt     DateTime?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  store    Store                @relation("StoreToHomeContent", fields: [storeId], references: [id])
+  products HomeContentProduct[]
+
+  @@index([storeId, placement, isActive, startsAt])
+  @@index([storeId, createdAt])
+}
+
+model HomeContentProduct {
+  homeContentId String
+  productId     String
+  position      Int    @default(0)
+
+  homeContent HomeContent @relation(fields: [homeContentId], references: [id], onDelete: Cascade)
+  product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([homeContentId, productId])
+  @@index([productId])
 }
 
 model Review {
@@ -2119,6 +2130,8 @@ model NewsletterSubscriber {
   unsubscribeTokenHash   String?                    @unique @db.VarChar(64)
   lastConfirmationSentAt DateTime?
   lastWelcomeSentAt      DateTime?
+  welcomeCouponId        String?                    @unique
+  interestProductId      String?
   createdAt              DateTime                   @default(now())
   updatedAt              DateTime                   @updatedAt
 
@@ -2127,6 +2140,7 @@ model NewsletterSubscriber {
   @@unique([storeId, emailNormalized])
   @@index([storeId, status, createdAt])
   @@index([storeId, source])
+  @@index([storeId, interestProductId])
   @@index([emailNormalized])
 }
 

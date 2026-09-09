@@ -154,9 +154,7 @@ export const paymentNames: Record<PaymentMethod, string> = {
 };
 
 export enum Models {
-  Banners = "banners",
-  MainBanner = "main-banner",
-  Billboards = "billboards",
+  HomeContent = "home-content",
   Categories = "categories",
   Colors = "colors",
   Designs = "designs",
@@ -185,9 +183,7 @@ export enum Models {
 }
 
 export const ModelLabels: Record<Models, string> = {
-  [Models.Banners]: "Banners",
-  [Models.MainBanner]: "Banner principal",
-  [Models.Billboards]: "Diapositivas",
+  [Models.HomeContent]: "Contenido de portada",
   [Models.Categories]: "Sub-Categorías",
   [Models.Colors]: "Colores",
   [Models.Designs]: "Diseños",
@@ -216,26 +212,13 @@ export const ModelLabels: Record<Models, string> = {
 };
 
 export const ModelsColumns: Record<Models, { [key: string]: string }> = {
-  [Models.Banners]: {
-    imageUrl: "Imagen",
-    callToAction: "URL de redirección",
-    createdAt: "Fecha de creación",
-  },
-  [Models.MainBanner]: {
+  [Models.HomeContent]: {
     imageUrl: "Imagen",
     title: "Título",
-    label1: "Párrafo 1",
-    highlight: "Subrayado",
-    label2: "Párrafo 2",
-    callToAction: "URL de redirección",
-    createdAt: "Fecha de creación",
-  },
-  [Models.Billboards]: {
-    imageUrl: "Imagen",
-    label: "Etiqueta",
-    title: "Título",
-    redirectUrl: "Link de redirección",
-    createdAt: "Fecha de creación",
+    kind: "Ubicación",
+    status: "Estado",
+    startsAt: "Desde",
+    endsAt: "Hasta",
   },
   [Models.Categories]: {
     name: "Nombre",

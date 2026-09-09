@@ -50,6 +50,23 @@ export const Summary: React.FC<SummaryProps> = ({ disabled }) => {
         <CreditCard aria-hidden="true" className="mr-2 h-5 w-5" />
         Finalizar compra
       </Button>
+      {items.length > 0 && (
+        <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-3 right-[5.25rem] z-40 lg:hidden">
+          <div className="flex h-14 items-center gap-3 rounded-full bg-white pl-4 pr-1.5 shadow-[0_8px_24px_rgba(34,27,65,0.22)] ring-1 ring-blue-baby">
+            <span className="flex min-w-0 flex-col leading-tight">
+              <span className="font-sans text-xs text-gray-500">Total</span>
+              <Currency value={total} className="text-[15px] font-bold" />
+            </span>
+            <Button
+              onClick={goToCheckout}
+              disabled={disabled}
+              className="ml-auto h-11 rounded-full bg-blue-yankees px-5 font-quicksand text-sm font-semibold text-white"
+            >
+              Finalizar compra
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

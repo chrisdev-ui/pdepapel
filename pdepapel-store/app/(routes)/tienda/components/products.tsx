@@ -19,7 +19,7 @@ const Products: React.FC<ProductsProps> = ({ products, totalPages }) => {
         />
       )}
       {!!products.length && (
-        <div className="grid grid-cols-2 gap-1 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
           {products.map((product, index) => (
             <ProductCard
               key={product.id}

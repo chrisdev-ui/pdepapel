@@ -1,6 +1,5 @@
 import { ShippingCarrier } from "@/types";
 
-export const DELAY = 8000;
 export const TOAST_DURATION = 2000;
 export const KAWAII_FACE_EXCITED = `(,,>﹏<,,)`;
 export const KAWAII_FACE_SAD = `(｡-_-｡)`;
@@ -115,7 +114,6 @@ export const ADMIN_USER_IDS = [
   "user_2edvPcKn4XDbCYSobmXRNJpGq9U",
 ];
 
-export const LIMIT_PER_ITEMS = 16;
 
 export const INTERRAPIDISIMO_KEYSIZE = 256;
 export const INTERRAPIDISIMO_IVSIZE = 128;

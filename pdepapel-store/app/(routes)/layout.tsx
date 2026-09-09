@@ -1,4 +1,6 @@
+import { CartReminderStrip } from "@/components/cart-reminder-strip";
 import { DeferredWhatsAppFloatingButton } from "@/components/deferred-whatsapp-floating-button";
+import { MobileCartBar } from "@/components/mobile-cart-bar";
 import { ReactNode } from "react";
 
 export default function StorefrontLayout({
@@ -11,7 +13,9 @@ export default function StorefrontLayout({
   // fold on short pages and loading states.
   return (
     <div className="flex-1">
+      <CartReminderStrip />
       {children}
+      <MobileCartBar />
       <DeferredWhatsAppFloatingButton />
     </div>
   );

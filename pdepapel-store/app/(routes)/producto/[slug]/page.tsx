@@ -1,8 +1,11 @@
 import { Metadata } from "next";
+import { cookies } from "next/headers";
 import { notFound, permanentRedirect } from "next/navigation";
 
 import { getProduct } from "@/actions/get-product";
 import { getProducts } from "@/actions/get-products";
+import { EARLY_ACCESS_COOKIE } from "@/lib/early-access";
+import { isComingSoon } from "@/lib/product-card";
 import Newsletter from "@/components/newsletter";
 import { RelatedProducts } from "@/components/related-products";
 import { RelatedProductsSkeleton } from "@/components/related-products-skeleton";
@@ -118,10 +121,14 @@ function buildProductSchema(product: Product, includeGroupReference = true) {
       priceCurrency: "COP",
       price: product.price,
       itemCondition: "https://schema.org/NewCondition",
-      availability:
-        product.stock > 0
+      availability: isComingSoon(product)
+        ? "https://schema.org/PreOrder"
+        : product.stock > 0
           ? "https://schema.org/InStock"
           : "https://schema.org/OutOfStock",
+      ...(isComingSoon(product) && product.availableAt
+        ? { availabilityStarts: product.availableAt }
+        : {}),
     },
   };
 }
@@ -155,6 +162,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
     stock: variant.stock,
   }));
   const canonicalPath = productPath(canonicalSlug);
+  const hasEarlyAccess = Boolean(cookies().get(EARLY_ACCESS_COOKIE)?.value);
   const seenVariantCombinations = new Set<string>();
   const hasDuplicateVariantCombination = siblingsResponse.products.some(
     (variant) => {
@@ -246,7 +254,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
-      <SingleProductPage product={product} siblings={siblings} />
+      <SingleProductPage product={product} siblings={siblings} earlyAccess={hasEarlyAccess} />
       <Container className="max-w-7xl px-4 pb-10 sm:px-6 lg:px-8">
         <Suspense fallback={<RelatedProductsSkeleton />}>
           <RelatedProducts productsPromise={suggestedProductsPromise} />

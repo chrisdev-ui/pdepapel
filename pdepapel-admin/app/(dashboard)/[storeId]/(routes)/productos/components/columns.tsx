@@ -85,7 +85,7 @@ export const buildColumns = (storeId: string): ColumnDef<ProductColumn>[] => [
   {
     accessorKey: "stock",
     header: ({ column }) => <DataTableColumnHeader column={column} title="Stock" />,
-    cell: ({ row }) => <StockBadge stock={row.original.stock} isArchived={row.original.isArchived} />,
+    cell: ({ row }) => <StockBadge stock={row.original.stock} isArchived={row.original.isArchived} availableAt={row.original.availableAt} />,
     enableGlobalFilter: false,
   },
   {

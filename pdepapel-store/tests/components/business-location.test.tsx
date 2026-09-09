@@ -3,7 +3,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import Features from "@/components/features";
+import { TrustStrip } from "@/components/trust-strip";
 import { Footer } from "@/components/footer";
 
 describe("business location messaging", () => {
@@ -12,7 +12,7 @@ describe("business location messaging", () => {
   it("explains the Medellín origin and national delivery coverage", () => {
     const { container } = render(
       <>
-        <Features />
+        <TrustStrip />
         <Footer />
       </>,
     );
@@ -28,10 +28,10 @@ describe("business location messaging", () => {
       screen.getByText("Tienda online con envíos a todo el país"),
     ).toBeInTheDocument();
 
-    const desktopFeatures = container.querySelector("section.lg\\:grid");
-    expect(desktopFeatures).toHaveClass("grid-cols-5", "gap-x-6");
-    expect(desktopFeatures?.children).toHaveLength(5);
-    expect(desktopFeatures?.firstElementChild).toHaveClass("min-w-0");
+    const strip = container.querySelector("section ul");
+    expect(strip).toHaveClass("sm:grid-cols-3");
+    expect(strip?.children).toHaveLength(3);
+    expect(strip?.firstElementChild).toHaveClass("min-w-0");
   });
 
   it("renders an accessible, mobile-friendly footer structure", () => {

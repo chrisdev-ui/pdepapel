@@ -1,4 +1,10 @@
 import { SORT_OPTIONS, SortOption } from "@/constants";
+import {
+  PRODUCT_AVAILABILITY_PARAM,
+  parseAvailableAt,
+  parseProductAvailability,
+  productAvailabilityWhere,
+} from "@/lib/product-availability";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import cloudinaryInstance from "@/lib/cloudinary";
 import prismadb from "@/lib/prismadb";
@@ -72,6 +78,7 @@ interface UnifiedProduct {
   supplier?: Supplier | null;
   stock: number;
   isFeatured?: boolean;
+  availableAt?: Date | null;
 }
 
 interface GroupVariantProduct {
@@ -136,6 +143,7 @@ export async function POST(
       images,
       isArchived,
       isFeatured,
+      availableAt,
       productGroupId,
       isKit, // [NEW]
       components, // [NEW] Array of { componentId, quantity }
@@ -245,6 +253,7 @@ export async function POST(
         stock: 0, // Stock is initialized to 0 and set via INITIAL_INTAKE movement below
         isArchived,
         isFeatured,
+        availableAt: parseAvailableAt(availableAt),
         categoryId,
         sizeId,
         colorId,
@@ -377,6 +386,8 @@ export async function GET(
 
     const productGroupId = searchParams.get("productGroupId");
     const isOnSale = searchParams.get("isOnSale") === "true"; // New filter
+    const availability = parseProductAvailability(searchParams.get(PRODUCT_AVAILABILITY_PARAM));
+    const availabilityFilter = productAvailabilityWhere(availability);
 
     const minPrice = searchParams.get("minPrice")
       ? Number(searchParams.get("minPrice"))
@@ -408,7 +419,8 @@ export async function GET(
       groupBy,
       productGroupId,
       isOnSale, // Include in cache key
-      v: "7",
+      availability,
+      v: "8",
     })}`;
 
     // Try to get from Redis cache
@@ -610,6 +622,7 @@ export async function GET(
           sku: item.sku,
           createdAt: item.createdAt,
           stock: item.stock,
+          availableAt: item.availableAt,
           isGroup: false, // Individual items only for id fetch
           productGroupId: item.productGroupId,
           offerLabel: pricing?.offerLabel ?? null,
@@ -688,6 +701,7 @@ export async function GET(
             ? catalogOptionConditions
             : undefined,
         isArchived: false,
+        ...availabilityFilter,
         price: priceFilter,
         NOT: {
           id: excludeProducts ? { in: excludeProducts.split(",") } : undefined,
@@ -746,6 +760,7 @@ export async function GET(
                 size: true,
                 design: true,
                 isFeatured: true,
+                availableAt: true,
                 reviews: {
                   where: PUBLIC_REVIEW_WHERE,
                   select: {
@@ -797,6 +812,7 @@ export async function GET(
           createdAt: g.createdAt,
           stock: g.products.reduce((acc: number, p: any) => acc + p.stock, 0),
           isFeatured: g.products.some((p: any) => p.isFeatured),
+          availableAt: primaryProduct?.availableAt ?? null,
         };
       });
 
@@ -821,6 +837,7 @@ export async function GET(
           createdAt: p.createdAt,
           stock: p.stock,
           isFeatured: p.isFeatured,
+          availableAt: p.availableAt ?? null,
         }),
       );
 
@@ -1122,6 +1139,7 @@ export async function GET(
         where: {
           storeId: params.storeId,
           isArchived: false,
+        ...availabilityFilter,
         },
         include: {
           images: true,
@@ -1164,6 +1182,7 @@ export async function GET(
         OR: search ? [{ name: { contains: search } }] : undefined,
         isFeatured: isFeatured !== null ? isFeatured === "true" : undefined,
         isArchived: false,
+        ...availabilityFilter,
         price: priceFilter,
         NOT: {
           id: excludeProducts ? { in: excludeProducts.split(",") } : undefined,
@@ -1323,6 +1342,7 @@ export async function GET(
         ],
         isFeatured: isFeatured !== null ? isFeatured === "true" : undefined,
         isArchived: false,
+        ...availabilityFilter,
         price: priceFilter,
         NOT: {
           id: excludeProducts ? { in: excludeProducts.split(",") } : undefined,

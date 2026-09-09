@@ -49,10 +49,20 @@ export async function POST(
       );
     }
 
+    let interestProductId: string | null = null;
+    if (parsed.data.productId) {
+      const product = await prismadb.product.findFirst({
+        where: { id: parsed.data.productId, storeId: params.storeId },
+        select: { id: true },
+      });
+      interestProductId = product?.id ?? null;
+    }
+
     await requestNewsletterSubscription({
       storeId: params.storeId,
       email: parsed.data.email,
       source: parsed.data.source,
+      interestProductId,
     });
 
     return NextResponse.json(

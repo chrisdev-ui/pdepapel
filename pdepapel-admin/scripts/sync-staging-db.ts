@@ -58,12 +58,11 @@ async function main() {
   // Level 2
   await prismaStaging.product.deleteMany({ where: deleteWhere });
   await prismaStaging.offer.deleteMany({ where: deleteWhere });
-  await prismaStaging.banner.deleteMany({ where: deleteWhere });
-  await prismaStaging.category.deleteMany({ where: deleteWhere }); // Depends on Type/Billboard?
+  await prismaStaging.category.deleteMany({ where: deleteWhere });
 
   // Level 1
-  await prismaStaging.mainBanner.deleteMany({ where: deleteWhere });
-  await prismaStaging.billboard.deleteMany({ where: deleteWhere });
+  await prismaStaging.homeContentProduct.deleteMany({ where: { homeContent: { storeId: stagingStore.id } } });
+  await prismaStaging.homeContent.deleteMany({ where: deleteWhere });
   await prismaStaging.post.deleteMany({ where: deleteWhere });
   await prismaStaging.coupon.deleteMany({ where: deleteWhere });
   await prismaStaging.shippingQuote.deleteMany({ where: deleteWhere });
@@ -82,7 +81,6 @@ async function main() {
   // -- Maps for IDs --
   const map = {
     type: new Map<string, string>(),
-    billboard: new Map<string, string>(),
     size: new Map<string, string>(),
     color: new Map<string, string>(),
     design: new Map<string, string>(),
@@ -98,12 +96,12 @@ async function main() {
 
   // --- Level 1 ---
 
-  // Billboard
-  const billboards = await prismaProd.billboard.findMany({
+  // Contenido de portada (sin los productos del cargamento: se re-eligen en staging)
+  const homeContents = await prismaProd.homeContent.findMany({
     where: { storeId: prodStore.id },
   });
-  for (const item of billboards) {
-    const created = await prismaStaging.billboard.create({
+  for (const item of homeContents) {
+    await prismaStaging.homeContent.create({
       data: {
         ...item,
         id: undefined,
@@ -112,9 +110,8 @@ async function main() {
         updatedAt: undefined,
       },
     });
-    map.billboard.set(item.id, created.id);
   }
-  console.log(`- Synced ${billboards.length} Billboards`);
+  console.log(`- Synced ${homeContents.length} home content entries`);
 
   // Type
   const types = await prismaProd.type.findMany({
@@ -269,22 +266,6 @@ async function main() {
     });
   }
 
-  // MainBanner (One-to-one per store usually, but let's sync)
-  const mainBanner = await prismaProd.mainBanner.findUnique({
-    where: { storeId: prodStore.id },
-  });
-  if (mainBanner) {
-    await prismaStaging.mainBanner.create({
-      data: {
-        ...mainBanner,
-        id: undefined,
-        storeId: stagingStore.id,
-        createdAt: undefined,
-        updatedAt: undefined,
-      },
-    });
-  }
-
   // --- Level 2 ---
 
   // Category (Depends on Type)
@@ -305,22 +286,6 @@ async function main() {
     map.category.set(item.id, created.id);
   }
   console.log(`- Synced ${categories.length} Categories`);
-
-  // Banner (Depends on Store, usually simple)
-  const banners = await prismaProd.banner.findMany({
-    where: { storeId: prodStore.id },
-  });
-  for (const item of banners) {
-    await prismaStaging.banner.create({
-      data: {
-        ...item,
-        id: undefined,
-        storeId: stagingStore.id,
-        createdAt: undefined,
-        updatedAt: undefined,
-      },
-    });
-  }
 
   // Product (Depends on Category, Size, Color, Design, Supplier)
   const products = await prismaProd.product.findMany({
