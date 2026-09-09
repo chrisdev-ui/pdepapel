@@ -459,7 +459,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
           </p>
         )}
 
-        {!data.isArchived && !comingSoon && (
+        {!data.isArchived && !comingSoon && !soldOut && (
           <div className="flex items-center gap-x-4">
             <h3 className="font-sans font-semibold">Cantidad:</h3>
             <div>
