@@ -417,15 +417,16 @@ export async function GET(
       fromShop,
       limit,
       search,
+      exact: exactSearch,
       sortOption,
       excludeProducts,
       minPrice,
       maxPrice,
       groupBy,
       productGroupId,
-      isOnSale, // Include in cache key
+      isOnSale,
       availability,
-      v: "9",
+      v: "10",
     })}`;
 
     // Try to get from Redis cache

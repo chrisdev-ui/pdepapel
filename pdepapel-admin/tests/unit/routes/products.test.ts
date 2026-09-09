@@ -584,6 +584,24 @@ describe("GET /api/[storeId]/products", () => {
     expect(standaloneWhere.OR).toEqual(expect.arrayContaining([{ name: { contains: "resaltadores" } }]));
   });
 
+  it("caches the exact search separately from the corrected one", async () => {
+    const { Redis } = await import("@upstash/redis");
+    const get = vi.fn().mockResolvedValue(null);
+    const set = vi.fn().mockResolvedValue("OK");
+    vi.mocked(Redis.fromEnv).mockReturnValue({ get, set } as never);
+    mocks.countProducts.mockResolvedValue(0);
+    try {
+      await GET(new Request("https://admin.example.com/api/store-id/products?groupBy=parents&search=resaltadres"), { params: { storeId: "store-id" } });
+      await GET(new Request("https://admin.example.com/api/store-id/products?groupBy=parents&search=resaltadres&exact=true"), { params: { storeId: "store-id" } });
+    } finally {
+      vi.mocked(Redis.fromEnv).mockReset();
+    }
+    const keys = get.mock.calls.map((call) => String(call[0])).filter((key) => key.includes(":products:"));
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).not.toBe(keys[1]);
+    expect(keys[1]).toContain('"exact":true');
+  });
+
   it("keeps the literal search when exact=true", async () => {
     mocks.countProducts.mockResolvedValueOnce(0);
     const response = await GET(
