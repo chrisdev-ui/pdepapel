@@ -81,7 +81,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   const name = stripTaxonomyIcon(category.name);
   const hasFilters = Object.entries(searchParams).some(([key, value]) => key !== "sortOption" && key !== "page" && value !== undefined && value !== "");
 
-  const [{ products, totalPages, totalItems, facets }, catalogOptions, colors, designs, cover, categoryTotal] = await Promise.all([
+  const [{ products, totalPages, totalItems, facets, searchCorrection }, catalogOptions, colors, designs, cover, categoryTotal] = await Promise.all([
     getProducts({
       categoryId: category.id,
       colorId: searchParams.colorId,
@@ -165,6 +165,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
           initialTotalPages={totalPages}
           initialTotalItems={totalItems}
           initialFacets={facets}
+        initialSearchCorrection={searchCorrection}
           types={[]}
           categories={[category]}
           catalogOptions={catalogOptions}

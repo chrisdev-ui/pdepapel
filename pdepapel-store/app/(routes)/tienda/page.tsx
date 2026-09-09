@@ -98,7 +98,7 @@ const FILTER_PARAMS = ["typeId", "categoryId", "colorId", "sizeId", "optionValue
 
 async function ShopContentWrapper({ searchParams }: { searchParams: ShopPageProps["searchParams"] }) {
   const hasFilters = FILTER_PARAMS.some((key) => searchParams[key] !== undefined && searchParams[key] !== "");
-  const [{ products, totalPages, totalItems, facets }, types, catalogOptions, colors, designs, categories, catalogTotal] = await Promise.all([
+  const [{ products, totalPages, totalItems, facets, searchCorrection }, types, catalogOptions, colors, designs, categories, catalogTotal] = await Promise.all([
     getProducts({
       typeId: searchParams.typeId,
       categoryId: searchParams.categoryId,
@@ -169,6 +169,7 @@ async function ShopContentWrapper({ searchParams }: { searchParams: ShopPageProp
         initialTotalPages={totalPages}
         initialTotalItems={totalItems}
         initialFacets={facets}
+        initialSearchCorrection={searchCorrection}
         types={types}
         categories={categories}
         catalogOptions={catalogOptions}

@@ -32,6 +32,7 @@ interface ShopContentProps {
   initialTotalPages: number;
   initialTotalItems: number;
   initialFacets?: ProductsResponse["facets"];
+  initialSearchCorrection?: ProductsResponse["searchCorrection"];
   types: Type[];
   categories: Category[];
   catalogOptions: CatalogOption[];
@@ -55,6 +56,7 @@ export const ShopContent: React.FC<ShopContentProps> = ({
   initialTotalPages,
   initialTotalItems,
   initialFacets,
+  initialSearchCorrection,
   types,
   categories,
   catalogOptions,
@@ -82,7 +84,7 @@ export const ShopContent: React.FC<ShopContentProps> = ({
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ["products", fixedCategoryId, effectiveFilters],
     queryFn: () => getProducts({ ...filtersToQuery(effectiveFilters, fixedCategoryId), page: effectiveFilters.page, itemsPerPage: LIMIT_SHOP_ITEMS }),
-    initialData: isMounted ? undefined : { products: initialProducts, totalPages: initialTotalPages, totalItems: initialTotalItems, facets: initialFacets },
+    initialData: isMounted ? undefined : { products: initialProducts, totalPages: initialTotalPages, totalItems: initialTotalItems, facets: initialFacets, searchCorrection: initialSearchCorrection },
     initialDataUpdatedAt: isMounted ? undefined : Date.now(),
     staleTime: 60_000,
     refetchOnWindowFocus: false,
