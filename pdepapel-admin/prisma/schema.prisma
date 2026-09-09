@@ -376,6 +376,7 @@ model Product {
   isFeatured                  Boolean                      @default(false)
   isArchived                  Boolean                      @default(false)
   availableAt                 DateTime?
+  soldCount                   Int                          @default(0)
   sizeId                      String
   shippingProfileId           String?
   colorId                     String
@@ -438,6 +439,7 @@ model Product {
   @@index([supplierId])
   @@index([storeId, isArchived, isFeatured])
   @@index([storeId, availableAt])
+  @@index([storeId, soldCount])
   @@index([storeId, categoryId, isArchived])
   @@index([storeId, createdAt, isArchived])
   @@index([storeId, price, isArchived])

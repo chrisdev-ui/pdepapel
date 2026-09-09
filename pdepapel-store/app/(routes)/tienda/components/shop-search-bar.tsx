@@ -1,9 +1,8 @@
 "use client";
 
-import { Search } from "lucide-react";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { Search, X } from "lucide-react";
+import { memo, useCallback, useEffect, useId, useRef, useState } from "react";
 
-import { Input } from "@/components/ui/input";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useProductFilters } from "@/hooks/use-product-filters";
 import { trackCustomerEvent } from "@/lib/customer-analytics";
@@ -14,69 +13,64 @@ interface ShopSearchBarProps {
   placeholder?: string;
 }
 
-const ShopSearchBar: React.FC<ShopSearchBarProps> = ({
-  className,
-  placeholder = "Buscar un producto",
-}) => {
+/**
+ * Búsqueda dentro de una categoría («Buscar en Stickers»), con la misma
+ * píldora que el campo de la cabecera. La tienda completa no la usa: ahí
+ * busca la cabecera.
+ */
+const ShopSearchBar: React.FC<ShopSearchBarProps> = ({ className, placeholder = "Buscar en esta categoría" }) => {
   const { filters, setFilter } = useProductFilters();
   const [searchTerm, setSearchTerm] = useState<string>(filters.search || "");
-
   const debouncedSearch = useDebounce(searchTerm, 300);
-
   const inputRef = useRef<HTMLInputElement>(null);
+  const inputId = useId();
 
-  const handleSearchChange = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      setSearchTerm(event.target.value);
-    },
-    [],
-  );
+  const handleChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(event.target.value), []);
 
-  // Sync local state with URL filters when not focused
   useEffect(() => {
-    if (
-      document.activeElement !== inputRef.current &&
-      filters.search !== searchTerm
-    ) {
+    if (document.activeElement !== inputRef.current && filters.search !== searchTerm) {
       setSearchTerm(filters.search || "");
     }
   }, [filters.search, searchTerm]);
 
   useEffect(() => {
-    // Only update if the value is different to avoid loops
-    // AND the component is visible (offsetParent is not null)
-    // AND the input is focused (to ensure we only drive changes when active)
-    if (
-      debouncedSearch !== filters.search &&
-      inputRef.current &&
-      inputRef.current.offsetParent !== null
-    ) {
+    if (debouncedSearch !== filters.search && inputRef.current && inputRef.current.offsetParent !== null) {
       setFilter("search", debouncedSearch || null);
-      if (debouncedSearch) {
-        trackCustomerEvent("catalog_search", {
-          query_length: debouncedSearch.length,
-        });
-      }
+      if (debouncedSearch) trackCustomerEvent("catalog_search", { query_length: debouncedSearch.length });
     }
   }, [debouncedSearch, filters.search, setFilter]);
 
   return (
-    <div
-      className={cn(
-        "relative flex w-auto min-w-fit items-center gap-2 sm:w-44 md:w-52 lg:w-72",
-        className,
-      )}
-    >
-      <Search className="absolute left-2 h-5 w-5 text-blue-yankees" />
-      <Input
+    <div className={cn("relative flex h-11 items-center rounded-full border-[1.5px] border-border bg-white pl-3.5 pr-1 focus-within:border-blue-yankees focus-within:ring-2 focus-within:ring-blue-yankees/20 lg:h-10", className)}>
+      <label htmlFor={inputId} className="sr-only">
+        {placeholder}
+      </label>
+      <Search aria-hidden="true" className="h-[18px] w-[18px] shrink-0 text-muted-foreground" />
+      <input
+        id={inputId}
         ref={inputRef}
         type="search"
-        aria-label={placeholder}
-        className="h-10 items-center border-blue-baby bg-background py-2 pl-9 pr-3 text-base"
+        inputMode="search"
+        enterKeyHint="search"
+        autoComplete="off"
         placeholder={placeholder}
         value={searchTerm}
-        onChange={handleSearchChange}
+        onChange={handleChange}
+        className="h-full min-w-0 flex-1 bg-transparent px-2.5 font-sans text-sm text-blue-yankees placeholder:text-muted-foreground focus:outline-none [&::-webkit-search-cancel-button]:hidden"
       />
+      {searchTerm ? (
+        <button
+          type="button"
+          aria-label="Borrar búsqueda"
+          onClick={() => {
+            setSearchTerm("");
+            inputRef.current?.focus();
+          }}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees"
+        >
+          <X aria-hidden="true" className="h-4 w-4" />
+        </button>
+      ) : null}
     </div>
   );
 };

@@ -24,7 +24,8 @@ export type SortOption =
   | "priceLowToHigh"
   | "priceHighToLow"
   | "name"
-  | "featuredFirst";
+  | "featuredFirst"
+  | "bestSellers";
 
 export type PriceRanges =
   | "[0,5000]"
@@ -43,6 +44,7 @@ export const SORT_OPTIONS: Record<
   priceHighToLow: { price: "desc" },
   name: { name: "asc" },
   featuredFirst: { isFeatured: "desc" },
+  bestSellers: { soldCount: "desc" },
 };
 
 export const START_YEAR = 2023;

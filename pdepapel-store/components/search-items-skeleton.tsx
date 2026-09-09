@@ -4,21 +4,18 @@ interface SearchItemsSkeletonProps {
   items: number;
 }
 
-export const SearchItemsSkeleton: React.FC<SearchItemsSkeletonProps> = ({
-  items,
-}) => {
-  return Array(items)
-    .fill(0)
-    .map((_, index) => (
-      <div
-        key={index}
-        className="grid grid-cols-[40px_1fr] gap-2.5 rounded p-1"
-      >
-        <Skeleton className="h-10 w-10" />
-        <div className="flex max-h-10 grow items-center justify-between">
-          <Skeleton className="h-4 w-32" />
-          <Skeleton className="h-4 w-14" />
+/** Filas de 56 px, como los resultados, para que el desplegable no salte al llegar los datos. */
+export const SearchItemsSkeleton: React.FC<SearchItemsSkeletonProps> = ({ items }) => (
+  <ul aria-hidden="true" className="flex flex-col">
+    {Array.from({ length: items }, (_, index) => (
+      <li key={index} className="grid min-h-14 grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-3 px-2.5 py-1.5">
+        <Skeleton className="h-11 w-11 rounded-[10px]" />
+        <div className="flex flex-col gap-1.5">
+          <Skeleton className="h-3.5 w-3/4" />
+          <Skeleton className="h-3 w-1/3" />
         </div>
-      </div>
-    ));
-};
+        <Skeleton className="h-3.5 w-14" />
+      </li>
+    ))}
+  </ul>
+);

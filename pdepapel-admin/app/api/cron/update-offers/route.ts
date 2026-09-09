@@ -2,6 +2,7 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { getColombiaDate } from "@/lib/date-utils";
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
+import { refreshSoldCounts } from "@/lib/sold-count";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -45,6 +46,9 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
+    // Orden «Más vendidos»: unidades de pedidos pagados o enviados.
+    const refreshedSoldCounts = await refreshSoldCounts();
+
     // Invalidate Redis cache for all stores (or could be more targeted)
     try {
       const { Redis } = await import("@upstash/redis");
@@ -76,6 +80,7 @@ export async function GET(req: NextRequest) {
       {
         deactivated: expiredOffers.count,
         activated: validOffers.count,
+        refreshedSoldCounts,
       },
       { headers: corsHeaders },
     );

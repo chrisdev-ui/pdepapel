@@ -336,6 +336,9 @@ export interface ProductsResponse {
     formattedSizes: { id: string; count: number }[];
     categories: { id: string; count: number }[];
     designs: { id: string; count: number }[];
+    types?: { id: string; count: number }[];
+    optionValues?: { id: string; count: number }[];
+    priceRanges?: { id: string; count: number }[];
   };
 }
 

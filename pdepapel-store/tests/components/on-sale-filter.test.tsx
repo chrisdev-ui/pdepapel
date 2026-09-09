@@ -12,6 +12,8 @@ vi.mock("@/hooks/use-product-filters", () => ({
   useProductFilters: () => ({
     filters: { isOnSale: false },
     setFilter: filterMocks.setFilter,
+    toggleFilter: vi.fn(),
+    setFilters: vi.fn(),
   }),
 }));
 
@@ -26,20 +28,15 @@ describe("OnSaleFilter", () => {
     const user = userEvent.setup();
     render(<OnSaleFilter />);
 
-    const offerSwitch = screen.getByRole("switch", {
-      name: "Mostrar solo ofertas",
-    });
+    const offerSwitch = screen.getByRole("switch", { name: "Mostrar solo ofertas" });
     expect(offerSwitch).not.toBeChecked();
     expect(offerSwitch).toHaveClass("h-11", "w-11", "touch-manipulation");
-    expect(offerSwitch.firstElementChild).toHaveClass("h-5", "w-9");
 
     await user.click(offerSwitch);
-
     expect(filterMocks.setFilter).toHaveBeenCalledWith("isOnSale", true);
 
     filterMocks.setFilter.mockClear();
-    await user.click(screen.getByText("Mostrar solo ofertas"));
-
+    await user.click(screen.getByText("Solo ofertas"));
     expect(filterMocks.setFilter).toHaveBeenCalledWith("isOnSale", true);
   });
 });

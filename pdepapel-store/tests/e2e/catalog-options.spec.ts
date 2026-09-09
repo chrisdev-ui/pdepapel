@@ -38,6 +38,13 @@ test("filtra el catálogo y oculta la talla logística", async ({ page }) => {
   const firstFilter = visibleFilters.getByRole("checkbox").first();
   await expect(firstFilter).toBeVisible();
   await firstFilter.click();
+  await expect(firstFilter).toBeChecked();
+  if (isCompact) {
+    // The sheet keeps changes pending until the count button applies them.
+    await visibleFilters
+      .getByRole("button", { name: /^Ver (\d|\.)+ productos?$|^Ver productos$/ })
+      .click();
+  }
   await expect(page).toHaveURL(
     /(?:typeId|categoryId|optionValueId|colorId|designId)=/,
   );
@@ -45,7 +52,6 @@ test("filtra el catálogo y oculta la talla logística", async ({ page }) => {
     page.getByRole("region", { name: "Resultados del catálogo" }),
   ).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
 
-  if (isCompact) await page.keyboard.press("Escape");
   await expectNoHorizontalOverflow(page);
 });
 
@@ -81,11 +87,9 @@ test("mantiene utilizables los controles del catálogo en tableta", async ({
     page.getByRole("button", { name: "Abrir carrito, 0 productos" }).first(),
   ).toBeEnabled({ timeout: 15_000 });
 
+  // Below lg the sort lives in a bottom sheet and the offer switch inside the filters sheet.
   await expect(
-    page.getByRole("combobox", { name: "Ordenar productos" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("switch", { name: "Mostrar solo ofertas" }),
+    page.getByRole("button", { name: "Ordenar productos" }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Filtros" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
@@ -99,7 +103,13 @@ test("mantiene utilizables los controles del catálogo en tableta", async ({
     filtersDialog.getByText("Categorías", { exact: true }),
   ).toBeVisible();
   await expect(
+    filtersDialog.getByRole("switch", { name: "Mostrar solo ofertas" }),
+  ).toBeVisible();
+  await expect(
     filtersDialog.getByRole("button", { name: "Cerrar" }),
+  ).toBeVisible();
+  await expect(
+    filtersDialog.getByRole("button", { name: /^Ver (\d|\.)+ productos?$|^Ver productos$/ }),
   ).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });

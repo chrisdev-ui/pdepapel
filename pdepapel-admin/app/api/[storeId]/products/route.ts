@@ -6,6 +6,8 @@ import {
   productAvailabilityWhere,
 } from "@/lib/product-availability";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { PRICE_RANGE_BUCKETS, priceBucketWhere, typeFacetsFromCategories, type ProductFacets } from "@/lib/catalog-facets";
+import { productGroupNameSearchWhere, productNameSearchWhere } from "@/lib/search-terms";
 import cloudinaryInstance from "@/lib/cloudinary";
 import prismadb from "@/lib/prismadb";
 import { PUBLIC_REVIEW_INCLUDE, PUBLIC_REVIEW_WHERE } from "@/lib/review-moderation";
@@ -53,6 +55,7 @@ import {
  */
 interface UnifiedProduct {
   id: string;
+  soldCount?: number;
   slug?: string;
   name: string;
   description?: string | null;
@@ -420,7 +423,7 @@ export async function GET(
       productGroupId,
       isOnSale, // Include in cache key
       availability,
-      v: "8",
+      v: "9",
     })}`;
 
     // Try to get from Redis cache
@@ -639,18 +642,6 @@ export async function GET(
       });
     }
 
-    interface FacetCount {
-      id: string;
-      count: number;
-    }
-
-    interface ProductFacets {
-      colors: FacetCount[];
-      formattedSizes: FacetCount[];
-      categories: FacetCount[];
-      designs: FacetCount[];
-    }
-
     // Custom type for unified product response
     type StorefrontProduct = Partial<Product> & {
       id: string; // Required
@@ -683,7 +674,6 @@ export async function GET(
     // GROUP BY PARENTS LOGIC
     // ---------------------------------------------------------
     if (groupBy === "parents") {
-      const shouldScopeGroupVariants = categoryId.length > 0;
       // Filter for Products (used to filter Groups via relation)
       const productFilters: Prisma.ProductWhereInput = {
         storeId: params.storeId,
@@ -715,12 +705,12 @@ export async function GET(
         ...(search
           ? {
               OR: [
-                { name: { contains: search } },
+                ...productGroupNameSearchWhere(search),
                 {
                   products: {
                     some: {
                       ...productFilters,
-                      OR: [{ name: { contains: search } }],
+                      OR: productNameSearchWhere(search),
                     },
                   },
                 },
@@ -733,7 +723,7 @@ export async function GET(
       const standaloneWhere: Prisma.ProductWhereInput = {
         ...productFilters,
         productGroupId: null,
-        ...(search ? { OR: [{ name: { contains: search } }] } : {}),
+        ...(search ? { OR: productNameSearchWhere(search) } : {}),
       };
 
       // Fetch ALL groups and products (no pagination at DB level)
@@ -760,6 +750,7 @@ export async function GET(
                 size: true,
                 design: true,
                 isFeatured: true,
+                soldCount: true,
                 availableAt: true,
                 reviews: {
                   where: PUBLIC_REVIEW_WHERE,
@@ -813,6 +804,7 @@ export async function GET(
           stock: g.products.reduce((acc: number, p: any) => acc + p.stock, 0),
           isFeatured: g.products.some((p: any) => p.isFeatured),
           availableAt: primaryProduct?.availableAt ?? null,
+          soldCount: g.products.reduce((acc: number, p: any) => acc + (p.soldCount ?? 0), 0),
         };
       });
 
@@ -837,6 +829,7 @@ export async function GET(
           createdAt: p.createdAt,
           stock: p.stock,
           isFeatured: p.isFeatured,
+          soldCount: p.soldCount ?? 0,
           availableAt: p.availableAt ?? null,
         }),
       );
@@ -998,6 +991,11 @@ export async function GET(
           if (discountDifference !== 0) return discountDifference;
         }
 
+        if (sortOption === "bestSellers") {
+          const soldDifference = (second.soldCount ?? 0) - (first.soldCount ?? 0);
+          if (soldDifference !== 0) return soldDifference;
+        }
+
         if (sortOption === "priceLowToHigh") return first.price - second.price;
         if (sortOption === "priceHighToLow") return second.price - first.price;
         if (sortOption === "name")
@@ -1022,86 +1020,67 @@ export async function GET(
       const offset = (page - 1) * itemsPerPage;
       const finalResponse = sortedItems.slice(offset, offset + itemsPerPage);
 
-      let groupFacets: ProductFacets | undefined;
-      if (shouldScopeGroupVariants) {
-        const getFacetWhere = (
-          excludedKey: "colorId" | "sizeId" | "categoryId" | "designId",
-        ): Prisma.ProductWhereInput => {
-          const conditions: Prisma.ProductWhereInput[] = [
-            ...catalogOptionConditions,
-          ];
+      // Facetas siempre, también sin categoría: la barra lateral y la hoja
+      // móvil muestran conteos de tipos, opciones y rangos de precio.
+      const getFacetWhere = (
+        excludedKey: "colorId" | "sizeId" | "categoryId" | "designId" | "optionValueId" | "price",
+      ): Prisma.ProductWhereInput => {
+        const conditions: Prisma.ProductWhereInput[] =
+          excludedKey === "optionValueId" ? [] : [...catalogOptionConditions];
 
-          if (search) {
-            conditions.push({
-              OR: [
-                { name: { contains: search } },
-                { productGroup: { is: { name: { contains: search } } } },
-              ],
-            });
-          }
-          if (isOnSale && onSaleFilter) {
-            conditions.push(onSaleFilter);
-          }
+        if (search) {
+          conditions.push({
+            OR: [
+              ...productNameSearchWhere(search),
+              { productGroup: { is: { OR: productGroupNameSearchWhere(search) } } },
+            ],
+          });
+        }
+        if (isOnSale && onSaleFilter) {
+          conditions.push(onSaleFilter);
+        }
 
-          return {
-            ...productFilters,
-            colorId:
-              excludedKey === "colorId" ? undefined : productFilters.colorId,
-            sizeId:
-              excludedKey === "sizeId" ? undefined : productFilters.sizeId,
-            categoryId:
-              excludedKey === "categoryId"
-                ? undefined
-                : productFilters.categoryId,
-            designId:
-              excludedKey === "designId" ? undefined : productFilters.designId,
-            ...(conditions.length > 0 ? { AND: conditions } : {}),
-          };
+        return {
+          ...productFilters,
+          AND: undefined,
+          colorId: excludedKey === "colorId" ? undefined : productFilters.colorId,
+          sizeId: excludedKey === "sizeId" ? undefined : productFilters.sizeId,
+          categoryId: excludedKey === "categoryId" ? undefined : productFilters.categoryId,
+          designId: excludedKey === "designId" ? undefined : productFilters.designId,
+          price: excludedKey === "price" ? undefined : productFilters.price,
+          ...(conditions.length > 0 ? { AND: conditions } : {}),
         };
+      };
 
-        const [colorFacets, sizeFacets, categoryFacets, designFacets] =
-          await Promise.all([
-            prismadb.product.groupBy({
-              by: ["colorId"],
-              where: getFacetWhere("colorId"),
-              _count: { colorId: true },
-            }),
-            prismadb.product.groupBy({
-              by: ["sizeId"],
-              where: getFacetWhere("sizeId"),
-              _count: { sizeId: true },
-            }),
-            prismadb.product.groupBy({
-              by: ["categoryId"],
-              where: getFacetWhere("categoryId"),
-              _count: { categoryId: true },
-            }),
-            prismadb.product.groupBy({
-              by: ["designId"],
-              where: getFacetWhere("designId"),
-              _count: { designId: true },
-            }),
-          ]);
+      const [colorFacets, sizeFacets, categoryFacets, designFacets, optionValueFacets, priceCounts, storeCategories] =
+        await Promise.all([
+          prismadb.product.groupBy({ by: ["colorId"], where: getFacetWhere("colorId"), _count: { colorId: true } }),
+          prismadb.product.groupBy({ by: ["sizeId"], where: getFacetWhere("sizeId"), _count: { sizeId: true } }),
+          prismadb.product.groupBy({ by: ["categoryId"], where: getFacetWhere("categoryId"), _count: { categoryId: true } }),
+          prismadb.product.groupBy({ by: ["designId"], where: getFacetWhere("designId"), _count: { designId: true } }),
+          prismadb.productCatalogOptionValue.groupBy({
+            by: ["optionValueId"],
+            where: { storeId: params.storeId, product: getFacetWhere("optionValueId") },
+            _count: { optionValueId: true },
+          }),
+          Promise.all(
+            PRICE_RANGE_BUCKETS.map((bucket) =>
+              prismadb.product.count({ where: { ...getFacetWhere("price"), price: priceBucketWhere(bucket) } }),
+            ),
+          ),
+          prismadb.category.findMany({ where: { storeId: params.storeId }, select: { id: true, typeId: true } }),
+        ]);
 
-        groupFacets = {
-          colors: colorFacets.map((facet) => ({
-            id: facet.colorId,
-            count: facet._count.colorId,
-          })),
-          formattedSizes: sizeFacets.map((facet) => ({
-            id: facet.sizeId,
-            count: facet._count.sizeId,
-          })),
-          categories: categoryFacets.map((facet) => ({
-            id: facet.categoryId,
-            count: facet._count.categoryId,
-          })),
-          designs: designFacets.map((facet) => ({
-            id: facet.designId,
-            count: facet._count.designId,
-          })),
-        };
-      }
+      const categoryFacetCounts = categoryFacets.map((facet) => ({ id: facet.categoryId, count: facet._count.categoryId }));
+      const groupFacets: ProductFacets = {
+        colors: colorFacets.map((facet) => ({ id: facet.colorId, count: facet._count.colorId })),
+        formattedSizes: sizeFacets.map((facet) => ({ id: facet.sizeId, count: facet._count.sizeId })),
+        categories: categoryFacetCounts,
+        designs: designFacets.map((facet) => ({ id: facet.designId, count: facet._count.designId })),
+        types: typeFacetsFromCategories(categoryFacetCounts, storeCategories),
+        optionValues: optionValueFacets.map((facet) => ({ id: facet.optionValueId, count: facet._count.optionValueId })),
+        priceRanges: PRICE_RANGE_BUCKETS.map((bucket, index) => ({ id: bucket.id, count: priceCounts[index] ?? 0 })),
+      };
 
       const response = {
         products: finalResponse,
@@ -1179,7 +1158,7 @@ export async function GET(
           catalogOptionConditions.length > 0
             ? catalogOptionConditions
             : undefined,
-        OR: search ? [{ name: { contains: search } }] : undefined,
+        OR: search ? productNameSearchWhere(search) : undefined,
         isFeatured: isFeatured !== null ? isFeatured === "true" : undefined,
         isArchived: false,
         ...availabilityFilter,
@@ -1336,10 +1315,7 @@ export async function GET(
           catalogOptionConditions.length > 0
             ? catalogOptionConditions
             : undefined,
-        OR: [
-          { name: search ? { search } : undefined },
-          { name: { contains: search } },
-        ],
+        OR: search ? [{ name: { search } }, ...productNameSearchWhere(search)] : undefined,
         isFeatured: isFeatured !== null ? isFeatured === "true" : undefined,
         isArchived: false,
         ...availabilityFilter,

@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   findProductGroups: vi.fn(),
   getActiveOffers: vi.fn(),
   getProductsPrices: vi.fn(),
+  groupOptionValues: vi.fn(),
+  findCategories: vi.fn(),
 }));
 
 vi.mock("@/constants", () => ({
@@ -17,6 +19,7 @@ vi.mock("@/constants", () => ({
     priceHighToLow: { price: "desc" },
     name: { name: "asc" },
     featuredFirst: { isFeatured: "desc" },
+    bestSellers: { soldCount: "desc" },
   },
 }));
 vi.mock("@/lib/api-errors", () => ({
@@ -34,6 +37,8 @@ vi.mock("@/lib/prismadb", () => ({
       groupBy: mocks.groupProducts,
     },
     productGroup: { findMany: mocks.findProductGroups },
+    productCatalogOptionValue: { groupBy: mocks.groupOptionValues },
+    category: { findMany: mocks.findCategories },
   },
 }));
 vi.mock("@/lib/utils", () => ({
@@ -87,6 +92,8 @@ describe("GET /api/[storeId]/products", () => {
     mocks.findProducts.mockResolvedValue([standaloneProduct]);
     mocks.countProducts.mockResolvedValue(1);
     mocks.groupProducts.mockResolvedValue([]);
+    mocks.groupOptionValues.mockResolvedValue([]);
+    mocks.findCategories.mockResolvedValue([]);
     mocks.getActiveOffers.mockResolvedValue([]);
     mocks.getProductsPrices.mockResolvedValue(
       new Map([
@@ -390,6 +397,7 @@ describe("GET /api/[storeId]/products", () => {
     ["name", ["group-variant", "sale-product", "featured-product"]],
     ["featuredFirst", ["featured-product", "group-variant", "sale-product"]],
     ["isOnSale", ["sale-product", "group-variant", "featured-product"]],
+    ["bestSellers", ["group-variant", "sale-product", "featured-product"]],
   ])("applies %s across grouped catalog products", async (sortOption, ids) => {
     const groupVariant = {
       ...standaloneProduct,
@@ -399,6 +407,7 @@ describe("GET /api/[storeId]/products", () => {
       price: 30000,
       stock: 2,
       isFeatured: false,
+      soldCount: 50,
       createdAt: new Date("2026-03-03T00:00:00.000Z"),
       reviews: [],
     };
@@ -409,6 +418,7 @@ describe("GET /api/[storeId]/products", () => {
       name: "Cuaderno destacado",
       price: 15000,
       isFeatured: true,
+      soldCount: 20,
       createdAt: new Date("2026-03-02T00:00:00.000Z"),
     };
     const saleProduct = {
@@ -418,6 +428,7 @@ describe("GET /api/[storeId]/products", () => {
       name: "Borrador en oferta",
       price: 20000,
       isFeatured: false,
+      soldCount: 40,
       createdAt: new Date("2026-03-01T00:00:00.000Z"),
     };
 
@@ -462,6 +473,7 @@ describe("GET /api/[storeId]/products", () => {
     ["priceHighToLow", { price: "desc" }],
     ["name", { name: "asc" }],
     ["featuredFirst", { isFeatured: "desc" }],
+    ["bestSellers", { soldCount: "desc" }],
   ])("applies %s to ungrouped catalog queries", async (sortOption, orderBy) => {
     const response = await GET(
       new Request(
@@ -523,5 +535,38 @@ describe("GET /api/[storeId]/products", () => {
     await expect(response.json()).resolves.toMatchObject({
       products: [{ id: discountedProduct.id }, { id: regularProduct.id }],
     });
+  });
+
+  it("returns type, option and price facets for grouped queries without a category", async () => {
+    mocks.groupProducts.mockImplementation(async ({ by }: { by: string[] }) =>
+      by[0] === "categoryId"
+        ? [
+            { categoryId: "cat-a", _count: { categoryId: 2 } },
+            { categoryId: "cat-b", _count: { categoryId: 3 } },
+          ]
+        : [],
+    );
+    mocks.groupOptionValues.mockResolvedValue([{ optionValueId: "value-1", _count: { optionValueId: 4 } }]);
+    mocks.findCategories.mockResolvedValue([
+      { id: "cat-a", typeId: "type-1" },
+      { id: "cat-b", typeId: "type-1" },
+    ]);
+    mocks.countProducts.mockResolvedValue(1);
+
+    const response = await GET(
+      new Request("https://admin.example.com/api/store-id/products?groupBy=parents&search=libreta&skipCache=true"),
+      { params: { storeId: "store-id" } },
+    );
+    const body = await response.json();
+
+    expect(body.facets.types).toEqual([{ id: "type-1", count: 5 }]);
+    expect(body.facets.optionValues).toEqual([{ id: "value-1", count: 4 }]);
+    expect(body.facets.priceRanges).toHaveLength(5);
+    expect(body.facets.priceRanges[0]).toEqual({ id: "[0,5000]", count: 1 });
+
+    const standaloneWhere = mocks.findProducts.mock.calls[0][0].where;
+    expect(standaloneWhere.OR).toEqual(
+      expect.arrayContaining([{ name: { contains: "libreta" } }, { name: { contains: "cuaderno" } }]),
+    );
   });
 });

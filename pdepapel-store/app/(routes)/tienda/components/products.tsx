@@ -1,7 +1,6 @@
-import { NoResults } from "@/components/ui/no-results";
 import ProductCard from "@/components/ui/product-card";
-import { KAWAII_FACE_SAD } from "@/constants";
 import { Product } from "@/types";
+
 import Paginator from "./paginator";
 
 interface ProductsProps {
@@ -9,31 +8,21 @@ interface ProductsProps {
   totalPages: number;
 }
 
+/** Cuadrícula del catálogo: 2 columnas en teléfono, 3 en tableta y portátil, 4 desde 1280 px. */
 const Products: React.FC<ProductsProps> = ({ products, totalPages }) => {
   return (
     <div className="flex flex-col gap-8">
-      {products.length === 0 && (
-        <NoResults
-          className="h-96"
-          message={`No hay productos ${KAWAII_FACE_SAD}`}
-        />
-      )}
-      {!!products.length && (
-        <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
-          {products.map((product, index) => (
-            <ProductCard
-              key={product.id}
-              product={product}
-              priority={index === 0}
-            />
-          ))}
-        </div>
-      )}
-      {totalPages > 0 && (
-        <div className="flex w-full items-center">
-          <Paginator totalPages={totalPages} />
-        </div>
-      )}
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
+        {products.map((product, index) => (
+          <ProductCard
+            key={product.id}
+            product={product}
+            priority={index < 2}
+            sizes="(max-width: 767px) 50vw, (max-width: 1279px) 33vw, 22vw"
+          />
+        ))}
+      </div>
+      {totalPages > 1 && <Paginator totalPages={totalPages} />}
     </div>
   );
 };

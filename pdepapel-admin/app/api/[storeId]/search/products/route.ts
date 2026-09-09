@@ -2,7 +2,9 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createCorsHeaders } from "@/lib/cors";
 import { getProductsPrices } from "@/lib/discount-engine";
 import prismadb from "@/lib/prismadb";
+import { expandSearchTerms } from "@/lib/search-terms";
 import { CACHE_HEADERS } from "@/lib/utils";
+import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 const getCorsHeaders = (request: Request) => ({
@@ -30,7 +32,7 @@ export async function GET(
     // ---------------------------------------------------------
     // REDIS CACHING (1 Hour)
     // ---------------------------------------------------------
-    const cacheKey = `store:${params.storeId}:search:${search}:${page}:${limit}:v3`;
+    const cacheKey = `store:${params.storeId}:search:${search}:${page}:${limit}:v4`;
     try {
       const { Redis } = await import("@upstash/redis");
       const redis = Redis.fromEnv();
@@ -57,6 +59,12 @@ export async function GET(
     // - Name Starts With Query (Score 50)
     // - Name Contains Query (Score 20)
     // - Description Contains Query (Score 5)
+    // Sinónimos («libreta» encuentra cuadernos): cualquier variante en el nombre cuenta.
+    const searchTerms = expandSearchTerms(search);
+    const nameMatches = searchTerms.length
+      ? Prisma.join(searchTerms.map((term) => Prisma.sql`name LIKE ${`%${term}%`}`), " OR ")
+      : Prisma.sql`name LIKE ${`%${search}%`}`;
+
     const rawIds = await prismadb.$queryRaw<{ id: string }[]>`
       SELECT id,
       (
@@ -71,7 +79,7 @@ export async function GET(
       FROM Product
       WHERE storeId = ${params.storeId}
         AND isArchived = 0
-        AND (name LIKE ${`%${search}%`} OR description LIKE ${`%${search}%`})
+        AND ((${nameMatches}) OR description LIKE ${`%${search}%`})
       ORDER BY relevance DESC, createdAt DESC
       LIMIT ${limit * 5}
       OFFSET ${skip}

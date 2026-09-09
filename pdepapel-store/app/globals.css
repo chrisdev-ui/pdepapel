@@ -328,10 +328,13 @@
    padding above reads it. Keep in sync with components/navbar.tsx. */
 :root {
   --storefront-header-offset: 158px;
+  /* Same header once the announcement bar hides on scroll (phones and tablets). */
+  --storefront-header-scrolled-offset: 126px;
 }
 @media (min-width: 1024px) {
   :root {
     --storefront-header-offset: 172px;
+    --storefront-header-scrolled-offset: 172px;
   }
 }
 

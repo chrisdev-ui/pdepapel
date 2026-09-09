@@ -157,7 +157,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
   const heart = (
     <Heart
       aria-hidden="true"
-      className={cn("h-[18px] w-[18px]", isWishlistProduct && "text-pink-froly")}
+      className={cn("h-[18px] w-[18px]", isWishlistProduct && "text-rose-700")}
       fill={isWishlistProduct ? "currentColor" : "none"}
     />
   );
@@ -249,7 +249,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
         </Link>
         <p className="h-[18px] truncate text-xs leading-[18px] text-gray-500 sm:text-[13px]">
           {product.category?.name}
-          {badges.newInline && <span className="font-semibold text-pink-froly"> · Nuevo</span>}
+          {badges.newInline && <span className="font-semibold text-rose-700"> · Nuevo</span>}
         </p>
         <div className="flex h-[22px] items-center justify-between gap-2">
           {rating ? (

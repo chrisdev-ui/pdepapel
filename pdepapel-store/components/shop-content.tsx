@@ -2,42 +2,33 @@
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
-import { X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { getProducts } from "@/actions/get-products";
-import Filter from "@/components/filter";
-import { OnSaleFilter } from "@/components/on-sale-filter";
-import PriceFilter from "@/components/price-filter";
-import { Button } from "@/components/ui/button";
-import { LIMIT_SHOP_ITEMS, SORT_OPTIONS } from "@/constants";
+import { MobileToolbar, ShopToolbar } from "@/components/shop/shop-toolbar";
+import { ShopSidebar } from "@/components/shop/shop-sidebar";
+import { NoResultsPanel, SuggestionChip } from "@/components/ui/no-results";
+import { LIMIT_SHOP_ITEMS } from "@/constants";
+import { filtersToQuery } from "@/hooks/use-filter-count";
+import { ProductFilters, useProductFilters } from "@/hooks/use-product-filters";
 import { toAnalyticsItem, trackCustomerEvent } from "@/lib/customer-analytics";
-import { useProductFilters } from "@/hooks/use-product-filters";
-import { CatalogOption, Category, Color, Design, Product, Type } from "@/types";
+import { buildActiveFilterChips, countActiveFilters, EMPTY_FILTERS, formatResultRange, removeFilterChip } from "@/lib/shop-filters";
+import { CatalogOption, Category, Color, Design, Product, ProductsResponse, Type } from "@/types";
 
 import Products from "../app/(routes)/tienda/components/products";
 import ShopSearchBar from "../app/(routes)/tienda/components/shop-search-bar";
-import {
-  MobileFiltersSkeleton,
-  ProductListSkeleton,
-} from "../app/(routes)/tienda/components/skeletons";
-import SortSelector from "../app/(routes)/tienda/components/sort-selector";
+import { ProductListSkeleton } from "../app/(routes)/tienda/components/skeletons";
 
 const MobileFilters = dynamic(() => import("@/components/mobile-filters"), {
   ssr: false,
-  loading: () => <MobileFiltersSkeleton />,
+  loading: () => <div aria-hidden="true" className="h-11 flex-1 rounded-full border-[1.5px] border-blue-yankees/30" />,
 });
 
 interface ShopContentProps {
   initialProducts: Product[];
   initialTotalPages: number;
   initialTotalItems: number;
-  initialFacets?: {
-    colors: { id: string; count: number }[];
-    formattedSizes: { id: string; count: number }[];
-    categories: { id: string; count: number }[];
-    designs: { id: string; count: number }[];
-  };
+  initialFacets?: ProductsResponse["facets"];
   types: Type[];
   categories: Category[];
   catalogOptions: CatalogOption[];
@@ -46,6 +37,14 @@ interface ShopContentProps {
   fixedCategoryId?: string;
   heading?: string;
   searchPlaceholder?: string;
+  /** Categorías sugeridas cuando no hay resultados. */
+  suggestions?: SuggestionChip[];
+}
+
+function mergeCounts<T extends { id: string }>(data: T[], facetCounts: { id: string; count: number }[] | undefined): (T & { count?: number })[] {
+  if (!facetCounts) return data;
+  const countMap = new Map(facetCounts.map((facet) => [facet.id, facet.count]));
+  return data.map((item) => ({ ...item, count: countMap.get(item.id) ?? 0 }));
 }
 
 export const ShopContent: React.FC<ShopContentProps> = ({
@@ -61,18 +60,15 @@ export const ShopContent: React.FC<ShopContentProps> = ({
   fixedCategoryId,
   heading = "Todos los productos",
   searchPlaceholder,
+  suggestions = [],
 }) => {
   const { filters, setFilters } = useProductFilters();
   const [isMounted, setIsMounted] = useState(false);
   const noResultsQueryRef = useRef<string>();
   const viewedListRef = useRef<string>();
 
-  const effectiveFilters = useMemo(
-    () => ({
-      ...filters,
-      typeId: fixedCategoryId ? [] : filters.typeId,
-      categoryId: fixedCategoryId ? [fixedCategoryId] : filters.categoryId,
-    }),
+  const effectiveFilters = useMemo<ProductFilters>(
+    () => ({ ...filters, typeId: fixedCategoryId ? [] : filters.typeId, categoryId: fixedCategoryId ? [fixedCategoryId] : filters.categoryId }),
     [filters, fixedCategoryId],
   );
 
@@ -80,44 +76,10 @@ export const ShopContent: React.FC<ShopContentProps> = ({
     setIsMounted(true);
   }, []);
 
-  const { data, isLoading, isPlaceholderData, isFetching, refetch } = useQuery({
+  const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ["products", fixedCategoryId, effectiveFilters],
-    queryFn: () =>
-      getProducts({
-        ...effectiveFilters,
-        page: effectiveFilters.page,
-        colorId: Array.isArray(effectiveFilters.colorId)
-          ? effectiveFilters.colorId.join(",")
-          : effectiveFilters.colorId,
-        sizeId: Array.isArray(effectiveFilters.sizeId)
-          ? effectiveFilters.sizeId.join(",")
-          : effectiveFilters.sizeId,
-        optionValueId: Array.isArray(effectiveFilters.optionValueId)
-          ? effectiveFilters.optionValueId.join(",")
-          : effectiveFilters.optionValueId,
-        typeId: Array.isArray(effectiveFilters.typeId)
-          ? effectiveFilters.typeId.join(",")
-          : effectiveFilters.typeId,
-        categoryId: Array.isArray(effectiveFilters.categoryId)
-          ? effectiveFilters.categoryId.join(",")
-          : effectiveFilters.categoryId,
-        designId: Array.isArray(effectiveFilters.designId)
-          ? effectiveFilters.designId.join(",")
-          : effectiveFilters.designId,
-        minPrice: effectiveFilters.minPrice,
-        maxPrice: effectiveFilters.maxPrice,
-        fromShop: true,
-        itemsPerPage: LIMIT_SHOP_ITEMS,
-        groupBy: "parents",
-      }),
-    initialData: isMounted
-      ? undefined
-      : {
-          products: initialProducts,
-          totalPages: initialTotalPages,
-          totalItems: initialTotalItems,
-          facets: initialFacets,
-        },
+    queryFn: () => getProducts({ ...filtersToQuery(effectiveFilters, fixedCategoryId), page: effectiveFilters.page, itemsPerPage: LIMIT_SHOP_ITEMS }),
+    initialData: isMounted ? undefined : { products: initialProducts, totalPages: initialTotalPages, totalItems: initialTotalItems, facets: initialFacets },
     initialDataUpdatedAt: isMounted ? undefined : Date.now(),
     staleTime: 60_000,
     refetchOnWindowFocus: false,
@@ -125,271 +87,131 @@ export const ShopContent: React.FC<ShopContentProps> = ({
     placeholderData: keepPreviousData,
   });
 
-  // Helper to merge counts into static data
-  const mergeCounts = (
-    data: any[],
-    facetCounts: { id: string; count: number }[] | undefined,
-  ) => {
-    if (!facetCounts) return data;
-    const countMap = new Map(facetCounts.map((f) => [f.id, f.count]));
-    return data.map((item) => ({
-      ...item,
-      count: countMap.get(item.id) ?? 0, // Default to 0 if not found in facets
-    }));
-  };
-
-  // Filter categories based on selected Type(s)
-  // We filtering based on type first, THEN merge counts.
-  // Actually, facets from backend might already respect the type filter if it restricts the product set.
-  // The 'filteredCategories' logic ensures we only show categories belonging to the selected TYPE.
-  const typeFilteredCategories = categories.filter((category) => {
-    if (effectiveFilters.typeId.length === 0) return true;
-    return effectiveFilters.typeId.includes(category.typeId);
-  });
-
-  const categoriesWithCounts = mergeCounts(
-    typeFilteredCategories,
-    data?.facets?.categories,
-  );
-  const onlyAvailableInCategory = (items: any[]) =>
-    fixedCategoryId ? items.filter((item) => item.count > 0) : items;
-  const colorsWithCounts = onlyAvailableInCategory(
-    mergeCounts(colors, data?.facets?.colors),
-  );
-  const selectedCategoryIds = fixedCategoryId
-    ? [fixedCategoryId]
-    : effectiveFilters.categoryId;
+  const facets = data?.facets;
+  const typeFilteredCategories = categories.filter((category) => effectiveFilters.typeId.length === 0 || effectiveFilters.typeId.includes(category.typeId));
+  const typesWithCounts = mergeCounts(types, facets?.types);
+  const categoriesWithCounts = mergeCounts(typeFilteredCategories, facets?.categories);
+  const onlyAvailableInCategory = <T extends { count?: number }>(items: T[]) => (fixedCategoryId ? items.filter((item) => item.count === undefined || item.count > 0) : items);
+  const colorsWithCounts = onlyAvailableInCategory(mergeCounts(colors, facets?.colors));
+  const designsWithCounts = onlyAvailableInCategory(mergeCounts(designs, facets?.designs));
+  const selectedCategoryIds = fixedCategoryId ? [fixedCategoryId] : effectiveFilters.categoryId;
+  const optionValueCounts = facets?.optionValues ? new Map(facets.optionValues.map((facet) => [facet.id, facet.count])) : null;
   const visibleCatalogOptions = catalogOptions
-    .filter(
-      (option) =>
-        selectedCategoryIds.length === 0 ||
-        option.categoryIds.some((categoryId) =>
-          selectedCategoryIds.includes(categoryId),
-        ),
-    )
+    .filter((option) => selectedCategoryIds.length === 0 || option.categoryIds.some((categoryId) => selectedCategoryIds.includes(categoryId)))
     .map((option) => ({
       ...option,
       values: option.values
         .map((value) => ({
           ...value,
-          count:
-            selectedCategoryIds.length === 0
+          count: optionValueCounts
+            ? (optionValueCounts.get(value.id) ?? 0)
+            : selectedCategoryIds.length === 0
               ? value.count
-              : selectedCategoryIds.reduce(
-                  (total, categoryId) =>
-                    total + (value.categoryCounts?.[categoryId] ?? 0),
-                  0,
-                ),
+              : selectedCategoryIds.reduce((total, categoryId) => total + (value.categoryCounts?.[categoryId] ?? 0), 0),
         }))
-        .filter(
-          (value) =>
-            value.count > 0 || filters.optionValueId.includes(value.id),
-        ),
+        .filter((value) => value.count > 0 || filters.optionValueId.includes(value.id)),
     }))
     .filter((option) => option.values.length > 0);
-  const designsWithCounts = onlyAvailableInCategory(
-    mergeCounts(designs, data?.facets?.designs),
+
+  const ignoredKeys = useMemo<(keyof ProductFilters)[]>(() => (fixedCategoryId ? ["categoryId", "typeId"] : []), [fixedCategoryId]);
+  const chips = useMemo(
+    () =>
+      buildActiveFilterChips(
+        filters,
+        {
+          types,
+          categories,
+          colors,
+          designs,
+          optionValues: catalogOptions.flatMap((option) => option.values.map((value) => ({ id: value.id, name: `${option.name}: ${value.name}` }))),
+        },
+        ignoredKeys,
+      ),
+    [filters, types, categories, colors, designs, catalogOptions, ignoredKeys],
   );
-  const hasActiveFilters = Boolean(
-    filters.typeId.length ||
-    filters.categoryId.length ||
-    filters.colorId.length ||
-    filters.sizeId.length ||
-    filters.optionValueId.length ||
-    filters.designId.length ||
-    filters.minPrice !== null ||
-    filters.maxPrice !== null ||
-    filters.search ||
-    filters.sortOption ||
-    filters.isOnSale,
-  );
+  const activeCount = countActiveFilters(filters, ignoredKeys);
   const totalItems = data?.totalItems ?? initialTotalItems;
   const isCatalogUnavailable = Boolean(data?.isUnavailable);
+  const products = data?.products ?? [];
+  const rangeText = formatResultRange(filters.page, LIMIT_SHOP_ITEMS, totalItems);
+
+  const clearFilters = () => setFilters({ ...EMPTY_FILTERS, sortOption: filters.sortOption, page: 1 });
+  const removeChip = (chip: (typeof chips)[number]) => setFilters(removeFilterChip(filters, chip));
 
   useEffect(() => {
     if (!isMounted || isFetching || !data || data.products.length > 0) return;
-
     const queryKey = JSON.stringify(effectiveFilters);
     if (noResultsQueryRef.current === queryKey) return;
-
     noResultsQueryRef.current = queryKey;
     trackCustomerEvent("catalog_no_results", {
       has_search: Boolean(effectiveFilters.search),
-      active_filters:
-        effectiveFilters.colorId.length +
-        effectiveFilters.sizeId.length +
-        effectiveFilters.optionValueId.length +
-        effectiveFilters.designId.length +
-        Number(effectiveFilters.isOnSale),
+      active_filters: countActiveFilters(effectiveFilters, ["search", "isOnSale"]) + Number(effectiveFilters.isOnSale),
     });
   }, [data, effectiveFilters, isFetching, isMounted]);
 
   useEffect(() => {
     if (!isMounted || isFetching || !data || data.products.length === 0) return;
-
-    const listKey = `${heading}:${effectiveFilters.page}:${data.products
-      .map((product) => product.id)
-      .join(",")}`;
+    const listKey = `${heading}:${effectiveFilters.page}:${data.products.map((product) => product.id).join(",")}`;
     if (viewedListRef.current === listKey) return;
-
     viewedListRef.current = listKey;
     trackCustomerEvent("view_item_list", {
       item_list_id: fixedCategoryId || "shop",
       item_list_name: heading,
       items: data.products.map((product) => toAnalyticsItem(product, 1)),
     });
-  }, [
-    data,
-    effectiveFilters.page,
-    fixedCategoryId,
-    heading,
-    isFetching,
-    isMounted,
-  ]);
+  }, [data, effectiveFilters.page, fixedCategoryId, heading, isFetching, isMounted]);
 
-  const clearFilters = () => {
-    setFilters({
-      typeId: null,
-      categoryId: null,
-      colorId: null,
-      sizeId: null,
-      optionValueId: null,
-      designId: null,
-      minPrice: null,
-      maxPrice: null,
-      sortOption: null,
-      search: null,
-      isOnSale: null,
-      page: 1,
-    });
+  const filterGroups = {
+    types: typesWithCounts,
+    categories: categoriesWithCounts,
+    catalogOptions: visibleCatalogOptions,
+    colors: colorsWithCounts,
+    designs: designsWithCounts,
+    hideCategoryFilters: Boolean(fixedCategoryId),
   };
 
   return (
-    <div className="lg:grid lg:grid-cols-5 lg:gap-x-8">
-      <div className="hidden lg:block">
-        {!fixedCategoryId && (
-          <Filter
-            valueKey="typeId"
-            name="Categorías"
-            data={types}
-            emptyMessage="No hay tipos disponibles"
-          />
-        )}
-        {!fixedCategoryId && (
-          <Filter
-            valueKey="categoryId"
-            name="Sub-Categorías"
-            emptyMessage="No hay categorías disponibles"
-            data={categoriesWithCounts}
-          />
-        )}
-        {visibleCatalogOptions.map((option) => (
-          <Filter
-            key={option.id}
-            valueKey="optionValueId"
-            name={option.name}
-            emptyMessage={`No hay valores de ${option.name.toLocaleLowerCase("es-CO")} disponibles`}
-            data={option.values}
-          />
-        ))}
-        {colorsWithCounts.length > 0 && (
-          <Filter
-            valueKey="colorId"
-            name="Colores"
-            emptyMessage="No hay colores disponibles"
-            data={colorsWithCounts}
-          />
-        )}
-        {designsWithCounts.length > 0 && (
-          <Filter
-            valueKey="designId"
-            name="Diseños"
-            emptyMessage="No hay diseños disponibles"
-            data={designsWithCounts}
-          />
-        )}
-        <PriceFilter min={0} max={1000000} step={1000} />
-      </div>
-      <div className="mt-6 space-y-8 lg:col-span-4 lg:mt-0">
-        <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h2 className="font-sans text-3xl font-bold">{heading}</h2>
-            {fixedCategoryId && (
-              <p
-                className="mt-1 text-sm text-muted-foreground"
-                aria-live="polite"
-              >
-                {totalItems} {totalItems === 1 ? "producto" : "productos"}
-              </p>
-            )}
-          </div>
-          <section
-            aria-label="Controles del catálogo"
-            className="flex w-full flex-col gap-2 lg:w-auto lg:items-end"
-          >
-            <div className="flex w-full items-center gap-2 md:justify-end md:gap-4 lg:w-auto">
-              <ShopSearchBar
-                className="hidden md:flex"
-                placeholder={searchPlaceholder}
-              />
-              <SortSelector options={SORT_OPTIONS} />
-            </div>
-            <div className="flex w-full flex-col gap-2 md:flex-row md:items-center md:justify-end md:gap-3 lg:w-auto">
-              <OnSaleFilter />
-              {hasActiveFilters && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearFilters}
-                  className="self-end md:self-auto"
-                >
-                  Limpiar filtros
-                  <X className="ml-1 h-4 w-4" />
-                </Button>
-              )}
-            </div>
-          </section>
-        </div>
-        <MobileFilters
-          types={types}
-          categories={categoriesWithCounts}
-          catalogOptions={visibleCatalogOptions}
-          colors={colorsWithCounts}
-          designs={designsWithCounts}
-          hideCategoryFilters={Boolean(fixedCategoryId)}
+    <div className="lg:grid lg:grid-cols-[264px_minmax(0,1fr)] lg:gap-10">
+      <ShopSidebar {...filterGroups} activeCount={activeCount} onClearAll={clearFilters} />
+      <div className="flex min-w-0 flex-col gap-4 lg:gap-5">
+        <MobileToolbar
+          filtersSlot={<MobileFilters {...filterGroups} fixedCategoryId={fixedCategoryId} />}
+          chips={chips}
+          onRemoveChip={removeChip}
+          onClearAll={clearFilters}
+          rangeText={rangeText}
         />
-        <ShopSearchBar className="md:hidden" placeholder={searchPlaceholder} />
-        {/* We need to handle the pagination inside Products or lift it here. Products component takes totalPages. */}
-        <div className="relative min-h-[400px]">
+        {fixedCategoryId && <ShopSearchBar className="lg:hidden" placeholder={searchPlaceholder} />}
+        <ShopToolbar
+          chips={chips}
+          onRemoveChip={removeChip}
+          onClearAll={clearFilters}
+          rangeText={rangeText}
+          searchSlot={fixedCategoryId ? <ShopSearchBar className="w-60 xl:w-72" placeholder={searchPlaceholder} /> : null}
+        />
+        <section
+          id="catalog-results"
+          tabIndex={-1}
+          aria-busy={isFetching}
+          aria-label="Resultados del catálogo"
+          aria-live="polite"
+          className={`min-h-[400px] outline-none transition-opacity duration-300 ease-in-out ${isFetching && !isLoading ? "pointer-events-none opacity-50" : "opacity-100"}`}
+        >
           {isLoading ? (
             <ProductListSkeleton />
           ) : isCatalogUnavailable ? (
-            <div
-              role="alert"
-              className="min-h-96 flex flex-col items-center justify-center gap-4 text-center text-muted-foreground"
-            >
-              <p>No pudimos cargar los productos en este momento.</p>
-              <Button type="button" variant="outline" onClick={() => refetch()}>
-                Intentar de nuevo
-              </Button>
-            </div>
+            <NoResultsPanel variant="error" onRetry={() => refetch()} />
+          ) : products.length === 0 ? (
+            <NoResultsPanel
+              variant={filters.search ? "search" : "filters"}
+              query={filters.search}
+              suggestions={suggestions}
+              onClearFilters={activeCount > 0 ? clearFilters : undefined}
+            />
           ) : (
-            <section
-              aria-busy={isFetching}
-              aria-label="Resultados del catálogo"
-              aria-live="polite"
-              className={`transition-opacity duration-300 ease-in-out ${
-                isFetching ? "pointer-events-none opacity-50" : "opacity-100"
-              }`}
-            >
-              <Products
-                products={data?.products ?? []}
-                totalPages={data?.totalPages ?? 0}
-              />
-            </section>
+            <Products products={products} totalPages={data?.totalPages ?? 0} />
           )}
-        </div>
+        </section>
       </div>
     </div>
   );

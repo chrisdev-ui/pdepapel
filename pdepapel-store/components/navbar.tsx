@@ -84,7 +84,7 @@ const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
         <div className="px-3 pb-2 sm:px-6 lg:hidden">
-          <SearchBar variant="inline" />
+          <SearchBar variant="inline" types={types} />
         </div>
 
         {/* Desktop */}
@@ -118,6 +118,7 @@ const Navbar: React.FC<NavbarProps> = ({
             <SearchBar
               variant="desktop"
               placeholder="Busca cuadernos, stickers, agendas, kits…"
+              types={types}
             />
           </div>
           <div className="flex shrink-0 items-center gap-5">

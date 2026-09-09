@@ -13,6 +13,7 @@ export enum SortOptions {
   dateAdded = "dateAdded",
   featuredFirst = "featuredFirst",
   isOnSale = "isOnSale",
+  bestSellers = "bestSellers",
 }
 
 export enum OrderStatus {
@@ -102,6 +103,7 @@ export const DIGIT_REGEX = /^[0-9]*$/;
 
 export const SORT_OPTIONS = [
   { value: SortOptions.dateAdded, label: "Los más nuevos" },
+  { value: SortOptions.bestSellers, label: "Más vendidos" },
   { value: SortOptions.priceLowToHigh, label: "Menor precio" },
   { value: SortOptions.priceHighToLow, label: "Mayor precio" },
   { value: SortOptions.name, label: "Nombre de producto" },
