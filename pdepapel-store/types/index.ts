@@ -190,7 +190,7 @@ export interface HomeReview {
   reply: string | null;
   repliedAt: string | null;
   createdAt: string;
-  product: { id: string; name: string; slug: string; imageUrl: string | null };
+  product: { id: string; name: string; slug: string; isArchived: boolean; imageUrl: string | null };
 }
 
 export interface HomeReviewsResponse {

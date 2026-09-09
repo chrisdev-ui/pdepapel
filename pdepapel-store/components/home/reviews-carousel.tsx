@@ -29,9 +29,11 @@ function ReviewCard({ review }: { review: HomeReview }) {
         <span className="truncate font-semibold text-gray-500">
           {review.name} · {review.product.name}
         </span>
-        <Link href={productPath(review.product.slug || review.product.id)} className="shrink-0 font-semibold text-blue-yankees underline underline-offset-4">
-          Ver producto
-        </Link>
+        {!review.product.isArchived && (
+          <Link href={productPath(review.product.slug || review.product.id)} className="shrink-0 font-semibold text-blue-yankees underline underline-offset-4">
+            Ver producto
+          </Link>
+        )}
       </div>
       {review.reply && (
         <div className="rounded-r-xl border-l-[3px] border-pink-shell bg-kawaii-pink-light/30 px-3 py-2 font-sans text-[13px] leading-relaxed text-blue-yankees">
