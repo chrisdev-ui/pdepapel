@@ -48,7 +48,7 @@ export const metadata: Metadata = {
     "Descubre en Papelería P de Papel una encantadora selección de artículos kawaii y todo lo necesario para tu oficina o estudio. Cuadernos, accesorios, y más con un toque único. ¡Explora y embellece tu espacio de trabajo y estudio! - Contáctanos 3132582293",
   applicationName: "Papelería P de Papel",
   keywords: [
-    "Papelería kawaii",
+    "Papelería bonita",
     "Suministros de oficina",
     "Artículos de papelería",
     "Cuadernos kawaii",

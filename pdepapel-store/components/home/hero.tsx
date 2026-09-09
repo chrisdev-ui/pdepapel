@@ -13,7 +13,7 @@ interface HeroProps {
 
 const DEFAULT_HERO = {
   eyebrow: null,
-  title: "Papelería kawaii desde Medellín con envíos a toda Colombia",
+  title: "Papelería bonita desde Medellín con envíos a toda Colombia",
   subtitle:
     "Agendas, cuadernos, útiles y regalos que dan ganas de estudiar. Pago en línea seguro o transferencia, y tu pedido sale de Medellín en 1 a 2 días hábiles.",
   primaryLabel: "Ver la tienda",

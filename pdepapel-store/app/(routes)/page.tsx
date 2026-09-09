@@ -63,11 +63,11 @@ const jsonLd: {
 
 export const metadata: Metadata = {
   metadataBase: new URL(BASE_URL),
-  title: "Papelería kawaii en Colombia",
+  title: "Papelería bonita en Colombia",
   description:
-    "Compra papelería kawaii, agendas, cuadernos, útiles escolares y regalos creativos con envíos a toda Colombia. Descubre novedades en Papelería P de Papel.",
+    "Compra papelería bonita, agendas, cuadernos, útiles escolares y regalos creativos con envíos a toda Colombia. Descubre novedades en Papelería P de Papel.",
   keywords: [
-    "papelería kawaii",
+    "papelería bonita",
     "útiles escolares",
     "oficina",
     "regalos originales",
@@ -91,9 +91,9 @@ export const metadata: Metadata = {
     canonical: "/",
   },
   openGraph: {
-    title: "Papelería kawaii en Colombia | Papelería P de Papel",
+    title: "Papelería bonita en Colombia | Papelería P de Papel",
     description:
-      "Papelería kawaii, útiles escolares y regalos creativos con envíos a toda Colombia.",
+      "Papelería bonita, útiles escolares y regalos creativos con envíos a toda Colombia.",
     url: "/",
     siteName: "Papelería P de Papel",
     locale: "es_CO",
@@ -115,9 +115,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Papelería kawaii en Colombia | Papelería P de Papel",
+    title: "Papelería bonita en Colombia | Papelería P de Papel",
     description:
-      "Papelería kawaii, útiles escolares y regalos creativos con envíos a toda Colombia.",
+      "Papelería bonita, útiles escolares y regalos creativos con envíos a toda Colombia.",
     images: ["/images/no-text-lightpink-bg.webp"],
   },
 };

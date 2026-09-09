@@ -48,7 +48,7 @@ export const Footer: React.FC<FooterProps> = ({ season = Season.Default }) => {
             </div>
           </Link>
           <p className="mt-3 max-w-sm text-sm leading-6 text-muted-foreground">
-            Papelería kawaii en línea con operación desde Medellín y envíos a
+            Papelería bonita en línea con operación desde Medellín y envíos a
             toda Colombia.
           </p>
           <Link

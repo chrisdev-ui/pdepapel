@@ -255,7 +255,7 @@ export default function AboutPage() {
               />
               <Image
                 src="/images/about-us.webp"
-                alt="Nuestro stand con papelería kawaii"
+                alt="Nuestro stand con papelería bonita"
                 width={1080}
                 height={720}
                 sizes="(max-width: 1024px) 384px, 576px"
