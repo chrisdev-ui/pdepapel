@@ -43,6 +43,7 @@ describe("SavedSearches", () => {
   it("describes a saved query in plain words", () => {
     expect(describeSavedQuery(saved.query)).toBe("«stickers» · filtros: color, orden");
     expect(describeSavedQuery("")).toBe("Todos los productos");
+    expect(describeSavedQuery("search=washi&isOnSale=false&exact=false")).toBe("«washi»");
   });
 
   it("lists saved searches with a link back to the shop", async () => {

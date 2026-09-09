@@ -59,7 +59,7 @@ describe("customer saved searches API", () => {
   });
 
   it("stores a cleaned query string without the page number", async () => {
-    const response = await post({ name: "  Stickers rosados ", query: "?categoryId=cat-1&colorId=pink&page=3" });
+    const response = await post({ name: "  Stickers rosados ", query: "?categoryId=cat-1&colorId=pink&isOnSale=false&exact=&page=3" });
     expect(response.status).toBe(201);
     expect(mocks.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: { storeId: "store-id", userId: "customer-id", name: "Stickers rosados", query: "categoryId=cat-1&colorId=pink" } }),

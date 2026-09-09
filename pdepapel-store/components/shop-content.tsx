@@ -142,7 +142,7 @@ export const ShopContent: React.FC<ShopContentProps> = ({
   const correction = data?.searchCorrection ?? null;
 
   const canSaveSearch = activeCount > 0 || Boolean(filters.search);
-  const suggestedSearchName = [filters.search ? `«${filters.search}»` : null, ...chips.map((chip) => chip.label)].filter(Boolean).join(" · ") || heading;
+  const suggestedSearchName = chips.map((chip) => (chip.key === "search" ? `«${filters.search}»` : chip.label)).join(" · ") || heading;
   const saveSearchSlot = canSaveSearch ? <SaveSearchButton suggestedName={suggestedSearchName} fixedCategoryId={fixedCategoryId} /> : null;
 
   const clearFilters = () => setFilters({ ...EMPTY_FILTERS, sortOption: filters.sortOption, page: 1 });

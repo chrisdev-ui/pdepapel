@@ -35,8 +35,8 @@ export function describeSavedQuery(query: string): string {
   const search = params.get("search");
   if (search) parts.push(`«${search}»`);
   const labels = new Set<string>();
-  params.forEach((_, key) => {
-    if (key !== "search" && FILTER_LABELS[key]) labels.add(FILTER_LABELS[key]);
+  params.forEach((value, key) => {
+    if (key !== "search" && FILTER_LABELS[key] && value !== "" && value !== "false") labels.add(FILTER_LABELS[key]);
   });
   if (labels.size > 0) parts.push(`filtros: ${Array.from(labels).join(", ")}`);
   return parts.join(" · ") || "Todos los productos";

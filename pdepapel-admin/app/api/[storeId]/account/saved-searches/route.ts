@@ -24,7 +24,7 @@ function normalizeQuery(value: unknown): string {
   params.delete("page");
   const kept = new URLSearchParams();
   for (const [key, entry] of Array.from(params.entries())) {
-    if (/^[a-zA-Z]{1,32}$/.test(key) && entry.length <= 200) kept.append(key, entry);
+    if (/^[a-zA-Z]{1,32}$/.test(key) && entry !== "" && entry !== "false" && entry.length <= 200) kept.append(key, entry);
   }
   const query = kept.toString();
   if (!query) throw ErrorFactory.InvalidRequest("La búsqueda no tiene filtros que guardar");
