@@ -17,8 +17,20 @@ import axios, { isAxiosError } from "axios";
 import { RefreshCw, Trash } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useFieldArray, useForm, useWatch } from "react-hook-form";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
+import {
+  useFieldArray,
+  useForm,
+  useWatch,
+  type FieldErrors,
+} from "react-hook-form";
 
 import { AlertModal } from "@/components/modals/alert-modal";
 import { GuideConfirmationModal } from "@/components/modals/guide-confirmation-modal";
@@ -205,6 +217,13 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   const { isDirty } = form.formState;
 
   const [loading, setLoading] = useState(false);
+  // `/pedidos/nuevo` y `/pedidos/<id>` son el mismo segmento dinamico: Next
+  // no muestra `loading.tsx` al cambiar solo el parametro, deja en pantalla el
+  // formulario recien llenado mientras trae la ficha (1,2 MB de payload) y
+  // `finally` ya lo habia vuelto a habilitar. Con el toast de "creado" ya
+  // visible, eso se lee como "se quedo pegado". La transicion mantiene el
+  // boton ocupado hasta que la ficha de verdad aparece.
+  const [isNavigating, startNavigation] = useTransition();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [conversionIndex, setConversionIndex] = useState<number | null>(null);
   const [conflict, setConflict] = useState<string | null>(null);
@@ -326,10 +345,12 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           setIdempotencyKey(crypto.randomUUID());
           toast({
             title: "Pedido creado",
-            description: `${response.data.orderNumber} · ${currencyFormatter(Number(response.data.total))}`,
+            description: `${response.data.orderNumber} · ${currencyFormatter(Number(response.data.total))}. Abriendo el pedido…`,
             variant: "success",
           });
-          router.push(`/${storeId}/pedidos/${response.data.id}`);
+          startNavigation(() => {
+            router.push(`/${storeId}/pedidos/${response.data.id}`);
+          });
           return;
         }
       } catch (error) {
@@ -406,6 +427,38 @@ export const OrderForm: React.FC<OrderFormProps> = ({
       await submitOrder(data, options);
     },
     [form, initialData, preset.status, submitOrder, toast],
+  );
+
+  /**
+   * `handleSubmit` sin segundo argumento se limita a NO llamar a onSubmit
+   * cuando la validacion falla: el boton "Guardar cambios" no hace nada y no
+   * dice nada. En un formulario tan largo el campo invalido casi siempre esta
+   * fuera de pantalla, asi que parece que el boton esta roto.
+   *
+   * Ahora se nombra el problema y se lleva al campo.
+   */
+  const onInvalid = useCallback(
+    (errors: FieldErrors<OrderFormValues>) => {
+      const message = firstErrorMessage(errors);
+      toast({
+        title: "Faltan datos para guardar",
+        description: message ?? "Revisa los campos marcados en rojo.",
+        variant: "destructive",
+      });
+
+      const firstInvalid = document.querySelector<HTMLElement>(
+        '[aria-invalid="true"], [data-invalid="true"]',
+      );
+      if (firstInvalid) {
+        firstInvalid.scrollIntoView({ block: "center", behavior: "smooth" });
+        // El foco espera al scroll para no pelearse con el desplazamiento.
+        window.setTimeout(
+          () => firstInvalid.focus?.({ preventScroll: true }),
+          300,
+        );
+      }
+    },
+    [toast],
   );
 
   const onDelete = async () => {
@@ -674,8 +727,8 @@ export const OrderForm: React.FC<OrderFormProps> = ({
 
       <Form {...form}>
         <form
-          onSubmit={form.handleSubmit(onSubmit)}
-          className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start xl:grid-cols-[minmax(0,1fr)_400px]"
+          onSubmit={form.handleSubmit(onSubmit, onInvalid)}
+          className="flex flex-col gap-4 pb-4 lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start lg:pb-6 xl:grid-cols-[minmax(0,1fr)_400px]"
           autoComplete="off"
         >
           {initialData?.orderNumber && (
@@ -763,6 +816,21 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 loading={loading}
               />
             </div>
+            {/* Cliente y Notas conservan su `order-*`, asi que el orden en el
+                telefono no cambia; solo dejan de inflar la columna lateral. */}
+            <div className="order-4 lg:order-none">
+              <CustomerCard
+                storeId={storeId}
+                users={users}
+                locations={locations}
+                loading={loading}
+                initialData={initialData}
+                total={totals.total}
+              />
+            </div>
+            <div className="order-8 lg:order-none">
+              <NotesCard preset={editPreset} />
+            </div>
             {initialData && (
               <div className="order-10 lg:order-none">
                 <SectionCard
@@ -806,7 +874,13 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             )}
           </div>
 
-          {/* Columna lateral: resumen, cliente, pago, notas e historial. Fija en escritorio. */}
+          {/* Columna lateral: solo tarjetas compactas de consulta (resumen, pago
+              e historial). Cliente y Notas viven en la columna principal: son
+              formularios largos (11 campos y dos editores de texto enriquecido)
+              que sumaban 2.400px en una columna de 380px. Como las dos columnas
+              comparten fila de la grilla, la más alta fijaba el alto y dejaba
+              ~1.600px en blanco debajo de la principal; además una barra lateral
+              más alta que la ventana nunca llega a fijarse. */}
           <aside className="contents lg:sticky lg:top-4 lg:flex lg:flex-col lg:gap-4">
             <div className="order-3 lg:order-none">
               <SummaryCard
@@ -818,16 +892,6 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   (sum, item) => sum + Number(item.quantity || 0),
                   0,
                 )}
-              />
-            </div>
-            <div className="order-4 lg:order-none">
-              <CustomerCard
-                storeId={storeId}
-                users={users}
-                locations={locations}
-                loading={loading}
-                initialData={initialData}
-                total={totals.total}
               />
             </div>
             {(editPreset.showPayment || initialData) && (
@@ -845,9 +909,6 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 />
               </div>
             )}
-            <div className="order-8 lg:order-none">
-              <NotesCard preset={editPreset} />
-            </div>
             {initialData && (
               <div className="order-9 lg:order-none">
                 <HistoryCard order={initialData} />
@@ -874,15 +935,34 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   Descartar cambios
                 </Button>
               ) : (
-                <Button asChild variant="outline">
-                  <Link href={`/${storeId}/pedidos`}>Cancelar</Link>
+                <Button asChild variant="outline" disabled={isNavigating}>
+                  <Link
+                    href={`/${storeId}/pedidos`}
+                    aria-disabled={isNavigating}
+                    tabIndex={isNavigating ? -1 : undefined}
+                    className={
+                      isNavigating
+                        ? "pointer-events-none opacity-60"
+                        : undefined
+                    }
+                  >
+                    Cancelar
+                  </Link>
                 </Button>
               )}
               <Button
                 type="submit"
-                disabled={loading || (Boolean(initialData) && !isDirty)}
-                isLoading={loading}
-                loadingText={initialData ? "Guardando…" : "Creando…"}
+                disabled={
+                  loading || isNavigating || (Boolean(initialData) && !isDirty)
+                }
+                isLoading={loading || isNavigating}
+                loadingText={
+                  isNavigating
+                    ? "Abriendo el pedido…"
+                    : initialData
+                      ? "Guardando…"
+                      : "Creando…"
+                }
                 className="min-w-[160px]"
               >
                 {initialData ? "Guardar cambios" : "Crear pedido"}
