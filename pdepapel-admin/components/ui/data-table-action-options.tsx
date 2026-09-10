@@ -41,7 +41,6 @@ export type Action =
   | "feature"
   | "unfeature"
   | "clear-images"
-  | "mark-as-created"
   | "mark-as-pending"
   | "mark-as-paid"
   | "mark-as-cancelled"
@@ -60,11 +59,10 @@ interface DataTableActionOptionsProps<TData> {
 const orderStatusMap: Record<
   Extract<
     Action,
-    "mark-as-created" | "mark-as-pending" | "mark-as-paid" | "mark-as-cancelled"
+    "mark-as-pending" | "mark-as-paid" | "mark-as-cancelled"
   >,
   OrderStatus
 > = {
-  "mark-as-created": OrderStatus.CREATED,
   "mark-as-pending": OrderStatus.PENDING,
   "mark-as-paid": OrderStatus.PAID,
   "mark-as-cancelled": OrderStatus.CANCELLED,
@@ -120,7 +118,6 @@ export function DataTableActionOptions<TData>({
         return [
           "delete",
           "export",
-          "mark-as-created",
           "mark-as-pending",
           "mark-as-paid",
           "mark-as-cancelled",
@@ -230,7 +227,6 @@ export function DataTableActionOptions<TData>({
             variant: "success",
           });
           break;
-        case "mark-as-created":
         case "mark-as-pending":
         case "mark-as-paid":
         case "mark-as-cancelled":
@@ -309,6 +305,87 @@ export function DataTableActionOptions<TData>({
     }
   };
 
+  /**
+   * Cada acción masiva confirma con lo que realmente va a pasar. Antes todas
+   * mostraban «¿Eliminar de forma definitiva?», incluso marcar como pagada.
+   */
+  const confirmCopy = useCallback(
+    (
+      action: Action | null,
+      count: number,
+    ): { title: string; description: string; confirmLabel: string; destructive: boolean } => {
+      const n = `${count} ${count === 1 ? "pedido" : "pedidos"}`;
+      const one = count === 1;
+      switch (action) {
+        case "mark-as-paid":
+          return {
+            title: `¿Marcar ${n} como ${one ? "pagado" : "pagados"}?`,
+            description:
+              "Se descuenta el inventario de cada producto, queda un movimiento en el kardex y se fija la fecha de pago de hoy, así que contarán en las ventas y en los reportes tributarios. Cada cliente recibe un correo de pago confirmado. Revisa los comprobantes antes de confirmar: no se pide una referencia por pedido.",
+            confirmLabel: one ? "Sí, marcar como pagado" : "Sí, marcar como pagados",
+            destructive: false,
+          };
+        case "mark-as-cancelled":
+          return {
+            title: `¿Cancelar ${n}?`,
+            description:
+              one
+              ? "Si estaba pagado, su inventario vuelve con un movimiento de cancelación y su cupón se libera. El cliente recibe un correo de cancelación."
+              : "Los que estaban pagados devuelven su inventario con un movimiento de cancelación y liberan su cupón. Cada cliente recibe un correo de cancelación.",
+            confirmLabel: "Sí, cancelar",
+            destructive: true,
+          };
+        case "mark-as-pending":
+          return {
+            title: `¿Dejar ${n} ${one ? "pendiente" : "pendientes"} de pago?`,
+            description:
+              one
+              ? "Queda a la espera del pago del cliente. No se toca el inventario."
+              : "Quedan a la espera del pago del cliente. No se toca el inventario.",
+            confirmLabel: one ? "Sí, dejar pendiente" : "Sí, dejar pendientes",
+            destructive: false,
+          };
+        case "mark-as-preparing":
+        case "mark-as-shipped":
+        case "mark-as-in-transit":
+        case "mark-as-delivered":
+        case "mark-as-returned":
+          return {
+            title: `¿Cambiar el envío de ${n}?`,
+            description:
+              "Se actualiza el estado del envío y cada cliente recibe el aviso por correo. Los pedidos sin envío registrado no se pueden cambiar así.",
+            confirmLabel: "Sí, cambiar el envío",
+            destructive: false,
+          };
+        case "delete":
+          return {
+            title: `¿Eliminar ${count} ${count === 1 ? "elemento" : "elementos"} de forma definitiva?`,
+            description:
+              model === Models.Orders
+                ? "Esta acción no se puede deshacer. Los pedidos pagados devuelven su inventario con un movimiento."
+                : "Esta acción no se puede deshacer.",
+            confirmLabel: "Sí, eliminar",
+            destructive: true,
+          };
+        case "export":
+          return {
+            title: `¿Exportar ${count} ${count === 1 ? "fila" : "filas"}?`,
+            description: "Se descarga un archivo CSV con las columnas visibles.",
+            confirmLabel: "Descargar CSV",
+            destructive: false,
+          };
+        default:
+          return {
+            title: "¿Aplicar el cambio?",
+            description: "Se aplicará a las filas seleccionadas.",
+            confirmLabel: "Sí, continuar",
+            destructive: false,
+          };
+      }
+    },
+    [model],
+  );
+
   const getActionDescription = useCallback((action: Action) => {
     switch (action) {
       case "delete":
@@ -325,7 +402,6 @@ export function DataTableActionOptions<TData>({
         return "eliminó o eliminaron sus imágenes con éxito";
       case "export":
         return "exportado(s) con éxito";
-      case "mark-as-created":
       case "mark-as-pending":
       case "mark-as-paid":
       case "mark-as-cancelled":
@@ -393,6 +469,7 @@ export function DataTableActionOptions<TData>({
         }}
         onConfirm={() => handleAction(action as Action)}
         loading={isLoading}
+        {...confirmCopy(action, table.getFilteredSelectedRowModel().rows.length)}
       />
 
       <DropdownMenu>
@@ -424,7 +501,7 @@ export function DataTableActionOptions<TData>({
           {routeActions.includes("delete") && (
             <DropdownMenuItem
               className={cn(
-                "flex cursor-pointer items-center justify-between",
+                "cursor-pointer",
                 {
                   "cursor-wait": isLoading,
                 },
@@ -438,7 +515,7 @@ export function DataTableActionOptions<TData>({
           {routeActions.includes("archive") && (
             <DropdownMenuItem
               className={cn(
-                "flex cursor-pointer items-center justify-between",
+                "cursor-pointer",
                 {
                   "cursor-wait": isLoading,
                 },
@@ -452,7 +529,7 @@ export function DataTableActionOptions<TData>({
           {routeActions.includes("unarchive") && (
             <DropdownMenuItem
               className={cn(
-                "flex cursor-pointer items-center justify-between",
+                "cursor-pointer",
                 {
                   "cursor-wait": isLoading,
                 },
@@ -466,7 +543,7 @@ export function DataTableActionOptions<TData>({
           {routeActions.includes("export") && (
             <DropdownMenuItem
               className={cn(
-                "flex cursor-pointer items-center justify-between",
+                "cursor-pointer",
                 {
                   "cursor-wait": isLoading,
                 },
@@ -480,7 +557,7 @@ export function DataTableActionOptions<TData>({
           {routeActions.includes("feature") && (
             <DropdownMenuItem
               className={cn(
-                "flex cursor-pointer items-center justify-between",
+                "cursor-pointer",
                 {
                   "cursor-wait": isLoading,
                 },
@@ -494,7 +571,7 @@ export function DataTableActionOptions<TData>({
           {routeActions.includes("unfeature") && (
             <DropdownMenuItem
               className={cn(
-                "flex cursor-pointer items-center justify-between",
+                "cursor-pointer",
                 {
                   "cursor-wait": isLoading,
                 },
@@ -508,7 +585,7 @@ export function DataTableActionOptions<TData>({
           {routeActions.includes("clear-images") && (
             <DropdownMenuItem
               className={cn(
-                "flex cursor-pointer items-center justify-between",
+                "cursor-pointer",
                 {
                   "cursor-wait": isLoading,
                 },
@@ -522,7 +599,7 @@ export function DataTableActionOptions<TData>({
           {routeActions.includes("invalidate") && (
             <DropdownMenuItem
               className={cn(
-                "flex cursor-pointer items-center justify-between",
+                "cursor-pointer",
                 {
                   "cursor-wait": isLoading,
                 },
@@ -539,113 +616,93 @@ export function DataTableActionOptions<TData>({
               <DropdownMenuLabel>Estado de la orden</DropdownMenuLabel>
               <DropdownMenuItem
                 className={cn(
-                  "flex cursor-pointer items-center justify-between",
+                  "cursor-pointer",
                   {
                     "cursor-wait": isLoading,
                   },
                 )}
-                onClick={() => handleAction("mark-as-created")}
-              >
-                Creada
-                <span>📖</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className={cn(
-                  "flex cursor-pointer items-center justify-between",
-                  {
-                    "cursor-wait": isLoading,
-                  },
-                )}
-                onClick={() => handleAction("mark-as-pending")}
+                onClick={() => setAction("mark-as-pending")}
               >
                 Pendiente
-                <span>⌛</span>
               </DropdownMenuItem>
               <DropdownMenuItem
                 className={cn(
-                  "flex cursor-pointer items-center justify-between",
+                  "cursor-pointer",
                   {
                     "cursor-wait": isLoading,
                   },
                 )}
-                onClick={() => handleAction("mark-as-paid")}
+                onClick={() => setAction("mark-as-paid")}
               >
                 Pagada
-                <span>💵</span>
               </DropdownMenuItem>
               <DropdownMenuItem
                 className={cn(
-                  "flex cursor-pointer items-center justify-between",
+                  "cursor-pointer",
                   {
                     "cursor-wait": isLoading,
                   },
                 )}
-                onClick={() => handleAction("mark-as-cancelled")}
+                onClick={() => setAction("mark-as-cancelled")}
               >
                 Cancelada
-                <span>🚫</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuLabel>Estado del envío</DropdownMenuLabel>
               <DropdownMenuItem
                 className={cn(
-                  "flex cursor-pointer items-center justify-between",
+                  "cursor-pointer",
                   {
                     "cursor-wait": isLoading,
                   },
                 )}
-                onClick={() => handleAction("mark-as-preparing")}
+                onClick={() => setAction("mark-as-preparing")}
               >
                 En preparación
-                <span>📦</span>
               </DropdownMenuItem>
               <DropdownMenuItem
                 className={cn(
-                  "flex cursor-pointer items-center justify-between",
+                  "cursor-pointer",
                   {
                     "cursor-wait": isLoading,
                   },
                 )}
-                onClick={() => handleAction("mark-as-shipped")}
+                onClick={() => setAction("mark-as-shipped")}
               >
                 Enviada
-                <span>🚀</span>
               </DropdownMenuItem>
               <DropdownMenuItem
                 className={cn(
-                  "flex cursor-pointer items-center justify-between",
+                  "cursor-pointer",
                   {
                     "cursor-wait": isLoading,
                   },
                 )}
-                onClick={() => handleAction("mark-as-in-transit")}
+                onClick={() => setAction("mark-as-in-transit")}
               >
                 En tránsito
-                <span>⛟</span>
               </DropdownMenuItem>
               <DropdownMenuItem
                 className={cn(
-                  "flex cursor-pointer items-center justify-between",
+                  "cursor-pointer",
                   {
                     "cursor-wait": isLoading,
                   },
                 )}
-                onClick={() => handleAction("mark-as-delivered")}
+                onClick={() => setAction("mark-as-delivered")}
               >
                 Entregada
-                <span>🏠</span>
               </DropdownMenuItem>
               <DropdownMenuItem
                 className={cn(
-                  "flex cursor-pointer items-center justify-between",
+                  "cursor-pointer",
                   {
                     "cursor-wait": isLoading,
                   },
                 )}
-                onClick={() => handleAction("mark-as-returned")}
+                onClick={() => setAction("mark-as-returned")}
               >
                 Retornado
-                <span>🚫</span>
               </DropdownMenuItem>
             </>
           )}

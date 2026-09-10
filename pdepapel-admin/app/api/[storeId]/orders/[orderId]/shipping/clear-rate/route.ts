@@ -69,7 +69,16 @@ export async function DELETE(
       );
     }
 
-    // Limpiar el idRate y datos relacionados de cotización
+    // Limpiar el idRate y datos relacionados de cotización. El total del
+    // pedido incluía el flete cotizado: se descuenta para no seguir cobrando
+    // un envío que ya no existe.
+    const previousCost = Number(order.shipping.cost ?? 0);
+    if (previousCost > 0) {
+      await prismadb.order.update({
+        where: { id: order.id },
+        data: { total: Math.max(0, Math.round((Number(order.total) - previousCost) * 100) / 100) },
+      });
+    }
     await prismadb.shipping.update({
       where: {
         id: order.shipping.id,

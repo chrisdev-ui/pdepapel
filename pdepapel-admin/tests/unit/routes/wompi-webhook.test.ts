@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   sendOrderEmail: vi.fn(),
   shippingUpsert: vi.fn(),
   transaction: vi.fn(),
+  markWelcomeBenefitRedeemed: vi.fn(),
+  releaseWelcomeBenefitReservation: vi.fn(),
 }));
 
 vi.mock("@/lib/env.mjs", () => ({
@@ -37,6 +39,14 @@ vi.mock("@/lib/shipping-helpers", () => ({
 vi.mock("@/lib/inventory", () => ({
   createInventoryMovementBatchResilient:
     mocks.createInventoryMovementBatchResilient,
+}));
+// Sin kits, la explosión devuelve los mismos movimientos.
+vi.mock("@/lib/order-stock-movements", () => ({
+  explodeKitMovements: async (_tx: unknown, movements: unknown) => movements,
+}));
+vi.mock("@/lib/customer-benefits", () => ({
+  markWelcomeBenefitRedeemed: mocks.markWelcomeBenefitRedeemed,
+  releaseWelcomeBenefitReservation: mocks.releaseWelcomeBenefitReservation,
 }));
 vi.mock("@/lib/cache", () => ({
   invalidateStoreProductsCache: mocks.invalidateStoreProductsCache,
@@ -111,7 +121,7 @@ describe("POST /api/webhook/wompi", () => {
 
   it("processes an approved payment once and prevents duplicate stock deductions", async () => {
     const transactionClient = {
-      coupon: { update: vi.fn() },
+      coupon: { update: vi.fn(), updateMany: vi.fn() },
       order: {
         update: vi.fn(),
         updateMany: vi
@@ -119,6 +129,8 @@ describe("POST /api/webhook/wompi", () => {
           .mockResolvedValueOnce({ count: 1 })
           .mockResolvedValueOnce({ count: 0 }),
       },
+      paymentDetails: { upsert: mocks.paymentUpsert },
+      shipping: { upsert: mocks.shippingUpsert },
     };
     const order = {
       id: "order-id",
@@ -205,11 +217,13 @@ describe("POST /api/webhook/wompi", () => {
 
   it("restocks a paid order only once when Wompi cancels it", async () => {
     const transactionClient = {
-      coupon: { update: vi.fn() },
+      coupon: { update: vi.fn(), updateMany: vi.fn() },
       order: {
         update: vi.fn(),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
+      paymentDetails: { upsert: mocks.paymentUpsert },
+      shipping: { upsert: mocks.shippingUpsert },
     };
     const order = {
       id: "order-id",
@@ -258,10 +272,179 @@ describe("POST /api/webhook/wompi", () => {
         }),
       ],
     );
-    expect(transactionClient.coupon.update).toHaveBeenCalledWith({
-      where: { id: "coupon-id" },
+    expect(transactionClient.coupon.updateMany).toHaveBeenCalledWith({
+      where: { id: "coupon-id", usedCount: { gt: 0 } },
       data: { usedCount: { decrement: 1 } },
     });
+    // Una anulación ya no deja el envío en «Preparando».
+    expect(mocks.shippingUpsert).not.toHaveBeenCalled();
     expect(mocks.invalidateStoreProductsCache).toHaveBeenCalledTimes(1);
+  });
+
+  it("answers 400 to a body that is not JSON so Wompi stops retrying", async () => {
+    const response = await POST(
+      new Request("https://admin.example.com/api/webhook/wompi", {
+        body: "no soy json",
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.findOrder).not.toHaveBeenCalled();
+  });
+
+  it("rejects a signed event whose signed property is missing, without a 500", async () => {
+    const response = await POST(
+      new Request("https://admin.example.com/api/webhook/wompi", {
+        body: JSON.stringify({
+          event: "transaction.updated",
+          data: { transaction: { id: "x" } },
+          signature: { properties: ["transaction.amount_in_cents"], checksum: "abc" },
+          timestamp: 1,
+        }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.findOrder).not.toHaveBeenCalled();
+  });
+
+  it("refuses a payment reported in another currency", async () => {
+    mocks.findOrder.mockResolvedValue({
+      id: "order-id",
+      orderNumber: "ORD-123",
+      payment: { method: PaymentMethod.Wompi },
+      status: OrderStatus.PENDING,
+      storeId: "store-id",
+      total: 80000,
+      orderItems: [],
+    });
+
+    const response = await POST(
+      createWebhookRequest({
+        id: "wompi-transaction-id",
+        reference: "order-id",
+        amount_in_cents: 8000000,
+        status: "APPROVED",
+        currency: "USD",
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it("accepts an amount that only differs by floating-point noise", async () => {
+    const transactionClient = {
+      coupon: { update: vi.fn(), updateMany: vi.fn() },
+      order: { update: vi.fn(), updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      paymentDetails: { upsert: mocks.paymentUpsert },
+      shipping: { upsert: mocks.shippingUpsert },
+    };
+    mocks.findOrder.mockResolvedValue({
+      id: "order-id",
+      orderNumber: "ORD-123",
+      payment: { method: PaymentMethod.Wompi },
+      status: OrderStatus.PENDING,
+      storeId: "store-id",
+      // 80000 guardado como Float puede volver con ruido decimal.
+      total: 80000.000000001,
+      orderItems: [],
+    });
+    mocks.findUpdatedOrder.mockResolvedValue(null);
+    mocks.transaction.mockImplementation(async (cb: any) => cb(transactionClient));
+    mocks.calculateOrderFinancials.mockResolvedValue({});
+
+    const response = await POST(
+      createWebhookRequest({
+        id: "wompi-transaction-id",
+        reference: "order-id",
+        amount_in_cents: 8000000,
+        status: "APPROVED",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.transaction).toHaveBeenCalled();
+  });
+
+  it("marks the welcome benefit redeemed when the payment is confirmed", async () => {
+    const transactionClient = {
+      coupon: { update: vi.fn(), updateMany: vi.fn() },
+      order: { update: vi.fn(), updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      paymentDetails: { upsert: mocks.paymentUpsert },
+      shipping: { upsert: mocks.shippingUpsert },
+    };
+    mocks.findOrder.mockResolvedValue({
+      id: "order-id",
+      orderNumber: "ORD-123",
+      payment: { method: PaymentMethod.Wompi },
+      status: OrderStatus.PENDING,
+      storeId: "store-id",
+      total: 80000,
+      userId: "user-id",
+      // Antes el select del cupón no traía isWelcomeBenefit y esto nunca corría.
+      coupon: { id: "coupon-id", isWelcomeBenefit: true },
+      orderItems: [],
+    });
+    mocks.findUpdatedOrder.mockResolvedValue(null);
+    mocks.transaction.mockImplementation(async (cb: any) => cb(transactionClient));
+    mocks.calculateOrderFinancials.mockResolvedValue({});
+
+    await POST(
+      createWebhookRequest({
+        id: "wompi-transaction-id",
+        reference: "order-id",
+        amount_in_cents: 8000000,
+        status: "APPROVED",
+      }),
+    );
+
+    expect(mocks.markWelcomeBenefitRedeemed).toHaveBeenCalledWith(
+      transactionClient,
+      expect.objectContaining({ couponId: "coupon-id", orderId: "order-id" }),
+    );
+    expect(mocks.releaseWelcomeBenefitReservation).not.toHaveBeenCalled();
+  });
+
+  it("clears the paid date when a paid order is voided", async () => {
+    const orderUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const transactionClient = {
+      coupon: { update: vi.fn(), updateMany: vi.fn() },
+      order: { update: vi.fn(), updateMany: orderUpdateMany },
+      paymentDetails: { upsert: mocks.paymentUpsert },
+      shipping: { upsert: mocks.shippingUpsert },
+    };
+    mocks.findOrder.mockResolvedValue({
+      id: "order-id",
+      orderNumber: "ORD-123",
+      payment: { method: PaymentMethod.Wompi },
+      status: OrderStatus.PAID,
+      storeId: "store-id",
+      total: 80000,
+      userId: "user-id",
+      coupon: { id: "coupon-id", isWelcomeBenefit: true },
+      orderItems: [],
+    });
+    mocks.findUpdatedOrder.mockResolvedValue(null);
+    mocks.transaction.mockImplementation(async (cb: any) => cb(transactionClient));
+
+    await POST(
+      createWebhookRequest({
+        id: "wompi-void-id",
+        reference: "order-id",
+        amount_in_cents: 8000000,
+        status: "VOIDED",
+      }),
+    );
+
+    expect(orderUpdateMany).toHaveBeenCalledWith({
+      where: { id: "order-id", status: OrderStatus.PAID },
+      data: { status: OrderStatus.CANCELLED, paidAt: null },
+    });
+    expect(mocks.releaseWelcomeBenefitReservation).toHaveBeenCalled();
   });
 });

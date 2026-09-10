@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getNextStep, getOrderQueue, getPaymentBadge, getShippingBadge, isExpiringSoon, orderMatchesView } from "@/lib/order-queues";
+import { getNextStep, getOrderQueue, getPaymentBadge, getShippingBadge, isAwaitingPaymentStale, isExpiringSoon, orderMatchesView } from "@/lib/order-queues";
 import { OrderStatus, OrderType, PaymentMethod, ShippingStatus } from "@prisma/client";
 
 const order = (overrides: Partial<Parameters<typeof getOrderQueue>[0]>) => ({
@@ -56,6 +56,30 @@ describe("order queues", () => {
     expect(orderMatchesView("quote", "por-atender", order({ status: OrderStatus.QUOTATION, type: OrderType.QUOTATION, expiresAt: null }))).toBe(false);
     expect(orderMatchesView("closed", "todos")).toBe(true);
     expect(isExpiringSoon(new Date(Date.now() - 1000))).toBe(false);
+  });
+
+  it("surfaces online payments that stayed pending for more than two hours, up to 14 days", () => {
+    const now = new Date("2026-09-10T15:00:00.000Z");
+    const minutesAgo = (m: number) => new Date(now.getTime() - m * 60 * 1000);
+    const fresh = order({ payment: { method: PaymentMethod.Bold }, createdAt: minutesAgo(30) });
+    const stale = order({ payment: { method: PaymentMethod.Wompi }, createdAt: minutesAgo(3 * 60) });
+    const abandoned = order({ payment: { method: PaymentMethod.Bold }, createdAt: minutesAgo(20 * 24 * 60) });
+
+    expect(getOrderQueue(fresh, now)).toBe("awaiting-payment");
+    expect(isAwaitingPaymentStale(fresh, now)).toBe(false);
+    expect(isAwaitingPaymentStale(stale, now)).toBe(true);
+    expect(isAwaitingPaymentStale(abandoned, now)).toBe(false);
+    expect(isAwaitingPaymentStale(order({ payment: { method: PaymentMethod.Bold }, createdAt: null }), now)).toBe(false);
+
+    expect(orderMatchesView("awaiting-payment", "por-atender", fresh, now)).toBe(false);
+    expect(orderMatchesView("awaiting-payment", "por-atender", stale, now)).toBe(true);
+    expect(orderMatchesView("awaiting-payment", "por-atender", abandoned, now)).toBe(false);
+    expect(orderMatchesView("awaiting-payment", "todos", abandoned, now)).toBe(true);
+
+    expect(getNextStep("awaiting-payment", fresh, now)).toEqual({ label: "Reenviar enlace de pago", primary: false });
+    expect(getNextStep("awaiting-payment", stale, now)).toEqual({ label: "Reenviar enlace de pago", primary: true });
+    expect(getPaymentBadge(fresh, now)).toEqual({ label: "Pago en línea pendiente", tone: "cream" });
+    expect(getPaymentBadge(stale, now)).toEqual({ label: "Pago en línea sin completar", tone: "pink" });
   });
 
   it("labels payment and shipping without emoji", () => {

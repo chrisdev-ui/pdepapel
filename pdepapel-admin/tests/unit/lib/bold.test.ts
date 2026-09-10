@@ -52,13 +52,27 @@ describe("Bold helpers", () => {
     expect(verifyBoldWebhookSignature(payload, null, secret)).toBe(false);
   });
 
-  it("uses the empty secret only for Bold sandbox webhooks", () => {
+  it("uses the configured secret in every environment, sandbox included", () => {
+    // Antes el entorno «test» devolvía "", y una clave HMAC vacía es válida:
+    // cualquiera podía firmar un pago.
     process.env.BOLD_ENVIRONMENT = "test";
     process.env.BOLD_SECRET_KEY = "production-secret";
-    expect(getBoldWebhookSecretKey()).toBe("");
+    expect(getBoldWebhookSecretKey()).toBe("production-secret");
 
     process.env.BOLD_ENVIRONMENT = "production";
     expect(getBoldWebhookSecretKey()).toBe("production-secret");
+  });
+
+  it("refuses to verify anything when the secret is missing", () => {
+    const payload = '{"type":"SALE_APPROVED"}';
+    const forged = crypto
+      .createHmac("sha256", "")
+      .update(Buffer.from(payload, "utf8").toString("base64"))
+      .digest("hex");
+
+    // Con la clave vacía el atacante puede calcular la firma «correcta»,
+    // así que la verificación tiene que cortar antes de compararla.
+    expect(verifyBoldWebhookSignature(payload, forged, "")).toBe(false);
   });
 
   it("builds checkout payloads with a safe public redirection URL", () => {

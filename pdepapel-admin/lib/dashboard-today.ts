@@ -1,8 +1,9 @@
 import { CAPSULAS_SORPRESA_ID, KITS_ID, TRESHOLD_LOW_STOCK } from "@/constants";
 import { createSettledMarketplaceSalesWhere } from "@/lib/mercadolibre/reporting";
+import { AWAITING_PAYMENT_STALE_HOURS, AWAITING_PAYMENT_WINDOW_DAYS } from "@/lib/order-queues";
 import prismadb from "@/lib/prismadb";
 import { OrderStatus, OrderType, PaymentMethod } from "@prisma/client";
-import { addDays, startOfDay, subDays } from "date-fns";
+import { addDays, startOfDay, subDays, subHours } from "date-fns";
 import { utcToZonedTime, zonedTimeToUtc } from "date-fns-tz";
 
 const TZ = "America/Bogota";
@@ -24,11 +25,12 @@ export function paidWithin(start: Date, end: Date) {
 }
 const PAID_STATUSES: OrderStatus[] = [OrderStatus.PAID, OrderStatus.SENT];
 const SHIPPABLE_TYPES: OrderType[] = [OrderType.STANDARD, OrderType.CUSTOM, OrderType.QUOTATION];
+const ONLINE_METHODS: PaymentMethod[] = [PaymentMethod.Bold, PaymentMethod.Wompi, PaymentMethod.PayU];
 
 export type SalesChannel = "tienda" | "presencial" | "feria" | "mercadolibre";
 
 export interface TodayPendingAction {
-  kind: "verify-payment" | "create-guide" | "answer-question" | "restock" | "expiring-quote" | "broken-image";
+  kind: "verify-payment" | "awaiting-payment" | "create-guide" | "answer-question" | "restock" | "expiring-quote" | "broken-image";
   title: string;
   meta: string;
   href: string;
@@ -82,6 +84,8 @@ export interface TodayRawInput {
   todayOrders: { total: number }[];
   todayMarketplaceNet: number;
   pendingTransfers: { id: string; orderNumber: string; fullName: string; total: number; createdAt: Date; method: PaymentMethod | null }[];
+  /** Pagos en línea (Bold/Wompi) que llevan más de dos horas sin completarse. */
+  awaitingPayments?: { id: string; orderNumber: string; fullName: string; total: number; createdAt: Date; method: PaymentMethod | null }[];
   toDispatch: { id: string; orderNumber: string; fullName: string; city: string | null; paidAt: Date | null; courier: string | null }[];
   toDispatchCount: number;
   lowStockProducts: { id: string; name: string; stock: number }[];
@@ -130,6 +134,16 @@ export function buildTodaySummary(input: TodayRawInput, storeId: string): TodayS
       weight: 0,
     });
   }
+  for (const order of input.awaitingPayments ?? []) {
+    pending.push({
+      kind: "awaiting-payment",
+      title: `Pago en línea sin completar · ${order.orderNumber}`,
+      meta: [order.fullName, cop(Number(order.total)), order.method === PaymentMethod.Wompi ? "Wompi" : order.method === PaymentMethod.Bold ? "Bold" : null, relative(order.createdAt, now)].filter(Boolean).join(" · "),
+      href: `/${storeId}/pedidos/${order.id}#pago`,
+      action: "Reenviar enlace",
+      weight: 1,
+    });
+  }
   for (const order of input.toDispatch) {
     pending.push({
       kind: "create-guide",
@@ -137,7 +151,7 @@ export function buildTodaySummary(input: TodayRawInput, storeId: string): TodayS
       meta: [order.fullName, order.city, order.paidAt ? `pagado ${relative(order.paidAt, now)}` : null].filter(Boolean).join(" · "),
       href: `/${storeId}/pedidos/${order.id}`,
       action: "Crear guía",
-      weight: 1,
+      weight: 2,
     });
   }
   for (const question of input.unansweredQuestions) {
@@ -147,7 +161,7 @@ export function buildTodaySummary(input: TodayRawInput, storeId: string): TodayS
       meta: [question.productName ?? question.question.slice(0, 60), relative(question.askedAt, now)].filter(Boolean).join(" · "),
       href: `/${storeId}/mercadolibre`,
       action: "Responder",
-      weight: 2,
+      weight: 3,
     });
   }
   for (const quote of input.expiringQuotes) {
@@ -157,7 +171,7 @@ export function buildTodaySummary(input: TodayRawInput, storeId: string): TodayS
       meta: [quote.fullName, cop(Number(quote.total)), quote.expiresAt ? `vence ${isoDay(quote.expiresAt) === isoDay(now) ? "hoy" : "mañana"}` : null].filter(Boolean).join(" · "),
       href: `/${storeId}/pedidos/${quote.id}`,
       action: "Renovar",
-      weight: 3,
+      weight: 4,
     });
   }
   for (const product of input.lowStockProducts) {
@@ -167,7 +181,7 @@ export function buildTodaySummary(input: TodayRawInput, storeId: string): TodayS
       meta: `${product.stock} ${product.stock === 1 ? "unidad" : "unidades"}`,
       href: `/${storeId}/productos/${product.id}`,
       action: "Aprovisionar",
-      weight: 4,
+      weight: 5,
     });
   }
   if ((input.brokenImageProducts ?? 0) > 0) {
@@ -178,7 +192,7 @@ export function buildTodaySummary(input: TodayRawInput, storeId: string): TodayS
       meta: "La foto ya no existe en Cloudinary: la tienda muestra un hueco. Sube la imagen de nuevo.",
       href: `/${storeId}/productos?vista=imagen-rota`,
       action: "Revisar",
-      weight: 2,
+      weight: 3,
     });
   }
   pending.sort((a, b) => a.weight - b.weight);
@@ -256,6 +270,8 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
   const quoteHorizon = addDays(now, 2);
   const dispatchSince = subDays(now, DISPATCH_WINDOW_DAYS);
   const transferSince = subDays(now, TRANSFER_WINDOW_DAYS);
+  const awaitingSince = subDays(now, AWAITING_PAYMENT_WINDOW_DAYS);
+  const awaitingUntil = subHours(now, AWAITING_PAYMENT_STALE_HOURS);
   const dispatchWhere = {
     storeId,
     status: OrderStatus.PAID,
@@ -267,6 +283,7 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
     todayOrders,
     todayMarketplace,
     pendingTransfers,
+    awaitingPayments,
     toDispatch,
     toDispatchCount,
     lowStockProducts,
@@ -287,6 +304,12 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
       where: { storeId, status: OrderStatus.PENDING, type: { in: SHIPPABLE_TYPES }, createdAt: { gte: transferSince }, payment: { method: { in: [PaymentMethod.BankTransfer] } } },
       orderBy: { createdAt: "desc" },
       take: 5,
+      select: { id: true, orderNumber: true, fullName: true, total: true, createdAt: true, payment: { select: { method: true } } },
+    }),
+    prismadb.order.findMany({
+      where: { storeId, status: { in: [OrderStatus.PENDING, OrderStatus.CREATED] }, type: { in: SHIPPABLE_TYPES }, createdAt: { gte: awaitingSince, lte: awaitingUntil }, payment: { method: { in: ONLINE_METHODS } } },
+      orderBy: { createdAt: "desc" },
+      take: 3,
       select: { id: true, orderNumber: true, fullName: true, total: true, createdAt: true, payment: { select: { method: true } } },
     }),
     prismadb.order.findMany({
@@ -335,6 +358,7 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
       todayOrders,
       todayMarketplaceNet: todayMarketplace.reduce((sum, o) => sum + Number(o.netAmount ?? 0), 0),
       pendingTransfers: pendingTransfers.map((o) => ({ ...o, method: o.payment?.method ?? null })),
+      awaitingPayments: awaitingPayments.map((o) => ({ ...o, method: o.payment?.method ?? null })),
       toDispatch: toDispatch.map((o) => ({ ...o, courier: o.shipping?.courier ?? null })),
       toDispatchCount,
       lowStockProducts,

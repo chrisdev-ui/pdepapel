@@ -20,6 +20,8 @@ const baseline: Record<string, string> = {
   CRON_SECRET: "cron",
   INTERNAL_API_SECRET: "internal",
   ENVIOCLICK_API_KEY: "envioclick",
+  ENVIOCLICK_WEBHOOK_SECRET: "envioclick-webhook-secret-de-pruebas",
+  BOLD_SECRET_KEY: "bold-secret",
   MIPAQUETE_API_KEY: "mipaquete",
   KV_REST_API_URL: "https://kv.example",
   KV_REST_API_TOKEN: "token",
@@ -79,6 +81,14 @@ describe("admin env contract", () => {
       expect(env.GA4_MEASUREMENT_ID).toBeUndefined();
       expect(env.GA4_API_SECRET).toBeUndefined();
     }
+  });
+
+  it("refuses to boot without the webhook secrets", async () => {
+    // Fallar cerrado: sin estas claves los webhooks aceptarían cualquier firma.
+    await expect(loadEnv({ ENVIOCLICK_WEBHOOK_SECRET: "" })).rejects.toThrow();
+    await expect(loadEnv({ BOLD_SECRET_KEY: "" })).rejects.toThrow();
+    // Un secreto demasiado corto tampoco sirve como credencial.
+    await expect(loadEnv({ ENVIOCLICK_WEBHOOK_SECRET: "corto" })).rejects.toThrow();
   });
 
   it("still rejects a malformed measurement ID everywhere", async () => {

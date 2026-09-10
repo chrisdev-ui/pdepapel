@@ -2,6 +2,7 @@ import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { createInventoryMovementBatchResilient } from "@/lib/inventory";
+import { explodeKitMovements } from "@/lib/order-stock-movements";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import {
   getBoldWebhookSecretKey,
@@ -14,10 +15,12 @@ import {
   markWelcomeBenefitRedeemed,
   releaseWelcomeBenefitReservation,
 } from "@/lib/customer-benefits";
+import { InvalidWebhookPayloadError, readWebhookStoreId } from "@/lib/webhook-auth";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
+    const scopedStoreId = readWebhookStoreId(req);
     const rawPayload = await req.text();
 
     if (!rawPayload) {
@@ -41,7 +44,16 @@ export async function POST(req: Request) {
       );
     }
 
-    const payload = JSON.parse(rawPayload);
+    let payload: any;
+    try {
+      payload = JSON.parse(rawPayload);
+    } catch {
+      // Cuerpo ilegible: 400 para que Bold deje de reintentarlo.
+      return NextResponse.json(
+        { error: "El cuerpo del webhook no es JSON válido" },
+        { status: 400 },
+      );
+    }
 
     if (!payload) {
       return NextResponse.json(
@@ -64,13 +76,13 @@ export async function POST(req: Request) {
       case "SALE_APPROVED":
       case "PAYMENT_APPROVED":
       case "transaction.approved":
-        return await processBoldPayment(transactionData, OrderStatus.PAID);
+        return await processBoldPayment(transactionData, OrderStatus.PAID, scopedStoreId);
 
       case "SALE_REJECTED":
       case "VOID_APPROVED":
       case "transaction.declined":
       case "transaction.voided":
-        return await processBoldPayment(transactionData, OrderStatus.CANCELLED);
+        return await processBoldPayment(transactionData, OrderStatus.CANCELLED, scopedStoreId);
 
       default:
         console.log(`Bold event received: ${eventType}`);
@@ -88,7 +100,11 @@ export async function POST(req: Request) {
   }
 }
 
-async function processBoldPayment(transaction: any, targetStatus: OrderStatus) {
+async function processBoldPayment(
+  transaction: any,
+  targetStatus: OrderStatus,
+  scopedStoreId: string | null,
+) {
   const orderReference =
     transaction.metadata?.reference ||
     transaction.reference ||
@@ -105,6 +121,7 @@ async function processBoldPayment(transaction: any, targetStatus: OrderStatus) {
   // Find order by orderNumber or ID
   const order = await prismadb.order.findFirst({
     where: {
+      ...(scopedStoreId ? { storeId: scopedStoreId } : {}),
       OR: [{ id: orderReference }, { orderNumber: orderReference }],
     },
     include: {
@@ -146,7 +163,7 @@ async function processBoldPayment(transaction: any, targetStatus: OrderStatus) {
     targetStatus === OrderStatus.PAID &&
     (!Number.isFinite(paidAmount) ||
       (!isSandboxZeroAmount &&
-        Math.round(paidAmount) !== Math.round(order.total)))
+        Math.round(paidAmount) !== Math.round(Number(order.total))))
   ) {
     return NextResponse.json(
       {
@@ -181,46 +198,63 @@ async function processBoldPayment(transaction: any, targetStatus: OrderStatus) {
     );
   }
 
-  const transactionId =
+  // Sin referencia del proveedor se guarda null: inventar «BOLD-<timestamp>»
+  // dejaba en el pedido un número que parecía de Bold y no lo era.
+  const transactionId: string | null =
     transaction.payment_id ||
     transaction.id ||
     transaction.transaction_id ||
-    `BOLD-${Date.now()}`;
+    null;
+
+  if (!transactionId) {
+    console.warn(
+      `[BOLD_WEBHOOK] Evento sin identificador de transacción para ${order.orderNumber}`,
+    );
+  }
 
   let paymentProcessed = false;
   if (targetStatus === OrderStatus.PAID) {
     paymentProcessed = await prismadb.$transaction(async (tx) => {
+      // Solo desde un estado sin cobrar. Con CANCELLED aquí, reenviar un
+      // webhook antiguo de aprobación resucitaba un pedido cancelado y
+      // descontaba el inventario por segunda vez.
       const claim = await tx.order.updateMany({
         where: {
           id: order.id,
-          status: {
-            in: [
-              OrderStatus.CREATED,
-              OrderStatus.PENDING,
-              OrderStatus.CANCELLED,
-            ],
-          },
+          status: { in: [OrderStatus.CREATED, OrderStatus.PENDING] },
         },
         data: { status: OrderStatus.PAID },
       });
 
       if (claim.count === 0) return false;
 
-      const stockMovements = order.orderItems
-        .filter((item: any) => item.product)
-        .map((orderItem: any) => ({
-          productId: orderItem.productId,
-          storeId: order.storeId,
-          type: "ORDER_PLACED" as const,
-          quantity: -orderItem.quantity,
-          reason: `Bold: Pago confirmado ${transactionId}`,
-          referenceId: order.id,
-          cost: Number(orderItem.product.acqPrice) || 0,
-          price: Number(orderItem.product.price),
-          createdBy: "SYSTEM_BOLD",
-        }));
+      // Los kits descuentan también sus componentes; el reingreso al anular
+      // hace lo mismo, así que ambos lados quedan simétricos.
+      const stockMovements = await explodeKitMovements(
+        tx,
+        order.orderItems
+          .filter((item: any) => item.product)
+          .map((orderItem: any) => ({
+            productId: orderItem.productId,
+            storeId: order.storeId,
+            type: "ORDER_PLACED" as const,
+            quantity: -orderItem.quantity,
+            reason: `Bold: pago confirmado ${transactionId ?? "sin referencia"}`,
+            referenceId: order.id,
+            cost: Number(orderItem.product.acqPrice) || 0,
+            price: Number(orderItem.product.price),
+            createdBy: "SYSTEM_BOLD",
+          })),
+      );
 
-      await createInventoryMovementBatchResilient(tx, stockMovements);
+      const stockResult = await createInventoryMovementBatchResilient(tx, stockMovements);
+      if (stockResult.failed.length > 0) {
+        console.error("[BOLD_WEBHOOK] Descuento de inventario incompleto en un pago confirmado:", {
+          orderNumber: order.orderNumber,
+          transactionId,
+          failed: stockResult.failed,
+        });
+      }
 
       const financials = await calculateOrderFinancials(
         order,
@@ -277,14 +311,6 @@ async function processBoldPayment(transaction: any, targetStatus: OrderStatus) {
         },
       });
 
-      if (order.coupon?.isWelcomeBenefit) {
-        await releaseWelcomeBenefitReservation(tx, {
-          couponId: order.coupon.id,
-          userId: order.userId,
-          orderId: order.id,
-        });
-      }
-
       return true;
     });
 
@@ -300,15 +326,74 @@ async function processBoldPayment(transaction: any, targetStatus: OrderStatus) {
     await invalidateStoreProductsCache(order.storeId);
   } else {
     paymentProcessed = await prismadb.$transaction(async (tx) => {
-      const claim = await tx.order.updateMany({
-        where: {
-          id: order.id,
-          status: { in: [OrderStatus.CREATED, OrderStatus.PENDING] },
-        },
-        data: { status: targetStatus },
+      // Una anulación puede llegar después de haber cobrado (VOID_APPROVED
+      // sobre un pedido ya pagado): antes se ignoraba en silencio y el pedido
+      // seguía diciendo «Pagado» con el inventario descontado.
+      const paidCancellation = await tx.order.updateMany({
+        where: { id: order.id, status: OrderStatus.PAID },
+        data: { status: targetStatus, paidAt: null },
       });
+      const reversedPaidOrder = paidCancellation.count > 0;
 
-      if (claim.count === 0) return false;
+      if (!reversedPaidOrder) {
+        const claim = await tx.order.updateMany({
+          where: {
+            id: order.id,
+            status: { in: [OrderStatus.CREATED, OrderStatus.PENDING] },
+          },
+          data: { status: targetStatus },
+        });
+
+        if (claim.count === 0) return false;
+      }
+
+      if (reversedPaidOrder) {
+        const restockMovements = await explodeKitMovements(
+          tx,
+          order.orderItems
+            .filter((item: any) => item.product)
+            .map((orderItem: any) => ({
+              productId: orderItem.productId,
+              storeId: order.storeId,
+              type: "ORDER_CANCELLED" as const,
+              quantity: orderItem.quantity,
+              reason: `Bold: pago anulado ${transactionId ?? "sin referencia"}`,
+              referenceId: order.id,
+              cost: Number(orderItem.product.acqPrice) || 0,
+              price: Number(orderItem.product.price),
+              createdBy: "SYSTEM_BOLD",
+            })),
+        );
+
+        const restockResult = await createInventoryMovementBatchResilient(
+          tx,
+          restockMovements,
+        );
+        if (restockResult.failed.length > 0) {
+          console.error("[BOLD_WEBHOOK] Reingreso de inventario incompleto tras la anulación:", {
+            orderNumber: order.orderNumber,
+            transactionId,
+            failed: restockResult.failed,
+          });
+        }
+
+        if (order.coupon) {
+          await tx.coupon.updateMany({
+            where: { id: order.coupon.id, usedCount: { gt: 0 } },
+            data: { usedCount: { decrement: 1 } },
+          });
+        }
+      }
+
+      // El beneficio de bienvenida vuelve al cliente solo cuando el pedido no
+      // se cobra: aquí, no en la rama de pago confirmado.
+      if (order.coupon?.isWelcomeBenefit) {
+        await releaseWelcomeBenefitReservation(tx, {
+          couponId: order.coupon.id,
+          userId: order.userId,
+          orderId: order.id,
+        });
+      }
 
       await tx.paymentDetails.upsert({
         where: { orderId: order.id },
@@ -336,6 +421,8 @@ async function processBoldPayment(transaction: any, targetStatus: OrderStatus) {
         { status: 200 },
       );
     }
+
+    await invalidateStoreProductsCache(order.storeId);
   }
 
   const updatedOrder = await prismadb.order.findUnique({

@@ -25,8 +25,15 @@ export const env = createEnv({
     CRON_SECRET: z.string().min(1),
     // Internal API authentication for server-to-server calls (webhooks, etc.)
     INTERNAL_API_SECRET: z.string().min(1),
+    // Bold: firma los webhooks de pago. Obligatoria — sin ella el HMAC se
+    // calcularía con una clave vacía y cualquiera podría falsificar un pago.
+    BOLD_SECRET_KEY: z.string().min(1),
+    BOLD_ENVIRONMENT: z.enum(["test", "production"]).default("production"),
     // EnvioClick API
     ENVIOCLICK_API_KEY: z.string().min(1),
+    // EnvioClick no firma sus webhooks: este secreto viaja en la URL que se
+    // configura en su panel (`?token=`) o en la cabecera `x-webhook-token`.
+    ENVIOCLICK_WEBHOOK_SECRET: z.string().min(24),
     ENVIOCLICK_API_URL: z
       .string()
       .url()

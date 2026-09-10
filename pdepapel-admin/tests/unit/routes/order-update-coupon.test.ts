@@ -310,7 +310,7 @@ describe("PATCH order coupon", () => {
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toMatchObject({
       error:
-        "No se puede cambiar el cupón de una orden pagada sin revertir primero su estado de pago",
+        "El cupón de un pedido pagado no se puede cambiar: el descuento ya se cobró. Cancela el pedido y crea uno nuevo si hace falta.",
     });
     expect(mocks.orderUpdate).not.toHaveBeenCalled();
   });

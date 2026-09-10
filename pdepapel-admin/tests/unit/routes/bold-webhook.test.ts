@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   calculateOrderFinancials: vi.fn(),
   createGuideForOrder: vi.fn(),
-  createInventoryMovementBatchResilient: vi.fn(),
+  createInventoryMovementBatchResilient: vi.fn().mockResolvedValue({ success: [], failed: [] }),
   getWebhookSecretKey: vi.fn(),
   findUpdatedOrder: vi.fn(),
   verifyWebhookSignature: vi.fn(),
@@ -37,6 +37,10 @@ vi.mock("@/lib/shipping-helpers", () => ({
 vi.mock("@/lib/inventory", () => ({
   createInventoryMovementBatchResilient:
     mocks.createInventoryMovementBatchResilient,
+}));
+// Sin kits, la explosión devuelve los mismos movimientos.
+vi.mock("@/lib/order-stock-movements", () => ({
+  explodeKitMovements: async (_tx: unknown, movements: unknown) => movements,
 }));
 vi.mock("@/lib/cache", () => ({
   invalidateStoreProductsCache: mocks.invalidateStoreProductsCache,
@@ -118,7 +122,7 @@ describe("POST /api/webhook/bold", () => {
         update: vi.fn(),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
-      coupon: { update: vi.fn() },
+      coupon: { update: vi.fn(), updateMany: vi.fn() },
       paymentDetails: { upsert: vi.fn() },
       shipping: { upsert: vi.fn() },
     };
@@ -179,9 +183,7 @@ describe("POST /api/webhook/bold", () => {
     expect(transactionClient.order.updateMany).toHaveBeenCalledWith({
       where: {
         id: "order-id",
-        status: {
-          in: [OrderStatus.CREATED, OrderStatus.PENDING, OrderStatus.CANCELLED],
-        },
+        status: { in: [OrderStatus.CREATED, OrderStatus.PENDING] },
       },
       data: { status: OrderStatus.PAID },
     });
@@ -193,7 +195,7 @@ describe("POST /api/webhook/bold", () => {
           storeId: "store-id",
           type: "ORDER_PLACED",
           quantity: -2,
-          reason: "Bold: Pago confirmado bold-transaction-id",
+          reason: "Bold: pago confirmado bold-transaction-id",
           referenceId: "order-id",
           cost: 15000,
           price: 40000,
@@ -226,5 +228,149 @@ describe("POST /api/webhook/bold", () => {
       "order-id",
     );
     expect(mocks.createGuideForOrder).not.toHaveBeenCalled();
+  });
+
+  it("does not resurrect a cancelled order when an old approval is replayed", async () => {
+    const transactionClient = {
+      order: { update: vi.fn(), updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+      coupon: { update: vi.fn(), updateMany: vi.fn() },
+      paymentDetails: { upsert: vi.fn() },
+      shipping: { upsert: vi.fn() },
+    };
+    mocks.verifyWebhookSignature.mockReturnValue(true);
+    mocks.findOrder.mockResolvedValue({
+      id: "order-id",
+      orderNumber: "ORD-123",
+      payment: { method: PaymentMethod.Bold },
+      status: OrderStatus.CANCELLED,
+      storeId: "store-id",
+      total: 80000,
+      orderItems: [],
+    });
+    mocks.transaction.mockImplementation(async (cb: any) => cb(transactionClient));
+
+    const response = await POST(
+      createWebhookRequest({
+        type: "SALE_APPROVED",
+        data: {
+          amount: { currency: "COP", total: 80000 },
+          metadata: { reference: "ORD-123" },
+          payment_id: "bold-transaction-id",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      message: "Orden ORD-123 ya fue procesada anteriormente",
+    });
+    expect(mocks.createInventoryMovementBatchResilient).not.toHaveBeenCalled();
+  });
+
+  it("treats a void on an already paid order as a real cancellation with restock", async () => {
+    const orderUpdateMany = vi
+      .fn()
+      .mockResolvedValueOnce({ count: 1 }); // la reclamación sobre el pedido pagado
+    const transactionClient = {
+      order: { update: vi.fn(), updateMany: orderUpdateMany },
+      coupon: { update: vi.fn(), updateMany: vi.fn() },
+      couponRedemption: { updateMany: vi.fn() },
+      paymentDetails: { upsert: vi.fn() },
+      shipping: { upsert: vi.fn() },
+    };
+    const order = {
+      id: "order-id",
+      orderNumber: "ORD-123",
+      payment: { method: PaymentMethod.Bold },
+      status: OrderStatus.PAID,
+      storeId: "store-id",
+      total: 80000,
+      userId: "user-id",
+      coupon: { id: "coupon-id", isWelcomeBenefit: true },
+      orderItems: [
+        { productId: "product-id", quantity: 2, product: { acqPrice: 15000, price: 40000 } },
+      ],
+    };
+    mocks.verifyWebhookSignature.mockReturnValue(true);
+    mocks.findOrder.mockResolvedValue(order);
+    mocks.findUpdatedOrder.mockResolvedValue({ ...order, status: OrderStatus.CANCELLED });
+    mocks.transaction.mockImplementation(async (cb: any) => cb(transactionClient));
+
+    const response = await POST(
+      createWebhookRequest({
+        type: "VOID_APPROVED",
+        data: { metadata: { reference: "ORD-123" }, payment_id: "bold-transaction-id" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(orderUpdateMany).toHaveBeenCalledWith({
+      where: { id: "order-id", status: OrderStatus.PAID },
+      data: { status: OrderStatus.CANCELLED, paidAt: null },
+    });
+    expect(mocks.createInventoryMovementBatchResilient).toHaveBeenCalledWith(
+      transactionClient,
+      [
+        expect.objectContaining({
+          productId: "product-id",
+          type: "ORDER_CANCELLED",
+          quantity: 2,
+        }),
+      ],
+    );
+    expect(transactionClient.coupon.updateMany).toHaveBeenCalledWith({
+      where: { id: "coupon-id", usedCount: { gt: 0 } },
+      data: { usedCount: { decrement: 1 } },
+    });
+    expect(mocks.invalidateStoreProductsCache).toHaveBeenCalledWith("store-id");
+  });
+
+  it("stores no transaction id when the provider sends none", async () => {
+    const transactionClient = {
+      order: { update: vi.fn(), updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      coupon: { update: vi.fn(), updateMany: vi.fn() },
+      paymentDetails: { upsert: vi.fn() },
+      shipping: { upsert: vi.fn() },
+    };
+    mocks.verifyWebhookSignature.mockReturnValue(true);
+    mocks.findOrder.mockResolvedValue({
+      id: "order-id",
+      orderNumber: "ORD-123",
+      payment: { method: PaymentMethod.Bold },
+      status: OrderStatus.PENDING,
+      storeId: "store-id",
+      total: 80000,
+      orderItems: [],
+    });
+    mocks.findUpdatedOrder.mockResolvedValue(null);
+    mocks.transaction.mockImplementation(async (cb: any) => cb(transactionClient));
+    mocks.calculateOrderFinancials.mockResolvedValue({});
+
+    await POST(
+      createWebhookRequest({
+        type: "SALE_APPROVED",
+        data: { amount: { currency: "COP", total: 80000 }, metadata: { reference: "ORD-123" } },
+      }),
+    );
+
+    expect(transactionClient.paymentDetails.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({ transactionId: null }),
+      }),
+    );
+  });
+
+  it("answers 400 to a body that is not JSON so Bold stops retrying", async () => {
+    mocks.verifyWebhookSignature.mockReturnValue(true);
+    const response = await POST(
+      new Request("https://admin.example.com/api/webhook/bold", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-bold-signature": "signature" },
+        body: "not json",
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.findOrder).not.toHaveBeenCalled();
   });
 });

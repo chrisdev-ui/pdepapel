@@ -44,6 +44,16 @@ export function isOrderView(value: string | null | undefined): value is OrderVie
 /** Un pedido pagado sin guía más viejo que esto ya se entregó por fuera del sistema: no es trabajo pendiente. */
 export const DISPATCH_WINDOW_DAYS = 30;
 
+/**
+ * Pago en línea sin completar: Bold y Wompi vencen la sesión de pago en
+ * minutos y el enlace en horas, así que un pedido que sigue pendiente dos
+ * horas después de creado ya no se va a pagar solo. Desde ese momento es
+ * trabajo: reenviar el enlace o cambiar el método. Pasados 14 días (la misma
+ * ventana que las transferencias) es un carrito abandonado, no un pendiente.
+ */
+export const AWAITING_PAYMENT_STALE_HOURS = 2;
+export const AWAITING_PAYMENT_WINDOW_DAYS = 14;
+
 export interface QueueableOrder {
   status: OrderStatus;
   type: OrderType;
@@ -64,6 +74,17 @@ export function isOlderThan(order: QueueableOrder, days: number, now = new Date(
   const reference = toDate(order.paidAt) ?? toDate(order.createdAt);
   if (!reference) return false;
   return now.getTime() - reference.getTime() > days * 24 * 60 * 60 * 1000;
+}
+
+/**
+ * Pago en línea que lleva más de dos horas sin completarse y menos de 14 días:
+ * hay que reaccionar (reenviar el enlace, cambiar el método o cancelar).
+ */
+export function isAwaitingPaymentStale(order: QueueableOrder, now = new Date()): boolean {
+  const created = toDate(order.createdAt);
+  if (!created) return false;
+  const age = now.getTime() - created.getTime();
+  return age > AWAITING_PAYMENT_STALE_HOURS * 60 * 60 * 1000 && age <= AWAITING_PAYMENT_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 }
 
 export function getOrderQueue(order: QueueableOrder, now = new Date()): OrderQueue {
@@ -102,12 +123,12 @@ export interface NextStep {
   primary: boolean;
 }
 
-export function getNextStep(queue: OrderQueue): NextStep | null {
+export function getNextStep(queue: OrderQueue, order?: QueueableOrder, now = new Date()): NextStep | null {
   switch (queue) {
     case "verify":
       return { label: "Verificar pago", primary: true };
     case "awaiting-payment":
-      return { label: "Reenviar link de pago", primary: false };
+      return { label: "Reenviar enlace de pago", primary: Boolean(order && isAwaitingPaymentStale(order, now)) };
     case "dispatch":
       return { label: "Crear guía", primary: false };
     case "in-transit":
@@ -124,12 +145,18 @@ export function getNextStep(queue: OrderQueue): NextStep | null {
   }
 }
 
-export function orderMatchesView(queue: OrderQueue, view: OrderView, order?: QueueableOrder): boolean {
+export function orderMatchesView(queue: OrderQueue, view: OrderView, order?: QueueableOrder, now = new Date()): boolean {
   switch (view) {
     case "todos":
       return true;
     case "por-atender":
-      return queue === "verify" || queue === "dispatch" || queue === "issue" || (queue === "quote" && isExpiringSoon(order?.expiresAt));
+      return (
+        queue === "verify" ||
+        queue === "dispatch" ||
+        queue === "issue" ||
+        (queue === "quote" && isExpiringSoon(order?.expiresAt, now)) ||
+        (queue === "awaiting-payment" && Boolean(order && isAwaitingPaymentStale(order, now)))
+      );
     case "por-verificar":
       return queue === "verify";
     case "por-despachar":
@@ -172,11 +199,11 @@ export interface PaymentBadge {
   tone: "mint" | "cream" | "sky" | "slate" | "pink";
 }
 
-export function getPaymentBadge(order: QueueableOrder): PaymentBadge {
+export function getPaymentBadge(order: QueueableOrder, now = new Date()): PaymentBadge {
   const method = order.payment?.method;
   const paid = order.status === OrderStatus.PAID || order.status === OrderStatus.SENT;
   if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.REJECTED) return { label: "Cancelado", tone: "slate" };
-  if (getOrderQueue(order) === "quote") return { label: "Sin pago", tone: "slate" };
+  if (getOrderQueue(order, now) === "quote") return { label: "Sin pago", tone: "slate" };
   if (paid) {
     if (method === PaymentMethod.CASH) return { label: "Efectivo", tone: "mint" };
     if (method === PaymentMethod.COD) return { label: "Contra entrega · pagado", tone: "mint" };
@@ -185,7 +212,9 @@ export function getPaymentBadge(order: QueueableOrder): PaymentBadge {
   if (method === PaymentMethod.BankTransfer) return { label: "Por verificar", tone: "cream" };
   if (method === PaymentMethod.COD) return { label: "Contra entrega", tone: "sky" };
   if (method === PaymentMethod.CASH) return { label: "Efectivo", tone: "cream" };
-  return { label: "Pago en línea pendiente", tone: "cream" };
+  return isAwaitingPaymentStale(order, now)
+    ? { label: "Pago en línea sin completar", tone: "pink" }
+    : { label: "Pago en línea pendiente", tone: "cream" };
 }
 
 export interface ShippingBadge {

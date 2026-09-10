@@ -6,12 +6,15 @@ interface UseFormPersistProps<T extends FieldValues> {
   form: UseFormReturn<T>;
   key: string;
   exclude?: (keyof T)[];
+  /** Con `false` no se guarda nada (registros existentes: el servidor manda). */
+  enabled?: boolean;
 }
 
 export function useFormPersist<T extends FieldValues>({
   form,
   key,
   exclude = [],
+  enabled = true,
 }: UseFormPersistProps<T>) {
   const isLoaded = useRef(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -66,6 +69,7 @@ export function useFormPersist<T extends FieldValues>({
 
   // Save data on change
   useEffect(() => {
+    if (!enabled) return;
     const subscription = form.watch(() => {
       if (!isLoaded.current) return;
 
@@ -93,7 +97,7 @@ export function useFormPersist<T extends FieldValues>({
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [form, key, setFormData]);
+  }, [form, key, setFormData, enabled]);
 
   const clearStorage = () => {
     // Cancel any pending debounced saves to prevent race condition

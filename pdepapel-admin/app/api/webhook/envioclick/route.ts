@@ -1,14 +1,30 @@
 import { handleErrorResponse } from "@/lib/api-errors";
 import { sendShippingEmail } from "@/lib/email";
+import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
+import {
+  InvalidWebhookPayloadError,
+  parseProviderDate,
+  readWebhookStoreId,
+  readWebhookToken,
+  safeSecretEquals,
+} from "@/lib/webhook-auth";
 import { ShippingStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
-// CORS headers for webhook
+/**
+ * EnvioClick no firma sus webhooks, así que la URL configurada en su panel
+ * lleva un secreto compartido (`?token=`, o la cabecera `x-webhook-token`) y,
+ * opcionalmente, la tienda (`?store=`) a la que se limita la búsqueda.
+ * Sin secreto válido esta ruta no toca nada: antes cualquiera podía marcar
+ * un envío como entregado, reescribir la guía y avisar al cliente.
+ */
+
+// Este webhook lo llama EnvioClick servidor a servidor: no hay navegador que
+// necesite CORS, y abrirlo a "*" solo facilitaba probarlo desde cualquier web.
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Allow-Headers": "Content-Type, X-Webhook-Token",
 };
 
 // Map EnvioClick status strings to our ShippingStatus enum
@@ -44,26 +60,42 @@ export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
 }
 
-// Handle GET request for webhook verification
-export async function GET() {
+// Verificación de EnvioClick: solo confirma el endpoint a quien trae el secreto.
+export async function GET(req: Request) {
+  if (!isAuthorized(req)) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401, headers: corsHeaders });
+  }
   return NextResponse.json(
-    {
-      status: "active",
-      message: "EnvioClick webhook endpoint is ready",
-      timestamp: new Date().toISOString(),
-    },
+    { status: "active", timestamp: new Date().toISOString() },
     { headers: corsHeaders },
   );
 }
 
-export async function POST(req: Request) {
-  try {
-    const payload = await req.json();
+function isAuthorized(req: Request): boolean {
+  return safeSecretEquals(readWebhookToken(req), env.ENVIOCLICK_WEBHOOK_SECRET);
+}
 
-    console.log(
-      "[ENVIOCLICK_WEBHOOK] Received payload:",
-      JSON.stringify(payload, null, 2),
+export async function POST(req: Request) {
+  if (!isAuthorized(req)) {
+    console.warn("[ENVIOCLICK_WEBHOOK] Petición rechazada: secreto inválido o ausente");
+    return NextResponse.json(
+      { error: "No autorizado" },
+      { status: 401, headers: corsHeaders },
     );
+  }
+
+  try {
+    const payload = await req.json().catch(() => {
+      throw new InvalidWebhookPayloadError("El cuerpo del webhook no es JSON válido");
+    });
+    const scopedStoreId = readWebhookStoreId(req);
+
+    console.log("[ENVIOCLICK_WEBHOOK] Payload recibido:", {
+      idOrder: payload?.idOrder,
+      myShipmentReference: payload?.myShipmentReference,
+      events: Array.isArray(payload?.events) ? payload.events.length : 0,
+      storeId: scopedStoreId,
+    });
 
     // EnvioClick sends data directly in the body, not nested in "data"
     const {
@@ -74,17 +106,35 @@ export async function POST(req: Request) {
       arrivalDate,
       realDeliveryDate,
       events = [],
-    } = payload;
+    } = payload ?? {};
+
+    if (idOrder === undefined && !myShipmentReference) {
+      throw new InvalidWebhookPayloadError(
+        "El webhook no trae idOrder ni myShipmentReference",
+      );
+    }
+    if (!Array.isArray(events)) {
+      throw new InvalidWebhookPayloadError("«events» debe ser una lista");
+    }
+
+    // Se validan antes de abrir la transacción: una fecha corrupta ya no
+    // llega a Prisma como Invalid Date ni provoca un 500 con reintentos.
+    const pickupDate = parseProviderDate(realPickupDate, "realPickupDate");
+    const estimatedDeliveryDate = parseProviderDate(arrivalDate, "arrivalDate");
+    const actualDeliveryDate = parseProviderDate(realDeliveryDate, "realDeliveryDate");
 
     // Wrap DB operations in a transaction for atomicity
     const result = await prismadb.$transaction(async (tx: any) => {
       // Find shipping by EnvioClick order ID or reference
+      const identifiers = [
+        ...(idOrder === undefined || idOrder === null ? [] : [{ envioClickIdOrder: Number(idOrder) }]),
+        ...(myShipmentReference ? [{ myShipmentReference: String(myShipmentReference) }] : []),
+      ];
+
       const shipping = await tx.shipping.findFirst({
         where: {
-          OR: [
-            { envioClickIdOrder: idOrder },
-            { myShipmentReference: myShipmentReference },
-          ],
+          ...(scopedStoreId ? { storeId: scopedStoreId } : {}),
+          OR: identifiers,
         },
         include: { order: true },
       });
@@ -108,24 +158,17 @@ export async function POST(req: Request) {
       });
 
       // Update shipping record
-      const updatedShipping = await tx.shipping.update({
+      // `notes` son del equipo: quien recibió el paquete queda en el evento de
+      // seguimiento, que es donde el cliente lo lee. Antes cada webhook de
+      // entrega borraba lo que hubiera escrito la administradora.
+      await tx.shipping.update({
         where: { id: shipping.id },
         data: {
           status: newStatus,
-          trackingCode: trackingCode || shipping.trackingCode,
-          pickupDate: realPickupDate
-            ? new Date(realPickupDate)
-            : shipping.pickupDate,
-          estimatedDeliveryDate: arrivalDate
-            ? new Date(arrivalDate)
-            : shipping.estimatedDeliveryDate,
-          actualDeliveryDate: realDeliveryDate
-            ? new Date(realDeliveryDate)
-            : shipping.actualDeliveryDate,
-          // Store receivedBy in notes if delivered
-          notes: latestEvent?.receivedBy
-            ? `Recibido por: ${latestEvent.receivedBy}`
-            : shipping.notes,
+          trackingCode: trackingCode ? String(trackingCode) : shipping.trackingCode,
+          pickupDate: pickupDate ?? shipping.pickupDate,
+          estimatedDeliveryDate: estimatedDeliveryDate ?? shipping.estimatedDeliveryDate,
+          actualDeliveryDate: actualDeliveryDate ?? shipping.actualDeliveryDate,
         },
       });
 
@@ -141,8 +184,8 @@ export async function POST(req: Request) {
           ] as ShippingStatus[]
         ).includes(newStatus)
       ) {
-        await tx.order.update({
-          where: { id: shipping.orderId },
+        await tx.order.updateMany({
+          where: { id: shipping.orderId, storeId: shipping.storeId },
           data: { status: "SENT" },
         });
       }
@@ -260,6 +303,13 @@ export async function POST(req: Request) {
       { status: 200, headers: corsHeaders },
     );
   } catch (error: any) {
+    if (error instanceof InvalidWebhookPayloadError) {
+      console.warn("[ENVIOCLICK_WEBHOOK] Payload inválido:", error.message);
+      return NextResponse.json(
+        { error: error.message },
+        { status: 400, headers: corsHeaders },
+      );
+    }
     console.error("[ENVIOCLICK_WEBHOOK] Error processing webhook:", error);
     return handleErrorResponse(error, "ENVIOCLICK_WEBHOOK", {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

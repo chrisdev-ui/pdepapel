@@ -10,7 +10,7 @@ export function OrderMobileCard({ order, storeId }: { order: OrderColumn; storeI
   const channel = getOrderChannel(order.type);
   const payment = getPaymentBadge(order);
   const shipping = getShippingBadge(order);
-  const step = getNextStep(getOrderQueue(order));
+  const step = getNextStep(getOrderQueue(order), order);
   return (
     <article className="flex flex-col gap-2.5 rounded-xl border bg-white p-3.5 shadow-sm">
       <div className="flex items-start justify-between gap-2">

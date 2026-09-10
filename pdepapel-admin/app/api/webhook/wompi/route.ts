@@ -11,6 +11,8 @@ import {
   markWelcomeBenefitRedeemed,
   releaseWelcomeBenefitReservation,
 } from "@/lib/customer-benefits";
+import { explodeKitMovements } from "@/lib/order-stock-movements";
+import { safeHexEquals } from "@/lib/webhook-auth";
 import crypto from "crypto";
 import { NextResponse } from "next/server";
 
@@ -18,7 +20,14 @@ const HASH_ALGORITHM = "sha256";
 
 export async function POST(req: Request) {
   try {
-    const response = await req.json();
+    const response = await req.json().catch(() => null);
+
+    if (!response) {
+      return NextResponse.json(
+        { error: "El cuerpo del webhook no es JSON válido" },
+        { status: 400 },
+      );
+    }
 
     if (response && response.event) {
       switch (response.event) {
@@ -39,6 +48,7 @@ export async function POST(req: Request) {
       );
     }
   } catch (error: any) {
+    console.error("[WOMPI_WEBHOOK] Error procesando el webhook:", error);
     return NextResponse.json(
       {
         error: `Internal server error processing webhook: ${
@@ -71,6 +81,10 @@ async function processWebhookPayment(response: any) {
             coupon: {
               select: {
                 id: true,
+                // Sin este campo, `order.coupon.isWelcomeBenefit` era siempre
+                // undefined y el beneficio de bienvenida nunca se marcaba
+                // usado ni se liberaba en los pagos por Wompi.
+                isWelcomeBenefit: true,
               },
             },
             shipping: true,
@@ -116,24 +130,33 @@ async function processWebhookPayment(response: any) {
 function isValidChecksum(response: any): boolean {
   const { signature, data, timestamp } = response;
 
-  if (!signature || !data || !timestamp) {
+  if (!signature || !data || !timestamp || !Array.isArray(signature.properties)) {
     return false;
   }
 
   const toHash = concatenateProperties(data, signature.properties);
+  if (toHash === null) return false;
+
   const hash = createHash(toHash, timestamp, env.WOMPI_EVENTS_KEY);
-  return hash === signature.checksum;
+  return safeHexEquals(signature.checksum, hash);
 }
 
-function concatenateProperties(data: any, properties: string[]): string {
+/**
+ * Recorre las propiedades firmadas. Devuelve null si el camino no existe, en
+ * lugar de lanzar: un cuerpo mal formado se responde como firma inválida (400)
+ * y no como error interno (500), que Wompi reintentaría sin fin.
+ */
+function concatenateProperties(data: any, properties: string[]): string | null {
   let result = "";
-  properties.forEach((property: string) => {
-    let value = data;
-    property.split(".").forEach((key: string) => {
+  for (const property of properties) {
+    let value: any = data;
+    for (const key of String(property).split(".")) {
+      if (value === null || value === undefined) return null;
       value = value[key];
-    });
+    }
+    if (value === undefined || value === null) return null;
     result += value;
-  });
+  }
   return result;
 }
 
@@ -151,16 +174,60 @@ function createHash(
 
 function isPaymentValid(order: any, transaction: any): boolean {
   const { total, payment } = order;
-  const { amount_in_cents: amountInCents } = transaction;
-  const totalAmount = total * 100;
-  return (
-    payment.method === PaymentMethod.Wompi && amountInCents === totalAmount
-  );
+  const amountInCents = Number(transaction?.amount_in_cents);
+  // `total` es un Float: se compara en enteros para que un céntimo de
+  // artefacto decimal no rechace un pago legítimo.
+  const expectedCents = Math.round(Number(total) * 100);
+  const currency = transaction?.currency;
+
+  if (payment?.method !== PaymentMethod.Wompi) return false;
+  if (!Number.isFinite(amountInCents) || Math.round(amountInCents) !== expectedCents) return false;
+  // Wompi opera en COP; otra moneda con el mismo número sería otro importe.
+  if (currency && currency !== "COP") return false;
+  return true;
 }
 
 async function updateOrderData(order: any, transaction: any) {
   try {
     const currentStatus = applyStatus(transaction.status);
+
+    /**
+     * Comprobante del pago y, solo cuando el cobro se confirma, el envío en
+     * preparación. Se escriben dentro de la misma transacción que el estado
+     * del pedido: antes iban después y una caída entre ambos dejaba un pedido
+     * pagado sin el identificador de la transacción, justo el dato que hace
+     * falta en una disputa. El envío ya no se crea para transacciones
+     * declinadas o pendientes, que mostraban «Preparando» sin haber cobrado.
+     */
+    const writePaymentArtifacts = async (tx: any, paid: boolean) => {
+      await tx.paymentDetails.upsert({
+        where: { orderId: order.id },
+        update: {
+          transactionId: transaction.id,
+          details: `customer_email: ${transaction?.customer_email ?? "undefined"} | payment_method_type: ${transaction?.payment_method_type ?? "undefined"}`,
+        },
+        create: {
+          method: PaymentMethod.Wompi,
+          transactionId: transaction.id,
+          details: `customer_email: ${transaction?.customer_email ?? "undefined"} | payment_method_type: ${transaction?.payment_method_type ?? "undefined"}`,
+          store: { connect: { id: order.storeId } },
+          order: { connect: { id: order.id } },
+        },
+      });
+
+      if (!paid) return;
+
+      await tx.shipping.upsert({
+        where: { orderId: order.id },
+        update: { status: ShippingStatus.Preparing },
+        create: {
+          status: ShippingStatus.Preparing,
+          store: { connect: { id: order.storeId } },
+          order: { connect: { id: order.id } },
+        },
+      });
+    };
+
     const result = await prismadb.$transaction(async (tx) => {
       if (currentStatus === OrderStatus.PAID) {
         const claim = await tx.order.updateMany({
@@ -182,19 +249,22 @@ async function updateOrderData(order: any, transaction: any) {
         }
 
         // Prepare stock updates for batch processing (Sales = Negative)
-        const stockMovements = order.orderItems
-          .filter((item: any) => item.product) // Filter out manual items
-          .map((orderItem: any) => ({
-            productId: orderItem.productId,
-            storeId: order.storeId,
-            type: "ORDER_PLACED" as const,
-            quantity: -orderItem.quantity, // Negative for removal
-            reason: `Wompi: Pago confirmado ${transaction.id}`,
-            referenceId: order.id,
-            cost: Number(orderItem.product.acqPrice) || 0,
-            price: Number(orderItem.product.price),
-            createdBy: "SYSTEM_WOMPI",
-          }));
+        const stockMovements = await explodeKitMovements(
+          tx,
+          order.orderItems
+            .filter((item: any) => item.product) // Filter out manual items
+            .map((orderItem: any) => ({
+              productId: orderItem.productId,
+              storeId: order.storeId,
+              type: "ORDER_PLACED" as const,
+              quantity: -orderItem.quantity, // Negative for removal
+              reason: `Wompi: Pago confirmado ${transaction.id}`,
+              referenceId: order.id,
+              cost: Number(orderItem.product.acqPrice) || 0,
+              price: Number(orderItem.product.price),
+              createdBy: "SYSTEM_WOMPI",
+            })),
+        );
 
         // Use the resilient batch update function
         const stockResult = await createInventoryMovementBatchResilient(
@@ -243,13 +313,16 @@ async function updateOrderData(order: any, transaction: any) {
           });
         }
 
+        await writePaymentArtifacts(tx, true);
         return { processed: true, shouldInvalidateCache: true };
       }
 
       if (currentStatus === OrderStatus.CANCELLED) {
+        // Se limpia la fecha de pago: un pedido cancelado que la conserva
+        // sigue contando como venta en los reportes tributarios.
         const paidCancellation = await tx.order.updateMany({
           where: { id: order.id, status: OrderStatus.PAID },
-          data: { status: OrderStatus.CANCELLED },
+          data: { status: OrderStatus.CANCELLED, paidAt: null },
         });
         let restockedPaidOrder = paidCancellation.count > 0;
 
@@ -268,19 +341,22 @@ async function updateOrderData(order: any, transaction: any) {
         }
 
         if (restockedPaidOrder) {
-          const stockMovements = order.orderItems
-            .filter((item: any) => item.product) // Filter out manual items
-            .map((orderItem: any) => ({
-              productId: orderItem.productId,
-              storeId: order.storeId,
-              type: "ORDER_CANCELLED" as const,
-              quantity: orderItem.quantity, // Positive for addition (Restock)
-              reason: `Wompi: Transacción anulada/error ${transaction.id}`,
-              referenceId: order.id,
-              cost: Number(orderItem.product.acqPrice) || 0,
-              price: Number(orderItem.product.price),
-              createdBy: "SYSTEM_WOMPI",
-            }));
+          const stockMovements = await explodeKitMovements(
+            tx,
+            order.orderItems
+              .filter((item: any) => item.product) // Filter out manual items
+              .map((orderItem: any) => ({
+                productId: orderItem.productId,
+                storeId: order.storeId,
+                type: "ORDER_CANCELLED" as const,
+                quantity: orderItem.quantity, // Positive for addition (Restock)
+                reason: `Wompi: Transacción anulada/error ${transaction.id}`,
+                referenceId: order.id,
+                cost: Number(orderItem.product.acqPrice) || 0,
+                price: Number(orderItem.product.price),
+                createdBy: "SYSTEM_WOMPI",
+              })),
+          );
 
           const stockResult = await createInventoryMovementBatchResilient(
             tx,
@@ -299,8 +375,8 @@ async function updateOrderData(order: any, transaction: any) {
         }
 
         if (restockedPaidOrder && order.coupon) {
-          await tx.coupon.update({
-            where: { id: order.coupon.id },
+          await tx.coupon.updateMany({
+            where: { id: order.coupon.id, usedCount: { gt: 0 } },
             data: {
               usedCount: {
                 decrement: 1,
@@ -325,6 +401,7 @@ async function updateOrderData(order: any, transaction: any) {
           });
         }
 
+        await writePaymentArtifacts(tx, false);
         return {
           processed: true,
           shouldInvalidateCache: restockedPaidOrder,
@@ -335,6 +412,8 @@ async function updateOrderData(order: any, transaction: any) {
         where: { id: order.id, status: OrderStatus.CREATED },
         data: { status: OrderStatus.PENDING },
       });
+
+      if (pendingClaim.count > 0) await writePaymentArtifacts(tx, false);
 
       return {
         processed: pendingClaim.count > 0,
@@ -365,60 +444,6 @@ async function updateOrderData(order: any, transaction: any) {
     if (result.shouldInvalidateCache) {
       await invalidateStoreProductsCache(order.storeId);
     }
-
-    await prismadb.paymentDetails.upsert({
-      where: {
-        orderId: order.id,
-      },
-      update: {
-        transactionId: transaction.id,
-        details: `customer_email: ${
-          transaction?.customer_email ?? "undefined"
-        } | payment_method_type: ${
-          transaction?.payment_method_type ?? "undefined"
-        }`,
-      },
-      create: {
-        method: PaymentMethod.Wompi,
-        transactionId: transaction.id,
-        details: `customer_email: ${
-          transaction?.customer_email ?? "undefined"
-        } | payment_method_type: ${
-          transaction?.payment_method_type ?? "undefined"
-        }`,
-        store: {
-          connect: {
-            id: order.storeId,
-          },
-        },
-        order: {
-          connect: {
-            id: order.id,
-          },
-        },
-      },
-    });
-    await prismadb.shipping.upsert({
-      where: {
-        orderId: order.id,
-      },
-      update: {
-        status: ShippingStatus.Preparing,
-      },
-      create: {
-        status: ShippingStatus.Preparing,
-        store: {
-          connect: {
-            id: order.storeId,
-          },
-        },
-        order: {
-          connect: {
-            id: order.id,
-          },
-        },
-      },
-    });
 
     // Fetch updated order with relations needed for the email
     const updatedOrder = await prismadb.order.findUnique({

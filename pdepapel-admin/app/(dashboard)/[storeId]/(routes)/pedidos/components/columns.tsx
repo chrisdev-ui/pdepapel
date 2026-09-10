@@ -122,7 +122,7 @@ export const buildColumns = (storeId: string): ColumnDef<OrderColumn>[] => [
     id: "nextStep",
     header: () => <span className="block text-right">Siguiente paso</span>,
     cell: ({ row }) => {
-      const step = getNextStep(getOrderQueue(row.original));
+      const step = getNextStep(getOrderQueue(row.original), row.original);
       return (
         <div className="flex items-center justify-end gap-1" data-no-row-click>
           {step && (

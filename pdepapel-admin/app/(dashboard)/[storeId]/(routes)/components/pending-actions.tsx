@@ -1,11 +1,12 @@
 import { Button } from "@/components/ui/button";
 import type { TodayPendingAction } from "@/lib/dashboard-today";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, CheckCircle2, Clock, CreditCard, ImageOff, ListChecks, MessageCircle, Truck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, CreditCard, ImageOff, Link2, ListChecks, MessageCircle, Truck } from "lucide-react";
 import Link from "next/link";
 
 const ICONS: Record<TodayPendingAction["kind"], { icon: React.ReactNode; tint: string }> = {
   "verify-payment": { icon: <CreditCard className="h-[18px] w-[18px]" aria-hidden="true" />, tint: "bg-tint-cream" },
+  "awaiting-payment": { icon: <Link2 className="h-[18px] w-[18px]" aria-hidden="true" />, tint: "bg-tint-pink" },
   "create-guide": { icon: <Truck className="h-[18px] w-[18px]" aria-hidden="true" />, tint: "bg-tint-sky" },
   "answer-question": { icon: <MessageCircle className="h-[18px] w-[18px]" aria-hidden="true" />, tint: "bg-tint-lavender" },
   restock: { icon: <AlertTriangle className="h-[18px] w-[18px]" aria-hidden="true" />, tint: "bg-tint-pink" },
@@ -43,7 +44,7 @@ export function PendingActions({ storeId, items }: PendingActionsProps) {
             <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
           </span>
           <p className="text-sm font-semibold">Todo al día</p>
-          <p className="text-sm text-muted-foreground">No hay pagos por verificar, guías por crear ni preguntas sin responder.</p>
+          <p className="text-sm text-muted-foreground">No hay pagos por verificar ni sin completar, guías por crear ni preguntas sin responder.</p>
         </div>
       ) : (
         <ul className="divide-y border-t">
@@ -56,7 +57,7 @@ export function PendingActions({ storeId, items }: PendingActionsProps) {
                   <span className="truncate text-sm font-semibold text-primary">{item.title}</span>
                   <span className="truncate text-xs text-muted-foreground">{item.meta}</span>
                 </div>
-                <Button asChild size="xs" variant={item.kind === "verify-payment" ? "default" : "outline"}>
+                <Button asChild size="xs" variant={item.kind === "verify-payment" || item.kind === "awaiting-payment" ? "default" : "outline"}>
                   <Link href={item.href}>{item.action}</Link>
                 </Button>
               </li>

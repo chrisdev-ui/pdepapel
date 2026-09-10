@@ -27,6 +27,10 @@ import {
   CreateInventoryMovementParams,
 } from "@/lib/inventory";
 import { invalidateStoreProductsCache } from "@/lib/cache";
+import { calculateOrderFinancials } from "@/lib/financial";
+import { explodeKitMovements } from "@/lib/order-stock-movements";
+import { canTransition, describeForbiddenTransition, ORDER_STATUS_LABELS } from "@/lib/order-transitions";
+import { markWelcomeBenefitRedeemed, releaseWelcomeBenefitReservation } from "@/lib/customer-benefits";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import {
   Coupon,
@@ -602,38 +606,11 @@ async function createOrder(
             createdBy: authenticatedUserId || "SYSTEM",
           }));
 
-        // [NEW] Explode Kits into Component Movements
-        const explodedMovements: CreateInventoryMovementParams[] = [];
-
-        for (const move of stockMovements) {
-          explodedMovements.push(move); // Keep original movement (Kit or Product)
-
-          const item = createdOrder.orderItems.find(
-            (i) => i.productId === move.productId,
-          );
-          if (item?.product?.isKit && item.product.kitComponents) {
-            for (const comp of item.product.kitComponents) {
-              explodedMovements.push({
-                productId: comp.componentId,
-                storeId: params.storeId,
-                type: "ORDER_PLACED" as const,
-                quantity: move.quantity * comp.quantity, // quantity is negative, so this works
-                reason: `Orden #${createdOrder.orderNumber} (Kit: ${item.product.name})`,
-                referenceId: createdOrder.id,
-                // For cost/price, we might use component's values if we had them,
-                // but here we might not have component details loaded (only relations).
-                // It's acceptable to have 0 or fetch if strictly needed.
-                // createInventoryMovement will use snapshot for stock, but cost might need fetch.
-                // Let's rely on default or simple pass for now.
-                createdBy: authenticatedUserId || "SYSTEM",
-              });
-            }
-          }
-        }
+        const explodedMovements = await explodeKitMovements(tx, stockMovements);
 
         const stockResult = await createInventoryMovementBatchResilient(
           tx,
-          explodedMovements, // Use expanded list
+          explodedMovements,
         );
 
         // Log stock update results but don't throw errors
@@ -662,6 +639,19 @@ async function createOrder(
       // Invalidate cache if stock was modified (Paid Order)
       if (status === OrderStatus.PAID) {
         await invalidateStoreProductsCache(params.storeId);
+
+        // Un pedido que nace pagado (venta registrada por la administradora)
+        // lleva fecha de pago y métricas, igual que uno marcado pagado después.
+        const financials = await calculateOrderFinancials(
+          createdOrder as any,
+          payment?.method,
+          Number(shipping?.cost) || 0,
+          tx,
+        );
+        await tx.order.update({
+          where: { id: createdOrder.id },
+          data: { ...financials, paidAt: new Date() } as any,
+        });
       }
 
       return createdOrder;
@@ -982,6 +972,40 @@ export async function PATCH(
         );
       }
 
+      // Las mismas reglas que en la página del pedido: si alguna orden no
+      // admite el cambio, no se aplica ninguna. Un lote a medias deja el
+      // inventario y la contabilidad imposibles de reconstruir.
+      if (status) {
+        const rejected = orders.filter(
+          (order) =>
+            !canTransition(order.status, status, {
+              type: order.type,
+              paymentMethod: order.payment?.method ?? null,
+            }),
+        );
+        if (rejected.length > 0) {
+          const detail = rejected
+            .slice(0, 5)
+            .map((order) => `${order.orderNumber} (${ORDER_STATUS_LABELS[order.status]})`)
+            .join(", ");
+          const extra = rejected.length > 5 ? ` y ${rejected.length - 5} más` : "";
+          throw ErrorFactory.InvalidRequest(
+            `${rejected.length} de ${orders.length} ${orders.length === 1 ? "pedido" : "pedidos"} ${rejected.length === 1 ? "no admite" : "no admiten"} pasar a «${ORDER_STATUS_LABELS[status]}»: ${detail}${extra}. ${describeForbiddenTransition(rejected[0].status, status)} No se cambió ninguno.`,
+          );
+        }
+      }
+
+      // Cambiar el estado del envío necesita un envío que actualizar; las
+      // ventas de mostrador y de feria no lo tienen.
+      if (shipping) {
+        const withoutShipping = orders.filter((order) => !order.shipping);
+        if (withoutShipping.length > 0) {
+          throw ErrorFactory.InvalidRequest(
+            `${withoutShipping.length} ${withoutShipping.length === 1 ? "pedido no tiene envío" : "pedidos no tienen envío"} registrado (${withoutShipping.slice(0, 5).map((o) => o.orderNumber).join(", ")}). No se cambió ninguno.`,
+          );
+        }
+      }
+
       // Collect all stock updates to batch them
       const stockUpdates: CreateInventoryMovementParams[] = [];
 
@@ -1062,7 +1086,7 @@ export async function PATCH(
       if (stockUpdates.length > 0) {
         const stockResult = await createInventoryMovementBatchResilient(
           tx,
-          stockUpdates,
+          await explodeKitMovements(tx, stockUpdates),
         );
 
         // Log stock update results but don't throw errors
@@ -1094,9 +1118,14 @@ export async function PATCH(
           };
         }
 
-        return tx.order.update({
+        const becomesPaid =
+          status === OrderStatus.PAID && order.status !== OrderStatus.PAID;
+        const leavesPaid =
+          Boolean(status) && status !== OrderStatus.PAID && order.status === OrderStatus.PAID;
+
+        const updated = await tx.order.update({
           where: { id: order.id },
-          data: updateData,
+          data: { ...updateData, ...(becomesPaid ? { paidAt: new Date() } : {}) },
           include: {
             orderItems: {
               include: {
@@ -1105,11 +1134,60 @@ export async function PATCH(
             },
             shipping: true,
             payment: true,
+            coupon: true,
           },
         });
+
+        // Un cobro es un cobro venga de donde venga: el cupón y las métricas
+        // se mueven igual que al marcar pagado desde la página del pedido.
+        if (becomesPaid) {
+          if (updated.coupon) {
+            await tx.coupon.update({
+              where: { id: updated.coupon.id },
+              data: { usedCount: { increment: 1 } },
+            });
+            if (updated.coupon.isWelcomeBenefit) {
+              await markWelcomeBenefitRedeemed(tx, {
+                couponId: updated.coupon.id,
+                userId: updated.userId,
+                orderId: updated.id,
+              });
+            }
+          }
+          const financials = await calculateOrderFinancials(
+            updated as any,
+            updated.payment?.method,
+            updated.shipping?.cost || 0,
+            tx,
+          );
+          await tx.order.update({
+            where: { id: updated.id },
+            data: financials as any,
+          });
+        }
+
+        if (leavesPaid && updated.coupon) {
+          await tx.coupon.updateMany({
+            where: { id: updated.coupon.id, usedCount: { gt: 0 } },
+            data: { usedCount: { decrement: 1 } },
+          });
+          if (updated.coupon.isWelcomeBenefit) {
+            await releaseWelcomeBenefitReservation(tx, {
+              couponId: updated.coupon.id,
+              userId: updated.userId,
+              orderId: updated.id,
+            });
+          }
+        }
+
+        return updated;
       });
 
-      return Promise.all(updatePromises);
+      const updatedOrders = await Promise.all(updatePromises);
+      if (status === OrderStatus.PAID) {
+        await invalidateStoreProductsCache(params.storeId);
+      }
+      return updatedOrders;
     });
 
     // Send email notifications asynchronously

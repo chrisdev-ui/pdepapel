@@ -1,4 +1,4 @@
-import { getOrderQueue, type OrderQueue, type QueueableOrder } from "@/lib/order-queues";
+import { getOrderQueue, isAwaitingPaymentStale, type OrderQueue, type QueueableOrder } from "@/lib/order-queues";
 import { OrderStatus, OrderType, ShippingStatus } from "@prisma/client";
 
 /** Línea de tiempo y siguiente paso de la página del pedido. Puro y testeable. */
@@ -107,7 +107,9 @@ export function getNextStepCard(order: TimelineOrder, storeId: string, now = new
     case "verify":
       return { queue, title: "Siguiente paso: verificar la transferencia", description: "Revisa el comprobante del cliente y marca el pedido como pagado con el número de la transacción.", primary: { label: "Marcar como pagado", href: "#estado" }, consequence: "Al confirmar: se descuenta el inventario y se habilita la guía.", tone: "cream" };
     case "awaiting-payment":
-      return { queue, title: "Esperando el pago en línea", description: "El cliente aún no completa el pago. Puedes reenviarle el enlace o cambiar el método.", primary: { label: "Ver enlace de pago", href: "#pago" }, consequence: "Bold o Wompi marcarán el pedido como pagado automáticamente.", tone: "sky" };
+      return isAwaitingPaymentStale(order, now)
+        ? { queue, title: "El pago en línea no se completó", description: "Lleva más de dos horas sin pagarse: la sesión de Bold o Wompi ya venció. Reenvía el enlace por WhatsApp, cambia el método a transferencia o cancela el pedido.", primary: { label: "Reenviar enlace de pago", href: "#pago" }, secondary: { label: "Cambiar método", href: "#pago" }, consequence: "Si el cliente paga, Bold o Wompi marcarán el pedido como pagado automáticamente.", tone: "pink" }
+        : { queue, title: "Esperando el pago en línea", description: "El cliente aún está en la pasarela. Si en dos horas no paga, este pedido pasará a «Por atender».", primary: { label: "Ver enlace de pago", href: "#pago" }, consequence: "Bold o Wompi marcarán el pedido como pagado automáticamente.", tone: "sky" };
     case "dispatch":
       return { queue, title: "Siguiente paso: crear la guía de envío", description: order.shipping?.courier ? `Cotización guardada con ${order.shipping.carrierName ?? order.shipping.courier}. Guarda el pedido como pagado para generar la guía.` : "Elige transportadora o registra un envío manual y guarda el pedido.", primary: { label: "Ir a envío", href: "#envio" }, consequence: "Con la guía creada podrás imprimir la etiqueta y el cliente recibirá el seguimiento.", tone: "sky" };
     case "in-transit":

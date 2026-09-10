@@ -111,6 +111,9 @@ export async function deleteInventoryFixture(fixture: InventoryFixture) {
     await testPrisma.paymentDetails.deleteMany({
       where: { orderId: { in: storeOrderIds } },
     });
+    await testPrisma.shipping.deleteMany({
+      where: { orderId: { in: storeOrderIds } },
+    });
     await testPrisma.order.deleteMany({
       where: { id: { in: storeOrderIds } },
     });

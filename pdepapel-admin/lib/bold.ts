@@ -54,6 +54,12 @@ export function verifyBoldWebhookSignature(
   secretKey: string,
 ): boolean {
   if (!signature) return false;
+  // Una clave vacía es una clave HMAC válida: sin este corte, cualquiera
+  // podría firmar un pago cuando BOLD_SECRET_KEY falta o el entorno es "test".
+  if (!secretKey) {
+    console.error("[BOLD] BOLD_SECRET_KEY vacía: no se puede verificar la firma");
+    return false;
+  }
 
   const expectedSignature = crypto
     .createHmac("sha256", secretKey)
@@ -70,10 +76,12 @@ export function verifyBoldWebhookSignature(
   );
 }
 
+/**
+ * Clave con la que Bold firma sus webhooks. Es la misma en pruebas y en
+ * producción: el entorno cambia las credenciales, no si se verifica la firma.
+ */
 export function getBoldWebhookSecretKey(): string {
-  return process.env.BOLD_ENVIRONMENT === "test"
-    ? ""
-    : process.env.BOLD_SECRET_KEY || "";
+  return process.env.BOLD_SECRET_KEY || "";
 }
 
 /**

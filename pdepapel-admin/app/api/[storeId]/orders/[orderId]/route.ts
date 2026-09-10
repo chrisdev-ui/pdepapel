@@ -21,6 +21,9 @@ import {
   validateStockAvailability,
 } from "@/lib/inventory";
 import { calculateOrderFinancials } from "@/lib/financial";
+import { explodeKitMovements } from "@/lib/order-stock-movements";
+import { canTransition, describeForbiddenTransition, isPaidLike, ORDER_STATUS_LABELS } from "@/lib/order-transitions";
+import { round2 } from "@/lib/order-totals";
 import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import {
@@ -112,8 +115,9 @@ export async function PATCH(
       fullName,
       phone,
       address,
-      orderItems,
+      orderItems: orderItemsInput,
       status,
+      expectedStatus,
       payment,
       shipping,
       shippingProvider,
@@ -141,8 +145,10 @@ export async function PATCH(
       expiresAt,
     } = body;
 
+    const orderItemsRequested: any[] | null = Array.isArray(orderItemsInput) ? orderItemsInput : null;
+
     // Validate order items count
-    if (orderItems && orderItems.length > 1000) {
+    if (orderItemsRequested && orderItemsRequested.length > 1000) {
       throw ErrorFactory.InvalidRequest(
         "La orden excede el límite máximo de 1000 productos",
       );
@@ -172,36 +178,58 @@ export async function PATCH(
       );
     }
 
-    let wasPaid = order.status === OrderStatus.PAID;
-    let isNowPaid = status === OrderStatus.PAID;
+    // Concurrencia: el formulario envía el estado con el que se cargó. Si el
+    // pedido cambió mientras tanto (un webhook lo marcó pagado, otra pestaña
+    // lo editó), no se pisa: se avisa y hay que recargar.
+    if (expectedStatus && expectedStatus !== order.status) {
+      throw ErrorFactory.Conflict(
+        `El pedido cambió mientras lo editabas: ahora está «${ORDER_STATUS_LABELS[order.status as OrderStatus] ?? order.status}». Recarga la página para ver el estado actual.`,
+        { currentStatus: order.status, expectedStatus },
+      );
+    }
 
-    // Validate order items changes for paid orders
-    if (wasPaid && isNowPaid && orderItems) {
-      const originalItems = order.orderItems
-        .map((item) => ({
-          productId: item.productId,
-          quantity: item.quantity,
-        }))
-        .sort((a, b) => (a.productId || "").localeCompare(b.productId || ""));
+    if (status && status !== order.status) {
+      const transitionType: OrderType = (type as OrderType | undefined) || order.type;
+      const transitionMethod = (payment?.method as PaymentMethod | undefined) ?? order.payment?.method ?? null;
+      if (!canTransition(order.status, status, { type: transitionType, paymentMethod: transitionMethod })) {
+        throw ErrorFactory.InvalidRequest(describeForbiddenTransition(order.status, status));
+      }
+    }
 
-      const newItems = orderItems
-        .map((item: any) => ({
-          productId: item.productId,
-          quantity: item.quantity || 1,
-        }))
-        .sort((a: any, b: any) =>
-          (a.productId || "").localeCompare(b.productId || ""),
-        );
-
-      const itemsMatch =
-        JSON.stringify(originalItems) === JSON.stringify(newItems);
-
-      if (!itemsMatch) {
+    // Un pedido pagado es un registro histórico: sus productos, precios y
+    // descuentos no cambian aunque el catálogo cambie. Solo cliente, envío,
+    // notas y estado siguen editables.
+    const itemsLocked = isPaidLike(order.status);
+    if (itemsLocked && orderItemsRequested) {
+      const snapshot = (items: { productId?: string | null; quantity?: number }[]) =>
+        items
+          .map((item) => `${item.productId ?? "manual"}:${item.quantity || 1}`)
+          .sort()
+          .join("|");
+      if (snapshot(order.orderItems) !== snapshot(orderItemsRequested)) {
         throw ErrorFactory.InvalidRequest(
-          "No se pueden modificar los items de una orden ya pagada",
+          "Los productos de un pedido pagado son un registro histórico y no se pueden cambiar. Si el cliente cambió de idea, cancela este pedido (el inventario vuelve) y crea uno nuevo.",
         );
       }
     }
+
+    // Sin productos en el cuerpo (o con el pedido pagado) se trabaja sobre el
+    // registro guardado: nunca se vuelve a valorar contra el catálogo de hoy.
+    const orderItems: any[] =
+      itemsLocked || !orderItemsRequested
+        ? order.orderItems.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+            name: item.name,
+            price: Number(item.price),
+            sku: item.sku,
+            imageUrl: item.imageUrl,
+          }))
+        : orderItemsRequested;
+    const rewriteItems = !itemsLocked && orderItemsRequested !== null;
+
+    let wasPaid = order.status === OrderStatus.PAID;
+    let isNowPaid = status === OrderStatus.PAID;
 
     // Validate discount and coupon conflicts
     if (
@@ -302,13 +330,9 @@ export async function PATCH(
     // Validate Required Fields for Active Orders
     const targetStatus = status || order.status;
 
-    if (
-      couponChanged &&
-      order.status === OrderStatus.PAID &&
-      targetStatus === OrderStatus.PAID
-    ) {
+    if (couponChanged && itemsLocked) {
       throw ErrorFactory.Conflict(
-        "No se puede cambiar el cupón de una orden pagada sin revertir primero su estado de pago",
+        "El cupón de un pedido pagado no se puede cambiar: el descuento ya se cobró. Cancela el pedido y crea uno nuevo si hace falta.",
       );
     }
     const isActiveStatus = [
@@ -333,6 +357,12 @@ export async function PATCH(
         );
       }
     }
+
+    const guideCreation = {
+      attempted: false,
+      success: false,
+      error: null as string | null,
+    };
 
     const updatedOrder = await prismadb.$transaction(async (tx) => {
       // Batch process products for better performance
@@ -430,8 +460,23 @@ export async function PATCH(
         calculateOrderTotals(itemsWithPrices).subtotal;
       assertCouponMinimumOrderValue(targetCoupon, authoritativeSubtotal);
 
-      // Calculate totals (including shipping cost)
-      const totals = calculateOrderTotals(itemsWithPrices, {
+      const newShippingCost =
+        shipping?.cost !== undefined
+          ? Number(shipping.cost)
+          : Number(order.shipping?.cost || 0);
+
+      // Calculate totals (including shipping cost). A paid order keeps its
+      // stored subtotal and discounts; only the shipping cost can still move.
+      const totals = itemsLocked
+        ? {
+            subtotal: Number(order.subtotal),
+            discount: Number(order.discount ?? 0),
+            couponDiscount: Number(order.couponDiscount ?? 0),
+            total: round2(
+              Number(order.total) - Number(order.shipping?.cost ?? 0) + newShippingCost,
+            ),
+          }
+        : calculateOrderTotals(itemsWithPrices, {
         discount:
           discount?.type && discount?.amount
             ? {
@@ -445,10 +490,7 @@ export async function PATCH(
               amount: targetCoupon.amount,
             }
           : undefined,
-        shippingCost:
-          shipping?.cost !== undefined
-            ? Number(shipping.cost)
-            : Number(order.shipping?.cost || 0),
+        shippingCost: newShippingCost,
       });
 
       // Log informative log if sent totals differ from recalculated totals,
@@ -521,34 +563,36 @@ export async function PATCH(
         }
       }
 
-      // Delete existing order items in batches
-      await tx.orderItem.deleteMany({
-        where: { orderId: order.id },
-      });
+      if (rewriteItems) {
+        // Delete existing order items in batches
+        await tx.orderItem.deleteMany({
+          where: { orderId: order.id },
+        });
 
-      // Batch create new order items
-      const createOperations = [];
-      for (let i = 0; i < itemsWithPrices.length; i += BATCH_SIZE) {
-        const batch = itemsWithPrices.slice(i, i + BATCH_SIZE);
-        createOperations.push(
-          ...batch.map((item: any) =>
-            tx.orderItem.create({
-              data: {
-                orderId: order.id,
-                quantity: item.quantity,
-                // Snapshot fields
-                name: item.name,
-                sku: item.sku,
-                price: item.product.price,
-                imageUrl: item.imageUrl,
-                isCustom: item.isCustom,
-                productId: item.productId || null,
-              },
-            }),
-          ),
-        );
+        // Batch create new order items
+        const createOperations = [];
+        for (let i = 0; i < itemsWithPrices.length; i += BATCH_SIZE) {
+          const batch = itemsWithPrices.slice(i, i + BATCH_SIZE);
+          createOperations.push(
+            ...batch.map((item: any) =>
+              tx.orderItem.create({
+                data: {
+                  orderId: order.id,
+                  quantity: item.quantity,
+                  // Snapshot fields
+                  name: item.name,
+                  sku: item.sku,
+                  price: item.product.price,
+                  imageUrl: item.imageUrl,
+                  isCustom: item.isCustom,
+                  productId: item.productId || null,
+                },
+              }),
+            ),
+          );
+        }
+        await Promise.all(createOperations);
       }
-      await Promise.all(createOperations);
 
       // Update the order
       const updated = await tx.order.update({
@@ -570,8 +614,12 @@ export async function PATCH(
           company,
           subtotal: totals.subtotal,
           discount: totals.discount,
-          discountType: discount?.type as DiscountType,
-          discountReason: discount?.reason,
+          ...(itemsLocked
+            ? {}
+            : {
+                discountType: discount?.type as DiscountType,
+                discountReason: discount?.reason,
+              }),
           coupon: targetCoupon
             ? { connect: { id: targetCoupon.id } }
             : order.coupon
@@ -706,14 +754,17 @@ export async function PATCH(
         updated.shipping.envioClickIdRate &&
         !skipAutoGuide
       ) {
+        guideCreation.attempted = true;
         try {
           console.log(
             "[ORDER_UPDATE] Attempting to create guide automatically...",
           );
           // Pass the updated order data and transaction client to avoid re-querying and locks
           await createGuideForOrder(updated.id, params.storeId, updated, tx);
+          guideCreation.success = true;
           console.log("[ORDER_UPDATE] Guide created automatically");
         } catch (error: any) {
+          guideCreation.error = error?.message || "No se pudo crear la guía";
           console.error("[ORDER_UPDATE] Failed to create guide:", error);
           // Guide creation failed, but order update should still succeed
           // User can manually create guide later
@@ -738,17 +789,22 @@ export async function PATCH(
 
       if (isNowPaid && !wasPaid) {
         // Prepare stock updates for decrementing (Sales)
-        const stockMovements = updated.orderItems
-          .filter((item) => item.productId) // Exclude manual items
-          .map((item) => ({
-            productId: item.productId as string,
-            storeId: params.storeId,
-            type: "ORDER_PLACED" as const,
-            quantity: -item.quantity, // Negative for removal
-            reason: `Orden Actualizada #${updated.orderNumber}`,
-            referenceId: updated.id,
-            createdBy: userId || "SYSTEM",
-          }));
+        const stockMovements = await explodeKitMovements(
+          tx,
+          updated.orderItems
+            .filter((item) => item.productId) // Exclude manual items
+            .map((item) => ({
+              productId: item.productId as string,
+              storeId: params.storeId,
+              type: "ORDER_PLACED" as const,
+              quantity: -item.quantity, // Negative for removal
+              reason: `Orden Actualizada #${updated.orderNumber}`,
+              referenceId: updated.id,
+              cost: Number(item.product?.acqPrice) || 0,
+              price: Number(item.price),
+              createdBy: userId || "SYSTEM",
+            })),
+        );
 
         const stockResult = await createInventoryMovementBatchResilient(
           tx,
@@ -804,18 +860,22 @@ export async function PATCH(
       // 4. Handle Refund/Restock (Paid -> Not Paid/Cancelled)
       if (wasPaid && !isNowPaid) {
         // Restock items
-        const stockMovements = updated.orderItems
-          .filter((item) => item.productId)
-          .map((item) => ({
-            productId: item.productId as string,
-            storeId: params.storeId,
-            type: "ORDER_CANCELLED" as const,
-            quantity: item.quantity, // Positive for addition
-            reason: `Orden Cancelada/Revertida #${updated.orderNumber}`,
-            referenceId: updated.id,
-            cost: Number(item.product?.acqPrice) || 0,
-            createdBy: userId || "SYSTEM",
-          }));
+        const stockMovements = await explodeKitMovements(
+          tx,
+          updated.orderItems
+            .filter((item) => item.productId)
+            .map((item) => ({
+              productId: item.productId as string,
+              storeId: params.storeId,
+              type: "ORDER_CANCELLED" as const,
+              quantity: item.quantity, // Positive for addition
+              reason: `Orden Cancelada/Revertida #${updated.orderNumber}`,
+              referenceId: updated.id,
+              cost: Number(item.product?.acqPrice) || 0,
+              price: Number(item.price),
+              createdBy: userId || "SYSTEM",
+            })),
+        );
 
         // We use standard batch because restocking shouldn't fail (unless product deleted?)
         await createInventoryMovementBatch(tx, stockMovements, false);
@@ -908,7 +968,7 @@ export async function PATCH(
       }
     });
 
-    return NextResponse.json(updatedOrder, {
+    return NextResponse.json({ ...updatedOrder, guideCreation }, {
       headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
     });
   } catch (error) {

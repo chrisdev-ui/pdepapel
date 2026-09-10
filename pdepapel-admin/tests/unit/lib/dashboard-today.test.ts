@@ -15,6 +15,9 @@ const base = (): TodayRawInput => ({
     { id: "o1", orderNumber: "ORD-1", fullName: "Mariana Torres", total: 39000, createdAt: new Date("2026-09-07T19:52:00.000Z"), method: PaymentMethod.BankTransfer },
     { id: "o2", orderNumber: "ORD-2", fullName: "Laura Gómez", total: 38000, createdAt: new Date("2026-09-07T15:52:00.000Z"), method: PaymentMethod.BankTransfer },
   ],
+  awaitingPayments: [
+    { id: "o5", orderNumber: "ORD-5", fullName: "Camila Ruiz", total: 54000, createdAt: new Date("2026-09-07T17:30:00.000Z"), method: PaymentMethod.Bold },
+  ],
   toDispatch: [{ id: "o3", orderNumber: "ORD-3", fullName: "Andrés Pérez", city: "Bogotá", paidAt: new Date("2026-09-06T20:00:00.000Z"), courier: "Coordinadora" }],
   toDispatchCount: 3,
   lowStockProducts: [{ id: "p1", name: "Regla Kawaii", stock: 1 }],
@@ -74,11 +77,19 @@ describe("dashboard today", () => {
 
   it("orders pending actions by urgency with links to the record", () => {
     const summary = buildTodaySummary(base(), "s1");
-    expect(summary.pending.map((p) => p.kind)).toEqual(["verify-payment", "verify-payment", "create-guide", "answer-question", "restock"]);
+    expect(summary.pending.map((p) => p.kind)).toEqual(["verify-payment", "verify-payment", "awaiting-payment", "create-guide", "answer-question", "restock"]);
     expect(summary.pending[0]).toMatchObject({ title: "Verificar transferencia · ORD-1", href: "/s1/pedidos/o1", action: "Verificar pago" });
     expect(summary.pending[0].meta).toContain("hace 2 h");
-    expect(summary.pending[2].meta).toContain("Bogotá");
-    expect(summary.pending[4]).toMatchObject({ href: "/s1/productos/p1", meta: "1 unidad" });
+    expect(summary.pending[2]).toMatchObject({ title: "Pago en línea sin completar · ORD-5", href: "/s1/pedidos/o5#pago", action: "Reenviar enlace" });
+    expect(summary.pending[2].meta).toContain("Bold");
+    expect(summary.pending[2].meta).toContain("hace 4 h");
+    expect(summary.pending[3].meta).toContain("Bogotá");
+    expect(summary.pending[5]).toMatchObject({ href: "/s1/productos/p1", meta: "1 unidad" });
+  });
+
+  it("keeps working when the loader sends no stale online payments", () => {
+    const summary = buildTodaySummary({ ...base(), awaitingPayments: undefined }, "s1");
+    expect(summary.pending.some((p) => p.kind === "awaiting-payment")).toBe(false);
   });
 
   it("builds the week by Colombia days, compares with the previous week, and splits channels", () => {

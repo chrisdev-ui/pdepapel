@@ -80,11 +80,11 @@ interface ShippingState {
     | "cancel-shipment"
     | "track-shipment"
     | null;
-  activeModal: "delete-rate" | "cancel-shipment" | null;
+  activeModal: "create-guide" | "delete-rate" | "cancel-shipment" | null;
 }
 
 type ShippingAction =
-  | { type: "OPEN_MODAL"; payload: "delete-rate" | "cancel-shipment" }
+  | { type: "OPEN_MODAL"; payload: "create-guide" | "delete-rate" | "cancel-shipment" }
   | { type: "CLOSE_MODAL" }
   | {
       type: "START_ACTION";
@@ -238,13 +238,15 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
         `/api/${params.storeId}/orders/${params.orderId}/shipping/create-guide`,
       );
 
+      const tracker = response.data?.data?.tracker;
       toast({
-        description: "Guía creada exitosamente",
+        title: "Guía creada",
+        description: tracker ? `Número de guía ${tracker}. La etiqueta aparece abajo al recargar.` : "La etiqueta aparece abajo al recargar.",
         variant: "success",
       });
 
       dispatch({ type: "ACTION_SUCCESS" });
-      
+
       router.refresh();
     } catch (error) {
       dispatch({ type: "ACTION_FAILURE" });
@@ -356,12 +358,12 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
   }
 
   return (
-    <Card>
+    <Card id="envio-estado" className="scroll-mt-24">
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Package className="h-5 w-5" />
-            Información de Envío
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle className="flex items-center gap-2 text-[15px]">
+            <Package className="h-5 w-5" aria-hidden="true" />
+            Estado del envío
           </CardTitle>
           {statusConfig && (
             <div
@@ -394,7 +396,7 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
           )}
 
           <div className="flex-1 space-y-2">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1">
                 <p className="text-sm text-muted-foreground">Transportadora</p>
                 <p className="font-medium">
@@ -415,7 +417,7 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
             <Separator />
             <div className="space-y-3 rounded-lg bg-muted/50 p-4">
               <p className="text-sm font-semibold">Detalles de Cotización</p>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {shipping.productName && (
                   <div className="space-y-1">
                     <p className="text-xs text-muted-foreground">
@@ -482,8 +484,8 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
             <p className="text-sm text-muted-foreground">
               Número de seguimiento
             </p>
-            <div className="flex items-center gap-2">
-              <p className="font-mono font-medium">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="break-all font-mono font-medium">
                 {shipping.trackingCode}
               </p>
               {shipping.trackingUrl && (
@@ -503,6 +505,7 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
                 onClick={handleTrackShipment}
                 disabled={loadingAction === "track-shipment"}
                 title="Actualizar rastreo"
+                aria-label="Actualizar rastreo"
               >
                 <RefreshCw
                   className={`h-4 w-4 ${loadingAction === "track-shipment" ? "animate-spin" : ""}`}
@@ -517,7 +520,7 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
           shipping.actualDeliveryDate) && (
           <>
             <Separator />
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {shipping.estimatedDeliveryDate && (
                 <div className="space-y-1">
                   <p className="flex items-center gap-1 text-sm text-muted-foreground">
@@ -581,7 +584,7 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
         )}
 
         {/* Guide Download */}
-        {hasGuide && shipping.guideUrl && (
+        {hasGuide && shipping.guideUrl && shipping.status !== ShippingStatus.Cancelled && (
           <>
             <Separator />
             <div className="flex flex-col gap-2">
@@ -629,17 +632,17 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
                     : " Edita la orden y guárdala como PAGADA para crear la guía automáticamente."}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Si la cotización ha expirado (más de 2 horas), elimínala para
-                  obtener una nueva con tarifas actualizadas.
+                  Las tarifas de EnvioClick valen 2 horas. Si esta cotización es
+                  más vieja, descártala y cotiza de nuevo antes de crear la guía.
                 </p>
               </AlertDescription>
             </Alert>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-2 sm:flex-row">
               {canCreateGuide && (
                 <Button
                   size="sm"
-                  className="w-full"
-                  onClick={handleCreateGuide}
+                  className="w-full sm:flex-1"
+                  onClick={() => dispatch({ type: "OPEN_MODAL", payload: "create-guide" })}
                   disabled={
                     loadingAction === "create-guide" ||
                     loadingAction === "delete-rate"
@@ -653,15 +656,15 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
                   ) : (
                     <>
                       <Package className="mr-2 h-4 w-4" />
-                      Crear Guía Ahora
+                      Crear guía ahora
                     </>
                   )}
                 </Button>
               )}
               <Button
-                variant="destructive"
+                variant="outline"
                 size="sm"
-                className={canCreateGuide ? "w-full" : "col-span-2 w-full"}
+                className="w-full border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive sm:flex-1"
                 onClick={() =>
                   dispatch({ type: "OPEN_MODAL", payload: "delete-rate" })
                 }
@@ -671,12 +674,37 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
                 }
               >
                 <Trash2 className="mr-2 h-4 w-4" />
-                Eliminar Cotización Expirada
+                Descartar cotización
               </Button>
             </div>
           </>
         )}
       </CardContent>
+
+      {/* Create guide confirmation: it costs money and cannot be undone. */}
+      <AlertDialog
+        open={activeModal === "create-guide"}
+        onOpenChange={(open) => !open && dispatch({ type: "CLOSE_MODAL" })}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Crear la guía de envío?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se solicita la guía a EnvioClick con {shipping.carrierName || shipping.courier || "la transportadora cotizada"}
+              {shipping.cost ? ` por ${currencyFormatter(Number(shipping.cost))}` : ""}. Esto genera un cobro con la
+              transportadora y no se puede deshacer desde aquí; si hace falta, tendrás que cancelar el envío.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={loadingAction === "create-guide"} onClick={() => dispatch({ type: "CLOSE_MODAL" })}>
+              Volver
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleCreateGuide} disabled={loadingAction === "create-guide"}>
+              {loadingAction === "create-guide" ? "Creando…" : "Crear guía"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog

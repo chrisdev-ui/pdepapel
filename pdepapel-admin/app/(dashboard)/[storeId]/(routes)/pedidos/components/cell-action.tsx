@@ -7,6 +7,7 @@ import {
   Edit,
   MessageSquare,
   MoreHorizontal,
+  Smartphone,
   Trash,
 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
@@ -27,6 +28,9 @@ import { getErrorMessage } from "@/lib/api-errors";
 import { OrderStatus, PaymentMethod } from "@prisma/client";
 import { OrderColumn } from "./columns";
 
+const STORE_URL =
+  process.env.NEXT_PUBLIC_FRONTEND_STORE_URL || "https://papeleriapdepapel.com";
+
 interface CellActionProps {
   data: OrderColumn;
 }
@@ -45,9 +49,11 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const isPointOfSale = data.type === "POINT_OF_SALE";
   const isBoldPayment = data.payment?.method === PaymentMethod.Bold;
 
-  const isOfflinePayment =
-    Boolean(data.payment?.method) &&
-    data.payment?.method !== PaymentMethod.Wompi;
+  // Copiar el enlace de Wompi cambia el método del pedido a Wompi: solo se
+  // ofrece donde eso no rompe nada (sin método o ya en Wompi). Con Bold, el
+  // enlace correcto es el de la página del pedido.
+  const canCopyWompiLink =
+    !data.payment?.method || data.payment.method === PaymentMethod.Wompi;
 
   const onCopy = (id: string, message: string) => {
     navigator.clipboard.writeText(id);
@@ -69,19 +75,15 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
 
     try {
       setPushingBold(true);
-      const response = await axios.post(
-        `/api/${params.storeId}/bold/terminal/${data.id}`,
-      );
+      await axios.post(`/api/${params.storeId}/bold/terminal/${data.id}`);
       toast({
-        title: "Notificación enviada",
+        title: "Cobro enviado al datáfono",
         description:
-          response.data?.message ||
-          "¡Cobro enviado al datáfono! (Si la pantalla del equipo está ocupada, presiona Cancelar 'X' en el datáfono para liberar la cola).",
-        variant: "success",
+          "Esto solo avisa al equipo. El pedido quedará pagado cuando Bold confirme el cobro. Si la pantalla del datáfono está ocupada, pulsa Cancelar (X) para liberar la cola.",
       });
     } catch (error) {
       toast({
-        title: "Error de datáfono",
+        title: "El datáfono no recibió el cobro",
         description: getErrorMessage(error),
         variant: "destructive",
       });
@@ -93,7 +95,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const onSendWhatsAppStatus = () => {
     const rawPhone = data.phone ? data.phone.replace(/\D/g, "") : "";
     const cleanPhone = rawPhone.length === 10 ? `57${rawPhone}` : rawPhone;
-    const orderUrl = `https://papeleriapdepapel.com/pedido/${data.id}`;
+    const orderUrl = `${STORE_URL}/pedido/${data.id}`;
     const statusText =
       data.status === OrderStatus.PAID
         ? "Pagada y Confirmada"
@@ -118,11 +120,11 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
       return;
     }
 
-    if (isOfflinePayment) {
+    if (!canCopyWompiLink) {
       toast({
-        title: "Pago por Transferencia / Directo",
+        title: "Este pedido no usa Wompi",
         description:
-          "Esta orden fue registrada para transferencia directa o efectivo. Los enlaces de pago solo aplican para pagos en línea.",
+          "Copiar el enlace de Wompi cambiaría el método de pago del pedido. Ábrelo y usa el enlace de pago que corresponde.",
         variant: "destructive",
       });
       return;
@@ -179,6 +181,13 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
         onClose={() => setOpen(false)}
         onConfirm={onDelete}
         loading={loading}
+        title={`¿Eliminar el pedido ${data.orderNumber}?`}
+        description={
+          isClosedOrder
+            ? "No se puede deshacer. Como estaba pagado, el inventario vuelve con un movimiento de cancelación."
+            : "No se puede deshacer. No se toca el inventario: este pedido nunca lo descontó."
+        }
+        confirmLabel="Sí, eliminar el pedido"
       />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -192,7 +201,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
           <DropdownMenuItem
             className="cursor-pointer"
             onClick={() =>
-              onCopy(data.id, "ID de la orden copiada la portapapeles")
+              onCopy(data.id, "ID del pedido copiado")
             }
           >
             <Copy className="mr-2 h-4 w-4" />
@@ -201,65 +210,51 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
           {!isPointOfSale && (
             <DropdownMenuItem
               className="cursor-pointer"
-              disabled={isClosedOrder || !isBoldPayment}
               onClick={() =>
                 onCopy(
-                  `https://papeleriapdepapel.com/pedido/${data.id}`,
-                  "URL de la orden copiada la portapapeles",
+                  `${STORE_URL}/pedido/${data.id}`,
+                  "Enlace del pedido copiado",
                 )
               }
             >
-              <Copy className="mr-2 h-4 w-4" />
-              Copiar URL de la orden
+              <Copy className="mr-2 h-4 w-4" aria-hidden="true" />
+              Copiar enlace del pedido
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem
-            className="cursor-pointer"
-            disabled={
-              isPointOfSale || copyingWompi || isClosedOrder || isOfflinePayment
-            }
-            onClick={onCopyWompiLink}
-          >
-            <CreditCard className="mr-2 h-4 w-4" />
-            {isClosedOrder
-              ? `Link de Pago (Orden ${data.status === OrderStatus.PAID ? "Pagada" : "Enviada"})`
-              : isOfflinePayment
-                ? "Link de Pago (Transferencia Directa)"
-                : "Copiar enlace de pago"}
-          </DropdownMenuItem>
-          {!isPointOfSale && (
+          {!isPointOfSale && !isClosedOrder && isBoldPayment && (
             <DropdownMenuItem
               className="cursor-pointer"
-              disabled={isClosedOrder || !isBoldPayment}
               onClick={() =>
                 onCopy(
-                  `https://papeleriapdepapel.com/pedido/${data.id}?autoPay=true`,
-                  "Enlace de pago copiado al portapapeles",
+                  `${STORE_URL}/pedido/${data.id}?autoPay=true`,
+                  "Enlace de pago copiado",
                 )
               }
             >
-              <CreditCard className="mr-2 h-4 w-4 text-emerald-600" />
-              {isClosedOrder
-                ? "Orden cerrada (sin enlace de pago)"
-                : isBoldPayment
-                  ? "Copiar enlace de pago en línea"
-                  : "Guarda primero como Pago en línea"}
+              <CreditCard className="mr-2 h-4 w-4" aria-hidden="true" />
+              Copiar enlace de pago
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem
-            className="cursor-pointer"
-            disabled={
-              isPointOfSale || pushingBold || isClosedOrder || !isBoldPayment
-            }
-            onClick={onPushBoldDatafono}
-          >
-            <CreditCard className="mr-2 h-4 w-4 text-emerald-600" />
-            {isClosedOrder
-              ? "Datáfono (Orden completada)"
-              : !isBoldPayment
-                ? "Datáfono (Solo para pagos en línea)"
-                : "Cobrar en datáfono"}
-          </DropdownMenuItem>
+          {!isPointOfSale && !isClosedOrder && canCopyWompiLink && (
+            <DropdownMenuItem
+              className="cursor-pointer"
+              disabled={copyingWompi}
+              onClick={onCopyWompiLink}
+            >
+              <CreditCard className="mr-2 h-4 w-4" aria-hidden="true" />
+              Copiar enlace de pago Wompi
+            </DropdownMenuItem>
+          )}
+          {!isPointOfSale && !isClosedOrder && isBoldPayment && (
+            <DropdownMenuItem
+              className="cursor-pointer"
+              disabled={pushingBold}
+              onClick={onPushBoldDatafono}
+            >
+              <Smartphone className="mr-2 h-4 w-4" aria-hidden="true" />
+              Cobrar en el datáfono
+            </DropdownMenuItem>
+          )}
           {!isPointOfSale && (
             <DropdownMenuItem
               className="cursor-pointer"
@@ -274,12 +269,12 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
             onClick={() =>
               onCopy(
                 data.orderNumber,
-                "Número de la orden copiado al portapapeles",
+                "Número del pedido copiado",
               )
             }
           >
             <Copy className="mr-2 h-4 w-4" />
-            Copiar Número de orden
+            Copiar número del pedido
           </DropdownMenuItem>
           <DropdownMenuItem
             className="cursor-pointer"
