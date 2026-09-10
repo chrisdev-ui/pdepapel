@@ -174,101 +174,242 @@ export async function recalculateKitStock(tx: PrismaTx, kitIds: string[]) {
   }
 }
 
+/**
+ * Un kit no tiene stock propio: `recalculateKitStock` lo deriva de sus
+ * componentes y sobreescribe la columna sin pedir permiso. Cualquier ajuste
+ * manual sobre un kit es por lo tanto un numero fantasma que la tienda muestra
+ * hasta que el siguiente movimiento de un componente lo borra, sin dejar un
+ * movimiento compensatorio: el libro deja de cuadrar con la columna.
+ *
+ * Los ajustes manuales se hacen sobre los componentes.
+ */
+export async function assertNotKitProducts(
+  tx: PrismaTx,
+  productIds: string[],
+): Promise<void> {
+  const ids = Array.from(new Set(productIds.filter(Boolean)));
+  if (ids.length === 0) return;
+
+  const kits = await tx.product.findMany({
+    where: { id: { in: ids }, isKit: true },
+    select: { id: true, name: true },
+  });
+  if (kits.length === 0) return;
+
+  const names = kits.map((kit) => kit.name).join(", ");
+  throw ErrorFactory.InvalidRequest(
+    kits.length === 1
+      ? `"${names}" es un kit: su stock se calcula a partir de sus componentes y no admite ajustes manuales. Ajusta los componentes.`
+      : `Estos productos son kits y su stock se calcula a partir de sus componentes, no admiten ajustes manuales: ${names}. Ajusta los componentes.`,
+  );
+}
+
+const MAX_KIT_DEPTH = 5;
+
+/**
+ * Convierte una lista de requerimientos (que puede incluir kits) en la demanda
+ * fisica real por producto. Un kit no guarda stock propio: lo que hace falta
+ * son sus componentes.
+ *
+ * La demanda de un mismo componente se SUMA venga de donde venga -- pedida
+ * directamente, o a traves de uno o varios kits -- porque el stock que la
+ * respalda es uno solo. Validar cada origen por separado deja pasar un carrito
+ * que pide 10 unidades sueltas de A mas un kit que tambien lleva A teniendo
+ * solo 10 en bodega. Es la misma regla que aplica el punto de venta
+ * (`lib/point-of-sale.ts › mergePhysicalRequirement`).
+ */
+export async function resolvePhysicalRequirements(
+  tx: PrismaTx,
+  items: { productId: string; quantity: number }[],
+): Promise<Map<string, number>> {
+  const physical = new Map<string, number>();
+  let pending = items;
+  let depth = 0;
+
+  while (pending.length > 0) {
+    if (depth++ > MAX_KIT_DEPTH) {
+      throw ErrorFactory.InvalidRequest(
+        "La composicion de este kit es demasiado profunda o tiene una referencia circular",
+      );
+    }
+
+    const grouped = new Map<string, number>();
+    for (const item of pending) {
+      grouped.set(
+        item.productId,
+        (grouped.get(item.productId) ?? 0) + item.quantity,
+      );
+    }
+
+    const products = await tx.product.findMany({
+      where: { id: { in: Array.from(grouped.keys()) } },
+      select: {
+        id: true,
+        isKit: true,
+        kitComponents: { select: { componentId: true, quantity: true } },
+      },
+    });
+    const productMap = new Map(products.map((p) => [p.id, p]));
+
+    const next: { productId: string; quantity: number }[] = [];
+    for (const [productId, quantity] of Array.from(grouped.entries())) {
+      const product = productMap.get(productId);
+      if (!product) {
+        throw ErrorFactory.NotFound(`Producto no encontrado: ${productId}`);
+      }
+      // Solo los requerimientos positivos consumen stock.
+      if (quantity <= 0) continue;
+
+      if (!product.isKit) {
+        physical.set(productId, (physical.get(productId) ?? 0) + quantity);
+        continue;
+      }
+
+      for (const component of product.kitComponents ?? []) {
+        next.push({
+          productId: component.componentId,
+          quantity: component.quantity * quantity,
+        });
+      }
+    }
+
+    pending = next;
+  }
+
+  return physical;
+}
+
+/**
+ * Expande lineas de venta que pueden ser kits en las lineas FISICAS que de
+ * verdad mueven stock: un kit desaparece de la lista y lo reemplazan sus
+ * componentes, un producto normal pasa igual.
+ *
+ * Se usa en las rutas que descuentan stock con `updateMany` directo (Mercado
+ * Libre) en vez de pasar por `createInventoryMovement`. Las rutas de pedidos
+ * usan `explodeKitMovements`, que conserva ademas la linea del propio kit
+ * porque alli `recalculateKitStock` corrige la columna despues.
+ */
+export async function explodeSaleLines<
+  T extends { productId: string; quantity: number },
+>(
+  tx: PrismaTx,
+  lines: T[],
+): Promise<
+  (T & {
+    physicalProductId: string;
+    physicalQuantity: number;
+    kitId: string | null;
+    kitName: string | null;
+  })[]
+> {
+  if (lines.length === 0) return [];
+
+  type Exploded = T & {
+    physicalProductId: string;
+    physicalQuantity: number;
+    kitId: string | null;
+    kitName: string | null;
+  };
+
+  const resolved: Exploded[] = [];
+  let pending: Exploded[] = lines.map((line) => ({
+    ...line,
+    physicalProductId: line.productId,
+    physicalQuantity: line.quantity,
+    kitId: null,
+    kitName: null,
+  }));
+  let depth = 0;
+
+  while (pending.length > 0) {
+    if (depth++ > MAX_KIT_DEPTH) {
+      throw ErrorFactory.InvalidRequest(
+        "La composicion de este kit es demasiado profunda o tiene una referencia circular",
+      );
+    }
+
+    const ids = Array.from(new Set(pending.map((l) => l.physicalProductId)));
+    const kits = await tx.product.findMany({
+      where: { id: { in: ids }, isKit: true },
+      select: {
+        id: true,
+        name: true,
+        kitComponents: { select: { componentId: true, quantity: true } },
+      },
+    });
+
+    if (kits.length === 0) {
+      resolved.push(...pending);
+      break;
+    }
+
+    const kitById = new Map(kits.map((kit) => [kit.id, kit]));
+    const next: Exploded[] = [];
+
+    for (const line of pending) {
+      const kit = kitById.get(line.physicalProductId);
+      if (!kit) {
+        resolved.push(line);
+        continue;
+      }
+      for (const component of kit.kitComponents ?? []) {
+        next.push({
+          ...line,
+          physicalProductId: component.componentId,
+          physicalQuantity: line.physicalQuantity * component.quantity,
+          kitId: kit.id,
+          kitName: kit.name,
+        });
+      }
+    }
+
+    pending = next;
+  }
+
+  return resolved;
+}
+
 export async function validateStockAvailability(
   tx: PrismaTx,
   items: { productId: string; quantity: number }[],
 ) {
-  // Group by product to handle duplicate entries
-  const groupedItems = items.reduce(
-    (acc, item) => {
-      acc[item.productId] = (acc[item.productId] || 0) + item.quantity;
-      return acc;
-    },
-    {} as Record<string, number>,
-  );
+  if (items.length === 0) return;
 
-  const productIds = Object.keys(groupedItems);
-  if (productIds.length === 0) return;
+  const physical = await resolvePhysicalRequirements(tx, items);
+  if (physical.size === 0) return;
 
   const products = await tx.product.findMany({
-    where: { id: { in: productIds } },
-    select: { id: true, stock: true, name: true, isKit: true },
+    where: { id: { in: Array.from(physical.keys()) } },
+    select: { id: true, stock: true, name: true },
   });
-
   const productMap = new Map(products.map((p) => [p.id, p]));
 
-  // Separate normal products from Kits
-  // Kits need recursive validation of their components
-  const kitValidations: { productId: string; quantity: number }[] = [];
-  const normalChecks: {
+  const missing: {
     productId: string;
     productName: string;
     available: number;
     requested: number;
   }[] = [];
 
-  for (const [productId, requiredQty] of Object.entries(groupedItems)) {
+  for (const [productId, requested] of Array.from(physical.entries())) {
     const product = productMap.get(productId);
     if (!product) {
       throw ErrorFactory.NotFound(`Producto no encontrado: ${productId}`);
     }
-
-    if (product.isKit) {
-      kitValidations.push({ productId, quantity: requiredQty });
-    } else {
-      // Checking strictly: requiredQty is positive for requirements
-      if (requiredQty > 0 && product.stock < requiredQty) {
-        normalChecks.push({
-          productId: product.id,
-          productName: product.name,
-          available: product.stock,
-          requested: requiredQty,
-        });
-      }
+    if (product.stock < requested) {
+      missing.push({
+        productId: product.id,
+        productName: product.name,
+        available: product.stock,
+        requested,
+      });
     }
   }
 
-  // If we have kits, we need to "explode" them into components and validate those components
-  // ALONG WITH any other components that might be in the cart directly.
-  if (kitValidations.length > 0) {
-    // Find all components for these kits
-    const kits = await tx.product.findMany({
-      where: { id: { in: kitValidations.map((k) => k.productId) } },
-      include: { kitComponents: true },
-    });
-
-    const componentRequirements: { productId: string; quantity: number }[] = [];
-
-    for (const kitReq of kitValidations) {
-      const kit = kits.find((k) => k.id === kitReq.productId);
-      if (!kit || !kit.kitComponents) continue;
-
-      for (const component of kit.kitComponents) {
-        componentRequirements.push({
-          productId: component.componentId,
-          quantity: component.quantity * kitReq.quantity, // Scale by kit quantity
-        });
-      }
-    }
-
-    // Recursively validate components (merged with current transaction state validation)
-    // Note: This effectively branches the recursion.
-    // We pass 'false' to allow recursion? logic is simple function call.
-    if (componentRequirements.length > 0) {
-      await validateStockAvailability(tx, componentRequirements);
-    }
-  }
-
-  if (normalChecks.length > 0) {
+  if (missing.length > 0) {
     // Always use MultipleInsufficientStock to provide consistent error structure (array of items)
     // This allows the frontend to generically handle "details.items" for highlighting.
-    const missingFormatted = normalChecks.map((c) => ({
-      productId: c.productId,
-      productName: c.productName,
-      available: c.available,
-      requested: c.requested,
-    }));
-    throw ErrorFactory.MultipleInsufficientStock(missingFormatted);
+    throw ErrorFactory.MultipleInsufficientStock(missing);
   }
 }
 

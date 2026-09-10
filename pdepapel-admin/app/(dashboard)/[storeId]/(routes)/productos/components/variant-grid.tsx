@@ -268,6 +268,7 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
                   />
                 </TableHead>
                 <TableHead>SKU</TableHead>
+                <TableHead className="w-[160px]">Identificador</TableHead>
                 <TableHead>Imagen</TableHead>
                 <TableHead>Variante</TableHead>
                 <TableHead className="w-[100px]">Costo</TableHead>
@@ -320,6 +321,51 @@ export const VariantGrid: React.FC<VariantGridProps> = ({
                           Generado
                         </span>
                       )}
+                    </TableCell>
+                    {/* El grupo nunca enviaba identificadores, asi que toda
+                        variante nacia "sin identificador" y Google Merchant la
+                        rechazaba. Ahora se puede escribir el GTIN real o
+                        declarar que el producto no tiene. */}
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <Input
+                          value={variant.gtin || ""}
+                          disabled={
+                            loading || variant.hasNoProductIdentifier === true
+                          }
+                          inputMode="numeric"
+                          placeholder="GTIN real"
+                          aria-label={`GTIN de ${variant.name || "la variante"}`}
+                          className="h-8 font-mono text-xs"
+                          onChange={(event) =>
+                            form.setValue(
+                              `variants.${index}.gtin`,
+                              event.target.value,
+                              { shouldDirty: true },
+                            )
+                          }
+                        />
+                        <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
+                          <Checkbox
+                            checked={variant.hasNoProductIdentifier === true}
+                            disabled={loading}
+                            onCheckedChange={(checked) => {
+                              const value = checked === true;
+                              form.setValue(
+                                `variants.${index}.hasNoProductIdentifier`,
+                                value,
+                                { shouldDirty: true },
+                              );
+                              if (value) {
+                                form.setValue(`variants.${index}.gtin`, "", {
+                                  shouldDirty: true,
+                                });
+                              }
+                            }}
+                          />
+                          Sin identificador
+                        </label>
+                      </div>
                     </TableCell>
                     <TableCell>
                       {(() => {

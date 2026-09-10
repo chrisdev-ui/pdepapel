@@ -3,7 +3,10 @@ import { auth } from "@clerk/nextjs/server";
 
 import prismadb from "@/lib/prismadb";
 import { verifyStoreOwner } from "@/lib/utils";
-import { createInventoryMovement } from "@/lib/inventory";
+import {
+  assertNotKitProducts,
+  createInventoryMovement,
+} from "@/lib/inventory";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { resolveInventoryMovementQuantity } from "@/lib/inventory-request";
 import { InventoryMovementType } from "@prisma/client";
@@ -81,8 +84,9 @@ export async function POST(
     });
 
     const targetProductId = productId || variantId;
-    const movement = await prismadb.$transaction((tx) =>
-      createInventoryMovement(tx, {
+    const movement = await prismadb.$transaction(async (tx) => {
+      await assertNotKitProducts(tx, [targetProductId]);
+      return createInventoryMovement(tx, {
         storeId: params.storeId,
         productId: targetProductId,
         type: type as InventoryMovementType,
@@ -91,8 +95,8 @@ export async function POST(
         description,
         cost: cost ? parseFloat(cost) : undefined,
         createdBy: `USER_${userId}`,
-      }),
-    );
+      });
+    });
     await invalidateStoreProductsCache(params.storeId, targetProductId);
 
     return NextResponse.json(movement, { headers: corsHeaders });

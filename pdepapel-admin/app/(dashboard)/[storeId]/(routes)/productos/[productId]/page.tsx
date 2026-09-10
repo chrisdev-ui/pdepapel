@@ -32,7 +32,7 @@ export default async function ProductPage({
           <p className="text-sm text-muted-foreground">Sube la foto, completa nombre, precio y categoría; la lista de la derecha te dice qué falta para venderlo.</p>
         </div>
       )}
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0">
         <ProductForm
           categories={categories}

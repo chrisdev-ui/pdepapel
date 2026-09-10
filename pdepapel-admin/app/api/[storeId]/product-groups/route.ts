@@ -8,6 +8,7 @@ import { sanitizeRichTextHtml } from "@/lib/rich-text";
 import { verifyStoreOwner } from "@/lib/utils";
 import { hasDuplicateVariantCombination } from "@/lib/variant-combinations";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { normalizeProductIdentifiers } from "@/lib/product-identifiers";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 
 const corsHeaders = {
@@ -100,8 +101,16 @@ export async function POST(
           const designId = variant.design?.id || variant.designId;
 
           if (!sizeId || !colorId || !designId) {
-            // Skip invalid variants (though validation should handle this)
-            return;
+            // Antes se hacia `return` y la respuesta decia "creado" mientras la
+            // variante nunca existia. Un grupo a medias es peor que un error.
+            const missing = [
+              !sizeId && "tamaño",
+              !colorId && "color",
+              !designId && "diseño",
+            ].filter(Boolean);
+            throw ErrorFactory.InvalidRequest(
+              `La variante "${variant.name || variant.sku || "sin nombre"}" no se puede crear: le falta ${missing.join(", ")}.`,
+            );
           }
 
           const [colorObj, designObj, sizeObj] = await Promise.all([
@@ -170,6 +179,22 @@ export async function POST(
 
           const finalSupplierId = variant.supplierId || defaultSupplier;
 
+          let variantIdentifiers;
+          try {
+            variantIdentifiers = normalizeProductIdentifiers({
+              gtin: variant.gtin,
+              mpn: variant.mpn,
+              hasNoProductIdentifier: variant.hasNoProductIdentifier,
+              defaultNoIdentifierWhenEmpty: true,
+            });
+          } catch (error) {
+            throw ErrorFactory.InvalidRequest(
+              `La variante "${variant.name || variant.sku || "sin nombre"}": ${
+                error instanceof Error ? error.message : "identificadores inválidos"
+              }`,
+            );
+          }
+
           const productData = {
             storeId: params.storeId,
             productGroupId: group.id,
@@ -189,6 +214,9 @@ export async function POST(
             designId,
             isFeatured: variant.isFeatured ?? isFeatured ?? false,
             isArchived: variant.isArchived || false,
+            // Sin esto toda variante creada desde el grupo quedaba para siempre
+            // "sin identificador" y Google Merchant la rechazaba.
+            ...variantIdentifiers,
             // Handle images carefully during update vs create?
             // For now, simpler to always recreate images or upsert
           };

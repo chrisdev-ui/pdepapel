@@ -3,7 +3,23 @@
  * tienda y en Google Merchant. Puro y testeable.
  */
 
+import { TRESHOLD_LOW_STOCK } from "@/constants";
 import { isComingSoon } from "@/lib/product-availability";
+
+/**
+ * Umbral por defecto de "stock crítico" cuando la tienda no fijó el suyo
+ * (`Store.lowStockThreshold`).
+ */
+export const DEFAULT_LOW_STOCK_THRESHOLD = TRESHOLD_LOW_STOCK;
+
+/** El umbral de la tienda, o el de la aplicación si no hay uno configurado. */
+export function resolveLowStockThreshold(
+  storeThreshold?: number | null,
+): number {
+  return storeThreshold && storeThreshold > 0
+    ? storeThreshold
+    : DEFAULT_LOW_STOCK_THRESHOLD;
+}
 
 export interface ReadinessInput {
   name?: string | null;
@@ -109,7 +125,7 @@ export function productLacksIdentifier(product: Pick<ReadinessInput, "gtin" | "h
 export function productMatchesView(
   product: { isArchived: boolean; stock: number } & Omit<ReadinessInput, "description">,
   view: ProductView,
-  lowStockThreshold = 5,
+  lowStockThreshold = DEFAULT_LOW_STOCK_THRESHOLD,
 ): boolean {
   switch (view) {
     case "todos":

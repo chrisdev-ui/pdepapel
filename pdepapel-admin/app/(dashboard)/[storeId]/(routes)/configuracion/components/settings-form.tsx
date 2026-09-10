@@ -37,6 +37,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Heading } from "@/components/ui/heading";
+import { DEFAULT_LOW_STOCK_THRESHOLD } from "@/lib/product-readiness";
 import { Icons } from "@/components/ui/icons";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { Input } from "@/components/ui/input";
@@ -87,6 +88,13 @@ const formSchema = z.object({
         message: "Escribe solo el valor en pesos, sin decimales",
       },
     ),
+  lowStockThreshold: z
+    .string()
+    .optional()
+    .refine(
+      (value) => !value || Number(value.replace(/[.\s]/g, "")) >= 1,
+      { message: "Escribe un número entero de al menos 1 unidad" },
+    ),
   policies: z
     .object({
       shipping: z.string().optional(),
@@ -129,6 +137,10 @@ export const SettingsForm: React.FC<
       freeShippingThreshold:
         initialData.freeShippingThreshold != null
           ? String(initialData.freeShippingThreshold)
+          : "",
+      lowStockThreshold:
+        initialData.lowStockThreshold != null
+          ? String(initialData.lowStockThreshold)
           : "",
       policies:
         typeof initialData.policies === "string"
@@ -397,6 +409,39 @@ export const SettingsForm: React.FC<
                           Subtotal de productos desde el cual el envío es
                           gratis. Se muestra en la barra superior y se aplica en
                           el checkout. Déjalo vacío para desactivarlo.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <Heading
+                  title="Stock crítico"
+                  description="Desde cuántas unidades un producto se considera por acabarse"
+                />
+                <div className="grid gap-8 md:grid-cols-3">
+                  <FormField
+                    control={form.control}
+                    name="lowStockThreshold"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-2">
+                          <AlertTriangle className="h-4 w-4" />
+                          Stock crítico desde (unidades)
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            inputMode="numeric"
+                            disabled={loading}
+                            placeholder={String(DEFAULT_LOW_STOCK_THRESHOLD)}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Un producto con esta cantidad o menos aparece en la
+                          vista «Stock crítico» de Productos y de Inventario.
+                          Déjalo vacío para usar el valor por defecto (
+                          {DEFAULT_LOW_STOCK_THRESHOLD}).
                         </FormDescription>
                         <FormMessage />
                       </FormItem>

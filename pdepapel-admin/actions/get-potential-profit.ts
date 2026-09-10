@@ -1,4 +1,4 @@
-import { CAPSULAS_SORPRESA_ID, KITS_ID } from "@/constants";
+import { CAPSULAS_SORPRESA_ID } from "@/constants";
 import prismadb from "@/lib/prismadb";
 
 export async function getPotentialProfit(storeId: string) {
@@ -6,8 +6,13 @@ export async function getPotentialProfit(storeId: string) {
     where: {
       storeId: storeId,
       isArchived: false,
+      // Un kit no tiene stock propio: su valor ya esta contado en los
+      // componentes. Se excluye por `isKit`, no por la categoria "Kits", para
+      // que un kit archivado en otra categoria no duplique el inventario
+      // (misma regla que `lib/inventory-views.ts › inventoryRowValue`).
+      isKit: false,
       categoryId: {
-        notIn: [CAPSULAS_SORPRESA_ID, KITS_ID],
+        notIn: [CAPSULAS_SORPRESA_ID],
       },
     },
     select: {

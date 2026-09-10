@@ -10,7 +10,10 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
-import { parseFreeShippingThreshold } from "@/lib/store-settings";
+import {
+  parseFreeShippingThreshold,
+  parseLowStockThreshold,
+} from "@/lib/store-settings";
 
 export async function GET(
   _req: Request,
@@ -66,11 +69,13 @@ export async function PATCH(
       pinterest,
       policies,
       freeShippingThreshold,
+      lowStockThreshold,
     } = body;
 
     const normalizedFreeShippingThreshold = parseFreeShippingThreshold(
       freeShippingThreshold,
     );
+    const normalizedLowStockThreshold = parseLowStockThreshold(lowStockThreshold);
 
     if (!name?.trim()) {
       throw ErrorFactory.InvalidRequest("El nombre de la tienda es requerido");
@@ -136,6 +141,7 @@ export async function PATCH(
         facebook,
         policies: policies ? JSON.stringify(policies) : {},
         freeShippingThreshold: normalizedFreeShippingThreshold,
+        lowStockThreshold: normalizedLowStockThreshold,
       },
     });
 

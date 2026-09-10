@@ -29,8 +29,16 @@ import {
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { calculateOrderFinancials } from "@/lib/financial";
 import { explodeKitMovements } from "@/lib/order-stock-movements";
-import { canTransition, describeForbiddenTransition, ORDER_STATUS_LABELS } from "@/lib/order-transitions";
-import { markWelcomeBenefitRedeemed, releaseWelcomeBenefitReservation } from "@/lib/customer-benefits";
+import {
+  ORDER_STATUS_LABELS,
+  canTransition,
+  describeForbiddenTransition,
+  isPaidLike,
+} from "@/lib/order-transitions";
+import {
+  markWelcomeBenefitRedeemed,
+  releaseWelcomeBenefitReservation,
+} from "@/lib/customer-benefits";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import {
   Coupon,
@@ -838,10 +846,23 @@ export async function DELETE(
         );
       }
 
-      // Restock products for paid orders before deletion
-      const paidOrders = orders.filter(
-        (order) => order.status === OrderStatus.PAID,
+      // Ninguna guia viva se queda huerfana: al borrar el pedido se borra en
+      // cascada la fila `Shipping` con su `envioClickIdOrder`, y la guia queda
+      // cobrada y activa sin registro. Mismo criterio que el borrado individual.
+      const withLiveGuide = orders.filter(
+        (order) => order.shipping?.envioClickIdOrder,
       );
+      if (withLiveGuide.length > 0) {
+        throw ErrorFactory.Conflict(
+          `${withLiveGuide.length === 1 ? "Un pedido tiene" : `${withLiveGuide.length} pedidos tienen`} una guía de EnvioClick activa (${withLiveGuide
+            .map((order) => order.orderNumber)
+            .join(", ")}). Cancela esos envíos antes de eliminarlos.`,
+        );
+      }
+
+      // La mercancia vuelve si el pedido todavia la tenia descontada: PAGADO y
+      // ENVIADO descuentan igual (`isPaidLike`).
+      const paidOrders = orders.filter((order) => isPaidLike(order.status));
       if (paidOrders.length > 0) {
         const stockMovements = [];
 
@@ -864,9 +885,10 @@ export async function DELETE(
         }
 
         if (stockMovements.length > 0) {
+          // Un kit devuelve tambien sus componentes (ver explodeKitMovements).
           const stockResult = await createInventoryMovementBatchResilient(
             tx,
-            stockMovements,
+            await explodeKitMovements(tx, stockMovements),
           );
 
           // Log any stock update failures but don't throw errors
@@ -888,6 +910,24 @@ export async function DELETE(
       // Batch disconnect coupons
       const ordersWithCoupons = orders.filter((order) => order.coupon);
       if (ordersWithCoupons.length > 0) {
+        // Esta ruta solo desligaba el cupon del pedido: nunca devolvia el uso
+        // ni liberaba el beneficio de bienvenida, ni siquiera para un pedido
+        // pagado. Un cupon de un solo uso quedaba quemado para siempre.
+        for (const order of ordersWithCoupons) {
+          if (!order.coupon || !isPaidLike(order.status)) continue;
+          await tx.coupon.updateMany({
+            where: { id: order.coupon.id, usedCount: { gt: 0 } },
+            data: { usedCount: { decrement: 1 } },
+          });
+          if (order.coupon.isWelcomeBenefit) {
+            await releaseWelcomeBenefitReservation(tx, {
+              couponId: order.coupon.id,
+              userId: order.userId,
+              orderId: order.id,
+            });
+          }
+        }
+
         await tx.order.updateMany({
           where: {
             id: {
@@ -986,9 +1026,13 @@ export async function PATCH(
         if (rejected.length > 0) {
           const detail = rejected
             .slice(0, 5)
-            .map((order) => `${order.orderNumber} (${ORDER_STATUS_LABELS[order.status]})`)
+            .map(
+              (order) =>
+                `${order.orderNumber} (${ORDER_STATUS_LABELS[order.status]})`,
+            )
             .join(", ");
-          const extra = rejected.length > 5 ? ` y ${rejected.length - 5} más` : "";
+          const extra =
+            rejected.length > 5 ? ` y ${rejected.length - 5} más` : "";
           throw ErrorFactory.InvalidRequest(
             `${rejected.length} de ${orders.length} ${orders.length === 1 ? "pedido" : "pedidos"} ${rejected.length === 1 ? "no admite" : "no admiten"} pasar a «${ORDER_STATUS_LABELS[status]}»: ${detail}${extra}. ${describeForbiddenTransition(rejected[0].status, status)} No se cambió ninguno.`,
           );
@@ -1001,7 +1045,10 @@ export async function PATCH(
         const withoutShipping = orders.filter((order) => !order.shipping);
         if (withoutShipping.length > 0) {
           throw ErrorFactory.InvalidRequest(
-            `${withoutShipping.length} ${withoutShipping.length === 1 ? "pedido no tiene envío" : "pedidos no tienen envío"} registrado (${withoutShipping.slice(0, 5).map((o) => o.orderNumber).join(", ")}). No se cambió ninguno.`,
+            `${withoutShipping.length} ${withoutShipping.length === 1 ? "pedido no tiene envío" : "pedidos no tienen envío"} registrado (${withoutShipping
+              .slice(0, 5)
+              .map((o) => o.orderNumber)
+              .join(", ")}). No se cambió ninguno.`,
           );
         }
       }
@@ -1041,10 +1088,13 @@ export async function PATCH(
       // Process all orders and collect stock updates
       for (const order of orders) {
         if (status) {
-          const wasPaid = order.status === OrderStatus.PAID;
-          const willBePaid = status === OrderStatus.PAID;
+          // Mismo desdoble que en el PATCH individual: "entro el dinero"
+          // (PAID exacto) no es lo mismo que "la mercancia salio de bodega"
+          // (PAID o SENT). Ver `lib/order-transitions.ts › isPaidLike`.
+          const heldStock = isPaidLike(order.status);
+          const holdsStock = isPaidLike(status);
 
-          if (willBePaid && !wasPaid) {
+          if (holdsStock && !heldStock) {
             // Will be paid - decrement stock (Sale)
             order.orderItems.forEach((item) => {
               if (item.productId && item.product) {
@@ -1061,7 +1111,7 @@ export async function PATCH(
                 });
               }
             });
-          } else if (!willBePaid && wasPaid) {
+          } else if (heldStock && !holdsStock) {
             // Was paid, now unpaid - increment stock (Restock/Cancel)
             order.orderItems.forEach((item) => {
               if (item.productId && item.product) {
@@ -1120,12 +1170,17 @@ export async function PATCH(
 
         const becomesPaid =
           status === OrderStatus.PAID && order.status !== OrderStatus.PAID;
+        // Un pedido ENVIADO tambien consumio el cupon: al cancelarlo hay que
+        // devolverlo, igual que al cancelar uno PAGADO.
         const leavesPaid =
-          Boolean(status) && status !== OrderStatus.PAID && order.status === OrderStatus.PAID;
+          Boolean(status) && !isPaidLike(status!) && isPaidLike(order.status);
 
         const updated = await tx.order.update({
           where: { id: order.id },
-          data: { ...updateData, ...(becomesPaid ? { paidAt: new Date() } : {}) },
+          data: {
+            ...updateData,
+            ...(becomesPaid ? { paidAt: new Date() } : {}),
+          },
           include: {
             orderItems: {
               include: {

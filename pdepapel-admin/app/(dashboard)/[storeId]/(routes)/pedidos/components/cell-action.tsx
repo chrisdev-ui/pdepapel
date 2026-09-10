@@ -184,7 +184,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
         title={`¿Eliminar el pedido ${data.orderNumber}?`}
         description={
           isClosedOrder
-            ? "No se puede deshacer. Como estaba pagado, el inventario vuelve con un movimiento de cancelación."
+            ? "No se puede deshacer. Como ya estaba pagado o enviado, el inventario vuelve con un movimiento de cancelación."
             : "No se puede deshacer. No se toca el inventario: este pedido nunca lo descontó."
         }
         confirmLabel="Sí, eliminar el pedido"

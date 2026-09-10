@@ -99,18 +99,14 @@ export function DataTableActionOptions<TData>({
 
   const routeActions: Action[] = useMemo(() => {
     switch (model) {
+      // Productos tiene su propio menu en lote (`ProductBulkActions`), con
+      // confirmaciones honestas y expansion de grupo explicita. Esta rama
+      // quedo inalcanzable al pasarle `bulkActions` a la tabla, y ofrecia
+      // archivar/destacar SIN confirmacion contra un PATCH que ya no existe.
+      // `agotados` y `stock-bajo` ahora redirigen a Inventario.
       case Models.Products:
       case Models.LowStock:
       case Models.OutOfStock:
-        return [
-          "delete",
-          "archive",
-          "unarchive",
-          "export",
-          "feature",
-          "unfeature",
-          "clear-images",
-        ];
       case Models.Inventory:
       case Models.SalesByCategory:
         return [];

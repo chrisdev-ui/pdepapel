@@ -4,7 +4,7 @@ import {
   MarketplaceOrderStatus,
 } from "@prisma/client";
 
-import { recalculateKitStock } from "@/lib/inventory";
+import { explodeSaleLines, recalculateKitStock } from "@/lib/inventory";
 import prismadb from "@/lib/prismadb";
 
 import {
@@ -296,9 +296,32 @@ async function applyMarketplaceInventory(
     });
     if (claim.count === 0) return false;
 
-    const productIds = Array.from(quantitiesByProductId.keys());
+    // Un kit no tiene stock propio: lo que sale de bodega son sus componentes.
+    // Sin esto la venta descuenta la columna del kit, los componentes siguen
+    // intactos y el siguiente movimiento de un componente borra la venta.
+    const physicalLines = await explodeSaleLines(
+      transaction,
+      orderItems.map((item) => ({
+        productId: item.productId!,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+      })),
+    );
+
+    const physicalByProductId = new Map<string, number>();
+    for (const line of physicalLines) {
+      physicalByProductId.set(
+        line.physicalProductId,
+        (physicalByProductId.get(line.physicalProductId) ?? 0) +
+          line.physicalQuantity,
+      );
+    }
+
+    const soldProductIds = Array.from(quantitiesByProductId.keys());
+    const physicalProductIds = Array.from(physicalByProductId.keys());
+
     const products = await transaction.product.findMany({
-      where: { id: { in: productIds }, storeId },
+      where: { id: { in: physicalProductIds }, storeId },
       select: { id: true, name: true, stock: true, acqPrice: true },
     });
     const productById = new Map(
@@ -306,7 +329,7 @@ async function applyMarketplaceInventory(
     );
 
     for (const [productId, quantity] of Array.from(
-      quantitiesByProductId.entries(),
+      physicalByProductId.entries(),
     )) {
       const product = productById.get(productId);
       if (!product || product.stock < quantity) {
@@ -317,7 +340,7 @@ async function applyMarketplaceInventory(
     }
 
     for (const [productId, quantity] of Array.from(
-      quantitiesByProductId.entries(),
+      physicalByProductId.entries(),
     )) {
       const update = await transaction.product.updateMany({
         where: { id: productId, storeId, stock: { gte: quantity } },
@@ -331,23 +354,23 @@ async function applyMarketplaceInventory(
     }
 
     const updatedProducts = await transaction.product.findMany({
-      where: { id: { in: productIds } },
+      where: { id: { in: physicalProductIds } },
       select: { id: true, stock: true, acqPrice: true },
     });
     const updatedProductById = new Map(
       updatedProducts.map((product) => [product.id, product]),
     );
     const runningStockByProductId = new Map(
-      Array.from(quantitiesByProductId, ([productId, quantity]) => [
+      Array.from(physicalByProductId, ([productId, quantity]) => [
         productId,
         (updatedProductById.get(productId)?.stock ?? 0) + quantity,
       ]),
     );
 
-    for (const item of orderItems) {
-      const productId = item.productId!;
+    for (const line of physicalLines) {
+      const productId = line.physicalProductId;
       const previousStock = runningStockByProductId.get(productId) ?? 0;
-      const newStock = previousStock - item.quantity;
+      const newStock = previousStock - line.physicalQuantity;
       runningStockByProductId.set(productId, newStock);
 
       await transaction.inventoryMovement.create({
@@ -355,20 +378,23 @@ async function applyMarketplaceInventory(
           storeId,
           productId,
           type: InventoryMovementType.ORDER_PLACED,
-          quantity: -item.quantity,
+          quantity: -line.physicalQuantity,
           previousStock,
           newStock,
-          reason: `Mercado Libre: venta confirmada ${externalOrderId}`,
+          reason: line.kitName
+            ? `Mercado Libre: venta confirmada ${externalOrderId} (Kit: ${line.kitName})`
+            : `Mercado Libre: venta confirmada ${externalOrderId}`,
           referenceId: marketplaceOrderId,
           cost: updatedProductById.get(productId)?.acqPrice ?? null,
-          price: item.unitPrice,
+          // El precio del kit no es el precio del componente.
+          price: line.kitId ? null : line.unitPrice,
           createdBy: "SYSTEM_MERCADOLIBRE",
         },
       });
     }
 
     const parentKits = await transaction.productKit.findMany({
-      where: { componentId: { in: productIds } },
+      where: { componentId: { in: physicalProductIds } },
       select: { kitId: true },
     });
     const parentKitIds = Array.from(
@@ -378,7 +404,9 @@ async function applyMarketplaceInventory(
 
     await queueMarketplaceStockSyncEvents(
       transaction,
-      Array.from(new Set([...productIds, ...parentKitIds])),
+      Array.from(
+        new Set([...soldProductIds, ...physicalProductIds, ...parentKitIds]),
+      ),
     );
 
     return true;

@@ -52,6 +52,7 @@ interface KitComponent {
   image?: string;
   stock?: number;
   price?: number; // Added to track component price
+  acqPrice?: number; // Costo de compra, para el costo del kit
   // Additional details for display
   categoryName?: string;
   colorName?: string;
@@ -164,6 +165,7 @@ export const ComponentSelector: React.FC<ComponentSelectorProps> = ({
       image: product.images?.[0]?.url,
       stock: product.stock,
       price: product.price, // Populate price
+      acqPrice: Number((product as { acqPrice?: number }).acqPrice ?? 0),
       categoryName: product.category?.name,
       colorName: product.color?.name,
       sizeName: product.size?.name,

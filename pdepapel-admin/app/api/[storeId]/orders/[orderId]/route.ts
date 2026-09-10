@@ -22,7 +22,12 @@ import {
 } from "@/lib/inventory";
 import { calculateOrderFinancials } from "@/lib/financial";
 import { explodeKitMovements } from "@/lib/order-stock-movements";
-import { canTransition, describeForbiddenTransition, isPaidLike, ORDER_STATUS_LABELS } from "@/lib/order-transitions";
+import {
+  canTransition,
+  describeForbiddenTransition,
+  isPaidLike,
+  ORDER_STATUS_LABELS,
+} from "@/lib/order-transitions";
 import { round2 } from "@/lib/order-totals";
 import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
 import { invalidateStoreProductsCache } from "@/lib/cache";
@@ -145,7 +150,9 @@ export async function PATCH(
       expiresAt,
     } = body;
 
-    const orderItemsRequested: any[] | null = Array.isArray(orderItemsInput) ? orderItemsInput : null;
+    const orderItemsRequested: any[] | null = Array.isArray(orderItemsInput)
+      ? orderItemsInput
+      : null;
 
     // Validate order items count
     if (orderItemsRequested && orderItemsRequested.length > 1000) {
@@ -189,10 +196,21 @@ export async function PATCH(
     }
 
     if (status && status !== order.status) {
-      const transitionType: OrderType = (type as OrderType | undefined) || order.type;
-      const transitionMethod = (payment?.method as PaymentMethod | undefined) ?? order.payment?.method ?? null;
-      if (!canTransition(order.status, status, { type: transitionType, paymentMethod: transitionMethod })) {
-        throw ErrorFactory.InvalidRequest(describeForbiddenTransition(order.status, status));
+      const transitionType: OrderType =
+        (type as OrderType | undefined) || order.type;
+      const transitionMethod =
+        (payment?.method as PaymentMethod | undefined) ??
+        order.payment?.method ??
+        null;
+      if (
+        !canTransition(order.status, status, {
+          type: transitionType,
+          paymentMethod: transitionMethod,
+        })
+      ) {
+        throw ErrorFactory.InvalidRequest(
+          describeForbiddenTransition(order.status, status),
+        );
       }
     }
 
@@ -201,7 +219,9 @@ export async function PATCH(
     // notas y estado siguen editables.
     const itemsLocked = isPaidLike(order.status);
     if (itemsLocked && orderItemsRequested) {
-      const snapshot = (items: { productId?: string | null; quantity?: number }[]) =>
+      const snapshot = (
+        items: { productId?: string | null; quantity?: number }[],
+      ) =>
         items
           .map((item) => `${item.productId ?? "manual"}:${item.quantity || 1}`)
           .sort()
@@ -228,8 +248,19 @@ export async function PATCH(
         : orderItemsRequested;
     const rewriteItems = !itemsLocked && orderItemsRequested !== null;
 
+    // Dos conceptos distintos que antes eran uno solo:
+    //
+    // - "el dinero entro"  -> PAID exacto. Fija `paidAt`, los financieros y
+    //   dispara la guia. Un pedido contra entrega enviado todavia no cobro.
+    // - "la mercancia salio de bodega" -> PAID o SENT (`isPaidLike`). Es lo
+    //   que decide si hay que descontar o devolver inventario.
+    //
+    // Cuando ambos eran `=== PAID`, pasar de PAGADO a ENVIADO se leia como
+    // "dejo de estar pagado" y devolvia todo el pedido al inventario.
     let wasPaid = order.status === OrderStatus.PAID;
     let isNowPaid = status === OrderStatus.PAID;
+    let heldStock = isPaidLike(order.status);
+    let holdsStock = status ? isPaidLike(status) : heldStock;
 
     // Validate discount and coupon conflicts
     if (
@@ -473,25 +504,27 @@ export async function PATCH(
             discount: Number(order.discount ?? 0),
             couponDiscount: Number(order.couponDiscount ?? 0),
             total: round2(
-              Number(order.total) - Number(order.shipping?.cost ?? 0) + newShippingCost,
+              Number(order.total) -
+                Number(order.shipping?.cost ?? 0) +
+                newShippingCost,
             ),
           }
         : calculateOrderTotals(itemsWithPrices, {
-        discount:
-          discount?.type && discount?.amount
-            ? {
-                type: discount.type as DiscountType,
-                amount: discount.amount,
-              }
-            : undefined,
-        coupon: targetCoupon
-          ? {
-              type: targetCoupon.type as DiscountType,
-              amount: targetCoupon.amount,
-            }
-          : undefined,
-        shippingCost: newShippingCost,
-      });
+            discount:
+              discount?.type && discount?.amount
+                ? {
+                    type: discount.type as DiscountType,
+                    amount: discount.amount,
+                  }
+                : undefined,
+            coupon: targetCoupon
+              ? {
+                  type: targetCoupon.type as DiscountType,
+                  amount: targetCoupon.amount,
+                }
+              : undefined,
+            shippingCost: newShippingCost,
+          });
 
       // Log informative log if sent totals differ from recalculated totals,
       // but do NOT throw error — store owner admin updates are authoritative.
@@ -727,6 +760,8 @@ export async function PATCH(
       // Handle stock changes with batching
       wasPaid = order.status === OrderStatus.PAID;
       isNowPaid = updated.status === OrderStatus.PAID;
+      heldStock = isPaidLike(order.status);
+      holdsStock = isPaidLike(updated.status);
 
       if (couponChanged) {
         if (order.coupon?.isWelcomeBenefit) {
@@ -787,7 +822,7 @@ export async function PATCH(
         }
       }
 
-      if (isNowPaid && !wasPaid) {
+      if (holdsStock && !heldStock) {
         // Prepare stock updates for decrementing (Sales)
         const stockMovements = await explodeKitMovements(
           tx,
@@ -821,7 +856,12 @@ export async function PATCH(
 
         // Invalidate cache since stock changed
         await invalidateStoreProductsCache(params.storeId);
+      }
 
+      // El dinero es otra cosa que la mercancia: un pedido contra entrega se
+      // despacha antes de cobrarse, asi que descuenta inventario sin fijar
+      // `paidAt` ni los financieros. Estos solo se escriben al cobrar.
+      if (isNowPaid && !wasPaid) {
         // CRITICAL FIX: Increment coupon usage when order becomes PAID
         if (updated.coupon) {
           await tx.coupon.update({
@@ -857,8 +897,8 @@ export async function PATCH(
         });
       }
 
-      // 4. Handle Refund/Restock (Paid -> Not Paid/Cancelled)
-      if (wasPaid && !isNowPaid) {
+      // 4. Handle Refund/Restock (la mercancia vuelve a bodega)
+      if (heldStock && !holdsStock) {
         // Restock items
         const stockMovements = await explodeKitMovements(
           tx,
@@ -968,9 +1008,12 @@ export async function PATCH(
       }
     });
 
-    return NextResponse.json({ ...updatedOrder, guideCreation }, {
-      headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
-    });
+    return NextResponse.json(
+      { ...updatedOrder, guideCreation },
+      {
+        headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
+      },
+    );
   } catch (error) {
     return handleErrorResponse(error, "ORDER_PATCH", {
       headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
@@ -1012,11 +1055,21 @@ export async function DELETE(
         );
       }
 
-      // REMOVED: Order status and shipping validations for deletion
-      // Now any order can be deleted regardless of status
+      // Un pedido se puede eliminar en cualquier estado (los guardas se
+      // quitaron a proposito), pero no si arrastra una guia de EnvioClick
+      // viva: al borrar el pedido se borra en cascada la fila `Shipping` que
+      // guarda `envioClickIdOrder`, y la guia queda cobrada y activa en el
+      // transportador sin ningun registro que la ate a nada.
+      if (order.shipping?.envioClickIdOrder) {
+        throw ErrorFactory.Conflict(
+          `El pedido ${order.orderNumber} tiene una guía de EnvioClick activa (${order.shipping.trackingCode ?? order.shipping.envioClickIdOrder}). Cancela el envío antes de eliminarlo, o la guía seguirá cobrada y sin registro.`,
+        );
+      }
 
-      // Restock products if order was paid
-      if (order.status === OrderStatus.PAID) {
+      // La mercancia vuelve a bodega si el pedido todavia la tenia descontada.
+      // PAGADO y ENVIADO descuentan igual (`isPaidLike`); un CANCELADO ya la
+      // devolvio al cancelarse y no debe devolverla dos veces.
+      if (isPaidLike(order.status)) {
         const stockMovements = order.orderItems
           .filter((item) => item.productId) // Exclude manual items
           .map((item) => ({
@@ -1029,9 +1082,11 @@ export async function DELETE(
             createdBy: userId || "SYSTEM",
           }));
 
+        // Un kit devuelve tambien sus componentes: sin esto el kit recupera
+        // una unidad fantasma y los componentes vendidos se pierden del libro.
         const stockResult = await createInventoryMovementBatchResilient(
           tx,
-          stockMovements,
+          await explodeKitMovements(tx, stockMovements),
         );
 
         // Log any stock update failures but don't throw errors
@@ -1047,8 +1102,8 @@ export async function DELETE(
 
       // Disconnect coupon if exists
       if (order.coupon) {
-        // CRITICAL FIX: Decrement coupon usage if order was PAID
-        if (order.status === OrderStatus.PAID) {
+        // Un pedido ENVIADO tambien consumio el cupon.
+        if (isPaidLike(order.status)) {
           await tx.coupon.update({
             where: { id: order.coupon.id },
             data: {
@@ -1083,6 +1138,9 @@ export async function DELETE(
 
       return deletedOrder;
     });
+
+    // Sin esto la tienda seguia mostrando el stock viejo tras la devolucion.
+    await invalidateStoreProductsCache(params.storeId);
 
     // Async cancellation email
     setImmediate(async () => {

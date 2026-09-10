@@ -4,7 +4,15 @@ import { useFormPersist } from "@/hooks/use-form-persist";
 import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { OrderStatus, OrderType, ShippingProvider, ShippingStatus, type Box, type Category, type Coupon } from "@prisma/client";
+import {
+  OrderStatus,
+  OrderType,
+  ShippingProvider,
+  ShippingStatus,
+  type Box,
+  type Category,
+  type Coupon,
+} from "@prisma/client";
 import axios, { isAxiosError } from "axios";
 import { RefreshCw, Trash } from "lucide-react";
 import Link from "next/link";
@@ -16,9 +24,21 @@ import { AlertModal } from "@/components/modals/alert-modal";
 import { GuideConfirmationModal } from "@/components/modals/guide-confirmation-modal";
 import { ProductConversionModal } from "@/components/modals/product-conversion-modal";
 import { Button } from "@/components/ui/button";
-import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+} from "@/components/ui/form";
 import type { LocationOption } from "@/components/ui/location-combobox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { getErrorMessage } from "@/lib/api-errors";
 import { isPaidLike, ORDER_STATUS_LABELS } from "@/lib/order-transitions";
 import { currencyFormatter } from "@/lib/utils";
@@ -46,18 +66,27 @@ import {
 } from "./order-form/schema";
 import { SectionCard } from "./order-form/section-card";
 import { ShippingSection } from "./order-form/shipping-section";
-import { StatusActions, type TransitionPayload } from "./order-form/status-actions";
+import {
+  StatusActions,
+  type TransitionPayload,
+} from "./order-form/status-actions";
 import { SummaryCard } from "./order-form/summary-card";
 import { useOrderTotals } from "./order-form/use-order-totals";
 
-const InvoiceDownloadButton = dynamic(() => import("@/components/invoice/invoice-download-button").then((mod) => mod.InvoiceDownloadButton), {
-  ssr: false,
-  loading: () => (
-    <Button type="button" variant="outline" size="sm" disabled>
-      Preparando PDF…
-    </Button>
-  ),
-});
+const InvoiceDownloadButton = dynamic(
+  () =>
+    import("@/components/invoice/invoice-download-button").then(
+      (mod) => mod.InvoiceDownloadButton,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <Button type="button" variant="outline" size="sm" disabled>
+        Preparando PDF…
+      </Button>
+    ),
+  },
+);
 
 interface OrderFormProps {
   storeId: string;
@@ -73,14 +102,22 @@ interface OrderFormProps {
   shippingInfo?: React.ReactNode;
 }
 
-const TYPE_PARAM: Record<string, CreatableOrderType> = { tienda: OrderType.STANDARD, personalizado: OrderType.CUSTOM, cotizacion: OrderType.QUOTATION };
+const TYPE_PARAM: Record<string, CreatableOrderType> = {
+  tienda: OrderType.STANDARD,
+  personalizado: OrderType.CUSTOM,
+  cotizacion: OrderType.QUOTATION,
+};
 
 /** Primer mensaje de error del formulario, buscando en profundidad (líneas de productos incluidas). */
 function firstErrorMessage(errors: unknown): string | undefined {
   if (!errors || typeof errors !== "object") return undefined;
   for (const value of Object.values(errors as Record<string, unknown>)) {
     if (!value) continue;
-    if (typeof value === "object" && "message" in (value as object) && typeof (value as { message?: unknown }).message === "string") {
+    if (
+      typeof value === "object" &&
+      "message" in (value as object) &&
+      typeof (value as { message?: unknown }).message === "string"
+    ) {
       return (value as { message: string }).message;
     }
     const nested = firstErrorMessage(value);
@@ -101,21 +138,42 @@ interface SubmitOptions {
  * en dos columnas. Cada bloque vive en `./order-form/*`; los cambios de estado
  * son acciones explícitas (`StatusActions`), nunca un selector suelto.
  */
-export const OrderForm: React.FC<OrderFormProps> = ({ storeId, initialData, products, categories, availableCoupons, users, locations, boxes, freeShippingThreshold = null, shippingInfo }) => {
+export const OrderForm: React.FC<OrderFormProps> = ({
+  storeId,
+  initialData,
+  products,
+  categories,
+  availableCoupons,
+  users,
+  locations,
+  boxes,
+  freeShippingThreshold = null,
+  shippingInfo,
+}) => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
 
   const requestedType = TYPE_PARAM[searchParams.get("tipo") ?? ""] ?? null;
-  const [chosenType, setChosenType] = useState<CreatableOrderType | null>(initialData ? null : requestedType);
+  const [chosenType, setChosenType] = useState<CreatableOrderType | null>(
+    initialData ? null : requestedType,
+  );
   const [guestId] = useState(() => generateGuestId());
-  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  const [idempotencyKey, setIdempotencyKey] = useState(() =>
+    crypto.randomUUID(),
+  );
 
   const currentType = initialData?.type ?? chosenType ?? OrderType.STANDARD;
-  const preset = ORDER_TYPE_PRESETS[isCreatableOrderType(currentType) ? currentType : OrderType.STANDARD];
+  const preset =
+    ORDER_TYPE_PRESETS[
+      isCreatableOrderType(currentType) ? currentType : OrderType.STANDARD
+    ];
 
   const defaultValues = useMemo(
-    () => (initialData ? buildExistingOrderDefaults(initialData, products) : buildNewOrderDefaults(preset, guestId)),
+    () =>
+      initialData
+        ? buildExistingOrderDefaults(initialData, products)
+        : buildNewOrderDefaults(preset, guestId),
     [initialData, products, preset, guestId],
   );
 
@@ -126,7 +184,9 @@ export const OrderForm: React.FC<OrderFormProps> = ({ storeId, initialData, prod
     reValidateMode: "onChange",
   });
 
-  const [coupon, setCoupon] = useState<Coupon | null>(initialData?.coupon ?? null);
+  const [coupon, setCoupon] = useState<Coupon | null>(
+    initialData?.coupon ?? null,
+  );
   const serverVersion = `${initialData?.id ?? "new"}:${initialData?.updatedAt ? new Date(initialData.updatedAt).getTime() : ""}:${chosenType ?? ""}`;
   const lastVersion = useRef(serverVersion);
   useEffect(() => {
@@ -136,7 +196,10 @@ export const OrderForm: React.FC<OrderFormProps> = ({ storeId, initialData, prod
     setCoupon(initialData?.coupon ?? null);
   }, [serverVersion, defaultValues, form, initialData]);
 
-  const fieldArray = useFieldArray({ control: form.control, name: "orderItems" });
+  const fieldArray = useFieldArray({
+    control: form.control,
+    name: "orderItems",
+  });
   const watchedItems = useWatch({ control: form.control, name: "orderItems" });
   const watchedType = useWatch({ control: form.control, name: "type" });
   const { isDirty } = form.formState;
@@ -147,18 +210,37 @@ export const OrderForm: React.FC<OrderFormProps> = ({ storeId, initialData, prod
   const [conflict, setConflict] = useState<string | null>(null);
   const [loadingQuotes, setLoadingQuotes] = useState(false);
   const [shippingQuotes, setShippingQuotes] = useState<ShippingQuote[]>([]);
-  const [selectedRateId, setSelectedRateId] = useState<number | null>(initialData?.shipping?.envioClickIdRate || null);
-  const [recommendedBox, setRecommendedBox] = useState<{ name: string; width: number; height: number; length: number } | null>(null);
+  const [selectedRateId, setSelectedRateId] = useState<number | null>(
+    initialData?.shipping?.envioClickIdRate || null,
+  );
+  const [recommendedBox, setRecommendedBox] = useState<{
+    name: string;
+    width: number;
+    height: number;
+    length: number;
+  } | null>(null);
   const [pendingGuide, setPendingGuide] = useState<SubmitOptions | null>(null);
 
-  const { clearStorage } = useFormPersist({ form, key: `order-form-${storeId}-${currentType}-new`, enabled: !initialData });
+  const { clearStorage } = useFormPersist({
+    form,
+    key: `order-form-${storeId}-${currentType}-new`,
+    enabled: !initialData,
+  });
   useFormValidationToast({ form });
 
-  const { totals, shippingChargeState, shippingCost } = useOrderTotals(form.control, coupon, freeShippingThreshold);
+  const { totals, shippingChargeState, shippingCost } = useOrderTotals(
+    form.control,
+    coupon,
+    freeShippingThreshold,
+  );
   const locked = Boolean(initialData && isPaidLike(initialData.status));
   const currentStatus = initialData?.status ?? preset.status;
-  const editPreset = ORDER_TYPE_PRESETS[isCreatableOrderType(watchedType) ? watchedType : OrderType.STANDARD];
-  const allowManualItems = editPreset.allowManualItems && !isRealOrderStatus(currentStatus) && !locked;
+  const editPreset =
+    ORDER_TYPE_PRESETS[
+      isCreatableOrderType(watchedType) ? watchedType : OrderType.STANDARD
+    ];
+  const allowManualItems =
+    editPreset.allowManualItems && !isRealOrderStatus(currentStatus) && !locked;
 
   useEffect(() => {
     if (!isDirty) return;
@@ -187,8 +269,18 @@ export const OrderForm: React.FC<OrderFormProps> = ({ storeId, initialData, prod
         expectedStatus: initialData?.status,
         userId: finalUserId,
         guestId: finalGuestId,
-        payment: { ...data.payment, ...(options.transactionId ? { transactionId: options.transactionId } : {}) },
-        shipping: { ...data.shipping, ...(options.trackingCode ? { trackingCode: options.trackingCode } : {}) },
+        payment: {
+          ...data.payment,
+          ...(options.transactionId
+            ? { transactionId: options.transactionId }
+            : {}),
+        },
+        shipping: {
+          ...data.shipping,
+          ...(options.trackingCode
+            ? { trackingCode: options.trackingCode }
+            : {}),
+        },
         subtotal: totals.subtotal,
         total: totals.total,
         discountType: data.discount?.type,
@@ -203,38 +295,69 @@ export const OrderForm: React.FC<OrderFormProps> = ({ storeId, initialData, prod
       setConflict(null);
       try {
         if (initialData) {
-          const response = await axios.patch(`/api/${storeId}/orders/${initialData.id}`, payload);
+          const response = await axios.patch(
+            `/api/${storeId}/orders/${initialData.id}`,
+            payload,
+          );
           clearStorage();
           const guide = response.data?.guideCreation;
           if (guide?.attempted && !guide.success) {
-            toast({ title: "Pedido guardado, pero la guía falló", description: guide.error || "Créala desde la sección Envío.", variant: "warning" });
+            toast({
+              title: "Pedido guardado, pero la guía falló",
+              description: guide.error || "Créala desde la sección Envío.",
+              variant: "warning",
+            });
           } else if (guide?.attempted && guide.success) {
             toast({ title: "Pedido pagado y guía creada", variant: "success" });
           } else if (options.status) {
-            toast({ title: `Ahora está «${ORDER_STATUS_LABELS[options.status]}»`, variant: "success" });
+            toast({
+              title: `Ahora está «${ORDER_STATUS_LABELS[options.status]}»`,
+              variant: "success",
+            });
           } else {
             toast({ description: "Cambios guardados", variant: "success" });
           }
           router.refresh();
         } else {
-          const response = await axios.post(`/api/${storeId}/orders`, payload, { headers: { "Idempotency-Key": idempotencyKey } });
+          const response = await axios.post(`/api/${storeId}/orders`, payload, {
+            headers: { "Idempotency-Key": idempotencyKey },
+          });
           clearStorage();
           setIdempotencyKey(crypto.randomUUID());
-          toast({ title: "Pedido creado", description: `${response.data.orderNumber} · ${currencyFormatter(Number(response.data.total))}`, variant: "success" });
+          toast({
+            title: "Pedido creado",
+            description: `${response.data.orderNumber} · ${currencyFormatter(Number(response.data.total))}`,
+            variant: "success",
+          });
           router.push(`/${storeId}/pedidos/${response.data.id}`);
           return;
         }
       } catch (error) {
         if (isAxiosError(error) && error.response?.status === 409) {
-          setConflict(getErrorMessage(error) || "El pedido cambió mientras lo editabas.");
+          setConflict(
+            getErrorMessage(error) || "El pedido cambió mientras lo editabas.",
+          );
         } else {
-          toast({ title: "No se pudo guardar", description: getErrorMessage(error), variant: "destructive" });
+          toast({
+            title: "No se pudo guardar",
+            description: getErrorMessage(error),
+            variant: "destructive",
+          });
         }
       } finally {
         setLoading(false);
       }
     },
-    [clearStorage, idempotencyKey, initialData, router, storeId, toast, totals.subtotal, totals.total],
+    [
+      clearStorage,
+      idempotencyKey,
+      initialData,
+      router,
+      storeId,
+      toast,
+      totals.subtotal,
+      totals.total,
+    ],
   );
 
   const onSubmit = (data: OrderFormValues) => submitOrder(data);
@@ -242,19 +365,40 @@ export const OrderForm: React.FC<OrderFormProps> = ({ storeId, initialData, prod
   const onTransition = useCallback(
     async ({ to, transactionId, trackingCode }: TransitionPayload) => {
       form.setValue("status", to, { shouldDirty: true });
-      if (transactionId) form.setValue("payment.transactionId", transactionId, { shouldDirty: true });
-      if (trackingCode) form.setValue("shipping.trackingCode", trackingCode, { shouldDirty: true });
+      if (transactionId)
+        form.setValue("payment.transactionId", transactionId, {
+          shouldDirty: true,
+        });
+      if (trackingCode)
+        form.setValue("shipping.trackingCode", trackingCode, {
+          shouldDirty: true,
+        });
       const valid = await form.trigger();
       if (!valid) {
         form.setValue("status", initialData?.status ?? preset.status);
         const first = firstErrorMessage(form.formState.errors);
-        console.error("[order-form] transición bloqueada por validación", form.formState.errors);
-        toast({ title: "Revisa el formulario antes de cambiar el estado", description: first ?? "Hay campos con errores.", variant: "destructive" });
+        console.error(
+          "[order-form] transición bloqueada por validación",
+          form.formState.errors,
+        );
+        toast({
+          title: "Revisa el formulario antes de cambiar el estado",
+          description: first ?? "Hay campos con errores.",
+          variant: "destructive",
+        });
         return;
       }
       const data = form.getValues();
-      const options: SubmitOptions = { status: to, transactionId, trackingCode };
-      const needsGuideDecision = to === OrderStatus.PAID && data.shippingProvider === ShippingProvider.ENVIOCLICK && data.envioClickIdRate && !initialData?.shipping?.envioClickIdOrder;
+      const options: SubmitOptions = {
+        status: to,
+        transactionId,
+        trackingCode,
+      };
+      const needsGuideDecision =
+        to === OrderStatus.PAID &&
+        data.shippingProvider === ShippingProvider.ENVIOCLICK &&
+        data.envioClickIdRate &&
+        !initialData?.shipping?.envioClickIdOrder;
       if (needsGuideDecision) {
         setPendingGuide(options);
         return;
@@ -283,17 +427,29 @@ export const OrderForm: React.FC<OrderFormProps> = ({ storeId, initialData, prod
   const onGetShippingQuotes = async () => {
     const data = form.getValues();
     if (!data.city || !data.department || !data.daneCode) {
-      toast({ title: "Falta la ciudad", description: "Elige la ciudad del cliente con el buscador para cotizar.", variant: "destructive" });
+      toast({
+        title: "Falta la ciudad",
+        description:
+          "Elige la ciudad del cliente con el buscador para cotizar.",
+        variant: "destructive",
+      });
       return;
     }
     if (data.orderItems.length === 0) {
-      toast({ title: "Sin productos", description: "Agrega al menos un producto para cotizar el envío.", variant: "destructive" });
+      toast({
+        title: "Sin productos",
+        description: "Agrega al menos un producto para cotizar el envío.",
+        variant: "destructive",
+      });
       return;
     }
     try {
       setLoadingQuotes(true);
       const response = await axios.post(`/api/${storeId}/shipment/quote`, {
-        destination: { daneCode: data.daneCode || "", address: data.address || "" },
+        destination: {
+          daneCode: data.daneCode || "",
+          address: data.address || "",
+        },
         orderTotal: totals.total,
         items: data.orderItems.map((item) => ({ ...item })),
         boxId: data.shipping.boxId,
@@ -303,10 +459,19 @@ export const OrderForm: React.FC<OrderFormProps> = ({ storeId, initialData, prod
       setShippingQuotes(response.data.quotes);
       setRecommendedBox(response.data.packageDimensions ?? null);
       if (response.data.quotes.length === 0) {
-        toast({ title: "Sin tarifas", description: "Ninguna transportadora cubre esta ciudad con EnvioClick. Prueba «Otra transportadora».", variant: "destructive" });
+        toast({
+          title: "Sin tarifas",
+          description:
+            "Ninguna transportadora cubre esta ciudad con EnvioClick. Prueba «Otra transportadora».",
+          variant: "destructive",
+        });
       }
     } catch (error) {
-      toast({ title: "No se pudo cotizar", description: getErrorMessage(error), variant: "destructive" });
+      toast({
+        title: "No se pudo cotizar",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
     } finally {
       setLoadingQuotes(false);
     }
@@ -314,7 +479,9 @@ export const OrderForm: React.FC<OrderFormProps> = ({ storeId, initialData, prod
 
   const onSelectRate = (quote: ShippingQuote) => {
     setSelectedRateId(quote.idRate);
-    form.setValue("shippingProvider", ShippingProvider.ENVIOCLICK, { shouldDirty: true });
+    form.setValue("shippingProvider", ShippingProvider.ENVIOCLICK, {
+      shouldDirty: true,
+    });
     form.setValue("envioClickIdRate", quote.idRate, { shouldDirty: true });
     form.setValue(
       "shipping",
@@ -325,14 +492,20 @@ export const OrderForm: React.FC<OrderFormProps> = ({ storeId, initialData, prod
         productName: quote.product,
         flete: quote.flete,
         minimumInsurance: quote.minimumInsurance,
-        deliveryDays: typeof quote.deliveryDays === "string" ? parseInt(quote.deliveryDays) : quote.deliveryDays,
+        deliveryDays:
+          typeof quote.deliveryDays === "string"
+            ? parseInt(quote.deliveryDays)
+            : quote.deliveryDays,
         isCOD: quote.isCOD,
         cost: quote.totalCost,
         status: ShippingStatus.Preparing,
       },
       { shouldDirty: true },
     );
-    toast({ description: `${quote.carrier} · ${currencyFormatter(quote.totalCost)}`, variant: "success" });
+    toast({
+      description: `${quote.carrier} · ${currencyFormatter(quote.totalCost)}`,
+      variant: "success",
+    });
   };
 
   const onClearRate = useCallback(() => {
@@ -357,7 +530,12 @@ export const OrderForm: React.FC<OrderFormProps> = ({ storeId, initialData, prod
       address: values.address || "",
       city: values.city || "",
       department: values.department || "",
-      items: (watchedItems || []).map((item) => ({ name: item.name, quantity: item.quantity, price: Number(item.price), sku: item.sku })),
+      items: (watchedItems || []).map((item) => ({
+        name: item.name,
+        quantity: item.quantity,
+        price: Number(item.price),
+        sku: item.sku,
+      })),
       subtotal: totals.subtotal,
       discount: totals.discount + totals.couponDiscount,
       shipping: shippingCost,
@@ -371,15 +549,24 @@ export const OrderForm: React.FC<OrderFormProps> = ({ storeId, initialData, prod
     return (
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-bold tracking-tight text-primary">Nuevo pedido</h1>
-          <p className="text-sm text-muted-foreground">Elige qué vas a registrar: cada tipo muestra solo lo que necesita.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-primary">
+            Nuevo pedido
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Elige qué vas a registrar: cada tipo muestra solo lo que necesita.
+          </p>
         </div>
-        <OrderTypePicker storeId={storeId} onPick={(type) => setChosenType(type)} />
+        <OrderTypePicker
+          storeId={storeId}
+          onPick={(type) => setChosenType(type)}
+        />
       </div>
     );
   }
 
-  const selectedQuote = shippingQuotes.find((q) => q.idRate === selectedRateId) || {
+  const selectedQuote = shippingQuotes.find(
+    (q) => q.idRate === selectedRateId,
+  ) || {
     idRate: form.getValues("envioClickIdRate") || 0,
     carrier: form.getValues("shipping.carrierName") || "",
     product: form.getValues("shipping.productName") || "",
@@ -392,7 +579,12 @@ export const OrderForm: React.FC<OrderFormProps> = ({ storeId, initialData, prod
 
   return (
     <>
-      <AlertModal isOpen={deleteOpen} onClose={() => setDeleteOpen(false)} onConfirm={onDelete} loading={loading} />
+      <AlertModal
+        isOpen={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={onDelete}
+        loading={loading}
+      />
       <GuideConfirmationModal
         isOpen={pendingGuide !== null}
         onClose={() => setPendingGuide(null)}
@@ -419,7 +611,9 @@ export const OrderForm: React.FC<OrderFormProps> = ({ storeId, initialData, prod
             ? {
                 name: form.getValues(`orderItems.${conversionIndex}.name`),
                 price: form.getValues(`orderItems.${conversionIndex}.price`),
-                quantity: form.getValues(`orderItems.${conversionIndex}.quantity`),
+                quantity: form.getValues(
+                  `orderItems.${conversionIndex}.quantity`,
+                ),
                 orderId: initialData?.id,
                 orderItemId: form.getValues(`orderItems.${conversionIndex}.id`),
               }
@@ -437,7 +631,9 @@ export const OrderForm: React.FC<OrderFormProps> = ({ storeId, initialData, prod
             imageUrl: product.images?.[0]?.url,
             stock: product.stock,
             isCustom: false,
-            productGroup: product.category ? { name: product.category.name } : undefined,
+            productGroup: product.category
+              ? { name: product.category.name }
+              : undefined,
           });
           setConversionIndex(null);
         }}
@@ -446,8 +642,16 @@ export const OrderForm: React.FC<OrderFormProps> = ({ storeId, initialData, prod
       {!initialData && (
         <div className="flex flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight text-primary">Nuevo pedido · {preset.label}</h1>
-            <Button type="button" variant="link" size="xs" className="h-auto p-0" onClick={() => setChosenType(null)}>
+            <h1 className="text-2xl font-bold tracking-tight text-primary">
+              Nuevo pedido · {preset.label}
+            </h1>
+            <Button
+              type="button"
+              variant="link"
+              size="xs"
+              className="h-auto p-0"
+              onClick={() => setChosenType(null)}
+            >
               Cambiar tipo
             </Button>
           </div>
@@ -456,7 +660,10 @@ export const OrderForm: React.FC<OrderFormProps> = ({ storeId, initialData, prod
       )}
 
       {conflict && (
-        <div role="alert" className="flex flex-col gap-2 rounded-xl border border-tint-pink bg-tint-pink/60 p-4 text-sm text-primary sm:flex-row sm:items-center sm:justify-between">
+        <div
+          role="alert"
+          className="flex flex-col gap-2 rounded-xl border border-tint-pink bg-tint-pink/60 p-4 text-sm text-primary sm:flex-row sm:items-center sm:justify-between"
+        >
           <span className="font-semibold">{conflict}</span>
           <Button type="button" size="sm" onClick={() => router.refresh()}>
             <RefreshCw className="h-4 w-4" aria-hidden="true" />
@@ -466,41 +673,67 @@ export const OrderForm: React.FC<OrderFormProps> = ({ storeId, initialData, prod
       )}
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start xl:grid-cols-[minmax(0,1fr)_400px]" autoComplete="off">
-          {initialData?.orderNumber && <h2 className="sr-only">Pedido {initialData.orderNumber}</h2>}
+        <form
+          onSubmit={form.handleSubmit(onSubmit)}
+          className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start xl:grid-cols-[minmax(0,1fr)_400px]"
+          autoComplete="off"
+        >
+          {initialData?.orderNumber && (
+            <h2 className="sr-only">Pedido {initialData.orderNumber}</h2>
+          )}
 
           {/* Columna principal: productos, envío y descuentos. En el teléfono cada bloque usa `order-*`. */}
           <div className="contents lg:flex lg:min-w-0 lg:flex-col lg:gap-4">
-            {initialData && isCreatableOrderType(initialData.type) && !locked && (
-              <div className="order-1 flex flex-col gap-2 rounded-xl border bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between lg:order-none">
-                <FormField
-                  control={form.control}
-                  name="type"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center gap-3 space-y-0">
-                      <FormLabel className="whitespace-nowrap">Tipo de pedido</FormLabel>
-                      <Select disabled={loading} onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger className="h-9 w-[220px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {Object.values(ORDER_TYPE_PRESETS).map((option) => (
-                            <SelectItem key={option.type} value={option.type}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </FormItem>
+            {initialData &&
+              isCreatableOrderType(initialData.type) &&
+              !locked && (
+                <div className="order-1 flex flex-col gap-2 rounded-xl border bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between lg:order-none">
+                  <FormField
+                    control={form.control}
+                    name="type"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center gap-3 space-y-0">
+                        <FormLabel className="whitespace-nowrap">
+                          Tipo de pedido
+                        </FormLabel>
+                        <Select
+                          disabled={loading}
+                          onValueChange={field.onChange}
+                          value={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="h-9 w-[220px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {Object.values(ORDER_TYPE_PRESETS).map((option) => (
+                              <SelectItem key={option.type} value={option.type}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
+                    )}
+                  />
+                  {invoiceData && (
+                    <InvoiceDownloadButton
+                      data={invoiceData}
+                      disabled={loading}
+                    />
                   )}
-                />
-                {invoiceData && <InvoiceDownloadButton data={invoiceData} disabled={loading} />}
-              </div>
-            )}
+                </div>
+              )}
             <div className="order-2 lg:order-none">
-              <ItemsSection fieldArray={fieldArray} watchedItems={watchedItems} locked={locked} allowManualItems={allowManualItems} loading={loading} onConvert={setConversionIndex} />
+              <ItemsSection
+                fieldArray={fieldArray}
+                watchedItems={watchedItems}
+                locked={locked}
+                allowManualItems={allowManualItems}
+                loading={loading}
+                onConvert={setConversionIndex}
+              />
             </div>
             <div className="order-6 lg:order-none">
               <ShippingSection
@@ -519,11 +752,25 @@ export const OrderForm: React.FC<OrderFormProps> = ({ storeId, initialData, prod
               </ShippingSection>
             </div>
             <div className="order-7 lg:order-none">
-              <DiscountsSection storeId={storeId} availableCoupons={availableCoupons} coupon={coupon} setCoupon={setCoupon} initialCoupon={initialData?.coupon ?? null} subtotal={totals.subtotal} locked={locked} loading={loading} />
+              <DiscountsSection
+                storeId={storeId}
+                availableCoupons={availableCoupons}
+                coupon={coupon}
+                setCoupon={setCoupon}
+                initialCoupon={initialData?.coupon ?? null}
+                subtotal={totals.subtotal}
+                locked={locked}
+                loading={loading}
+              />
             </div>
             {initialData && (
               <div className="order-10 lg:order-none">
-                <SectionCard id="zona-de-cuidado" title="Zona de cuidado" tone="care" description="Acciones que cierran o borran el pedido. Cada una confirma antes de aplicarse.">
+                <SectionCard
+                  id="zona-de-cuidado"
+                  title="Zona de cuidado"
+                  tone="care"
+                  description="Acciones que cierran o borran el pedido. Cada una confirma antes de aplicarse."
+                >
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusActions
                       status={initialData.status}
@@ -537,12 +784,23 @@ export const OrderForm: React.FC<OrderFormProps> = ({ storeId, initialData, prod
                       variant="care"
                       onTransition={onTransition}
                     />
-                    <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => setDeleteOpen(true)} className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={loading}
+                      onClick={() => setDeleteOpen(true)}
+                      className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    >
                       <Trash className="h-4 w-4" aria-hidden="true" />
                       Eliminar pedido
                     </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">Eliminar borra el pedido de forma definitiva; si estaba pagado, el inventario vuelve con un movimiento.</p>
+                  <p className="text-xs text-muted-foreground">
+                    {initialData?.shipping?.envioClickIdOrder
+                      ? "Este pedido tiene una guía de EnvioClick activa: cancela el envío antes de eliminarlo, o la guía seguirá cobrada y sin registro."
+                      : "Eliminar borra el pedido de forma definitiva; si ya estaba pagado o enviado, el inventario vuelve con un movimiento."}
+                  </p>
                 </SectionCard>
               </div>
             )}
@@ -551,14 +809,40 @@ export const OrderForm: React.FC<OrderFormProps> = ({ storeId, initialData, prod
           {/* Columna lateral: resumen, cliente, pago, notas e historial. Fija en escritorio. */}
           <aside className="contents lg:sticky lg:top-4 lg:flex lg:flex-col lg:gap-4">
             <div className="order-3 lg:order-none">
-              <SummaryCard totals={totals} shippingChargeState={shippingChargeState} shippingCost={shippingCost} coupon={coupon} itemCount={(watchedItems ?? []).reduce((sum, item) => sum + Number(item.quantity || 0), 0)} />
+              <SummaryCard
+                totals={totals}
+                shippingChargeState={shippingChargeState}
+                shippingCost={shippingCost}
+                coupon={coupon}
+                itemCount={(watchedItems ?? []).reduce(
+                  (sum, item) => sum + Number(item.quantity || 0),
+                  0,
+                )}
+              />
             </div>
             <div className="order-4 lg:order-none">
-              <CustomerCard storeId={storeId} users={users} locations={locations} loading={loading} initialData={initialData} total={totals.total} />
+              <CustomerCard
+                storeId={storeId}
+                users={users}
+                locations={locations}
+                loading={loading}
+                initialData={initialData}
+                total={totals.total}
+              />
             </div>
             {(editPreset.showPayment || initialData) && (
               <div className="order-5 lg:order-none">
-                <PaymentCard storeId={storeId} initialData={initialData} type={watchedType} loading={loading} isDirty={isDirty} showMethod={editPreset.showPayment || Boolean(initialData?.payment)} onTransition={onTransition} />
+                <PaymentCard
+                  storeId={storeId}
+                  initialData={initialData}
+                  type={watchedType}
+                  loading={loading}
+                  isDirty={isDirty}
+                  showMethod={
+                    editPreset.showPayment || Boolean(initialData?.payment)
+                  }
+                  onTransition={onTransition}
+                />
               </div>
             )}
             <div className="order-8 lg:order-none">
@@ -571,7 +855,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({ storeId, initialData, prod
             )}
           </aside>
 
-          <div className="order-11 sticky bottom-[84px] z-20 flex flex-col gap-3 rounded-xl border bg-white/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between lg:col-span-2 lg:bottom-4">
+          <div className="sticky bottom-[84px] z-20 order-11 flex flex-col gap-3 rounded-xl border bg-white/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between lg:bottom-4 lg:col-span-2">
             <p className="text-xs text-muted-foreground">
               {initialData
                 ? locked
@@ -581,7 +865,12 @@ export const OrderForm: React.FC<OrderFormProps> = ({ storeId, initialData, prod
             </p>
             <div className="flex items-center gap-2">
               {initialData ? (
-                <Button type="button" variant="outline" onClick={() => form.reset(defaultValues)} disabled={loading || !isDirty}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => form.reset(defaultValues)}
+                  disabled={loading || !isDirty}
+                >
                   Descartar cambios
                 </Button>
               ) : (
@@ -589,7 +878,13 @@ export const OrderForm: React.FC<OrderFormProps> = ({ storeId, initialData, prod
                   <Link href={`/${storeId}/pedidos`}>Cancelar</Link>
                 </Button>
               )}
-              <Button type="submit" disabled={loading || (Boolean(initialData) && !isDirty)} isLoading={loading} loadingText={initialData ? "Guardando…" : "Creando…"} className="min-w-[160px]">
+              <Button
+                type="submit"
+                disabled={loading || (Boolean(initialData) && !isDirty)}
+                isLoading={loading}
+                loadingText={initialData ? "Guardando…" : "Creando…"}
+                className="min-w-[160px]"
+              >
                 {initialData ? "Guardar cambios" : "Crear pedido"}
               </Button>
             </div>

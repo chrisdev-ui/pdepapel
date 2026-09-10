@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { getProductReadiness, getProductShape } from "@/lib/product-readiness";
 import { cn, currencyFormatter } from "@/lib/utils";
-import { AlertTriangle, Check, ExternalLink } from "lucide-react";
+import { AlertTriangle, Check, ExternalLink, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { ProductTintBadge, ShapeBadge } from "../../components/product-badges";
 
@@ -25,13 +25,16 @@ interface WorkspaceProduct {
 
 const SECTIONS = [
   { id: "imagenes", label: "Imágenes" },
+  { id: "asistente", label: "Asistente de producto" },
   { id: "informacion", label: "Información básica" },
   { id: "precio", label: "Precio y margen" },
+  { id: "composicion", label: "Composición del kit" },
   { id: "inventario", label: "Inventario" },
   { id: "identificadores", label: "Identificadores" },
   { id: "clasificacion", label: "Clasificación y atributos" },
   { id: "visibilidad", label: "Visibilidad" },
   { id: "descripcion", label: "Descripción" },
+  { id: "zona-de-cuidado", label: "Zona de cuidado" },
 ];
 
 export function ProductWorkspaceHeader({ product, storeUrl }: { product: WorkspaceProduct; storeUrl?: string }) {
@@ -71,8 +74,9 @@ export function ProductWorkspaceHeader({ product, storeUrl }: { product: Workspa
 
 export function ProductWorkspaceAside({ product, storeId }: { product: WorkspaceProduct | null; storeId: string }) {
   const readiness = product ? getProductReadiness(product) : null;
+  const photoCount = product?.images?.length ?? 0;
   return (
-    <aside className="flex flex-col gap-4 xl:sticky xl:top-4">
+    <aside className="flex flex-col gap-4 lg:sticky lg:top-4">
       <nav aria-label="Secciones del producto" className="rounded-xl border bg-white p-2 shadow-sm">
         <ul className="flex flex-col gap-0.5">
           {SECTIONS.map((section) => (
@@ -84,6 +88,21 @@ export function ProductWorkspaceAside({ product, storeId }: { product: Workspace
           ))}
         </ul>
       </nav>
+      <section aria-labelledby="asistente-titulo" className="flex flex-col gap-2 rounded-xl border border-tint-lavender bg-tint-lavender/25 p-4 shadow-sm">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+          <h2 id="asistente-titulo" className="text-sm font-bold text-primary">Asistente de producto</h2>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {photoCount > 0
+            ? `Lee ${photoCount === 1 ? "la foto" : `las ${photoCount} fotos`} y propone nombre, marca, clasificación, descripción y el código de barras impreso.`
+            : "Sube una foto y la IA propone nombre, marca, clasificación, descripción y el código de barras impreso."}
+        </p>
+        <a href="#asistente" className="text-[13px] font-semibold text-primary hover:underline">
+          {photoCount > 0 ? "Analizar fotos con IA" : "Ir al asistente"}
+        </a>
+        <p className="text-[11px] text-muted-foreground">Tú apruebas campo por campo. Nada se guarda solo.</p>
+      </section>
       {readiness && (
         <section aria-labelledby="listo-titulo" className="flex flex-col gap-3 rounded-xl border bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between">

@@ -32,6 +32,7 @@ model Store {
   defaultPackageWidth            Float?                          @default(10.0) // Ancho por defecto (cm)
   defaultPackageLength           Float?                          @default(10.0) // Largo por defecto (cm)
   freeShippingThreshold          Int? // Subtotal (COP) desde el cual el envío es gratis; null = desactivado
+  lowStockThreshold              Int? // Unidades desde las cuales el stock se considera crítico; null = usa TRESHOLD_LOW_STOCK (5)
   createdAt                      DateTime                        @default(now())
   updatedAt                      DateTime                        @updatedAt
   types                          Type[]                          @relation("StoreToType")

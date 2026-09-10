@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
+  AlertTriangle,
   Eraser,
   Loader2,
   PackageCheckIcon,
@@ -69,7 +70,9 @@ import {
 } from "@prisma/client";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { currencyFormatter } from "@/lib/utils";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ProductTintBadge } from "./product-badges";
 import { VariantGrid } from "./variant-grid";
 import { VariantMatrix } from "./variant-matrix";
 
@@ -125,6 +128,16 @@ const formSchema = z.object({
         isArchived: z.boolean().optional(),
         description: z.string().optional(),
         images: z.array(z.string()).optional(),
+        // Identificadores por variante: el grupo nunca los enviaba, asi que
+        // toda variante nacia "sin identificador" para Google Merchant.
+        gtin: z
+          .string()
+          .optional()
+          .refine((value) => !value || /^(\d{8}|\d{12,14})$/.test(value), {
+            message: "El GTIN debe tener 8, 12, 13 o 14 dígitos",
+          }),
+        mpn: z.string().max(70).optional(),
+        hasNoProductIdentifier: z.boolean().optional(),
       }),
     )
     .optional(),
@@ -457,6 +470,9 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
             isArchived: p.isArchived,
             images: p.images.map((img) => img.url),
             description: p.description || "",
+            gtin: p.gtin || "",
+            mpn: p.mpn || "",
+            hasNoProductIdentifier: p.hasNoProductIdentifier ?? true,
           })) || [],
       }
     : {
@@ -510,61 +526,89 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
     return 0;
   };
 
-  useEffect(() => {
-    const subscription = form.watch((value, { name }) => {
-      const watchedFields = [
-        "acqPrice",
-        "percentageIncrease",
-        "transportationCost",
-        "miscCost",
-        "defaultSupplier",
-        "defaultStock",
-      ];
+  // El precio del grupo YA NO se propaga solo a las variantes. Antes un
+  // `form.watch` con debounce sobreescribia `price` y `acqPrice` de todas las
+  // variantes en cada tecla de los campos de precio: bastaba abrir el grupo y
+  // rozar un campo para reemplazar precios puestos a mano variante por
+  // variante. Ahora es un boton que dice antes que va a sobreescribir.
 
-      if (name && watchedFields.includes(name)) {
-        if (debounceRef.current) {
-          clearTimeout(debounceRef.current);
-        }
+  const watchedVariants = form.watch("variants");
+  const watchedGroupPrice = form.watch("price");
+  const watchedGroupAcqPrice = form.watch("acqPrice");
+  const watchedPercentageIncrease = form.watch("percentageIncrease");
+  const watchedTransportationCost = form.watch("transportationCost");
+  const watchedMiscCost = form.watch("miscCost");
 
-        debounceRef.current = setTimeout(() => {
-          const values = form.getValues();
-          const newPrice = calculatePrice({
-            acqPrice: values.acqPrice ?? 0,
-            percentageIncrease: values.percentageIncrease ?? 0,
-            transportationCost: values.transportationCost ?? 0,
-            miscCost: values.miscCost ?? 0,
-          });
+  /** Precio que sugieren el costo y los gastos del grupo. Solo se aplica al pulsar. */
+  const suggestedGroupPrice = useMemo(
+    () =>
+      calculatePrice({
+        acqPrice: watchedGroupAcqPrice ?? 0,
+        percentageIncrease: watchedPercentageIncrease ?? 0,
+        transportationCost: watchedTransportationCost ?? 0,
+        miscCost: watchedMiscCost ?? 0,
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      watchedGroupAcqPrice,
+      watchedPercentageIncrease,
+      watchedTransportationCost,
+      watchedMiscCost,
+    ],
+  );
 
-          if (newPrice > 0) {
-            form.setValue("price", newPrice);
+  /** Variantes cuyo precio o costo cambiaria si se aplica el del grupo. */
+  const variantsPriceDiff = useMemo(() => {
+    const price = Number(watchedGroupPrice) || 0;
+    const acqPrice = Number(watchedGroupAcqPrice) || 0;
+    if (price <= 0) return [];
+    return (watchedVariants ?? [])
+      .map((variant, index) => ({ variant, index }))
+      .filter(
+        ({ variant }) =>
+          Number(variant.price ?? 0) !== price ||
+          Number(variant.acqPrice ?? 0) !== acqPrice,
+      );
+  }, [watchedVariants, watchedGroupPrice, watchedGroupAcqPrice]);
 
-            // Sync variants - REACTIVE UPDATE
-            // IMPORTANT: We update price and acqPrice for consistency, but we do NOT
-            // override stock. Stock should be managed per-variant and not reset when
-            // pricing fields change. Imported products keep their original stock.
-            const currentVariants = form.getValues("variants") || [];
-            const updatedVariants = currentVariants.map((v) => ({
-              ...v,
-              price: newPrice,
-              acqPrice: values.acqPrice ?? 0,
-              supplierId: values.defaultSupplier || v.supplierId,
-              // PRESERVE stock - don't override with defaultStock during sync
-              // The stock value should only be set when variant is first created
-              stock: v.stock,
-            }));
+  /**
+   * Variantes que existen en el grupo pero ya no estan en el formulario. El
+   * servidor las archiva (si tienen pedidos) o las elimina; antes lo hacia sin
+   * avisar, asi que aqui se dicen por su nombre ANTES de guardar.
+   */
+  const pendingRemovals = useMemo(() => {
+    if (!initialData?.products) return [];
+    const keptIds = new Set(
+      (watchedVariants ?? [])
+        .map((variant) => variant.id)
+        .filter(Boolean) as string[],
+    );
+    return initialData.products
+      .filter((product: { id: string }) => !keptIds.has(product.id))
+      .map((product: any) => ({
+        id: product.id,
+        name: product.name as string,
+        sku: product.sku as string | null,
+        // El servidor decide igual, pero el criterio es el mismo: con pedidos
+        // se archiva para conservar el historial.
+        willArchive: (product.orderItems?.length ?? 0) > 0,
+      }));
+  }, [initialData, watchedVariants]);
 
-            if (updatedVariants.length > 0) {
-              form.setValue("variants", updatedVariants);
-            }
-          }
-        }, 500);
-      }
+  const applyGroupPriceToVariants = useCallback(() => {
+    const price = Number(form.getValues("price")) || 0;
+    const acqPrice = Number(form.getValues("acqPrice")) || 0;
+    const current = form.getValues("variants") || [];
+    form.setValue(
+      "variants",
+      current.map((variant) => ({ ...variant, price, acqPrice })),
+      { shouldDirty: true },
+    );
+    toast({
+      description: `Precio aplicado a ${current.length} ${current.length === 1 ? "variante" : "variantes"}`,
+      variant: "success",
     });
-    return () => {
-      subscription.unsubscribe();
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [form]);
+  }, [form, toast]);
 
   const watchedColorIds = form.watch("colorIds");
   const watchedSizeIds = form.watch("sizeIds");
@@ -847,6 +891,9 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
             ...data,
             imageMapping: mapping,
             preserveSlug: true,
+            // El formulario ya listo las bajas en "Cambios pendientes";
+            // sin esta bandera el servidor responde 409 en vez de borrar.
+            confirmRemovals: true,
           },
         );
       } else {
@@ -1563,12 +1610,12 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
               </div>
             )}
 
-          <div className="grid grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8 xl:grid-cols-3">
             <FormField
               control={form.control}
               name="name"
               render={({ field }) => (
-                <FormItem className="col-span-3">
+                <FormItem className="col-span-full">
                   <FormLabel isRequired>Nombre</FormLabel>
                   <FormControl>
                     <Input
@@ -1582,7 +1629,31 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                 </FormItem>
               )}
             />
-            <div className="col-span-3">
+            <div
+              id="informacion"
+              className="col-span-full flex scroll-mt-24 flex-col gap-0.5"
+            >
+              <h2 className="text-[15px] font-bold text-primary">
+                Datos del grupo
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Se heredan a cada variante nueva.
+              </p>
+            </div>
+            <div
+              id="asistente"
+              className="col-span-full flex scroll-mt-24 flex-col gap-0.5 border-t pt-6"
+            >
+              <h2 className="text-[15px] font-bold text-primary">
+                Asistente de producto
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Lee las fotos del grupo y propone nombre, marca, clasificación y
+                descripción. Se aplican al grupo, y de ahí las heredan las
+                variantes nuevas.
+              </p>
+            </div>
+            <div className="col-span-full">
               <ProductNameAssistant
                 currentName={watchedName}
                 categoryName={
@@ -1734,7 +1805,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
               name="price"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel isRequired>Precio de venta (calculado)</FormLabel>
+                  <FormLabel isRequired>Precio de venta</FormLabel>
                   <FormControl>
                     <CurrencyInput
                       placeholder="$ 1.000"
@@ -1743,10 +1814,76 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                       onChange={field.onChange}
                     />
                   </FormControl>
+                  {suggestedGroupPrice > 0 &&
+                    suggestedGroupPrice !== Number(field.value) && (
+                      <button
+                        type="button"
+                        disabled={loading}
+                        onClick={() =>
+                          form.setValue("price", suggestedGroupPrice, {
+                            shouldDirty: true,
+                          })
+                        }
+                        className="self-start text-xs text-primary underline underline-offset-2 hover:text-primary/80"
+                      >
+                        Usar el sugerido:{" "}
+                        {currencyFormatter(suggestedGroupPrice)}
+                      </button>
+                    )}
                   <FormMessage />
                 </FormItem>
               )}
             />
+            {variantsPriceDiff.length > 0 && (
+              <div className="col-span-full flex flex-col gap-3 rounded-lg border border-tint-cream bg-tint-cream/25 p-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle
+                    className="mt-0.5 h-4 w-4 shrink-0 text-primary"
+                    aria-hidden="true"
+                  />
+                  <div className="flex flex-col gap-1">
+                    <p className="text-sm font-semibold text-primary">
+                      Aplicar este precio sobrescribe {variantsPriceDiff.length}{" "}
+                      {variantsPriceDiff.length === 1
+                        ? "variante"
+                        : "variantes"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      El stock nunca se toca. Solo cambia lo que listamos aquí.
+                    </p>
+                  </div>
+                </div>
+                <ul className="flex flex-col gap-1 text-xs text-primary">
+                  {variantsPriceDiff.slice(0, 6).map(({ variant, index }) => (
+                    <li key={variant.id ?? index} className="flex gap-2">
+                      <span className="font-medium">
+                        {variant.name || variant.sku || `Variante ${index + 1}`}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {currencyFormatter(Number(variant.price ?? 0))} →{" "}
+                        {currencyFormatter(Number(watchedGroupPrice) || 0)}
+                      </span>
+                    </li>
+                  ))}
+                  {variantsPriceDiff.length > 6 && (
+                    <li className="text-muted-foreground">
+                      y {variantsPriceDiff.length - 6} más
+                    </li>
+                  )}
+                </ul>
+                <Button
+                  type="button"
+                  variant="soft"
+                  size="sm"
+                  disabled={loading}
+                  onClick={applyGroupPriceToVariants}
+                  className="self-start"
+                >
+                  Aplicar a {variantsPriceDiff.length}{" "}
+                  {variantsPriceDiff.length === 1 ? "variante" : "variantes"}
+                </Button>
+              </div>
+            )}
             <FormField
               control={form.control}
               name="defaultStock"
@@ -1995,7 +2132,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
               )}
             />
 
-            <div className="col-span-3 rounded-lg border bg-muted/30 p-4">
+            <div className="col-span-full rounded-lg border bg-muted/30 p-4">
               <p className="text-sm font-medium">Nombre de las variantes</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 Color y diseño siguen siendo obligatorios para inventario y SKU.
@@ -2026,7 +2163,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
               </div>
             </div>
 
-            <div className="col-span-3 flex justify-end gap-2">
+            <div className="col-span-full flex justify-end gap-2">
               <Button
                 type="button"
                 variant="secondary"
@@ -2067,7 +2204,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
               control={form.control}
               name="description"
               render={({ field }) => (
-                <FormItem className="col-span-3">
+                <FormItem className="col-span-full">
                   <FormLabel isRequired>Descripción</FormLabel>
                   <FormControl>
                     <RichTextEditor
@@ -2084,6 +2221,16 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
             />
           </div>
 
+          <div
+            id="variantes"
+            className="flex scroll-mt-24 flex-col gap-0.5 border-t pt-6"
+          >
+            <h2 className="text-[15px] font-bold text-primary">Variantes</h2>
+            <p className="text-xs text-muted-foreground">
+              Cada fila es un producto real con su propio SKU, identificador,
+              precio y stock.
+            </p>
+          </div>
           <VariantGrid
             form={form}
             loading={loading}
@@ -2129,6 +2276,55 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
             defaultSupplierId={form.getValues("defaultSupplier") || ""}
             suppliers={suppliers}
           />
+
+          {pendingRemovals.length > 0 && (
+            <section
+              aria-labelledby="cambios-pendientes-titulo"
+              className="flex flex-col gap-3 rounded-xl border border-tint-pink bg-tint-pink/20 p-4"
+            >
+              <div className="flex items-start gap-3">
+                <AlertTriangle
+                  className="mt-0.5 h-4 w-4 shrink-0 text-primary"
+                  aria-hidden="true"
+                />
+                <div className="flex flex-col gap-1">
+                  <h3
+                    id="cambios-pendientes-titulo"
+                    className="text-sm font-semibold text-primary"
+                  >
+                    Al guardar se quitarán {pendingRemovals.length}{" "}
+                    {pendingRemovals.length === 1 ? "variante" : "variantes"}{" "}
+                    del grupo
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Una variante con pedidos se archiva y conserva su historial.
+                    Una sin pedidos se elimina de forma definitiva.
+                  </p>
+                </div>
+              </div>
+              <ul className="flex flex-col gap-1.5 text-xs">
+                {pendingRemovals.map((removal) => (
+                  <li
+                    key={removal.id}
+                    className="flex flex-wrap items-center gap-2"
+                  >
+                    <span className="font-medium text-primary">
+                      {removal.name}
+                    </span>
+                    {removal.sku && (
+                      <span className="font-mono text-muted-foreground">
+                        {removal.sku}
+                      </span>
+                    )}
+                    <ProductTintBadge
+                      label={removal.willArchive ? "Se archiva" : "Se elimina"}
+                      tone={removal.willArchive ? "cream" : "pink"}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           <Button disabled={loading} className="ml-auto" type="submit">
             {loading ? (

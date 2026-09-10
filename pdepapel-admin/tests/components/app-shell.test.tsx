@@ -91,9 +91,9 @@ describe("AppShell", () => {
 
 describe("Breadcrumbs", () => {
   it("labels nested segments in Spanish and reads ids as Detalle", () => {
-    pathname = "/store-1/productos/gestion-masiva";
+    pathname = "/store-1/productos/nuevo-grupo";
     const { rerender } = render(<Breadcrumbs storeId="store-1" />);
-    expect(screen.getByRole("navigation", { name: "Ruta" })).toHaveTextContent("CatálogoProductosGestión masiva");
+    expect(screen.getByRole("navigation", { name: "Ruta" })).toHaveTextContent("CatálogoProductosNuevo grupo");
     expect(screen.getByRole("link", { name: "Productos" })).toHaveAttribute("href", "/store-1/productos");
 
     pathname = "/store-1/pedidos/8ffbaa18-1b5d-4bc7-8fe6-ff298111564c";

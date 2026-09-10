@@ -1,103 +1,75 @@
-"use strict";
+"use client";
 
 import { Button } from "@/components/ui/button";
-import { FormLabel } from "@/components/ui/form";
-import { Heading } from "@/components/ui/heading";
-import { PercentageInput } from "@/components/ui/percentage-input";
-import { Separator } from "@/components/ui/separator";
+import {
+  suggestKitPrice,
+  sumKitComponentRetail,
+  type KitComponentLine,
+} from "@/lib/kit-pricing";
 import { currencyFormatter } from "@/lib/utils";
 import { Calculator } from "lucide-react";
-import { useMemo, useState } from "react";
-import { UseFormReturn } from "react-hook-form";
+import { useMemo } from "react";
 
-interface KitPriceCalculatorProps {
-  form: UseFormReturn<any>;
+interface KitPriceSuggestionProps {
+  components: KitComponentLine[];
+  discountPercent: number;
+  onApply: (price: number) => void;
+  disabled?: boolean;
 }
 
-export const KitPriceCalculator: React.FC<KitPriceCalculatorProps> = ({
-  form,
+/**
+ * Línea de sugerencia dentro de «Precio y margen». Nunca escribe el precio por
+ * su cuenta: el precio solo cambia cuando se pulsa el botón.
+ */
+export const KitPriceSuggestion: React.FC<KitPriceSuggestionProps> = ({
+  components,
+  discountPercent,
+  onApply,
+  disabled,
 }) => {
-  const watchedComponents = form.watch("components");
-  const components = useMemo(
-    () => watchedComponents || [],
-    [watchedComponents],
+  const retail = useMemo(
+    () => sumKitComponentRetail(components),
+    [components],
   );
-  const [discountPercent, setDiscountPercent] = useState(0);
+  const suggested = useMemo(
+    () => suggestKitPrice(components, discountPercent),
+    [components, discountPercent],
+  );
 
-  const sumOfComponents = useMemo(() => {
-    return components.reduce((acc: number, item: any) => {
-      return acc + (item.price || 0) * (item.quantity || 1);
-    }, 0);
-  }, [components]);
-
-  const suggestedPrice = useMemo(() => {
-    const discount = Number(discountPercent) || 0;
-    return sumOfComponents * (1 - discount / 100);
-  }, [sumOfComponents, discountPercent]);
-
-  const onApplyPrice = () => {
-    form.setValue("price", parseFloat(suggestedPrice.toFixed(2)));
-  };
+  if (components.length === 0) {
+    return (
+      <p className="col-span-full text-xs text-muted-foreground">
+        Agrega componentes en «Composición del kit» para calcular un precio
+        sugerido.
+      </p>
+    );
+  }
 
   return (
-    <div className="col-span-3 mt-4 rounded-md border bg-indigo-50/30 p-4 dark:bg-indigo-950/10">
-      <Heading
-        title="Calculadora de Precio Sugerido"
-        description="Calcula el precio del kit basado en la suma de sus componentes y un descuento opcional."
+    <div className="col-span-full flex flex-col gap-3 rounded-lg border bg-muted/30 p-3 sm:flex-row sm:items-center">
+      <Calculator
+        className="h-4 w-4 shrink-0 text-muted-foreground"
+        aria-hidden="true"
       />
-      <Separator className="my-4" />
-      <div className="grid gap-6 md:grid-cols-3">
-        {/* Sum Display */}
-        <div className="space-y-4 rounded-lg border bg-card p-4 shadow-sm">
-          <div className="text-sm font-medium text-muted-foreground">
-            Suma de Componentes
-          </div>
-          <div className="mt-2 text-2xl font-bold">
-            {currencyFormatter(sumOfComponents)}
-          </div>
-          <div className="text-xs text-muted-foreground">
-            {components.length} componentes seleccionados
-          </div>
-        </div>
-
-        {/* Discount Input */}
-        <div className="space-y-2">
-          <FormLabel isRequired>Descuento Sugerido (%)</FormLabel>
-          <PercentageInput
-            min={0}
-            max={100}
-            placeholder="0"
-            value={discountPercent}
-            onChange={(value) => setDiscountPercent(value || 0)}
-          />
-          <p className="text-xs text-muted-foreground">
-            Ingresa un porcentaje para calcular el precio final sugerido.
-          </p>
-        </div>
-
-        {/* Suggested Price & Action */}
-        <div className="flex flex-col justify-between rounded-lg border bg-card p-4 shadow-sm">
-          <div>
-            <div className="text-sm font-medium text-muted-foreground">
-              Precio Sugerido
-            </div>
-            <div className="mt-2 text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-              {currencyFormatter(suggestedPrice)}
-            </div>
-          </div>
-
-          <Button
-            type="button"
-            variant="default"
-            size="sm"
-            className="mt-3 w-full"
-            onClick={onApplyPrice}
-          >
-            <Calculator className="mr-2 h-4 w-4" />
-            Aplicar Precio
-          </Button>
-        </div>
-      </div>
+      <p className="flex-1 text-xs leading-relaxed text-muted-foreground">
+        Comprados por separado, los componentes suman{" "}
+        <strong className="text-foreground">{currencyFormatter(retail)}</strong>.
+        Con {Number(discountPercent) || 0} % de descuento de kit:{" "}
+        <strong className="text-foreground">
+          {currencyFormatter(suggested)}
+        </strong>
+        .
+      </p>
+      <Button
+        type="button"
+        variant="soft"
+        size="xs"
+        disabled={disabled || suggested <= 0}
+        onClick={() => onApply(suggested)}
+        className="shrink-0"
+      >
+        Usar {currencyFormatter(suggested)}
+      </Button>
     </div>
   );
 };

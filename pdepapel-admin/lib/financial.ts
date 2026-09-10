@@ -13,6 +13,30 @@ export interface FinancialMetrics {
 }
 
 /**
+ * El costo unitario de un producto. Un kit no tiene costo propio: lo que
+ * cuesta es armarlo, es decir la suma del `acqPrice` de sus componentes por la
+ * cantidad que lleva cada uno. Es la misma regla que aplica el punto de venta
+ * (`lib/point-of-sale.ts › getOrderItemCost`); si las dos difieren, la misma
+ * venta queda con margen distinto segun el canal.
+ */
+export function getProductUnitCost(product: {
+  acqPrice: number | null;
+  isKit?: boolean | null;
+  kitComponents?: {
+    quantity: number;
+    component: { acqPrice: number | null } | null;
+  }[];
+}): number {
+  if (!product.isKit) return Number(product.acqPrice || 0);
+
+  return (product.kitComponents ?? []).reduce(
+    (total, component) =>
+      total + Number(component.component?.acqPrice || 0) * component.quantity,
+    0,
+  );
+}
+
+/**
  * Calculates the total product cost based on the acquisition price of each item at the time of purchase.
  * We must use a historical snapshot (if available) or the current `acqPrice` of the product.
  * To be 100% accurate historically, we should ideally fetch the Product `acqPrice` right before payment is confirmed.
@@ -29,11 +53,18 @@ export async function calculateTotalProductCost(
 
   const products = await prismadb.product.findMany({
     where: { id: { in: productIds } },
-    select: { id: true, acqPrice: true },
+    select: {
+      id: true,
+      acqPrice: true,
+      isKit: true,
+      kitComponents: {
+        select: { quantity: true, component: { select: { acqPrice: true } } },
+      },
+    },
   });
 
   const priceMap = new Map<string, number>(
-    products.map((p: any) => [p.id, p.acqPrice || 0]),
+    products.map((p: any) => [p.id, getProductUnitCost(p)]),
   );
 
   let totalCost = 0;
@@ -68,11 +99,23 @@ export function calculateGatewayFee(
       return baseFee + vat;
     }
 
-    // Default to 0 for Bank transfers, Cash, COD, Bold
-    case PaymentMethod.Bold:
+    // Efectivo, contra entrega y transferencia no pagan pasarela: no hay
+    // intermediario que cobre.
     case PaymentMethod.BankTransfer:
     case PaymentMethod.COD:
     case PaymentMethod.CASH:
+      return 0;
+
+    // TODO(bold): este 0 NO esta verificado contra el contrato de Bold.
+    // Se agrego en un commit de limpieza del enum de pagos, sin nota ni
+    // documento que diga si Bold liquida neto (ya descontada su comision) o
+    // si simplemente no teniamos la tarifa a mano. Nada del payload de Bold
+    // trae comision, neto ni liquidacion, asi que el repo no puede decidirlo.
+    // Mientras siga en 0, el margen de un pedido pagado con Bold sale inflado.
+    // Al confirmar los terminos: si liquida neto, dejarlo en 0 y documentarlo;
+    // si cobra comision, modelarla como en Mercado Libre (valor real del
+    // proveedor, y `null` cuando no se conoce) en vez de copiar la de Wompi.
+    case PaymentMethod.Bold:
     default:
       return 0;
   }
@@ -126,23 +169,21 @@ export function getOrderNetProfit(order: any): number {
   const total = Number(order.total || order.subtotal || 0);
   if (total <= 0) return 0;
 
-  const paymentMethod = order.payment?.method || order.paymentMethod || undefined;
+  const paymentMethod =
+    order.payment?.method || order.paymentMethod || undefined;
   const shippingCost = Number(order.shipping?.cost || order.shippingCost || 0);
 
-  // Gateway fee calculation
-  let gatewayFee = 0;
-  if (paymentMethod === PaymentMethod.Wompi || paymentMethod === "Wompi") {
-    const baseFee = total * 0.0265 + 700;
-    gatewayFee = baseFee + baseFee * 0.19;
-  }
+  // Una sola definicion de la comision: antes esta rama repetia la tarifa de
+  // Wompi a mano, asi que cambiarla en un sitio dejaba el otro desfasado.
+  const gatewayFee = calculateGatewayFee(total, paymentMethod);
 
   // Product cost calculation
   let totalProductCost = Number(order.totalProductCost || 0);
   if (!totalProductCost && Array.isArray(order.orderItems)) {
     for (const item of order.orderItems) {
-      const acqPrice = Number(
-        item.product?.acqPrice ?? item.acqPrice ?? 0,
-      );
+      const acqPrice = item.product
+        ? getProductUnitCost(item.product)
+        : Number(item.acqPrice ?? 0);
       totalProductCost += acqPrice * Number(item.quantity || 1);
     }
   }
@@ -150,4 +191,3 @@ export function getOrderNetProfit(order: any): number {
   const calculatedProfit = total - totalProductCost - gatewayFee - shippingCost;
   return isNaN(calculatedProfit) ? 0 : calculatedProfit;
 }
-

@@ -1,7 +1,9 @@
 import {
+  assertNotKitProducts,
   createInventoryMovement,
   createInventoryMovementBatch,
   createInventoryMovementBatchResilient,
+  explodeSaleLines,
   recalculateKitStock,
   validateStockAvailability,
 } from "@/lib/inventory";
@@ -194,17 +196,20 @@ describe("inventory movements", () => {
       product: {
         findMany: vi
           .fn()
-          .mockResolvedValueOnce([
-            { id: "kit-id", name: "Kit creativo", stock: 10, isKit: true },
-          ])
+          // resolucion: el kit se expande a sus componentes
           .mockResolvedValueOnce([
             {
               id: "kit-id",
+              isKit: true,
               kitComponents: [{ componentId: "component-id", quantity: 2 }],
             },
           ])
           .mockResolvedValueOnce([
-            { id: "component-id", name: "Sticker", stock: 4, isKit: false },
+            { id: "component-id", isKit: false, kitComponents: [] },
+          ])
+          // validacion final sobre la demanda fisica
+          .mockResolvedValueOnce([
+            { id: "component-id", name: "Sticker", stock: 4 },
           ]),
       },
     };
@@ -214,10 +219,126 @@ describe("inventory movements", () => {
         { productId: "kit-id", quantity: 2 },
       ]),
     ).resolves.toBeUndefined();
-    expect(tx.product.findMany).toHaveBeenNthCalledWith(2, {
-      where: { id: { in: ["kit-id"] } },
-      include: { kitComponents: true },
+    // 2 kits x 2 stickers = 4, y hay 4: pasa justo.
+    expect(tx.product.findMany).toHaveBeenLastCalledWith({
+      where: { id: { in: ["component-id"] } },
+      select: { id: true, stock: true, name: true },
     });
+  });
+
+  it("suma la demanda directa y la que viene dentro de un kit", async () => {
+    // Regresion: antes se validaba en dos pasadas independientes, asi que un
+    // carrito con 10 unidades sueltas de A mas un kit que tambien lleva A
+    // pasaba la validacion teniendo solo 10 en bodega.
+    const tx = {
+      product: {
+        findMany: vi
+          .fn()
+          .mockResolvedValueOnce([
+            { id: "component-id", isKit: false, kitComponents: [] },
+            {
+              id: "kit-id",
+              isKit: true,
+              kitComponents: [{ componentId: "component-id", quantity: 1 }],
+            },
+          ])
+          .mockResolvedValueOnce([
+            { id: "component-id", isKit: false, kitComponents: [] },
+          ])
+          .mockResolvedValueOnce([
+            { id: "component-id", name: "Sticker", stock: 10 },
+          ]),
+      },
+    };
+
+    await expect(
+      validateStockAvailability(tx as any, [
+        { productId: "component-id", quantity: 10 },
+        { productId: "kit-id", quantity: 1 },
+      ]),
+    ).rejects.toMatchObject({
+      details: {
+        items: [
+          {
+            productId: "component-id",
+            productName: "Sticker",
+            available: 10,
+            requested: 11,
+          },
+        ],
+      },
+    });
+  });
+
+  it("bloquea un ajuste manual sobre un kit", async () => {
+    const tx = {
+      product: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ id: "kit-id", name: "Kit creativo" }]),
+      },
+    };
+
+    await expect(
+      assertNotKitProducts(tx as any, ["kit-id"]),
+    ).rejects.toThrowError(/no admite ajustes manuales/);
+    expect(tx.product.findMany).toHaveBeenCalledWith({
+      where: { id: { in: ["kit-id"] }, isKit: true },
+      select: { id: true, name: true },
+    });
+  });
+
+  it("deja pasar un ajuste manual sobre un producto normal", async () => {
+    const tx = { product: { findMany: vi.fn().mockResolvedValue([]) } };
+    await expect(
+      assertNotKitProducts(tx as any, ["product-id"]),
+    ).resolves.toBeUndefined();
+  });
+
+  it("explodeSaleLines reemplaza el kit por sus componentes", async () => {
+    const tx = {
+      product: {
+        findMany: vi
+          .fn()
+          .mockResolvedValueOnce([
+            {
+              id: "kit-id",
+              name: "Kit creativo",
+              kitComponents: [
+                { componentId: "a", quantity: 2 },
+                { componentId: "b", quantity: 1 },
+              ],
+            },
+          ])
+          .mockResolvedValueOnce([]),
+      },
+    };
+
+    await expect(
+      explodeSaleLines(tx as any, [
+        { productId: "kit-id", quantity: 3 },
+        { productId: "suelto", quantity: 4 },
+      ]),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        physicalProductId: "suelto",
+        physicalQuantity: 4,
+        kitId: null,
+        kitName: null,
+      }),
+      expect.objectContaining({
+        physicalProductId: "a",
+        physicalQuantity: 6,
+        kitId: "kit-id",
+        kitName: "Kit creativo",
+      }),
+      expect.objectContaining({
+        physicalProductId: "b",
+        physicalQuantity: 3,
+        kitId: "kit-id",
+        kitName: "Kit creativo",
+      }),
+    ]);
   });
 
   it("processes resilient batches without blocking valid products", async () => {

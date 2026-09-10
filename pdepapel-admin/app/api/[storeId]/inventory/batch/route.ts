@@ -3,7 +3,10 @@ import { auth } from "@clerk/nextjs/server";
 
 import prismadb from "@/lib/prismadb";
 import { verifyStoreOwner } from "@/lib/utils";
-import { createInventoryMovementBatch } from "@/lib/inventory";
+import {
+  assertNotKitProducts,
+  createInventoryMovementBatch,
+} from "@/lib/inventory";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import { InventoryMovementType } from "@prisma/client";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
@@ -88,6 +91,10 @@ export async function POST(
 
     // Execute batch in transaction
     await prismadb.$transaction(async (tx) => {
+      await assertNotKitProducts(
+        tx,
+        movementParams.map((m) => m.productId),
+      );
       await createInventoryMovementBatch(tx, movementParams, false);
     });
     await invalidateStoreProductsCache(params.storeId);

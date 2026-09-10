@@ -6,7 +6,7 @@ import {
   Prisma,
 } from "@prisma/client";
 
-import { recalculateKitStock } from "@/lib/inventory";
+import { explodeSaleLines, recalculateKitStock } from "@/lib/inventory";
 import prismadb from "@/lib/prismadb";
 
 import { getMercadoLibreResource, requestMercadoLibreResource } from "./client";
@@ -406,10 +406,36 @@ export async function reconcileMercadoLibreHistoricalSale({
     const productsById = new Map(
       products.map((product) => [product.id, product]),
     );
+    // Un kit no tiene stock propio: lo que sale de bodega son sus componentes.
+    const physicalLines = await explodeSaleLines(
+      transaction,
+      mappings.map((mapping) => ({
+        productId: mapping.productId,
+        quantity: mapping.quantity,
+        unitPrice: mapping.unitPrice,
+      })),
+    );
+    const physicalByProductId = new Map<string, number>();
+    for (const line of physicalLines) {
+      physicalByProductId.set(
+        line.physicalProductId,
+        (physicalByProductId.get(line.physicalProductId) ?? 0) +
+          line.physicalQuantity,
+      );
+    }
+    const physicalProductIds = Array.from(physicalByProductId.keys());
+    const physicalProducts = await transaction.product.findMany({
+      where: { id: { in: physicalProductIds }, storeId },
+      select: { id: true, name: true, stock: true, acqPrice: true },
+    });
+    const physicalProductsById = new Map(
+      physicalProducts.map((product) => [product.id, product]),
+    );
+
     for (const [productId, quantity] of Array.from(
-      quantitiesByProductId.entries(),
+      physicalByProductId.entries(),
     )) {
-      const product = productsById.get(productId);
+      const product = physicalProductsById.get(productId);
       if (!product || product.stock < quantity) {
         throw new Error(
           `Stock insuficiente para conciliar ${product?.name ?? productId}`,
@@ -497,7 +523,7 @@ export async function reconcileMercadoLibreHistoricalSale({
     }
 
     for (const [productId, quantity] of Array.from(
-      quantitiesByProductId.entries(),
+      physicalByProductId.entries(),
     )) {
       const stockUpdate = await transaction.product.updateMany({
         where: { id: productId, storeId, stock: { gte: quantity } },
@@ -547,38 +573,45 @@ export async function reconcileMercadoLibreHistoricalSale({
     });
 
     const runningStockByProductId = new Map(
-      products.map((product) => [product.id, product.stock]),
+      physicalProducts.map((product) => [product.id, product.stock]),
     );
-    for (const mapping of mappings) {
-      const previousStock = runningStockByProductId.get(mapping.productId) ?? 0;
-      const newStock = previousStock - mapping.quantity;
-      runningStockByProductId.set(mapping.productId, newStock);
+    for (const line of physicalLines) {
+      const productId = line.physicalProductId;
+      const previousStock = runningStockByProductId.get(productId) ?? 0;
+      const newStock = previousStock - line.physicalQuantity;
+      runningStockByProductId.set(productId, newStock);
       await transaction.inventoryMovement.create({
         data: {
           storeId,
-          productId: mapping.productId,
+          productId,
           type: InventoryMovementType.ORDER_PLACED,
-          quantity: -mapping.quantity,
+          quantity: -line.physicalQuantity,
           previousStock,
           newStock,
-          reason: `Mercado Libre: conciliación histórica de venta confirmada ${externalOrderId}`,
+          reason: line.kitName
+            ? `Mercado Libre: conciliación histórica de venta confirmada ${externalOrderId} (Kit: ${line.kitName})`
+            : `Mercado Libre: conciliación histórica de venta confirmada ${externalOrderId}`,
           referenceId: marketplaceOrder.id,
-          cost: productsById.get(mapping.productId)?.acqPrice ?? null,
-          price: mapping.unitPrice,
+          cost: physicalProductsById.get(productId)?.acqPrice ?? null,
+          // El precio del kit no es el precio del componente.
+          price: line.kitId ? null : line.unitPrice,
           createdBy: "SYSTEM_MERCADOLIBRE",
         },
       });
     }
 
     const parentKits = await transaction.productKit.findMany({
-      where: { componentId: { in: productIds } },
+      where: { componentId: { in: physicalProductIds } },
       select: { kitId: true },
     });
     await recalculateKitStock(
       transaction,
       Array.from(new Set(parentKits.map((kit) => kit.kitId))),
     );
-    await queueMarketplaceStockSyncEvents(transaction, productIds);
+    await queueMarketplaceStockSyncEvents(
+      transaction,
+      Array.from(new Set([...productIds, ...physicalProductIds])),
+    );
     return marketplaceOrder.id;
   });
 

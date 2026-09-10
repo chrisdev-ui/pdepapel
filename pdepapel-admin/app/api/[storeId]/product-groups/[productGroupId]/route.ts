@@ -13,6 +13,7 @@ import {
   verifyStoreOwner,
 } from "@/lib/utils";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { normalizeProductIdentifiers } from "@/lib/product-identifiers";
 import cloudinaryInstance from "@/lib/cloudinary";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 
@@ -85,6 +86,7 @@ export async function PATCH(
       categoryId,
       variants: variantsPayload,
       preserveSlug = false,
+      confirmRemovals = false,
     } = body;
     const sanitizedDescription = sanitizeRichTextHtml(description);
 
@@ -156,6 +158,28 @@ export async function PATCH(
         (p) => !payloadIds.has(p.id),
       );
 
+      // Quitar una variante del payload borraba el producto sin avisar. Ahora
+      // el cliente tiene que confirmar que vio la lista; cualquier otro cliente
+      // recibe 409 con el detalle en vez de perder catalogo en silencio.
+      if (productsToDelete.length > 0 && confirmRemovals !== true) {
+        throw ErrorFactory.Conflict(
+          `Este guardado quitaria ${productsToDelete.length} ${
+            productsToDelete.length === 1 ? "variante" : "variantes"
+          } del grupo. Confirma la operacion para continuar.`,
+          {
+            removals: productsToDelete.map((product) => ({
+              id: product.id,
+              name: product.name,
+              sku: product.sku,
+              // Con pedidos se archiva para conservar el historial; sin
+              // pedidos se elimina de forma definitiva.
+              action: product.orderItems.length > 0 ? "archive" : "delete",
+              orderItems: product.orderItems.length,
+            })),
+          },
+        );
+      }
+
       // Process Deletions
       for (const product of productsToDelete) {
         if (product.orderItems.length > 0) {
@@ -178,6 +202,17 @@ export async function PATCH(
           const sizeId = variant.size?.id || variant.sizeId;
           const colorId = variant.color?.id || variant.colorId;
           const designId = variant.design?.id || variant.designId;
+
+          if (!sizeId || !colorId || !designId) {
+            const missing = [
+              !sizeId && "tamaño",
+              !colorId && "color",
+              !designId && "diseño",
+            ].filter(Boolean);
+            throw ErrorFactory.InvalidRequest(
+              `La variante "${variant.name || variant.sku || "sin nombre"}" no se puede guardar: le falta ${missing.join(", ")}.`,
+            );
+          }
 
           const [colorObj, designObj, sizeObj] = await Promise.all([
             tx.color.findUnique({ where: { id: colorId } }),
@@ -246,6 +281,24 @@ export async function PATCH(
             submittedStock: finalStock,
           });
 
+          let variantIdentifiers;
+          try {
+            variantIdentifiers = normalizeProductIdentifiers({
+              gtin: variant.gtin,
+              mpn: variant.mpn,
+              hasNoProductIdentifier: variant.hasNoProductIdentifier,
+              defaultNoIdentifierWhenEmpty: true,
+            });
+          } catch (error) {
+            throw ErrorFactory.InvalidRequest(
+              `La variante "${variant.name || variant.sku || "sin nombre"}": ${
+                error instanceof Error
+                  ? error.message
+                  : "identificadores inválidos"
+              }`,
+            );
+          }
+
           const dataToUpsert = {
             storeId: params.storeId,
             productGroupId: params.productGroupId,
@@ -265,6 +318,8 @@ export async function PATCH(
             supplierId: finalSupplierId,
             isFeatured: variant.isFeatured ?? isFeatured ?? false,
             isArchived: variant.isArchived || false,
+            // Sin esto la variante quedaba para siempre "sin identificador".
+            ...variantIdentifiers,
           };
 
           const imageData = applicableImages.map(
