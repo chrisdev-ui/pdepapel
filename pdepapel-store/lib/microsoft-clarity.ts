@@ -24,6 +24,7 @@ const TRACKED_CLARITY_EVENTS = new Set([
   "checkout_stock_unavailable",
   "checkout_submit_failed",
   "checkout_validation_error",
+  "purchase",
   "select_category",
   "select_item",
   "select_item_variant",

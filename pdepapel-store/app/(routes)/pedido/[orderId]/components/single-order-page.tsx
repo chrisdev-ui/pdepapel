@@ -15,6 +15,7 @@ import {
   ExternalLink,
   Hourglass,
   Info,
+  Lock,
   LucideIcon,
   MapPin,
   Package,
@@ -40,7 +41,6 @@ import { BankTransferInstructions } from "@/components/bank-transfer-instruction
 import { BoldCheckoutButton } from "@/components/bold-checkout-button";
 import { Icons } from "@/components/icons";
 import { OrderAccountClaimCard } from "@/components/order-account-claim-card";
-import { PayUForm } from "@/components/payu-form";
 import { CldImage } from "@/components/ui/CldImage";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
@@ -54,6 +54,8 @@ import {
 } from "@/constants";
 import { useCart } from "@/hooks/use-cart";
 import useCheckoutOrder from "@/hooks/use-checkout-order";
+import { useCheckoutStore } from "@/hooks/use-checkout-store";
+import { trackCustomerEvent } from "@/lib/customer-analytics";
 import { useConfetti } from "@/hooks/use-confetti";
 import { useGuestUser } from "@/hooks/use-guest-user";
 import { useToast } from "@/hooks/use-toast";
@@ -65,9 +67,7 @@ import {
 } from "@/lib/order-status-polling";
 import {
   Order,
-  PayUFormState,
   ShippingTrackingEvent,
-  WompiResponse,
 } from "@/types";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -145,18 +145,60 @@ const SHIPPING_ICONS: Record<ShippingStatus, LucideIcon> = {
 
 const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
   const searchParams = useSearchParams();
-  const payUFormRef = useRef<HTMLFormElement>(null);
   const { userId, getToken } = useAuth();
   const { toast } = useToast();
   const guestId = useGuestUser((state) => state.guestId ?? "");
-  const [payUformData, setPayUformData] = useState<PayUFormState>();
   const [trackingEvents, setTrackingEvents] = useState<ShippingTrackingEvent[]>(
     [],
   );
   const removeAll = useCart((state) => state.removeAll);
+  const pendingOrder = useCheckoutStore((state) => state.pendingOrder);
+  const setPendingOrder = useCheckoutStore((state) => state.setPendingOrder);
+  const resetCheckout = useCheckoutStore((state) => state.resetCheckout);
   const { fireConfetti } = useConfetti();
   const [currentOrder, setCurrentOrder] = useState(order);
   const activeOrder = currentOrder || order;
+
+  // The checkout keeps the cart until the gateway confirms the payment. Once
+  // this order is PAID, the cart and the saved checkout are cleared here —
+  // whether the confirmation arrives by polling, by redirect or on a later
+  // visit — and the conversion is reported once per order.
+  useEffect(() => {
+    if (activeOrder.status !== OrderStatus.PAID) return;
+
+    if (pendingOrder?.id === order.id) {
+      removeAll();
+      resetCheckout();
+      setPendingOrder(null);
+    }
+
+    const trackedKey = `pdepapel:purchase-tracked:${order.id}`;
+    try {
+      if (window.localStorage.getItem(trackedKey)) return;
+      window.localStorage.setItem(trackedKey, new Date().toISOString());
+    } catch {
+      // Storage unavailable: report anyway.
+    }
+    trackCustomerEvent("purchase", {
+      currency: "COP",
+      transaction_id: order.orderNumber || order.id,
+      value: Number(order.total) || 0,
+      shipping: Number(order.shipping?.cost ?? 0) || 0,
+      items: order.orderItems.map((orderItem) => ({
+        item_id: orderItem.product?.id ?? orderItem.id,
+        item_name:
+          orderItem.name || orderItem.product?.name || "Producto sin nombre",
+        quantity: orderItem.quantity || 1,
+      })),
+    });
+  }, [
+    activeOrder.status,
+    order,
+    pendingOrder?.id,
+    removeAll,
+    resetCheckout,
+    setPendingOrder,
+  ]);
 
   useEffect(() => {
     if (!shouldPollOrderStatus(currentOrder.status, true)) {
@@ -202,7 +244,6 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
               duration: 10000,
             });
             fireConfetti();
-            removeAll();
           } else if (fetchedOrder.status === OrderStatus.CANCELLED) {
             toast({
               title: "Intento de pago no procesado",
@@ -238,7 +279,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
       window.clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [currentOrder.status, order.id, removeAll, fireConfetti, toast]);
+  }, [currentOrder.status, order.id, fireConfetti, toast]);
 
   const { mutate, status } = useCheckoutOrder({
     orderId: order.id,
@@ -251,12 +292,7 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
       });
     },
     onSuccess(data) {
-      if (data && order.payment.method === PaymentMethod.PayU) {
-        setPayUformData(data as PayUFormState);
-      } else if (data && order.payment.method === PaymentMethod.Wompi) {
-        const { url } = data as WompiResponse;
-        window.location.href = url;
-      }
+      if (data?.url) window.location.href = data.url;
     },
   });
 
@@ -293,7 +329,6 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
         duration: 10000,
       });
       fireConfetti();
-      removeAll();
     }
 
     if (
@@ -306,10 +341,9 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
         variant: "destructive",
         icon: <ShieldClose className="h-14 w-14" />,
         description:
-          "No se realizó ningún cargo a tu cuenta, intenta el pago de nuevo más tarde o utiliza otro método.",
+          "No se realizó ningún cargo a tu cuenta. Tu carrito sigue intacto: intenta el pago de nuevo o usa otro método.",
         duration: 10000,
       });
-      removeAll();
     }
 
     if (
@@ -325,92 +359,8 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
           "¡Casi listo! Estamos confirmando tu pago. Te mantendremos informado y te avisaremos en cuanto tengamos todo confirmado.",
         duration: 10000,
       });
-      removeAll();
     }
-  }, [order, removeAll, searchParams, toast, fireConfetti]);
-
-  useEffect(() => {
-    if (payUformData && payUFormRef.current) {
-      payUFormRef.current?.submit();
-    }
-  }, [payUformData]);
-
-  useEffect(() => {
-    const transactionState = Number(searchParams.get("transactionState"));
-    const transactionId = searchParams.get("transactionId");
-
-    if (
-      transactionId &&
-      transactionState &&
-      transactionId === order?.payment?.transactionId
-    ) {
-      switch (transactionState) {
-        case 4: {
-          toast({
-            title: "¡Gracias por tu compra!",
-            variant: "success",
-            icon: <ShieldCheck className="h-8 w-8" />,
-            description: "Tu pago ha sido recibido.",
-            duration: 10000,
-          });
-          fireConfetti();
-          removeAll();
-          break;
-        }
-
-        case 104: {
-          toast({
-            title: "¡Hubo un fallo en tu intento de pago!",
-            variant: "destructive",
-            icon: <ShieldClose className="h-14 w-14" />,
-            description:
-              "No se realizó ningún cargo a tu cuenta, intenta el pago de nuevo más tarde o utiliza otro método.",
-            duration: 10000,
-          });
-          removeAll();
-          break;
-        }
-
-        case 6: {
-          toast({
-            title: "¡La transacción ha sido rechazada!",
-            variant: "destructive",
-            icon: <ShieldClose className="h-14 w-14" />,
-            description:
-              "No se realizó ningún cargo a tu cuenta, intenta el pago de nuevo más tarde o utiliza otro método.",
-            duration: 10000,
-          });
-          removeAll();
-          break;
-        }
-
-        case 7: {
-          toast({
-            title: "Pago pendiente",
-            variant: "warning",
-            icon: <ShieldAlert className="h-14 w-14" />,
-            description:
-              "¡Casi listo! Estamos confirmando tu pago. Te mantendremos informado y te avisaremos en cuanto tengamos todo confirmado.",
-            duration: 10000,
-          });
-          removeAll();
-          break;
-        }
-
-        default: {
-          toast({
-            title: "Respuesta desconocida",
-            variant: "destructive",
-            icon: <ShieldClose className="h-14 w-14" />,
-            description:
-              "Hemos recibido una respuesta desconocida del pago en línea. Por favor, contacta a nuestro equipo de soporte para más información.",
-            duration: 10000,
-          });
-          break;
-        }
-      }
-    }
-  }, [order, removeAll, searchParams, toast, fireConfetti]);
+  }, [order, searchParams, toast, fireConfetti]);
 
   const shippingStatus = useMemo(
     () =>
@@ -1219,24 +1169,10 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
                           disabled={status === "pending"}
                           onClick={() => mutate()}
                         >
+                          <Lock className="h-4 w-4" aria-hidden="true" />
                           {status === "pending"
-                            ? "Procesando pago..."
-                            : "Pagar ahora"}{" "}
-                          <Icons.payments.wompi className="w-20" />
-                        </Button>
-                      )}
-
-                    {activeOrder.status !== OrderStatus.PAID &&
-                      order?.payment?.method === PaymentMethod.PayU && (
-                        <Button
-                          className="flex w-full items-center justify-center gap-2 font-serif"
-                          disabled={status === "pending"}
-                          onClick={() => mutate()}
-                        >
-                          {status === "pending"
-                            ? "Procesando pago..."
-                            : "Pagar ahora"}{" "}
-                          <Icons.payments.payu className="w-10" />
+                            ? "Preparando el pago…"
+                            : "Pagar ahora"}
                         </Button>
                       )}
 
@@ -1258,31 +1194,6 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
               </div>
             </div>
 
-            {/* PayU Form (hidden) */}
-            {payUformData && (
-              <PayUForm
-                formRef={payUFormRef}
-                referenceCode={payUformData.referenceCode}
-                products={order.orderItems.map((orderItem) => ({
-                  name:
-                    orderItem.name ||
-                    orderItem.product?.name ||
-                    "Producto sin nombre",
-                  quantity: orderItem.quantity || 1,
-                }))}
-                amount={payUformData.amount}
-                tax={payUformData.tax}
-                taxReturnBase={payUformData.taxReturnBase}
-                currency={payUformData.currency}
-                signature={payUformData.signature}
-                test={payUformData.test}
-                responseUrl={payUformData.responseUrl}
-                confirmationUrl={payUformData.confirmationUrl}
-                shippingAddress={payUformData.shippingAddress}
-                shippingCity={payUformData.shippingCity}
-                shippingCountry={payUformData.shippingCountry}
-              />
-            )}
           </div>
         </div>
       )}

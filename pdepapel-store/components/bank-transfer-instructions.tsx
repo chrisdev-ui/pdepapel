@@ -8,6 +8,7 @@ import {
   Smartphone,
   Building2,
   ExternalLink,
+  Info,
   ShieldCheck,
   Zap,
   ZoomIn,
@@ -81,18 +82,30 @@ export const BankTransferInstructions: React.FC<
             </div>
             <Badge
               variant="outline"
-              className="shrink-0 border-purple-300 bg-purple-100/80 text-[10px] font-semibold text-purple-900 dark:border-purple-800 dark:bg-purple-950/60 dark:text-purple-200"
+              className="shrink-0 border-amber-300 bg-amber-100/80 text-[10px] font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200"
             >
-              Pago Inmediato
+              Verificación manual
             </Badge>
           </div>
           <p className="text-xs text-purple-700/90 dark:text-purple-300">
-            Paga fácilmente sin comisiones adicionales
+            Sin comisiones. Tu pedido queda reservado mientras confirmamos la
+            transferencia.
           </p>
         </div>
       </CardHeader>
 
       <CardContent className="space-y-4 p-4 pt-1 sm:p-5 sm:pt-1">
+        <p
+          className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50/80 p-3 text-xs leading-relaxed text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"
+          role="status"
+        >
+          <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>
+            <strong>Verificamos cada transferencia a mano</strong> en horario de
+            atención (8 a. m. a 8 p. m.). Cuando la confirmemos, el pedido pasa
+            a «Pagado» y te avisamos por WhatsApp y correo.
+          </span>
+        </p>
         {/* Exact Amount Banner - Clean 2-row layout */}
         <div className="flex flex-col gap-3 rounded-2xl border border-purple-100 bg-white p-3.5 shadow-sm dark:border-purple-900/40 dark:bg-zinc-900">
           <div className="space-y-0.5">
@@ -319,8 +332,8 @@ export const BankTransferInstructions: React.FC<
               </span>
               <p className="text-xs leading-relaxed text-emerald-900/80 dark:text-emerald-300">
                 Envía una foto o captura del comprobante al WhatsApp{" "}
-                <strong>313-258-2293</strong> para procesar tu pedido de
-                inmediato.
+                <strong>313-258-2293</strong>. Así lo verificamos más rápido y
+                te confirmamos el pedido.
               </p>
             </div>
             <Button

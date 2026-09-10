@@ -9,7 +9,9 @@ import {
 describe("checkout analytics", () => {
   it("uses stable Spanish step names", () => {
     expect(getCheckoutStepName(1)).toBe("informacion");
-    expect(getCheckoutStepName(4)).toBe("revision");
+    expect(getCheckoutStepName(3)).toBe("pago");
+    // The old review screen no longer exists as a step.
+    expect(getCheckoutStepName(4)).toBeNull();
     expect(getCheckoutStepName(9)).toBeNull();
   });
 

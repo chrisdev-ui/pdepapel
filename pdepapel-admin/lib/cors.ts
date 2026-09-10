@@ -27,7 +27,11 @@ export function isAllowedCorsOrigin(origin: string | null): origin is string {
 
 export function createCorsHeaders(
   request: Request,
-  { methods, headers = "Content-Type, Authorization", maxAge = "86400" }: CorsOptions,
+  {
+    methods,
+    headers = "Content-Type, Authorization, Idempotency-Key",
+    maxAge = "86400",
+  }: CorsOptions,
 ): Record<string, string> {
   const origin = request.headers.get("origin");
   const corsHeaders: Record<string, string> = {

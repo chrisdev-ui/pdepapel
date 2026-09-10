@@ -1,64 +1,84 @@
 "use client";
 
 import { checkLiveStock } from "@/actions/check-live-stock";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 
-import { PayUForm } from "@/components/payu-form";
-import { CldImage } from "@/components/ui/CldImage";
+import { FreeShippingProgress } from "@/components/free-shipping-progress";
+import { Icons } from "@/components/icons";
 import { Button } from "@/components/ui/button";
+import { CldImage } from "@/components/ui/CldImage";
 import { Currency } from "@/components/ui/currency";
 import { Form } from "@/components/ui/form";
 import { NoResults } from "@/components/ui/no-results";
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { KAWAII_FACE_SAD, PaymentMethod } from "@/constants";
-import { readEarlyAccessCookie } from "@/lib/early-access";
 import { useCart } from "@/hooks/use-cart";
 import useCheckout from "@/hooks/use-checkout";
-import { useCheckoutStore } from "@/hooks/use-checkout-store";
+import {
+  isPendingOrderUsable,
+  useCheckoutStore,
+} from "@/hooks/use-checkout-store";
 import { useConfetti } from "@/hooks/use-confetti";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useGuestUser } from "@/hooks/use-guest-user";
 import { useToast } from "@/hooks/use-toast";
 import useValidateCoupon from "@/hooks/use-validate-coupon";
-import { calculateTotals, cn, generateGuestId } from "@/lib/utils";
-import { toBoldCheckoutConfig } from "@/lib/bold";
 import {
   getCheckoutRequestFailureAnalytics,
   getCheckoutStepName,
   summarizeCheckoutValidationErrors,
 } from "@/lib/checkout-analytics";
 import {
+  CHECKOUT_TOTAL_STEPS,
+  getFirstInvalidStep,
+  getStepFields,
+  joinFullName,
+} from "@/lib/checkout-steps";
+import {
   getAnalyticsValue,
   getGoogleAnalyticsClientId,
   toAnalyticsItem,
   trackCustomerEvent,
 } from "@/lib/customer-analytics";
+import { readEarlyAccessCookie } from "@/lib/early-access";
 import { normalizePhoneForInput } from "@/lib/phone";
 import { getCustomerFacingProductOptions } from "@/lib/product-options";
 import { orderPath, productPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import {
-  CheckoutByOrderResponse,
-  Coupon,
-  Order,
-  PayUFormState,
-  Product,
-  WompiResponse,
-} from "@/types";
+  calculateTotals,
+  cn,
+  currencyFormatter,
+  generateGuestId,
+} from "@/lib/utils";
+import {
+  createIdempotencyKey,
+  getCartSignature,
+} from "@/lib/checkout-idempotency";
+import { Coupon, Product } from "@/types";
 import { UnifiedOrder } from "@/types/unified-order";
 import { useAuth } from "@clerk/nextjs";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, Loader2, ShoppingBag } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronDown,
+  Clock,
+  Loader2,
+  Lock,
+  ShoppingBag,
+  Undo2,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { isValidPhoneNumber } from "react-phone-number-input";
 import { MultiStepForm } from "./multi-step-form";
 import { StepNavigation } from "./step-navigation";
 import { BasicInfoStep } from "./steps/basic-info-step";
-import { PaymentInfoStep } from "./steps/payment-info-step";
-import { ReviewStep } from "./steps/review-step";
+import {
+  PaymentInfoStep,
+  StockConflictItem,
+} from "./steps/payment-info-step";
 import { ShippingInfoStep } from "./steps/shipping-info-step";
 
 type CheckoutFormUser = {
@@ -85,76 +105,62 @@ const shippingSchema = z
   })
   .partial();
 
+const optionalText = (min: number, max: number, label: string) =>
+  z
+    .string()
+    .trim()
+    .min(min, `${label} debe tener al menos ${min} caracteres`)
+    .max(max, `${label} debe tener menos de ${max} caracteres`)
+    .optional()
+    .or(z.literal(""));
+
 const formSchema = z
   .object({
-    firstName: z
+    fullName: z
       .string()
-      .min(1, "Por favor, escribe tu nombre")
-      .max(50, "El nombre debe tener menos de 50 caracteres"),
-    lastName: z
-      .string()
-      .min(1, "Por favor, escribe tus apellidos")
-      .max(50, "Los apellidos deben tener menos de 50 caracteres"),
+      .trim()
+      .min(3, "Escribe tu nombre y apellidos")
+      .max(100, "El nombre debe tener menos de 100 caracteres"),
     email: z
       .string()
-      .email("Por favor, escribe un correo válido")
-      .min(8, "El correo debe tener al menos 8 caracteres")
+      .trim()
+      .email("Escribe un correo válido, por ejemplo ana@gmail.com")
       .max(60, "El correo debe tener menos de 60 caracteres"),
     telephone: z.string().refine(isValidPhoneNumber, {
-      message: "Por favor, escribe un número de teléfono válido",
+      message: "Escribe un celular válido, por ejemplo 300 123 4567",
     }),
     address1: z
       .string()
-      .min(2, "Por favor, escribe tu dirección principal")
+      .trim()
+      .min(2, "Escribe tu dirección con número")
       .max(50, "La dirección debe tener menos de 50 caracteres"),
-    address2: z
-      .string()
-      .min(2, "La dirección adicional debe tener al menos 2 caracteres")
-      .max(50, "La dirección adicional debe tener menos de 50 caracteres")
-      .optional()
-      .or(z.literal("")),
-    neighborhood: z
-      .string()
-      .min(2, "El barrio debe tener al menos 2 caracteres")
-      .max(30, "El barrio debe tener menos de 30 caracteres")
-      .optional()
-      .or(z.literal("")),
-    addressReference: z
-      .string()
-      .min(2, "La referencia de tu domicilio debe tener al menos 2 caracteres")
-      .max(
-        25,
-        "La referencia de tu domicilio debe tener menos de 25 caracteres",
-      )
-      .optional()
-      .or(z.literal("")),
-    company: z
-      .string()
-      .min(2, "El nombre de tu empresa debe tener al menos 2 caracteres")
-      .max(50, "El nombre de tu empresa debe tener menos de 50 caracteres")
-      .optional()
-      .or(z.literal("")),
+    address2: optionalText(2, 50, "El apartamento o torre"),
+    neighborhood: optionalText(2, 30, "El barrio"),
+    addressReference: optionalText(2, 25, "La referencia"),
+    company: optionalText(2, 50, "El nombre de la empresa"),
     city: z
       .string()
-      .min(1, "Por favor, escribe tu ciudad")
+      .min(1, "Elige tu ciudad de la lista")
       .max(50, "La ciudad debe tener menos de 50 caracteres"),
     department: z
       .string()
-      .min(1, "Por favor, escribe tu departamento")
+      .min(1, "Elige tu ciudad de la lista")
       .max(50, "El departamento debe tener menos de 50 caracteres"),
     daneCode: z
       .string({
         required_error:
-          "Selecciona tu ciudad y departamento. Si no encuentras tu ciudad, comunica tu domicilio a nuestro WhatsApp.",
+          "Elige tu ciudad y departamento de la lista. Si no aparece, escríbenos por WhatsApp.",
       })
       .length(
         8,
-        "Selecciona tu ciudad y departamento. Si no encuentras tu ciudad, comunica tu domicilio a nuestro WhatsApp.",
+        "Elige tu ciudad y departamento de la lista. Si no aparece, escríbenos por WhatsApp.",
       ),
     documentId: z
       .string()
-      .min(1, "Por favor, escribe tu número de identificación")
-      .max(15, "El número de identificación debe tener menos de 15 caracteres"),
+      .trim()
+      .min(5, "Escribe el número de tu documento")
+      .max(15, "El documento debe tener menos de 15 caracteres")
+      .regex(/^[A-Za-z0-9.-]+$/, "Escribe solo números, sin espacios"),
     saveAddress: z.boolean().default(false),
     savedAddressId: z.string().max(191).optional().or(z.literal("")),
     addressLabel: z
@@ -164,9 +170,9 @@ const formSchema = z
       .or(z.literal("")),
     couponCode: z.string().optional().or(z.literal("")),
     newsletterOptIn: z.boolean().default(false),
-    paymentMethod: z
-      .nativeEnum(PaymentMethod)
-      .default(PaymentMethod.BankTransfer),
+    // Business rule: the online gateway is the default; bank transfer stays
+    // available but needs manual verification, so it is never preselected.
+    paymentMethod: z.nativeEnum(PaymentMethod).default(PaymentMethod.Bold),
     shippingProvider: z.string().default("ENVIOCLICK"),
     shippingOptionType: z
       .enum(["ENVIOCLICK", "MEDELLIN_LOCAL", "CUSTOM_WHATSAPP"])
@@ -179,7 +185,7 @@ const formSchema = z
       if (data.envioClickIdRate === undefined || data.envioClickIdRate < 1) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "Por favor, calcula y selecciona una tarifa de envío",
+          message: "Elige una transportadora para continuar",
           path: ["envioClickIdRate"],
         });
       }
@@ -200,12 +206,8 @@ async function subscribeFromCheckout(email: string) {
   }
 }
 
-
-import { Season } from "@/types";
-
 interface CheckoutFormProps {
   currentUser?: CheckoutFormUser | null;
-  season?: Season;
   customOrder?: UnifiedOrder | null;
   /** Store free-shipping threshold (COP) on the product subtotal; null = off. */
   freeShippingThreshold?: number | null;
@@ -217,47 +219,27 @@ export interface CouponState {
 }
 
 const FORM_STEPS = [
-  {
-    id: 1,
-    name: "Información",
-    description: "Datos básicos",
-    logo: "basic-info.webp",
-  },
-  {
-    id: 2,
-    name: "Envío",
-    description: "Dirección de entrega",
-    logo: "shipping-info.webp",
-  },
-  {
-    id: 3,
-    name: "Pago",
-    description: "Método de pago",
-    logo: "payment-info.webp",
-  },
-  {
-    id: 4,
-    name: "Revisión",
-    description: "Confirmar",
-    logo: "review-info.webp",
-  },
+  { id: 1, name: "Datos", description: "Contacto" },
+  { id: 2, name: "Entrega", description: "Dirección y envío" },
+  { id: 3, name: "Pago", description: "Confirmar y pagar" },
 ];
 
 export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   currentUser,
-  season = Season.Default,
   customOrder,
   freeShippingThreshold = null,
 }) => {
   const { userId, getToken } = useAuth();
   const router = useRouter();
-  const payUFormRef = useRef<HTMLFormElement>(null);
-  const [payUformData, setPayUformData] = useState<PayUFormState>();
-  const [hasSubmittedPayU, setHasSubmittedPayU] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const navigationRef = useRef<HTMLDivElement>(null);
+  const [isNavigationVisible, setIsNavigationVisible] = useState(true);
   const { guestId, setGuestId, clearGuestId } = useGuestUser();
   const cart = useCart();
   const [isMounted, setIsMounted] = useState(false);
-  const [outOfStockItems, setOutOfStockItems] = useState<string[]>([]); // Product IDs
+  const [stockConflicts, setStockConflicts] = useState<StockConflictItem[]>(
+    [],
+  );
   const { toast } = useToast();
   const { fireConfetti } = useConfetti();
   const setStoredStep = useCheckoutStore((state) => state.setCurrentStep);
@@ -265,13 +247,17 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   const setStoredCouponState = useCheckoutStore(
     (state) => state.setCouponState,
   );
+  const setPendingOrder = useCheckoutStore((state) => state.setPendingOrder);
+  const pendingOrder = useCheckoutStore((state) => state.pendingOrder);
   const resetCheckout = useCheckoutStore((state) => state.resetCheckout);
 
   // Initialize state from store only once on mount
   const [currentStep, setCurrentStep] = useState(() => {
-    return useCheckoutStore.getState().currentStep || 1;
+    const stored = useCheckoutStore.getState().currentStep || 1;
+    return Math.min(Math.max(stored, 1), CHECKOUT_TOTAL_STEPS);
   });
   const [isNavigating, setIsNavigating] = useState(false);
+  const [isPreparingSubmit, setIsPreparingSubmit] = useState(false);
   const [completedOrderPath, setCompletedOrderPath] = useState<string | null>(
     null,
   );
@@ -279,6 +265,11 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   const checkoutStartedRef = useRef(false);
   const trackedCheckoutStepsRef = useRef(new Set<number>());
   const analyticsClientIdRef = useRef<string | null>(null);
+  const isSubmittingRef = useRef(false);
+  // One key per order attempt (see lib/checkout-idempotency): retries of the
+  // same attempt reuse it, a created order or a changed cart renews it.
+  const idempotencyKeyRef = useRef<string>(createIdempotencyKey());
+  const cartSignatureRef = useRef<string | null>(null);
 
   const [couponState, setCouponState] = useState<CouponState>(() => {
     return (
@@ -330,9 +321,9 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
 
       if (hasAdjusted) {
         toast({
-          title: "Actualización de Inventario",
+          title: "Actualizamos tu carrito",
           description:
-            "Ajustamos las cantidades de tu pedido de acuerdo a la disponibilidad actual.",
+            "Ajustamos las cantidades de tu pedido a la disponibilidad actual.",
           variant: "warning",
         });
       }
@@ -340,21 +331,16 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   }, [customOrder, toast]);
 
   const form = useForm<CheckoutFormValue>({
-    mode: "onChange",
+    mode: "onTouched",
     resolver: zodResolver(formSchema),
     defaultValues: async () => {
       const storedFormData = useCheckoutStore.getState().formData;
       if (customOrder) {
         return {
-          firstName: customOrder.customerName
-            ? customOrder.customerName.split(" ")[0]
-            : "",
-          lastName: customOrder.customerName
-            ? customOrder.customerName.split(" ").slice(1).join(" ")
-            : "",
+          fullName: customOrder.customerName ?? "",
           telephone: normalizePhoneForInput(customOrder.customerPhone),
           email: customOrder.email ?? "",
-          documentId: "", // Not usually in quotation but can be if added
+          documentId: "",
           address1: customOrder.address ?? "",
           address2: customOrder.address2 ?? "",
           neighborhood: customOrder.neighborhood ?? "",
@@ -368,24 +354,24 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
           addressLabel: "",
           couponCode: "",
           newsletterOptIn: false,
-          paymentMethod: PaymentMethod.BankTransfer,
+          paymentMethod: PaymentMethod.Bold,
           shippingProvider: "ENVIOCLICK",
           shippingOptionType: "ENVIOCLICK",
           envioClickIdRate: customOrder.shipping?.envioClickIdRate ?? 0,
           shipping: customOrder.shipping
             ? {
-                carrieName: customOrder.shipping.carrierName,
+                carrierName: customOrder.shipping.carrierName,
                 cost: customOrder.shipping.cost,
                 status: customOrder.shipping.status,
-                // Add other potential mappings if schema expects them
               }
             : {},
         };
       }
 
       return {
-        firstName: storedFormData.firstName ?? currentUser?.firstName ?? "",
-        lastName: storedFormData.lastName ?? currentUser?.lastName ?? "",
+        fullName:
+          storedFormData.fullName ??
+          joinFullName(currentUser?.firstName, currentUser?.lastName),
         telephone: normalizePhoneForInput(
           storedFormData.telephone ?? currentUser?.telephone,
         ),
@@ -400,15 +386,14 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         department: storedFormData.department ?? "",
         daneCode: storedFormData.daneCode ?? "",
         saveAddress: false,
-        savedAddressId: "",
+        savedAddressId: storedFormData.savedAddressId ?? "",
         addressLabel: "",
         couponCode: storedFormData.couponCode ?? "",
         newsletterOptIn: storedFormData.newsletterOptIn ?? false,
         shippingProvider: storedFormData.shippingProvider ?? "ENVIOCLICK",
         shippingOptionType: storedFormData.shippingOptionType ?? "ENVIOCLICK",
         envioClickIdRate: storedFormData.envioClickIdRate ?? 0,
-        paymentMethod:
-          storedFormData.paymentMethod ?? PaymentMethod.BankTransfer,
+        paymentMethod: storedFormData.paymentMethod ?? PaymentMethod.Bold,
         shipping: {
           carrierName: storedFormData.shipping?.carrierName ?? "",
           courier: storedFormData.shipping?.courier ?? "",
@@ -427,6 +412,19 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   // Watch form changes and update store with debounce
   const watchedFormData = form.watch();
   const debouncedFormData = useDebounce(watchedFormData, 500);
+
+  // Fields validate when the customer leaves them («onTouched»), but a field
+  // flagged by a step check must clear its error while it is being fixed.
+  // Otherwise the message disappears on the blur caused by tapping the
+  // button, the layout shifts under the finger and the tap is lost.
+  useEffect(() => {
+    const subscription = form.watch((_, { name }) => {
+      if (name && form.getFieldState(name).invalid) {
+        void form.trigger(name);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
 
   // If customOrder is present, we override the items list
   const activeItems = useMemo(() => {
@@ -462,22 +460,22 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     setStoredFormData(debouncedFormData as Partial<CheckoutFormValue>);
   }, [completedOrderPath, debouncedFormData, setStoredFormData]);
 
+  // A different cart is a different order: renew the idempotency key.
   useEffect(() => {
-    if (payUformData && payUFormRef.current && !hasSubmittedPayU) {
-      setHasSubmittedPayU(true);
-      // Small delay to ensure DOM is ready
-      setTimeout(() => {
-        payUFormRef.current?.submit();
-      }, 100);
+    const signature = getCartSignature(activeItems);
+    if (cartSignatureRef.current !== null && cartSignatureRef.current !== signature) {
+      idempotencyKeyRef.current = createIdempotencyKey();
     }
-  }, [payUformData, hasSubmittedPayU]);
+    cartSignatureRef.current = signature;
+  }, [activeItems]);
 
   const isCODShipment = form.watch("shipping.isCOD");
   const paymentMethod = form.watch("paymentMethod");
+  const shippingOptionType = form.watch("shippingOptionType");
 
   useEffect(() => {
     if (!isCODShipment && paymentMethod === PaymentMethod.COD) {
-      form.setValue("paymentMethod", PaymentMethod.BankTransfer, {
+      form.setValue("paymentMethod", PaymentMethod.Bold, {
         shouldDirty: true,
       });
     }
@@ -491,7 +489,6 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     couponDiscount,
     productSavings,
     freeShipping,
-    freeShippingRemaining,
   } = useMemo(
     () =>
       calculateTotals(
@@ -546,31 +543,9 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   }, []);
 
   const validateStep = async (step: number) => {
-    let fieldsToValidate: (keyof CheckoutFormValue)[] = [];
-    if (step === 1) {
-      fieldsToValidate = [
-        "firstName",
-        "lastName",
-        "email",
-        "telephone",
-        "documentId",
-      ];
-    } else if (step === 2) {
-      fieldsToValidate = [
-        "address1",
-        "address2",
-        "neighborhood",
-        "addressReference",
-        "company",
-        "city",
-        "department",
-        "daneCode",
-        "shippingOptionType",
-        "envioClickIdRate",
-      ];
-    } else if (step === 3) {
-      fieldsToValidate = ["paymentMethod"];
-    }
+    const fieldsToValidate = getStepFields(
+      step,
+    ) as (keyof CheckoutFormValue)[];
     const result = await form.trigger(fieldsToValidate);
     if (!result) {
       const invalidFields = fieldsToValidate
@@ -588,21 +563,72 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   const scrollToFirstError = () => {
     const { errors } = form.formState;
     const firstErrorKey = Object.keys(errors)[0];
-    if (firstErrorKey) {
-      const element = document.querySelector(
-        `[name="${firstErrorKey}"]`,
-      ) as HTMLElement;
-      if (element) {
-        element.scrollIntoView({ behavior: "smooth", block: "center" });
-        element.focus();
-      }
+    if (!firstErrorKey) return;
+
+    // Native inputs carry the field name; custom controls (location
+    // combobox, radio cards, rate selector) only carry aria-invalid.
+    const element = (document.querySelector(`[name="${firstErrorKey}"]`) ??
+      document.querySelector(
+        '[aria-invalid="true"]',
+      )) as HTMLElement | null;
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+      element.focus({ preventScroll: true });
     }
+  };
+
+  const scrollToTop = () => {
+    document
+      .getElementById("checkout-form")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const goToStep = useCallback(
+    (step: number) => {
+      const nextStep = Math.min(Math.max(step, 1), CHECKOUT_TOTAL_STEPS);
+      setCurrentStep(nextStep);
+      setStoredStep(nextStep);
+      window.setTimeout(scrollToTop, 0);
+    },
+    [setStoredStep],
+  );
+
+  /**
+   * The final submit validates the whole form. If a value saved from an
+   * earlier session became invalid (expired rate, cleared city…), take the
+   * customer back to that step instead of failing silently.
+   */
+  const handleInvalidSubmit = (errors: Record<string, unknown>) => {
+    const invalidFields = Object.keys(errors);
+    trackCustomerEvent(
+      "checkout_validation_error",
+      summarizeCheckoutValidationErrors(currentStep, invalidFields),
+    );
+
+    const targetStep = getFirstInvalidStep(errors, currentStep);
+    if (targetStep && targetStep !== currentStep) {
+      goToStep(targetStep);
+    }
+    toast({
+      title: "Revisa un dato antes de continuar",
+      description:
+        targetStep && targetStep !== currentStep
+          ? `Falta completar algo en el paso ${targetStep}. Te llevamos allí.`
+          : "Hay un campo por corregir en este paso.",
+      variant: "warning",
+    });
+    // Wait for the step to render before looking for the invalid control.
+    window.setTimeout(scrollToFirstError, 80);
   };
 
   const handleNext = async () => {
     if (isNavigating) return;
     setIsNavigating(true);
     try {
+      // Tapping the button blurs the last field, which starts its own
+      // validation in «onTouched» mode; let that settle before validating the
+      // step, otherwise the two runs race and the tap does nothing.
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
       const isValid = await validateStep(currentStep);
       if (isValid) {
         if (currentStep === 2) {
@@ -615,30 +641,19 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
           });
         }
 
-        if (currentStep === 3) {
-          trackCustomerEvent("add_payment_info", {
-            currency: "COP",
-            items: analyticsItems,
-            payment_type: form.getValues("paymentMethod"),
-            value: getAnalyticsValue(analyticsItems),
-          });
-        }
-
-        const nextStep = Math.min(currentStep + 1, FORM_STEPS.length);
-        setCurrentStep(nextStep);
-        setStoredStep(nextStep);
+        goToStep(currentStep + 1);
       } else {
         scrollToFirstError();
       }
     } finally {
-      setTimeout(() => setIsNavigating(false), 500);
+      // The lock only guards against a double tap while validating; holding
+      // it longer leaves the button in «Procesando…» for no reason.
+      setIsNavigating(false);
     }
   };
 
   const handleBack = () => {
-    const prevStep = Math.max(currentStep - 1, 1);
-    setCurrentStep(prevStep);
-    setStoredStep(prevStep);
+    goToStep(currentStep - 1);
   };
 
   const { mutate: validateCouponMutate, status: validateCouponStatus } =
@@ -651,8 +666,8 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
           isValid: false,
         }));
         toast({
-          title: "Cupón no válido ❌",
-          description: "El código ingresado no es válido o ha expirado.",
+          title: "Cupón no válido",
+          description: "El código ingresado no es válido o ya expiró.",
           variant: "destructive",
         });
       },
@@ -663,8 +678,8 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
           isValid: true,
         }));
         toast({
-          title: "Cupón validado 🎉",
-          description: "El cupón es válido y se ha aplicado al pedido.",
+          title: "Cupón aplicado 🎉",
+          description: "El descuento ya está en tu total.",
           variant: "success",
         });
       },
@@ -680,15 +695,27 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     validateCouponMutate({ code, subtotal });
   };
 
-  const { mutate, status } = useCheckout({
+  const rememberPendingOrder = useCallback(
+    (order: { id: string; orderNumber?: string; total?: number }) => {
+      setPendingOrder({
+        id: order.id,
+        orderNumber: order.orderNumber || order.id,
+        total: Number(order.total ?? total),
+        createdAt: Date.now(),
+      });
+    },
+    [setPendingOrder, total],
+  );
+
+  const { mutateAsync, status } = useCheckout({
     getToken,
     onError(err: any) {
       console.error(err);
 
       if (err?.response?.status === 409) {
         toast({
-          title: "Orden ya procesada ⚠️",
-          description: "Esta orden ya fue generada o pagada previamente.",
+          title: "Este pedido ya existe",
+          description: "Ya fue creado o pagado antes. Revisa tus pedidos.",
           variant: "destructive",
         });
         return;
@@ -701,29 +728,36 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       ) {
         const items = err.response.data.details.items as {
           productId: string;
-          productName: string;
+          productName?: string;
+          available?: number;
+          requested?: number;
         }[];
-        const ids = items.map((i) => i.productId);
-        setOutOfStockItems(ids);
+        const conflicts: StockConflictItem[] = items.map((item) => {
+          const cartItem = activeItems.find(
+            (candidate) => candidate.id === item.productId,
+          );
+          return {
+            productId: item.productId,
+            name: item.productName || cartItem?.name || "Producto",
+            requested: item.requested ?? cartItem?.quantity ?? 1,
+            available: Math.max(0, item.available ?? 0),
+          };
+        });
+        setStockConflicts(conflicts);
         trackCustomerEvent("checkout_stock_unavailable", {
-          affected_items: ids.length,
+          affected_items: conflicts.length,
           checkout_step: currentStep,
         });
-
-        toast({
-          title: "Stock insuficiente ⚠️",
-          description:
-            "Algunos productos marcados en rojo ya no tienen stock disponible. Por favor revísalos.",
-          variant: "destructive",
-        });
-        // Do NOT redirect automatically, let user see the red items
+        scrollToTop();
         return;
       }
 
       const serverError =
         err?.response?.data?.error ||
         err?.response?.data?.message ||
-        err?.message;
+        (err?.code === "ECONNABORTED"
+          ? "La conexión tardó demasiado."
+          : null);
 
       trackCustomerEvent("checkout_submit_failed", {
         checkout_step: currentStep,
@@ -732,91 +766,66 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       });
 
       toast({
-        title: "Error al crear la orden",
-        description:
-          serverError ||
-          "Ha ocurrido un error creando tu orden, intenta de nuevo más tarde.",
+        title: "No pudimos crear tu pedido",
+        description: `${serverError ? `${serverError} ` : ""}Tu información sigue aquí y no se cobró nada. Inténtalo de nuevo.`,
         variant: "destructive",
       });
     },
     onSuccess(data) {
-      // Check for PayU response first
-      if (
-        (data as CheckoutByOrderResponse as PayUFormState).referenceCode !==
-        undefined
-      ) {
-        const payUData = data as CheckoutByOrderResponse as PayUFormState;
-        trackCustomerEvent("checkout_payment_redirect", {
-          payment_type: PaymentMethod.PayU,
-        });
-        setPayUformData(payUData);
-      }
-      // Check for Wompi response second
-      else if (
-        (data as CheckoutByOrderResponse as WompiResponse).url !== undefined
-      ) {
-        const { url } = data as CheckoutByOrderResponse as WompiResponse;
+      const wantsNewsletter = form.getValues("newsletterOptIn");
+      const email = form.getValues("email");
+      // This attempt produced an order: the next attempt is a new order.
+      idempotencyKeyRef.current = createIdempotencyKey();
+
+      // Fallback gateway: full-page redirect with the order remembered.
+      if ("url" in data && typeof data.url === "string") {
         trackCustomerEvent("checkout_payment_redirect", {
           payment_type: PaymentMethod.Wompi,
         });
-        if (form.getValues("newsletterOptIn")) void subscribeFromCheckout(form.getValues("email"));
-        window.location.href = url;
+        if (wantsNewsletter) void subscribeFromCheckout(email);
+        // The cart stays until the gateway confirms the payment.
+        window.location.href = data.url;
       }
-      // Check for Bold response
-      else if ((data as any)?.boldData !== undefined) {
-        const { order, boldData } = data as any;
+      // Default gateway: pre-signed payload, opened from the order page.
+      else if ("boldData" in data && data.boldData !== undefined) {
+        const { order } = data;
         trackCustomerEvent("checkout_payment_redirect", {
           payment_type: PaymentMethod.Bold,
         });
-        fireConfetti();
+        if (wantsNewsletter) void subscribeFromCheckout(email);
+        // The order exists but nothing has been paid: keep the cart and the
+        // form, remember the order, and open the gateway from the order page
+        // (where the payment SDK lives and the status is polled).
+        rememberPendingOrder(order);
         toast({
-          title: "Orden creada",
-          description: `Tu orden #${order.orderNumber || order.id} ha sido creada exitosamente. Redirigiendo al pago en línea...`,
-          variant: "success",
+          title: "Pedido creado, falta el pago",
+          description: `Tu pedido #${order.orderNumber || order.id} quedó reservado. Te llevamos al pago seguro…`,
         });
-
-        if (form.getValues("newsletterOptIn")) void subscribeFromCheckout(form.getValues("email"));
-        cart.removeAll();
-        form.reset();
-        resetCheckout();
-        if (userId) clearGuestId();
-
-        // 🚀 Redirect to Bold directly from the checkout page
-        if (window.BoldCheckout) {
-          try {
-            const boldCheckout = new window.BoldCheckout(
-              toBoldCheckoutConfig(boldData),
-            );
-            boldCheckout.open();
-            return; // Exit here, the browser will redirect
-          } catch (e) {
-            console.error("Error opening Bold checkout:", e);
-            trackCustomerEvent("checkout_payment_redirect_failed", {
-              fallback_used: true,
-              payment_type: PaymentMethod.Bold,
-            });
-          }
-        }
-
-        // Fallback: Navigate to order page where BoldCheckoutButton will auto-open
         router.push(`${orderPath(order.id)}?autoPay=true`);
       }
-      // Finally check for direct order creation (COD/BankTransfer)
-      else if ((data as Order).id !== undefined) {
-        const order = data as Order;
-        fireConfetti();
+      // Offline methods (COD / bank transfer): the order itself comes back.
+      else if ("id" in data && data.id !== undefined) {
+        const order = data;
+        const isBankTransfer =
+          form.getValues("paymentMethod") === PaymentMethod.BankTransfer;
+        if (!isBankTransfer) fireConfetti();
         toast({
-          title: "Orden creada",
-          description: `Tu orden #${order.id} ha sido creada exitosamente`,
+          title: isBankTransfer
+            ? "Pedido reservado, falta la transferencia"
+            : "¡Pedido creado!",
+          description: isBankTransfer
+            ? "Te mostramos los datos para transferir. Lo verificamos manualmente y te confirmamos."
+            : `Tu pedido #${order.orderNumber || order.id} quedó registrado.`,
           variant: "success",
         });
-        if (form.getValues("newsletterOptIn")) void subscribeFromCheckout(form.getValues("email"));
+        if (wantsNewsletter) void subscribeFromCheckout(email);
+        setPendingOrder(null);
         setCompletedOrderPath(orderPath(order.id));
       }
     },
   });
 
-  const isPendingSubmit = useMemo(() => status === "pending", [status]);
+  const isPendingSubmit = status === "pending" || isPreparingSubmit;
 
   useEffect(() => {
     if (!completedOrderPath || hasFinalizedCheckoutRef.current) return;
@@ -831,6 +840,26 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  // Show the fixed action bar only while the in-form buttons are off screen.
+  useEffect(() => {
+    const target = navigationRef.current;
+    if (!target || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsNavigationVisible(entry.isIntersecting),
+      { rootMargin: "0px 0px -8px 0px" },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [isMounted, currentStep, activeItems.length, completedOrderPath]);
+
+  const adjustStockConflict = (productId: string, quantity: number) => {
+    if (quantity <= 0) cart.removeItem(productId);
+    else cart.updateQuantity(productId, quantity);
+    setStockConflicts((conflicts) =>
+      conflicts.filter((item) => item.productId !== productId),
+    );
+  };
 
   if (!isMounted) {
     return <CheckoutFormSkeleton />;
@@ -855,96 +884,395 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   }
 
   const totalQuantity = activeItems.reduce(
-    (total, item) => total + Number(item.quantity ?? 1),
+    (sum, item) => sum + Number(item.quantity ?? 1),
     0,
   );
 
   const onSubmit = async (data: CheckoutFormValue): Promise<void> => {
-    const orderItems = activeItems.map((item) => ({
-      productId: item.id,
-      quantity: item.quantity ?? 1,
-    }));
-    const {
-      firstName,
-      lastName,
-      email,
-      telephone,
-      address1,
-      address2,
-      neighborhood,
-      addressReference,
-      company,
-      city,
-      department,
-      daneCode,
-      documentId,
-      saveAddress,
-      savedAddressId,
-      addressLabel,
-      paymentMethod,
-      shipping,
-      shippingProvider,
-      shippingOptionType,
-      envioClickIdRate,
-    } = data;
-    const isUserLoggedIn = Boolean(userId);
-    let guestUserId = guestId;
-    if (!isUserLoggedIn && !guestUserId) {
-      guestUserId = generateGuestId();
-      setGuestId(guestUserId);
-    }
-    const analyticsClientId =
-      analyticsClientIdRef.current ??
-      (process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID
-        ? await getGoogleAnalyticsClientId(
-            process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID,
-          )
-        : null);
-    analyticsClientIdRef.current = analyticsClientId;
-    const formattedData = {
-      fullName: `${firstName} ${lastName}`,
-      phone: telephone,
-      email,
-      orderItems,
-      userId: isUserLoggedIn ? userId : null,
-      guestId: isUserLoggedIn ? null : guestUserId,
-      city,
-      department,
-      daneCode,
-      address: address1,
-      address2,
-      neighborhood,
-      addressReference,
-      company,
-      documentId,
-      shippingProvider,
-      shippingOptionType,
-      envioClickIdRate,
-      payment: {
-        method: paymentMethod,
-      },
-      // The API re-applies the store rule; sending cost 0 keeps both sides
-      // and the stored shipping record consistent.
-      shipping: freeShipping ? { ...shipping, cost: 0 } : shipping,
-      couponCode: couponState.coupon?.code ?? null,
-      earlyAccessToken: readEarlyAccessCookie(),
-      subtotal,
-      total,
-      customOrderToken: customOrder?.token, // Include token for conversion
-      analyticsClientId,
-      saveAddress: Boolean(saveAddress && isUserLoggedIn && !customOrder),
-      savedAddressId: saveAddress ? savedAddressId || null : null,
-      addressLabel: saveAddress ? addressLabel || null : null,
-    };
+    if (isSubmittingRef.current || status === "pending") return;
+    isSubmittingRef.current = true;
+    setIsPreparingSubmit(true);
 
-    trackCustomerEvent("checkout_order_submitted", {
-      currency: "COP",
-      items: analyticsItems,
-      payment_type: paymentMethod,
-      value: getAnalyticsValue(analyticsItems),
-    });
-    mutate(formattedData);
+    try {
+      // Stock is re-checked right before creating the order so the customer
+      // fixes quantities here instead of getting a server rejection.
+      if (!customOrder) {
+        const stockMap = await checkLiveStock(activeItems.map((i) => i.id));
+        const conflicts: StockConflictItem[] = activeItems.flatMap((item) => {
+          const live = stockMap?.[item.id];
+          const requested = item.quantity ?? 1;
+          if (!live || live.stock >= requested) return [];
+          return [
+            {
+              productId: item.id,
+              name: live.name || item.name,
+              requested,
+              available: Math.max(0, live.stock),
+            },
+          ];
+        });
+        if (conflicts.length > 0) {
+          setStockConflicts(conflicts);
+          trackCustomerEvent("checkout_stock_unavailable", {
+            affected_items: conflicts.length,
+            checkout_step: currentStep,
+          });
+          scrollToTop();
+          return;
+        }
+      }
+
+      const orderItems = activeItems.map((item) => ({
+        productId: item.id,
+        quantity: item.quantity ?? 1,
+      }));
+      const {
+        fullName,
+        email,
+        telephone,
+        address1,
+        address2,
+        neighborhood,
+        addressReference,
+        company,
+        city,
+        department,
+        daneCode,
+        documentId,
+        saveAddress,
+        savedAddressId,
+        addressLabel,
+        paymentMethod,
+        shipping,
+        shippingProvider,
+        shippingOptionType,
+        envioClickIdRate,
+      } = data;
+      const isUserLoggedIn = Boolean(userId);
+      let guestUserId = guestId;
+      if (!isUserLoggedIn && !guestUserId) {
+        guestUserId = generateGuestId();
+        setGuestId(guestUserId);
+      }
+      const analyticsClientId =
+        analyticsClientIdRef.current ??
+        (process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID
+          ? await getGoogleAnalyticsClientId(
+              process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID,
+            )
+          : null);
+      analyticsClientIdRef.current = analyticsClientId;
+      const formattedData = {
+        fullName: fullName.trim(),
+        phone: telephone,
+        email,
+        orderItems,
+        userId: isUserLoggedIn ? userId : null,
+        guestId: isUserLoggedIn ? null : guestUserId,
+        city,
+        department,
+        daneCode,
+        address: address1,
+        address2,
+        neighborhood,
+        addressReference,
+        company,
+        documentId,
+        shippingProvider,
+        shippingOptionType,
+        envioClickIdRate,
+        payment: {
+          method: paymentMethod,
+        },
+        // The API re-applies the store rule; sending cost 0 keeps both sides
+        // and the stored shipping record consistent.
+        shipping: freeShipping ? { ...shipping, cost: 0 } : shipping,
+        couponCode: couponState.coupon?.code ?? null,
+        earlyAccessToken: readEarlyAccessCookie(),
+        subtotal,
+        total,
+        customOrderToken: customOrder?.token, // Include token for conversion
+        analyticsClientId,
+        saveAddress: Boolean(saveAddress && isUserLoggedIn && !customOrder),
+        savedAddressId: saveAddress ? savedAddressId || null : null,
+        addressLabel: saveAddress ? addressLabel || null : null,
+      };
+
+      trackCustomerEvent("add_payment_info", {
+        currency: "COP",
+        items: analyticsItems,
+        payment_type: paymentMethod,
+        value: getAnalyticsValue(analyticsItems),
+      });
+      trackCustomerEvent("checkout_order_submitted", {
+        currency: "COP",
+        items: analyticsItems,
+        payment_type: paymentMethod,
+        value: getAnalyticsValue(analyticsItems),
+      });
+      setIsPreparingSubmit(false);
+      await mutateAsync({
+        data: formattedData,
+        idempotencyKey: idempotencyKeyRef.current,
+      }).catch(() => {
+        // Already reported through onError.
+      });
+    } finally {
+      isSubmittingRef.current = false;
+      setIsPreparingSubmit(false);
+    }
   };
+
+  const submitLabel =
+    paymentMethod === PaymentMethod.Bold ||
+    paymentMethod === PaymentMethod.Wompi
+      ? `Pagar ${currencyFormatter.format(total)}`
+      : "Confirmar pedido";
+
+  const submitFootnote =
+    paymentMethod === PaymentMethod.Bold ||
+    paymentMethod === PaymentMethod.Wompi ? (
+      <>
+        Vas a la pasarela segura para pagar; no se cobra nada hasta que
+        confirmes allí. Al continuar aceptas las{" "}
+        <Link
+          href={STOREFRONT_ROUTES.shippingPolicy}
+          className="underline underline-offset-4"
+        >
+          políticas de entrega y cambios
+        </Link>
+        .
+      </>
+    ) : paymentMethod === PaymentMethod.BankTransfer ? (
+      <>
+        Te mostraremos la cuenta y el valor exacto en la siguiente pantalla.
+        Al continuar aceptas las{" "}
+        <Link
+          href={STOREFRONT_ROUTES.shippingPolicy}
+          className="underline underline-offset-4"
+        >
+          políticas de entrega y cambios
+        </Link>
+        .
+      </>
+    ) : (
+      <>
+        Pagas al recibir. Al continuar aceptas las{" "}
+        <Link
+          href={STOREFRONT_ROUTES.shippingPolicy}
+          className="underline underline-offset-4"
+        >
+          políticas de entrega y cambios
+        </Link>
+        .
+      </>
+    );
+
+  const shippingSummary = (() => {
+    if (shippingOptionType === "MEDELLIN_LOCAL") {
+      return (
+        <span className="text-sm text-muted-foreground">
+          Se acuerda por WhatsApp
+        </span>
+      );
+    }
+    if (shippingOptionType === "CUSTOM_WHATSAPP") {
+      return (
+        <span className="text-sm text-muted-foreground">
+          Se acuerda por WhatsApp
+        </span>
+      );
+    }
+    if (freeShipping) {
+      return (
+        <span className="rounded-full bg-kawaii-mint-light px-3 py-1 font-sans text-sm font-bold text-blue-yankees">
+          Gratis
+        </span>
+      );
+    }
+    if ((shippingCost ?? 0) > 0) {
+      return (
+        <Currency className="text-base font-semibold" value={shippingCost} />
+      );
+    }
+    return (
+      <span className="text-sm text-muted-foreground">
+        Se calcula en Entrega
+      </span>
+    );
+  })();
+
+  const summary = (
+    <div className="flex w-full flex-col gap-4">
+      <div className="flex w-full items-center justify-between">
+        <h2 className="font-serif text-xl font-bold text-blue-yankees">
+          Tu pedido{" "}
+          <span className="font-quicksand text-sm font-semibold text-muted-foreground">
+            ({totalQuantity})
+          </span>
+        </h2>
+        {!customOrder && (
+          <Link
+            href={STOREFRONT_ROUTES.cart}
+            className="text-sm font-semibold underline underline-offset-4"
+          >
+            Editar carrito
+          </Link>
+        )}
+      </div>
+      <ul className="flex w-full flex-col gap-3">
+        {activeItems.map((item) => {
+          const conflict = stockConflicts.find(
+            (candidate) => candidate.productId === item.id,
+          );
+          return (
+            <li
+              key={item.id}
+              className={cn(
+                "grid grid-cols-[64px_1fr] gap-3 rounded-lg transition-colors",
+                conflict ? "border border-destructive bg-destructive/10 p-2" : "",
+              )}
+            >
+              <Link
+                href={productPath(item.slug || item.id)}
+                className="relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-md bg-gray-100"
+              >
+                {getProductImageUrl(item) ? (
+                  <CldImage
+                    src={getProductImageUrl(item)!}
+                    alt={item.name ?? "Imagen del producto"}
+                    fill
+                    sizes="64px"
+                    className="object-cover"
+                  />
+                ) : (
+                  <>
+                    <ShoppingBag
+                      aria-hidden="true"
+                      className="h-6 w-6 text-gray-400"
+                    />
+                    <span className="sr-only">Sin imagen disponible</span>
+                  </>
+                )}
+                <span className="absolute right-0 top-0 flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-yankees px-1 font-quicksand text-[11px] font-bold text-white">
+                  {item.quantity}
+                </span>
+              </Link>
+              <div className="flex min-w-0 flex-col justify-between gap-1">
+                <div className="flex min-w-0 flex-col text-left text-sm">
+                  <span className="line-clamp-2 font-semibold" title={item.name}>
+                    {item.name}
+                  </span>
+                  <span className="line-clamp-1 text-xs text-muted-foreground">
+                    {[
+                      item.design?.name ? `Diseño: ${item.design.name}` : null,
+                      item.color?.name ? `Color: ${item.color.name}` : null,
+                      ...getCustomerFacingProductOptions(item).map(
+                        (option) => `${option.name}: ${option.value}`,
+                      ),
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                  {conflict && (
+                    <span className="mt-1 text-xs font-bold text-destructive">
+                      {conflict.available > 0
+                        ? `Solo quedan ${conflict.available}`
+                        : "Sin stock"}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <Currency className="text-base font-bold" value={item.price} />
+                  {item.hasDiscount ||
+                  (item.originalPrice &&
+                    item.originalPrice > Number(item.price)) ? (
+                    <Currency
+                      className="text-xs text-gray-500 line-through"
+                      value={item.originalPrice}
+                    />
+                  ) : null}
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      {!customOrder && (
+        <FreeShippingProgress
+          subtotal={subtotal}
+          threshold={freeShippingThreshold}
+          className="border-y py-3"
+        />
+      )}
+      <dl className="flex w-full flex-col gap-2.5 text-sm">
+        <div className="flex items-center justify-between">
+          <dt>Subtotal</dt>
+          <dd>
+            <Currency className="text-base font-semibold" value={subtotal} />
+          </dd>
+        </div>
+        {productSavings > 0 ? (
+          <div className="flex items-center justify-between">
+            <dt className="text-muted-foreground">Ahorros en ofertas</dt>
+            <dd>
+              <Currency
+                className="text-base font-semibold text-success"
+                value={productSavings}
+              />
+            </dd>
+          </div>
+        ) : null}
+        {couponDiscount > 0 ? (
+          <div className="flex items-center justify-between">
+            <dt className="text-destructive">
+              Cupón{" "}
+              {couponState.coupon?.type === "PERCENTAGE"
+                ? `(${couponState.coupon.amount}%)`
+                : ""}
+            </dt>
+            <dd>
+              <Currency
+                className="text-base font-semibold text-destructive"
+                value={couponDiscount}
+                isNegative
+              />
+            </dd>
+          </div>
+        ) : null}
+        <div className="flex items-center justify-between">
+          <dt>Envío</dt>
+          <dd>{shippingSummary}</dd>
+        </div>
+        <div className="flex items-center justify-between border-t border-dashed pt-3">
+          <dt className="text-base font-bold">Total a pagar</dt>
+          <dd>
+            <Currency className="font-quicksand text-2xl font-black text-pink-froly" value={total} />
+          </dd>
+        </div>
+      </dl>
+      <p className="text-xs text-muted-foreground">
+        IVA incluido. Sin cargos ocultos: el envío que ves es el que pagas.
+      </p>
+      <ul className="flex flex-col gap-2 border-t pt-3 text-xs text-foreground/80">
+        <li className="flex items-center gap-2">
+          <Lock className="h-3.5 w-3.5 shrink-0 text-success" aria-hidden="true" />
+          Pago seguro: tus datos viajan cifrados.
+        </li>
+        <li className="flex items-center gap-2">
+          <Undo2 className="h-3.5 w-3.5 shrink-0 text-blue-yankees" aria-hidden="true" />
+          Cambios hasta 5 días después de recibir.
+        </li>
+        <li className="flex items-center gap-2">
+          <Icons.whatsapp className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+          ¿Dudas? Escríbenos por WhatsApp.
+        </li>
+      </ul>
+    </div>
+  );
+
+  const showPendingOrder =
+    !customOrder && isPendingOrderUsable(pendingOrder) && !completedOrderPath;
 
   return (
     <>
@@ -953,7 +1281,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
           <NoResults
             message={`No hay productos en el carrito ${KAWAII_FACE_SAD}`}
           />
-          <Button asChild className="mt-4">
+          <Button asChild className="mt-4 rounded-full">
             <Link href={STOREFRONT_ROUTES.shop}>
               <ArrowLeft className="mr-2 h-5 w-5" /> Regresar a la tienda
             </Link>
@@ -961,287 +1289,216 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         </div>
       )}
       {activeItems.length > 0 && (
-        <div className="mt-4 space-y-8 lg:mt-12 lg:grid lg:grid-cols-12 lg:items-start lg:gap-6 lg:space-y-0">
-          <div className="rounded-md border p-5 lg:col-span-8">
-            <MultiStepForm
-              steps={FORM_STEPS}
-              currentStep={currentStep}
-              season={season}
-            >
-              {/* Step Content */}
-              <Form {...form}>
-                <form
-                  onSubmit={form.handleSubmit(onSubmit)}
-                  className="space-y-8"
-                  autoComplete="off"
-                  data-clarity-mask="true"
-                >
-                  <div className="relative min-h-[300px]">
-                    {currentStep === 1 && (
-                      <BasicInfoStep form={form} isLoading={isPendingSubmit} />
-                    )}
-                    {currentStep === 2 && (
-                      <ShippingInfoStep
-                        form={form}
-                        isLoading={isPendingSubmit}
-                        allowSavedAddresses={!customOrder}
-                        cartItems={activeItems.map((item) => ({
-                          id: item.id,
-                          quantity: item.quantity || 1,
-                        }))}
-                        orderTotal={subtotal}
-                      />
-                    )}
-                    {currentStep === 3 && (
-                      <PaymentInfoStep
-                        form={form}
-                        isLoading={isPendingSubmit}
-                      />
-                    )}
-                    {currentStep === 4 && (
-                      <ReviewStep
-                        form={form}
-                        isLoading={isPendingSubmit}
-                        couponState={couponState}
-                        setCouponState={setCouponState}
-                        validateCouponMutate={validateCouponMutate}
-                        validateCouponStatus={validateCouponStatus}
-                        subtotal={subtotal}
-                        onEditStep={setCurrentStep}
-                        onApplyWelcomeBenefit={applyWelcomeBenefit}
-                      />
-                    )}
-                  </div>
-
-                  {/* Navigation */}
-                  <StepNavigation
-                    currentStep={currentStep}
-                    totalSteps={FORM_STEPS.length}
-                    onNext={handleNext}
-                    onBack={handleBack}
-                    isNextDisabled={false}
-                    isLoading={isPendingSubmit || isNavigating}
-                  />
-                </form>
-              </Form>
-            </MultiStepForm>
-          </div>
-          <div className="rounded-md border p-5 lg:col-span-4">
-            <div className="flex w-full items-center justify-between">
-              <h2 className="font-serif text-lg font-bold">
-                ({totalQuantity}) Productos
-              </h2>
-              {!customOrder && (
-                <Link
-                  href={STOREFRONT_ROUTES.cart}
-                  className="text-sm underline"
-                >
-                  Editar
-                </Link>
-              )}
-            </div>
-            <Separator className="mt-6" />
-            <div className="mt-6 flex w-full flex-col gap-4">
-              {activeItems.map((item) => (
-                <div
-                  key={item.id}
-                  className={cn(
-                    "grid grid-cols-[80px_1fr] gap-2.5 rounded-md p-2 transition-colors",
-                    outOfStockItems.includes(item.id)
-                      ? "border border-destructive bg-destructive/10"
-                      : "",
-                  )}
-                >
-                  <Link
-                    href={productPath(item.slug || item.id)}
-                    className="relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-md bg-gray-100"
-                  >
-                    {getProductImageUrl(item) ? (
-                      <CldImage
-                        src={getProductImageUrl(item)!}
-                        alt={item.name ?? "Imagen del producto"}
-                        fill
-                        sizes="(max-width: 640px) 80px, 120px"
-                        className="object-cover"
-                      />
-                    ) : (
-                      <>
-                        <ShoppingBag
-                          aria-hidden="true"
-                          className="h-7 w-7 text-gray-400"
-                        />
-                        <span className="sr-only">Sin imagen disponible</span>
-                      </>
-                    )}
-                    <span className="absolute right-0 top-0 flex h-4 w-4 items-center justify-center rounded-full bg-blue-yankees font-serif text-xs text-white">
-                      {item.quantity}
-                    </span>
-                  </Link>
-                  <div className="flex min-w-0 items-center justify-between">
-                    <div className="flex min-w-0 flex-1 flex-col items-start justify-between gap-2">
-                      <div className="flex min-w-0 flex-col text-left font-serif text-sm font-medium tracking-tight">
-                        <span className="line-clamp-2" title={item.name}>
-                          {item.name}
-                        </span>
-                        {item.design && (
-                          <span className="line-clamp-1 text-xs text-gray-400">{`Diseño: ${item.design.name}`}</span>
-                        )}
-                        {item.color && (
-                          <span className="line-clamp-1 text-xs text-gray-400">{`Color: ${item.color.name}`}</span>
-                        )}
-                        {getCustomerFacingProductOptions(item).map((option) => (
-                          <span
-                            key={`${option.name}-${option.value}`}
-                            className="line-clamp-1 text-xs text-gray-400"
-                          >
-                            {option.name}: {option.value}
-                          </span>
-                        ))}
-                        {outOfStockItems.includes(item.id) && (
-                          <span className="mt-1 font-bold text-destructive">
-                            Sin Stock
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {item.hasDiscount ||
-                        (item.originalPrice &&
-                          item.originalPrice > Number(item.price)) ? (
-                          <>
-                            <Currency className="text-lg" value={item.price} />
-                            <Currency
-                              className="text-sm text-gray-500 line-through"
-                              value={item.originalPrice}
-                            />
-                          </>
-                        ) : (
-                          <Currency className="text-lg" value={item.price} />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <Separator className="my-6" />
-            <div className="flex w-full flex-col gap-y-4">
-              <div className="flex flex-1 items-center justify-between">
-                <span className="text-lg">Subtotal</span>
-                <Currency className="text-lg" value={subtotal} />
-              </div>
-              {productSavings > 0 ? (
-                <div className="flex flex-1 items-center justify-between">
-                  <span className="font-quicksand text-lg font-semibold text-gray-600">
-                    Ahorros en ofertas
+        <div className="mt-4 space-y-6 lg:mt-8 lg:grid lg:grid-cols-12 lg:items-start lg:gap-8 lg:space-y-0">
+          <div className="space-y-4 lg:col-span-8" id="checkout-form">
+            {showPendingOrder && pendingOrder && (
+              <div
+                className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between"
+                role="status"
+              >
+                <p className="flex items-start gap-2">
+                  <Clock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span>
+                    <strong>
+                      Tienes un pedido pendiente de pago (#
+                      {pendingOrder.orderNumber})
+                    </strong>{" "}
+                    por {currencyFormatter.format(pendingOrder.total)}. Puedes
+                    pagarlo ahora o crear uno nuevo con este carrito.
                   </span>
-                  <Currency
-                    className="font-quicksand text-lg font-bold text-success"
-                    value={productSavings}
-                  />
-                </div>
-              ) : null}
-              {couponDiscount > 0 ? (
-                <div className="flex flex-1 items-center justify-between">
-                  <div className="ml-2 text-lg text-destructive">
-                    Descuento{" "}
-                    {couponState.coupon?.type === "PERCENTAGE" && (
-                      <span className="text-destructive">
-                        ({couponState.coupon.amount}%)
-                      </span>
-                    )}
-                  </div>
-                  <Currency
-                    className="ml-2 text-lg text-destructive"
-                    value={couponDiscount}
-                  />
-                </div>
-              ) : null}
-              {freeShipping ? (
-                <div className="flex flex-1 items-center justify-between">
-                  <span className="text-lg">Envío</span>
-                  <span className="rounded-full bg-kawaii-mint-light px-3 py-1 font-sans text-sm font-bold text-blue-yankees">
-                    Gratis
-                  </span>
-                </div>
-              ) : (shippingCost ?? 0) > 0 ? (
-                <div className="flex flex-1 items-center justify-between">
-                  <span className="text-lg">Envío</span>
-                  <Currency className="text-lg" value={shippingCost} />
-                </div>
-              ) : null}
-              {!freeShipping && freeShippingRemaining > 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Te faltan{" "}
-                  <Currency
-                    className="inline text-sm font-bold text-blue-yankees"
-                    value={freeShippingRemaining}
-                  />{" "}
-                  en productos para tener envío gratis.
                 </p>
-              ) : null}
-              <Separator />
-              <div className="flex flex-1 items-center justify-between">
-                <span className="text-xl font-black text-pink-froly">
-                  Total a pagar
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  <Button asChild size="sm" className="h-9 rounded-full">
+                    <Link href={`${orderPath(pendingOrder.id)}?autoPay=true`}>
+                      Pagar ahora
+                    </Link>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9 rounded-full"
+                    onClick={() => setPendingOrder(null)}
+                  >
+                    Crear uno nuevo
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Mobile: collapsible summary so the total is never out of sight. */}
+            <details className="group rounded-xl border border-blue-baby/60 bg-blue-purple/10 lg:hidden">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold [&::-webkit-details-marker]:hidden">
+                <span className="flex items-center gap-2">
+                  <ShoppingBag className="h-4 w-4" aria-hidden="true" />
+                  {totalQuantity} {totalQuantity === 1 ? "producto" : "productos"}
+                  <span className="font-normal text-muted-foreground underline underline-offset-4">
+                    Ver resumen
+                  </span>
+                  <ChevronDown
+                    className="h-4 w-4 transition-transform group-open:rotate-180"
+                    aria-hidden="true"
+                  />
                 </span>
                 <Currency
-                  className="text-xl font-black text-pink-froly"
+                  className="font-quicksand text-lg font-black text-pink-froly"
                   value={total}
                 />
+              </summary>
+              <div className="border-t border-blue-baby/60 bg-background p-4">
+                {summary}
               </div>
+            </details>
+
+            <div className="rounded-xl border border-blue-baby/60 bg-card p-4 shadow-[20px_20px_30px_rgba(0,0,0,0.02)] sm:p-6">
+              <MultiStepForm steps={FORM_STEPS} currentStep={currentStep}>
+                <Form {...form}>
+                  <form
+                    ref={formRef}
+                    onSubmit={form.handleSubmit(onSubmit, handleInvalidSubmit)}
+                    className="space-y-6"
+                    autoComplete="on"
+                    noValidate
+                    data-clarity-mask="true"
+                  >
+                    <div className="relative min-h-[300px]">
+                      {currentStep === 1 && (
+                        <BasicInfoStep form={form} isLoading={isPendingSubmit} />
+                      )}
+                      {currentStep === 2 && (
+                        <ShippingInfoStep
+                          form={form}
+                          isLoading={isPendingSubmit}
+                          allowSavedAddresses={!customOrder}
+                          cartItems={activeItems.map((item) => ({
+                            id: item.id,
+                            quantity: item.quantity || 1,
+                          }))}
+                          orderTotal={subtotal}
+                          freeShipping={freeShipping}
+                        />
+                      )}
+                      {currentStep === 3 && (
+                        <PaymentInfoStep
+                          form={form}
+                          isLoading={isPendingSubmit}
+                          couponState={couponState}
+                          setCouponState={setCouponState}
+                          validateCouponMutate={validateCouponMutate}
+                          validateCouponStatus={validateCouponStatus}
+                          subtotal={subtotal}
+                          shippingCost={shippingCost ?? 0}
+                          freeShipping={freeShipping}
+                          onEditStep={goToStep}
+                          onApplyWelcomeBenefit={applyWelcomeBenefit}
+                          stockConflicts={stockConflicts}
+                          onAdjustStock={adjustStockConflict}
+                          onDismissStockConflicts={() => setStockConflicts([])}
+                        />
+                      )}
+                    </div>
+
+                    <StepNavigation
+                      ref={navigationRef}
+                      currentStep={currentStep}
+                      totalSteps={FORM_STEPS.length}
+                      onNext={handleNext}
+                      onBack={handleBack}
+                      isNextDisabled={
+                        currentStep === FORM_STEPS.length &&
+                        stockConflicts.length > 0
+                      }
+                      isLoading={isPendingSubmit || isNavigating}
+                      submitLabel={submitLabel}
+                      footnote={
+                        currentStep === FORM_STEPS.length
+                          ? submitFootnote
+                          : undefined
+                      }
+                    />
+                  </form>
+                </Form>
+              </MultiStepForm>
             </div>
+          </div>
+          <aside className="hidden rounded-xl border border-blue-baby/60 bg-card p-5 shadow-[20px_20px_30px_rgba(0,0,0,0.02)] lg:sticky lg:top-24 lg:col-span-4 lg:block">
+            {summary}
+          </aside>
+        </div>
+      )}
+      {/* Phone: the main action follows the customer once the in-form buttons scroll away. */}
+      {activeItems.length > 0 && !isNavigationVisible && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-blue-baby/60 bg-background/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(0,0,0,0.06)] backdrop-blur lg:hidden">
+          <div className="mx-auto flex max-w-lg items-center gap-3">
+            <div className="flex min-w-0 flex-col">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Total a pagar
+              </span>
+              <Currency
+                className="text-lg font-black text-pink-froly"
+                value={total}
+              />
+            </div>
+            <Button
+              type="button"
+              disabled={
+                isPendingSubmit ||
+                isNavigating ||
+                (currentStep === FORM_STEPS.length && stockConflicts.length > 0)
+              }
+              aria-busy={isPendingSubmit || undefined}
+              className="ml-auto h-12 shrink-0 rounded-full px-6 text-base font-semibold"
+              onClick={() => {
+                if (currentStep === FORM_STEPS.length) {
+                  formRef.current?.requestSubmit();
+                } else {
+                  void handleNext();
+                }
+              }}
+            >
+              {isPendingSubmit ? (
+                <Loader2 aria-hidden="true" className="mr-2 h-4 w-4 animate-spin" />
+              ) : currentStep === FORM_STEPS.length ? (
+                <Lock aria-hidden="true" className="mr-2 h-4 w-4" />
+              ) : null}
+              {currentStep === FORM_STEPS.length
+                ? submitLabel
+                : currentStep === 1
+                  ? "Continuar a entrega"
+                  : "Continuar al pago"}
+            </Button>
           </div>
         </div>
       )}
-      {payUformData ? (
-        <PayUForm
-          formRef={payUFormRef}
-          referenceCode={payUformData.referenceCode}
-          products={activeItems.map((product) => ({
-            name: product.name,
-            quantity: product.quantity || 1,
-          }))}
-          amount={payUformData.amount}
-          tax={payUformData.tax}
-          taxReturnBase={payUformData.taxReturnBase}
-          currency={payUformData.currency}
-          signature={payUformData.signature}
-          test={payUformData.test}
-          responseUrl={payUformData.responseUrl}
-          confirmationUrl={payUformData.confirmationUrl}
-          shippingAddress={payUformData.shippingAddress}
-          shippingCity={payUformData.shippingCity}
-          shippingCountry={payUformData.shippingCountry}
-        />
-      ) : null}
     </>
   );
 };
 
 const CheckoutFormSkeleton = () => (
   <div
-    className="mt-4 space-y-8 lg:mt-12 lg:grid lg:grid-cols-12 lg:items-start lg:gap-6 lg:space-y-0"
+    className="mt-4 space-y-6 lg:mt-8 lg:grid lg:grid-cols-12 lg:items-start lg:gap-8 lg:space-y-0"
     aria-busy="true"
     aria-live="polite"
   >
     <span className="sr-only">Cargando formulario de compra</span>
-    <div className="space-y-8 rounded-md border p-5 lg:col-span-8">
+    <div className="space-y-6 rounded-xl border border-blue-baby/60 p-4 sm:p-6 lg:col-span-8">
+      <Skeleton className="h-11 w-full" />
       <Skeleton className="h-8 w-3/5" />
-      <div className="space-y-5">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <Skeleton className="h-11 w-full" />
         <Skeleton className="h-11 w-full" />
         <Skeleton className="h-11 w-full" />
         <Skeleton className="h-11 w-full" />
       </div>
-      <div className="flex justify-between pt-6">
-        <Skeleton className="h-10 w-24" />
-        <Skeleton className="h-10 w-28" />
+      <div className="flex justify-end pt-6">
+        <Skeleton className="h-12 w-52 rounded-full" />
       </div>
     </div>
-    <div className="space-y-6 rounded-md border p-5 lg:col-span-4">
+    <div className="hidden space-y-4 rounded-xl border border-blue-baby/60 p-5 lg:col-span-4 lg:block">
       <Skeleton className="h-7 w-40" />
       {Array.from({ length: 2 }, (_, index) => (
         <div key={index} className="flex gap-3">
-          <Skeleton className="h-20 w-20 shrink-0" />
+          <Skeleton className="h-16 w-16 shrink-0" />
           <div className="flex-1 space-y-3">
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-2/3" />

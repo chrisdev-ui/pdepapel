@@ -60,10 +60,24 @@ export async function POST(
         `La orden #${order.orderNumber || params.orderId} ya está completada (${order.status === OrderStatus.PAID ? "Pagada" : "Enviada"}). No es posible generar un nuevo link de pago.`,
       );
 
-    if (order.payment?.method && order.payment.method !== PaymentMethod.Wompi) {
+    // Online orders may switch to the fallback gateway (Bold → Wompi) while
+    // unpaid; offline methods never get a payment link.
+    const isOnlineMethod =
+      !order.payment?.method ||
+      order.payment.method === PaymentMethod.Wompi ||
+      order.payment.method === PaymentMethod.Bold;
+    if (!isOnlineMethod) {
       throw ErrorFactory.InvalidRequest(
         `La orden #${order.orderNumber || params.orderId} fue registrada para transferencia o efectivo. Los enlaces de pago solo aplican para pagos en línea.`,
       );
+    }
+
+    if (order.payment && order.payment.method !== PaymentMethod.Wompi) {
+      await prismadb.paymentDetails.update({
+        where: { id: order.payment.id },
+        data: { method: PaymentMethod.Wompi },
+      });
+      order.payment.method = PaymentMethod.Wompi;
     }
 
     // Validate order items count (similar to main checkout)

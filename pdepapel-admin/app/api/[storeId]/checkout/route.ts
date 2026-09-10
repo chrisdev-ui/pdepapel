@@ -11,6 +11,7 @@ import { NextResponse } from "next/server";
 import { env } from "@/lib/env.mjs";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createCorsHeaders } from "@/lib/cors";
+import { withIdempotency } from "@/lib/idempotency";
 import { normalizeGoogleAnalyticsClientId } from "@/lib/google-analytics";
 import { generateBoldCheckoutData } from "@/lib/bold";
 import { getColombiaDate } from "@/lib/date-utils";
@@ -87,7 +88,20 @@ export async function OPTIONS(req: Request) {
   return NextResponse.json({}, { headers: getCorsHeaders(req) });
 }
 
+/** A retried checkout (timeout, double tap) replays the order it already created. */
 export async function POST(
+  req: Request,
+  context: { params: { storeId: string } },
+) {
+  return withIdempotency(
+    req,
+    context.params.storeId,
+    () => createCheckout(req, context),
+    getCorsHeaders(req),
+  );
+}
+
+async function createCheckout(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {

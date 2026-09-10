@@ -3,8 +3,8 @@ import {
   deleteCustomerAddress,
   getCustomerAddresses,
 } from "@/actions/customer-addresses";
-import { AutocompleteLocation } from "@/components/ui/autocomplete-location";
 import { ActionConfirmationDialog } from "@/components/ui/action-confirmation-dialog";
+import { AutocompleteLocation } from "@/components/ui/autocomplete-location";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -16,18 +16,10 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { ShippingRatesSelector } from "@/components/ui/shipping-rates-selector";
-import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ShippingStatus } from "@/constants";
 import { useCheckoutStore } from "@/hooks/use-checkout-store";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -35,18 +27,34 @@ import { useLocations } from "@/hooks/use-locations";
 import { useShippingQuote } from "@/hooks/use-shipping-quote";
 import { trackCustomerEvent } from "@/lib/customer-analytics";
 import { normalizePhoneForInput } from "@/lib/phone";
+import {
+  getShippingQuoteKey,
+  groupShippingQuotes,
+  isShippingQuoteFresh,
+} from "@/lib/shipping-rates";
+import { cn } from "@/lib/utils";
 import { useAuth } from "@clerk/nextjs";
 import {
   Bike,
+  Check,
+  ChevronDown,
+  Home,
   Loader2,
   MapPin,
-  MapPinHouse,
   MessageSquare,
-  PackageSearch,
+  Plus,
+  RefreshCw,
   Trash2,
   Truck,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { UseFormReturn } from "react-hook-form";
 import { CheckoutFormValue } from "../multi-step-checkout-form";
 
@@ -56,7 +64,45 @@ interface ShippingInfoStepProps {
   allowSavedAddresses?: boolean;
   cartItems: { id: string; quantity: number }[];
   orderTotal: number;
+  /** The order already qualifies for free shipping: rates show «Gratis». */
+  freeShipping?: boolean;
 }
+
+const MEDELLIN_AREA_CITIES = [
+  "medellin",
+  "medellín",
+  "envigado",
+  "itagui",
+  "itaguí",
+  "sabaneta",
+  "bello",
+  "la estrella",
+  "caldas",
+  "copacabana",
+  "girardota",
+  "barbosa",
+  "rionegro",
+];
+
+const WHATSAPP_SHIPPING = {
+  carrierName: "Acordar por WhatsApp",
+  courier: "Transportadora a Convenir",
+  productName: "Envío Especial / Flete al Cobro",
+  cost: 0,
+  flete: 0,
+  status: ShippingStatus.Preparing,
+};
+
+const MEDELLIN_SHIPPING = {
+  carrierName: "Domicilio Mismo Día (Medellín)",
+  courier: "Domiciliario Local",
+  productName: "Entrega Mismo Día Medellín",
+  cost: 0,
+  flete: 0,
+  status: ShippingStatus.Preparing,
+};
+
+const optionalInputClass = "bg-blue-purple/20 invalid:bg-pink-froly/20";
 
 export const ShippingInfoStep = ({
   form,
@@ -64,6 +110,7 @@ export const ShippingInfoStep = ({
   allowSavedAddresses = true,
   cartItems,
   orderTotal,
+  freeShipping = false,
 }: ShippingInfoStepProps) => {
   const { getToken, isLoaded: isAuthLoaded, userId } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
@@ -77,55 +124,78 @@ export const ShippingInfoStep = ({
     null,
   );
   const debouncedQuery = useDebounce(searchQuery, 300);
+  const ratesLabelId = useId();
+  const modeLabelId = useId();
 
-  const {
-    data: { results: locations, count } = {},
-    isLoading: isLoadingLocations,
-  } = useLocations(debouncedQuery);
+  const { data: { results: locations } = {}, isLoading: isLoadingLocations } =
+    useLocations(debouncedQuery);
 
-  // Watch form fields for shipping quote
   const selectedDaneCode = form.watch("daneCode");
   const address1 = form.watch("address1");
+  const address2 = form.watch("address2");
+  const neighborhood = form.watch("neighborhood");
+  const company = form.watch("company");
+  const addressReference = form.watch("addressReference");
   const selectedCity = form.watch("city") || "";
   const selectedDept = form.watch("department") || "";
   const wantsToSaveAddress = form.watch("saveAddress");
+  const shippingOptionType = form.watch("shippingOptionType") || "ENVIOCLICK";
+  const selectedRateId = form.watch("envioClickIdRate");
   const locationsDisabled = isLoading || isLoadingLocations;
+
+  const hasOptionalDetails = Boolean(
+    address2 || neighborhood || company || addressReference,
+  );
+  const [showDetails, setShowDetails] = useState(hasOptionalDetails);
+  useEffect(() => {
+    if (hasOptionalDetails) setShowDetails(true);
+  }, [hasOptionalDetails]);
 
   const isMedellinArea = useMemo(() => {
     const cityLower = selectedCity.toLowerCase();
     const deptLower = selectedDept.toLowerCase();
-    const areaCities = [
-      "medellin",
-      "medellín",
-      "envigado",
-      "itagui",
-      "itaguí",
-      "sabaneta",
-      "bello",
-      "la estrella",
-      "caldas",
-      "copacabana",
-      "girardota",
-      "barbosa",
-      "rionegro",
-    ];
     return (
-      areaCities.some((c) => cityLower.includes(c)) ||
+      MEDELLIN_AREA_CITIES.some((city) => cityLower.includes(city)) ||
       deptLower.includes("antioquia")
     );
   }, [selectedCity, selectedDept]);
 
-  // Get quote data from store
+  // ---- Shipping quotes -------------------------------------------------
   const storedQuoteData = useCheckoutStore((state) => state.quoteData);
+  const storedQuoteKey = useCheckoutStore((state) => state.quoteKey);
+  const storedQuoteFetchedAt = useCheckoutStore(
+    (state) => state.quoteFetchedAt,
+  );
   const setStoredQuoteData = useCheckoutStore((state) => state.setQuoteData);
 
-  // Use mutation for manual quote fetching
+  const canFetchQuotes =
+    Boolean(selectedDaneCode) &&
+    Boolean(address1 && address1.trim().length >= 2) &&
+    cartItems.length > 0;
+
+  const quoteKey = useMemo(
+    () =>
+      canFetchQuotes
+        ? getShippingQuoteKey({
+            daneCode: selectedDaneCode,
+            address: address1,
+            orderTotal,
+            items: cartItems.map((item) => ({
+              productId: item.id,
+              quantity: item.quantity,
+            })),
+          })
+        : null,
+    [address1, canFetchQuotes, cartItems, orderTotal, selectedDaneCode],
+  );
+  const debouncedQuoteKey = useDebounce(quoteKey, 600);
+  const requestedKeyRef = useRef<string | null>(null);
+
   const {
     mutate: fetchQuotes,
-    data: quoteData,
     isPending: isLoadingQuotes,
     error: quoteError,
-    reset: resetQuotes,
+    reset: resetQuoteRequest,
   } = useShippingQuote({
     onMutate: () => {
       trackCustomerEvent("shipping_quote_requested", {
@@ -133,7 +203,7 @@ export const ShippingInfoStep = ({
         checkout_step_name: "envio",
       });
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       const quoteCount = data.quotes?.length ?? 0;
       trackCustomerEvent(
         quoteCount > 0
@@ -145,6 +215,15 @@ export const ShippingInfoStep = ({
           quote_count: quoteCount,
         },
       );
+      setStoredQuoteData(
+        data,
+        getShippingQuoteKey({
+          daneCode: variables.destination.daneCode,
+          address: variables.destination.address,
+          orderTotal: variables.orderTotal,
+          items: variables.items,
+        }),
+      );
     },
     onError: () => {
       trackCustomerEvent("shipping_quote_failed", {
@@ -155,69 +234,139 @@ export const ShippingInfoStep = ({
     },
   });
 
-  // Initialize quote data from store on mount
-  const [localQuoteData, setLocalQuoteData] = useState(storedQuoteData);
-
-  // Sync local quote data with both mutation data and stored data
-  useEffect(() => {
-    if (quoteData) {
-      setLocalQuoteData(quoteData);
-      setStoredQuoteData(quoteData);
-    } else if (storedQuoteData && !localQuoteData) {
-      setLocalQuoteData(storedQuoteData);
-    }
-  }, [quoteData, storedQuoteData, localQuoteData, setStoredQuoteData]);
-
-  // Check if required fields are filled for button enable
-  const canFetchQuotes =
-    !!selectedDaneCode && !!address1 && cartItems.length > 0;
-
-  // Handle quote fetch
-  const handleFetchQuotes = () => {
-    if (!canFetchQuotes) return;
-
-    fetchQuotes({
-      destination: {
-        daneCode: selectedDaneCode,
-        address: address1,
-      },
+  const requestQuotes = useCallback(
+    (forceRefresh = false) => {
+      if (!canFetchQuotes) return;
+      requestedKeyRef.current = quoteKey;
+      fetchQuotes({
+        destination: { daneCode: selectedDaneCode, address: address1 },
+        orderTotal,
+        items: cartItems.map((item) => ({
+          productId: item.id,
+          quantity: item.quantity,
+        })),
+        isCOD: true,
+        forceRefresh,
+      });
+    },
+    [
+      address1,
+      canFetchQuotes,
+      cartItems,
+      fetchQuotes,
       orderTotal,
-      items: cartItems.map((item) => ({
-        productId: item.id,
-        quantity: item.quantity,
-      })),
-      isCOD: true,
-    });
+      quoteKey,
+      selectedDaneCode,
+    ],
+  );
+
+  const quotesMatchCurrentAddress =
+    Boolean(storedQuoteData) &&
+    storedQuoteKey === quoteKey &&
+    isShippingQuoteFresh(storedQuoteFetchedAt);
+
+  // Quotes are fetched as soon as city + address are complete (debounced),
+  // and again whenever the address or the cart changes.
+  useEffect(() => {
+    if (shippingOptionType !== "ENVIOCLICK") return;
+    if (!debouncedQuoteKey || debouncedQuoteKey !== quoteKey) return;
+    if (quotesMatchCurrentAddress) return;
+    if (isLoadingQuotes && requestedKeyRef.current === debouncedQuoteKey) return;
+    if (quoteError && requestedKeyRef.current === debouncedQuoteKey) return;
+    requestQuotes();
+  }, [
+    debouncedQuoteKey,
+    isLoadingQuotes,
+    quoteError,
+    quoteKey,
+    quotesMatchCurrentAddress,
+    requestQuotes,
+    shippingOptionType,
+  ]);
+
+  const groupedQuotes = useMemo(
+    () =>
+      quotesMatchCurrentAddress
+        ? groupShippingQuotes(storedQuoteData?.quotes)
+        : [],
+    [quotesMatchCurrentAddress, storedQuoteData],
+  );
+
+  const applyRate = useCallback(
+    (idRate: number) => {
+      const selectedQuote = groupedQuotes.find(
+        (quote) => quote.idRate === idRate,
+      );
+      if (!selectedQuote) return;
+      form.setValue("envioClickIdRate", idRate, { shouldDirty: true });
+      form.setValue("shipping", {
+        carrierName: selectedQuote.carrier,
+        courier: selectedQuote.carrier,
+        productName: selectedQuote.product,
+        flete: selectedQuote.flete,
+        minimumInsurance: selectedQuote.minimumInsurance,
+        deliveryDays: Number(selectedQuote.deliveryDays),
+        isCOD: selectedQuote.isCOD,
+        cost: selectedQuote.totalCost,
+        status: ShippingStatus.Preparing,
+      });
+      void form.trigger("envioClickIdRate");
+    },
+    [form, groupedQuotes],
+  );
+
+  // Keep the selection consistent with the rates on screen: drop a rate that
+  // no longer exists and preselect the cheapest one when nothing is chosen.
+  useEffect(() => {
+    if (shippingOptionType !== "ENVIOCLICK") return;
+    if (groupedQuotes.length === 0) {
+      if (selectedRateId && !quotesMatchCurrentAddress && quoteKey) {
+        form.setValue("envioClickIdRate", 0);
+        form.setValue("shipping", {});
+      }
+      return;
+    }
+    const stillValid = groupedQuotes.some(
+      (quote) => quote.idRate === selectedRateId,
+    );
+    if (!stillValid) applyRate(groupedQuotes[0].idRate);
+  }, [
+    applyRate,
+    form,
+    groupedQuotes,
+    quoteKey,
+    quotesMatchCurrentAddress,
+    selectedRateId,
+    shippingOptionType,
+  ]);
+
+  const handleRetryQuotes = () => {
+    resetQuoteRequest();
+    requestQuotes(true);
   };
 
-  // Handle reset quotes
-  const handleResetQuotes = useCallback(() => {
-    setLocalQuoteData(null);
-    setStoredQuoteData(null);
-    resetQuotes();
+  const chooseWhatsAppShipping = () => {
+    form.setValue("shippingOptionType", "CUSTOM_WHATSAPP", {
+      shouldDirty: true,
+    });
+    form.setValue("shippingProvider", "MANUAL");
     form.setValue("envioClickIdRate", 0);
-    form.setValue("shipping", {});
-  }, [form, resetQuotes, setStoredQuoteData]);
+    form.setValue("shipping", WHATSAPP_SHIPPING);
+  };
 
+  // ---- Saved addresses -------------------------------------------------
   const applySavedAddress = useCallback(
     async (savedAddress: CustomerAddress) => {
-      const nameParts = savedAddress.fullName
-        .trim()
-        .split(/\s+/)
-        .filter(Boolean);
-      const [firstName, ...lastNameParts] = nameParts;
       const options = { shouldDirty: true, shouldValidate: true };
 
-      if (firstName) form.setValue("firstName", firstName, options);
-      if (lastNameParts.length > 0) {
-        form.setValue("lastName", lastNameParts.join(" "), options);
+      if (savedAddress.fullName?.trim()) {
+        form.setValue("fullName", savedAddress.fullName.trim(), options);
       }
-      form.setValue(
-        "telephone",
-        normalizePhoneForInput(savedAddress.phone),
-        options,
-      );
-      form.setValue("documentId", savedAddress.documentId || "", options);
+      const phone = normalizePhoneForInput(savedAddress.phone);
+      if (phone) form.setValue("telephone", phone, options);
+      if (savedAddress.documentId) {
+        form.setValue("documentId", savedAddress.documentId, options);
+      }
       form.setValue("address1", savedAddress.address || "", options);
       form.setValue("address2", savedAddress.address2 || "", options);
       form.setValue("city", savedAddress.city || "", options);
@@ -234,19 +383,8 @@ export const ShippingInfoStep = ({
       form.setValue("addressLabel", savedAddress.label || "", {
         shouldDirty: false,
       });
-      handleResetQuotes();
-      await form.trigger([
-        "firstName",
-        "lastName",
-        "telephone",
-        "documentId",
-        "address1",
-        "city",
-        "department",
-        "daneCode",
-      ]);
     },
-    [form, handleResetQuotes],
+    [form],
   );
 
   useEffect(() => {
@@ -273,16 +411,18 @@ export const ShippingInfoStep = ({
         if (!isCurrent) return;
 
         setSavedAddresses(addresses);
+        const currentSavedId = form.getValues("savedAddressId");
         const hasCurrentAddress = Boolean(
-          form.getValues("address1") ||
-          form.getValues("city") ||
-          form.getValues("department") ||
-          form.getValues("daneCode"),
+          form.getValues("address1") || form.getValues("daneCode"),
         );
         const preferredAddress =
-          addresses.find((address) => address.isDefault) ?? addresses[0];
+          addresses.find((address) => address.id === currentSavedId) ??
+          addresses.find((address) => address.isDefault) ??
+          addresses[0];
 
-        if (!hasCurrentAddress && preferredAddress) {
+        if (currentSavedId && preferredAddress?.id === currentSavedId) {
+          setSelectedSavedAddressId(currentSavedId);
+        } else if (!hasCurrentAddress && preferredAddress) {
           setSelectedSavedAddressId(preferredAddress.id);
           await applySavedAddress(preferredAddress);
         }
@@ -328,17 +468,6 @@ export const ShippingInfoStep = ({
     await applySavedAddress(savedAddress);
   };
 
-  const handleDeleteSelectedAddress = () => {
-    if (!selectedSavedAddressId || isDeletingAddress) return;
-
-    const selectedAddress = savedAddresses.find(
-      (address) => address.id === selectedSavedAddressId,
-    );
-    if (!selectedAddress) return;
-
-    setAddressPendingDeletion(selectedAddress);
-  };
-
   const confirmDeleteSelectedAddress = async () => {
     const selectedAddress = addressPendingDeletion;
     if (!selectedAddress || isDeletingAddress) return;
@@ -367,239 +496,217 @@ export const ShippingInfoStep = ({
     }
   };
 
+  const showSavedAddresses = allowSavedAddresses && Boolean(userId);
+  const selectedSavedAddress = savedAddresses.find(
+    (address) => address.id === selectedSavedAddressId,
+  );
+
+  const modeOptions = [
+    {
+      value: "ENVIOCLICK",
+      icon: Truck,
+      title: "Encomienda nacional",
+      description: "Transportadoras a todo el país. Cotizamos al instante.",
+      badge: null,
+    },
+    {
+      value: "MEDELLIN_LOCAL",
+      icon: Bike,
+      title: "Domicilio mismo día",
+      description: "Solo Medellín y Valle de Aburrá.",
+      badge: isMedellinArea ? "Medellín" : null,
+    },
+    {
+      value: "CUSTOM_WHATSAPP",
+      icon: MessageSquare,
+      title: "Acordar por WhatsApp",
+      description: "Interrapidísimo contraentrega o casos especiales.",
+      badge: null,
+    },
+  ] as const;
+
   return (
     <>
-      <div className="space-y-8 duration-500 animate-in fade-in-0 slide-in-from-right-4">
-        <div className="space-y-2">
-          <h2 className="bg-gradient-to-r from-primary to-accent bg-clip-text text-3xl font-bold text-transparent">
-            Información de envío
+      <div className="space-y-6 duration-500 animate-in fade-in-0 slide-in-from-right-4">
+        <div className="space-y-1">
+          <h2 className="font-serif text-2xl font-bold text-blue-yankees sm:text-3xl">
+            ¿A dónde lo enviamos?
           </h2>
-          <p className="text-muted-foreground">¿A dónde enviamos tu pedido?</p>
+          <p className="text-sm text-muted-foreground">
+            Las tarifas se calculan solas cuando completas ciudad y dirección.
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-          {allowSavedAddresses && userId && (
-            <div className="col-span-1 space-y-4 rounded-xl border border-primary/20 bg-primary/5 p-4 sm:col-span-2">
-              <div className="flex items-start gap-3">
-                <div className="rounded-full bg-background p-2 text-primary shadow-sm">
-                  <MapPinHouse className="h-4 w-4" aria-hidden="true" />
-                </div>
-                <div className="space-y-1">
-                  <h3 className="font-semibold">Direcciones guardadas</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Elige una para completar el envío más rápido o guarda la que
-                    estás escribiendo.
-                  </p>
-                </div>
+        {showSavedAddresses && (
+          <div className="space-y-3">
+            <p className="font-serif text-xs font-semibold text-foreground/90">
+              Tus direcciones guardadas
+            </p>
+            {isLoadingAddresses ? (
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                <Skeleton className="h-16 w-full rounded-xl" />
+                <Skeleton className="h-16 w-full rounded-xl" />
               </div>
-
-              {isLoadingAddresses ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2
-                    className="h-4 w-4 animate-spin"
-                    aria-hidden="true"
-                  />
-                  Cargando tus direcciones…
-                </div>
-              ) : savedAddresses.length > 0 ? (
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <Label htmlFor="saved-address">Usar una dirección</Label>
-                    <Select
-                      value={selectedSavedAddressId || "new"}
-                      onValueChange={handleSavedAddressChange}
-                      disabled={Boolean(isLoading)}
-                    >
-                      <SelectTrigger
-                        id="saved-address"
-                        className="bg-background"
+            ) : (
+              <RadioGroup
+                value={selectedSavedAddressId || "new"}
+                onValueChange={(value) => void handleSavedAddressChange(value)}
+                disabled={Boolean(isLoading)}
+                aria-label="Direcciones guardadas"
+                className="grid grid-cols-1 gap-2.5 sm:grid-cols-2"
+              >
+                {savedAddresses.map((savedAddress) => {
+                  const isSelected = selectedSavedAddressId === savedAddress.id;
+                  return (
+                    <div key={savedAddress.id} className="relative">
+                      <RadioGroupItem
+                        value={savedAddress.id}
+                        id={`saved-${savedAddress.id}`}
+                        className="peer sr-only"
+                      />
+                      <Label
+                        htmlFor={`saved-${savedAddress.id}`}
+                        className={cn(
+                          "flex min-h-[64px] cursor-pointer items-center gap-3 rounded-xl border-2 border-muted bg-card px-3.5 py-3 font-sans transition-[border-color,background-color] hover:border-primary/50",
+                          "peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-blue-purple/10",
+                          "peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2",
+                        )}
                       >
-                        <SelectValue placeholder="Elige una dirección" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="new">
-                          Ingresar una dirección nueva
-                        </SelectItem>
-                        {savedAddresses.map((savedAddress) => (
-                          <SelectItem
-                            key={savedAddress.id}
-                            value={savedAddress.id}
-                          >
-                            <span className="flex max-w-[18rem] flex-col text-left sm:max-w-[28rem]">
-                              <span className="font-medium">
-                                {savedAddress.label}
-                              </span>
-                              <span className="truncate text-xs text-muted-foreground">
-                                {savedAddress.address} ·{" "}
-                                {savedAddress.city || "Sin ciudad"}
-                              </span>
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {selectedSavedAddressId && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive hover:text-destructive"
-                      onClick={handleDeleteSelectedAddress}
-                      disabled={isDeletingAddress || Boolean(isLoading)}
-                    >
-                      {isDeletingAddress ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="mr-2 h-4 w-4" />
-                      )}
-                      Eliminar
-                    </Button>
-                  )}
-                </div>
-              ) : (
-                <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <MapPin className="h-4 w-4" aria-hidden="true" />
-                  Aún no tienes direcciones guardadas.
-                </p>
-              )}
-
-              <div className="space-y-3 rounded-lg border bg-background/80 p-3">
-                <div className="flex items-start gap-3">
-                  <Checkbox
-                    id="save-address"
-                    checked={wantsToSaveAddress}
-                    onCheckedChange={(checked) => {
-                      form.setValue("saveAddress", checked === true, {
-                        shouldDirty: true,
-                      });
-                    }}
-                    disabled={Boolean(isLoading)}
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2",
+                            isSelected
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-muted-foreground/50",
+                          )}
+                        >
+                          {isSelected && (
+                            <Check className="h-3 w-3 stroke-[3]" />
+                          )}
+                        </span>
+                        <Home
+                          className="h-4 w-4 shrink-0 text-primary"
+                          aria-hidden="true"
+                        />
+                        <span className="flex min-w-0 flex-1 flex-col">
+                          <span className="text-sm font-semibold">
+                            {savedAddress.label || "Dirección guardada"}
+                          </span>
+                          <span className="truncate text-xs text-muted-foreground">
+                            {savedAddress.address}
+                            {savedAddress.city ? ` · ${savedAddress.city}` : ""}
+                          </span>
+                        </span>
+                      </Label>
+                    </div>
+                  );
+                })}
+                <div className="relative">
+                  <RadioGroupItem
+                    value="new"
+                    id="saved-new"
+                    className="peer sr-only"
                   />
                   <Label
-                    htmlFor="save-address"
-                    className="cursor-pointer text-sm leading-5"
+                    htmlFor="saved-new"
+                    className={cn(
+                      "flex min-h-[64px] cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed border-muted bg-card px-3.5 py-3 font-sans transition-[border-color,background-color] hover:border-primary/50",
+                      "peer-data-[state=checked]:border-solid peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-blue-purple/10",
+                      "peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2",
+                    )}
                   >
-                    {selectedSavedAddressId
-                      ? "Actualizar esta dirección con los datos de este pedido"
-                      : "Guardar esta dirección para mi próxima compra"}
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2",
+                        !selectedSavedAddressId
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-muted-foreground/50",
+                      )}
+                    >
+                      {!selectedSavedAddressId && (
+                        <Check className="h-3 w-3 stroke-[3]" />
+                      )}
+                    </span>
+                    <Plus
+                      className="h-4 w-4 shrink-0 text-primary"
+                      aria-hidden="true"
+                    />
+                    <span className="text-sm font-semibold">
+                      {savedAddresses.length > 0
+                        ? "Nueva dirección"
+                        : "Escribir mi dirección"}
+                    </span>
                   </Label>
                 </div>
-                {wantsToSaveAddress && (
-                  <FormField
-                    control={form.control}
-                    name="addressLabel"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm">
-                          Nombre para reconocerla
-                        </FormLabel>
-                        <FormControl>
-                          <Input
-                            className="bg-background"
-                            placeholder="Ej.: Casa, Oficina o Regalo"
-                            disabled={Boolean(isLoading)}
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          Es opcional. Si lo dejas vacío aparecerá como
-                          “Dirección guardada”.
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
-              </div>
-
-              {addressActionError && (
-                <p className="text-sm text-muted-foreground" role="status">
-                  {addressActionError}
-                </p>
-              )}
-            </div>
-          )}
-          <div className="col-span-1 sm:col-span-2">
-            <FormField
-              control={form.control}
-              name="daneCode"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-foreground/90">
-                    Busca tu ciudad y departamento
-                  </FormLabel>
-                  <FormControl>
-                    <AutocompleteLocation
-                      options={locations || []}
-                      value={field.value || ""}
-                      defaultDisplayValue={
-                        form.getValues("city") && form.getValues("department")
-                          ? `${form.getValues("city")} - ${form.getValues(
-                              "department",
-                            )}`
-                          : undefined
-                      }
-                      onSearch={setSearchQuery}
-                      onChange={async (value, location) => {
-                        field.onChange(value);
-                        if (location) {
-                          form.setValue("city", location.city);
-                          form.setValue("department", location.department);
-                          // Trigger validation to clear any errors
-                          await form.trigger(["city", "department"]);
-                        }
-                      }}
-                      onClear={() => {
-                        form.setValue("city", "");
-                        form.setValue("department", "");
-                      }}
-                      isLoading={isLoadingLocations}
-                      disabled={isLoading}
-                      placeholder="Escribe el nombre de tu ciudad o departamento..."
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-          <FormField
-            control={form.control}
-            name="city"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-foreground/90">Ciudad *</FormLabel>
-                <FormControl>
-                  <Input
-                    className="bg-blue-purple/20 invalid:bg-pink-froly/20"
-                    disabled={locationsDisabled}
-                    placeholder="Ciudad"
-                    readOnly={!!selectedDaneCode}
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
+              </RadioGroup>
             )}
-          />
+            {selectedSavedAddress && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-9 rounded-full text-destructive hover:text-destructive"
+                onClick={() => setAddressPendingDeletion(selectedSavedAddress)}
+                disabled={isDeletingAddress || Boolean(isLoading)}
+              >
+                {isDeletingAddress ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                )}
+                Eliminar «{selectedSavedAddress.label || "esta dirección"}»
+              </Button>
+            )}
+            {addressActionError && (
+              <p className="text-sm text-muted-foreground" role="status">
+                {addressActionError}
+              </p>
+            )}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <FormField
             control={form.control}
-            name="department"
+            name="daneCode"
             render={({ field }) => (
               <FormItem>
                 <FormLabel className="text-foreground/90">
-                  Departamento *
+                  Ciudad y departamento *
                 </FormLabel>
                 <FormControl>
-                  <Input
-                    className="bg-blue-purple/20 invalid:bg-pink-froly/20"
-                    disabled={locationsDisabled}
-                    placeholder="Departamento"
-                    readOnly={!!selectedDaneCode}
-                    {...field}
+                  <AutocompleteLocation
+                    options={locations || []}
+                    value={field.value || ""}
+                    defaultDisplayValue={
+                      selectedCity && selectedDept
+                        ? `${selectedCity} - ${selectedDept}`
+                        : undefined
+                    }
+                    onSearch={setSearchQuery}
+                    onChange={async (value, location) => {
+                      field.onChange(value);
+                      if (location) {
+                        form.setValue("city", location.city);
+                        form.setValue("department", location.department);
+                        await form.trigger(["city", "department", "daneCode"]);
+                      }
+                    }}
+                    onClear={() => {
+                      form.setValue("city", "");
+                      form.setValue("department", "");
+                    }}
+                    isLoading={isLoadingLocations}
+                    disabled={isLoading}
+                    placeholder="Escribe tu ciudad…"
                   />
                 </FormControl>
+                <FormDescription>
+                  Escribe y elige de la lista. Si no aparece, escríbenos por
+                  WhatsApp.
+                </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -609,388 +716,438 @@ export const ShippingInfoStep = ({
             name="address1"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-foreground/90">
-                  Dirección *
-                </FormLabel>
+                <FormLabel className="text-foreground/90">Dirección *</FormLabel>
                 <FormControl>
                   <Input
-                    className="bg-blue-purple/20 invalid:bg-pink-froly/20"
+                    className={optionalInputClass}
                     disabled={locationsDisabled}
-                    placeholder="ej: Calle 123 #45-67"
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="address2"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-foreground/90">
-                  Dirección adicional
-                </FormLabel>
-                <FormControl>
-                  <Input
-                    className="bg-blue-purple/20 invalid:bg-pink-froly/20"
-                    disabled={locationsDisabled}
-                    placeholder="ej: Piso 3, Apartamento 123"
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="neighborhood"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-foreground/90">Barrio</FormLabel>
-                <FormControl>
-                  <Input
-                    className="bg-blue-purple/20 invalid:bg-pink-froly/20"
-                    disabled={locationsDisabled}
-                    placeholder="ej: Barrio 123"
+                    autoComplete="street-address"
+                    placeholder="Ej. Calle 12 AA Sur #55D-30"
                     {...field}
                   />
                 </FormControl>
                 <FormDescription>
-                  Tu barrio es opcional, si no lo conoces puedes dejarlo en
-                  blanco.
+                  Calle, carrera o vereda con número.
                 </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
           />
-          <FormField
-            control={form.control}
-            name="company"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-foreground/90">Empresa</FormLabel>
-                <FormControl>
-                  <Input
-                    className="bg-blue-purple/20 invalid:bg-pink-froly/20"
-                    disabled={locationsDisabled}
-                    placeholder="ej: Empresa 123"
-                    {...field}
-                  />
-                </FormControl>
-                <FormDescription>
-                  Sólo si la compra es a nombre de una empresa
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
+        </div>
+
+        <div className="space-y-4">
+          <button
+            type="button"
+            onClick={() => setShowDetails((open) => !open)}
+            aria-expanded={showDetails}
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-blue-yankees underline-offset-4 hover:underline"
+          >
+            {showDetails ? (
+              <ChevronDown className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <Plus className="h-4 w-4" aria-hidden="true" />
             )}
-          />
-          <FormField
-            control={form.control}
-            name="addressReference"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-foreground/90">Referencia</FormLabel>
-                <FormControl>
-                  <Textarea
-                    className="bg-blue-purple/20 invalid:bg-pink-froly/20"
-                    disabled={locationsDisabled}
-                    placeholder="ej: Frente al supermercado"
-                    {...field}
-                  />
-                </FormControl>
-                <FormDescription>
-                  Datos adicionales que ayuden a localizar tu domicilio, esto es
-                  opcional.
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+            Agregar apartamento, barrio, referencia o empresa
+          </button>
 
-          {/* Shipping Option Type Selector */}
-          <div className="col-span-1 sm:col-span-2">
-            <FormField
-              control={form.control}
-              name="shippingOptionType"
-              render={({ field }) => (
-                <FormItem className="space-y-3">
-                  <FormLabel className="font-medium text-foreground/90">
-                    Selecciona la modalidad de entrega *
-                  </FormLabel>
-                  <FormControl>
-                    <RadioGroup
-                      onValueChange={(val) => {
-                        field.onChange(val);
-                        if (val === "MEDELLIN_LOCAL") {
-                          form.setValue("shippingProvider", "MANUAL");
-                          form.setValue("envioClickIdRate", 0);
-                          form.setValue("shipping", {
-                            carrierName: "Domicilio Mismo Día (Medellín)",
-                            courier: "Domiciliario Local",
-                            productName: "Entrega Mismo Día Medellín",
-                            cost: 0,
-                            flete: 0,
-                            status: ShippingStatus.Preparing,
-                          });
-                        } else if (val === "CUSTOM_WHATSAPP") {
-                          form.setValue("shippingProvider", "MANUAL");
-                          form.setValue("envioClickIdRate", 0);
-                          form.setValue("shipping", {
-                            carrierName: "Acordar por WhatsApp",
-                            courier: "Transportadora a Convenir",
-                            productName: "Envío Especial / Flete al Cobro",
-                            cost: 0,
-                            flete: 0,
-                            status: ShippingStatus.Preparing,
-                          });
-                        } else {
-                          form.setValue("shippingProvider", "ENVIOCLICK");
-                          form.setValue("shipping", {});
-                        }
-                      }}
-                      value={field.value || "ENVIOCLICK"}
-                      className="grid grid-cols-1 gap-3 md:grid-cols-3"
-                    >
-                      {/* Card 1: EnvioClick */}
-                      <div className="relative">
-                        <RadioGroupItem
-                          value="ENVIOCLICK"
-                          id="opt-envioclick"
-                          className="peer sr-only"
-                        />
-                        <Label
-                          htmlFor="opt-envioclick"
-                          className="flex h-full cursor-pointer flex-col items-start justify-between rounded-xl border-2 border-muted bg-popover p-4 transition-all hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-purple-600 peer-data-[state=checked]:bg-purple-50/40"
-                        >
-                          <div className="flex items-center gap-2 font-semibold">
-                            <Truck className="h-5 w-5 shrink-0 text-purple-600" />
-                            <span className="text-sm">Encomienda Nacional</span>
-                          </div>
-                          <p className="mt-2 text-xs text-muted-foreground">
-                            Cotización en vivo con múltiples transportadoras
-                            nacionales (según cobertura).{" "}
-                            <b>Soporta Pago Contraentrega</b>.
-                          </p>
-                        </Label>
-                      </div>
-
-                      {/* Card 2: Domicilio Mismo Día Medellín */}
-                      <div className="relative">
-                        <RadioGroupItem
-                          value="MEDELLIN_LOCAL"
-                          id="opt-medellin"
-                          className="peer sr-only"
-                        />
-                        <Label
-                          htmlFor="opt-medellin"
-                          className="flex h-full cursor-pointer flex-col items-start justify-between rounded-xl border-2 border-muted bg-popover p-4 transition-all hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-purple-600 peer-data-[state=checked]:bg-purple-50/40"
-                        >
-                          <div className="flex w-full items-center justify-between font-semibold">
-                            <div className="flex items-center gap-2">
-                              <Bike className="h-5 w-5 shrink-0 text-emerald-600" />
-                              <span className="text-sm">
-                                Domicilio Mismo Día
-                              </span>
-                            </div>
-                            {isMedellinArea && (
-                              <Badge
-                                variant="outline"
-                                className="bg-emerald-100 text-[10px] text-emerald-800"
-                              >
-                                Medellín
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="mt-2 text-xs text-muted-foreground">
-                            Mensajería local especializada en Medellín y Valle
-                            de Aburrá.
-                          </p>
-                        </Label>
-                      </div>
-
-                      {/* Card 3: Acordar por WhatsApp */}
-                      <div className="relative">
-                        <RadioGroupItem
-                          value="CUSTOM_WHATSAPP"
-                          id="opt-whatsapp"
-                          className="peer sr-only"
-                        />
-                        <Label
-                          htmlFor="opt-whatsapp"
-                          className="flex h-full cursor-pointer flex-col items-start justify-between rounded-xl border-2 border-muted bg-popover p-4 transition-all hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-purple-600 peer-data-[state=checked]:bg-purple-50/40"
-                        >
-                          <div className="flex items-center gap-2 font-semibold">
-                            <MessageSquare className="h-5 w-5 shrink-0 text-green-600" />
-                            <span className="text-sm">
-                              Acordar por WhatsApp
-                            </span>
-                          </div>
-                          <p className="mt-2 text-xs text-muted-foreground">
-                            Interrapidísimo contraentrega, flete al cobro o
-                            transportadoras especiales.
-                          </p>
-                        </Label>
-                      </div>
-                    </RadioGroup>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-
-          {/* Dynamic Shipping Option Details */}
-          {form.watch("shippingOptionType") === "MEDELLIN_LOCAL" && (
-            <div className="col-span-1 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 text-emerald-900 sm:col-span-2">
-              <Bike className="mt-0.5 h-6 w-6 shrink-0 text-emerald-600" />
-              <div>
-                <h4 className="text-sm font-semibold">
-                  Domicilio Mismo Día (Medellín y Área Metropolitana)
-                </h4>
-                <p className="mt-1 text-xs text-emerald-700">
-                  Tu pedido será entregado directamente con nuestro domiciliario
-                  especializado. Coordinaremos la hora exacta de entrega por
-                  WhatsApp tras finalizar el pedido.
-                </p>
-              </div>
+          {showDetails && (
+            <div className="grid grid-cols-1 gap-5 duration-300 animate-in fade-in-0 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="address2"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-foreground/90">
+                      Apartamento, torre u oficina
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        className={optionalInputClass}
+                        disabled={locationsDisabled}
+                        autoComplete="address-line2"
+                        placeholder="Ej. Torre 2, apto 1801"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="neighborhood"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-foreground/90">Barrio</FormLabel>
+                    <FormControl>
+                      <Input
+                        className={optionalInputClass}
+                        disabled={locationsDisabled}
+                        placeholder="Ej. Belén"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="addressReference"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-foreground/90">
+                      Referencia para el mensajero
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        className={optionalInputClass}
+                        disabled={locationsDisabled}
+                        maxLength={25}
+                        placeholder="Ej. Portería, frente al parque"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormDescription>Hasta 25 caracteres.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="company"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-foreground/90">
+                      Empresa (solo si aplica)
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        className={optionalInputClass}
+                        disabled={locationsDisabled}
+                        autoComplete="organization"
+                        placeholder="Nombre de la empresa"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
           )}
 
-          {form.watch("shippingOptionType") === "CUSTOM_WHATSAPP" && (
-            <div className="col-span-1 flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50/60 p-4 text-blue-900 sm:col-span-2">
-              <MessageSquare className="mt-0.5 h-6 w-6 shrink-0 text-blue-600" />
-              <div>
-                <h4 className="text-sm font-semibold">
-                  Acordar Transportadora y Flete por WhatsApp
-                </h4>
-                <p className="mt-1 text-xs text-blue-700">
-                  Ideal para Interrapidísimo flete al cobro o transportadoras
-                  personalizadas. Realiza tu pago online y al finalizar podrás
-                  coordinar directamente con nuestro asesor por WhatsApp.
-                </p>
+          {showSavedAddresses && (
+            <div className="space-y-3">
+              <div className="flex items-start gap-2.5">
+                <Checkbox
+                  id="save-address"
+                  checked={wantsToSaveAddress}
+                  onCheckedChange={(checked) => {
+                    form.setValue("saveAddress", checked === true, {
+                      shouldDirty: true,
+                    });
+                  }}
+                  disabled={Boolean(isLoading)}
+                  className="mt-0.5 h-5 w-5 border-blue-yankees bg-white"
+                />
+                <Label
+                  htmlFor="save-address"
+                  className="cursor-pointer text-sm leading-5"
+                >
+                  {selectedSavedAddressId
+                    ? "Actualizar esta dirección con los datos de este pedido"
+                    : "Guardar esta dirección para mi próxima compra"}
+                </Label>
               </div>
-            </div>
-          )}
-
-          {/* Calculate Rates Button (Only shown for ENVIOCLICK mode) */}
-          {(!form.watch("shippingOptionType") ||
-            form.watch("shippingOptionType") === "ENVIOCLICK") && (
-            <>
-              <div className="col-span-1 sm:col-span-2">
-                {!localQuoteData && (
-                  <Button
-                    type="button"
-                    onClick={handleFetchQuotes}
-                    disabled={!canFetchQuotes || isLoadingQuotes}
-                    className="w-full bg-gradient-to-r from-blue-baby to-blue-baby/80 text-primary shadow-lg transition-all hover:scale-[1.02] hover:shadow-xl"
-                  >
-                    {isLoadingQuotes ? (
-                      <>
-                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                        Calculando tarifas...
-                      </>
-                    ) : (
-                      <>
-                        <PackageSearch className="mr-2 h-5 w-5" />
-                        Calcular tarifas de envío
-                      </>
-                    )}
-                  </Button>
-                )}
-                {localQuoteData && (
-                  <Button
-                    type="button"
-                    onClick={handleResetQuotes}
-                    variant="outline"
-                    className="w-full"
-                  >
-                    <PackageSearch className="mr-2 h-5 w-5" />
-                    Recalcular tarifas de envío
-                  </Button>
-                )}
-                {!canFetchQuotes && !localQuoteData && (
-                  <p className="mt-2 text-center text-sm text-muted-foreground">
-                    Completa la ubicación y dirección para calcular las tarifas
-                  </p>
-                )}
-                {quoteError && (
-                  <p className="mt-2 text-center text-sm text-destructive">
-                    Error: {quoteError.message ?? "Error desconocido"}
-                  </p>
-                )}
-              </div>
-
-              {/* Shipping Rates */}
-              <div className="col-span-1 sm:col-span-2">
+              {wantsToSaveAddress && (
                 <FormField
                   control={form.control}
-                  name="envioClickIdRate"
+                  name="addressLabel"
                   render={({ field }) => (
-                    <FormItem>
-                      {localQuoteData && (
-                        <FormLabel className="text-foreground/90">
-                          Selecciona una tarifa de envío *
-                        </FormLabel>
-                      )}
+                    <FormItem className="max-w-sm">
+                      <FormLabel className="text-foreground/90">
+                        Nombre para reconocerla
+                      </FormLabel>
                       <FormControl>
-                        {localQuoteData ? (
-                          <ShippingRatesSelector
-                            quotes={localQuoteData?.quotes || []}
-                            selectedRate={field.value}
-                            onSelect={async (idRate) => {
-                              field.onChange(idRate);
-
-                              // Find selected quote and update shipping details
-                              const selectedQuote = localQuoteData?.quotes.find(
-                                (q) => q.idRate === idRate,
-                              );
-
-                              if (selectedQuote) {
-                                form.setValue("shipping", {
-                                  carrierName: selectedQuote.carrier,
-                                  courier: selectedQuote.carrier,
-                                  productName: selectedQuote.product,
-                                  flete: selectedQuote.flete,
-                                  minimumInsurance:
-                                    selectedQuote.minimumInsurance,
-                                  deliveryDays: Number(
-                                    selectedQuote.deliveryDays,
-                                  ),
-                                  isCOD: selectedQuote.isCOD,
-                                  cost: selectedQuote.totalCost,
-                                  status: ShippingStatus.Preparing,
-                                });
-                              }
-
-                              // Trigger validation to clear any errors
-                              await form.trigger("envioClickIdRate");
-                            }}
-                            onClear={() => {
-                              field.onChange(undefined);
-                              form.setValue("shipping", {});
-                            }}
-                            isLoading={isLoadingQuotes}
-                          />
-                        ) : (
-                          <input type="hidden" {...field} />
-                        )}
+                        <Input
+                          className={optionalInputClass}
+                          placeholder="Ej. Casa, Oficina o Regalo"
+                          disabled={Boolean(isLoading)}
+                          {...field}
+                        />
                       </FormControl>
-                      {localQuoteData && (
-                        <FormDescription>
-                          Selecciona la tarifa de envío que deseas utilizar.
-                        </FormDescription>
-                      )}
+                      <FormDescription>
+                        Opcional. Si lo dejas vacío aparecerá como «Dirección
+                        guardada».
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-              </div>
-            </>
+              )}
+            </div>
           )}
         </div>
+
+        <FormField
+          control={form.control}
+          name="shippingOptionType"
+          render={({ field }) => (
+            <FormItem className="space-y-3">
+              <FormLabel id={modeLabelId} className="text-foreground/90">
+                ¿Cómo quieres recibirlo? *
+              </FormLabel>
+              <FormControl>
+                <RadioGroup
+                  onValueChange={(value) => {
+                    field.onChange(value);
+                    if (value === "MEDELLIN_LOCAL") {
+                      form.setValue("shippingProvider", "MANUAL");
+                      form.setValue("envioClickIdRate", 0);
+                      form.setValue("shipping", MEDELLIN_SHIPPING);
+                    } else if (value === "CUSTOM_WHATSAPP") {
+                      form.setValue("shippingProvider", "MANUAL");
+                      form.setValue("envioClickIdRate", 0);
+                      form.setValue("shipping", WHATSAPP_SHIPPING);
+                    } else {
+                      form.setValue("shippingProvider", "ENVIOCLICK");
+                      form.setValue("envioClickIdRate", 0);
+                      form.setValue("shipping", {});
+                    }
+                  }}
+                  value={shippingOptionType}
+                  aria-labelledby={modeLabelId}
+                  disabled={Boolean(isLoading)}
+                  className="grid grid-cols-1 gap-2.5 md:grid-cols-3"
+                >
+                  {modeOptions.map((option) => {
+                    const Icon = option.icon;
+                    const isSelected = shippingOptionType === option.value;
+                    return (
+                      <div key={option.value} className="relative">
+                        <RadioGroupItem
+                          value={option.value}
+                          id={`opt-${option.value.toLowerCase()}`}
+                          className="peer sr-only"
+                        />
+                        <Label
+                          htmlFor={`opt-${option.value.toLowerCase()}`}
+                          className={cn(
+                            "flex h-full cursor-pointer flex-col gap-1.5 rounded-xl border-2 border-muted bg-card p-3.5 font-sans transition-[border-color,background-color] hover:border-primary/50",
+                            "peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-blue-purple/10",
+                            "peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2",
+                          )}
+                        >
+                          <span className="flex items-center gap-2">
+                            <span
+                              aria-hidden="true"
+                              className={cn(
+                                "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2",
+                                isSelected
+                                  ? "border-primary bg-primary text-primary-foreground"
+                                  : "border-muted-foreground/50",
+                              )}
+                            >
+                              {isSelected && (
+                                <Check className="h-3 w-3 stroke-[3]" />
+                              )}
+                            </span>
+                            <Icon
+                              className="h-4 w-4 shrink-0 text-primary"
+                              aria-hidden="true"
+                            />
+                            <span className="text-sm font-semibold">
+                              {option.title}
+                            </span>
+                            {option.badge && (
+                              <span className="ml-auto rounded-full bg-kawaii-mint-light px-2 py-0.5 text-[11px] font-semibold text-emerald-900">
+                                {option.badge}
+                              </span>
+                            )}
+                          </span>
+                          <span className="pl-7 text-xs leading-snug text-muted-foreground">
+                            {option.description}
+                          </span>
+                        </Label>
+                      </div>
+                    );
+                  })}
+                </RadioGroup>
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {shippingOptionType === "MEDELLIN_LOCAL" && (
+          <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 text-emerald-900">
+            <Bike
+              className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600"
+              aria-hidden="true"
+            />
+            <div>
+              <h3 className="text-sm font-semibold">
+                Domicilio mismo día (Medellín y área metropolitana)
+              </h3>
+              <p className="mt-1 text-xs text-emerald-800">
+                Entregamos con nuestro domiciliario. Coordinamos la hora por
+                WhatsApp cuando confirmes el pedido; el valor del domicilio se
+                acuerda allí.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {shippingOptionType === "CUSTOM_WHATSAPP" && (
+          <div className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50/60 p-4 text-blue-900">
+            <MessageSquare
+              className="mt-0.5 h-5 w-5 shrink-0 text-blue-600"
+              aria-hidden="true"
+            />
+            <div>
+              <h3 className="text-sm font-semibold">
+                Acordar transportadora y flete por WhatsApp
+              </h3>
+              <p className="mt-1 text-xs text-blue-800">
+                Ideal para Interrapidísimo con flete al cobro o transportadoras
+                especiales. Pagas los productos ahora y acordamos el envío por
+                WhatsApp al confirmar.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {shippingOptionType === "ENVIOCLICK" && (
+          <FormField
+            control={form.control}
+            name="envioClickIdRate"
+            render={({ field }) => (
+              <FormItem className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <FormLabel id={ratesLabelId} className="text-foreground/90">
+                    Transportadora *
+                  </FormLabel>
+                  {canFetchQuotes && quotesMatchCurrentAddress && (
+                    <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Check
+                        className="h-3.5 w-3.5 text-success"
+                        aria-hidden="true"
+                      />
+                      Tarifas para {selectedCity || "tu ciudad"}
+                      <button
+                        type="button"
+                        onClick={handleRetryQuotes}
+                        disabled={isLoadingQuotes}
+                        className="inline-flex items-center gap-1 font-semibold text-blue-yankees underline-offset-4 hover:underline disabled:opacity-50"
+                      >
+                        <RefreshCw className="h-3 w-3" aria-hidden="true" />
+                        Actualizar
+                      </button>
+                    </span>
+                  )}
+                </div>
+                <FormControl>
+                  <div>
+                    <input
+                      type="hidden"
+                      name={field.name}
+                      value={field.value ?? 0}
+                      readOnly
+                    />
+                    {!canFetchQuotes ? (
+                      <p className="flex items-center gap-2 rounded-xl border border-dashed border-muted p-4 text-sm text-muted-foreground">
+                        <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        Completa la ciudad y la dirección: las tarifas aparecen
+                        aquí solas.
+                      </p>
+                    ) : isLoadingQuotes || (!quotesMatchCurrentAddress && !quoteError) ? (
+                      <ShippingRatesSelector
+                        quotes={[]}
+                        onSelect={applyRate}
+                        isLoading
+                        ariaLabelledBy={ratesLabelId}
+                      />
+                    ) : quoteError ? (
+                      <div
+                        className="flex flex-col gap-3 rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm sm:flex-row sm:items-center sm:justify-between"
+                        role="alert"
+                      >
+                        <p className="text-destructive">
+                          <strong>No pudimos calcular el envío.</strong>{" "}
+                          {quoteError.message ||
+                            "Suele ser un problema momentáneo de conexión."}
+                        </p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleRetryQuotes}
+                          className="shrink-0 rounded-full"
+                        >
+                          <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
+                          Volver a calcular
+                        </Button>
+                      </div>
+                    ) : groupedQuotes.length === 0 ? (
+                      <div
+                        className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-950"
+                        role="status"
+                      >
+                        <p>
+                          <strong>
+                            Ninguna transportadora cubre esta dirección por
+                            ahora.
+                          </strong>{" "}
+                          Revisa la ciudad o coordina el envío con nosotras por
+                          WhatsApp.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleRetryQuotes}
+                            className="rounded-full"
+                          >
+                            <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
+                            Reintentar
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={chooseWhatsAppShipping}
+                            className="rounded-full"
+                          >
+                            <MessageSquare className="mr-2 h-4 w-4" aria-hidden="true" />
+                            Acordar por WhatsApp
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <ShippingRatesSelector
+                        quotes={groupedQuotes}
+                        selectedRate={field.value || undefined}
+                        onSelect={applyRate}
+                        freeShipping={freeShipping}
+                        disabled={Boolean(isLoading)}
+                        ariaLabelledBy={ratesLabelId}
+                      />
+                    )}
+                  </div>
+                </FormControl>
+                {groupedQuotes.length > 0 && (
+                  <FormDescription>
+                    Mostramos una tarifa por transportadora, la más barata. La
+                    tarifa se mantiene si eliges pago contra entrega.
+                  </FormDescription>
+                )}
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
       </div>
       <ActionConfirmationDialog
         isOpen={Boolean(addressPendingDeletion)}

@@ -1,8 +1,12 @@
+/**
+ * Checkout step names are an analytics contract (GA4 + Clarity tags).
+ * Since 2026-09 the checkout has three steps: the old «revision» screen
+ * lives inside «pago».
+ */
 export const CHECKOUT_STEP_NAMES = {
   1: "informacion",
   2: "envio",
   3: "pago",
-  4: "revision",
 } as const;
 
 export type CheckoutStepNumber = keyof typeof CHECKOUT_STEP_NAMES;
@@ -15,12 +19,14 @@ const CHECKOUT_FIELD_GROUPS: Record<string, string> = {
   addressReference: "direccion_entrega",
   city: "ubicacion_entrega",
   company: "direccion_entrega",
+  couponCode: "cupon",
   daneCode: "ubicacion_entrega",
   department: "ubicacion_entrega",
   documentId: "informacion_contacto",
   email: "informacion_contacto",
   envioClickIdRate: "tarifa_envio",
   firstName: "informacion_contacto",
+  fullName: "informacion_contacto",
   lastName: "informacion_contacto",
   neighborhood: "direccion_entrega",
   paymentMethod: "metodo_pago",
@@ -67,6 +73,13 @@ function getResponseStatus(error: unknown): number | null {
   return typeof response.status === "number" ? response.status : null;
 }
 
+function isTimeoutError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const code = "code" in error ? error.code : undefined;
+  const name = "name" in error ? error.name : undefined;
+  return code === "ECONNABORTED" || code === "ETIMEDOUT" || name === "AbortError";
+}
+
 export function getCheckoutRequestFailureAnalytics(error: unknown) {
   const httpStatus = getResponseStatus(error);
 
@@ -77,6 +90,7 @@ export function getCheckoutRequestFailureAnalytics(error: unknown) {
   else if (httpStatus === 400 || httpStatus === 409 || httpStatus === 422) {
     failureType = "request_rejected";
   } else if (httpStatus !== null) failureType = "http_error";
+  else if (isTimeoutError(error)) failureType = "timeout";
 
   return {
     failure_type: failureType,

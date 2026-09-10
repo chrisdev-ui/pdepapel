@@ -1,6 +1,7 @@
 import { BATCH_SIZE } from "@/constants";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createCorsHeaders } from "@/lib/cors";
+import { withIdempotency } from "@/lib/idempotency";
 import { getColombiaDate } from "@/lib/date-utils";
 import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
@@ -85,7 +86,20 @@ export async function OPTIONS(req: Request) {
   return NextResponse.json({}, { headers: getCorsHeaders(req) });
 }
 
+/** A retried order (timeout, double tap) replays the order it already created. */
 export async function POST(
+  req: Request,
+  context: { params: { storeId: string } },
+) {
+  return withIdempotency(
+    req,
+    context.params.storeId,
+    () => createOrder(req, context),
+    getCorsHeaders(req),
+  );
+}
+
+async function createOrder(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {

@@ -1,14 +1,10 @@
-import { SEASON_CONFIG } from "@/constants";
 import { cn } from "@/lib/utils";
-import { Season } from "@/types";
 import { Check } from "lucide-react";
-import Image from "next/image";
 
 interface Step {
   id: number;
   name: string;
   description: string;
-  logo: string;
 }
 
 interface MultiStepFormProps {
@@ -16,141 +12,95 @@ interface MultiStepFormProps {
   currentStep: number;
   children: React.ReactNode;
   className?: string;
-  season?: Season;
 }
 
+/**
+ * Stepper + step content. Numbered circles instead of illustrations: the
+ * progress reads at a glance on a phone and needs no seasonal assets.
+ */
 export const MultiStepForm = ({
   steps,
   currentStep,
   children,
   className,
-  season = Season.Default,
 }: MultiStepFormProps) => {
-  const seasonConfig = SEASON_CONFIG[season];
+  const progress =
+    steps.length > 1 ? ((currentStep - 1) / (steps.length - 1)) * 100 : 0;
 
   return (
     <div className={cn("w-full", className)}>
-      {/* {Stepper} */}
-      <div className="mb-6 sm:mb-8">
-        <div className="relative flex flex-col items-start gap-4 px-2 xs:flex-row xs:items-start xs:justify-between sm:px-4">
-          {/* Progress Line with Glow - Vertical on mobile, Horizontal on xxs+ */}
-          <div className="absolute left-4 top-0 h-full w-0.5 overflow-hidden rounded-full bg-border xs:left-0 xs:top-5 xs:h-1 xs:w-full">
-            <div
-              className="relative h-full bg-gradient-to-b from-primary via-pink-froly to-primary transition-all duration-700 ease-out xs:bg-gradient-to-r"
-              style={{
-                height: `${((currentStep - 1) / (steps.length - 1)) * 100}%`,
-                width: "100%",
-              }}
+      <ol
+        className="relative mb-6 flex items-start justify-between gap-2 px-2 sm:mb-8 sm:px-6"
+        aria-label={`Paso ${currentStep} de ${steps.length}`}
+      >
+        {/* Rail: from the centre of the first circle to the centre of the last. */}
+        <div
+          aria-hidden="true"
+          className="absolute left-[calc(8px+20px)] right-[calc(8px+20px)] top-5 h-1 overflow-hidden rounded-full bg-border sm:left-[calc(24px+22px)] sm:right-[calc(24px+22px)]"
+        >
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-primary via-pink-froly to-pink-froly transition-[width] duration-700 ease-out motion-reduce:transition-none"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+
+        {steps.map((step, index) => {
+          const stepNumber = index + 1;
+          const isActive = currentStep === stepNumber;
+          const isComplete = currentStep > stepNumber;
+
+          return (
+            <li
+              key={step.id}
+              aria-current={isActive ? "step" : undefined}
+              className={cn(
+                "relative z-10 flex flex-1 flex-col items-center gap-2 text-center",
+                index === 0 && "items-start text-left",
+                index === steps.length - 1 && "items-end text-right",
+              )}
             >
-              <style jsx>{`
-                @media (min-width: 375px) {
-                  div {
-                    height: 100% !important;
-                    width: ${((currentStep - 1) / (steps.length - 1)) *
-                    100}% !important;
-                  }
-                }
-              `}</style>
-              <div
-                className="absolute inset-0 animate-shimmer bg-gradient-to-r from-transparent via-white/30 to-transparent"
-                style={{ backgroundSize: "1000px 100%" }}
-              />
-            </div>
-          </div>
-
-          {/* Steps */}
-          {steps.map((step, index) => {
-            const stepNumber = index + 1;
-            const isActive = currentStep === stepNumber;
-            const isComplete = currentStep > stepNumber;
-
-            const logoSrc =
-              seasonConfig.checkoutImage ??
-              step.logo.replace(
-                ".webp",
-                `${seasonConfig.checkoutSuffix || ""}.webp`,
-              );
-
-            return (
-              <div
-                key={step.id}
-                className="relative flex items-center gap-3 xs:flex-col"
+              <span
+                className={cn(
+                  "flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 bg-background font-quicksand text-sm font-bold transition-[background-color,border-color,box-shadow] duration-300 sm:h-11 sm:w-11",
+                  isActive &&
+                    "border-primary bg-primary text-primary-foreground shadow-[0_0_0_6px_hsl(var(--froly)/0.25)]",
+                  isComplete &&
+                    "border-pink-froly bg-pink-froly text-white",
+                  !isActive && !isComplete && "border-border text-muted-foreground",
+                )}
               >
-                {/* Step Circle with Glow */}
-                <div
+                {isComplete ? (
+                  <>
+                    <Check className="h-5 w-5 stroke-[3]" aria-hidden="true" />
+                    <span className="sr-only">Completado</span>
+                  </>
+                ) : (
+                  stepNumber
+                )}
+              </span>
+              <span className="flex flex-col">
+                <span
                   className={cn(
-                    "group relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all duration-500 s:h-10 s:w-10 sm:h-12 sm:w-12",
-                    {
-                      "scale-110 animate-pulse-glow text-primary shadow-lg":
-                        isActive,
-                      "scale-105 border-success text-primary shadow-lg":
-                        isComplete,
-                      "bg-card/50 text-muted-foreground backdrop-blur-sm hover:scale-105 hover:border-pink-froly/50":
-                        !isActive && !isComplete,
-                    },
+                    "text-xs font-semibold sm:text-sm",
+                    isActive || isComplete
+                      ? "text-blue-yankees"
+                      : "text-muted-foreground",
                   )}
                 >
-                  {isComplete ? (
-                    <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-full">
-                      {/* Logo as background with opacity and blur */}
-                      <Image
-                        src={`/images/${logoSrc}`}
-                        alt={step.name}
-                        fill
-                        className="z-50 opacity-30 blur-[0.5px] duration-300 animate-in zoom-in"
-                      />
-                      {/* Success check icon in the center */}
-                      <div className="relative z-10 flex h-6 w-6 items-center justify-center rounded-full bg-pink-froly/90 shadow-lg s:h-8 s:w-8">
-                        <Check className="h-4 w-4 stroke-[3] text-white duration-300 animate-in zoom-in s:h-5 s:w-5" />
-                      </div>
-                    </div>
-                  ) : (
-                    <Image
-                      src={`/images/${logoSrc}`}
-                      alt={step.name}
-                      fill
-                      className="duration-300 animate-in zoom-in"
-                    />
-                  )}
-                  {isActive && (
-                    <div className="absolute inset-0 animate-ping rounded-full bg-pink-froly/10" />
-                  )}
-                </div>
+                  {step.name}
+                </span>
+                {step.description && (
+                  <span className="hidden text-xs text-muted-foreground sm:block">
+                    {step.description}
+                  </span>
+                )}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
 
-                {/* Step Label */}
-                <div className="flex-1 text-left xs:mt-2 xs:text-center sm:mt-3">
-                  <p
-                    className={cn(
-                      "text-xs font-semibold transition-all duration-300 sm:text-sm",
-                      {
-                        "scale-110 text-primary": isActive,
-                        "text-pink-froly": isComplete,
-                        "text-muted-foreground": !isActive && !isComplete,
-                      },
-                    )}
-                  >
-                    {step.name}
-                  </p>
-                  {step.description && (
-                    <p
-                      className={cn(
-                        "hidden text-xs transition-colors duration-300 sm:block",
-                        isComplete
-                          ? "text-pink-froly/70"
-                          : "text-muted-foreground",
-                      )}
-                    >
-                      {step.description}
-                    </p>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-      {/* Step Content */}
-      <div className="transition-all duration-300">{children}</div>
+      <div>{children}</div>
     </div>
   );
 };

@@ -1,8 +1,14 @@
 import { checkoutOrder } from "@/actions/checkout-order";
 import { createNewOrder } from "@/actions/create-new-order";
 import { PaymentMethod } from "@/constants";
-import { CheckoutByOrderResponse, CheckoutOrder, Order } from "@/types";
+import { CheckoutOrder, CheckoutResponse, Order } from "@/types";
 import { useMutation } from "@tanstack/react-query";
+
+export interface CheckoutSubmission {
+  data: CheckoutOrder;
+  /** Same key on every retry of this attempt; see lib/checkout-idempotency. */
+  idempotencyKey?: string;
+}
 
 export default function useCheckout({
   onError,
@@ -11,46 +17,44 @@ export default function useCheckout({
   onSuccess,
   getToken,
 }: {
-  onError?: (err: Error, variables: CheckoutOrder, context: unknown) => void;
+  onError?: (err: Error, variables: CheckoutSubmission, context: unknown) => void;
   onSuccess?: (
-    data: CheckoutByOrderResponse | Order,
-    variables: CheckoutOrder,
+    data: CheckoutResponse | Order,
+    variables: CheckoutSubmission,
     context: unknown,
   ) => void;
   onSettled?: (
-    data: CheckoutByOrderResponse | Order | undefined,
+    data: CheckoutResponse | Order | undefined,
     error: Error | null,
-    variables: CheckoutOrder,
+    variables: CheckoutSubmission,
     context: unknown,
   ) => void;
-  onMutate?: (variables: CheckoutOrder) => void;
+  onMutate?: (variables: CheckoutSubmission) => void;
   getToken?: () => Promise<string | null>;
 } = {}) {
-  const mutationFn = async (formData: CheckoutOrder) => {
+  const mutationFn = async ({ data, idempotencyKey }: CheckoutSubmission) => {
     const sessionToken = await getToken?.();
-    if (formData.userId && !sessionToken) {
+    if (data.userId && !sessionToken) {
       throw new Error(
         "No pudimos validar tu sesión. Actualiza la página e inténtalo de nuevo.",
       );
     }
 
-    // If this is a quotation conversion, always use /checkout route
-    // which handles the customOrderToken and updates the existing order
-    // instead of creating a duplicate via /orders
-    if (formData.customOrderToken) {
-      return await checkoutOrder(formData, sessionToken);
+    // A quotation conversion always goes through /checkout, which updates the
+    // existing order instead of creating a duplicate via /orders.
+    if (data.customOrderToken) {
+      return await checkoutOrder(data, sessionToken, idempotencyKey);
     }
 
-    switch (formData.payment.method) {
+    switch (data.payment.method) {
       case PaymentMethod.BankTransfer:
       case PaymentMethod.COD:
-        return await createNewOrder(formData, sessionToken);
+        return await createNewOrder(data, sessionToken, idempotencyKey);
       case PaymentMethod.Bold:
       case PaymentMethod.Wompi:
-      case PaymentMethod.PayU:
-        return await checkoutOrder(formData, sessionToken);
+        return await checkoutOrder(data, sessionToken, idempotencyKey);
       default:
-        throw new Error("Invalid payment method");
+        throw new Error("Método de pago no disponible");
     }
   };
 

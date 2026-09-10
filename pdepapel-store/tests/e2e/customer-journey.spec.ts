@@ -58,6 +58,8 @@ test.describe("recorrido de compra sin pago", () => {
     await expect(finishButton).toBeEnabled();
     await finishButton.click();
     await expect(page).toHaveURL(/\/finalizar-compra/, { timeout: 20_000 });
-    await expect(page.getByRole("button", { name: "Siguiente" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Continuar a entrega" }),
+    ).toBeVisible();
   });
 });

@@ -9,8 +9,6 @@ export enum Season {
 export interface SeasonConfig {
   navbarText: string;
   navbarNoText: string;
-  checkoutSuffix?: string;
-  checkoutImage?: string;
   logoAccent?: string;
 }
 
@@ -361,35 +359,21 @@ export interface SearchResult {
 
 export type SearchResponse = SearchResult[] | { products: SearchResult[] };
 
-export type PayUFormState = Omit<PayUFormProps, "formRef" | "products">;
-
-type formattedProduct = {
-  name: string;
-  quantity: number;
-};
-
-export interface PayUFormProps {
-  formRef: React.RefObject<HTMLFormElement>;
-  referenceCode: string;
-  products: formattedProduct[];
-  amount: number;
-  tax?: number;
-  taxReturnBase?: number;
-  currency?: string;
-  signature: string;
-  test: number;
-  responseUrl: string;
-  confirmationUrl: string;
-  shippingAddress: string;
-  shippingCity: string;
-  shippingCountry: string;
-}
-
 export interface WompiResponse {
   url: string;
 }
 
-export type CheckoutByOrderResponse = PayUFormState | WompiResponse;
+/** Pre-signed payload for the default online gateway, opened from the order page. */
+export interface BoldCheckoutResponse {
+  order: Order;
+  boldData: import("@/lib/bold").BoldCheckoutPayload;
+}
+
+/** `POST /checkout` answers with a gateway handshake or, for offline methods, the order itself. */
+export type CheckoutResponse = WompiResponse | BoldCheckoutResponse | Order;
+
+/** `POST /checkout/[orderId]` only ever returns the fallback gateway link. */
+export type CheckoutByOrderResponse = WompiResponse;
 
 export interface CheckoutOrder {
   fullName: string;

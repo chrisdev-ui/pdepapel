@@ -1,11 +1,8 @@
-import { SignedIn, currentUser } from "@clerk/nextjs";
-import { CheckCircle } from "lucide-react";
+import { currentUser } from "@clerk/nextjs";
 import { Metadata } from "next";
 
 import { AccountPrompt } from "@/components/account-prompt";
-import { BoldCheckoutSdk } from "@/components/bold-checkout-sdk";
 import { Container } from "@/components/ui/container";
-import { KAWAII_FACE_WELCOME } from "@/constants";
 import { getStorefrontSettings } from "@/actions/get-storefront-settings";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { MultiStepCheckoutForm } from "./components/multi-step-checkout-form";
@@ -23,7 +20,6 @@ export const metadata: Metadata = {
   },
 };
 
-import { getCurrentSeason } from "@/lib/date-utils";
 import { normalizeOrder } from "@/lib/normalization";
 import { UnifiedOrder } from "@/types/unified-order";
 
@@ -53,7 +49,6 @@ export default async function CheckoutPage({
     telephone: user?.phoneNumbers[0]?.phoneNumber,
     email: user?.emailAddresses[0]?.emailAddress,
   };
-  const currentSeason = getCurrentSeason();
 
   const customOrderToken = searchParams.customOrderToken;
   let customOrder: UnifiedOrder | null = null;
@@ -63,38 +58,32 @@ export default async function CheckoutPage({
   }
 
   return (
-    <>
-      <BoldCheckoutSdk />
-      <Container>
-        <div className="flex w-full flex-col items-center justify-between sm:flex-row">
-          <h1 className="flex items-center justify-start font-serif text-3xl font-bold">
-            {customOrder
-              ? "Finalizar cotización"
-              : "Ya casi completas tu orden…"}
-            <CheckCircle
-              aria-hidden="true"
-              className="h-8 w-8 text-green-500 sm:ml-2"
-            />
+    <Container>
+      <div className="flex w-full flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="font-serif text-3xl font-bold text-blue-yankees sm:text-4xl">
+            {customOrder ? "Finalizar cotización" : "Finaliza tu compra"}
           </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {user?.firstName
+              ? `¡Hola, ${user.firstName}! Tres pasos y listo.`
+              : "Tres pasos, sin crear cuenta. Pago seguro."}
+          </p>
+        </div>
+        {!user && (
           <AccountPrompt
-            className="mt-4 w-full sm:mt-0 sm:w-auto sm:max-w-md"
+            className="w-full sm:w-auto sm:max-w-md"
             variant="compact"
             source="checkout"
             redirectPath={STOREFRONT_ROUTES.checkout}
           />
-          <SignedIn>
-            <span className="text-lg text-pink-froly">
-              ¡Hola, {user?.firstName}! {KAWAII_FACE_WELCOME}
-            </span>
-          </SignedIn>
-        </div>
-        <MultiStepCheckoutForm
-          currentUser={formattedUser}
-          season={currentSeason}
-          customOrder={customOrder}
-          freeShippingThreshold={storefrontSettings.freeShippingThreshold}
-        />
-      </Container>
-    </>
+        )}
+      </div>
+      <MultiStepCheckoutForm
+        currentUser={formattedUser}
+        customOrder={customOrder}
+        freeShippingThreshold={storefrontSettings.freeShippingThreshold}
+      />
+    </Container>
   );
 }

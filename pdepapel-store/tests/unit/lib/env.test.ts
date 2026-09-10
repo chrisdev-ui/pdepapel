@@ -12,10 +12,6 @@ const baseline: Record<string, string> = {
   NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL: "/",
   NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL: "/",
   NEXT_PUBLIC_API_URL: "http://localhost:3001/api/store-id",
-  NEXT_PUBLIC_PAYU_URL: "https://sandbox.payu.example",
-  NEXT_PUBLIC_PAYU_MERCHANT_ID: "1",
-  NEXT_PUBLIC_PAYU_ACCOUNT_ID: "1",
-  NEXT_PUBLIC_PAYU_API_KEY: "placeholder",
 };
 
 const analytics: Record<string, string> = {

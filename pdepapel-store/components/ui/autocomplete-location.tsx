@@ -6,6 +6,7 @@ import {
   useCallback,
   useDeferredValue,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -31,6 +32,15 @@ interface AutocompleteLocationProps {
   onSearch?: (value: string) => void;
   emptyMessage?: string;
   defaultDisplayValue?: string;
+  /**
+   * Accessible name of the text input. cmdk owns the input's id and
+   * `aria-labelledby`, so a visible `<FormLabel htmlFor>` cannot reach it;
+   * this renders cmdk's own visually hidden label instead.
+   */
+  label?: string;
+  id?: string;
+  "aria-describedby"?: string;
+  "aria-invalid"?: boolean;
 }
 
 function normalizeText(text: string): string {
@@ -51,8 +61,13 @@ export const AutocompleteLocation: React.FC<AutocompleteLocationProps> = ({
   isLoading = false,
   emptyMessage = "No se encontraron ciudades.",
   defaultDisplayValue,
+  label = "Ciudad y departamento",
+  id,
+  "aria-describedby": ariaDescribedBy,
+  "aria-invalid": ariaInvalid,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
+  const listId = useId();
 
   const [isOpen, setOpen] = useState(false);
   const [selected, setSelected] = useState<LocationOption | undefined>(
@@ -183,7 +198,11 @@ export const AutocompleteLocation: React.FC<AutocompleteLocationProps> = ({
   }, [onChange, onClear]);
 
   return (
-    <CommandPrimitive onKeyDown={handleKeyDown}>
+    <CommandPrimitive
+      onKeyDown={handleKeyDown}
+      shouldFilter={false}
+      label={label}
+    >
       <div className="relative">
         <CommandInput
           ref={inputRef}
@@ -196,22 +215,34 @@ export const AutocompleteLocation: React.FC<AutocompleteLocationProps> = ({
           onFocus={() => setOpen(true)}
           placeholder={placeholder}
           disabled={disabled}
+          id={id}
+          role="combobox"
+          aria-expanded={isOpen}
+          aria-controls={listId}
+          aria-autocomplete="list"
+          aria-describedby={ariaDescribedBy}
+          aria-invalid={ariaInvalid}
+          autoCapitalize="words"
+          className={selected ? "pr-11" : undefined}
         />
         {selected && !disabled && (
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            className="absolute right-2 top-1/2 h-6 w-6 -translate-y-1/2 p-0 hover:bg-muted"
+            aria-label="Borrar ciudad seleccionada"
+            className="absolute right-1 top-1/2 h-9 w-9 -translate-y-1/2 rounded-full p-0 hover:bg-muted"
             onClick={handleClear}
-            tabIndex={-1}
+            // Fires before the input blur closes the list on touch screens.
+            onPointerDown={(event) => event.preventDefault()}
           >
-            <X className="h-4 w-4" />
+            <X className="h-4 w-4" aria-hidden="true" />
           </Button>
         )}
       </div>
       <div className="relative mt-1">
         <div
+          id={listId}
           className={cn(
             "absolute top-0 z-10 w-full rounded-xl bg-white outline-none animate-in fade-in-0 zoom-in-95",
             isOpen ? "block" : "hidden",
@@ -233,7 +264,9 @@ export const AutocompleteLocation: React.FC<AutocompleteLocationProps> = ({
                     <CommandItem
                       key={location.value}
                       value={`${location.city} ${location.department} ${location.daneCode}`}
-                      onMouseDown={(event) => {
+                      // pointerdown covers mouse and touch: the input must not
+                      // blur (and close the list) before the tap lands.
+                      onPointerDown={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
                       }}
