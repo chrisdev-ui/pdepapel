@@ -154,3 +154,18 @@ describe("API error helpers", () => {
     );
   });
 });
+
+describe("ErrorFactory.NoShippingCoverage", () => {
+  it("responde 422 con un código que la tienda reconoce", async () => {
+    const response = handleErrorResponse(
+      ErrorFactory.NoShippingCoverage(),
+      "QUOTE_SHIPPING",
+      { expectedStatusCodes: [422] },
+    );
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({
+      error: "Ninguna transportadora cubre esta dirección por ahora.",
+      details: { code: "NO_COVERAGE" },
+    });
+  });
+});

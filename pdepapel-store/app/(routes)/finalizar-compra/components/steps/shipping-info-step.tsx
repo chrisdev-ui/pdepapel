@@ -3,6 +3,7 @@ import {
   deleteCustomerAddress,
   getCustomerAddresses,
 } from "@/actions/customer-addresses";
+import { isShippingCoverageError } from "@/actions/get-shipping-quote";
 import { ActionConfirmationDialog } from "@/components/ui/action-confirmation-dialog";
 import { AutocompleteLocation } from "@/components/ui/autocomplete-location";
 import { Button } from "@/components/ui/button";
@@ -151,12 +152,20 @@ export const ShippingInfoStep = ({
     if (hasOptionalDetails) setShowDetails(true);
   }, [hasOptionalDetails]);
 
+  // Exact match on the normalized city name inside Antioquia: «Medellín del
+  // Ariari» (Meta) or «Bello» elsewhere must not light up the local badge.
   const isMedellinArea = useMemo(() => {
-    const cityLower = selectedCity.toLowerCase();
-    const deptLower = selectedDept.toLowerCase();
+    const normalize = (value: string) =>
+      value
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[̀-ͯ]/g, "")
+        .trim();
+    const city = normalize(selectedCity);
+    const department = normalize(selectedDept);
     return (
-      MEDELLIN_AREA_CITIES.some((city) => cityLower.includes(city)) ||
-      deptLower.includes("antioquia")
+      department === "antioquia" &&
+      MEDELLIN_AREA_CITIES.map(normalize).includes(city)
     );
   }, [selectedCity, selectedDept]);
 
@@ -1068,7 +1077,7 @@ export const ShippingInfoStep = ({
                         isLoading
                         ariaLabelledBy={ratesLabelId}
                       />
-                    ) : quoteError ? (
+                    ) : quoteError && !isShippingCoverageError(quoteError) ? (
                       <div
                         className="flex flex-col gap-3 rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm sm:flex-row sm:items-center sm:justify-between"
                         role="alert"
@@ -1091,7 +1100,8 @@ export const ShippingInfoStep = ({
                           Volver a calcular
                         </Button>
                       </div>
-                    ) : groupedQuotes.length === 0 ? (
+                    ) : groupedQuotes.length === 0 ||
+                      isShippingCoverageError(quoteError) ? (
                       <div
                         className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-950"
                         role="status"

@@ -306,6 +306,22 @@ export async function POST(
       },
     );
   } catch (error: any) {
+    // EnvioClick rejects DANE codes outside its coverage as a validation
+    // error; that is a «no carriers here» answer, not a server failure.
+    const message = String(error?.message ?? "");
+    if (
+      error?.code === "ENVIOCLICK_API_ERROR" &&
+      /daneCode no existe|Unprocessed Entity|no existe/i.test(message)
+    ) {
+      return handleErrorResponse(
+        ErrorFactory.NoShippingCoverage(),
+        "QUOTE_SHIPPING",
+        {
+          headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
+          expectedStatusCodes: [422],
+        },
+      );
+    }
     return handleErrorResponse(error, "QUOTE_SHIPPING", {
       headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE },
     });

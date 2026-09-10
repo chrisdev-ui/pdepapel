@@ -9,6 +9,15 @@ export const SHIPPING_QUOTE_TIMEOUT_MS = 20_000;
 export const SHIPPING_QUOTE_ERROR_MESSAGE =
   "No pudimos calcular el envío. Suele ser un problema momentáneo de conexión.";
 
+/** The carriers do not serve this destination: not a failure to retry. */
+export class ShippingCoverageError extends Error {
+  readonly name = "ShippingCoverageError";
+}
+
+export const isShippingCoverageError = (error: unknown): boolean =>
+  error instanceof ShippingCoverageError ||
+  (error instanceof Error && error.name === "ShippingCoverageError");
+
 export const getShippingQuote = async (
   request: ShippingQuoteRequest,
 ): Promise<ShippingQuoteResponse> => {
@@ -31,6 +40,11 @@ export const getShippingQuote = async (
       const detail = [error?.error, error?.message].find(
         (value): value is string => typeof value === "string" && value.length > 0,
       );
+      if (response.status === 422 || error?.details?.code === "NO_COVERAGE") {
+        throw new ShippingCoverageError(
+          detail ?? "Ninguna transportadora cubre esta dirección por ahora.",
+        );
+      }
       throw new Error(detail ?? SHIPPING_QUOTE_ERROR_MESSAGE);
     }
 

@@ -82,6 +82,13 @@ export const ErrorFactory = {
   // Error genérico
   InternalServerError: (error?: any) =>
     new AppError("Error interno del servidor", 500, error),
+  /** The carriers do not serve the destination: the store shows its own way out. */
+  NoShippingCoverage: () =>
+    new AppError(
+      "Ninguna transportadora cubre esta dirección por ahora.",
+      422,
+      { code: "NO_COVERAGE" },
+    ),
 };
 
 export type ErrorHandlerOptions = {
