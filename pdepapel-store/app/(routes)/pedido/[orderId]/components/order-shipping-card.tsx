@@ -6,6 +6,7 @@ import { useState } from "react";
 import { formatPhoneNumber } from "react-phone-number-input";
 
 import { Button } from "@/components/ui/button";
+import { ShippingStatus } from "@/constants";
 import { formatOrderDate } from "@/lib/order-dates";
 import { getShippingStatusLabel, getTrackingUrl } from "@/lib/order-status";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
@@ -78,6 +79,10 @@ export function OrderShippingCard({
 }: OrderShippingCardProps) {
   const shipping = order.shipping;
   const isPickup = shipping?.provider === "NONE";
+  // Delivered or returned: nothing is "about to ship" any more.
+  const isConcluded =
+    shipping?.status === ShippingStatus.Delivered ||
+    shipping?.status === ShippingStatus.Returned;
   const trackingUrl = getTrackingUrl(shipping);
   const carrierName = shipping?.carrierName || shipping?.courier || null;
   const eta = shipping?.estimatedDeliveryDate
@@ -178,7 +183,9 @@ export function OrderShippingCard({
             <span className="text-muted-foreground">
               {awaitingPayment
                 ? "Aparece aquí cuando confirmemos el pago."
-                : "Te lo enviamos por correo cuando el pedido salga."}
+                : isConcluded
+                  ? "Este envío no tuvo guía registrada."
+                  : "Te lo enviamos por correo cuando el pedido salga."}
             </span>
           </Field>
         )}
