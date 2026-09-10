@@ -62,8 +62,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { SectionCard } from "@/components/ui/section-card";
 import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
-import { Switch } from "@/components/ui/switch";
+import { SuggestionStrip } from "@/components/ui/suggestion-strip";
+import { BarcodeScanner } from "@/components/ui/barcode-scanner";
+import { focusFirstInvalidField } from "@/lib/focus-invalid-field";
 import { availableAtToInput } from "@/lib/product-availability";
 import {
   Tooltip,
@@ -116,10 +119,10 @@ const formSchema = z
       .number()
       .min(0, "El costo de misceláneo no puede ser negativo"),
     price: z.coerce.number().min(1, "El precio de venta debe ser mayor a 0"),
-    categoryId: z.string().min(1),
-    colorId: z.string().min(1),
-    sizeId: z.string().min(1),
-    designId: z.string().min(1),
+    categoryId: z.string().min(1, "Elige una sub-categoría"),
+    colorId: z.string().min(1, "Elige un color"),
+    sizeId: z.string().min(1, "Elige un tamaño"),
+    designId: z.string().min(1, "Elige un diseño"),
     catalogAttributes: z
       .array(
         z.object({
@@ -323,8 +326,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               }),
             ),
             percentageIncrease: INITIAL_PERCENTAGE_INCREASE,
-            transportationCost: INITIAL_TRANSPORTATION_COST,
-            miscCost: INITIAL_MISC_COST,
+            transportationCost: INITIAL_TRANSPORTATION_COST + INITIAL_MISC_COST,
+            miscCost: 0,
             productGroupId: initialData.productGroupId || "",
             stock: initialData.stock,
             isKit: initialData.isKit || false,
@@ -377,8 +380,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             isArchived: false,
             availableAt: "",
             percentageIncrease: INITIAL_PERCENTAGE_INCREASE,
-            transportationCost: INITIAL_TRANSPORTATION_COST,
-            miscCost: INITIAL_MISC_COST,
+            transportationCost: INITIAL_TRANSPORTATION_COST + INITIAL_MISC_COST,
+            miscCost: 0,
             productGroupId: productGroup?.id || "",
             kitDiscountPercent: 0,
             isKit: false,
@@ -1062,12 +1065,12 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       )}
       <Form {...form}>
         <form
-          onSubmit={form.handleSubmit(onSubmit)}
+          onSubmit={form.handleSubmit(onSubmit, focusFirstInvalidField)}
           autoComplete="off"
-          className="w-full space-y-8"
+          className="flex w-full flex-col gap-4"
         >
           {productGroup && (
-            <div className="mb-8 space-y-4 rounded-md border p-4">
+            <div className="space-y-4 rounded-xl border bg-white p-4 shadow-sm">
               <div className="flex items-center justify-between">
                 <Heading
                   title="Galería del Grupo"
@@ -1107,1089 +1110,1043 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             </div>
           )}
 
-          <FormField
-            control={form.control}
-            name="images"
-            render={({ field }) => (
-              <FormItem id="imagenes" className="scroll-mt-24">
-                <FormLabel isRequired>Imágenes del Producto</FormLabel>
-                <FormControl>
-                  <ImageUpload
-                    value={field.value}
+          <SectionCard
+            id="imagenes"
+            title="Imágenes"
+            description="La principal se ve en la tienda y en Google; el asistente las lee para proponer los datos."
+          >
+            <FormField
+              control={form.control}
+              name="images"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel isRequired>Imágenes del producto</FormLabel>
+                  <FormControl>
+                    <ImageUpload
+                      value={field.value}
+                      disabled={loading}
+                      onChange={(images) => field.onChange(images)}
+                      onRemove={(url) =>
+                        field.onChange([
+                          ...field.value.filter(
+                            (current) => current.url !== url,
+                          ),
+                        ])
+                      }
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </SectionCard>
+
+          <div className="flex flex-col gap-4">
+            <SectionCard
+              id="asistente"
+              title="Asistente de producto"
+              description="Lee las fotos y propone nombre, marca, clasificación, descripción y el código de barras impreso. Tú apruebas campo por campo; nada se guarda solo."
+            >
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8 xl:grid-cols-3">
+                <div className="col-span-full">
+                  <ProductNameAssistant
+                    currentName={watchedName}
+                    categoryName={
+                      availableCategories.find(
+                        (category) => category.id === watchedCategoryId,
+                      )?.name
+                    }
+                    brand={watchedBrand}
+                    designName={
+                      availableDesigns.find(
+                        (design) => design.id === watchedDesignId,
+                      )?.name
+                    }
+                    colorName={
+                      availableColors.find(
+                        (color) => color.id === watchedColorId,
+                      )?.name
+                    }
+                    sizeName={
+                      availableSizes.find((size) => size.id === watchedSizeId)
+                        ?.name
+                    }
+                    sizeValue={
+                      availableSizes.find((size) => size.id === watchedSizeId)
+                        ?.value
+                    }
                     disabled={loading}
-                    onChange={(images) => field.onChange(images)}
-                    onRemove={(url) =>
-                      field.onChange([
-                        ...field.value.filter((current) => current.url !== url),
-                      ])
+                    storeId={params.storeId}
+                    imageUrls={watchedImages?.map((image) => image.url)}
+                    visualFieldAvailability={{
+                      brand: true,
+                      category: !watchedGroupId || watchedGroupId === "none",
+                      size: !watchedGroupId || watchedGroupId === "none",
+                      color: !watchedGroupId || watchedGroupId === "none",
+                      design: !watchedGroupId || watchedGroupId === "none",
+                      catalogAttributes: true,
+                    }}
+                    onApply={(name) =>
+                      form.setValue("name", name, {
+                        shouldDirty: true,
+                        shouldTouch: true,
+                        shouldValidate: true,
+                      })
+                    }
+                    onApplyVisualAnalysis={(analysis) => {
+                      const options = {
+                        shouldDirty: true,
+                        shouldTouch: true,
+                        shouldValidate: true,
+                      };
+
+                      if (analysis.brand) {
+                        form.setValue("brand", analysis.brand, options);
+                      }
+
+                      if (!watchedGroupId || watchedGroupId === "none") {
+                        if (analysis.categoryId) {
+                          form.setValue(
+                            "categoryId",
+                            analysis.categoryId,
+                            options,
+                          );
+                        }
+                        if (analysis.sizeId) {
+                          form.setValue("sizeId", analysis.sizeId, options);
+                        }
+                        if (analysis.colorId) {
+                          form.setValue("colorId", analysis.colorId, options);
+                        }
+                        if (analysis.designId) {
+                          form.setValue("designId", analysis.designId, options);
+                        }
+                      }
+
+                      if (analysis.catalogAttributes.length > 0) {
+                        form.setValue(
+                          "catalogAttributes",
+                          mergeProductCatalogAttributes(
+                            form.getValues("catalogAttributes") || [],
+                            analysis.catalogAttributes,
+                          ),
+                          options,
+                        );
+                      }
+                    }}
+                    onApplyDescription={(description) =>
+                      form.setValue("description", description, {
+                        shouldDirty: true,
+                        shouldTouch: true,
+                        shouldValidate: true,
+                      })
+                    }
+                    onApplyVerifiedIdentifier={(type, identifier) => {
+                      const options = {
+                        shouldDirty: true,
+                        shouldTouch: true,
+                        shouldValidate: true,
+                      };
+                      form.setValue(type, identifier.value, options);
+                      form.setValue("hasNoProductIdentifier", false, options);
+                      toast({
+                        description: `${type.toUpperCase()} confirmado desde el empaque.`,
+                        variant: "success",
+                      });
+                    }}
+                    canReviewVariantRecommendation={Boolean(
+                      initialData &&
+                      !initialData.productGroupId &&
+                      !initialData.isKit &&
+                      !initialData.isArchived,
+                    )}
+                    onReviewVariantRecommendation={requestVariantConversion}
+                    onCreateVisualAttribute={
+                      !watchedGroupId || watchedGroupId === "none"
+                        ? createVisualAttribute
+                        : undefined
+                    }
+                    categoryTypes={types.map((type) => ({
+                      id: type.id,
+                      name: type.name,
+                    }))}
+                    onCreateSuggestedCategory={
+                      !watchedGroupId || watchedGroupId === "none"
+                        ? createSuggestedCategory
+                        : undefined
+                    }
+                    onCreateSuggestedSize={
+                      !watchedGroupId || watchedGroupId === "none"
+                        ? createSuggestedSize
+                        : undefined
                     }
                   />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8 xl:grid-cols-3">
-            <div
-              id="asistente"
-              className="col-span-full flex scroll-mt-24 flex-col gap-0.5 border-t pt-6"
-            >
-              <h2 className="text-[15px] font-bold text-primary">
-                Asistente de producto
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                Lee las fotos y propone nombre, marca, clasificación,
-                descripción y el código de barras impreso. Tú apruebas campo por
-                campo; nada se guarda solo.
-              </p>
-            </div>
-            <div className="col-span-full">
-              <ProductNameAssistant
-                currentName={watchedName}
-                categoryName={
-                  availableCategories.find(
-                    (category) => category.id === watchedCategoryId,
-                  )?.name
-                }
-                brand={watchedBrand}
-                designName={
-                  availableDesigns.find(
-                    (design) => design.id === watchedDesignId,
-                  )?.name
-                }
-                colorName={
-                  availableColors.find((color) => color.id === watchedColorId)
-                    ?.name
-                }
-                sizeName={
-                  availableSizes.find((size) => size.id === watchedSizeId)?.name
-                }
-                sizeValue={
-                  availableSizes.find((size) => size.id === watchedSizeId)
-                    ?.value
-                }
-                disabled={loading}
-                storeId={params.storeId}
-                imageUrls={watchedImages?.map((image) => image.url)}
-                visualFieldAvailability={{
-                  brand: true,
-                  category: !watchedGroupId || watchedGroupId === "none",
-                  size: !watchedGroupId || watchedGroupId === "none",
-                  color: !watchedGroupId || watchedGroupId === "none",
-                  design: !watchedGroupId || watchedGroupId === "none",
-                  catalogAttributes: true,
-                }}
-                onApply={(name) =>
-                  form.setValue("name", name, {
-                    shouldDirty: true,
-                    shouldTouch: true,
-                    shouldValidate: true,
-                  })
-                }
-                onApplyVisualAnalysis={(analysis) => {
-                  const options = {
-                    shouldDirty: true,
-                    shouldTouch: true,
-                    shouldValidate: true,
-                  };
-
-                  if (analysis.brand) {
-                    form.setValue("brand", analysis.brand, options);
-                  }
-
-                  if (!watchedGroupId || watchedGroupId === "none") {
-                    if (analysis.categoryId) {
-                      form.setValue("categoryId", analysis.categoryId, options);
-                    }
-                    if (analysis.sizeId) {
-                      form.setValue("sizeId", analysis.sizeId, options);
-                    }
-                    if (analysis.colorId) {
-                      form.setValue("colorId", analysis.colorId, options);
-                    }
-                    if (analysis.designId) {
-                      form.setValue("designId", analysis.designId, options);
-                    }
-                  }
-
-                  if (analysis.catalogAttributes.length > 0) {
-                    form.setValue(
-                      "catalogAttributes",
-                      mergeProductCatalogAttributes(
-                        form.getValues("catalogAttributes") || [],
-                        analysis.catalogAttributes,
-                      ),
-                      options,
-                    );
-                  }
-                }}
-                onApplyDescription={(description) =>
-                  form.setValue("description", description, {
-                    shouldDirty: true,
-                    shouldTouch: true,
-                    shouldValidate: true,
-                  })
-                }
-                onApplyVerifiedIdentifier={(type, identifier) => {
-                  const options = {
-                    shouldDirty: true,
-                    shouldTouch: true,
-                    shouldValidate: true,
-                  };
-                  form.setValue(type, identifier.value, options);
-                  form.setValue("hasNoProductIdentifier", false, options);
-                  toast({
-                    description: `${type.toUpperCase()} confirmado desde el empaque.`,
-                    variant: "success",
-                  });
-                }}
-                canReviewVariantRecommendation={Boolean(
-                  initialData &&
-                  !initialData.productGroupId &&
-                  !initialData.isKit &&
-                  !initialData.isArchived,
-                )}
-                onReviewVariantRecommendation={requestVariantConversion}
-                onCreateVisualAttribute={
-                  !watchedGroupId || watchedGroupId === "none"
-                    ? createVisualAttribute
-                    : undefined
-                }
-                categoryTypes={types.map((type) => ({
-                  id: type.id,
-                  name: type.name,
-                }))}
-                onCreateSuggestedCategory={
-                  !watchedGroupId || watchedGroupId === "none"
-                    ? createSuggestedCategory
-                    : undefined
-                }
-                onCreateSuggestedSize={
-                  !watchedGroupId || watchedGroupId === "none"
-                    ? createSuggestedSize
-                    : undefined
-                }
-              />
-            </div>
-            <div
-              id="informacion"
-              className="col-span-full flex scroll-mt-24 flex-col gap-0.5 "
-            >
-              <h2 className="text-[15px] font-bold text-primary">
-                Información básica
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                Nombre comercial claro (50–65 caracteres) y marca. La URL se
-                conserva aunque cambies el nombre.
-              </p>
-            </div>
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem className="col-span-full">
-                  <FormLabel isRequired>Nombre</FormLabel>
-                  <FormControl>
-                    <Input
-                      disabled={loading}
-                      maxLength={PRODUCT_NAME_MAX_LENGTH}
-                      placeholder="Nombre del producto"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div className="col-span-full">
-              <CatalogAttributesEditor
-                value={watchedCatalogAttributes}
-                options={catalogOptions}
-                categoryId={watchedCategoryId}
-                disabled={loading}
-                onChange={(attributes) =>
-                  form.setValue("catalogAttributes", attributes, {
-                    shouldDirty: true,
-                    shouldTouch: true,
-                    shouldValidate: true,
-                  })
-                }
-              />
-            </div>
-            <FormField
-              control={form.control}
-              name="brand"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Marca o fabricante</FormLabel>
-                  <FormControl>
-                    <Input
-                      disabled={loading}
-                      placeholder="Ej. Sanrio, Stabilo"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Se usa en Google Merchant y datos estructurados.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div
-              id="precio"
-              className="col-span-full flex scroll-mt-24 flex-col gap-0.5 border-t pt-6"
-            >
-              <h2 className="text-[15px] font-bold text-primary">
-                Precio y margen
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                El margen sale del costo de compra registrado; el precio de
-                Mercado Libre es independiente.
-              </p>
-            </div>
-            <FormField
-              control={form.control}
-              name="acqPrice"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired={!watchedIsKit}>
-                    Precio de compra
-                  </FormLabel>
-                  <FormControl>
-                    <CurrencyInput
-                      placeholder="$ 1.000"
-                      disabled={loading || watchedIsKit}
-                      value={watchedIsKit ? kitComponentCost : field.value}
-                      onChange={field.onChange}
-                    />
-                  </FormControl>
-                  {watchedIsKit && (
-                    <FormDescription>
-                      Se calcula sumando el costo de los componentes.
-                    </FormDescription>
-                  )}
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="percentageIncrease"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>Porcentaje de incremento</FormLabel>
-                  <FormControl>
-                    <PercentageInput
-                      disabled={loading}
-                      placeholder="30"
-                      value={field.value}
-                      onChange={field.onChange}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Se usa solo para calcular el precio de venta actual.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="transportationCost"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>Costo de transporte</FormLabel>
-                  <FormControl>
-                    <CurrencyInput
-                      placeholder="$ 0"
-                      disabled={loading}
-                      value={field.value}
-                      onChange={field.onChange}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Se usa solo para calcular el precio de venta actual.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="miscCost"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>Costos misceláneos</FormLabel>
-                  <FormControl>
-                    <CurrencyInput
-                      placeholder="$ 0"
-                      disabled={loading}
-                      value={field.value}
-                      onChange={field.onChange}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Se usa solo para calcular el precio de venta actual.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="price"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>Precio de venta</FormLabel>
-                  <FormControl>
-                    <CurrencyInput
-                      placeholder="$ 1.000"
-                      disabled={loading}
-                      value={field.value}
-                      onChange={field.onChange}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormItem>
-              {/* Solo lectura: sin `isRequired` el label anade "- Opcional",
-                  que no tiene sentido en un valor calculado. */}
-              <FormLabel isRequired>Margen resultante</FormLabel>
-              <div
-                className={cn(
-                  "flex h-10 items-center gap-2 rounded-md border px-3 text-sm",
-                  marginPct === null
-                    ? "bg-muted/40 text-muted-foreground"
-                    : marginPct >= 0
-                      ? "border-tint-mint bg-tint-mint/40 text-primary"
-                      : "border-destructive/40 bg-destructive/10 text-destructive",
-                )}
-              >
-                {marginPct === null ? (
-                  <span>Sin precio de venta</span>
-                ) : (
-                  <>
-                    <strong>{marginPct.toFixed(1)} %</strong>
-                    <span className="text-xs">
-                      ={" "}
-                      {currencyFormatter(
-                        (Number(watchedPrice) || 0) -
-                          (watchedIsKit
-                            ? kitComponentCost
-                            : Number(watchedAcqPrice) || 0),
-                      )}{" "}
-                      por unidad
-                    </span>
-                  </>
-                )}
+                </div>
               </div>
-            </FormItem>
-            {watchedIsKit ? (
-              <>
+            </SectionCard>
+            <SectionCard
+              id="informacion"
+              title="Información básica"
+              description="Nombre comercial claro (50–65 caracteres) y marca. La URL se conserva aunque cambies el nombre."
+            >
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8 xl:grid-cols-3">
                 <FormField
                   control={form.control}
-                  name="kitDiscountPercent"
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem className="col-span-full">
+                      <FormLabel isRequired>Nombre</FormLabel>
+                      <FormControl>
+                        <Input
+                          disabled={loading}
+                          maxLength={PRODUCT_NAME_MAX_LENGTH}
+                          placeholder="Nombre del producto"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="col-span-full">
+                  <CatalogAttributesEditor
+                    value={watchedCatalogAttributes}
+                    options={catalogOptions}
+                    categoryId={watchedCategoryId}
+                    disabled={loading}
+                    onChange={(attributes) =>
+                      form.setValue("catalogAttributes", attributes, {
+                        shouldDirty: true,
+                        shouldTouch: true,
+                        shouldValidate: true,
+                      })
+                    }
+                  />
+                </div>
+                <FormField
+                  control={form.control}
+                  name="brand"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Descuento de kit</FormLabel>
+                      <FormLabel>Marca o fabricante</FormLabel>
                       <FormControl>
-                        <PercentageInput
+                        <Input
                           disabled={loading}
-                          placeholder="15"
-                          value={field.value}
-                          onChange={field.onChange}
+                          placeholder="Ej. Sanrio, Stabilo"
+                          {...field}
                         />
                       </FormControl>
                       <FormDescription>
-                        Sobre lo que costarían los componentes por separado.
+                        Se usa en Google Merchant y datos estructurados.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                <KitPriceSuggestion
-                  components={watchedComponents ?? []}
-                  discountPercent={watchedKitDiscount ?? 0}
-                  disabled={loading}
-                  onApply={(value) =>
-                    form.setValue("price", value, { shouldDirty: true })
-                  }
-                />
-              </>
-            ) : (
-              suggestedPrice > 0 &&
-              suggestedPrice !== Number(watchedPrice) && (
-                <div className="col-span-full flex flex-col gap-3 rounded-lg border bg-muted/30 p-3 sm:flex-row sm:items-center">
-                  <p className="flex-1 text-xs leading-relaxed text-muted-foreground">
-                    Con el costo, el incremento y los gastos de arriba, el
-                    precio sugerido es{" "}
-                    <strong className="text-foreground">
-                      {currencyFormatter(suggestedPrice)}
-                    </strong>
-                    . El precio de venta no se recalcula solo.
-                  </p>
-                  <Button
-                    type="button"
-                    variant="soft"
-                    size="xs"
-                    disabled={loading}
-                    className="shrink-0"
-                    onClick={() =>
-                      form.setValue("price", suggestedPrice, {
-                        shouldDirty: true,
-                      })
-                    }
-                  >
-                    Usar {currencyFormatter(suggestedPrice)}
-                  </Button>
-                </div>
-              )
-            )}
-            <div
-              id="composicion"
-              className="col-span-full flex scroll-mt-24 flex-col gap-0.5 border-t pt-6"
-            >
-              <h2 className="text-[15px] font-bold text-primary">
-                Composición del kit
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                Un kit se arma con productos que ya existen. De aquí salen su
-                costo y su stock.
-              </p>
-            </div>
-            <FormField
-              control={form.control}
-              name="isKit"
-              render={({ field }) => (
-                <FormItem className="col-span-full flex flex-row items-center justify-between gap-4 rounded-lg border p-4 shadow-sm">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <Package
-                        className="h-4 w-4 text-muted-foreground"
-                        aria-hidden="true"
-                      />
-                      <FormLabel className="text-base font-semibold">
-                        Este producto es un kit o combo
-                      </FormLabel>
-                      {field.value && (
-                        <ProductTintBadge label="Kit" tone="cream" />
-                      )}
-                    </div>
-                    <FormDescription>
-                      Al venderse se descuentan sus componentes, no el kit. Su
-                      stock no se escribe: se deriva de lo que haya en bodega.
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                      disabled={loading}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-            {watchedIsKit && (
-              <FormField
-                control={form.control}
-                name="components"
-                render={({ field }) => (
-                  <FormItem className="col-span-full">
-                    <FormControl>
-                      <ComponentSelector
-                        value={field.value || []}
-                        onChange={(val) => field.onChange(val)}
-                        disabled={loading}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-            {watchedIsKit && kitStockLimit && kitStockLimit.binding && (
-              <div className="col-span-full flex items-start gap-3 rounded-lg border border-tint-cream bg-tint-cream/30 p-3">
-                <Info
-                  className="mt-0.5 h-4 w-4 shrink-0 text-primary"
-                  aria-hidden="true"
-                />
-                <p className="text-xs leading-relaxed text-primary">
-                  Con estos componentes se pueden armar{" "}
-                  <strong>{kitStockLimit.units}</strong>{" "}
-                  {kitStockLimit.units === 1 ? "kit" : "kits"}. Lo limita{" "}
-                  <strong>{kitStockLimit.binding.name}</strong> (
-                  {kitStockLimit.binding.stock ?? 0} en bodega ÷{" "}
-                  {kitStockLimit.binding.quantity || 1} por kit). Armarlo cuesta{" "}
-                  <strong>{currencyFormatter(kitComponentCost)}</strong>.
-                </p>
               </div>
-            )}
-            <div
-              id="inventario"
-              className="col-span-full flex scroll-mt-24 flex-col gap-0.5 border-t pt-6"
+            </SectionCard>
+            <SectionCard
+              id="precio"
+              title="Precio y margen"
+              description="El margen sale del costo de compra registrado; el precio de Mercado Libre es independiente."
             >
-              <h2 className="text-[15px] font-bold text-primary">Inventario</h2>
-              <p className="text-xs text-muted-foreground">
-                Cada cambio queda como movimiento auditable.
-              </p>
-            </div>
-            {watchedIsKit ? (
-              // Un kit no guarda stock propio: se deriva de sus componentes y
-              // `recalculateKitStock` sobreescribe la columna. Ofrecer un campo
-              // aqui solo produce numeros fantasma.
-              <FormItem className="col-span-full sm:col-span-1">
-                <FormLabel>Kits armables</FormLabel>
-                <div className="flex h-10 items-center gap-3 rounded-md border bg-muted/50 px-3">
-                  <PackageCheckIcon
-                    className="h-4 w-4 text-primary"
-                    aria-hidden="true"
-                  />
-                  <strong className="text-sm">
-                    {kitStockLimit?.units ?? 0}
-                  </strong>
-                  <span className="text-xs text-muted-foreground">
-                    derivado de los componentes
-                  </span>
-                </div>
-                <FormDescription>
-                  {kitStockLimit?.binding
-                    ? `Lo limita ${kitStockLimit.binding.name} (${kitStockLimit.binding.stock ?? 0} en bodega ÷ ${kitStockLimit.binding.quantity || 1} por kit).`
-                    : "Agrega componentes para saber cuántos kits se pueden armar."}
-                </FormDescription>
-              </FormItem>
-            ) : (
-              <FormField
-                control={form.control}
-                name="stock"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel isRequired className="flex items-center gap-2">
-                      Cantidad
-                      {!initialData && (
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Info className="h-4 w-4 cursor-pointer text-muted-foreground transition-colors hover:text-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className="max-w-[200px] text-xs">
-                                Esta cantidad generará un nuevo movimiento en el
-                                inventario para este producto una vez creado.
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      )}
-                    </FormLabel>
-                    {initialData ? (
-                      // EDIT MODE: Show read-only display with IntakeModal button
-                      <>
-                        <div className="flex items-center justify-between rounded-md border bg-muted/50 px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <div className="rounded-full bg-primary/10 p-1">
-                              <PackageCheckIcon className="h-4 w-4 text-primary" />
-                            </div>
-                            <span className="text-sm font-semibold">
-                              {field.value ?? 0}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <span className="mr-1 rounded border bg-background px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                              Inventario
-                            </span>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => setIntakeOpen(true)}
-                              title="Agregar Stock"
-                            >
-                              <Plus className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                        <FormControl>
-                          <Input type="hidden" {...field} />
-                        </FormControl>
-                      </>
-                    ) : (
-                      // CREATE MODE: Show editable stock input
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8 xl:grid-cols-3">
+                <FormField
+                  control={form.control}
+                  name="acqPrice"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel isRequired={!watchedIsKit}>
+                        Precio de compra
+                      </FormLabel>
                       <FormControl>
-                        <StockQuantityInput
+                        <CurrencyInput
+                          placeholder="$ 1.000"
+                          disabled={loading || watchedIsKit}
+                          value={watchedIsKit ? kitComponentCost : field.value}
+                          onChange={field.onChange}
+                        />
+                      </FormControl>
+                      {watchedIsKit && (
+                        <FormDescription>
+                          Se calcula sumando el costo de los componentes.
+                        </FormDescription>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="percentageIncrease"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel isRequired>Porcentaje de incremento</FormLabel>
+                      <FormControl>
+                        <PercentageInput
+                          disabled={loading}
+                          placeholder="30"
+                          value={field.value}
+                          onChange={field.onChange}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Se usa solo para calcular el precio de venta actual.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="transportationCost"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Envío y otros gastos</FormLabel>
+                      <FormControl>
+                        <CurrencyInput
+                          placeholder="$ 0"
                           disabled={loading}
                           value={field.value}
                           onChange={field.onChange}
-                          min={0}
                         />
                       </FormControl>
+                      <FormDescription>
+                        Por unidad. Entra solo en el precio sugerido.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="price"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel isRequired>Precio de venta</FormLabel>
+                      <FormControl>
+                        <CurrencyInput
+                          placeholder="$ 1.000"
+                          disabled={loading}
+                          value={field.value}
+                          onChange={field.onChange}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormItem>
+                  <FormLabel>Margen resultante</FormLabel>
+                  <div
+                    className={cn(
+                      "flex h-10 items-center gap-2 rounded-md border px-3 text-sm",
+                      marginPct === null
+                        ? "bg-muted/40 text-muted-foreground"
+                        : marginPct >= 0
+                          ? "border-tint-mint bg-tint-mint/40 text-primary"
+                          : "border-destructive/40 bg-destructive/10 text-destructive",
                     )}
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-
-            <div
-              id="identificadores"
-              className="col-span-full flex scroll-mt-24 flex-col gap-0.5 border-t pt-6"
-            >
-              <h2 className="text-[15px] font-bold text-primary">
-                Identificadores
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                SKU interno, GTIN real del código de barras (nunca inventado) y
-                código del fabricante.
-              </p>
-            </div>
-            <FormField
-              control={form.control}
-              name="gtin"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>GTIN / código de barras</FormLabel>
-                  <FormControl>
-                    <Input
-                      disabled={loading || form.watch("hasNoProductIdentifier")}
-                      inputMode="numeric"
-                      placeholder="8, 12, 13 o 14 dígitos"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Regístralo solo si corresponde a esta variante.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="mpn"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Referencia del fabricante (MPN)</FormLabel>
-                  <FormControl>
-                    <Input
-                      disabled={loading || form.watch("hasNoProductIdentifier")}
-                      placeholder="Referencia del fabricante"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="hasNoProductIdentifier"
-              render={({ field }) => (
-                <FormItem className="flex h-fit items-start space-x-3 space-y-0 rounded-md border p-4">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      disabled={loading}
-                      onCheckedChange={(checked) => {
-                        const hasNoIdentifier = checked === true;
-                        field.onChange(hasNoIdentifier);
-
-                        if (hasNoIdentifier) {
-                          form.setValue("gtin", "");
-                          form.setValue("mpn", "");
-                        }
-                      }}
-                    />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel>No tiene identificador global</FormLabel>
-                    <FormDescription>
-                      Úsalo únicamente para productos sin GTIN ni MPN del
-                      fabricante. Al activarlo se eliminan ambos valores.
-                    </FormDescription>
+                  >
+                    {marginPct === null ? (
+                      <span>Sin precio de venta</span>
+                    ) : (
+                      <>
+                        <strong>{marginPct.toFixed(1)} %</strong>
+                        <span className="text-xs">
+                          ={" "}
+                          {currencyFormatter(
+                            (Number(watchedPrice) || 0) -
+                              (watchedIsKit
+                                ? kitComponentCost
+                                : Number(watchedAcqPrice) || 0),
+                          )}{" "}
+                          por unidad
+                        </span>
+                      </>
+                    )}
                   </div>
                 </FormItem>
-              )}
-            />
-
-            {initialData && (
-              <IntakeModal
-                isOpen={intakeOpen}
-                onClose={() => setIntakeOpen(false)}
-                productId={initialData.id}
-                productName={initialData.name}
-                defaultCost={form.watch("acqPrice") || 0}
-                defaultSupplierId={initialData.supplierId || ""}
-                suppliers={suppliers}
-                onSuccess={({ newStock }) => {
-                  form.setValue("stock", newStock);
-                }}
-              />
-            )}
-            <div
-              id="clasificacion"
-              className="col-span-full flex scroll-mt-24 flex-col gap-0.5 border-t pt-6"
-            >
-              <h2 className="text-[15px] font-bold text-primary">
-                Clasificación y atributos
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                Subcategoría, tamaño, color, diseño y proveedor.
-              </p>
-            </div>
-            <FormField
-              control={form.control}
-              name="productGroupId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Asignar a Grupo</FormLabel>
-                  <Select
-                    disabled={loading}
-                    onValueChange={(value) =>
-                      field.onChange(value === "none" ? "" : value)
-                    }
-                    value={field.value || "none"}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecciona un grupo" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="none">-- Ninguno --</SelectItem>
-                      {productGroups?.map((group: any) => (
-                        <SelectItem key={group.id} value={group.id}>
-                          {group.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormDescription>
-                    Al asignarlo a un grupo, la sub-categoría, el tamaño, el
-                    color y el diseño pasan a gestionarse desde el grupo.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="categoryId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>Sub-Categoría</FormLabel>
-                  <FormControl>
-                    <Combobox
-                      id="categoryId"
-                      options={selectOptions.categories ?? []}
-                      value={field.value || null}
-                      onChange={(value) => field.onChange(value ?? "")}
-                      placeholder="Selecciona una sub-categoría"
-                      searchPlaceholder="Escribe para buscar…"
-                      emptyText="No hay resultados"
-                      disabled={
-                        loading ||
-                        (!!watchedGroupId && watchedGroupId !== "none")
-                      }
-                    />
-                  </FormControl>
-                  {!!watchedGroupId && watchedGroupId !== "none" && (
-                    <FormDescription>
-                      Gestionado por el Grupo de Productos
-                    </FormDescription>
-                  )}
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="sizeId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>Tamaño</FormLabel>
-                  <Select
-                    key={field.value}
-                    disabled={
-                      loading || (!!watchedGroupId && watchedGroupId !== "none")
-                    }
-                    onValueChange={field.onChange}
-                    value={field.value}
-                    defaultValue={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecciona un tamaño" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {selectOptions.sizes?.length === 0 && (
-                        <button
-                          disabled
-                          className="relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
-                        >
-                          No hay resultados
-                        </button>
+                {watchedIsKit ? (
+                  <>
+                    <FormField
+                      control={form.control}
+                      name="kitDiscountPercent"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Descuento de kit</FormLabel>
+                          <FormControl>
+                            <PercentageInput
+                              disabled={loading}
+                              placeholder="15"
+                              value={field.value}
+                              onChange={field.onChange}
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            Sobre lo que costarían los componentes por separado.
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
                       )}
-                      {selectOptions.sizes?.length > 0 &&
-                        selectOptions.sizes.map((size) => (
-                          <SelectItem key={size.value} value={size.value}>
-                            {size.label}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                  {!!watchedGroupId && watchedGroupId !== "none" && (
-                    <FormDescription>
-                      Gestionado por el Grupo de Productos
-                    </FormDescription>
-                  )}
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="colorId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>Color</FormLabel>
-                  <FormControl>
-                    <Combobox
-                      id="colorId"
-                      options={(selectOptions.colors ?? []).map((color) => ({
-                        value: color.value,
-                        label: color.label,
-                        description: color.color,
-                        icon: (
-                          <span
-                            aria-hidden="true"
-                            className="mr-2 h-4 w-4 shrink-0 rounded-full border border-black/10"
-                            style={{ backgroundColor: color.color }}
-                          />
-                        ),
-                      }))}
-                      value={field.value || null}
-                      onChange={(value) => field.onChange(value ?? "")}
-                      placeholder="Selecciona un color"
-                      searchPlaceholder="Escribe para buscar…"
-                      emptyText="No hay resultados"
-                      disabled={
-                        loading ||
-                        (!!watchedGroupId && watchedGroupId !== "none")
-                      }
                     />
-                  </FormControl>
-
-                  {!!watchedGroupId && watchedGroupId !== "none" && (
-                    <FormDescription>
-                      Gestionado por el Grupo de Productos
-                    </FormDescription>
-                  )}
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="designId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>Diseño</FormLabel>
-                  <FormControl>
-                    <Combobox
-                      id="designId"
-                      options={selectOptions.designs ?? []}
-                      value={field.value || null}
-                      onChange={(value) => field.onChange(value ?? "")}
-                      placeholder="Selecciona un diseño"
-                      searchPlaceholder="Escribe para buscar…"
-                      emptyText="No hay resultados"
-                      disabled={
-                        loading ||
-                        (!!watchedGroupId && watchedGroupId !== "none")
-                      }
-                    />
-                  </FormControl>
-
-                  {!!watchedGroupId && watchedGroupId !== "none" && (
-                    <FormDescription>
-                      Gestionado por el Grupo de Productos
-                    </FormDescription>
-                  )}
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {collisionError && (
-              <div className="col-span-full rounded-md bg-destructive/15 p-4 text-sm text-destructive">
-                <div className="flex items-center font-medium">
-                  <span className="mr-2">⚠️</span>
-                  Conflicto de Variantes Detectado
-                </div>
-                <div className="mt-1">{collisionError}</div>
-              </div>
-            )}
-
-            <FormField
-              control={form.control}
-              name="supplierId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Proveedor</FormLabel>
-                  <FormControl>
-                    <Combobox
-                      id="supplierId"
-                      options={selectOptions.suppliers ?? []}
-                      value={field.value || null}
-                      onChange={(value) => field.onChange(value ?? "")}
-                      placeholder="Sin proveedor"
-                      searchPlaceholder="Escribe para buscar…"
-                      emptyText="No hay resultados"
+                    <KitPriceSuggestion
+                      components={watchedComponents ?? []}
+                      discountPercent={watchedKitDiscount ?? 0}
                       disabled={loading}
+                      onApply={(value) =>
+                        form.setValue("price", value, { shouldDirty: true })
+                      }
                     />
-                  </FormControl>
-                  <FormDescription>Este campo es opcional</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div
+                  </>
+                ) : (
+                  suggestedPrice > 0 &&
+                  suggestedPrice !== Number(watchedPrice) && (
+                    <SuggestionStrip
+                      className="col-span-full"
+                      actionLabel={`Usar ${currencyFormatter(suggestedPrice)}`}
+                      disabled={loading}
+                      onApply={() =>
+                        form.setValue("price", suggestedPrice, {
+                          shouldDirty: true,
+                        })
+                      }
+                    >
+                      Con el costo, el incremento y los gastos de arriba, el
+                      precio sugerido es{" "}
+                      <strong className="text-foreground">
+                        {currencyFormatter(suggestedPrice)}
+                      </strong>
+                      . El precio de venta no se recalcula solo.
+                    </SuggestionStrip>
+                  )
+                )}
+              </div>
+            </SectionCard>
+            <SectionCard
+              id="composicion"
+              title="Composición del kit"
+              description="Un kit se arma con productos que ya existen. De aquí salen su costo y su stock."
+            >
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8 xl:grid-cols-3">
+                {watchedIsKit ? (
+                  <div className="col-span-full flex flex-col gap-3 rounded-lg border bg-muted/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-2 text-sm text-primary">
+                      <ProductTintBadge label="Kit" tone="cream" />
+                      Al venderse se descuentan sus componentes, no el kit. Su
+                      stock se deriva de lo que haya en bodega.
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      disabled={loading}
+                      onClick={() =>
+                        form.setValue("isKit", false, { shouldDirty: true })
+                      }
+                    >
+                      Dejar de ser kit
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="col-span-full flex flex-col gap-3 rounded-lg border border-dashed p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm text-muted-foreground">
+                      Este producto se vende por sí solo. Un kit se arma con
+                      productos que ya existen: su costo y su stock salen de los
+                      componentes.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={loading}
+                      className="shrink-0"
+                      onClick={() =>
+                        form.setValue("isKit", true, { shouldDirty: true })
+                      }
+                    >
+                      <Package className="h-4 w-4" aria-hidden="true" />
+                      Convertir en kit
+                    </Button>
+                  </div>
+                )}
+                {watchedIsKit && (
+                  <FormField
+                    control={form.control}
+                    name="components"
+                    render={({ field }) => (
+                      <FormItem className="col-span-full">
+                        <FormControl>
+                          <ComponentSelector
+                            value={field.value || []}
+                            onChange={(val) => field.onChange(val)}
+                            disabled={loading}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+                {watchedIsKit && kitStockLimit && kitStockLimit.binding && (
+                  <div className="col-span-full flex items-start gap-3 rounded-lg border border-tint-cream bg-tint-cream/30 p-3">
+                    <Info
+                      className="mt-0.5 h-4 w-4 shrink-0 text-primary"
+                      aria-hidden="true"
+                    />
+                    <p className="text-xs leading-relaxed text-primary">
+                      Con estos componentes se pueden armar{" "}
+                      <strong>{kitStockLimit.units}</strong>{" "}
+                      {kitStockLimit.units === 1 ? "kit" : "kits"}. Lo limita{" "}
+                      <strong>{kitStockLimit.binding.name}</strong> (
+                      {kitStockLimit.binding.stock ?? 0} en bodega ÷{" "}
+                      {kitStockLimit.binding.quantity || 1} por kit). Armarlo
+                      cuesta{" "}
+                      <strong>{currencyFormatter(kitComponentCost)}</strong>.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </SectionCard>
+            <SectionCard
+              id="inventario"
+              title="Inventario"
+              description="Cada cambio queda como movimiento auditable."
+            >
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8 xl:grid-cols-3">
+                {watchedIsKit ? (
+                  // Un kit no guarda stock propio: se deriva de sus componentes y
+                  // `recalculateKitStock` sobreescribe la columna. Ofrecer un campo
+                  // aqui solo produce numeros fantasma.
+                  <FormItem className="col-span-full sm:col-span-1">
+                    <FormLabel>Kits armables</FormLabel>
+                    <div className="flex h-10 items-center gap-3 rounded-md border bg-muted/50 px-3">
+                      <PackageCheckIcon
+                        className="h-4 w-4 text-primary"
+                        aria-hidden="true"
+                      />
+                      <strong className="text-sm">
+                        {kitStockLimit?.units ?? 0}
+                      </strong>
+                      <span className="text-xs text-muted-foreground">
+                        derivado de los componentes
+                      </span>
+                    </div>
+                    <FormDescription>
+                      {kitStockLimit?.binding
+                        ? `Lo limita ${kitStockLimit.binding.name} (${kitStockLimit.binding.stock ?? 0} en bodega ÷ ${kitStockLimit.binding.quantity || 1} por kit).`
+                        : "Agrega componentes para saber cuántos kits se pueden armar."}
+                    </FormDescription>
+                  </FormItem>
+                ) : (
+                  <FormField
+                    control={form.control}
+                    name="stock"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel
+                          isRequired
+                          className="flex items-center gap-2"
+                        >
+                          Cantidad
+                          {!initialData && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Info className="h-4 w-4 cursor-pointer text-muted-foreground transition-colors hover:text-foreground" />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p className="max-w-[200px] text-xs">
+                                    Esta cantidad generará un nuevo movimiento
+                                    en el inventario para este producto una vez
+                                    creado.
+                                  </p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        </FormLabel>
+                        {initialData ? (
+                          // EDIT MODE: Show read-only display with IntakeModal button
+                          <>
+                            <div className="flex items-center justify-between rounded-md border bg-muted/50 px-3 py-2">
+                              <div className="flex items-center gap-2">
+                                <div className="rounded-full bg-primary/10 p-1">
+                                  <PackageCheckIcon className="h-4 w-4 text-primary" />
+                                </div>
+                                <span className="text-sm font-semibold">
+                                  {field.value ?? 0}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="mr-1 rounded border bg-background px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                                  Inventario
+                                </span>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => setIntakeOpen(true)}
+                                  title="Agregar Stock"
+                                >
+                                  <Plus className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                            <FormControl>
+                              <Input type="hidden" {...field} />
+                            </FormControl>
+                          </>
+                        ) : (
+                          // CREATE MODE: Show editable stock input
+                          <FormControl>
+                            <StockQuantityInput
+                              disabled={loading}
+                              value={field.value}
+                              onChange={field.onChange}
+                              min={0}
+                            />
+                          </FormControl>
+                        )}
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+              </div>
+            </SectionCard>
+            <SectionCard
+              id="identificadores"
+              title="Identificadores"
+              description="SKU interno, GTIN real del código de barras (nunca inventado) y código del fabricante."
+            >
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8 xl:grid-cols-3">
+                <FormField
+                  control={form.control}
+                  name="gtin"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>GTIN / código de barras</FormLabel>
+                      <div className="flex gap-2">
+                        <FormControl>
+                          <Input
+                            disabled={
+                              loading || form.watch("hasNoProductIdentifier")
+                            }
+                            inputMode="numeric"
+                            placeholder="8, 12, 13 o 14 dígitos"
+                            {...field}
+                          />
+                        </FormControl>
+                        {!form.watch("hasNoProductIdentifier") && (
+                          <BarcodeScanner
+                            label="Escanear"
+                            description="Apunta la cámara al código de barras del empaque."
+                            onDetected={(code) =>
+                              form.setValue("gtin", code, {
+                                shouldDirty: true,
+                                shouldTouch: true,
+                                shouldValidate: true,
+                              })
+                            }
+                          />
+                        )}
+                      </div>
+                      <FormDescription>
+                        Regístralo solo si corresponde a esta variante.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="mpn"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Referencia del fabricante (MPN)</FormLabel>
+                      <FormControl>
+                        <Input
+                          disabled={
+                            loading || form.watch("hasNoProductIdentifier")
+                          }
+                          placeholder="Referencia del fabricante"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="hasNoProductIdentifier"
+                  render={({ field }) => (
+                    <FormItem className="flex h-fit items-start space-x-3 space-y-0 rounded-md border p-4">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          disabled={loading}
+                          onCheckedChange={(checked) => {
+                            const hasNoIdentifier = checked === true;
+                            field.onChange(hasNoIdentifier);
+
+                            if (hasNoIdentifier) {
+                              form.setValue("gtin", "");
+                              form.setValue("mpn", "");
+                            }
+                          }}
+                        />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel>No tiene identificador global</FormLabel>
+                        <FormDescription>
+                          Úsalo únicamente para productos sin GTIN ni MPN del
+                          fabricante. Al activarlo se eliminan ambos valores.
+                        </FormDescription>
+                      </div>
+                    </FormItem>
+                  )}
+                />
+
+                {initialData && (
+                  <IntakeModal
+                    isOpen={intakeOpen}
+                    onClose={() => setIntakeOpen(false)}
+                    productId={initialData.id}
+                    productName={initialData.name}
+                    defaultCost={form.watch("acqPrice") || 0}
+                    defaultSupplierId={initialData.supplierId || ""}
+                    suppliers={suppliers}
+                    onSuccess={({ newStock }) => {
+                      form.setValue("stock", newStock);
+                    }}
+                  />
+                )}
+              </div>
+            </SectionCard>
+            <SectionCard
+              id="clasificacion"
+              title="Clasificación y atributos"
+              description="Subcategoría, tamaño, color, diseño y proveedor."
+            >
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8 xl:grid-cols-3">
+                <FormField
+                  control={form.control}
+                  name="productGroupId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Grupo de variantes</FormLabel>
+                      <FormControl>
+                        <Combobox
+                          id="productGroupId"
+                          options={(productGroups ?? []).map((group: any) => ({
+                            value: group.id,
+                            label: group.name,
+                          }))}
+                          value={
+                            field.value && field.value !== "none"
+                              ? field.value
+                              : null
+                          }
+                          onChange={(value) => field.onChange(value ?? "")}
+                          placeholder="Sin grupo"
+                          searchPlaceholder="Escribe para buscar…"
+                          emptyText="No hay grupos con ese nombre"
+                          disabled={loading}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Al asignarlo a un grupo, la sub-categoría, el tamaño, el
+                        color y el diseño pasan a gestionarse desde el grupo.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="categoryId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel isRequired>Sub-Categoría</FormLabel>
+                      <FormControl>
+                        <Combobox
+                          id="categoryId"
+                          options={selectOptions.categories ?? []}
+                          value={field.value || null}
+                          onChange={(value) => field.onChange(value ?? "")}
+                          placeholder="Selecciona una sub-categoría"
+                          searchPlaceholder="Escribe para buscar…"
+                          emptyText="No hay resultados"
+                          disabled={
+                            loading ||
+                            (!!watchedGroupId && watchedGroupId !== "none")
+                          }
+                        />
+                      </FormControl>
+                      {!!watchedGroupId && watchedGroupId !== "none" && (
+                        <FormDescription>
+                          Gestionado por el Grupo de Productos
+                        </FormDescription>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="sizeId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel isRequired>Tamaño</FormLabel>
+                      <FormControl>
+                        <Combobox
+                          id="sizeId"
+                          options={selectOptions.sizes ?? []}
+                          value={field.value || null}
+                          onChange={(value) => field.onChange(value ?? "")}
+                          placeholder="Selecciona un tamaño"
+                          searchPlaceholder="Escribe para buscar…"
+                          emptyText="No hay resultados"
+                          disabled={
+                            loading ||
+                            (!!watchedGroupId && watchedGroupId !== "none")
+                          }
+                        />
+                      </FormControl>
+                      {!!watchedGroupId && watchedGroupId !== "none" && (
+                        <FormDescription>
+                          Gestionado por el Grupo de Productos
+                        </FormDescription>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="colorId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel isRequired>Color</FormLabel>
+                      <FormControl>
+                        <Combobox
+                          id="colorId"
+                          options={(selectOptions.colors ?? []).map(
+                            (color) => ({
+                              value: color.value,
+                              label: color.label,
+                              description: color.color,
+                              icon: (
+                                <span
+                                  aria-hidden="true"
+                                  className="mr-2 h-4 w-4 shrink-0 rounded-full border border-black/10"
+                                  style={{ backgroundColor: color.color }}
+                                />
+                              ),
+                            }),
+                          )}
+                          value={field.value || null}
+                          onChange={(value) => field.onChange(value ?? "")}
+                          placeholder="Selecciona un color"
+                          searchPlaceholder="Escribe para buscar…"
+                          emptyText="No hay resultados"
+                          disabled={
+                            loading ||
+                            (!!watchedGroupId && watchedGroupId !== "none")
+                          }
+                        />
+                      </FormControl>
+
+                      {!!watchedGroupId && watchedGroupId !== "none" && (
+                        <FormDescription>
+                          Gestionado por el Grupo de Productos
+                        </FormDescription>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="designId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel isRequired>Diseño</FormLabel>
+                      <FormControl>
+                        <Combobox
+                          id="designId"
+                          options={selectOptions.designs ?? []}
+                          value={field.value || null}
+                          onChange={(value) => field.onChange(value ?? "")}
+                          placeholder="Selecciona un diseño"
+                          searchPlaceholder="Escribe para buscar…"
+                          emptyText="No hay resultados"
+                          disabled={
+                            loading ||
+                            (!!watchedGroupId && watchedGroupId !== "none")
+                          }
+                        />
+                      </FormControl>
+
+                      {!!watchedGroupId && watchedGroupId !== "none" && (
+                        <FormDescription>
+                          Gestionado por el Grupo de Productos
+                        </FormDescription>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {collisionError && (
+                  <div className="col-span-full rounded-md bg-destructive/15 p-4 text-sm text-destructive">
+                    <div className="flex items-center font-medium">
+                      <span className="mr-2">⚠️</span>
+                      Conflicto de Variantes Detectado
+                    </div>
+                    <div className="mt-1">{collisionError}</div>
+                  </div>
+                )}
+
+                <FormField
+                  control={form.control}
+                  name="supplierId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Proveedor</FormLabel>
+                      <FormControl>
+                        <Combobox
+                          id="supplierId"
+                          options={selectOptions.suppliers ?? []}
+                          value={field.value || null}
+                          onChange={(value) => field.onChange(value ?? "")}
+                          placeholder="Sin proveedor"
+                          searchPlaceholder="Escribe para buscar…"
+                          emptyText="No hay resultados"
+                          disabled={loading}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </SectionCard>
+            <SectionCard
               id="visibilidad"
-              className="col-span-full flex scroll-mt-24 flex-col gap-0.5 border-t pt-6"
+              title="Visibilidad"
+              description="Destacado en la portada, archivado (desaparece de la tienda; la URL queda como alias) o próximamente (se ve sin botón de compra hasta la fecha)."
             >
-              <h2 className="text-[15px] font-bold text-primary">
-                Visibilidad
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                Destacado en la portada, archivado (desaparece de la tienda; la
-                URL queda como alias) o próximamente (se ve sin botón de compra
-                hasta la fecha).
-              </p>
-            </div>
-            <FormField
-              control={form.control}
-              name="availableAt"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Disponible desde</FormLabel>
-                  <FormControl>
-                    <DateField
-                      value={field.value ?? ""}
-                      onChange={field.onChange}
-                      clearable
-                      placeholder="Ya disponible"
-                      aria-label="Fecha desde la que se puede comprar"
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Con una fecha futura el producto aparece como «Llega el…» y
-                    las clientas pueden pedir aviso. Vacío: se vende ya.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="isFeatured"
-              render={({ field }) => (
-                <FormItem className="mt-auto flex h-fit items-start space-x-3 space-y-0 rounded-md border p-4">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel isRequired>Destacado</FormLabel>
-                    <FormDescription>
-                      Este producto aparecerá en la pagina principal
-                    </FormDescription>
-                  </div>
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="isArchived"
-              render={({ field }) => (
-                <FormItem className="mt-auto flex h-fit items-start space-x-3 space-y-0 rounded-md border p-4">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel isRequired>Archivado</FormLabel>
-                    <FormDescription>
-                      Este producto no se mostrará en ninguna sección de la
-                      tienda
-                    </FormDescription>
-                  </div>
-                </FormItem>
-              )}
-            />
-            <div
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8 xl:grid-cols-3">
+                <FormField
+                  control={form.control}
+                  name="availableAt"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Disponible desde</FormLabel>
+                      <FormControl>
+                        <DateField
+                          value={field.value ?? ""}
+                          onChange={field.onChange}
+                          clearable
+                          placeholder="Ya disponible"
+                          aria-label="Fecha desde la que se puede comprar"
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Con una fecha futura el producto aparece como «Llega
+                        el…» y las clientas pueden pedir aviso. Vacío: se vende
+                        ya.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="isFeatured"
+                  render={({ field }) => (
+                    <FormItem className="mt-auto flex h-fit items-start space-x-3 space-y-0 rounded-md border p-4">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel>Destacado</FormLabel>
+                        <FormDescription>
+                          Este producto aparecerá en la pagina principal
+                        </FormDescription>
+                      </div>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="isArchived"
+                  render={({ field }) => (
+                    <FormItem className="mt-auto flex h-fit items-start space-x-3 space-y-0 rounded-md border p-4">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel>Archivado</FormLabel>
+                        <FormDescription>
+                          Este producto no se mostrará en ninguna sección de la
+                          tienda
+                        </FormDescription>
+                      </div>
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </SectionCard>
+            <SectionCard
               id="descripcion"
-              className="col-span-full flex scroll-mt-24 flex-col gap-0.5 border-t pt-6"
+              title="Descripción"
+              description="Se muestra en la tienda y en Google; sin emojis y con formato."
             >
-              <h2 className="text-[15px] font-bold text-primary">
-                Descripción
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                Se muestra en la tienda y en Google; sin emojis y con formato.
-              </p>
-            </div>
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem className="col-span-full">
-                  <FormLabel isRequired>Descripción</FormLabel>
-                  <FormControl>
-                    <RichTextEditor
-                      placeholder="Describe las características y beneficios del producto 🚀..."
-                      value={field.value || ""}
-                      onChange={field.onChange}
-                      templates={PRODUCT_DESCRIPTION_TEMPLATES}
-                      showSeoGuidance
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Usa secciones, listas y plantillas para explicar beneficios,
-                    medidas y cuidados con claridad.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8 xl:grid-cols-3">
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem className="col-span-full">
+                      <FormLabel>Descripción</FormLabel>
+                      <FormControl>
+                        <RichTextEditor
+                          placeholder="Describe las características y beneficios del producto 🚀..."
+                          value={field.value || ""}
+                          onChange={field.onChange}
+                          templates={PRODUCT_DESCRIPTION_TEMPLATES}
+                          showSeoGuidance
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Usa secciones, listas y plantillas para explicar
+                        beneficios, medidas y cuidados con claridad.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </SectionCard>
           </div>
           {initialData && (
-            <section
+            <SectionCard
               id="zona-de-cuidado"
-              aria-labelledby="producto-cuidado-titulo"
-              className="space-y-3 rounded-xl border border-tint-pink bg-white p-5 shadow-sm"
+              title="Zona de cuidado"
+              tone="care"
+              description="Limpiar descarta lo escrito sin guardar. Eliminar borra el producto de la tienda; si tiene pedidos, prefiere archivarlo desde Visibilidad."
             >
-              <div className="flex flex-col gap-0.5">
-                <h2
-                  id="producto-cuidado-titulo"
-                  className="text-[15px] font-bold text-primary"
-                >
-                  Zona de cuidado
-                </h2>
-                <p className="text-xs text-muted-foreground">
-                  Limpiar descarta lo escrito sin guardar. Eliminar borra el
-                  producto de la tienda; si tiene pedidos, prefiere archivarlo
-                  desde Visibilidad.
-                </p>
-              </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   type="button"
@@ -2211,7 +2168,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   Eliminar producto
                 </Button>
               </div>
-            </section>
+            </SectionCard>
           )}
           <div className="sticky bottom-[84px] z-20 flex flex-col gap-3 rounded-xl border bg-white/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between lg:bottom-4">
             <p className="text-xs text-muted-foreground">

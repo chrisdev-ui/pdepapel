@@ -71,23 +71,24 @@ function Harness({
 describe("CatalogAttributesEditor", () => {
   afterEach(cleanup);
 
+  const featurePicker = (index: number) =>
+    screen.getByRole("combobox", { name: `Nombre de característica ${index}` });
+  const valuePicker = (index: number) =>
+    screen.getByRole("combobox", { name: `Valor de característica ${index}` });
+  const search = () => screen.getByPlaceholderText("Buscar o escribir…");
+
   it("suggests category features and reuses an existing canonical value", async () => {
     const user = userEvent.setup();
     render(<Harness />);
 
     await user.click(screen.getByRole("button", { name: "Formato" }));
 
-    expect(
-      screen.getByRole("combobox", { name: "Nombre de característica 1" }),
-    ).toHaveValue("Formato");
+    expect(featurePicker(1)).toHaveTextContent("Formato");
 
-    const valueInput = screen.getByRole("combobox", {
-      name: "Valor de característica 1",
-    });
-    await user.click(valueInput);
+    await user.click(valuePicker(1));
     await user.click(screen.getByRole("option", { name: /A5/ }));
 
-    expect(valueInput).toHaveValue("A5");
+    expect(valuePicker(1)).toHaveTextContent("A5");
     expect(screen.getByText("2 valores existentes")).toBeInTheDocument();
   });
 
@@ -106,13 +107,11 @@ describe("CatalogAttributesEditor", () => {
       />,
     );
 
-    const featureInput = screen.getByRole("combobox", {
-      name: "Nombre de característica 1",
-    });
-    await user.type(featureInput, "formato");
-    await user.tab();
+    await user.click(featurePicker(1));
+    await user.type(search(), "formato");
+    await user.click(screen.getByRole("option", { name: /Formato/ }));
 
-    expect(featureInput).toHaveValue("Formato");
+    expect(featurePicker(1)).toHaveTextContent("Formato");
     expect(screen.getByText("Existente")).toBeInTheDocument();
   });
 
@@ -137,17 +136,18 @@ describe("CatalogAttributesEditor", () => {
       />,
     );
 
-    const duplicateInput = screen.getByRole("combobox", {
-      name: "Nombre de característica 2",
-    });
-    await user.type(duplicateInput, "Formato");
+    await user.click(featurePicker(2));
+    await user.type(search(), "Formato");
 
+    const duplicate = screen.getByRole("option", {
+      name: /Formato.*Ya agregada/,
+    });
+    expect(duplicate).toHaveAttribute("aria-disabled", "true");
+    // Sin atajo para crearla otra vez: la coincidencia existe, solo que ya
+    // está usada en este producto.
     expect(
-      screen.getByText("Esta característica ya está agregada."),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("option", { name: /Formato.*Ya agregada/ }),
-    ).toBeDisabled();
+      screen.queryByRole("button", { name: /Usar “Formato”/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps a genuinely new feature editable until the product is saved", async () => {
@@ -165,12 +165,11 @@ describe("CatalogAttributesEditor", () => {
       />,
     );
 
-    const featureInput = screen.getByRole("combobox", {
-      name: "Nombre de característica 1",
-    });
-    await user.type(featureInput, "Tipo de papel");
+    await user.click(featurePicker(1));
+    await user.type(search(), "Tipo de papel");
+    await user.click(screen.getByRole("button", { name: "Usar “Tipo de papel”" }));
 
-    expect(featureInput).toHaveValue("Tipo de papel");
+    expect(featurePicker(1)).toHaveTextContent("Tipo de papel");
     expect(screen.getByText("Nueva")).toBeInTheDocument();
     expect(
       screen.getByText(/“Tipo de papel” se creará al guardar/),

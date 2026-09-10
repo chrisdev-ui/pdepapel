@@ -26,7 +26,13 @@ interface AppShellProps {
  * tablet y móvil), cabecera con la barra de comando, miga de pan a nivel de
  * página y barra inferior en el teléfono.
  */
-export function AppShell({ storeId, stores, storeUrl, counts, children }: AppShellProps) {
+export function AppShell({
+  storeId,
+  stores,
+  storeUrl,
+  counts,
+  children,
+}: AppShellProps) {
   const { collapsed, toggle } = useSidebarStore();
   const [menuOpen, setMenuOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
@@ -61,19 +67,32 @@ export function AppShell({ storeId, stores, storeUrl, counts, children }: AppShe
           collapsed ? "w-16" : "w-64",
         )}
       >
-        <div className={cn("flex h-16 items-center border-b", collapsed ? "justify-center px-2" : "px-3")}>
+        <div
+          className={cn(
+            "flex h-16 items-center border-b",
+            collapsed ? "justify-center px-2" : "px-3",
+          )}
+        >
           <StoreSwitcher items={stores} compact={collapsed} />
         </div>
         <SidebarNav storeId={storeId} counts={counts} collapsed={collapsed} />
       </aside>
 
       <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-        <SheetContent side="left" className="flex w-[300px] flex-col p-0" aria-describedby={undefined}>
+        <SheetContent
+          side="left"
+          className="flex w-[300px] flex-col p-0"
+          aria-describedby={undefined}
+        >
           <SheetTitle className="sr-only">Menú del panel</SheetTitle>
           <div className="flex h-16 items-center border-b px-3">
             <StoreSwitcher items={stores} />
           </div>
-          <SidebarNav storeId={storeId} counts={counts} onNavigate={() => setMenuOpen(false)} />
+          <SidebarNav
+            storeId={storeId}
+            counts={counts}
+            onNavigate={() => setMenuOpen(false)}
+          />
         </SheetContent>
       </Sheet>
 
@@ -86,14 +105,23 @@ export function AppShell({ storeId, stores, storeUrl, counts, children }: AppShe
           onOpenMenu={() => setMenuOpen(true)}
           onOpenCommand={() => setCommandOpen(true)}
         />
-        <main className="min-h-0 flex-1 overflow-y-auto pb-[88px] lg:pb-0">
+        {/* `relative`: los inputs ocultos de Radix (checkbox, radio) y los
+            textos `sr-only` son `position: absolute`; sin un ancestro
+            posicionado su bloque contenedor es el documento, se salen del
+            scroll de <main> y la ventana entera se vuelve desplazable hacia
+            una zona en blanco. */}
+        <main className="min-h-0 relative flex-1 overflow-y-auto pb-[88px] lg:pb-0">
           <Breadcrumbs storeId={storeId} className="px-4 pt-4 sm:px-8" />
           {children}
         </main>
       </div>
 
       <MobileNav storeId={storeId} onOpenMenu={() => setMenuOpen(true)} />
-      <CommandPalette storeId={storeId} open={commandOpen} onOpenChange={setCommandOpen} />
+      <CommandPalette
+        storeId={storeId}
+        open={commandOpen}
+        onOpenChange={setCommandOpen}
+      />
     </div>
   );
 }

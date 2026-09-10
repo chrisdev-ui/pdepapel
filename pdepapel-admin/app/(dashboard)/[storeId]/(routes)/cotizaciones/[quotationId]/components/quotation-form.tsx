@@ -340,7 +340,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                     />
                   </FormControl>
                   <div className="space-y-1 leading-none">
-                    <FormLabel isRequired>Es Plantilla</FormLabel>
+                    <FormLabel>Es Plantilla</FormLabel>
                     <FormDescription>
                       Si se marca, aparecerá en la biblioteca de plantillas para
                       reusar.
@@ -361,7 +361,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                     />
                   </FormControl>
                   <div className="space-y-1 leading-none">
-                    <FormLabel isRequired>Activo</FormLabel>
+                    <FormLabel>Activo</FormLabel>
                     <FormDescription>
                       Disponible para selección pública o interna.
                     </FormDescription>
@@ -397,7 +397,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
               <h3 className="text-lg font-medium">Ítems de la plantilla</h3>
               <div className="rounded-lg border bg-slate-50 p-4">
                 <div className="mb-4 space-y-3">
-                  <FormLabel isRequired>Agregar Producto al Carrito</FormLabel>
+                  <FormLabel>Agregar Producto al Carrito</FormLabel>
                   <EnhancedProductSelector
                     selectedItems={fields.reduce(
                       (acc, field) => {
@@ -603,10 +603,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                                   />
                                 </FormControl>
                                 <div className="flex items-center gap-2">
-                                  <FormLabel
-                                    isRequired
-                                    className="font-normal text-muted-foreground"
-                                  >
+                                  <FormLabel className="font-normal text-muted-foreground">
                                     Opcional
                                   </FormLabel>
                                   <TooltipProvider>

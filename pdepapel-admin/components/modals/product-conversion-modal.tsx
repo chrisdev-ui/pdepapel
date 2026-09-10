@@ -254,7 +254,7 @@ export const ProductConversionModal: React.FC<ProductConversionModalProps> = ({
                   />
                 </FormControl>
                 <div className="space-y-1 leading-none">
-                  <FormLabel isRequired>Publicar inmediatamente</FormLabel>
+                  <FormLabel>Publicar inmediatamente</FormLabel>
                   <FormDescription>
                     Si se marca, el producto será visible en la tienda. De lo
                     contrario, quedará archivado.

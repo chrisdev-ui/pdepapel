@@ -25,15 +25,9 @@ import {
   useState,
   useTransition,
 } from "react";
-import {
-  useFieldArray,
-  useForm,
-  useWatch,
-  type FieldErrors,
-} from "react-hook-form";
+import { useFieldArray, useForm, useWatch } from "react-hook-form";
 
 import { AlertModal } from "@/components/modals/alert-modal";
-import { GuideConfirmationModal } from "@/components/modals/guide-confirmation-modal";
 import { ProductConversionModal } from "@/components/modals/product-conversion-modal";
 import { Button } from "@/components/ui/button";
 import {
@@ -52,6 +46,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { getErrorMessage } from "@/lib/api-errors";
+import { focusFirstInvalidField } from "@/lib/focus-invalid-field";
 import { isPaidLike, ORDER_STATUS_LABELS } from "@/lib/order-transitions";
 import { currencyFormatter } from "@/lib/utils";
 import dynamic from "next/dynamic";
@@ -214,6 +209,22 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   });
   const watchedItems = useWatch({ control: form.control, name: "orderItems" });
   const watchedType = useWatch({ control: form.control, name: "type" });
+  const watchedProvider = useWatch({
+    control: form.control,
+    name: "shippingProvider",
+  });
+  const watchedRateId = useWatch({
+    control: form.control,
+    name: "envioClickIdRate",
+  });
+  const watchedCarrier = useWatch({
+    control: form.control,
+    name: "shipping.carrierName",
+  });
+  const watchedShippingCost = useWatch({
+    control: form.control,
+    name: "shipping.cost",
+  });
   const { isDirty } = form.formState;
 
   const [loading, setLoading] = useState(false);
@@ -238,7 +249,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     height: number;
     length: number;
   } | null>(null);
-  const [pendingGuide, setPendingGuide] = useState<SubmitOptions | null>(null);
+  const [quotedAt, setQuotedAt] = useState<Date | null>(null);
 
   const { clearStorage } = useFormPersist({
     form,
@@ -384,7 +395,12 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   const onSubmit = (data: OrderFormValues) => submitOrder(data);
 
   const onTransition = useCallback(
-    async ({ to, transactionId, trackingCode }: TransitionPayload) => {
+    async ({
+      to,
+      transactionId,
+      trackingCode,
+      createGuide,
+    }: TransitionPayload) => {
       form.setValue("status", to, { shouldDirty: true });
       if (transactionId)
         form.setValue("payment.transactionId", transactionId, {
@@ -410,56 +426,24 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         return;
       }
       const data = form.getValues();
+      // La decisión de la guía viene del propio diálogo de «Marcar como
+      // pagado»; cuando no aplica (sin tarifa, ya hay guía) queda en su
+      // valor por defecto: no crear.
       const options: SubmitOptions = {
         status: to,
         transactionId,
         trackingCode,
+        skipAutoGuide: createGuide === undefined ? undefined : !createGuide,
       };
-      const needsGuideDecision =
-        to === OrderStatus.PAID &&
-        data.shippingProvider === ShippingProvider.ENVIOCLICK &&
-        data.envioClickIdRate &&
-        !initialData?.shipping?.envioClickIdOrder;
-      if (needsGuideDecision) {
-        setPendingGuide(options);
-        return;
-      }
       await submitOrder(data, options);
     },
     [form, initialData, preset.status, submitOrder, toast],
   );
 
-  /**
-   * `handleSubmit` sin segundo argumento se limita a NO llamar a onSubmit
-   * cuando la validacion falla: el boton "Guardar cambios" no hace nada y no
-   * dice nada. En un formulario tan largo el campo invalido casi siempre esta
-   * fuera de pantalla, asi que parece que el boton esta roto.
-   *
-   * Ahora se nombra el problema y se lleva al campo.
-   */
-  const onInvalid = useCallback(
-    (errors: FieldErrors<OrderFormValues>) => {
-      const message = firstErrorMessage(errors);
-      toast({
-        title: "Faltan datos para guardar",
-        description: message ?? "Revisa los campos marcados en rojo.",
-        variant: "destructive",
-      });
-
-      const firstInvalid = document.querySelector<HTMLElement>(
-        '[aria-invalid="true"], [data-invalid="true"]',
-      );
-      if (firstInvalid) {
-        firstInvalid.scrollIntoView({ block: "center", behavior: "smooth" });
-        // El foco espera al scroll para no pelearse con el desplazamiento.
-        window.setTimeout(
-          () => firstInvalid.focus?.({ preventScroll: true }),
-          300,
-        );
-      }
-    },
-    [toast],
-  );
+  // El toast lo pone `useFormValidationToast`; aquí solo se lleva la vista
+  // al campo, que en un formulario tan largo casi siempre está fuera de
+  // pantalla.
+  const onInvalid = useCallback(() => focusFirstInvalidField(), []);
 
   const onDelete = async () => {
     if (!initialData) return;
@@ -477,98 +461,160 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     }
   };
 
-  const onGetShippingQuotes = async () => {
-    const data = form.getValues();
-    if (!data.city || !data.department || !data.daneCode) {
-      toast({
-        title: "Falta la ciudad",
-        description:
-          "Elige la ciudad del cliente con el buscador para cotizar.",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (data.orderItems.length === 0) {
-      toast({
-        title: "Sin productos",
-        description: "Agrega al menos un producto para cotizar el envío.",
-        variant: "destructive",
-      });
-      return;
-    }
-    try {
-      setLoadingQuotes(true);
-      const response = await axios.post(`/api/${storeId}/shipment/quote`, {
-        destination: {
-          daneCode: data.daneCode || "",
-          address: data.address || "",
-        },
-        orderTotal: totals.total,
-        items: data.orderItems.map((item) => ({ ...item })),
-        boxId: data.shipping.boxId,
-        forceRefresh: true,
-        isCOD: data.shipping?.isCOD || false,
-      });
-      setShippingQuotes(response.data.quotes);
-      setRecommendedBox(response.data.packageDimensions ?? null);
-      if (response.data.quotes.length === 0) {
+  const onGetShippingQuotes = useCallback(
+    async (
+      options: { silent?: boolean } = {},
+    ): Promise<ShippingQuote[] | null> => {
+      const data = form.getValues();
+      if (!data.city || !data.department || !data.daneCode) {
+        if (!options.silent) {
+          toast({
+            title: "Falta la ciudad",
+            description:
+              "Elige la ciudad del cliente con el buscador para cotizar.",
+            variant: "destructive",
+          });
+        }
+        return null;
+      }
+      if (data.orderItems.length === 0) {
+        if (!options.silent) {
+          toast({
+            title: "Sin productos",
+            description: "Agrega al menos un producto para cotizar el envío.",
+            variant: "destructive",
+          });
+        }
+        return null;
+      }
+      try {
+        setLoadingQuotes(true);
+        const response = await axios.post(`/api/${storeId}/shipment/quote`, {
+          destination: {
+            daneCode: data.daneCode || "",
+            address: data.address || "",
+          },
+          orderTotal: totals.total,
+          items: data.orderItems.map((item) => ({ ...item })),
+          boxId: data.shipping.boxId,
+          forceRefresh: !options.silent,
+          isCOD: data.shipping?.isCOD || false,
+        });
+        const quotes: ShippingQuote[] = response.data.quotes ?? [];
+        setShippingQuotes(quotes);
+        setRecommendedBox(response.data.packageDimensions ?? null);
+        setQuotedAt(new Date());
+        // La tarifa que estaba elegida ya no existe en esta cotización
+        // (cambió el destino, el contenido o la forma de pago): se suelta
+        // para que no llegue a la guía. La sección vuelve a elegir una.
+        const currentRate = form.getValues("envioClickIdRate");
+        if (currentRate && !quotes.some((q) => q.idRate === currentRate)) {
+          setSelectedRateId(null);
+          form.setValue("envioClickIdRate", undefined, { shouldDirty: true });
+          form.setValue("shipping.cost", 0, { shouldDirty: true });
+          form.setValue("shipping.carrierName", "", { shouldDirty: true });
+          form.setValue("shipping.courier", "", { shouldDirty: true });
+        }
+        if (quotes.length === 0) {
+          toast({
+            title: "Sin tarifas",
+            description:
+              "Ninguna transportadora cubre esta ciudad con EnvioClick. Prueba «Otra transportadora».",
+            variant: options.silent ? "warning" : "destructive",
+          });
+        }
+        return quotes;
+      } catch (error) {
         toast({
-          title: "Sin tarifas",
-          description:
-            "Ninguna transportadora cubre esta ciudad con EnvioClick. Prueba «Otra transportadora».",
+          title: "No se pudo cotizar",
+          description: getErrorMessage(error),
           variant: "destructive",
         });
+        return null;
+      } finally {
+        setLoadingQuotes(false);
       }
-    } catch (error) {
-      toast({
-        title: "No se pudo cotizar",
-        description: getErrorMessage(error),
-        variant: "destructive",
+    },
+    [form, storeId, toast, totals.total],
+  );
+
+  const onSelectRate = useCallback(
+    (quote: ShippingQuote, options: { silent?: boolean } = {}) => {
+      setSelectedRateId(quote.idRate);
+      form.setValue("shippingProvider", ShippingProvider.ENVIOCLICK, {
+        shouldDirty: true,
       });
-    } finally {
-      setLoadingQuotes(false);
+      form.setValue("envioClickIdRate", quote.idRate, { shouldDirty: true });
+      form.setValue(
+        "shipping",
+        {
+          ...form.getValues("shipping"),
+          carrierName: quote.carrier,
+          courier: quote.carrier,
+          productName: quote.product,
+          flete: quote.flete,
+          minimumInsurance: quote.minimumInsurance,
+          deliveryDays:
+            typeof quote.deliveryDays === "string"
+              ? parseInt(quote.deliveryDays)
+              : quote.deliveryDays,
+          // `isCOD` es la decisión de la administradora (paga contra
+          // entrega), no la capacidad de la transportadora: la tarifa no la
+          // sobreescribe. Si la transportadora no recauda, la sección avisa.
+          isCOD: form.getValues("shipping.isCOD") ?? false,
+          cost: quote.totalCost,
+          status: ShippingStatus.Preparing,
+        },
+        { shouldDirty: true },
+      );
+      if (!options.silent) {
+        toast({
+          description: `${quote.carrier} · ${currencyFormatter(quote.totalCost)}`,
+          variant: "success",
+        });
+      }
+    },
+    [form, toast],
+  );
+
+  /**
+   * Un solo «Descartar tarifa»: limpia el formulario y, si la cotización ya
+   * estaba guardada en el pedido, también la quita del servidor (que además
+   * resta el flete del total).
+   */
+  const onDiscardRate = useCallback(async () => {
+    if (initialData?.shipping?.envioClickIdRate) {
+      try {
+        await axios.delete(
+          `/api/${storeId}/orders/${initialData.id}/shipping/clear-rate`,
+        );
+        toast({ description: "Tarifa descartada", variant: "success" });
+        router.refresh();
+      } catch (error) {
+        toast({ description: getErrorMessage(error), variant: "destructive" });
+        return;
+      }
     }
-  };
-
-  const onSelectRate = (quote: ShippingQuote) => {
-    setSelectedRateId(quote.idRate);
-    form.setValue("shippingProvider", ShippingProvider.ENVIOCLICK, {
-      shouldDirty: true,
-    });
-    form.setValue("envioClickIdRate", quote.idRate, { shouldDirty: true });
-    form.setValue(
-      "shipping",
-      {
-        ...form.getValues("shipping"),
-        carrierName: quote.carrier,
-        courier: quote.carrier,
-        productName: quote.product,
-        flete: quote.flete,
-        minimumInsurance: quote.minimumInsurance,
-        deliveryDays:
-          typeof quote.deliveryDays === "string"
-            ? parseInt(quote.deliveryDays)
-            : quote.deliveryDays,
-        isCOD: quote.isCOD,
-        cost: quote.totalCost,
-        status: ShippingStatus.Preparing,
-      },
-      { shouldDirty: true },
-    );
-    toast({
-      description: `${quote.carrier} · ${currencyFormatter(quote.totalCost)}`,
-      variant: "success",
-    });
-  };
-
-  const onClearRate = useCallback(() => {
     setSelectedRateId(null);
     setShippingQuotes([]);
+    setQuotedAt(null);
+    setRecommendedBox(null);
     form.setValue("envioClickIdRate", undefined, { shouldDirty: true });
     form.setValue("shipping.cost", 0, { shouldDirty: true });
     form.setValue("shipping.carrierName", "", { shouldDirty: true });
     form.setValue("shipping.courier", "", { shouldDirty: true });
-  }, [form]);
+  }, [form, initialData, router, storeId, toast]);
+
+  /** Tarifa lista para la guía: alimenta la decisión del diálogo de pago. */
+  const guideRate =
+    watchedProvider === ShippingProvider.ENVIOCLICK &&
+    watchedRateId &&
+    !initialData?.shipping?.envioClickIdOrder
+      ? {
+          carrier: watchedCarrier || "transportadora",
+          cost: Number(watchedShippingCost ?? 0),
+        }
+      : null;
 
   const invoiceData = useMemo(() => {
     if (!initialData) return null;
@@ -617,19 +663,6 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     );
   }
 
-  const selectedQuote = shippingQuotes.find(
-    (q) => q.idRate === selectedRateId,
-  ) || {
-    idRate: form.getValues("envioClickIdRate") || 0,
-    carrier: form.getValues("shipping.carrierName") || "",
-    product: form.getValues("shipping.productName") || "",
-    flete: form.getValues("shipping.flete") || 0,
-    minimumInsurance: form.getValues("shipping.minimumInsurance") || 0,
-    totalCost: form.getValues("shipping.cost") || 0,
-    deliveryDays: form.getValues("shipping.deliveryDays") || 0,
-    isCOD: form.getValues("shipping.isCOD") || false,
-  };
-
   return (
     <>
       <AlertModal
@@ -637,22 +670,6 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         onClose={() => setDeleteOpen(false)}
         onConfirm={onDelete}
         loading={loading}
-      />
-      <GuideConfirmationModal
-        isOpen={pendingGuide !== null}
-        onClose={() => setPendingGuide(null)}
-        onConfirm={async () => {
-          const options = { ...pendingGuide, skipAutoGuide: false };
-          setPendingGuide(null);
-          await submitOrder(form.getValues(), options);
-        }}
-        onSaveWithoutGuide={async () => {
-          const options = { ...pendingGuide, skipAutoGuide: true };
-          setPendingGuide(null);
-          await submitOrder(form.getValues(), options);
-        }}
-        loading={loading}
-        selectedQuote={selectedQuote}
       />
       <ProductConversionModal
         isOpen={conversionIndex !== null}
@@ -795,11 +812,12 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 loading={loading}
                 loadingQuotes={loadingQuotes}
                 shippingQuotes={shippingQuotes}
+                quotedAt={quotedAt}
                 selectedRateId={selectedRateId}
                 recommendedBox={recommendedBox}
                 onGetShippingQuotes={onGetShippingQuotes}
                 onSelectRate={onSelectRate}
-                onClearRate={onClearRate}
+                onDiscardRate={onDiscardRate}
               >
                 {shippingInfo}
               </ShippingSection>
@@ -847,7 +865,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                       shippingProvider={form.getValues("shippingProvider")}
                       trackingCode={form.getValues("shipping.trackingCode")}
                       transactionId={form.getValues("payment.transactionId")}
-                      hasEnvioClickRate={false}
+                      guideRate={guideRate}
                       loading={loading}
                       variant="care"
                       onTransition={onTransition}

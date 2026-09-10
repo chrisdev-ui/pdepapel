@@ -104,8 +104,16 @@ const FormLabel = React.forwardRef<
       {...props}
     >
       {props.children}
-      {!isRequired ? (
-        <span className="text-xs italic text-muted-foreground">- Opcional</span>
+      {/* Regla del panel: lo obligatorio lleva asterisco; lo opcional es el
+          silencio. Antes era al reves (todo lo no marcado decia "Opcional",
+          incluidos valores calculados), asi que la marca no decia nada. */}
+      {isRequired ? (
+        <>
+          <span aria-hidden="true" className="ml-0.5 text-destructive">
+            *
+          </span>
+          <span className="sr-only"> (obligatorio)</span>
+        </>
       ) : null}
     </Label>
   );

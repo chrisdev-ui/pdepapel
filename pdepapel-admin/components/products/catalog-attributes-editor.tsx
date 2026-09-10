@@ -1,12 +1,15 @@
 "use client";
 
-import { Check, Plus, Trash } from "lucide-react";
-import { useId, useMemo, useState } from "react";
+import { Plus, Trash } from "lucide-react";
+import { useMemo } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { cn } from "@/lib/utils";
+
+/** Valor centinela de la opción provisional (texto libre aún no guardado). */
+const NEW_ENTRY = "__nueva__";
 
 export type EditableCatalogAttribute = {
   key: string;
@@ -47,6 +50,12 @@ function normalizeForMatch(value: string) {
     .trim();
 }
 
+/**
+ * Selector con búsqueda sobre las opciones existentes y "Usar «texto»" para
+ * una nueva. El texto libre (escrito o propuesto por el asistente) se muestra
+ * como opción provisional hasta que se guarde el producto: así "Existente" y
+ * "Nueva" siguen siendo visibles y nada se pierde al cambiar de control.
+ */
 function SuggestionInput({
   id,
   value,
@@ -68,133 +77,59 @@ function SuggestionInput({
   onChange: (value: string) => void;
   onSelect: (suggestion: InputSuggestion) => void;
 }) {
-  const listboxId = useId();
-  const [open, setOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(0);
   const normalizedValue = normalizeForMatch(value);
-  const filteredSuggestions = useMemo(() => {
-    const matching = normalizedValue
-      ? suggestions.filter((suggestion) =>
-          normalizeForMatch(suggestion.searchText).includes(normalizedValue),
-        )
-      : suggestions;
-
-    return matching.slice(0, 8);
-  }, [normalizedValue, suggestions]);
   const exactSuggestion = suggestions.find(
     (suggestion) => normalizeForMatch(suggestion.label) === normalizedValue,
   );
+  const options: ComboboxOption[] = suggestions.map((suggestion) => ({
+    value: suggestion.id,
+    label: suggestion.label,
+    description: suggestion.description,
+    keywords: [suggestion.searchText],
+    disabled: suggestion.disabled,
+  }));
+  if (value.trim() && !exactSuggestion) {
+    options.unshift({
+      value: NEW_ENTRY,
+      label: value,
+      description: newEntryLabel,
+    });
+  }
 
-  const selectSuggestion = (suggestion: InputSuggestion) => {
-    if (suggestion.disabled) return;
-    onSelect(suggestion);
-    setOpen(false);
-    setActiveIndex(0);
-  };
+  const isNew = Boolean(value.trim()) && !exactSuggestion;
 
   return (
-    <div className="relative">
-      <Input
+    <div className="space-y-1">
+      <Combobox
         id={id}
-        role="combobox"
         aria-label={ariaLabel}
-        aria-autocomplete="list"
-        aria-expanded={open}
-        aria-controls={listboxId}
-        aria-activedescendant={
-          open && filteredSuggestions[activeIndex]
-            ? `${listboxId}-${filteredSuggestions[activeIndex].id}`
-            : undefined
-        }
-        value={value}
-        disabled={disabled}
+        options={options}
+        value={exactSuggestion ? exactSuggestion.id : isNew ? NEW_ENTRY : null}
         placeholder={placeholder}
-        autoComplete="off"
-        onFocus={() => setOpen(true)}
-        onBlur={() => {
-          setOpen(false);
-          if (exactSuggestion && !exactSuggestion.disabled) {
-            selectSuggestion(exactSuggestion);
-          }
+        searchPlaceholder="Buscar o escribir…"
+        emptyText="Escribe para crear una nueva."
+        disabled={disabled}
+        createLabel={(query) => `Usar “${query}”`}
+        onCreate={(query) => {
+          const match = suggestions.find(
+            (suggestion) =>
+              normalizeForMatch(suggestion.label) === normalizeForMatch(query),
+          );
+          if (match && !match.disabled) onSelect(match);
+          else onChange(query);
         }}
-        onChange={(event) => {
-          onChange(event.target.value);
-          setOpen(true);
-          setActiveIndex(0);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "ArrowDown") {
-            event.preventDefault();
-            setOpen(true);
-            setActiveIndex((current) =>
-              Math.min(current + 1, filteredSuggestions.length - 1),
-            );
+        onChange={(next) => {
+          if (next === null) {
+            onChange("");
+            return;
           }
-          if (event.key === "ArrowUp") {
-            event.preventDefault();
-            setActiveIndex((current) => Math.max(current - 1, 0));
-          }
-          if (event.key === "Enter" && open) {
-            const activeSuggestion = filteredSuggestions[activeIndex];
-            if (activeSuggestion && !activeSuggestion.disabled) {
-              event.preventDefault();
-              selectSuggestion(activeSuggestion);
-            }
-          }
-          if (event.key === "Escape") setOpen(false);
+          if (next === NEW_ENTRY) return;
+          const suggestion = suggestions.find((item) => item.id === next);
+          if (suggestion && !suggestion.disabled) onSelect(suggestion);
         }}
       />
-      {open && !disabled && (
-        <div
-          id={listboxId}
-          role="listbox"
-          className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
-        >
-          {filteredSuggestions.map((suggestion, index) => (
-            <button
-              id={`${listboxId}-${suggestion.id}`}
-              key={suggestion.id}
-              type="button"
-              role="option"
-              aria-selected={index === activeIndex}
-              disabled={suggestion.disabled}
-              className={cn(
-                "flex w-full items-start gap-2 rounded-sm px-2 py-2 text-left text-sm outline-none hover:bg-accent focus:bg-accent",
-                index === activeIndex && "bg-accent",
-                suggestion.disabled && "cursor-not-allowed opacity-50",
-              )}
-              onPointerDown={(event) => event.preventDefault()}
-              onClick={() => selectSuggestion(suggestion)}
-            >
-              <Check
-                className={cn(
-                  "mt-0.5 h-4 w-4 shrink-0",
-                  normalizeForMatch(suggestion.label) === normalizedValue
-                    ? "opacity-100"
-                    : "opacity-0",
-                )}
-              />
-              <span className="min-w-0">
-                <span className="block font-medium">{suggestion.label}</span>
-                {suggestion.description && (
-                  <span className="block text-xs text-muted-foreground">
-                    {suggestion.description}
-                  </span>
-                )}
-              </span>
-            </button>
-          ))}
-          {filteredSuggestions.length === 0 && (
-            <p className="px-3 py-2 text-sm text-muted-foreground">
-              No hay coincidencias existentes.
-            </p>
-          )}
-          {value.trim() && !exactSuggestion && (
-            <p className="border-t px-3 py-2 text-xs text-muted-foreground">
-              {newEntryLabel}
-            </p>
-          )}
-        </div>
+      {isNew && (
+        <p className="text-xs text-muted-foreground">{newEntryLabel}</p>
       )}
     </div>
   );

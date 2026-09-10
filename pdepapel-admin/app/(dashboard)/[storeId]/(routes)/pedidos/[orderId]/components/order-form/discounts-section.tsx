@@ -2,20 +2,31 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
+import { Combobox } from "@/components/ui/combobox";
 import { CurrencyInput } from "@/components/ui/currency-input";
-import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { PercentageInput } from "@/components/ui/percentage-input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { discountOptions } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import { cn, currencyFormatter } from "@/lib/utils";
+import { currencyFormatter } from "@/lib/utils";
 import { DiscountType, type Coupon } from "@prisma/client";
 import axios from "axios";
-import { Check, ChevronsUpDown, Lock, Ticket, Trash } from "lucide-react";
+import { Check, Lock, Ticket, Trash } from "lucide-react";
 import { useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 
@@ -33,19 +44,40 @@ interface DiscountsSectionProps {
   loading: boolean;
 }
 
-export function DiscountsSection({ storeId, availableCoupons, coupon, setCoupon, initialCoupon, subtotal, locked, loading }: DiscountsSectionProps) {
+export function DiscountsSection({
+  storeId,
+  availableCoupons,
+  coupon,
+  setCoupon,
+  initialCoupon,
+  subtotal,
+  locked,
+  loading,
+}: DiscountsSectionProps) {
   const form = useFormContext<OrderFormValues>();
   const { toast } = useToast();
   const [validatingCoupon, setValidatingCoupon] = useState(false);
-  const discountType = useWatch({ control: form.control, name: "discount.type" });
+  const discountType = useWatch({
+    control: form.control,
+    name: "discount.type",
+  });
   const disabled = loading || locked;
 
   if (locked) {
     const amount = form.getValues("discount.amount");
     return (
-      <SectionCard id="descuentos" title="Descuentos y cupones" description="Pagado: el descuento ya se cobró y no cambia." action={<Lock className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}>
+      <SectionCard
+        id="descuentos"
+        title="Descuentos y cupones"
+        description="Pagado: el descuento ya se cobró y no cambia."
+        action={
+          <Lock className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        }
+      >
         <p className="text-sm text-muted-foreground">
-          {discountType ? `Descuento ${discountType === DiscountType.PERCENTAGE ? `${amount}%` : currencyFormatter(Number(amount ?? 0))}` : "Sin descuento manual"}
+          {discountType
+            ? `Descuento ${discountType === DiscountType.PERCENTAGE ? `${amount}%` : currencyFormatter(Number(amount ?? 0))}`
+            : "Sin descuento manual"}
           {coupon ? ` · cupón ${coupon.code}` : " · sin cupón"}
         </p>
       </SectionCard>
@@ -84,15 +116,25 @@ export function DiscountsSection({ storeId, availableCoupons, coupon, setCoupon,
           render={({ field }) => (
             <FormItem>
               <FormLabel>Tipo de descuento</FormLabel>
-              <Select key={field.value ?? "none"} disabled={disabled || Boolean(coupon)} onValueChange={field.onChange} value={field.value || ""} defaultValue={field.value || ""}>
+              <Select
+                key={field.value ?? "none"}
+                disabled={disabled || Boolean(coupon)}
+                onValueChange={field.onChange}
+                value={field.value || ""}
+                defaultValue={field.value || ""}
+              >
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Sin descuento" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value={DiscountType.PERCENTAGE}>{discountOptions[DiscountType.PERCENTAGE]}</SelectItem>
-                  <SelectItem value={DiscountType.FIXED}>{discountOptions[DiscountType.FIXED]}</SelectItem>
+                  <SelectItem value={DiscountType.PERCENTAGE}>
+                    {discountOptions[DiscountType.PERCENTAGE]}
+                  </SelectItem>
+                  <SelectItem value={DiscountType.FIXED}>
+                    {discountOptions[DiscountType.FIXED]}
+                  </SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />
@@ -104,12 +146,27 @@ export function DiscountsSection({ storeId, availableCoupons, coupon, setCoupon,
           name="discount.amount"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{discountType === DiscountType.PERCENTAGE ? "Porcentaje" : "Monto"}</FormLabel>
+              <FormLabel>
+                {discountType === DiscountType.PERCENTAGE
+                  ? "Porcentaje"
+                  : "Monto"}
+              </FormLabel>
               <FormControl>
                 {discountType === DiscountType.PERCENTAGE ? (
-                  <PercentageInput disabled={disabled || !discountType} placeholder="10" value={field.value} onChange={field.onChange} max={100} />
+                  <PercentageInput
+                    disabled={disabled || !discountType}
+                    placeholder="10"
+                    value={field.value}
+                    onChange={field.onChange}
+                    max={100}
+                  />
                 ) : (
-                  <CurrencyInput placeholder="$ 10.000" disabled={disabled || !discountType} value={field.value} onChange={field.onChange} />
+                  <CurrencyInput
+                    placeholder="$ 10.000"
+                    disabled={disabled || !discountType}
+                    value={field.value}
+                    onChange={field.onChange}
+                  />
                 )}
               </FormControl>
               <FormMessage />
@@ -123,7 +180,12 @@ export function DiscountsSection({ storeId, availableCoupons, coupon, setCoupon,
             <FormItem>
               <FormLabel>Motivo</FormLabel>
               <FormControl>
-                <Textarea disabled={disabled || !discountType} rows={1} placeholder="Ej: Cliente frecuente" {...field} />
+                <Textarea
+                  disabled={disabled || !discountType}
+                  rows={1}
+                  placeholder="Ej: Cliente frecuente"
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -144,62 +206,73 @@ export function DiscountsSection({ storeId, availableCoupons, coupon, setCoupon,
                 )}
               </FormLabel>
               <div className="flex items-center gap-2">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <FormControl>
-                      <Button variant="outline" role="combobox" disabled={validatingCoupon || disabled || Boolean(discountType)} className={cn("w-full justify-between", !field.value && "text-muted-foreground")}>
-                        <span className="flex items-center gap-2 font-mono">
-                          <Ticket className={cn("h-4 w-4", coupon ? "text-success" : "text-muted-foreground")} aria-hidden="true" />
-                          {field.value ? field.value : availableCoupons.length > 0 ? "Elegir cupón" : "No hay cupones"}
-                        </span>
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" aria-hidden="true" />
-                      </Button>
-                    </FormControl>
-                  </PopoverTrigger>
-                  {availableCoupons.length > 0 && (
-                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
-                      <Command>
-                        <CommandInput placeholder="Buscar cupón…" />
-                        <CommandEmpty>No se encontraron cupones.</CommandEmpty>
-                        <CommandGroup>
-                          {availableCoupons.map((c) => (
-                            <CommandItem
-                              key={c.code}
-                              value={c.code}
-                              onSelect={async () => {
-                                try {
-                                  setValidatingCoupon(true);
-                                  if (!initialCoupon || initialCoupon.code !== c.code) {
-                                    const response = await axios.post(`/api/${storeId}/coupons/validate`, { code: c.code, subtotal });
-                                    setCoupon(response.data);
-                                  } else {
-                                    setCoupon(initialCoupon);
-                                  }
-                                  field.onChange(c.code);
-                                  toast({ description: "Cupón aplicado", variant: "success" });
-                                } catch (error) {
-                                  toast({ description: getErrorMessage(error), variant: "destructive" });
-                                  setCoupon(null);
-                                  field.onChange("");
-                                } finally {
-                                  setValidatingCoupon(false);
-                                }
-                              }}
-                            >
-                              <Check className={cn("mr-2 h-4 w-4", c.code === field.value ? "opacity-100" : "opacity-0")} aria-hidden="true" />
-                              <div className="flex w-full items-center justify-between">
-                                <span className="font-mono">{c.code}</span>
-                                <span className="text-xs text-muted-foreground">
-                                  {c.type === DiscountType.PERCENTAGE ? `${c.amount}%` : currencyFormatter(Number(c.amount))}
-                                </span>
-                              </div>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </Command>
-                    </PopoverContent>
-                  )}
-                </Popover>
+                <FormControl>
+                  <Combobox
+                    id="pedido-cupon"
+                    aria-label="Cupón"
+                    options={availableCoupons.map((c) => ({
+                      value: c.code,
+                      label: c.code,
+                      description:
+                        c.type === DiscountType.PERCENTAGE
+                          ? `${c.amount} % de descuento`
+                          : `${currencyFormatter(Number(c.amount))} de descuento`,
+                      icon: (
+                        <Ticket
+                          className="h-4 w-4 shrink-0 text-muted-foreground"
+                          aria-hidden="true"
+                        />
+                      ),
+                    }))}
+                    value={field.value || null}
+                    placeholder={
+                      availableCoupons.length > 0
+                        ? "Elegir cupón"
+                        : "No hay cupones"
+                    }
+                    searchPlaceholder="Buscar cupón…"
+                    emptyText="No se encontraron cupones."
+                    disabled={
+                      validatingCoupon ||
+                      disabled ||
+                      Boolean(discountType) ||
+                      availableCoupons.length === 0
+                    }
+                    onChange={async (code) => {
+                      if (!code) {
+                        setCoupon(null);
+                        field.onChange("");
+                        return;
+                      }
+                      try {
+                        setValidatingCoupon(true);
+                        if (!initialCoupon || initialCoupon.code !== code) {
+                          const response = await axios.post(
+                            `/api/${storeId}/coupons/validate`,
+                            { code, subtotal },
+                          );
+                          setCoupon(response.data);
+                        } else {
+                          setCoupon(initialCoupon);
+                        }
+                        field.onChange(code);
+                        toast({
+                          description: "Cupón aplicado",
+                          variant: "success",
+                        });
+                      } catch (error) {
+                        toast({
+                          description: getErrorMessage(error),
+                          variant: "destructive",
+                        });
+                        setCoupon(null);
+                        field.onChange("");
+                      } finally {
+                        setValidatingCoupon(false);
+                      }
+                    }}
+                  />
+                </FormControl>
                 {coupon && (
                   <Button
                     type="button"
@@ -210,7 +283,10 @@ export function DiscountsSection({ storeId, availableCoupons, coupon, setCoupon,
                     onClick={() => {
                       setCoupon(null);
                       field.onChange("");
-                      toast({ description: "Cupón quitado", variant: "success" });
+                      toast({
+                        description: "Cupón quitado",
+                        variant: "success",
+                      });
                     }}
                   >
                     <Trash className="h-4 w-4" aria-hidden="true" />

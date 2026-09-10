@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { shippingOptions } from "@/constants";
 import { getCarrierInfo } from "@/constants/shipping";
@@ -35,7 +34,6 @@ import {
   PackageOpen,
   PackageX,
   RefreshCw,
-  Trash2,
   Truck,
   XCircle,
 } from "lucide-react";
@@ -74,25 +72,16 @@ interface ShippingInfoProps {
 }
 
 interface ShippingState {
-  loadingAction:
-    | "create-guide"
-    | "delete-rate"
-    | "cancel-shipment"
-    | "track-shipment"
-    | null;
-  activeModal: "create-guide" | "delete-rate" | "cancel-shipment" | null;
+  loadingAction: "create-guide" | "cancel-shipment" | "track-shipment" | null;
+  activeModal: "create-guide" | "cancel-shipment" | null;
 }
 
 type ShippingAction =
-  | { type: "OPEN_MODAL"; payload: "create-guide" | "delete-rate" | "cancel-shipment" }
+  | { type: "OPEN_MODAL"; payload: "create-guide" | "cancel-shipment" }
   | { type: "CLOSE_MODAL" }
   | {
       type: "START_ACTION";
-      payload:
-        | "create-guide"
-        | "delete-rate"
-        | "cancel-shipment"
-        | "track-shipment";
+      payload: "create-guide" | "cancel-shipment" | "track-shipment";
     }
   | { type: "ACTION_SUCCESS" }
   | { type: "ACTION_FAILURE" };
@@ -206,8 +195,7 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
   const { loadingAction, activeModal } = state;
 
   const hasGuide = !!shipping?.envioClickIdOrder;
-  const hasRateWithoutGuide =
-    !!shipping?.envioClickIdRate && !hasGuide;
+  const hasRateWithoutGuide = !!shipping?.envioClickIdRate && !hasGuide;
   const canCreateGuide =
     hasRateWithoutGuide &&
     (orderStatus === "PAID" || (shipping?.isCOD && orderStatus === "PENDING"));
@@ -217,18 +205,18 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
       ? getCarrierInfo(shipping.courier)
       : null;
   const bgColor = carrierInfo?.color || "#FFFFFF";
-  const statusConfig = shipping
-    ? getStatusConfig(shipping.status)
-    : null;
+  const statusConfig = shipping ? getStatusConfig(shipping.status) : null;
 
   const canCancel =
     shipping &&
     hasGuide &&
-    !([
-      ShippingStatus.Delivered,
-      ShippingStatus.Cancelled,
-      ShippingStatus.Returned,
-    ] as ShippingStatus[]).includes(shipping.status);
+    !(
+      [
+        ShippingStatus.Delivered,
+        ShippingStatus.Cancelled,
+        ShippingStatus.Returned,
+      ] as ShippingStatus[]
+    ).includes(shipping.status);
 
   const handleCreateGuide = async () => {
     try {
@@ -241,32 +229,9 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
       const tracker = response.data?.data?.tracker;
       toast({
         title: "Guía creada",
-        description: tracker ? `Número de guía ${tracker}. La etiqueta aparece abajo al recargar.` : "La etiqueta aparece abajo al recargar.",
-        variant: "success",
-      });
-
-      dispatch({ type: "ACTION_SUCCESS" });
-
-      router.refresh();
-    } catch (error) {
-      dispatch({ type: "ACTION_FAILURE" });
-      toast({
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleDeleteRate = async () => {
-    dispatch({ type: "START_ACTION", payload: "delete-rate" });
-
-    try {
-      await axios.delete(
-        `/api/${params.storeId}/orders/${params.orderId}/shipping/clear-rate`,
-      );
-
-      toast({
-        description: "Cotización eliminada exitosamente",
+        description: tracker
+          ? `Número de guía ${tracker}. La etiqueta aparece abajo al recargar.`
+          : "La etiqueta aparece abajo al recargar.",
         variant: "success",
       });
 
@@ -293,7 +258,7 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
       });
 
       toast({
-        description: "Envío cancelado exitosamente",
+        description: "Envío cancelado",
         variant: "success",
       });
 
@@ -321,7 +286,7 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
       );
 
       toast({
-        description: "Información de rastreo actualizada",
+        description: "Seguimiento actualizado",
         variant: "success",
       });
 
@@ -336,35 +301,19 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
     }
   };
 
-  if (!shipping) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Package className="h-5 w-5" />
-            Información de Envío
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Alert>
-            <AlertDescription>
-              No hay información de envío. Usa el formulario de arriba para
-              cotizar y crear un envío.
-            </AlertDescription>
-          </Alert>
-        </CardContent>
-      </Card>
-    );
-  }
+  if (!shipping) return null;
 
   return (
-    <Card id="envio-estado" className="scroll-mt-24">
-      <CardHeader>
+    <div
+      id="envio-estado"
+      className="flex scroll-mt-24 flex-col gap-4 rounded-lg border bg-white p-4"
+    >
+      <div>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle className="flex items-center gap-2 text-[15px]">
-            <Package className="h-5 w-5" aria-hidden="true" />
+          <h3 className="flex items-center gap-2 text-sm font-bold text-primary">
+            <Package className="h-4 w-4" aria-hidden="true" />
             Estado del envío
-          </CardTitle>
+          </h3>
           {statusConfig && (
             <div
               className={`flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-medium ${statusConfig.color}`}
@@ -376,8 +325,8 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
             </div>
           )}
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
+      </div>
+      <div className="space-y-4">
         {/* Carrier Info with Logo */}
         <div className="flex items-center gap-4">
           {carrierInfo && (
@@ -416,7 +365,7 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
           <>
             <Separator />
             <div className="space-y-3 rounded-lg bg-muted/50 p-4">
-              <p className="text-sm font-semibold">Detalles de Cotización</p>
+              <p className="text-sm font-semibold">Detalles de la cotización</p>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {shipping.productName && (
                   <div className="space-y-1">
@@ -436,23 +385,18 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
                       </p>
                       <p className="text-sm font-medium">
                         {shipping.deliveryDays}{" "}
-                        {shipping.deliveryDays === 1
-                          ? "día"
-                          : "días"}
+                        {shipping.deliveryDays === 1 ? "día" : "días"}
                       </p>
                     </div>
                   )}
-                {shipping.flete !== null &&
-                  shipping.flete !== undefined && (
-                    <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">
-                        Flete base
-                      </p>
-                      <p className="text-sm font-medium">
-                        {currencyFormatter(shipping.flete)}
-                      </p>
-                    </div>
-                  )}
+                {shipping.flete !== null && shipping.flete !== undefined && (
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Flete base</p>
+                    <p className="text-sm font-medium">
+                      {currencyFormatter(shipping.flete)}
+                    </p>
+                  </div>
+                )}
                 {shipping.minimumInsurance !== null &&
                   shipping.minimumInsurance !== undefined && (
                     <div className="space-y-1">
@@ -460,16 +404,14 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
                         Seguro mínimo
                       </p>
                       <p className="text-sm font-medium">
-                        {currencyFormatter(
-                          shipping.minimumInsurance,
-                        )}
+                        {currencyFormatter(shipping.minimumInsurance)}
                       </p>
                     </div>
                   )}
                 {shipping.isCOD && (
                   <div className="col-span-2 space-y-1">
                     <Badge variant="secondary" className="text-xs">
-                      Pago contra entrega (COD)
+                      Pago contra entrega
                     </Badge>
                   </div>
                 )}
@@ -492,9 +434,7 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() =>
-                    window.open(shipping.trackingUrl!, "_blank")
-                  }
+                  onClick={() => window.open(shipping.trackingUrl!, "_blank")}
                 >
                   <ExternalLink className="h-4 w-4" />
                 </Button>
@@ -516,8 +456,7 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
         )}
 
         {/* Dates */}
-        {(shipping.estimatedDeliveryDate ||
-          shipping.actualDeliveryDate) && (
+        {(shipping.estimatedDeliveryDate || shipping.actualDeliveryDate) && (
           <>
             <Separator />
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -528,13 +467,9 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
                     Entrega estimada
                   </p>
                   <p className="text-sm font-medium">
-                    {format(
-                      new Date(shipping.estimatedDeliveryDate),
-                      "PPP",
-                      {
-                        locale: es,
-                      },
-                    )}
+                    {format(new Date(shipping.estimatedDeliveryDate), "PPP", {
+                      locale: es,
+                    })}
                   </p>
                 </div>
               )}
@@ -545,13 +480,9 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
                     Entrega real
                   </p>
                   <p className="text-sm font-medium">
-                    {format(
-                      new Date(shipping.actualDeliveryDate),
-                      "PPP",
-                      {
-                        locale: es,
-                      },
-                    )}
+                    {format(new Date(shipping.actualDeliveryDate), "PPP", {
+                      locale: es,
+                    })}
                   </p>
                 </div>
               )}
@@ -584,102 +515,83 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
         )}
 
         {/* Guide Download */}
-        {hasGuide && shipping.guideUrl && shipping.status !== ShippingStatus.Cancelled && (
-          <>
-            <Separator />
-            <div className="flex flex-col gap-2">
-              <Button
-                onClick={() =>
-                  window.open(shipping.guideUrl!, "_blank")
-                }
-                variant="outline"
-                className="w-full"
-              >
-                <Download className="mr-2 h-4 w-4" />
-                Descargar Guía de Envío (PDF)
-              </Button>
-
-              {canCancel && (
+        {hasGuide &&
+          shipping.guideUrl &&
+          shipping.status !== ShippingStatus.Cancelled && (
+            <>
+              <Separator />
+              <div className="flex flex-col gap-2">
                 <Button
-                  variant="destructive"
+                  onClick={() => window.open(shipping.guideUrl!, "_blank")}
+                  variant="outline"
                   className="w-full"
-                  onClick={() =>
-                    dispatch({
-                      type: "OPEN_MODAL",
-                      payload: "cancel-shipment",
-                    })
-                  }
-                  disabled={loadingAction === "cancel-shipment"}
                 >
-                  <XCircle className="mr-2 h-4 w-4" />
-                  Cancelar Envío
+                  <Download className="mr-2 h-4 w-4" />
+                  Descargar guía (PDF)
                 </Button>
-              )}
-            </div>
-          </>
-        )}
 
-        {/* Warning if no guide yet */}
+                {canCancel && (
+                  <Button
+                    variant="destructive"
+                    className="w-full"
+                    onClick={() =>
+                      dispatch({
+                        type: "OPEN_MODAL",
+                        payload: "cancel-shipment",
+                      })
+                    }
+                    disabled={loadingAction === "cancel-shipment"}
+                  >
+                    <XCircle className="mr-2 h-4 w-4" />
+                    Cancelar envío
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
+
+        {/* Sin guía todavía: crearla desde aquí cuando el pedido lo permite. */}
         {hasRateWithoutGuide && (
           <>
             <Alert>
-              <AlertDescription className="space-y-3">
+              <AlertDescription className="space-y-1">
                 <p>
-                  Esta orden tiene una cotización pero aún no se ha creado la
-                  guía de envío.
                   {canCreateGuide
-                    ? " Puedes crear la guía manualmente desde aquí."
-                    : " Edita la orden y guárdala como PAGADA para crear la guía automáticamente."}
+                    ? "La tarifa está guardada y el pedido ya permite pedir la guía."
+                    : "La tarifa está guardada. La guía se crea al marcar el pedido como pagado, o desde aquí una vez pagado."}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Las tarifas de EnvioClick valen 2 horas. Si esta cotización es
-                  más vieja, descártala y cotiza de nuevo antes de crear la guía.
+                  Las tarifas de EnvioClick valen 2 horas: si esta cotización es
+                  más vieja, descártala arriba y cotiza de nuevo antes de crear
+                  la guía.
                 </p>
               </AlertDescription>
             </Alert>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              {canCreateGuide && (
-                <Button
-                  size="sm"
-                  className="w-full sm:flex-1"
-                  onClick={() => dispatch({ type: "OPEN_MODAL", payload: "create-guide" })}
-                  disabled={
-                    loadingAction === "create-guide" ||
-                    loadingAction === "delete-rate"
-                  }
-                >
-                  {loadingAction === "create-guide" ? (
-                    <>
-                      <Package className="mr-2 h-4 w-4 animate-spin" />
-                      Creando...
-                    </>
-                  ) : (
-                    <>
-                      <Package className="mr-2 h-4 w-4" />
-                      Crear guía ahora
-                    </>
-                  )}
-                </Button>
-              )}
+            {canCreateGuide && (
               <Button
-                variant="outline"
                 size="sm"
-                className="w-full border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive sm:flex-1"
+                className="w-full sm:w-auto"
                 onClick={() =>
-                  dispatch({ type: "OPEN_MODAL", payload: "delete-rate" })
+                  dispatch({ type: "OPEN_MODAL", payload: "create-guide" })
                 }
-                disabled={
-                  loadingAction === "delete-rate" ||
-                  loadingAction === "create-guide"
-                }
+                disabled={loadingAction === "create-guide"}
               >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Descartar cotización
+                {loadingAction === "create-guide" ? (
+                  <>
+                    <Package className="mr-2 h-4 w-4 animate-spin" />
+                    Creando…
+                  </>
+                ) : (
+                  <>
+                    <Package className="mr-2 h-4 w-4" />
+                    Crear guía ahora
+                  </>
+                )}
               </Button>
-            </div>
+            )}
           </>
         )}
-      </CardContent>
+      </div>
 
       {/* Create guide confirmation: it costs money and cannot be undone. */}
       <AlertDialog
@@ -690,61 +602,29 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
           <AlertDialogHeader>
             <AlertDialogTitle>¿Crear la guía de envío?</AlertDialogTitle>
             <AlertDialogDescription>
-              Se solicita la guía a EnvioClick con {shipping.carrierName || shipping.courier || "la transportadora cotizada"}
-              {shipping.cost ? ` por ${currencyFormatter(Number(shipping.cost))}` : ""}. Esto genera un cobro con la
-              transportadora y no se puede deshacer desde aquí; si hace falta, tendrás que cancelar el envío.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={loadingAction === "create-guide"} onClick={() => dispatch({ type: "CLOSE_MODAL" })}>
-              Volver
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={handleCreateGuide} disabled={loadingAction === "create-guide"}>
-              {loadingAction === "create-guide" ? "Creando…" : "Crear guía"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog
-        open={activeModal === "delete-rate"}
-        onOpenChange={(open) =>
-          !open && dispatch({ type: "CLOSE_MODAL" })
-        }
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar cotización de envío?</AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2">
-              <p>
-                Esta acción eliminará la cotización actual del envío. Después
-                podrás:
-              </p>
-              <ul className="list-disc space-y-1 pl-5">
-                <li>Solicitar una nueva cotización con tarifas actualizadas</li>
-                <li>Seleccionar la mejor opción de envío disponible</li>
-              </ul>
-              <p className="mt-3 font-semibold text-destructive">
-                Solo puedes hacer esto si aún no se ha creado la guía de envío.
-              </p>
+              Se solicita la guía a EnvioClick con{" "}
+              {shipping.carrierName ||
+                shipping.courier ||
+                "la transportadora cotizada"}
+              {shipping.cost
+                ? ` por ${currencyFormatter(Number(shipping.cost))}`
+                : ""}
+              . Esto genera un cobro con la transportadora y no se puede
+              deshacer desde aquí; si hace falta, tendrás que cancelar el envío.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel
-              disabled={loadingAction === "delete-rate"}
+              disabled={loadingAction === "create-guide"}
               onClick={() => dispatch({ type: "CLOSE_MODAL" })}
             >
-              Cancelar
+              Volver
             </AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDeleteRate}
-              disabled={loadingAction === "delete-rate"}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleCreateGuide}
+              disabled={loadingAction === "create-guide"}
             >
-              {loadingAction === "delete-rate"
-                ? "Eliminando..."
-                : "Eliminar Cotización"}
+              {loadingAction === "create-guide" ? "Creando…" : "Crear guía"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -753,25 +633,18 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
       {/* Cancel Shipment Dialog */}
       <AlertDialog
         open={activeModal === "cancel-shipment"}
-        onOpenChange={(open) =>
-          !open && dispatch({ type: "CLOSE_MODAL" })
-        }
+        onOpenChange={(open) => !open && dispatch({ type: "CLOSE_MODAL" })}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Cancelar envío?</AlertDialogTitle>
+            <AlertDialogTitle>¿Cancelar el envío?</AlertDialogTitle>
             <AlertDialogDescription className="space-y-2">
-              <p>
-                Esta acción cancelará el envío con la transportadora. Ten en
-                cuenta que:
-              </p>
+              <p>Se anula la guía con la transportadora.</p>
               <ul className="list-disc space-y-1 pl-5">
-                <li>La guía de envío será anulada.</li>
+                <li>La transportadora puede cobrar por la cancelación.</li>
                 <li>
-                  Es posible que se apliquen cargos por cancelación dependiendo
-                  de la transportadora.
+                  No se puede deshacer: habría que cotizar y crear otra guía.
                 </li>
-                <li>Esta acción no se puede deshacer.</li>
               </ul>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -789,11 +662,11 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
             >
               {loadingAction === "cancel-shipment"
                 ? "Cancelando..."
-                : "Sí, Cancelar Envío"}
+                : "Sí, cancelar envío"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Card>
+    </div>
   );
 };

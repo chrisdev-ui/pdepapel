@@ -24,7 +24,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { QuantitySelector } from "@/components/ui/quantity-selector";
+import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import { cn, currencyFormatter } from "@/lib/utils";
 
 // Interface matched to API response
@@ -210,7 +210,7 @@ export const ComponentSelector: React.FC<ComponentSelectorProps> = ({
           <DialogTitle className="sr-only">
             Buscar productos para el kit
           </DialogTitle>
-          <div className="flex min-w-0 items-center justify-between border-b pl-4 pr-12 py-2">
+          <div className="flex min-w-0 items-center justify-between border-b py-2 pl-4 pr-12">
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <Search className="h-5 w-5 text-muted-foreground" />
               <input
@@ -434,16 +434,21 @@ export const ComponentSelector: React.FC<ComponentSelectorProps> = ({
                 <div className="mt-3 flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className="flex flex-col">
-                      <label className="mb-1 text-[10px] font-bold uppercase text-muted-foreground">
-                        Cantidad Requerida
+                      <label
+                        htmlFor={`componente-${item.componentId}-cantidad`}
+                        className="mb-1 text-[10px] font-bold uppercase text-muted-foreground"
+                      >
+                        Cantidad requerida
                       </label>
-                      <QuantitySelector
+                      <StockQuantityInput
+                        id={`componente-${item.componentId}-cantidad`}
                         value={item.quantity}
                         onChange={(val) =>
                           onUpdateQuantity(item.componentId, val)
                         }
-                        className="h-8 w-28"
+                        className="w-auto"
                         min={1}
+                        ariaLabel={`Cantidad de ${item.name}`}
                       />
                     </div>
                     <div className="ml-2 mt-4 text-xs text-muted-foreground">

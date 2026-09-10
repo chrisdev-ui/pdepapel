@@ -555,10 +555,7 @@ export const OfferForm: React.FC<OfferFormProps> = ({
                                 />
                               </FormControl>
                               <div className="flex-1 space-y-0.5">
-                                <FormLabel
-                                  isRequired
-                                  className="cursor-pointer font-normal"
-                                >
+                                <FormLabel className="cursor-pointer font-normal">
                                   {category.name}
                                 </FormLabel>
                                 <p className="text-xs text-muted-foreground">
@@ -657,10 +654,7 @@ export const OfferForm: React.FC<OfferFormProps> = ({
                                 />
                               </FormControl>
                               <div className="flex-1 space-y-0.5">
-                                <FormLabel
-                                  isRequired
-                                  className="cursor-pointer font-normal"
-                                >
+                                <FormLabel className="cursor-pointer font-normal">
                                   {group.name}
                                 </FormLabel>
                               </div>
@@ -771,10 +765,7 @@ export const OfferForm: React.FC<OfferFormProps> = ({
                                 </div>
                               )}
                               <div className="flex-1 space-y-0.5">
-                                <FormLabel
-                                  isRequired
-                                  className="cursor-pointer font-normal"
-                                >
+                                <FormLabel className="cursor-pointer font-normal">
                                   {product.name}
                                 </FormLabel>
                                 <p className="text-xs text-muted-foreground">

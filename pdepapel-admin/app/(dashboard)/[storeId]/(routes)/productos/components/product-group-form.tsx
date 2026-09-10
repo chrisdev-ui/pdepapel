@@ -1922,7 +1922,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
               render={({ field }) => (
                 <FormItem>
                   <div className="flex items-center justify-between">
-                    <FormLabel isRequired>Proveedor por defecto</FormLabel>
+                    <FormLabel>Proveedor por defecto</FormLabel>
                     <div
                       className="cursor-pointer text-xs text-primary underline hover:text-primary/80"
                       onClick={() => {
@@ -1983,7 +1983,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                     />
                   </FormControl>
                   <div className="space-y-1 leading-none">
-                    <FormLabel isRequired>Destacado</FormLabel>
+                    <FormLabel>Destacado</FormLabel>
                     <FormDescription>
                       Este grupo aparecerá en la pagina principal
                     </FormDescription>
@@ -2003,7 +2003,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
                     />
                   </FormControl>
                   <div className="space-y-1 leading-none">
-                    <FormLabel isRequired>Archivado</FormLabel>
+                    <FormLabel>Archivado</FormLabel>
                     <FormDescription>
                       Ocultar este grupo de la tienda
                     </FormDescription>
@@ -2205,7 +2205,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
               name="description"
               render={({ field }) => (
                 <FormItem className="col-span-full">
-                  <FormLabel isRequired>Descripción</FormLabel>
+                  <FormLabel>Descripción</FormLabel>
                   <FormControl>
                     <RichTextEditor
                       placeholder="Describe el grupo de productos..."

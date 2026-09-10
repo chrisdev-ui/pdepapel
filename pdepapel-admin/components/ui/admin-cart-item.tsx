@@ -6,7 +6,7 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { currencyFormatter } from "@/lib/utils";
 import { ProductForItem } from "./product-selector";
-import { QuantitySelector } from "./quantity-selector";
+import { StockQuantityInput } from "./stock-quantity-input";
 
 interface AdminCartItemProps {
   item: ProductForItem & {
@@ -72,11 +72,12 @@ export const AdminCartItem: React.FC<AdminCartItemProps> = ({
           </div>
 
           <div className="mt-2 flex items-center gap-4">
-            <QuantitySelector
+            <StockQuantityInput
               value={item.quantity}
               onChange={onUpdateQuantity}
-              className="w-24"
+              className="w-auto"
               min={1}
+              ariaLabel={`Cantidad de ${item.name}`}
             />
             <div className="flex flex-1 flex-col items-end">
               <div className="flex items-center gap-2">

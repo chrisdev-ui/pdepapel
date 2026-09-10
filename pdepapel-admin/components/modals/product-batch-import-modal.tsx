@@ -373,7 +373,7 @@ export const ProductBatchImportModal: React.FC<
                     />
                   </FormControl>
                   <div className="space-y-1 leading-none">
-                    <FormLabel isRequired>Generar Orden de Restock</FormLabel>
+                    <FormLabel>Generar Orden de Restock</FormLabel>
                     <FormDescription>
                       Crea una orden de restock vinculada a esta importación
                       para llevar control del inventario.
