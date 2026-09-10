@@ -1456,7 +1456,9 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               )}
             />
             <FormItem>
-              <FormLabel>Margen resultante</FormLabel>
+              {/* Solo lectura: sin `isRequired` el label anade "- Opcional",
+                  que no tiene sentido en un valor calculado. */}
+              <FormLabel isRequired>Margen resultante</FormLabel>
               <div
                 className={cn(
                   "flex h-10 items-center gap-2 rounded-md border px-3 text-sm",
