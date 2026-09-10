@@ -12,7 +12,7 @@ export const publicRoutes = [
 export const publicApiCorsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
   "Access-Control-Allow-Headers":
-    "Content-Type, Authorization, X-Requested-With, X-Guest-Id",
+    "Content-Type, Authorization, X-Requested-With, X-Guest-Id, Idempotency-Key",
   "Access-Control-Max-Age": "86400",
   Vary: "Origin",
 };
