@@ -1,53 +1,50 @@
 "use client";
 
-import Image from "next/image";
+import { RefreshCw, Wrench } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { startTransition, useEffect } from "react";
 
-import { Button } from "@/components/ui/button";
-import { Container } from "@/components/ui/container";
-import { useEffect } from "react";
+import { ErrorState, ErrorStateAction } from "@/components/error-state";
+import { STOREFRONT_ROUTES } from "@/lib/routes";
 
-export default function Error({
+/** Error boundary for every routed page: the root layout (header, footer, providers) is intact here. */
+export default function RouteError({
   error,
   reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const router = useRouter();
+
   useEffect(() => {
     console.error(error);
   }, [error]);
+
+  // A plain reset() re-renders the segment with the stale server payload;
+  // refreshing first re-fetches it, which is what actually recovers the page.
+  const retry = () => {
+    startTransition(() => {
+      router.refresh();
+      reset();
+    });
+  };
+
   return (
-    <Container className="flex h-full items-center justify-center">
-      <div className="w-full max-w-md space-y-8 lg:py-20">
-        <div className="relative mx-auto h-48 w-48">
-          <Image
-            src="/images/text-below-transparent-bg.webp"
-            fill
-            alt="Logo Papelería P de Papel con nombre debajo"
-            sizes="(max-width: 640px) 100vw, 640px"
-            priority
-            className="object-cover"
-            unoptimized
-          />
-        </div>
-        <h1 className="text-center font-serif text-9xl font-black text-pink-froly">
-          500
-        </h1>
-        <h2 className="mt-6 text-center font-serif text-3xl font-extrabold text-pink-froly">
-          !Ha ocurrido un error inesperado!
-        </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          Hubo un error interno en el servidor. Por favor, recarga la página.
-          <br />
-          <br />
-          <Button
-            onClick={() => window.location.reload()}
-            className="bg-pink-froly font-serif font-semibold"
-          >
-            Recargar
-          </Button>
-        </p>
-      </div>
-    </Container>
+    <ErrorState
+      tone="failure"
+      icon={Wrench}
+      title="Algo salió mal de nuestro lado"
+      description="No es tu culpa. Tu carrito y tus datos siguen guardados; intenta de nuevo en unos segundos."
+      primary={
+        <ErrorStateAction onClick={retry}>
+          <RefreshCw aria-hidden="true" className="h-4 w-4" />
+          Intentar de nuevo
+        </ErrorStateAction>
+      }
+      whatsappMessage={`¡Hola! La página me mostró un error al abrir ${typeof window !== "undefined" ? window.location.pathname : "la tienda"}.${error.digest ? ` Código: ${error.digest}.` : ""}`}
+      secondaryLink={{ href: STOREFRONT_ROUTES.shop, label: "Ir a la tienda" }}
+      digest={error.digest}
+    />
   );
 }
