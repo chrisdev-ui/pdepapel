@@ -3,6 +3,7 @@ import { ThemeProvider } from "@/providers/theme-provider";
 import { Toaster } from "@/providers/toaster";
 import { esES } from "@clerk/localizations";
 import { ClerkProvider } from "@clerk/nextjs";
+import { adminClerkAppearance } from "@/lib/clerk-appearance";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import NextTopLoader from "nextjs-toploader";
@@ -28,7 +29,8 @@ export default function RootLayout({
     <ClerkProvider
       localization={esES}
       signInUrl="/iniciar-sesion"
-      signUpUrl="/crear-cuenta"
+      signInFallbackRedirectUrl="/"
+      appearance={adminClerkAppearance}
     >
       <html lang="es" suppressHydrationWarning>
         <body className={inter.className}>

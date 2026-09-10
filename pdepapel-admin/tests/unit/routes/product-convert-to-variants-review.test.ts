@@ -16,7 +16,7 @@ class AppError extends Error {
   }
 }
 
-vi.mock("@clerk/nextjs", () => ({ auth: mocks.auth }));
+vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/cache", () => ({
   invalidateStoreProductsCache: vi.fn(),
 }));

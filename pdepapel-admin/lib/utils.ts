@@ -1,6 +1,5 @@
 import { BATCH_SIZE, DEFAULT_COUNTRY } from "@/constants";
 import prismadb from "@/lib/prismadb";
-import { clerkClient } from "@clerk/nextjs";
 import {
   Order,
   OrderItem,
@@ -197,13 +196,6 @@ export const parseErrorDetails = (
   [key]: JSON.stringify(list),
 });
 
-export async function getClerkUserById(
-  userId: string | undefined,
-): Promise<string | null> {
-  if (!userId) return null;
-  const user = await clerkClient.users.getUser(userId);
-  return user ? user.id : null;
-}
 
 export function checkRequiredFields(
   fields: Record<string, any>,

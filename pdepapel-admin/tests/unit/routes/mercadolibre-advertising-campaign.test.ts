@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   updateCampaign: vi.fn(),
 }));
 
-vi.mock("@clerk/nextjs", () => ({ auth: mocks.auth }));
+vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/utils", () => ({
   CACHE_HEADERS: { NO_CACHE: { "Cache-Control": "no-store" } },
   verifyStoreOwner: mocks.verifyStoreOwner,

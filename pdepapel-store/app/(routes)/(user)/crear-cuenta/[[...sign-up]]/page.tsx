@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { Metadata } from "next";
 import { redirect } from "next/navigation";
 
@@ -9,8 +9,9 @@ import {
 import { Register } from "./components/register";
 
 export const metadata: Metadata = {
-  title: "Registrarse",
-  description: "Registrarse en el sitio de Papelería P de Papel",
+  title: "Crear cuenta",
+  description:
+    "Crea tu cuenta gratis en Papelería P de Papel para guardar pedidos, direcciones y favoritos.",
   alternates: {
     canonical: STOREFRONT_ROUTES.signUp,
   },
@@ -26,8 +27,8 @@ type RegisterPageProps = {
   };
 };
 
-export default function RegisterPage({ searchParams }: RegisterPageProps) {
-  const { userId } = auth();
+export default async function RegisterPage({ searchParams }: RegisterPageProps) {
+  const { userId } = await auth();
 
   if (userId) {
     redirect(getSafeStorefrontRedirectPath(searchParams?.redirect_url));

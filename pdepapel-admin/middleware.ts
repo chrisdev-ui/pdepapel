@@ -1,13 +1,22 @@
-import { authMiddleware } from "@clerk/nextjs";
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { isAllowedCorsOrigin } from "@/lib/cors";
 import { NextRequest, NextResponse } from "next/server";
 import type { NextFetchEvent } from "next/server";
 
+/**
+ * Every API path is public at the middleware: the storefront, webhooks, cron
+ * and customers with a bearer token all reach it. Authorization happens inside
+ * each handler (`auth()` + `checkIfStoreOwner` for dashboard-only work). The
+ * dashboard pages themselves require a session; the layouts then verify that
+ * the session owns the store.
+ */
 export const publicRoutes = [
-  "/api/:path*",
+  "/api(.*)",
   "/iniciar-sesion(.*)",
-  "/crear-cuenta(.*)",
+  "/sin-acceso(.*)",
 ];
+
+const isPublicRoute = createRouteMatcher(publicRoutes);
 
 export const publicApiCorsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
@@ -17,10 +26,26 @@ export const publicApiCorsHeaders = {
   Vary: "Origin",
 };
 
-const clerkMiddleware = authMiddleware({
-  publicRoutes,
-  signInUrl: "/iniciar-sesion",
-});
+/** Navigations get a redirect; fetches and scripts get a plain status code. */
+const isDocumentRequest = (request: NextRequest) =>
+  request.headers.get("sec-fetch-dest") === "document" ||
+  (request.headers.get("accept") ?? "").includes("text/html");
+
+const withClerk = clerkMiddleware(
+  async (auth, request) => {
+    if (isPublicRoute(request)) return;
+    const { userId, redirectToSignIn } = await auth();
+    if (userId) return;
+    // Not `auth.protect()`: for non-browser requests it rewrites to a
+    // `/clerk_<id>` path expecting a 404, but here that path matches the
+    // `[storeId]` segment and renders the dashboard layout instead.
+    if (isDocumentRequest(request)) {
+      return redirectToSignIn({ returnBackUrl: request.url });
+    }
+    return new NextResponse("Inicia sesión para continuar.", { status: 401 });
+  },
+  { signInUrl: "/iniciar-sesion" },
+);
 
 const isApiRequest = (request: NextRequest) =>
   request.nextUrl.pathname.startsWith("/api/");
@@ -57,7 +82,7 @@ export default async function middleware(
     });
   }
 
-  const response = await clerkMiddleware(request, event);
+  const response = await withClerk(request, event);
 
   if (!isApiRequest(request)) {
     return response;

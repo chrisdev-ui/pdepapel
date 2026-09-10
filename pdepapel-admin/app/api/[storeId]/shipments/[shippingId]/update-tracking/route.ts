@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { ShippingProvider, ShippingStatus } from "@prisma/client";
 import prismadb from "@/lib/prismadb";
@@ -47,7 +47,7 @@ export async function POST(
   { params }: { params: { storeId: string; shippingId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
 
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();

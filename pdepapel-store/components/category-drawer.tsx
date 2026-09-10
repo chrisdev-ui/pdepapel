@@ -184,8 +184,17 @@ export function CategoryDrawer({ types, logoSrc }: CategoryDrawerProps) {
           </SignedOut>
           <SignedIn>
             <Link
-              href={STOREFRONT_ROUTES.myOrders}
+              href={STOREFRONT_ROUTES.account}
               className="flex h-11 items-center justify-center gap-2 rounded-md bg-blue-yankees font-sans text-sm font-semibold text-white transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2"
+            >
+              <User aria-hidden="true" className="h-[18px] w-[18px]" />
+              Mi cuenta
+            </Link>
+          </SignedIn>
+          <SignedIn>
+            <Link
+              href={STOREFRONT_ROUTES.myOrders}
+              className="flex h-11 items-center justify-center gap-2 rounded-md border-[1.5px] border-blue-yankees font-sans text-sm font-semibold text-blue-yankees transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2"
             >
               <PackageOpen aria-hidden="true" className="h-[18px] w-[18px]" />
               Mis pedidos
@@ -194,7 +203,7 @@ export function CategoryDrawer({ types, logoSrc }: CategoryDrawerProps) {
           <SignedIn>
             <Link
               href={STOREFRONT_ROUTES.savedSearches}
-              className="col-span-2 flex h-11 items-center justify-center gap-2 rounded-md border-[1.5px] border-blue-yankees font-sans text-sm font-semibold text-blue-yankees transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2"
+              className="flex h-11 items-center justify-center gap-2 rounded-md border-[1.5px] border-blue-yankees font-sans text-sm font-semibold text-blue-yankees transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2"
             >
               <Bookmark aria-hidden="true" className="h-[18px] w-[18px]" />
               Mis búsquedas

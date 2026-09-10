@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 
 import prismadb from "@/lib/prismadb";
 import { checkIfStoreOwner, CACHE_HEADERS } from "@/lib/utils";
@@ -33,7 +33,7 @@ export async function DELETE(
   { params }: { params: { boxId: string; storeId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
 
     if (!userId) {
       throw ErrorFactory.Unauthenticated();
@@ -68,7 +68,7 @@ export async function PATCH(
   { params }: { params: { boxId: string; storeId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     const body = await req.json();
 
     const { name, type, width, height, length, isDefault } = body;

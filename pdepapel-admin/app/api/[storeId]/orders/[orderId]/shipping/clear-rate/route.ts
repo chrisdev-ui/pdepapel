@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import prismadb from "@/lib/prismadb";
 import { ErrorFactory } from "@/lib/api-errors";
 import { Prisma } from "@prisma/client";
@@ -9,7 +9,7 @@ export async function DELETE(
   { params }: { params: { storeId: string; orderId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
 
     if (!userId) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });

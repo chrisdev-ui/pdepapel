@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   getProductsPrices: vi.fn(),
 }));
 
-vi.mock("@clerk/nextjs", () => ({ auth: mocks.auth }));
+vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/prismadb", () => ({
   default: {
     customerWishlistItem: { findMany: mocks.findMany, createMany: mocks.createMany, deleteMany: mocks.deleteMany },

@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { NewsletterSubscriberStatus } from "@prisma/client";
 import { headers } from "next/headers";
 
@@ -9,7 +9,7 @@ import { verifyStoreOwner } from "@/lib/utils";
 
 export async function getNewsletterSubscribers(storeId: string) {
   headers();
-  const { userId } = auth();
+  const { userId } = await auth();
   if (!userId) throw new Error("No autenticado");
   await verifyStoreOwner(userId, storeId);
 

@@ -29,7 +29,7 @@ import {
   releaseWelcomeBenefitReservation,
   reserveWelcomeBenefit,
 } from "@/lib/customer-benefits";
-import { auth, clerkClient } from "@clerk/nextjs";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import {
   DiscountType,
   OrderStatus,
@@ -96,7 +96,7 @@ export async function PATCH(
   const corsHeaders = createCorsHeaders(req, {
     methods: "GET, PATCH, DELETE, OPTIONS",
   });
-  const { userId } = auth();
+  const { userId } = await auth();
 
   try {
     if (!userId) throw ErrorFactory.Unauthenticated();
@@ -253,7 +253,7 @@ export async function PATCH(
     let verifiedUserId = order.userId;
     if (requestUserId && order.userId !== requestUserId) {
       try {
-        await clerkClient.users.getUser(requestUserId);
+        await (await clerkClient()).users.getUser(requestUserId);
         verifiedUserId = requestUserId;
       } catch (error) {
         throw ErrorFactory.NotFound("El usuario asignado no existe");
@@ -925,7 +925,7 @@ export async function DELETE(
   const corsHeaders = createCorsHeaders(req, {
     methods: "GET, PATCH, DELETE, OPTIONS",
   });
-  const { userId } = auth();
+  const { userId } = await auth();
 
   try {
     if (!userId) throw ErrorFactory.Unauthenticated();

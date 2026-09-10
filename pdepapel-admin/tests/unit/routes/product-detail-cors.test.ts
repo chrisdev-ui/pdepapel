@@ -56,7 +56,7 @@ vi.mock("@/lib/product-slugs", () => ({
 vi.mock("@/lib/discount-engine", () => ({
   calculateDiscountedPrice: mocks.calculateDiscountedPrice,
 }));
-vi.mock("@clerk/nextjs", () => ({ auth: vi.fn() }));
+vi.mock("@clerk/nextjs/server", () => ({ auth: vi.fn() }));
 
 import {
   GET,

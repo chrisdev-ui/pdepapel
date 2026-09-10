@@ -1,6 +1,6 @@
 import { AppError, ErrorFactory } from "@/lib/api-errors";
 import { hasMatchingOrderAccountEmail, normalizeOrderAccountEmail } from "@/lib/order-account-claims";
-import { clerkClient } from "@clerk/nextjs";
+import { clerkClient } from "@clerk/nextjs/server";
 import {
   Coupon,
   CouponRedemptionStatus,
@@ -22,7 +22,7 @@ export type WelcomeBenefitEligibilityDatabase = Pick<
 >;
 
 export async function getVerifiedPrimaryEmail(userId: string) {
-  const user = await clerkClient.users.getUser(userId);
+  const user = await (await clerkClient()).users.getUser(userId);
   const primaryEmailAddress = user.emailAddresses.find(
     (emailAddress) => emailAddress.id === user.primaryEmailAddressId,
   );

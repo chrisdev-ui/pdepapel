@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { OrderStatus, ShippingStatus } from "@prisma/client";
 
@@ -36,7 +36,7 @@ export async function POST(
 ) {
   try {
     // Allow either authenticated admin OR internal webhook calls
-    const { userId } = auth();
+    const { userId } = await auth();
     const internalSecret = req.headers.get("x-internal-secret");
 
     const isAuthenticated = !!userId;

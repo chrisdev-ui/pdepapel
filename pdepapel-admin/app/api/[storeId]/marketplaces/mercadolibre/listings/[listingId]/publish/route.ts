@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import {
   MarketplaceConnectionStatus,
   MarketplaceListingStatus,
@@ -26,7 +26,7 @@ export async function POST(
   { params }: { params: { storeId: string; listingId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
     await verifyStoreOwner(userId, params.storeId);
 

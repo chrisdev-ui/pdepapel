@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
@@ -34,7 +34,7 @@ const mutationSchema = z.discriminatedUnion("action", [
 ]);
 
 async function requireOwner(storeId: string) {
-  const { userId } = auth();
+  const { userId } = await auth();
   if (!userId) throw ErrorFactory.Unauthenticated();
   if (!storeId) throw ErrorFactory.MissingStoreId();
   await verifyStoreOwner(userId, storeId);

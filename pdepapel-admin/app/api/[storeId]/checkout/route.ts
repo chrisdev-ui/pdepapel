@@ -33,7 +33,7 @@ import {
   calculateOrderTotals,
   getEffectiveShippingCost,
 } from "@/lib/order-totals";
-import { auth, clerkClient } from "@clerk/nextjs";
+import { auth, clerkClient, currentUser } from "@clerk/nextjs/server";
 import { sendOrderEmail } from "@/lib/email";
 import { BATCH_SIZE } from "@/constants";
 import { ENVIOCLICK_DEFAULTS } from "@/constants/shipping";
@@ -106,7 +106,9 @@ async function createCheckout(
   { params }: { params: { storeId: string } },
 ) {
   const corsHeaders = getCorsHeaders(req);
-  const { userId: userLogged, user } = auth();
+  const { userId: userLogged } = await auth();
+  // Core 3: auth() no longer carries the user; the profile is a separate call.
+  const user = userLogged ? await currentUser() : null;
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
@@ -209,7 +211,7 @@ async function createCheckout(
     if (userId) {
       if (isStoreOwner) {
         try {
-          await clerkClient.users.getUser(userId);
+          await (await clerkClient()).users.getUser(userId);
           authenticatedUserId = userId;
         } catch (error) {
           throw ErrorFactory.NotFound("El usuario asignado no existe");

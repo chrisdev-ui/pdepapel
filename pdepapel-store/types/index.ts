@@ -253,6 +253,8 @@ export interface Order {
   couponDiscount?: number;
   createdBy?: string | null;
   createdAt: string;
+  /** Set by the admin only when a genuine payment was confirmed. */
+  paidAt?: string | null;
 }
 
 export interface OrderItem {

@@ -1,5 +1,5 @@
 import prismadb from "@/lib/prismadb";
-import { clerkClient } from "@clerk/nextjs";
+import { clerkClient } from "@clerk/nextjs/server";
 
 export const getInventoryMovements = async (storeId: string) => {
   const movements = await prismadb.inventoryMovement.findMany({
@@ -36,7 +36,7 @@ export const getInventoryMovements = async (storeId: string) => {
     await Promise.all(
       Array.from(uniqueUserIds).map(async (userId) => {
         try {
-          const user = await clerkClient.users.getUser(userId);
+          const user = await (await clerkClient()).users.getUser(userId);
           usersMap.set(userId, user);
         } catch (error) {
           console.error(`Failed to fetch user ${userId}`, error);

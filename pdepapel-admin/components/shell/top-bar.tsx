@@ -77,7 +77,7 @@ export function TopBar({ storeId, storeUrl, collapsed, onToggleSidebar, onOpenMe
           </Link>
         </Button>
         <div className="ml-1 flex items-center">
-          <UserButton afterSignOutUrl="/" />
+          <UserButton afterSignOutUrl="/iniciar-sesion" />
         </div>
       </div>
     </header>

@@ -63,7 +63,7 @@ vi.mock("@/lib/discount-engine", () => ({
   getProductsPrices: mocks.getProductsPrices,
 }));
 vi.mock("@/lib/cache", () => ({ invalidateStoreProductsCache: vi.fn() }));
-vi.mock("@clerk/nextjs", () => ({ auth: vi.fn() }));
+vi.mock("@clerk/nextjs/server", () => ({ auth: vi.fn() }));
 vi.mock("@upstash/redis", () => ({ Redis: { fromEnv: vi.fn() } }));
 
 import { GET } from "@/app/api/[storeId]/products/route";

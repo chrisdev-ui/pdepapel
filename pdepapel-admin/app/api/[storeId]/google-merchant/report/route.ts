@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
@@ -14,7 +14,7 @@ import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 
 async function requireOwner(storeId: string) {
-  const { userId } = auth();
+  const { userId } = await auth();
   if (!userId) throw ErrorFactory.Unauthenticated();
   await verifyStoreOwner(userId, storeId);
 }

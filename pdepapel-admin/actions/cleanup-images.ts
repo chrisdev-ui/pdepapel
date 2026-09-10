@@ -1,12 +1,12 @@
 "use server";
 
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import cloudinaryInstance from "@/lib/cloudinary";
 import { getPublicIdFromCloudinaryUrl } from "@/lib/utils";
 
 export async function cleanupImages(urls: string[]) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
 
     if (!userId) {
       throw new Error("Unauthorized");

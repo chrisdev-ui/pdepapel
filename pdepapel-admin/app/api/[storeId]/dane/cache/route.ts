@@ -1,5 +1,6 @@
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { checkIfStoreOwner } from "@/lib/utils";
 import {
   getCacheStats,
   clearLocationsCache,
@@ -9,12 +10,18 @@ import {
 /**
  * GET /api/dane/cache - Get Redis cache statistics
  */
-export async function GET() {
+export async function GET(
+  _req: Request,
+  { params }: { params: { storeId: string } },
+) {
   try {
     // Only allow authenticated admins
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!(await checkIfStoreOwner(userId, params.storeId))) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
     const stats = await getCacheStats();
@@ -38,12 +45,18 @@ export async function GET() {
 /**
  * POST /api/dane/cache - Warm up cache (fetch and store locations)
  */
-export async function POST() {
+export async function POST(
+  _req: Request,
+  { params }: { params: { storeId: string } },
+) {
   try {
     // Only allow authenticated admins
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!(await checkIfStoreOwner(userId, params.storeId))) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
     const locations = await getAllLocationsWithCache();
@@ -65,12 +78,18 @@ export async function POST() {
 /**
  * DELETE /api/dane/cache - Clear Redis cache
  */
-export async function DELETE() {
+export async function DELETE(
+  _req: Request,
+  { params }: { params: { storeId: string } },
+) {
   try {
     // Only allow authenticated admins
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!(await checkIfStoreOwner(userId, params.storeId))) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
     await clearLocationsCache();

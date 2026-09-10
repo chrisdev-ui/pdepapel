@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
@@ -18,7 +18,7 @@ import { CACHE_HEADERS, getPublicIdFromCloudinaryUrl, verifyStoreOwner } from "@
 type Params = { params: { storeId: string; homeContentId: string } };
 
 async function requireOwner(params: Params["params"]) {
-  const { userId } = auth();
+  const { userId } = await auth();
   if (!userId) throw ErrorFactory.Unauthenticated();
   if (!params.storeId) throw ErrorFactory.MissingStoreId();
   if (!params.homeContentId) throw ErrorFactory.InvalidRequest("Se requiere el ID del contenido");

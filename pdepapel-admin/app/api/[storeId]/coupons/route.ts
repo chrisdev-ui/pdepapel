@@ -2,7 +2,7 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { normalizeCouponCode } from "@/lib/coupon-code";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { DiscountType } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -13,7 +13,7 @@ export async function POST(
   { params }: { params: { storeId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
@@ -175,7 +175,7 @@ export async function DELETE(
   { params }: { params: { storeId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
@@ -236,7 +236,7 @@ export async function PATCH(
   { params }: { params: { storeId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 

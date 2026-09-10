@@ -25,7 +25,7 @@ vi.mock("@/lib/prismadb", () => ({
 vi.mock("@upstash/redis", () => ({
   Redis: { fromEnv: () => ({ get: mocks.redisGet, set: mocks.redisSet }) },
 }));
-vi.mock("@clerk/nextjs", () => ({ auth: mocks.auth }));
+vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/utils", () => ({
   CACHE_HEADERS: {
     NO_CACHE: {

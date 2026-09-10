@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -35,7 +35,7 @@ interface SettingsPageProps {
 }
 
 export default async function SettingsPage({ params, searchParams }: SettingsPageProps) {
-  const { userId } = auth();
+  const { userId } = await auth();
   if (!userId) redirect("/iniciar-sesion");
   const store = await prismadb.store.findFirst({ where: { id: params.storeId, userId } });
   if (!store) redirect("/");

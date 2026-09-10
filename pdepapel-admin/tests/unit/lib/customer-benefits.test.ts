@@ -9,8 +9,8 @@ const mocks = vi.hoisted(() => ({
   updateManyRedemptions: vi.fn(),
 }));
 
-vi.mock("@clerk/nextjs", () => ({
-  clerkClient: { users: { getUser: mocks.getUser } },
+vi.mock("@clerk/nextjs/server", () => ({
+  clerkClient: async () => ({ users: { getUser: mocks.getUser } }),
 }));
 
 import {

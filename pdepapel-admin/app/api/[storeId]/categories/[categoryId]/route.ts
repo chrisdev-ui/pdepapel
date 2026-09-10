@@ -9,7 +9,7 @@ import prismadb from "@/lib/prismadb";
 import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 import { slugify } from "@/lib/slugify";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 const getCategoryRevalidationPaths = (...slugs: string[]) => [
@@ -97,7 +97,7 @@ export async function PATCH(
   { params }: { params: { storeId: string; categoryId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.categoryId)
@@ -212,7 +212,7 @@ export async function DELETE(
   { params }: { params: { storeId: string; categoryId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.categoryId)

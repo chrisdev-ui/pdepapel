@@ -82,10 +82,17 @@ const nextConfig = {
         destination: "/iniciar-sesion/:path*",
         permanent: true,
       },
+      // Accounts are created on the storefront (shared Clerk instance); the
+      // panel has no sign-up page any more.
       {
         source: "/sign-up/:path*",
-        destination: "/crear-cuenta/:path*",
-        permanent: true,
+        destination: "/iniciar-sesion",
+        permanent: false,
+      },
+      {
+        source: "/crear-cuenta/:path*",
+        destination: "/iniciar-sesion",
+        permanent: false,
       },
       ...newDashboardRoutePairs.flatMap(([sourceSegment, destinationSegment]) => [
         {

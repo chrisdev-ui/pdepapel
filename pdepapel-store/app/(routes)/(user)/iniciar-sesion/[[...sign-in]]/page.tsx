@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { Metadata } from "next";
 import { redirect } from "next/navigation";
 
@@ -9,8 +9,9 @@ import {
 import { Login } from "./components/login";
 
 export const metadata: Metadata = {
-  title: "Iniciar Sesión",
-  description: "Iniciar Sesión en el sitio de Papelería P de Papel",
+  title: "Iniciar sesión",
+  description:
+    "Entra a tu cuenta de Papelería P de Papel para ver tus pedidos, guías de envío y direcciones guardadas.",
   alternates: {
     canonical: STOREFRONT_ROUTES.signIn,
   },
@@ -26,8 +27,8 @@ type LoginPageProps = {
   };
 };
 
-export default function LoginPage({ searchParams }: LoginPageProps) {
-  const { userId } = auth();
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const { userId } = await auth();
 
   if (userId) {
     redirect(getSafeStorefrontRedirectPath(searchParams?.redirect_url));

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import prismadb from "@/lib/prismadb";
 import { Prisma } from "@prisma/client";
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { verifyStoreOwner } from "@/lib/utils";
 
@@ -11,7 +11,7 @@ export async function POST(
   { params }: { params: { storeId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
 
     const { storeId } = params;

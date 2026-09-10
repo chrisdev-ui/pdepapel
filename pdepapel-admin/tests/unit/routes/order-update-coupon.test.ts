@@ -71,9 +71,9 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("@clerk/nextjs", () => ({
+vi.mock("@clerk/nextjs/server", () => ({
   auth: () => ({ userId: "owner-1" }),
-  clerkClient: { users: { getUser: vi.fn() } },
+  clerkClient: async () => ({ users: { getUser: vi.fn() } }),
 }));
 
 vi.mock("@/lib/prismadb", () => ({

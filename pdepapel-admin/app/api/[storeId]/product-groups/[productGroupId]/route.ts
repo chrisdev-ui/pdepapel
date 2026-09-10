@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 
 import prismadb from "@/lib/prismadb";
 import { generateProductSlug, slugify } from "@/lib/slugify";
@@ -68,7 +68,7 @@ export async function PATCH(
   { params }: { params: { storeId: string; productGroupId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     const body = await req.json();
 
     const {
@@ -357,7 +357,7 @@ export async function DELETE(
   { params }: { params: { storeId: string; productGroupId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     // Parse query params for delete mode
     const url = new URL(req.url);
     const deleteVariants = url.searchParams.get("deleteVariants") === "true";

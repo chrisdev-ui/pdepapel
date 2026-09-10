@@ -3,7 +3,7 @@ import { createCorsHeaders } from "@/lib/cors";
 import prismadb from "@/lib/prismadb";
 import { PUBLIC_REVIEW_SELECT, PUBLIC_REVIEW_WHERE } from "@/lib/review-moderation";
 import { CACHE_HEADERS } from "@/lib/utils";
-import { auth, clerkClient } from "@clerk/nextjs";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 export async function OPTIONS(req: Request) {
@@ -22,7 +22,7 @@ export async function POST(
   };
 
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.productId)
@@ -31,7 +31,7 @@ export async function POST(
     const body = await req.json();
     const { rating, comment } = body;
 
-    const user = await clerkClient.users.getUser(userId).catch(() => null);
+    const user = await (await clerkClient()).users.getUser(userId).catch(() => null);
     if (!user) throw ErrorFactory.Unauthenticated();
 
     // Validate rating

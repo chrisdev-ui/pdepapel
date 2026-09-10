@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
@@ -59,7 +59,7 @@ export async function PATCH(
   { params }: { params: { storeId: string; purchaseId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     await ensurePurchaseAccess(userId, params.storeId, params.purchaseId);
     const purchase = parsePurchase(await req.json());
 
@@ -98,7 +98,7 @@ export async function DELETE(
   { params }: { params: { storeId: string; purchaseId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     await ensurePurchaseAccess(userId, params.storeId, params.purchaseId);
 
     await prismadb.taxPurchase.delete({

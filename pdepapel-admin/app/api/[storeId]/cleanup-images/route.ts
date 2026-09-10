@@ -1,18 +1,22 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 
 import prismadb from "@/lib/prismadb";
 import cloudinary from "@/lib/cloudinary";
+import { checkIfStoreOwner } from "@/lib/utils";
 
 export async function GET(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
 
     if (!userId) {
       return new NextResponse("Unauthenticated", { status: 401 });
+    }
+    if (!(await checkIfStoreOwner(userId, params.storeId))) {
+      return new NextResponse("Unauthorized", { status: 403 });
     }
 
     if (!params.storeId) {
@@ -159,12 +163,15 @@ export async function DELETE(
   { params }: { params: { storeId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     const body = await req.json();
     const { publicIds } = body;
 
     if (!userId) {
       return new NextResponse("Unauthenticated", { status: 401 });
+    }
+    if (!(await checkIfStoreOwner(userId, params.storeId))) {
+      return new NextResponse("Unauthorized", { status: 403 });
     }
 
     if (!publicIds || !Array.isArray(publicIds) || publicIds.length === 0) {

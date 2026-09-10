@@ -7,7 +7,7 @@ import { createCorsHeaders } from "@/lib/cors";
 import { getColombiaDate } from "@/lib/date-utils";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 const getCorsHeaders = (request: Request) =>
@@ -40,7 +40,7 @@ export async function GET(
   const corsHeaders = getCorsHeaders(req);
 
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 

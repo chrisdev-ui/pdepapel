@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
@@ -16,7 +16,7 @@ export async function POST(
   { params }: { params: { storeId: string; productId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     const body = (await req.json()) as ConvertToVariantsBody;
     const groupName = typeof body.name === "string" ? body.name.trim() : "";
 

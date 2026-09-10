@@ -3,6 +3,8 @@
 import { CalendarClock, Check, CreditCard, Flame, PackageX, Truck, Undo2 } from "lucide-react";
 import Link from "next/link";
 
+import { DELIVERY_WINDOW } from "@/constants";
+
 import { FreeShippingProgress } from "@/components/free-shipping-progress";
 import { NotifyMeForm } from "@/components/notify-me-form";
 import { useCart } from "@/hooks/use-cart";
@@ -21,7 +23,7 @@ interface ProductSignalsProps {
 }
 
 /** Tiempo de entrega publicado en la política de envíos. */
-export const DELIVERY_WINDOW = "2 a 4 días hábiles";
+export { DELIVERY_WINDOW };
 
 const TONES = {
   green: { bg: "bg-kawaii-mint-light/60", text: "text-green-700", Icon: Check },

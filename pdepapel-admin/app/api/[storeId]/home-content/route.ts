@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
@@ -30,7 +30,7 @@ export async function GET(req: Request, { params }: { params: { storeId: string 
       return NextResponse.json(selectLiveHomeContent(entries, now), { headers: CACHE_HEADERS.DYNAMIC });
     }
 
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
     await verifyStoreOwner(userId, params.storeId);
 
@@ -47,7 +47,7 @@ export async function GET(req: Request, { params }: { params: { storeId: string 
 
 export async function POST(req: Request, { params }: { params: { storeId: string } }) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     await verifyStoreOwner(userId, params.storeId);

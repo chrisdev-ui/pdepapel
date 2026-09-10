@@ -5,7 +5,7 @@ import { getColombiaDate } from "@/lib/date-utils";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, currencyFormatter } from "@/lib/utils";
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 
 const getCorsHeaders = (request: Request) => ({
   ...createCorsHeaders(request, { methods: "POST, OPTIONS" }),
@@ -22,7 +22,7 @@ export async function POST(
 ) {
   const corsHeaders = getCorsHeaders(req);
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     const { code, subtotal } = await req.json();
 
     if (!code) {

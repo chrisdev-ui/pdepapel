@@ -1,18 +1,20 @@
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { ShippingStatus } from "@prisma/client";
 import prismadb from "@/lib/prismadb";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { ALLOWED_TRANSITIONS } from "@/constants";
+import { verifyStoreOwner } from "@/lib/utils";
 
 export async function PATCH(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
 
     if (!userId) throw ErrorFactory.Unauthenticated();
+    await verifyStoreOwner(userId, params.storeId);
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
     const body = await req.json();

@@ -19,9 +19,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/env.mjs", () => ({ env: {} }));
-vi.mock("@clerk/nextjs", () => ({
+vi.mock("@clerk/nextjs/server", () => ({
   auth: mocks.auth,
-  clerkClient: { users: { getUser: vi.fn() } },
+  clerkClient: async () => ({ users: { getUser: vi.fn() } }),
 }));
 vi.mock("@/lib/prismadb", () => ({
   default: {

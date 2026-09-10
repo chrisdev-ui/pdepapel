@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import prismadb from "@/lib/prismadb";
 import { SimuladoProvider } from "@/lib/invoicing/providers/simulado";
 import { InvoiceStatus, DianStatus } from "@prisma/client";
+import { checkIfStoreOwner } from "@/lib/utils";
 
 const provider = new SimuladoProvider();
 
@@ -11,10 +12,13 @@ export async function GET(
   { params }: { params: { storeId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
 
     if (!userId) {
       return new NextResponse("Unauthenticated", { status: 401 });
+    }
+    if (!(await checkIfStoreOwner(userId, params.storeId))) {
+      return new NextResponse("Unauthorized", { status: 403 });
     }
 
     if (!params.storeId) {
@@ -50,13 +54,16 @@ export async function POST(
   { params }: { params: { storeId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     const body = await req.json();
 
     const { orderId } = body;
 
     if (!userId) {
       return new NextResponse("Unauthenticated", { status: 401 });
+    }
+    if (!(await checkIfStoreOwner(userId, params.storeId))) {
+      return new NextResponse("Unauthorized", { status: 403 });
     }
 
     if (!params.storeId) {

@@ -1,16 +1,20 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import prismadb from "@/lib/prismadb";
+import { checkIfStoreOwner } from "@/lib/utils";
 
 export async function GET(
   req: Request,
   { params }: { params: { storeId: string; quotationId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
 
     if (!userId) {
       return new NextResponse("Unauthorized", { status: 401 });
+    }
+    if (!(await checkIfStoreOwner(userId, params.storeId))) {
+      return new NextResponse("Unauthorized", { status: 403 });
     }
 
     if (!params.quotationId) {
@@ -43,7 +47,7 @@ export async function PATCH(
   { params }: { params: { storeId: string; quotationId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     const body = await req.json();
 
     const {
@@ -61,6 +65,9 @@ export async function PATCH(
 
     if (!userId) {
       return new NextResponse("Unauthorized", { status: 401 });
+    }
+    if (!(await checkIfStoreOwner(userId, params.storeId))) {
+      return new NextResponse("Unauthorized", { status: 403 });
     }
 
     if (!params.quotationId) {
@@ -125,10 +132,13 @@ export async function DELETE(
   { params }: { params: { storeId: string; quotationId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
 
     if (!userId) {
       return new NextResponse("Unauthorized", { status: 401 });
+    }
+    if (!(await checkIfStoreOwner(userId, params.storeId))) {
+      return new NextResponse("Unauthorized", { status: 403 });
     }
 
     if (!params.quotationId) {

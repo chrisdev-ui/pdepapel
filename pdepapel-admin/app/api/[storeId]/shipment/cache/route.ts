@@ -1,17 +1,18 @@
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
 import { NextResponse } from "next/server";
-import { CACHE_HEADERS } from "@/lib/utils";
+import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
 export async function GET(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
+    await verifyStoreOwner(userId, params.storeId);
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
     const stats = await prismadb.shippingQuote.aggregate({
@@ -62,8 +63,9 @@ export async function DELETE(
   { params }: { params: { storeId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
+    await verifyStoreOwner(userId, params.storeId);
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
     const { searchParams } = new URL(req.url);

@@ -98,6 +98,9 @@ export const DOTS = "...";
 
 export const BASE_URL = "https://papeleriapdepapel.com";
 
+/** Carrier delivery window promised on the PDP, the checkout and the shipping policy. */
+export const DELIVERY_WINDOW = "2 a 4 días hábiles";
+
 export const LETTER_REGEX = /^[a-zA-Z]*$/;
 export const DIGIT_REGEX = /^[0-9]*$/;
 

@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   verifyStoreOwner: vi.fn(),
 }));
 
-vi.mock("@clerk/nextjs", () => ({ auth: mocks.auth }));
+vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/api-errors", () => ({
   ErrorFactory: {
     Unauthenticated: () => new Error("Unauthenticated"),

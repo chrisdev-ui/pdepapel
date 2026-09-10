@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { NewsletterSubscriberStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
@@ -13,7 +13,7 @@ export async function GET(
   _request: Request,
   { params }: { params: { storeId: string } },
 ) {
-  const { userId } = auth();
+  const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ message: "No autenticado" }, { status: 401 });
   }

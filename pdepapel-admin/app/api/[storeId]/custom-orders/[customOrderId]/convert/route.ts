@@ -1,17 +1,21 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import prismadb from "@/lib/prismadb";
 import { normalizePhone } from "@/lib/phone";
+import { checkIfStoreOwner } from "@/lib/utils";
 
 export async function POST(
   req: Request,
   { params }: { params: { storeId: string; customOrderId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
 
     if (!userId) {
-      return new NextResponse("Unauthenticated", { status: 403 });
+      return new NextResponse("Unauthenticated", { status: 401 });
+    }
+    if (!(await checkIfStoreOwner(userId, params.storeId))) {
+      return new NextResponse("Unauthorized", { status: 403 });
     }
 
     if (!params.storeId) {

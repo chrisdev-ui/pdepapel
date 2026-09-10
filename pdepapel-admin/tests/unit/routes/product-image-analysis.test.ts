@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   env: { GEMINI_API_KEY: "gemini-test-key" as string | undefined },
 }));
 
-vi.mock("@clerk/nextjs", () => ({ auth: mocks.auth }));
+vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/utils", () => ({ verifyStoreOwner: mocks.verifyStoreOwner }));
 vi.mock("@/lib/env.mjs", () => ({ env: mocks.env }));
 vi.mock("@/lib/prismadb", () => ({

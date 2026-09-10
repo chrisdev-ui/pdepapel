@@ -1,15 +1,17 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { hasAdminAccess } from "@/lib/admin-access";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, parseErrorDetails } from "@/lib/utils";
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 // Enable Edge Runtime for faster response times
 
 export async function POST(req: Request) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!(await hasAdminAccess(userId))) throw ErrorFactory.Unauthorized();
 
     const body = await req.json();
     const { name } = body;
@@ -45,7 +47,7 @@ export async function POST(req: Request) {
 
 export async function GET(req: Request) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
 
     const stores = await prismadb.store.findMany({
@@ -73,7 +75,7 @@ export async function GET(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
 
     const { ids }: { ids: string[] } = await req.json();

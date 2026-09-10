@@ -1,4 +1,4 @@
-import { currentUser } from "@clerk/nextjs";
+import { currentUser } from "@clerk/nextjs/server";
 import { Metadata } from "next";
 
 import { AccountPrompt } from "@/components/account-prompt";

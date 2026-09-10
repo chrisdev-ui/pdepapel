@@ -1,5 +1,5 @@
 import prismadb from "@/lib/prismadb";
-import { clerkClient } from "@clerk/nextjs";
+import { clerkClient } from "@clerk/nextjs/server";
 import { normalizePhone } from "@/lib/utils";
 import parsePhoneNumber from "libphonenumber-js";
 

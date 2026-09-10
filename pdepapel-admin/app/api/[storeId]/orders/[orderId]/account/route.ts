@@ -7,7 +7,7 @@ import {
   hashOrderAccountClaimToken,
 } from "@/lib/order-account-claims";
 import prismadb from "@/lib/prismadb";
-import { auth, clerkClient } from "@clerk/nextjs";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { OrderAccountClaimSource, OrderType } from "@prisma/client";
 import { NextResponse } from "next/server";
 
@@ -101,7 +101,7 @@ export async function PATCH(
       throw ErrorFactory.InvalidRequest("Se requiere el ID del pedido");
     }
 
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
 
     const { token } = await req.json();
@@ -134,7 +134,7 @@ export async function PATCH(
         },
         select: { id: true },
       }),
-      clerkClient.users.getUser(userId),
+      await (await clerkClient()).users.getUser(userId),
     ]);
 
     const primaryEmailAddress = user.emailAddresses?.find(

@@ -1,22 +1,27 @@
-import { getOrder } from "@/actions/get-order";
-import SingleOrderPage from "./components/single-order-page";
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
+
+import { getOrder } from "@/actions/get-order";
 import { orderPath } from "@/lib/routes";
+import SingleOrderPage from "./components/single-order-page";
 
 export const revalidate = 0;
+
+// `generateMetadata` and the page run in the same request: fetch the order once.
+const getOrderOnce = cache(getOrder);
 
 export async function generateMetadata({
   params,
 }: {
   params: { orderId: string };
 }): Promise<Metadata> {
-  const order = await getOrder(params.orderId);
+  const order = await getOrderOnce(params.orderId);
   if (!order) {
     return {
-      title: "Orden no encontrada",
+      title: "Pedido no encontrado",
       description:
-        "Lo sentimos, la orden que buscas no está disponible en Papelería P de Papel. Revisa tu correo electrónico para confirmar el número de tu orden. Si tienes alguna pregunta, no dudes en contactarnos. ¡Estaremos felices de ayudarte!",
+        "No encontramos este pedido en Papelería P de Papel. Revisa el enlace del correo de confirmación o escríbenos y lo buscamos contigo.",
       alternates: {
         canonical: "/",
       },
@@ -27,9 +32,9 @@ export async function generateMetadata({
     };
   }
   return {
-    title: `Detalle de tu orden #${order.orderNumber}`,
+    title: `Pedido #${order.orderNumber}`,
     description:
-      "Consulta los detalles de tu orden en Papelería P de Papel. Aquí encontrarás toda la información sobre tus artículos kawaii y de oficina seleccionados, estado del pedido, y opciones de seguimiento. Comprometidos con una experiencia de compra transparente y eficiente.",
+      "Estado, envío, guía y recibo de tu pedido en Papelería P de Papel.",
     alternates: {
       canonical: orderPath(params.orderId),
     },
@@ -45,7 +50,7 @@ export default async function OrderPage({
 }: {
   params: { orderId: string };
 }) {
-  const order = await getOrder(params.orderId);
+  const order = await getOrderOnce(params.orderId);
 
   if (!order) return notFound();
 

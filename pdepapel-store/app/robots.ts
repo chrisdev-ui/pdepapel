@@ -18,6 +18,7 @@ const PRIVATE_PATHS = [
   "/finalizar-compra/",
   "/carrito/",
   "/favoritos/",
+  "/mi-cuenta/",
   "/mis-pedidos/",
   "/mis-busquedas/",
   "/iniciar-sesion/",

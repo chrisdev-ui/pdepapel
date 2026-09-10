@@ -1,7 +1,7 @@
 "use server";
 
 import prismadb from "@/lib/prismadb";
-import { clerkClient } from "@clerk/nextjs";
+import { clerkClient, type User } from "@clerk/nextjs/server";
 
 export async function getReviews(storeId: string) {
   const reviews = await prismadb.review.findMany({
@@ -24,7 +24,10 @@ export async function getReviews(storeId: string) {
 
   if (!reviews.length) return [];
 
-  const users = await clerkClient.users.getUserList().catch(() => []);
+  const users: User[] = await (await clerkClient()).users
+    .getUserList()
+    .then((response) => response.data)
+    .catch(() => []);
 
   return reviews.map((review) => {
     const user = users.find((user) => user.id === review.userId);

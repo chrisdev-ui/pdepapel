@@ -1,18 +1,19 @@
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { ShippingStatus } from "@prisma/client";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS } from "@/lib/utils";
+import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
 export async function POST(
   req: Request,
   { params }: { params: { storeId: string; orderId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
+    await verifyStoreOwner(userId, params.storeId);
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.orderId)
       throw ErrorFactory.InvalidRequest("Se requiere el ID de la orden");

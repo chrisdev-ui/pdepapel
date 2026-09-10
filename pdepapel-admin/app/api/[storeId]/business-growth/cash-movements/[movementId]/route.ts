@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
@@ -28,7 +28,7 @@ export async function PATCH(
   { params }: { params: { storeId: string; movementId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     await ensureMovementAccess(userId, params.storeId, params.movementId);
     const movement = parseBusinessCashMovement(await req.json());
     const updatedMovement = await prismadb.businessCashMovement.update({
@@ -51,7 +51,7 @@ export async function DELETE(
   { params }: { params: { storeId: string; movementId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     await ensureMovementAccess(userId, params.storeId, params.movementId);
     await prismadb.businessCashMovement.delete({
       where: { id: params.movementId },

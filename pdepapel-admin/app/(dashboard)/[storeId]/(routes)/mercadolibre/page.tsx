@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { MarketplaceProvider } from "@prisma/client";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
@@ -22,7 +22,7 @@ export default async function MercadoLibrePage({
 }: {
   params: { storeId: string };
 }) {
-  const { userId } = auth();
+  const { userId } = await auth();
   if (!userId) redirect("/iniciar-sesion");
 
   const connection = await prismadb.marketplaceConnection.findUnique({

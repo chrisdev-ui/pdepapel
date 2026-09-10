@@ -1,11 +1,11 @@
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
 import { envioClickClient } from "@/lib/envioclick";
 import { Prisma, ShippingStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
-import { CACHE_HEADERS } from "@/lib/utils";
+import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { getColombiaDate } from "@/lib/date-utils";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -16,8 +16,9 @@ export async function POST(
   { params }: { params: { storeId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
+    await verifyStoreOwner(userId, params.storeId);
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
     const { shippingId } = await req.json();

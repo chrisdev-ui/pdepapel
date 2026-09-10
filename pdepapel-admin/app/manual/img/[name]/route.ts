@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 const IMAGE_DIR = path.join(process.cwd(), "content", "manual", "img");
@@ -23,7 +23,7 @@ export async function GET(
   }
   let userId: string | null = null;
   try {
-    userId = auth().userId;
+    userId = (await auth()).userId;
   } catch {
     userId = null;
   }

@@ -2,7 +2,7 @@
 
 import prismadb from "@/lib/prismadb";
 import { createInventoryMovementBatch } from "@/lib/inventory";
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { InventoryMovementType } from "@prisma/client";
 
 interface CreateProductParams {
@@ -20,7 +20,7 @@ interface CreateProductParams {
 }
 
 export async function createProductFromManualItem(data: CreateProductParams) {
-  const { userId } = auth();
+  const { userId } = await auth();
 
   if (!userId) {
     throw new Error("Unauthenticated");

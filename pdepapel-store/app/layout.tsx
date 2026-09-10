@@ -134,8 +134,8 @@ export default async function RootLayout({
       localization={esES}
       signInUrl={STOREFRONT_ROUTES.signIn}
       signUpUrl={STOREFRONT_ROUTES.signUp}
-      afterSignInUrl={STOREFRONT_ROUTES.home}
-      afterSignUpUrl={STOREFRONT_ROUTES.home}
+      signInFallbackRedirectUrl={STOREFRONT_ROUTES.home}
+      signUpFallbackRedirectUrl={STOREFRONT_ROUTES.home}
     >
       <html lang="es" suppressHydrationWarning>
         <body

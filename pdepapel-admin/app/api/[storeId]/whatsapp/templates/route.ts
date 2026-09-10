@@ -1,16 +1,20 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import prismadb from "@/lib/prismadb";
+import { checkIfStoreOwner } from "@/lib/utils";
 
 export async function GET(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
 
     if (!userId) {
       return new NextResponse("Unauthorized", { status: 401 });
+    }
+    if (!(await checkIfStoreOwner(userId, params.storeId))) {
+      return new NextResponse("Unauthorized", { status: 403 });
     }
 
     const { searchParams } = new URL(req.url);
@@ -43,13 +47,16 @@ export async function POST(
   { params }: { params: { storeId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     const body = await req.json();
 
     const { name, type, message, variables, mediaUrl } = body;
 
     if (!userId) {
       return new NextResponse("Unauthorized", { status: 401 });
+    }
+    if (!(await checkIfStoreOwner(userId, params.storeId))) {
+      return new NextResponse("Unauthorized", { status: 403 });
     }
 
     if (!name || !message) {

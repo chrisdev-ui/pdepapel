@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import prismadb from "@/lib/prismadb";
 import { normalizePhone } from "@/lib/phone";
-import { generateOrderNumber } from "@/lib/utils";
+import { checkIfStoreOwner, generateOrderNumber } from "@/lib/utils";
 import crypto from "crypto";
 
 export async function POST(
@@ -10,7 +10,7 @@ export async function POST(
   { params }: { params: { storeId: string; quotationId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     const body = await req.json();
 
     const { customerName, customerPhone, customerEmail, adjustedItems, notes } =
@@ -18,6 +18,9 @@ export async function POST(
 
     if (!userId) {
       return new NextResponse("Unauthorized", { status: 401 });
+    }
+    if (!(await checkIfStoreOwner(userId, params.storeId))) {
+      return new NextResponse("Unauthorized", { status: 403 });
     }
 
     if (!params.quotationId) {

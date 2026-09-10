@@ -27,7 +27,7 @@ import {
   CreateInventoryMovementParams,
 } from "@/lib/inventory";
 import { invalidateStoreProductsCache } from "@/lib/cache";
-import { auth, clerkClient } from "@clerk/nextjs";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import {
   Coupon,
   DiscountType,
@@ -104,7 +104,7 @@ async function createOrder(
   { params }: { params: { storeId: string } },
 ) {
   const corsHeaders = getCorsHeaders(req);
-  const { userId: userLogged } = auth();
+  const { userId: userLogged } = await auth();
 
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
@@ -209,7 +209,7 @@ async function createOrder(
     if (userId) {
       if (isStoreOwner) {
         try {
-          await clerkClient.users.getUser(userId);
+          await (await clerkClient()).users.getUser(userId);
           authenticatedUserId = userId;
         } catch (error) {
           throw ErrorFactory.NotFound("El usuario asignado no existe");
@@ -752,7 +752,7 @@ export async function GET(
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
 
     const isStoreOwner = await checkIfStoreOwner(userId, params.storeId);
@@ -801,7 +801,7 @@ export async function DELETE(
   { params }: { params: { storeId: string } },
 ) {
   const corsHeaders = getCorsHeaders(req);
-  const { userId } = auth();
+  const { userId } = await auth();
   try {
     if (!userId) throw ErrorFactory.Unauthenticated();
 
@@ -936,7 +936,7 @@ export async function PATCH(
   { params }: { params: { storeId: string } },
 ) {
   const corsHeaders = getCorsHeaders(req);
-  const { userId } = auth();
+  const { userId } = await auth();
 
   try {
     if (!userId) throw ErrorFactory.Unauthenticated();

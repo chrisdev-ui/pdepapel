@@ -1,17 +1,15 @@
-import { Mail, Phone, ScrollText } from "lucide-react";
+import { CalendarClock, PackageOpen, Undo2 } from "lucide-react";
 import { Metadata } from "next";
-import Image from "next/image";
+import Link from "next/link";
 
-import { Icons } from "@/components/icons";
-import { Container } from "@/components/ui/container";
-import { Separator } from "@/components/ui/separator";
-import { BASE_URL, KAWAII_FACE_HAPPY } from "@/constants";
+import { PolicyPage, type PolicyFact, type PolicySection } from "@/components/policy/policy-page";
+import { BASE_URL } from "@/constants";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 
 export const metadata: Metadata = {
-  title: "Política de devoluciones",
+  title: "Política de cambios y devoluciones",
   description:
-    "Conoce la política de devoluciones de Papelería P de Papel. Brindamos información clara y detallada sobre cómo realizar devoluciones de artículos kawaii y de oficina. Nuestro objetivo es garantizar tu satisfacción y una experiencia de compra positiva. Aquí te explicamos los pasos y condiciones.",
+    "Cómo pedir un cambio o una devolución en Papelería P de Papel: plazo de 5 días calendario, condiciones del producto, quién paga el envío y cómo funcionan los reembolsos.",
   alternates: {
     canonical: STOREFRONT_ROUTES.returnsPolicy,
   },
@@ -20,122 +18,129 @@ export const metadata: Metadata = {
   },
 };
 
+const facts: PolicyFact[] = [
+  {
+    icon: CalendarClock,
+    tint: "bg-kawaii-yellow-light",
+    value: "5 días calendario",
+    label: "desde la compra para avisarnos",
+  },
+  {
+    icon: PackageOpen,
+    tint: "bg-kawaii-blue-light",
+    value: "Producto sin usar",
+    label: "en su empaque y estado original",
+  },
+  {
+    icon: Undo2,
+    tint: "bg-kawaii-mint-light",
+    value: "Errores nuestros, sin costo",
+    label: "asumimos todos los envíos",
+  },
+];
+
+const sections: PolicySection[] = [
+  {
+    id: "como-pedir-un-cambio",
+    title: "Cómo pedir un cambio o una devolución",
+    content: (
+      <>
+        <p>
+          Tienes <strong>cinco (5) días calendario</strong> a partir de la fecha
+          de compra para avisarnos de cualquier cambio o devolución. Escríbenos
+          por WhatsApp o correo con el número de pedido, el producto y, si
+          aplica, una foto del problema. Te respondemos con los pasos a seguir.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: "condiciones",
+    title: "Condiciones del producto",
+    content: (
+      <ul>
+        <li>
+          El producto debe estar en su estado original: sin abrir, sin usar y
+          con su empaque completo.
+        </li>
+        <li>
+          No aceptamos devoluciones de productos abiertos, probados o usados, ni
+          de productos cuyo empaque esté dañado o muestre mal uso.
+        </li>
+      </ul>
+    ),
+  },
+  {
+    id: "costos-de-envio",
+    title: "Quién paga el envío",
+    content: (
+      <ul>
+        <li>
+          Si el cambio o la devolución es por un error nuestro (producto
+          equivocado, defectuoso o incompleto), asumimos todos los costos.
+        </li>
+        <li>
+          Si es por decisión tuya, los costos de envío corren por tu cuenta.
+        </li>
+      </ul>
+    ),
+  },
+  {
+    id: "defectos-de-fabricacion",
+    title: "Defectos de fabricación",
+    content: (
+      <p>
+        Si el producto tiene un defecto de fabricación, lo cambiamos sin costo
+        adicional. Envíanos una foto o un video donde se vea el defecto para
+        agilizar el proceso.
+      </p>
+    ),
+  },
+  {
+    id: "reembolsos",
+    title: "Reembolsos",
+    content: (
+      <>
+        <p>
+          Si un producto que compraste ya no está disponible, te reembolsamos su
+          valor. El tiempo en que ves el dinero depende del método de pago
+          original (pago en línea o transferencia).
+        </p>
+        <p>
+          Si te retractas de la compra, el valor queda como saldo a favor para
+          usar en otros productos de la tienda.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: "mientras-tanto",
+    title: "Mientras revisamos tu caso",
+    content: (
+      <p>
+        Puedes ver el estado de cada pedido en{" "}
+        <Link href={STOREFRONT_ROUTES.myOrders}>Mis pedidos</Link>. Si el
+        problema es con la entrega (paquete que no llega, dañado o incompleto),
+        revisa también la{" "}
+        <Link href={STOREFRONT_ROUTES.shippingPolicy}>política de envíos</Link>.
+      </p>
+    ),
+  },
+];
+
 export default function ReturnsPolicyPage() {
   return (
-    <>
-      <Container>
-        <h1 className="flex items-center justify-start font-serif text-3xl font-bold">
-          Políticas de devolución o cambio
-          <ScrollText className="ml-2 h-8 w-8" />
-        </h1>
-        <Separator className="my-10" />
-        <div className="flex w-full flex-col space-y-5">
-          <p>
-            En{" "}
-            <Image
-              src="/images/text-beside-transparent-bg.webp"
-              alt="Logo Papelería P de Papel con nombre en un costado"
-              width={80}
-              height={20}
-              title="P de Papel"
-              className="inline-flex object-contain"
-              unoptimized
-            />
-            , queremos que estés completamente satisfecho con cada compra.
-            Entendemos que a veces puede ser necesario devolver o cambiar un
-            producto, por lo que ofrecemos las siguientes políticas para
-            asegurarnos de que tu experiencia sea lo más agradable posible.
-          </p>
-          <h3 className="font-serif text-lg font-semibold">
-            Notificación de devolución o cambio:
-          </h3>
-          <ul className="list-disc space-y-3 pl-5">
-            <li>
-              Tienes cinco (5) días calendario a partir de la fecha de compra
-              para notificarnos sobre cualquier devolución o cambio.
-            </li>
-            <li>
-              Para iniciar el proceso, contáctanos al teléfono{" "}
-              <Phone className="inline-flex h-4 w-4" />
-              (+57) 313 258 2293 o envía un correo electrónico a{" "}
-              <Mail className="inline-flex h-4 w-4" />{" "}
-              papeleria.pdepapel@gmail.com.
-            </li>
-          </ul>
-          <h3 className="font-serif text-lg font-semibold">
-            Condiciones para devoluciones:
-          </h3>
-          <ul className="list-disc space-y-3 pl-5">
-            <li>
-              No aceptamos devoluciones de productos que hayan sido abiertos,
-              probados, usados, o cuyos empaques estén dañados o evidencien mal
-              uso.
-            </li>
-            <li>
-              Los productos deben estar en su estado original para ser elegibles
-              para devolución o cambio.
-            </li>
-          </ul>
-          <h3 className="font-serif text-lg font-semibold">
-            Costos de devolución:
-          </h3>
-          <ul className="list-disc space-y-3 pl-5">
-            <li>
-              Si la devolución o cambio es debido a un error de nuestra parte,
-              nos haremos cargo de todos los costos adicionales.
-            </li>
-            <li>
-              Si la devolución o cambio es por decisión del cliente, los costos
-              de envío asociados serán responsabilidad del cliente.
-            </li>
-          </ul>
-          <h3 className="font-serif text-lg font-semibold">Reembolsos:</h3>
-          <ul className="list-disc space-y-3 pl-5">
-            <li>
-              Se efectuará un reembolso si el producto comprado no está
-              disponible. Los tiempos para el reembolso dependerán del método de
-              pago original utilizado.
-            </li>
-          </ul>
-          <h3 className="font-serif text-lg font-semibold">
-            Retractación de la compra:
-          </h3>
-          <ul className="list-disc space-y-3 pl-5">
-            <li>
-              En caso de que desees retractarte de tu compra, no se realizará
-              una devolución de dinero, pero podrás utilizar el valor de la
-              compra para adquirir otros productos de nuestra tienda.
-            </li>
-          </ul>
-          <h3 className="font-serif text-lg font-semibold">
-            Cambios por defectos de la fabricación:
-          </h3>
-          <ul className="list-disc space-y-3 pl-5">
-            <li>
-              Realizaremos cambios sin costo adicional si se evidencia un
-              defecto de fabricación en el producto.
-            </li>
-          </ul>
-          <h3 className="font-serif text-lg font-semibold">
-            Contacto para inquietudes:
-          </h3>
-          <ul className="list-disc space-y-3 pl-5">
-            <li>
-              Si tienes alguna pregunta o inquietud, no dudes en comunicarte con
-              nosotros al whatsapp{" "}
-              <Icons.whatsapp className="inline-flex h-4 w-4 text-green-500" />{" "}
-              (+57) 313 258 2293 o al correo electrónico{" "}
-              <Mail className="inline-flex h-4 w-4 text-pink-froly" />{" "}
-              papeleria.pdepapel@gmail.com
-            </li>
-          </ul>
-          <p>
-            Siempre estaremos comprometidos con ofrecerte productos de alta
-            calidad y un servicio al cliente excepcional. ¡Gracias por elegirnos
-            para añadir un toque kawaii a tu vida! {KAWAII_FACE_HAPPY}
-          </p>
-        </div>
-      </Container>
-    </>
+    <PolicyPage
+      eyebrow="Cambios y devoluciones"
+      eyebrowIcon={Undo2}
+      eyebrowClassName="bg-kawaii-yellow-light text-yellow-900"
+      title="Cambios y devoluciones"
+      lede="Queremos que quedes feliz con cada compra. Si algo no salió bien, así lo resolvemos."
+      updatedAt="2026-09-09"
+      facts={facts}
+      sections={sections}
+      contactPrompt="¿Necesitas un cambio o una devolución?"
+      currentRoute={STOREFRONT_ROUTES.returnsPolicy}
+    />
   );
 }

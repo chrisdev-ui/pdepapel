@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -21,6 +22,10 @@ vi.mock("@/components/price-filter", () => ({ default: () => <div>Precio</div> }
 
 import MobileFilters from "@/components/mobile-filters";
 
+// The sheet waits for the live count query to settle before applying filters.
+const renderWithQuery = (ui: React.ReactElement) =>
+  render(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>);
+
 const types = [
   { id: "t1", name: "Cuadernos", categories: [] },
   { id: "t2", name: "Escritura", categories: [] },
@@ -40,7 +45,7 @@ describe("MobileFilters", () => {
 
   it("keeps changes pending until the count button applies them", async () => {
     const user = userEvent.setup();
-    render(<MobileFilters types={types} categories={[]} catalogOptions={[]} colors={[]} designs={[]} />);
+    renderWithQuery(<MobileFilters types={types} categories={[]} catalogOptions={[]} colors={[]} designs={[]} />);
 
     await user.click(screen.getByRole("button", { name: "Filtros" }));
     const dialog = await screen.findByRole("dialog", { name: "Filtros de productos" });
@@ -60,7 +65,7 @@ describe("MobileFilters", () => {
     const user = userEvent.setup();
     mocks.filters = { ...EMPTY_FILTERS, typeId: ["t1"], isOnSale: true };
     mocks.count.mockReturnValue({ data: 0, isFetching: false });
-    render(<MobileFilters types={types} categories={[]} catalogOptions={[]} colors={[]} designs={[]} />);
+    renderWithQuery(<MobileFilters types={types} categories={[]} catalogOptions={[]} colors={[]} designs={[]} />);
 
     expect(screen.getByRole("button", { name: "Filtros" })).toHaveTextContent("2");
     await user.click(screen.getByRole("button", { name: "Filtros" }));

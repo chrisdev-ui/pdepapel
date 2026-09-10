@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import prismadb from "@/lib/prismadb";
 import { getProductProfitRanking } from "@/actions/get-product-profitability";
 
@@ -15,7 +15,7 @@ export async function POST(
 
     // If not a scheduler, require manual Clerk authentication
     if (!isScheduler) {
-      const { userId } = auth();
+      const { userId } = await auth();
 
       if (!userId) {
         return new NextResponse("Unauthenticated", { status: 401 });

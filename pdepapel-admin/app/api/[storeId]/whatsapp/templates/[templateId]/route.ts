@@ -1,18 +1,22 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import prismadb from "@/lib/prismadb";
+import { checkIfStoreOwner } from "@/lib/utils";
 
 export async function PATCH(
   req: Request,
   { params }: { params: { storeId: string; templateId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     const body = await req.json();
     const { name, type, message, variables, mediaUrl, isActive } = body;
 
     if (!userId) {
       return new NextResponse("Unauthorized", { status: 401 });
+    }
+    if (!(await checkIfStoreOwner(userId, params.storeId))) {
+      return new NextResponse("Unauthorized", { status: 403 });
     }
 
     if (!params.templateId) {
@@ -46,10 +50,13 @@ export async function DELETE(
   { params }: { params: { storeId: string; templateId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
 
     if (!userId) {
       return new NextResponse("Unauthorized", { status: 401 });
+    }
+    if (!(await checkIfStoreOwner(userId, params.storeId))) {
+      return new NextResponse("Unauthorized", { status: 403 });
     }
 
     if (!params.templateId) {

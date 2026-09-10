@@ -3,7 +3,7 @@ import { createCorsHeaders } from "@/lib/cors";
 import { envioClickClient } from "@/lib/envioclick";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, checkIfStoreOwner } from "@/lib/utils";
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { ShippingStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
@@ -20,7 +20,7 @@ export async function POST(
 ) {
   const corsHeaders = getCorsHeaders(req);
   try {
-    const { userId: userLogged } = auth();
+    const { userId: userLogged } = await auth();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
     const isStoreOwner = userLogged

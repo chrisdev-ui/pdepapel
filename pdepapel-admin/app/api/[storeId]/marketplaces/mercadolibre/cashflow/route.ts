@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { MarketplaceProvider } from "@prisma/client";
 import { NextResponse } from "next/server";
 
@@ -28,7 +28,7 @@ async function getCashflowConnection(storeId: string) {
 }
 
 async function authorizeCashflow({ params }: { params: { storeId: string } }) {
-  const { userId } = auth();
+  const { userId } = await auth();
   if (!userId) throw ErrorFactory.Unauthenticated();
   if (!params.storeId) throw ErrorFactory.MissingStoreId();
   await verifyStoreOwner(userId, params.storeId);

@@ -55,9 +55,9 @@ vi.mock("@/lib/utils", () => ({
   CACHE_HEADERS: { NO_CACHE: { "Cache-Control": "no-store" } },
 }));
 
-vi.mock("@clerk/nextjs", () => ({
+vi.mock("@clerk/nextjs/server", () => ({
   auth: mocks.auth,
-  clerkClient: { users: { getUser: mocks.getUser } },
+  clerkClient: async () => ({ users: { getUser: mocks.getUser } }),
 }));
 
 import {

@@ -1,38 +1,35 @@
-"use client";
-
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { getCourierIcon } from "@/lib/utils";
 import Image from "next/image";
+
+import { getCourierIcon } from "@/lib/utils";
 
 interface CourierProps {
   name: string;
+  /** Service or product name from the carrier ("Normal", "Mensajería"). */
+  service?: string | null;
 }
 
-export const Courier: React.FC<CourierProps> = ({ name }) => {
+/** Carrier logo with its name beside it, readable without hovering. */
+export const Courier: React.FC<CourierProps> = ({ name, service }) => {
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div className="relative h-10 w-10">
-            <Image
-              src={getCourierIcon(name)}
-              alt={name ?? "Logo de compañía de envíos"}
-              fill
-              className="rounded-md object-cover transition-all duration-300 ease-in-out hover:scale-105"
-              sizes="(max-width: 640px) 100vw, 640px"
-              unoptimized
-            />
-          </div>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p className="text-xs">{name}</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <span className="inline-flex items-center gap-3">
+      <span className="relative h-10 w-14 shrink-0 overflow-hidden rounded-md border border-border bg-white">
+        <Image
+          src={getCourierIcon(name)}
+          alt=""
+          fill
+          className="object-contain p-1"
+          sizes="56px"
+          unoptimized
+        />
+      </span>
+      <span className="flex min-w-0 flex-col">
+        <span className="font-sans text-sm font-bold text-blue-yankees">
+          {name}
+        </span>
+        {service && (
+          <span className="text-xs text-muted-foreground">{service}</span>
+        )}
+      </span>
+    </span>
   );
 };

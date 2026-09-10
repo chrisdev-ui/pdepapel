@@ -2,7 +2,7 @@ import { AppShell } from "@/components/shell/app-shell";
 import { StoreInitializer } from "@/components/store-initializer";
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 
 export default async function DashboardLayout({
@@ -12,7 +12,7 @@ export default async function DashboardLayout({
   children: React.ReactNode;
   params: { storeId: string };
 }) {
-  const { userId } = auth();
+  const { userId } = await auth();
   if (!userId) {
     redirect("/iniciar-sesion");
   }

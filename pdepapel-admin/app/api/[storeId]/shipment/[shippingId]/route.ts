@@ -1,8 +1,8 @@
 import { ALLOWED_TRANSITIONS } from "@/constants";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS } from "@/lib/utils";
-import { auth } from "@clerk/nextjs";
+import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { auth } from "@clerk/nextjs/server";
 import { ShippingStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
@@ -11,8 +11,9 @@ export async function GET(
   { params }: { params: { storeId: string; shippingId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
+    await verifyStoreOwner(userId, params.storeId);
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.shippingId)
       throw ErrorFactory.InvalidRequest("Se requiere el ID de envío");
@@ -56,8 +57,9 @@ export async function PATCH(
   { params }: { params: { storeId: string; shippingId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
+    await verifyStoreOwner(userId, params.storeId);
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.shippingId)
       throw ErrorFactory.InvalidRequest("Se requiere el ID de envío");
@@ -143,8 +145,9 @@ export async function DELETE(
   { params }: { params: { storeId: string; shippingId: string } },
 ) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
+    await verifyStoreOwner(userId, params.storeId);
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.shippingId)
       throw ErrorFactory.InvalidRequest("Se requiere el ID de envío");

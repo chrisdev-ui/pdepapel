@@ -1,15 +1,23 @@
 import { NextResponse } from "next/server";
-import { clerkClient } from "@clerk/nextjs";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import prismadb from "@/lib/prismadb";
 import { AvailableCustomer } from "@/app/(dashboard)/[storeId]/(routes)/pedidos/[orderId]/server/get-available-customers";
 import parsePhoneNumber from "libphonenumber-js";
-import { normalizePhone } from "@/lib/utils";
+import { checkIfStoreOwner, normalizePhone } from "@/lib/utils";
 
 export async function GET(
   req: Request,
   { params }: { params: { storeId: string } },
 ) {
   try {
+    const { userId } = await auth();
+    if (!userId) {
+      return new NextResponse("Unauthenticated", { status: 401 });
+    }
+    if (!(await checkIfStoreOwner(userId, params.storeId))) {
+      return new NextResponse("Unauthorized", { status: 403 });
+    }
+
     const { searchParams } = new URL(req.url);
     const query = searchParams.get("query") || "";
     const page = parseInt(searchParams.get("page") || "1");
@@ -64,7 +72,7 @@ export async function GET(
       // 1. Clerk Search - ENABLED
       let registered: AvailableCustomer[] = [];
       try {
-        const clerkUsers = await clerkClient.users.getUserList({
+        const { data: clerkUsers } = await (await clerkClient()).users.getUserList({
           query,
           limit: 10,
         });

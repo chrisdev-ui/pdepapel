@@ -41,8 +41,8 @@
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.50",
-    "@clerk/localizations": "^1.26.4",
-    "@clerk/nextjs": "^4.29.5",
+    "@clerk/localizations": "^3.37.8",
+    "@clerk/nextjs": "^6.39.6",
     "@date-fns/tz": "^1.4.1",
     "@date-fns/utc": "^2.1.1",
     "@hookform/resolvers": "^3.3.2",

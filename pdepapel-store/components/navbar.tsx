@@ -1,7 +1,7 @@
 "use client";
 
 import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
-import { FileSearch } from "lucide-react";
+import { Bookmark, PackageOpen, UserRound } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -12,12 +12,12 @@ import { Icons } from "@/components/icons";
 import { MegaMenu } from "@/components/mega-menu";
 import { NavbarCart } from "@/components/navbar-cart";
 import { NavigationLink } from "@/components/navigation-link";
-import { OrderHistory } from "@/components/order-history";
 import { SearchBar } from "@/components/search-bar";
 import { WishlistButton } from "@/components/wishlist-button";
 import { SEASON_CONFIG } from "@/constants";
 import { useScrollPosition } from "@/hooks/use-scroll-position";
 import { FeaturedByType, NavigationType } from "@/lib/catalog-navigation";
+import { storefrontClerkAppearance } from "@/lib/clerk-appearance";
 import { accountAccessPath, offersPath, STOREFRONT_ROUTES, typePath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import { Season } from "@/types";
@@ -124,14 +124,30 @@ const Navbar: React.FC<NavbarProps> = ({
           <div className="flex shrink-0 items-center gap-5">
             <WishlistButton withLabel />
             <SignedIn>
-              <UserButton afterSignOutUrl="/" userProfileMode="modal">
-                <UserButton.UserProfilePage
-                  label="Mis Órdenes"
-                  url="/orders"
-                  labelIcon={<FileSearch className="h-4 w-4" />}
-                >
-                  <OrderHistory />
-                </UserButton.UserProfilePage>
+              <UserButton
+                afterSignOutUrl={STOREFRONT_ROUTES.home}
+                userProfileMode="modal"
+                appearance={storefrontClerkAppearance}
+              >
+                <UserButton.MenuItems>
+                  <UserButton.Link
+                    label="Mi cuenta"
+                    href={STOREFRONT_ROUTES.account}
+                    labelIcon={<UserRound className="h-4 w-4" />}
+                  />
+                  <UserButton.Link
+                    label="Mis pedidos"
+                    href={STOREFRONT_ROUTES.myOrders}
+                    labelIcon={<PackageOpen className="h-4 w-4" />}
+                  />
+                  <UserButton.Link
+                    label="Mis búsquedas"
+                    href={STOREFRONT_ROUTES.savedSearches}
+                    labelIcon={<Bookmark className="h-4 w-4" />}
+                  />
+                  <UserButton.Action label="manageAccount" />
+                  <UserButton.Action label="signOut" />
+                </UserButton.MenuItems>
               </UserButton>
             </SignedIn>
             <SignedOut>
