@@ -27,11 +27,11 @@ export const getShippingQuote = async (
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      throw new Error(
-        typeof error?.message === "string" && error.message
-          ? error.message
-          : SHIPPING_QUOTE_ERROR_MESSAGE,
+      // The admin answers `{ error }`; older handlers use `{ message }`.
+      const detail = [error?.error, error?.message].find(
+        (value): value is string => typeof value === "string" && value.length > 0,
       );
+      throw new Error(detail ?? SHIPPING_QUOTE_ERROR_MESSAGE);
     }
 
     return response.json();

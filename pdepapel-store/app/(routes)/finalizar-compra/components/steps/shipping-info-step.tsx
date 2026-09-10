@@ -1075,8 +1075,10 @@ export const ShippingInfoStep = ({
                       >
                         <p className="text-destructive">
                           <strong>No pudimos calcular el envío.</strong>{" "}
-                          {quoteError.message ||
-                            "Suele ser un problema momentáneo de conexión."}
+                          {quoteError.message &&
+                          !quoteError.message.startsWith("No pudimos calcular")
+                            ? quoteError.message
+                            : "Suele ser un problema momentáneo de conexión."}
                         </p>
                         <Button
                           type="button"

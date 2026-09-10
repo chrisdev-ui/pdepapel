@@ -49,6 +49,10 @@ const QUOTES = {
   ],
 };
 
+/** Below `lg` a fixed bar repeats the step button; the in-form one is the reference. */
+const formButton = (page: Page, name: string | RegExp) =>
+  page.locator("#checkout-form form").getByRole("button", { name });
+
 const json = (route: Route, status: number, body: unknown) =>
   route.fulfill({
     status,
@@ -74,7 +78,7 @@ async function mockQuotes(page: Page, body: unknown = QUOTES, status = 200) {
 }
 
 async function fillContact(page: Page) {
-  const next = page.getByRole("button", { name: "Continuar a entrega" });
+  const next = formButton(page, "Continuar a entrega");
   await expect(next).toBeVisible({ timeout: 30_000 });
   await page.getByLabel(/Nombre y apellidos/).fill("Paula Andrea Restrepo");
   await page.getByLabel(/Correo electrónico/).fill("paula@ejemplo.com");
@@ -100,7 +104,7 @@ async function goToPayment(page: Page) {
   await expect(page.locator('[id^="rate-"]').first()).toBeAttached({
     timeout: 20_000,
   });
-  await page.getByRole("button", { name: "Continuar al pago" }).click();
+  await formButton(page, "Continuar al pago").click();
   await expect(
     page.getByRole("heading", { name: "Pago y confirmación" }),
   ).toBeVisible();
@@ -116,7 +120,7 @@ test.describe("checkout en tres pasos", () => {
     await seedCheckout(page);
     await gotoPublicPage(page, "/finalizar-compra");
 
-    const next = page.getByRole("button", { name: "Continuar a entrega" });
+    const next = formButton(page, "Continuar a entrega");
     await expect(next).toBeVisible({ timeout: 30_000 });
     await next.click();
     await expect(page.getByText("Escribe tu nombre y apellidos")).toBeVisible();
@@ -128,7 +132,7 @@ test.describe("checkout en tres pasos", () => {
     await fillContact(page);
     await expect(page.getByText("Paso 2", { exact: false })).toHaveCount(0);
     await expect(
-      page.getByRole("button", { name: "Continuar al pago" }),
+      formButton(page, "Continuar al pago"),
     ).toBeVisible();
   });
 
@@ -152,7 +156,7 @@ test.describe("checkout en tres pasos", () => {
     await expect(page.getByText("Contraentrega disponible").first()).toBeVisible();
 
     await goToPayment(page);
-    await expect(page.getByRole("button", { name: /Pagar \$/ })).toBeVisible();
+    await expect(formButton(page, /Pagar \$/)).toBeVisible();
     await expect(page.getByText("Verificamos cada transferencia manualmente")).toBeVisible();
     await expect(page.locator("#payment-Bold")).toHaveAttribute(
       "data-state",
@@ -213,9 +217,9 @@ test.describe("checkout en tres pasos", () => {
 
     await page.getByText("Transferencia bancaria", { exact: true }).click();
     await expect(
-      page.getByRole("button", { name: "Confirmar pedido" }),
+      formButton(page, "Confirmar pedido"),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Confirmar pedido" }).click();
+    await formButton(page, "Confirmar pedido").click();
 
     await page.waitForURL(/\/pedido\/e2e-transfer-order/, { timeout: 30_000 });
     const cart = await page.evaluate(() =>
@@ -254,7 +258,7 @@ test.describe("checkout en tres pasos", () => {
     await fillDelivery(page);
     await goToPayment(page);
 
-    await page.getByRole("button", { name: /Pagar \$/ }).click();
+    await formButton(page, /Pagar \$/).click();
     await page.waitForURL(/\/pedido\/e2e-online-order\?autoPay=true/, {
       timeout: 30_000,
     });
@@ -304,16 +308,16 @@ test.describe("checkout en tres pasos", () => {
     await goToPayment(page);
 
     await page.getByText("Transferencia bancaria", { exact: true }).click();
-    await page.getByRole("button", { name: "Confirmar pedido" }).click();
+    await formButton(page, "Confirmar pedido").click();
 
     const conflict = page.getByRole("alert").filter({
       hasText: "Se agotó parte de tu pedido",
     });
     await expect(conflict).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByRole("button", { name: "Confirmar pedido" })).toBeDisabled();
+    await expect(formButton(page, "Confirmar pedido")).toBeDisabled();
     await conflict.getByRole("button", { name: "Dejar 1" }).click();
     await expect(conflict).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Confirmar pedido" })).toBeEnabled();
+    await expect(formButton(page, "Confirmar pedido")).toBeEnabled();
 
     const cart = await page.evaluate(() =>
       JSON.parse(window.localStorage.getItem("cart-storage") ?? "{}"),
@@ -334,12 +338,12 @@ test.describe("checkout en tres pasos", () => {
     await fillDelivery(page);
     await goToPayment(page);
 
-    await page.getByRole("button", { name: /Pagar \$/ }).click();
+    await formButton(page, /Pagar \$/).click();
     await expect(
       page.getByText("No pudimos crear tu pedido", { exact: true }),
     ).toBeVisible({ timeout: 20_000 });
     await expect(page).toHaveURL(/\/finalizar-compra/);
-    await expect(page.getByRole("button", { name: /Pagar \$/ })).toBeEnabled();
+    await expect(formButton(page, /Pagar \$/)).toBeEnabled();
     await expect(page.getByText("Paula Andrea Restrepo")).toBeVisible();
   });
 });

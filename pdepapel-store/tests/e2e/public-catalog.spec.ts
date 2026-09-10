@@ -44,15 +44,15 @@ test("redirige rutas en inglés a sus URLs canónicas en español", async ({
   }
 });
 
-test("carga el SDK de pago solo durante la compra", async ({ page }) => {
+test("no carga el SDK de pago antes de crear el pedido", async ({ page }) => {
+  // The gateway script lives on the order page only (it opens the payment
+  // window there); neither the catalog nor the checkout form should load it.
   await gotoPublicPage(page, "/");
   await expect(page.locator("#bold-checkout-sdk")).toHaveCount(0);
 
   await gotoPublicPage(page, "/finalizar-compra");
-  await expect(page.locator("#bold-checkout-sdk")).toHaveAttribute(
-    "src",
-    "https://checkout.bold.co/library/boldPaymentButton.js",
-  );
+  await expect(page.locator("h1")).toBeVisible();
+  await expect(page.locator("#bold-checkout-sdk")).toHaveCount(0);
 });
 
 test("mantiene la categoría acotada, canónica y sin filtro de categorías", async ({
