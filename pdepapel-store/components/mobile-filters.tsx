@@ -1,6 +1,7 @@
 "use client";
 
 import { SlidersHorizontal, X } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
 import { FilterGroups, FilterGroupsProps } from "@/components/shop/filter-groups";
@@ -34,6 +35,7 @@ const MobileFilters: React.FC<MobileFiltersProps> = ({ fixedCategoryId, classNam
   const appliedCount = countActiveFilters(filters, ignore);
   const pendingCount = countActiveFilters(pending, ignore);
   const count = useFilterCount(pending, fixedCategoryId, open);
+  const queryClient = useQueryClient();
   const pendingState = useMemo(() => createPendingFilterState(pending, setPending), [pending]);
 
   const onOpenChange = (next: boolean) => {
@@ -41,9 +43,16 @@ const MobileFilters: React.FC<MobileFiltersProps> = ({ fixedCategoryId, classNam
     setOpen(next);
   };
 
-  const apply = () => {
-    setFilters({ ...pending, page: 1 });
+  const apply = async () => {
     setOpen(false);
+    // Server actions run one at a time and, in Next 14.2, a products request
+    // fired while the live count is still in flight can be dropped, leaving
+    // the catalog dimmed forever. Let the count settle first (bounded wait).
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      if (queryClient.isFetching({ queryKey: ["products-count"] }) === 0) break;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    setFilters({ ...pending, page: 1 });
   };
 
   const clearAll = () => {
