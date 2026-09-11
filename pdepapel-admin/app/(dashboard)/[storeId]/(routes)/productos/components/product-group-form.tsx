@@ -1,14 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  AlertTriangle,
-  Eraser,
-  Loader2,
-  PackageCheckIcon,
-  Settings2,
-  Trash,
-} from "lucide-react";
+import { AlertTriangle, ArrowLeft, Eraser, Loader2, PackageCheckIcon, Settings2, Trash } from "lucide-react";
 import Image from "next/image";
 import { useForm } from "react-hook-form";
 import z from "zod";
@@ -56,6 +49,7 @@ import {
 } from "@/constants";
 import { useFormPersist } from "@/hooks/use-form-persist";
 import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import {
@@ -830,6 +824,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
   });
 
   useFormValidationToast({ form });
+  const { confirmLeave, confirmationDialog: leaveDialog } = useUnsavedChangesGuard(form, { enabled: !loading });
 
   const onClear = async () => {
     // Diff Logic to clean up orphan images
@@ -1391,6 +1386,7 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
 
   return (
     <>
+      {leaveDialog}
       <Modal
         title="Eliminar Grupo"
         description="¿Cómo deseas eliminar este grupo?"
@@ -1446,7 +1442,20 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       />
 
       <div className="flex items-center justify-between">
-        <Heading title={title} description={description} />
+        <div className="flex items-center gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            aria-label="Volver a productos"
+            onClick={async () => {
+              if (await confirmLeave()) router.push(`/${params.storeId}/productos`);
+            }}
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          </Button>
+          <Heading title={title} description={description} />
+        </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center space-x-2 rounded-md border p-2">
             <Switch

@@ -16,15 +16,7 @@ import { PRODUCT_NAME_MAX_LENGTH } from "@/lib/product-naming";
 import { type ProductImageAnalysis } from "@/lib/product-image-analysis";
 import { mergeProductCatalogAttributes } from "@/lib/product-catalog-attributes";
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  Eraser,
-  Info,
-  Loader2,
-  Package,
-  PackageCheckIcon,
-  Plus,
-  Trash,
-} from "lucide-react";
+import { ArrowLeft, Eraser, Info, Loader2, Package, PackageCheckIcon, Plus, Trash } from "lucide-react";
 import Image from "next/image";
 import { useForm } from "react-hook-form";
 import z from "zod";
@@ -83,6 +75,7 @@ import {
 import { generateSizeName, generateSizeValue } from "@/constants/sizes";
 import { useFormPersist } from "@/hooks/use-form-persist";
 import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import { Color, Design, Size, Supplier, Type } from "@prisma/client";
@@ -409,6 +402,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   });
 
   useFormValidationToast({ form });
+  const { confirmLeave, confirmationDialog: leaveDialog } = useUnsavedChangesGuard(form, { enabled: !loading });
 
   const onClear = async () => {
     const currentImages = form.getValues("images") || [];
@@ -990,6 +984,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 
   return (
     <>
+      {leaveDialog}
       <AlertModal
         isOpen={open}
         onClose={() => setOpen(false)}
@@ -1028,6 +1023,19 @@ export const ProductForm: React.FC<ProductFormProps> = ({
           sizes={availableSizes}
         />
       )}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="self-start"
+        aria-label="Volver a productos"
+        onClick={async () => {
+          if (await confirmLeave()) router.push(`/${params.storeId}/${Models.Products}`);
+        }}
+      >
+        <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
+        Volver a productos
+      </Button>
       {(!initialData || !initialData.productGroupId) && (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
           <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
