@@ -2,11 +2,16 @@ import {
   InventoryMovementType,
   MarketplaceInventoryStatus,
   MarketplaceOrderStatus,
+  type Prisma,
 } from "@prisma/client";
 
 import { explodeSaleLines, recalculateKitStock } from "@/lib/inventory";
 import prismadb from "@/lib/prismadb";
 
+import {
+  isReturnMarketplaceOrderStatus,
+  isRevenueMarketplaceOrderStatus,
+} from "./order-status";
 import {
   enqueuePendingMarketplaceOutboxEvents,
   queueMarketplaceOrderFinancials,
@@ -23,10 +28,19 @@ type MercadoLibreOrderItem = {
   unitPrice: number;
 };
 
+export type MercadoLibreOrderRefund = {
+  /** Suma de `transaction_amount_refunded` de los pagos. */
+  amount: number;
+  /** Por qué la venta dejó de contar (o cuenta menos) como ingreso. */
+  reason: "partially_refunded" | "pending_cancel" | "charged_back" | "refund" | null;
+  rawStatus: string;
+};
+
 type MercadoLibreOrder = {
   externalOrderId: string;
   externalPackId: string | null;
   status: MarketplaceOrderStatus;
+  refund: MercadoLibreOrderRefund;
   paidAt: Date | null;
   shipmentId: string | null;
   buyerName: string | null;
@@ -77,13 +91,73 @@ function getOptionalDate(value: unknown) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function getMarketplaceOrderStatus(status: string): MarketplaceOrderStatus {
-  if (status === "paid") return MarketplaceOrderStatus.PAID;
-  if (["cancelled", "invalid"].includes(status)) {
-    return MarketplaceOrderStatus.CANCELLED;
-  }
-  return MarketplaceOrderStatus.PENDING;
+/**
+ * Pagos de la orden: lo devuelto al comprador y si hubo contracargo. Mercado
+ * Libre deja la orden en `paid` aunque devuelva dinero, así que el reembolso
+ * solo se ve aquí.
+ */
+function getPaymentsRefund(payments: unknown) {
+  if (!Array.isArray(payments)) return { amount: 0, chargedBack: false };
+  return payments.reduce(
+    (summary, payment) => {
+      if (!payment || typeof payment !== "object" || Array.isArray(payment)) {
+        return summary;
+      }
+      const data = payment as Record<string, unknown>;
+      const refunded = Number(data.transaction_amount_refunded);
+      return {
+        amount:
+          summary.amount +
+          (Number.isFinite(refunded) && refunded > 0 ? refunded : 0),
+        chargedBack:
+          summary.chargedBack ||
+          getOptionalString(data.status)?.toLowerCase() === "charged_back",
+      };
+    },
+    { amount: 0, chargedBack: false },
+  );
 }
+
+/**
+ * Estado interno a partir del estado crudo y de los pagos. Regla: la venta se
+ * queda en PAID mientras Mercado Libre la tenga en `paid` (el reembolso se
+ * registra aparte y se resta del neto); `partially_refunded` cuenta como
+ * ingreso por su neto real; `pending_cancel` y un contracargo dejan de contar
+ * como ingreso. Nada cae en PENDING por accidente.
+ */
+export function getMarketplaceOrderStatus(
+  status: string,
+  refund: { amount: number; chargedBack: boolean } = {
+    amount: 0,
+    chargedBack: false,
+  },
+): { status: MarketplaceOrderStatus; reason: MercadoLibreOrderRefund["reason"] } {
+  if (["cancelled", "invalid"].includes(status)) {
+    return { status: MarketplaceOrderStatus.CANCELLED, reason: null };
+  }
+  if (refund.chargedBack) {
+    return { status: MarketplaceOrderStatus.REFUNDED, reason: "charged_back" };
+  }
+  if (status === "partially_refunded") {
+    return {
+      status: MarketplaceOrderStatus.PARTIALLY_REFUNDED,
+      reason: "partially_refunded",
+    };
+  }
+  if (status === "pending_cancel") {
+    return { status: MarketplaceOrderStatus.REFUNDED, reason: "pending_cancel" };
+  }
+  if (status === "paid") {
+    return {
+      status: MarketplaceOrderStatus.PAID,
+      reason: refund.amount > 0 ? "refund" : null,
+    };
+  }
+  return { status: MarketplaceOrderStatus.PENDING, reason: null };
+}
+
+/** Estados crudos en los que el comprador ya pagó (aunque luego se devuelva parte). */
+const PAID_RAW_STATUSES = ["paid", "partially_refunded", "pending_cancel"];
 
 function getBuyerName(buyer: unknown) {
   if (!buyer || typeof buyer !== "object" || Array.isArray(buyer)) return null;
@@ -136,6 +210,8 @@ export function parseMercadoLibreOrder(
     payload.status,
     "el estado",
   ).toLowerCase();
+  const paymentsRefund = getPaymentsRefund(payload.payments);
+  const mapped = getMarketplaceOrderStatus(rawStatus, paymentsRefund);
   const totalAmount = Number(payload.total_amount);
   const calculatedTotal = items.reduce(
     (total, item) => total + item.quantity * item.unitPrice,
@@ -151,10 +227,17 @@ export function parseMercadoLibreOrder(
   return {
     externalOrderId: getRequiredString(payload.id, "el identificador"),
     externalPackId: getOptionalString(payload.pack_id),
-    status: getMarketplaceOrderStatus(rawStatus),
+    status: mapped.status,
+    refund: {
+      amount: paymentsRefund.amount,
+      reason: mapped.reason,
+      rawStatus,
+    },
     paidAt:
-      rawStatus === "paid"
-        ? (getOptionalDate(payload.date_closed) ?? new Date())
+      PAID_RAW_STATUSES.includes(rawStatus) || paymentsRefund.chargedBack
+        ? (getOptionalDate(payload.date_closed) ??
+          getOptionalDate(payload.date_created) ??
+          new Date())
         : null,
     shipmentId: getOptionalString(shipping?.id),
     buyerName: getBuyerName(payload.buyer),
@@ -268,6 +351,7 @@ async function applyMarketplaceInventory(
   storeId: string,
   orderItems: ResolvedMercadoLibreOrderItem[],
   externalOrderId: string,
+  connectionId: string,
 ) {
   const quantitiesByProductId = new Map<string, number>();
   for (const item of orderItems) {
@@ -409,6 +493,17 @@ async function applyMarketplaceInventory(
       ),
     );
 
+    // El aviso de venta se encola en la misma transacción que descuenta el
+    // inventario y con clave por venta: si el proceso muere aquí, se
+    // reintenta todo; si se reintenta después de haber pasado, la clave lo
+    // deja en una sola. Antes dependía del estado leído antes del upsert y
+    // un reintento lo perdía.
+    await queueMarketplaceOrderNotification(transaction, {
+      connectionId,
+      externalOrderId,
+      marketplaceOrderId,
+    });
+
     return true;
   });
 }
@@ -419,6 +514,7 @@ async function queuePaidOrderNotification(
   marketplaceOrderId: string,
   needsFinancialReconciliation: boolean,
   shouldSendNotification: boolean,
+  resetFinancials = false,
 ) {
   let hasQueuedWork = false;
   if (needsFinancialReconciliation) {
@@ -426,10 +522,13 @@ async function queuePaidOrderNotification(
       connectionId,
       externalOrderId,
       marketplaceOrderId,
+      reset: resetFinancials,
     });
     hasQueuedWork = true;
   }
   if (shouldSendNotification) {
+    // Clave por venta: si ya se encoló dentro de la transacción de
+    // inventario, este upsert no cambia nada.
     await queueMarketplaceOrderNotification(prismadb, {
       connectionId,
       externalOrderId,
@@ -448,13 +547,18 @@ async function queuePaidOrderNotification(
   }
 }
 
+/**
+ * @deprecated El aviso ya no depende de comparar estados: se encola con clave
+ * por venta dentro de la transacción de inventario. Se conserva para quien
+ * necesite saber si una venta acaba de pasar a ingreso.
+ */
 export function isMercadoLibreOrderNewlyPaid(
   previousStatus: MarketplaceOrderStatus | null,
   nextStatus: MarketplaceOrderStatus,
 ) {
   return (
-    nextStatus === MarketplaceOrderStatus.PAID &&
-    previousStatus !== MarketplaceOrderStatus.PAID
+    isRevenueMarketplaceOrderStatus(nextStatus) &&
+    (previousStatus === null || !isRevenueMarketplaceOrderStatus(previousStatus))
   );
 }
 
@@ -508,12 +612,59 @@ export async function synchronizeMercadoLibreOrder(
         externalOrderId: order.externalOrderId,
       },
     },
-    select: { status: true },
+    select: {
+      status: true,
+      inventoryStatus: true,
+      refundedAmount: true,
+      metadata: true,
+    },
   });
-  const shouldSendNotification = isMercadoLibreOrderNewlyPaid(
-    existingMarketplaceOrder?.status ?? null,
-    order.status,
-  );
+  // Solo las rutas que no pasan por la transacción de inventario avisan
+  // aquí (venta sin relación local o sin stock); la clave por venta evita
+  // el correo duplicado si después el inventario sí se aplica.
+  const shouldSendNotification = isRevenueMarketplaceOrderStatus(order.status);
+  // Una venta con inventario ya aplicado es un registro histórico: sus
+  // líneas no se vuelven a resolver contra las publicaciones de hoy (una
+  // publicación desvinculada después dejaba la venta sin producto). Solo se
+  // reconstruyen mientras el inventario no se haya aplicado.
+  const canRebuildItems =
+    !existingMarketplaceOrder ||
+    existingMarketplaceOrder.inventoryStatus ===
+      MarketplaceInventoryStatus.NOT_APPLIED ||
+    existingMarketplaceOrder.inventoryStatus ===
+      MarketplaceInventoryStatus.EXCEPTION;
+  // Un reembolso nuevo o distinto obliga a recalcular el neto ya escrito.
+  const refundChanged =
+    (existingMarketplaceOrder?.refundedAmount ?? 0) !== order.refund.amount;
+  const existingMetadata =
+    existingMarketplaceOrder?.metadata &&
+    typeof existingMarketplaceOrder.metadata === "object" &&
+    !Array.isArray(existingMarketplaceOrder.metadata)
+      ? (existingMarketplaceOrder.metadata as Record<string, unknown>)
+      : {};
+  const refundMetadata =
+    order.refund.amount > 0 || order.refund.reason
+      ? {
+          refund: {
+            amount: order.refund.amount,
+            reason: order.refund.reason,
+            rawStatus: order.refund.rawStatus,
+            updatedAt: new Date().toISOString(),
+          },
+        }
+      : {};
+  const metadataUpdate =
+    Object.keys(refundMetadata).length > 0 || "refund" in existingMetadata
+      ? {
+          metadata: {
+            ...existingMetadata,
+            ...refundMetadata,
+            ...(Object.keys(refundMetadata).length === 0
+              ? { refund: null }
+              : {}),
+          } as Prisma.InputJsonValue,
+        }
+      : {};
   const marketplaceOrder = await prismadb.marketplaceOrder.upsert({
     where: {
       connectionId_externalOrderId: {
@@ -524,32 +675,42 @@ export async function synchronizeMercadoLibreOrder(
     update: {
       externalPackId: order.externalPackId,
       status: order.status,
+      refundedAmount: order.refund.amount > 0 ? order.refund.amount : null,
+      ...metadataUpdate,
       ...(order.paidAt ? { paidAt: order.paidAt } : {}),
       shipmentId: order.shipmentId,
       buyerName: order.buyerName,
       totalAmount: order.totalAmount,
       currencyId: order.currencyId,
       lastRemoteUpdateAt: order.lastRemoteUpdateAt,
-      items: {
-        deleteMany: {},
-        create: resolvedItems.map((item) => ({
-          listingId: item.listingId,
-          productId: item.productId,
-          externalItemId: item.externalItemId,
-          externalVariationId: item.externalVariationId,
-          title: item.title,
-          sku: item.sku,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          acqPrice: item.acqPrice,
-        })),
-      },
+      ...(canRebuildItems
+        ? {
+            items: {
+              deleteMany: {},
+              create: resolvedItems.map((item) => ({
+                listingId: item.listingId,
+                productId: item.productId,
+                externalItemId: item.externalItemId,
+                externalVariationId: item.externalVariationId,
+                title: item.title,
+                sku: item.sku,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                acqPrice: item.acqPrice,
+              })),
+            },
+          }
+        : {}),
     },
     create: {
       connectionId,
       externalOrderId: order.externalOrderId,
       externalPackId: order.externalPackId,
       status: order.status,
+      refundedAmount: order.refund.amount > 0 ? order.refund.amount : null,
+      ...(Object.keys(refundMetadata).length > 0
+        ? { metadata: refundMetadata as Prisma.InputJsonValue }
+        : {}),
       paidAt: order.paidAt,
       shipmentId: order.shipmentId,
       buyerName: order.buyerName,
@@ -573,13 +734,18 @@ export async function synchronizeMercadoLibreOrder(
     select: { id: true, inventoryStatus: true, netAmount: true },
   });
 
-  if (order.status === MarketplaceOrderStatus.CANCELLED) {
-    await cancelPendingMercadoLibreShipments({
-      connectionId,
-      marketplaceOrderId: marketplaceOrder.id,
-      externalShipmentId: order.shipmentId,
-      lastRemoteUpdateAt: order.lastRemoteUpdateAt,
-    });
+  if (isReturnMarketplaceOrderStatus(order.status)) {
+    // Cancelada o reembolsada: el dinero volvió (o va a volver) y la
+    // mercancía todavía no. Nunca se devuelve stock solo; queda pendiente de
+    // confirmar el retorno físico.
+    if (order.status === MarketplaceOrderStatus.CANCELLED) {
+      await cancelPendingMercadoLibreShipments({
+        connectionId,
+        marketplaceOrderId: marketplaceOrder.id,
+        externalShipmentId: order.shipmentId,
+        lastRemoteUpdateAt: order.lastRemoteUpdateAt,
+      });
+    }
     if (
       marketplaceOrder.inventoryStatus ===
       MarketplaceInventoryStatus.DECREMENTED
@@ -589,16 +755,20 @@ export async function synchronizeMercadoLibreOrder(
         data: {
           inventoryStatus: MarketplaceInventoryStatus.RESTOCK_PENDING,
           inventoryError:
-            "La venta fue cancelada. Confirma el retorno físico antes de devolver unidades al inventario.",
+            order.status === MarketplaceOrderStatus.CANCELLED
+              ? "La venta fue cancelada. Confirma el retorno físico antes de devolver unidades al inventario."
+              : "Mercado Libre reembolsó la venta. Confirma el retorno físico antes de devolver unidades al inventario.",
         },
       });
     }
     return { inventoryChanged: false, needsAttention: false };
   }
 
-  if (order.status !== MarketplaceOrderStatus.PAID) {
+  if (!isRevenueMarketplaceOrderStatus(order.status)) {
     return { inventoryChanged: false, needsAttention: false };
   }
+
+  const needsFinancials = marketplaceOrder.netAmount === null || refundChanged;
 
   const unmappedItems = resolvedItems.filter((item) => !item.productId);
   if (unmappedItems.length > 0) {
@@ -615,8 +785,9 @@ export async function synchronizeMercadoLibreOrder(
       connectionId,
       order.externalOrderId,
       marketplaceOrder.id,
-      marketplaceOrder.netAmount === null,
+      needsFinancials,
       shouldSendNotification,
+      refundChanged && marketplaceOrder.netAmount !== null,
     );
     return { inventoryChanged: false, needsAttention: true };
   }
@@ -627,13 +798,15 @@ export async function synchronizeMercadoLibreOrder(
       storeId,
       resolvedItems,
       order.externalOrderId,
+      connectionId,
     );
     await queuePaidOrderNotification(
       connectionId,
       order.externalOrderId,
       marketplaceOrder.id,
-      marketplaceOrder.netAmount === null,
+      needsFinancials,
       shouldSendNotification,
+      refundChanged && marketplaceOrder.netAmount !== null,
     );
     return { inventoryChanged, needsAttention: false };
   } catch (error) {
@@ -649,8 +822,9 @@ export async function synchronizeMercadoLibreOrder(
         connectionId,
         order.externalOrderId,
         marketplaceOrder.id,
-        marketplaceOrder.netAmount === null,
+        needsFinancials,
         shouldSendNotification,
+        refundChanged && marketplaceOrder.netAmount !== null,
       );
       return { inventoryChanged: false, needsAttention: true };
     }

@@ -1,3 +1,5 @@
+import type { MarketplaceOrderStatus } from "@prisma/client";
+
 /**
  * Mercado Libre order-status presentation helpers.
  *
@@ -29,7 +31,34 @@ export const SALE_STATUS_META: Record<string, StatusMeta> = {
   CANCELLED: { label: "Cancelada", variant: "destructive" },
   RETURN_PENDING: { label: "Devolución en proceso", variant: "warning" },
   RETURNED: { label: "Devuelta", variant: "destructive" },
+  PARTIALLY_REFUNDED: { label: "Reembolso parcial", variant: "warning" },
+  REFUNDED: { label: "Reembolsada", variant: "destructive" },
 };
+
+/**
+ * Qué estados cuentan como ingreso. Decidido a propósito: un reembolso parcial
+ * sigue siendo una venta (su neto ya descuenta lo devuelto); un reembolso
+ * total o un contracargo no es ingreso aunque Mercado Libre haya cobrado
+ * comisión. Toda consulta de dinero debe usar esta lista, nunca `PAID` suelto.
+ */
+export const REVENUE_MARKETPLACE_ORDER_STATUSES = [
+  "PAID",
+  "PARTIALLY_REFUNDED",
+] as const satisfies readonly MarketplaceOrderStatus[];
+
+/** Estados en los que la mercancía salió y no ha vuelto: piden retorno físico. */
+export const RETURN_MARKETPLACE_ORDER_STATUSES = [
+  "CANCELLED",
+  "REFUNDED",
+] as const satisfies readonly MarketplaceOrderStatus[];
+
+export function isRevenueMarketplaceOrderStatus(status: string): boolean {
+  return (REVENUE_MARKETPLACE_ORDER_STATUSES as readonly string[]).includes(status);
+}
+
+export function isReturnMarketplaceOrderStatus(status: string): boolean {
+  return (RETURN_MARKETPLACE_ORDER_STATUSES as readonly string[]).includes(status);
+}
 
 /** Raw Mercado Libre order status (lowercase) → Spanish label + badge color. */
 export const RAW_ORDER_STATUS_META: Record<string, StatusMeta> = {
@@ -61,5 +90,33 @@ export function getSaleStatusMeta(status: string): StatusMeta {
 export function getRawOrderStatusMeta(status: string): StatusMeta {
   return (
     RAW_ORDER_STATUS_META[(status ?? "").toLowerCase()] ?? UNKNOWN_STATUS_META
+  );
+}
+
+export type TintTone = "pink" | "lavender" | "mint" | "cream" | "sky" | "slate";
+
+/**
+ * `MarketplaceInventoryStatus` → etiqueta y tono para la lista de ventas. Es
+ * el estado que decide si hay algo que hacer: excepción (re-sincronizar),
+ * retorno pendiente (confirmar el retorno físico) o nada.
+ */
+export const INVENTORY_STATUS_META: Record<
+  string,
+  { label: string; tone: TintTone; action: "resync" | "restock" | null }
+> = {
+  NOT_APPLIED: { label: "Inventario sin aplicar", tone: "slate", action: "resync" },
+  DECREMENTED: { label: "Inventario descontado", tone: "mint", action: null },
+  RESTOCK_PENDING: { label: "Retorno físico pendiente", tone: "cream", action: "restock" },
+  RESTOCKED: { label: "Inventario devuelto", tone: "sky", action: null },
+  EXCEPTION: { label: "Inventario con excepción", tone: "pink", action: "resync" },
+};
+
+export function getInventoryStatusMeta(status: string) {
+  return (
+    INVENTORY_STATUS_META[status] ?? {
+      label: "Inventario pendiente de revisión",
+      tone: "slate" as TintTone,
+      action: null,
+    }
   );
 }

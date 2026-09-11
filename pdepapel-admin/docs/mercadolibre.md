@@ -75,7 +75,7 @@ No los pegues en este documento, Git, mensajes ni capturas. No renueves el Clien
    - `QSTASH_NEXT_SIGNING_KEY`
 5. No crees manualmente una cola, URL Group, schedule ni webhook en Upstash. P de Papel creará el schedule de recuperación y verificará cada entrega firmada al activar la integración.
 
-QStash reintenta los trabajos. Si se agotan los intentos, conserva el mensaje en su DLQ y P de Papel registra el error para recuperarlo sin aplicar inventario dos veces.
+QStash reintenta los trabajos y una recuperación programada cada 15 minutos vuelve a encolar lo que quedó pendiente. Cada evento (aviso de venta o tarea de sincronización) tiene un tope de **12 intentos**: al agotarlos pasa a **FAILED**, deja de reintentarse y aparece en la salud de Mercado Libre (Resumen y correo diario). Una liquidación que Mercado Libre todavía no publicó no cuenta para ese tope: se reintenta cada 6 horas hasta que exista. Ningún reintento aplica inventario dos veces.
 
 ## 3. Generar la llave de cifrado
 
@@ -226,7 +226,7 @@ Después de reconectar Mercado Libre y activar los tópicos, abre **Ventas → M
 1. **Preguntas:** pulsa **Actualizar preguntas**, revisa el borrador sugerido, edítalo y pulsa **Enviar respuesta**. Nunca se responde solo.
 2. **Envíos y despachos:** revisa los envíos que Mercado Libre marca como listos. P de Papel los vincula con su venta usando los ítems que Mercado Libre reporta para cada paquete; nunca descuenta existencias al recibir este aviso. Prepara o despacha desde Mercado Libre; este panel no compra guías ni cambia la logística.
 3. **Reclamos:** abre el caso en Mercado Libre y toma la decisión allí. P de Papel no devuelve dinero ni suma stock por un reclamo o una devolución sin confirmar el retorno físico.
-4. **Ganancia real:** muestra por publicación el neto que Mercado Libre liquidó, menos el costo de compra registrado en P de Papel. Una venta sin liquidación sigue como pendiente y no se usa como ingreso real.
+4. **Ganancia real:** muestra por publicación el neto que Mercado Libre liquidó, menos el costo de compra registrado en P de Papel. Una venta sin liquidación sigue como pendiente y no se usa como ingreso real. La tabla muestra 20 publicaciones y ofrece ver el resto.
 5. Recibirás un correo diario si hay publicaciones con error, poco stock frente al colchón, preguntas, envíos por despachar, reclamos o alertas de margen. La revisión se ejecuta desde un flujo programado de GitHub, separado de los dos cron de Vercel. Es un recordatorio para revisar; no ejecuta cambios automáticos ni puede interrumpir la actualización de ofertas.
 
 ## Importar publicaciones existentes
@@ -246,22 +246,37 @@ Usa este proceso para publicaciones que ya existían en Mercado Libre antes de a
 
 Si aparece un aviso de que un producto local fue elegido varias veces, no es una falla de Mercado Libre: desmarca los vínculos repetidos. Cada publicación o variación necesita su propio producto local para que el stock pueda sincronizarse correctamente.
 
-## Conciliar ventas anteriores
+## La pestaña Ventas
 
-Usa este proceso para ventas hechas en Mercado Libre antes de activar esta integración. No es necesario crear un pedido manual en P de Papel.
+**Ventas → Mercado Libre → Ventas** lista todas las ventas sincronizadas o importadas con vistas en la URL (`?vista=`): **Por atender** (excepciones de inventario, retornos por confirmar y liquidaciones pendientes), **Pagadas**, **Canceladas y reembolsos** y **Todas**. Cada fila muestra el estado de la venta, el estado del inventario con su motivo, lo cobrado, los cargos (o «—» mientras no se conozcan), el neto y de dónde salió ese neto (confirmado por Mercado Libre, liberado, pendiente o ingresado a mano al importar).
+
+Acciones por fila:
+
+- **Re-sincronizar** (venta pagada con «Inventario con excepción» o sin aplicar): vuelve a leer la venta en Mercado Libre, la relaciona con las publicaciones de hoy y aplica el inventario una sola vez. Primero lee, luego libera la excepción: si Mercado Libre no responde, la venta sigue marcada como excepción.
+- **Confirmar retorno físico** (venta cancelada o reembolsada con «Retorno físico pendiente»): devuelve cada unidad al inventario por el mismo helper del kardex que usan los pedidos (los kits devuelven componentes), deja la venta como «Inventario devuelto», reenvía el stock a Mercado Libre y, si alguna línea no pudo entrar, la deja como incidencia en **Movimientos de inventario**. `POST /api/[storeId]/marketplaces/mercadolibre/orders/[externalOrderId]/restock`.
+
+El enlace del correo de salud (`?order=<id>`) muestra esa venta destacada arriba de la lista aunque no esté en la página visible.
+
+### Reembolsos y estados
+
+La sincronización lee los pagos de la orden. Si Mercado Libre mantiene la orden como `paid` pero devolvió dinero, la venta sigue **Pagada** con el monto reembolsado registrado y el neto se recalcula. `partially_refunded` se guarda como **Reembolso parcial** (sigue siendo ingreso por su neto real). `pending_cancel` y un contracargo se guardan como **Reembolsada**: no es ingreso y, si el inventario ya se había descontado, queda pendiente de retorno físico como una cancelación. Todo reporte de dinero usa la misma lista de estados con ingreso (Pagada y Reembolso parcial), nunca «Pagada» a secas.
+
+## Importar ventas anteriores
+
+Usa este proceso solo para ventas hechas en Mercado Libre antes de activar esta integración. No es necesario crear un pedido manual en P de Papel. Una venta reciente que no descontó inventario se arregla con **Re-sincronizar** en su fila, no importándola.
 
 1. En Mercado Libre abre el detalle de la venta y confirma que figure como **Pagada**.
 2. Copia el número que aparece como **Venta #...**. Puede ser un pack que contiene una o más órdenes; P de Papel identificará las órdenes reales automáticamente.
-3. En Administración abre **Ventas** → **Mercado Libre** → **Ventas de Mercado Libre**.
-4. Pega el número y pulsa **Revisar venta**. Esta acción no cambia inventario ni crea registros.
-5. Revisa que cada producto local sugerido sea el correcto y que el stock mostrado aún incluya las unidades vendidas. Si ya descontaste esa venta manualmente, no la concilies: evita descontar dos veces.
-6. Copia del resumen de Mercado Libre los valores de **Cargos por venta**, **Envíos** e **Impuestos**. El sistema calcula el neto recibido automáticamente.
-7. Pulsa **Conciliar venta pagada** y confirma. P de Papel hará una sola vez lo siguiente:
-   - registra la orden real, el pack y los valores financieros;
-   - descuenta las unidades con un movimiento auditable;
-   - vincula la publicación existente de Mercado Libre con el producto local;
+3. En Administración abre **Ventas** → **Mercado Libre** → **Ventas** y baja hasta **Importar una venta anterior a la integración**.
+4. Pega el número y pulsa **Revisar venta**. Esta acción no cambia inventario ni crea registros. Si la venta ya está registrada, la tarjeta lo dice y remite a **Re-sincronizar**.
+5. Revisa que cada producto local sugerido sea el correcto y que el stock mostrado aún incluya las unidades vendidas (la tarjeta marca en rojo el stock insuficiente). Si ya descontaste esa venta manualmente, no la importes: evita descontar dos veces.
+6. Pulsa **Traer cargos de Mercado Libre** (`GET …/historical-sales/financials`) para rellenar **Cargo por venta**, **Envío a cargo tuyo** e **Impuestos** desde la facturación; si aún no está publicada, cópialos del resumen de la venta. El sistema calcula el neto automáticamente.
+7. Pulsa **Importar venta pagada** y confirma. La confirmación enumera lo que P de Papel hará una sola vez:
+   - registra la orden real, el pack y los valores financieros, con el neto marcado como **ingresado a mano** (la sincronización nunca lo sobrescribe, pero tampoco lo verifica);
+   - descuenta las unidades con un movimiento auditable (los kits descuentan componentes);
+   - crea o vincula la publicación de Mercado Libre con el producto local, con sincronización de stock activa y sin reserva de seguridad;
    - programa la actualización del stock publicado en Mercado Libre.
-8. Revisa la sección **Ventas registradas**. Una venta ya conciliada no puede descontarse otra vez.
+8. La venta aparece en la lista de arriba. Una venta ya importada no puede descontarse otra vez.
 
 Si aparece **Sin vínculo local**, el SKU de la publicación de Mercado Libre no coincide con el SKU del producto en P de Papel. Corrige el SKU en Mercado Libre o solicita soporte antes de conciliar; nunca adivines el producto.
 
@@ -273,5 +288,6 @@ Si aparece **Sin vínculo local**, el SKU de la publicación de Mercado Libre no
 - Si Mercado Libre todavía no publicó ese detalle, la venta muestra **Liquidación pendiente** y se reintenta de forma diferida. Nunca se presenta el valor bruto como ingreso de P de Papel.
 - Cada venta pagada nueva genera un correo administrativo con un enlace directo a su registro en **Ventas de Mercado Libre** solo después de confirmar el neto. El enlace resalta la venta y sus productos locales vinculados.
 - Si falta un vínculo del producto, falta stock o existe una condición insegura, la venta queda como excepción y no se descuenta parcialmente.
-- Cuando Mercado Libre cancela una venta que todavía no se había despachado, el envío deja de mostrarse como listo para preparar y pasa a **Cancelado**. La cancelación no repone automáticamente las unidades: el administrador debe confirmar el retorno físico antes de registrar un movimiento de devolución.
+- Cuando Mercado Libre cancela una venta que todavía no se había despachado, el envío deja de mostrarse como listo para preparar y pasa a **Cancelado**. La cancelación (o un reembolso total) no repone automáticamente las unidades: la venta queda «Retorno físico pendiente» hasta que alguien pulse **Confirmar retorno físico** en la pestaña Ventas.
+- La cantidad que se envía a Mercado Libre es el stock local leído en el momento de sincronizar, no el que tenía el evento al encolarse; si el stock cambió mientras se enviaba, el evento se vuelve a ejecutar en vez de darse por hecho.
 - No publiques productos archivados, sin fotos, sin categoría o sin precio de Mercado Libre configurado.

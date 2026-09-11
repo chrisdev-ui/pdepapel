@@ -29,7 +29,7 @@ describe("Mercado Libre reporting", () => {
     ],
   };
 
-  it("only selects paid sales with a settled net amount", () => {
+  it("only selects revenue sales (paid or partially refunded) with a settled net amount", () => {
     const start = new Date("2026-08-01T00:00:00.000Z");
     const end = new Date("2026-08-31T23:59:59.999Z");
 
@@ -37,7 +37,8 @@ describe("Mercado Libre reporting", () => {
       createSettledMarketplaceSalesWhere("store-1", { start, end }),
     ).toEqual({
       connection: { storeId: "store-1" },
-      status: "PAID",
+      // Un reembolso total o contracargo (REFUNDED) no es ingreso; un reembolso parcial sí, por su neto.
+      status: { in: ["PAID", "PARTIALLY_REFUNDED"] },
       netAmount: { not: null },
       paidAt: { gte: start, lte: end },
     });

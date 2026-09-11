@@ -36,6 +36,7 @@ vi.mock("@/lib/mercadolibre/outbox", () => ({
 }));
 
 import {
+  getMarketplaceOrderStatus,
   isMercadoLibreOrderNewlyPaid,
   parseMercadoLibreOrder,
   synchronizeMercadoLibreOrder,
@@ -97,6 +98,64 @@ describe("Mercado Libre order parsing", () => {
       ],
     });
     expect(order.paidAt).toEqual(new Date("2026-08-07T15:30:00.000Z"));
+  });
+
+  it("maps every raw status deliberately: refunds never fall back to PENDING", () => {
+    expect(getMarketplaceOrderStatus("paid").status).toBe("PAID");
+    expect(getMarketplaceOrderStatus("paid", { amount: 5_000, chargedBack: false })).toEqual({
+      status: "PAID",
+      reason: "refund",
+    });
+    expect(getMarketplaceOrderStatus("partially_refunded")).toEqual({
+      status: "PARTIALLY_REFUNDED",
+      reason: "partially_refunded",
+    });
+    expect(getMarketplaceOrderStatus("pending_cancel")).toEqual({
+      status: "REFUNDED",
+      reason: "pending_cancel",
+    });
+    expect(getMarketplaceOrderStatus("paid", { amount: 0, chargedBack: true })).toEqual({
+      status: "REFUNDED",
+      reason: "charged_back",
+    });
+    expect(getMarketplaceOrderStatus("cancelled").status).toBe("CANCELLED");
+    expect(getMarketplaceOrderStatus("invalid").status).toBe("CANCELLED");
+    expect(getMarketplaceOrderStatus("payment_in_process").status).toBe("PENDING");
+    expect(getMarketplaceOrderStatus("confirmed").status).toBe("PENDING");
+  });
+
+  it("reads the refunded amount from the payments and keeps the sale paid when Mercado Libre does", () => {
+    const order = parseMercadoLibreOrder({
+      id: "2000003",
+      status: "paid",
+      total_amount: 69_000,
+      date_closed: "2026-08-07T15:30:00.000Z",
+      payments: [
+        { status: "approved", transaction_amount: 69_000, transaction_amount_refunded: 10_000 },
+        { status: "approved", transaction_amount: 0, transaction_amount_refunded: "x" },
+      ],
+      order_items: [
+        { quantity: 1, unit_price: 69_000, item: { id: "MCO125", title: "Agenda" } },
+      ],
+    });
+    expect(order.status).toBe("PAID");
+    expect(order.refund).toEqual({ amount: 10_000, reason: "refund", rawStatus: "paid" });
+    expect(order.paidAt).toEqual(new Date("2026-08-07T15:30:00.000Z"));
+
+    const partial = parseMercadoLibreOrder({
+      id: "2000004",
+      status: "partially_refunded",
+      total_amount: 69_000,
+      date_created: "2026-08-01T10:00:00.000Z",
+      payments: [{ status: "approved", transaction_amount_refunded: 20_000 }],
+      order_items: [
+        { quantity: 1, unit_price: 69_000, item: { id: "MCO125", title: "Agenda" } },
+      ],
+    });
+    expect(partial.status).toBe("PARTIALLY_REFUNDED");
+    expect(partial.refund.amount).toBe(20_000);
+    // Sin date_closed se usa date_created, no «ahora».
+    expect(partial.paidAt).toEqual(new Date("2026-08-01T10:00:00.000Z"));
   });
 
   it("keeps cancelled orders out of automatic restocking", () => {

@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  REVENUE_MARKETPLACE_ORDER_STATUSES,
+  RETURN_MARKETPLACE_ORDER_STATUSES,
+  getInventoryStatusMeta,
   getRawOrderStatusMeta,
   getSaleStatusMeta,
+  isReturnMarketplaceOrderStatus,
+  isRevenueMarketplaceOrderStatus,
 } from "@/lib/mercadolibre/order-status";
 
 describe("getSaleStatusMeta", () => {
@@ -74,5 +79,23 @@ describe("getRawOrderStatusMeta", () => {
       label: "Estado pendiente de revisión",
       variant: "secondary",
     });
+  });
+
+  it("maps the inventory state to the action a person can take", () => {
+    expect(getInventoryStatusMeta("EXCEPTION")).toMatchObject({ tone: "pink", action: "resync" });
+    expect(getInventoryStatusMeta("RESTOCK_PENDING")).toMatchObject({ tone: "cream", action: "restock" });
+    expect(getInventoryStatusMeta("DECREMENTED").action).toBeNull();
+    expect(getInventoryStatusMeta("RESTOCKED").action).toBeNull();
+    expect(getInventoryStatusMeta("whatever")).toMatchObject({ label: "Inventario pendiente de revisión", action: null });
+  });
+
+  it("labels the refund states and decides which states count as revenue", () => {
+    expect(getSaleStatusMeta("PARTIALLY_REFUNDED")).toEqual({ label: "Reembolso parcial", variant: "warning" });
+    expect(getSaleStatusMeta("REFUNDED")).toEqual({ label: "Reembolsada", variant: "destructive" });
+    expect([...REVENUE_MARKETPLACE_ORDER_STATUSES]).toEqual(["PAID", "PARTIALLY_REFUNDED"]);
+    expect([...RETURN_MARKETPLACE_ORDER_STATUSES]).toEqual(["CANCELLED", "REFUNDED"]);
+    expect(isRevenueMarketplaceOrderStatus("REFUNDED")).toBe(false);
+    expect(isRevenueMarketplaceOrderStatus("PENDING")).toBe(false);
+    expect(isReturnMarketplaceOrderStatus("PARTIALLY_REFUNDED")).toBe(false);
   });
 });

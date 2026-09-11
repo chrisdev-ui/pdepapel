@@ -206,10 +206,10 @@ export default function MercadoLibreClient({ configuration, queueConfiguration, 
         <>
           <div className="grid gap-4 lg:grid-cols-2">
             {!configuration.configured ? (
-              <Card className="border-amber-300">
+              <Card className="border-tint-cream">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
-                    <AlertCircle className="h-5 w-5 text-amber-600" aria-hidden="true" />
+                    <AlertCircle className="h-5 w-5 text-primary" aria-hidden="true" />
                     Configuración pendiente
                   </CardTitle>
                   <CardDescription>La conexión permanece bloqueada hasta que el servidor tenga sus credenciales seguras.</CardDescription>
@@ -257,7 +257,7 @@ export default function MercadoLibreClient({ configuration, queueConfiguration, 
                 className={cn(
                   queueState === "active" && "border-success/30",
                   queueState === "error" && "border-destructive/50",
-                  queueState === "configuration" && "border-amber-300",
+                  queueState === "configuration" && "border-tint-cream",
                 )}
               >
                 <CardHeader>
@@ -334,7 +334,7 @@ export default function MercadoLibreClient({ configuration, queueConfiguration, 
       )}
 
       {tab !== "resumen" && blockedCopy && tab !== "ventas" && tab !== "publicaciones" ? (
-        <p className="rounded-md border border-amber-300 bg-amber-50/60 p-4 text-sm text-amber-900">{blockedCopy}</p>
+        <p className="rounded-md border border-tint-cream bg-tint-cream/40 p-4 text-sm text-primary">{blockedCopy}</p>
       ) : null}
 
       {tab === "publicaciones" && (

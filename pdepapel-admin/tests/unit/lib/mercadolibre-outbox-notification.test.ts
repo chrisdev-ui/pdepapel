@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   findOutboxEvent: vi.fn(),
   claimOutboxEvent: vi.fn(),
+  completeOutboxEvent: vi.fn(),
   findMarketplaceOrder: vi.fn(),
   updateOutboxEvent: vi.fn(),
   updateConnection: vi.fn(),
@@ -25,12 +26,18 @@ vi.mock("@/lib/prismadb", () => ({
     },
     $transaction: async (
       callback: (transaction: {
-        marketplaceOutboxEvent: { update: typeof mocks.updateOutboxEvent };
+        marketplaceOutboxEvent: {
+          update: typeof mocks.updateOutboxEvent;
+          updateMany: typeof mocks.completeOutboxEvent;
+        };
         marketplaceConnection: { update: typeof mocks.updateConnection };
-      }) => Promise<void>,
+      }) => Promise<unknown>,
     ) =>
       callback({
-        marketplaceOutboxEvent: { update: mocks.updateOutboxEvent },
+        marketplaceOutboxEvent: {
+          update: mocks.updateOutboxEvent,
+          updateMany: mocks.completeOutboxEvent,
+        },
         marketplaceConnection: { update: mocks.updateConnection },
       }),
   },
@@ -46,6 +53,7 @@ describe("Mercado Libre outbox sale notification", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.claimOutboxEvent.mockResolvedValue({ count: 1 });
+    mocks.completeOutboxEvent.mockResolvedValue({ count: 1 });
     mocks.sendNotification.mockResolvedValue(undefined);
     mocks.updateOutboxEvent.mockResolvedValue({});
     mocks.updateConnection.mockResolvedValue({});
@@ -55,6 +63,8 @@ describe("Mercado Libre outbox sale notification", () => {
       action: MarketplaceOutboxAction.SEND_ORDER_NOTIFICATION,
       payload: { marketplaceOrderId: "marketplace-order-id" },
       status: MarketplaceOutboxStatus.PENDING,
+      attempts: 0,
+      availableAt: new Date(Date.now() - 1000),
       listing: null,
     });
     mocks.findMarketplaceOrder.mockResolvedValue({
@@ -87,8 +97,14 @@ describe("Mercado Libre outbox sale notification", () => {
         netAmount: null,
       }),
     );
-    expect(mocks.updateOutboxEvent).toHaveBeenCalledWith(
+    // El cierre exige que el evento siga en PROCESSING: si otro upsert lo
+    // devolvió a PENDING mientras corría, no se pisa con COMPLETED.
+    expect(mocks.completeOutboxEvent).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: {
+          id: "notification-event-id",
+          status: MarketplaceOutboxStatus.PROCESSING,
+        },
         data: expect.objectContaining({
           status: MarketplaceOutboxStatus.COMPLETED,
         }),

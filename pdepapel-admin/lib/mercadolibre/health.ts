@@ -7,6 +7,10 @@ import {
 } from "@prisma/client";
 
 import prismadb from "@/lib/prismadb";
+import {
+  RETURN_MARKETPLACE_ORDER_STATUSES,
+  REVENUE_MARKETPLACE_ORDER_STATUSES,
+} from "./order-status";
 
 import { getMercadoLibreListingImageUrls } from "./listing-metadata";
 import { getMarketplaceOrderNetProfit } from "./reporting";
@@ -128,7 +132,9 @@ export async function getMercadoLibreHealthSummary(
             { marketplaceOrderId: null },
             {
               marketplaceOrder: {
-                is: { status: { not: MarketplaceOrderStatus.CANCELLED } },
+                is: {
+                  status: { notIn: [...RETURN_MARKETPLACE_ORDER_STATUSES] },
+                },
               },
             },
           ],
@@ -157,7 +163,7 @@ export async function getMercadoLibreHealthSummary(
         ? prismadb.marketplaceOrder.findMany({
             where: {
               connectionId,
-              status: MarketplaceOrderStatus.PAID,
+              status: { in: [...REVENUE_MARKETPLACE_ORDER_STATUSES] },
               netAmount: { not: null },
             },
             select: {
@@ -216,7 +222,7 @@ export async function getMercadoLibreHealthSummary(
       prismadb.marketplaceOrder.findMany({
         where: {
           connectionId,
-          status: MarketplaceOrderStatus.PAID,
+          status: { in: [...REVENUE_MARKETPLACE_ORDER_STATUSES] },
           netAmount: null,
           paidAt: { lt: settlementCutoff },
         },

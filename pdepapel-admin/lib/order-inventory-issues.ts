@@ -18,7 +18,10 @@ export interface FailedInventoryLine {
 
 export {
   FAIR_ISSUE_PREFIX,
+  MARKETPLACE_ISSUE_PREFIX,
   formatFairIssueReference,
+  formatMarketplaceIssueReference,
+  isExternalIssueReference,
   isFairIssueReference,
 } from "./fair-issue-reference";
 
@@ -156,7 +159,9 @@ export async function retryOrderInventoryIssue(
     quantity: decrement ? -issue.quantity : issue.quantity,
     reason: fromFair
       ? `Reintento de devolución · ${issue.orderNumber}`
-      : `Reintento de inventario · pedido #${issue.orderNumber}`,
+      : issue.orderId === null
+        ? `Reintento de inventario · ${issue.orderNumber}`
+        : `Reintento de inventario · pedido #${issue.orderNumber}`,
     description: `Línea que falló al ${decrement ? "descontar" : "devolver"}: ${issue.reason}`,
     referenceId: issue.orderId ?? undefined,
     cost: Number(product?.acqPrice) || 0,

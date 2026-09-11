@@ -20,10 +20,19 @@ import {
   syncMercadoLibreListingContent,
 } from "./listings";
 import { enqueueMercadoLibreOutboxEvent } from "./queue";
+import { REVENUE_MARKETPLACE_ORDER_STATUSES } from "./order-status";
 
 const RETRY_DELAY_MS = 5 * 60 * 1000;
 const FINANCIALS_PENDING_RETRY_DELAY_MS = 6 * 60 * 60 * 1000;
 const MAX_OUTBOX_EVENTS_PER_DISPATCH = 50;
+/** Un evento que lleva más de esto en PROCESSING murió a medias (función cortada). */
+const STALE_PROCESSING_EVENT_MS = 15 * 60 * 1000;
+/**
+ * Tope de intentos antes de FAILED («outbox_failed» en la salud). Una
+ * liquidación aún no publicada no cuenta: ese estado es normal y se reintenta
+ * cada 6 h hasta que Mercado Libre la publique.
+ */
+export const MAX_OUTBOX_EVENT_ATTEMPTS = 12;
 
 type StockSyncTransaction = Pick<
   Prisma.TransactionClient,
@@ -320,17 +329,26 @@ export async function queueMarketplaceOrderFinancials(
     connectionId,
     externalOrderId,
     marketplaceOrderId,
+    reset = false,
   }: {
     connectionId: string;
     externalOrderId: string;
     marketplaceOrderId: string;
+    /** Volver a calcular un neto ya escrito (cambió el reembolso). */
+    reset?: boolean;
   },
 ) {
   await transaction.marketplaceOutboxEvent.upsert({
     where: {
       deduplicationKey: `${connectionId}:order-financials:${externalOrderId}`,
     },
-    update: {},
+    update: reset
+      ? {
+          status: MarketplaceOutboxStatus.PENDING,
+          availableAt: new Date(),
+          lastError: null,
+        }
+      : {},
     create: {
       connectionId,
       action: MarketplaceOutboxAction.SYNC_ORDER_FINANCIALS,
@@ -344,7 +362,7 @@ async function queuePendingMarketplaceOrderFinancials(connectionId: string) {
   const orders = await prismadb.marketplaceOrder.findMany({
     where: {
       connectionId,
-      status: MarketplaceOrderStatus.PAID,
+      status: { in: [...REVENUE_MARKETPLACE_ORDER_STATUSES] },
       netAmount: null,
     },
     select: { id: true, externalOrderId: true },
@@ -366,6 +384,21 @@ export async function enqueuePendingMarketplaceOutboxEvents(
   connectionId: string,
 ) {
   await queuePendingMarketplaceOrderFinancials(connectionId);
+
+  // Misma barrida que los webhooks: una liquidación o un correo que quedó en
+  // PROCESSING porque la función se cortó no tenía ningún camino de vuelta.
+  await prismadb.marketplaceOutboxEvent.updateMany({
+    where: {
+      connectionId,
+      status: MarketplaceOutboxStatus.PROCESSING,
+      updatedAt: { lt: new Date(Date.now() - STALE_PROCESSING_EVENT_MS) },
+    },
+    data: {
+      status: MarketplaceOutboxStatus.RETRY,
+      availableAt: new Date(),
+      lastError: "El procesamiento anterior no terminó y fue reintentado",
+    },
+  });
 
   const events = await prismadb.marketplaceOutboxEvent.findMany({
     where: {
@@ -511,6 +544,8 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
       action: true,
       payload: true,
       status: true,
+      attempts: true,
+      availableAt: true,
       listing: {
         select: {
           id: true,
@@ -564,12 +599,20 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
     return { processed: false, reason: "unpublished_listing" as const };
   }
 
+  if (event.status === MarketplaceOutboxStatus.FAILED) {
+    return { processed: false, reason: "failed" as const };
+  }
+  const now = new Date();
+  if (event.availableAt > now) {
+    return { processed: false, reason: "not_due" as const };
+  }
   const claim = await prismadb.marketplaceOutboxEvent.updateMany({
     where: {
       id: event.id,
       status: {
         in: [MarketplaceOutboxStatus.PENDING, MarketplaceOutboxStatus.RETRY],
       },
+      availableAt: { lte: now },
     },
     data: {
       status: MarketplaceOutboxStatus.PROCESSING,
@@ -580,9 +623,12 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
   if (claim.count === 0) {
     return { processed: false, reason: "claimed_elsewhere" as const };
   }
+  const attempts = event.attempts + 1;
 
   try {
     let syncedQuantity: number | null = null;
+    /** Stock local leído justo antes de enviar la cantidad a Mercado Libre. */
+    let stockSnapshot: number | null = null;
     let syncedPrice: number | null = null;
     let syncedListingContent = false;
     let syncedListingStatus: MarketplaceListingStatus | null = null;
@@ -611,6 +657,7 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
           connectionId: true,
           externalOrderId: true,
           totalAmount: true,
+          refundedAmount: true,
           metadata: true,
         },
       });
@@ -638,6 +685,7 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
           event.connectionId,
           marketplaceOrder.externalOrderId,
           marketplaceOrder.totalAmount,
+          marketplaceOrder.refundedAmount ?? 0,
         );
         financialsUpdate = {
           marketplaceOrderId: marketplaceOrder.id,
@@ -716,7 +764,19 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
         netAmount: marketplaceOrder.netAmount,
       });
     } else if (event.action === MarketplaceOutboxAction.SYNC_STOCK) {
-      const targetQuantity = getTargetQuantity(event.payload);
+      // La cantidad guardada en el evento es la de cuando se encoló. Si el
+      // stock volvió a cambiar mientras este evento esperaba, el nuevo upsert
+      // pisó el payload pero la lectura de arriba ya lo había cargado. Lo que
+      // manda es el stock de ahora; el payload solo sirve de respaldo.
+      const liveProduct = await prismadb.product.findUnique({
+        where: { id: event.listing!.product.id },
+        select: { stock: true },
+      });
+      const targetQuantity =
+        liveProduct === null
+          ? getTargetQuantity(event.payload)
+          : Math.max(0, liveProduct.stock - event.listing!.stockSafetyBuffer);
+      stockSnapshot = liveProduct?.stock ?? null;
       await updateMercadoLibreStock(
         event.connectionId,
         event.listing!.externalItemId!,
@@ -775,7 +835,7 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
       );
     }
 
-    await prismadb.$transaction(async (transaction) => {
+    const superseded = await prismadb.$transaction(async (transaction) => {
       if (financialsUpdate) {
         await transaction.marketplaceOrder.update({
           where: { id: financialsUpdate.marketplaceOrderId },
@@ -787,14 +847,34 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
           },
         });
       }
-      await transaction.marketplaceOutboxEvent.update({
-        where: { id: event.id },
-        data: {
-          status: MarketplaceOutboxStatus.COMPLETED,
-          processedAt: new Date(),
-          lastError: null,
-        },
-      });
+      // Solo se cierra si nadie volvió a pedir la misma sincronización
+      // mientras corría. Si el upsert la dejó otra vez en PENDING (o el stock
+      // cambió desde que se leyó), lo enviado ya está viejo: se deja abierta y
+      // se vuelve a encolar en vez de marcarla COMPLETED encima.
+      const stockMoved =
+        stockSnapshot !== null &&
+        (
+          await transaction.product.findUnique({
+            where: { id: event.listing!.product.id },
+            select: { stock: true },
+          })
+        )?.stock !== stockSnapshot;
+      const completed = stockMoved
+        ? { count: 0 }
+        : await transaction.marketplaceOutboxEvent.updateMany({
+            where: { id: event.id, status: MarketplaceOutboxStatus.PROCESSING },
+            data: {
+              status: MarketplaceOutboxStatus.COMPLETED,
+              processedAt: new Date(),
+              lastError: null,
+            },
+          });
+      if (completed.count === 0) {
+        await transaction.marketplaceOutboxEvent.updateMany({
+          where: { id: event.id, status: MarketplaceOutboxStatus.PROCESSING },
+          data: { status: MarketplaceOutboxStatus.PENDING, availableAt: new Date() },
+        });
+      }
       if (
         event.listing &&
         (syncedQuantity !== null ||
@@ -843,7 +923,26 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
         where: { id: event.connectionId },
         data: { lastSyncedAt: new Date(), lastError: null },
       });
+      return completed.count === 0;
     });
+    if (superseded) {
+      try {
+        await enqueueMercadoLibreOutboxEvent(
+          event.id,
+          event.connectionId,
+          event.action === MarketplaceOutboxAction.SEND_ORDER_NOTIFICATION
+            ? "notification"
+            : "operation",
+        );
+      } catch (enqueueError) {
+        console.error("Mercado Libre outbox re-enqueue deferred", {
+          eventId: event.id,
+          message:
+            enqueueError instanceof Error ? enqueueError.message : "unknown",
+        });
+      }
+      return { processed: true, reason: "superseded" as const };
+    }
     return { processed: true, reason: "processed" as const };
   } catch (error) {
     const financialsPending =
@@ -866,13 +965,18 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
         },
       });
     }
+    const exhausted =
+      !financialsPending &&
+      !publicationNeedsReview &&
+      attempts >= MAX_OUTBOX_EVENT_ATTEMPTS;
     await prismadb.marketplaceOutboxEvent.update({
       where: { id: event.id },
       data: {
-        status: publicationNeedsReview
-          ? MarketplaceOutboxStatus.FAILED
-          : MarketplaceOutboxStatus.RETRY,
-        ...(publicationNeedsReview
+        status:
+          publicationNeedsReview || exhausted
+            ? MarketplaceOutboxStatus.FAILED
+            : MarketplaceOutboxStatus.RETRY,
+        ...(publicationNeedsReview || exhausted
           ? {}
           : {
               availableAt: new Date(
@@ -882,7 +986,9 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
                     : RETRY_DELAY_MS),
               ),
             }),
-        lastError: errorMessage,
+        lastError: exhausted
+          ? `Se agotaron los ${MAX_OUTBOX_EVENT_ATTEMPTS} intentos. Último error: ${errorMessage}`
+          : errorMessage,
       },
     });
     if (publicationNeedsReview) {
@@ -891,6 +997,22 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
     if (financialsPending) {
       return { processed: false, reason: "financials_pending" as const };
     }
-    throw error;
+    if (exhausted) {
+      console.error("Mercado Libre outbox event failed permanently", {
+        eventId: event.id,
+        action: event.action,
+        lastError: errorMessage,
+      });
+      return { processed: false, reason: "failed" as const };
+    }
+    // 200 a propósito: los reintentos inmediatos de QStash solo verían
+    // «not_due»; la recuperación programada lo reintenta cuando venza.
+    console.warn("Mercado Libre outbox event scheduled for retry", {
+      eventId: event.id,
+      action: event.action,
+      attempts,
+      lastError: errorMessage,
+    });
+    return { processed: false, reason: "retry_scheduled" as const };
   }
 }

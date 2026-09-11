@@ -74,6 +74,13 @@ export async function POST(
     }
 
     try {
+      // Read Mercado Libre FIRST. Releasing the exception before the fetch left
+      // the sale as an invisible NOT_APPLIED whenever the fetch failed.
+      const payload = await getMercadoLibreResource(
+        connection.id,
+        `/orders/${externalOrderId}`,
+      );
+
       // An EXCEPTION means the inventory was never applied (the transaction that
       // claims the order rolls back on failure), so it is safe to release the
       // order for a fresh attempt. DECREMENTED and RESTOCK_PENDING are left alone
@@ -93,10 +100,6 @@ export async function POST(
         });
       }
 
-      const payload = await getMercadoLibreResource(
-        connection.id,
-        `/orders/${externalOrderId}`,
-      );
       const result = await synchronizeMercadoLibreOrder(
         connection.id,
         params.storeId,

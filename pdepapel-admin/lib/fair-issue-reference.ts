@@ -16,3 +16,18 @@ export function formatFairIssueReference(fairName: string): string {
 export function isFairIssueReference(orderNumber: string): boolean {
   return orderNumber.startsWith(FAIR_ISSUE_PREFIX);
 }
+
+/** Misma idea para una venta de Mercado Libre: no es un pedido interno. */
+export const MARKETPLACE_ISSUE_PREFIX = "Mercado Libre: ";
+
+export function formatMarketplaceIssueReference(externalOrderId: string): string {
+  return `${MARKETPLACE_ISSUE_PREFIX}${externalOrderId}`;
+}
+
+/** Deuda que no pertenece a un pedido interno (feria o marketplace). */
+export function isExternalIssueReference(orderNumber: string): boolean {
+  return (
+    orderNumber.startsWith(FAIR_ISSUE_PREFIX) ||
+    orderNumber.startsWith(MARKETPLACE_ISSUE_PREFIX)
+  );
+}

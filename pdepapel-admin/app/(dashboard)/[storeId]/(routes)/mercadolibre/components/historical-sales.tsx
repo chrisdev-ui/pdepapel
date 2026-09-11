@@ -1,153 +1,37 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { CurrencyInput } from "@/components/ui/currency-input";
-import { useActionConfirmation } from "@/hooks/use-action-confirmation";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  getRawOrderStatusMeta,
-  getSaleStatusMeta,
-} from "@/lib/mercadolibre/order-status";
-import {
-  AlertCircle,
-  CheckCircle2,
-  Loader2,
-  Receipt,
-  Search,
-} from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-type HistoricalSaleItem = {
-  externalItemId: string;
-  title: string;
-  sku: string | null;
-  quantity: number;
-  unitPrice: number;
-  linkedProduct: ProductReference | null;
-  suggestedProduct: ProductReference | null;
-};
+import { Models } from "@/constants";
 
-type ProductReference = {
-  id: string;
-  name: string;
-  sku: string;
-  stock: number;
-};
+import { Button } from "@/components/ui/button";
+import { DataTable } from "@/components/ui/data-table";
+import {
+  countSalesByView,
+  DEFAULT_SALES_VIEW,
+  isSalesView,
+  SALES_VIEWS,
+  saleMatchesView,
+  type SalesView,
+} from "@/lib/mercadolibre/sales-views";
+import { cn } from "@/lib/utils";
 
-type HistoricalSaleInspection = {
-  referenceType: "order" | "pack";
-  pack: { id: string; status: string | null } | null;
-  orders: {
-    externalOrderId: string;
-    status: string;
-    paidAt: string | null;
-    totalAmount: number;
-    currencyId: string | null;
-    alreadyImported: boolean;
-    inventoryStatus: string | null;
-    items: HistoricalSaleItem[];
-  }[];
-};
+import { HistoricalImportCard } from "./sales/historical-import-card";
+import { SaleMobileCard } from "./sales/sale-mobile-card";
+import { getResponseError, type SaleFeedback, type SalesResponse } from "./sales/sale-types";
+import { buildSalesColumns } from "./sales/sales-columns";
+import { useSaleActions } from "./sales/use-sale-actions";
 
-type MarketplaceSale = {
-  id: string;
-  externalOrderId: string;
-  externalPackId: string | null;
-  status: string;
-  inventoryStatus: string;
-  paidAt: string | null;
-  totalAmount: number | null;
-  marketplaceFee: number | null;
-  shippingCost: number | null;
-  netAmount: number | null;
-  metadata: {
-    taxesAmount?: number;
-    financials?: { moneyReleaseStatus?: string | null; status?: string };
-  } | null;
-  items: {
-    title: string;
-    quantity: number;
-    unitPrice: number;
-    product: { name: string; sku: string } | null;
-  }[];
-};
+const VIEW_PARAM = "vista";
 
-type SalesResponse = {
-  data: MarketplaceSale[];
-  page: number;
-  pageSize: number;
-  total: number;
-  pageCount: number;
-};
-
-const currencyFormatter = new Intl.NumberFormat("es-CO", {
-  style: "currency",
-  currency: "COP",
-  maximumFractionDigits: 0,
-});
-
-function formatCurrency(value: number | null) {
-  return value === null || !Number.isFinite(value)
-    ? "—"
-    : currencyFormatter.format(value);
-}
-
-function formatDate(value: string | null) {
-  if (!value) return "Sin fecha";
-  return new Intl.DateTimeFormat("es-CO", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "America/Bogota",
-  }).format(new Date(value));
-}
-
-function getErrorMessage(response: Response) {
-  return response
-    .json()
-    .then(
-      (body: { error?: string }) =>
-        body.error ?? "No fue posible completar la acción",
-    )
-    .catch(() => "No fue posible completar la acción");
-}
-
-function getTaxesAmount(metadata: MarketplaceSale["metadata"]) {
-  const amount = Number(metadata?.taxesAmount);
-  return Number.isFinite(amount) ? amount : null;
-}
-
-function toCurrencyInputValue(value: string) {
-  if (!value.trim()) return undefined;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-function getSettlementLabel(sale: MarketplaceSale) {
-  if (sale.netAmount === null) {
-    return "Liquidación pendiente de Mercado Libre";
-  }
-  if (sale.metadata?.financials?.moneyReleaseStatus === "released") {
-    return "Liquidación liberada por Mercado Libre";
-  }
-  return "Neto confirmado por Mercado Libre";
-}
-
+/**
+ * Pestaña Ventas de Mercado Libre: primero lo que hay que atender hoy
+ * (excepciones de inventario, retornos, liquidaciones), luego el resto de
+ * ventas, y al final la herramienta para importar ventas anteriores a la
+ * integración. Vistas en la URL como en Pedidos.
+ */
 export function MercadoLibreHistoricalSales({
   storeId,
   canReconcile,
@@ -157,541 +41,205 @@ export function MercadoLibreHistoricalSales({
   canReconcile: boolean;
   highlightedOrderId: string | null;
 }) {
-  const { requestConfirmation, confirmationDialog } = useActionConfirmation();
-  const [reference, setReference] = useState("");
-  const [inspection, setInspection] = useState<HistoricalSaleInspection | null>(
-    null,
+  const pathname = usePathname() ?? "";
+  const searchParams = useSearchParams();
+  const requested = searchParams.get(VIEW_PARAM);
+  const [view, setViewState] = useState<SalesView>(
+    isSalesView(requested) ? requested : DEFAULT_SALES_VIEW,
   );
-  const [selectedOrderId, setSelectedOrderId] = useState("");
-  const [marketplaceFee, setMarketplaceFee] = useState("");
-  const [shippingCost, setShippingCost] = useState("");
-  const [taxesAmount, setTaxesAmount] = useState("");
-  const [isInspecting, setIsInspecting] = useState(false);
-  const [isReconciling, setIsReconciling] = useState(false);
-  const [feedback, setFeedback] = useState<{
-    type: "error" | "success";
-    message: string;
-  } | null>(null);
   const [sales, setSales] = useState<SalesResponse | null>(null);
-  const [isLoadingSales, setIsLoadingSales] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<SaleFeedback | null>(null);
 
-  const loadSales = useCallback(
-    async (page = 1) => {
-      setIsLoadingSales(true);
-      try {
-        const response = await fetch(
-          `/api/${storeId}/marketplaces/mercadolibre/historical-sales?page=${page}&pageSize=10`,
-        );
-        if (!response.ok) throw new Error(await getErrorMessage(response));
-        setSales((await response.json()) as SalesResponse);
-      } catch (error) {
-        setFeedback({
-          type: "error",
-          message:
-            error instanceof Error
-              ? error.message
-              : "No fue posible cargar las ventas conciliadas",
-        });
-      } finally {
-        setIsLoadingSales(false);
-      }
-    },
-    [storeId],
-  );
+  const loadSales = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const query = new URLSearchParams();
+      if (highlightedOrderId) query.set("order", highlightedOrderId);
+      const response = await fetch(
+        `/api/${storeId}/marketplaces/mercadolibre/historical-sales?${query}`,
+      );
+      if (!response.ok) throw new Error(await getResponseError(response));
+      setSales((await response.json()) as SalesResponse);
+    } catch (error) {
+      setLoadError(
+        error instanceof Error ? error.message : "No fue posible cargar las ventas",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, [highlightedOrderId, storeId]);
 
   useEffect(() => {
     void loadSales();
   }, [loadSales]);
 
+  const onActionDone = useCallback(
+    async (result: SaleFeedback) => {
+      await loadSales();
+      setFeedback(result);
+    },
+    [loadSales],
+  );
+  const { resync, confirmReturn, busySaleId, confirmationDialog } = useSaleActions({
+    storeId,
+    onDone: onActionDone,
+  });
+
+  const allSales = useMemo(() => sales?.data ?? [], [sales]);
+  const counts = useMemo(() => countSalesByView(allSales), [allSales]);
+  const rows = useMemo(
+    () => allSales.filter((sale) => saleMatchesView(sale, view)),
+    [allSales, view],
+  );
+  const columns = useMemo(
+    () => buildSalesColumns({ busySaleId, onResync: resync, onConfirmReturn: confirmReturn }),
+    [busySaleId, resync, confirmReturn],
+  );
+  const linkedSale = sales?.linkedSale ?? null;
+
+  const setView = useCallback(
+    (next: SalesView) => {
+      setViewState(next);
+      const query = new URLSearchParams(searchParams.toString());
+      if (next === DEFAULT_SALES_VIEW) query.delete(VIEW_PARAM);
+      else query.set(VIEW_PARAM, next);
+      const suffix = query.toString();
+      window.history.replaceState(null, "", suffix ? `${pathname}?${suffix}` : pathname);
+    },
+    [pathname, searchParams],
+  );
+
+  // Con la vista «Por atender» vacía se aterriza en «Todas»: nada que hacer no es una pantalla vacía.
   useEffect(() => {
-    if (
-      !highlightedOrderId ||
-      !sales?.data.some((sale) => sale.id === highlightedOrderId)
-    ) {
-      return;
+    if (!isSalesView(requested) && sales && counts["por-atender"] === 0 && view === "por-atender") {
+      setViewState("todas");
     }
-    document
-      .getElementById(`mercadolibre-order-${highlightedOrderId}`)
-      ?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [highlightedOrderId, sales]);
-
-  const selectedOrder = useMemo(
-    () =>
-      inspection?.orders.find(
-        (order) => order.externalOrderId === selectedOrderId,
-      ) ?? null,
-    [inspection, selectedOrderId],
-  );
-  const selectedOrderStatusMeta = selectedOrder
-    ? getRawOrderStatusMeta(selectedOrder.status)
-    : null;
-  const calculatedNet = selectedOrder
-    ? selectedOrder.totalAmount -
-      Number(marketplaceFee || 0) -
-      Number(shippingCost || 0) -
-      Number(taxesAmount || 0)
-    : null;
-  const hasMappedItems = Boolean(
-    selectedOrder?.items.every(
-      (item) => item.linkedProduct || item.suggestedProduct,
-    ),
-  );
-  const hasFinancialDetails =
-    marketplaceFee !== "" && shippingCost !== "" && taxesAmount !== "";
-
-  const inspectSale = async () => {
-    if (!reference.trim()) {
-      setFeedback({
-        type: "error",
-        message: "Ingresa el número de venta u orden",
-      });
-      return;
-    }
-    setIsInspecting(true);
-    setFeedback(null);
-    try {
-      const response = await fetch(
-        `/api/${storeId}/marketplaces/mercadolibre/historical-sales/inspect`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reference: reference.trim() }),
-        },
-      );
-      if (!response.ok) throw new Error(await getErrorMessage(response));
-      const result = (await response.json()) as HistoricalSaleInspection;
-      setInspection(result);
-      const firstPendingOrder = result.orders.find(
-        (order) => order.status === "paid" && !order.alreadyImported,
-      );
-      setSelectedOrderId(firstPendingOrder?.externalOrderId ?? "");
-      setMarketplaceFee("");
-      setShippingCost("");
-      setTaxesAmount("");
-    } catch (error) {
-      setInspection(null);
-      setFeedback({
-        type: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "No fue posible revisar la venta de Mercado Libre",
-      });
-    } finally {
-      setIsInspecting(false);
-    }
-  };
-
-  const reconcileSale = async () => {
-    if (!selectedOrder || !hasMappedItems || !hasFinancialDetails) return;
-    if (calculatedNet === null || calculatedNet < 0) {
-      setFeedback({
-        type: "error",
-        message: "Los cargos no pueden ser mayores al total de la venta",
-      });
-      return;
-    }
-    if (
-      !(await requestConfirmation({
-        title: "¿Conciliar venta histórica?",
-        description: `Se registrará la venta ${selectedOrder.externalOrderId} y se descontará su inventario una sola vez.`,
-        confirmLabel: "Conciliar venta",
-      }))
-    ) {
-      return;
-    }
-
-    setIsReconciling(true);
-    setFeedback(null);
-    try {
-      const response = await fetch(
-        `/api/${storeId}/marketplaces/mercadolibre/historical-sales/reconcile`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            externalOrderId: selectedOrder.externalOrderId,
-            marketplaceFee,
-            shippingCost,
-            taxesAmount,
-          }),
-        },
-      );
-      if (!response.ok) throw new Error(await getErrorMessage(response));
-      setFeedback({
-        type: "success",
-        message:
-          "Venta conciliada. El inventario y la sincronización con Mercado Libre quedaron registrados.",
-      });
-      await loadSales(1);
-      setInspection(null);
-      setSelectedOrderId("");
-      setReference("");
-    } catch (error) {
-      setFeedback({
-        type: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "No fue posible conciliar la venta de Mercado Libre",
-      });
-    } finally {
-      setIsReconciling(false);
-    }
-  };
+  }, [counts, requested, sales, view]);
 
   return (
-    <>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Receipt className="h-5 w-5 text-muted-foreground" />
-            Ventas de Mercado Libre
-          </CardTitle>
-          <CardDescription>
-            Revisa ventas anteriores sin modificar stock. Solo concilia una
-            venta pagada después de confirmar sus cargos y productos.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          {!canReconcile ? (
-            <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
-              Conecta Mercado Libre y activa el procesamiento seguro antes de
-              conciliar ventas anteriores.
-            </p>
-          ) : (
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Input
-                value={reference}
-                onChange={(event) => setReference(event.target.value)}
-                placeholder="Número de venta o pack de Mercado Libre"
-                inputMode="numeric"
-              />
-              <Button
-                type="button"
-                onClick={() => void inspectSale()}
-                disabled={isInspecting}
-              >
-                {isInspecting ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Search className="mr-2 h-4 w-4" />
-                )}
-                Revisar venta
-              </Button>
-            </div>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-xl font-bold tracking-tight text-primary">Ventas de Mercado Libre</h2>
+          <p className="text-sm text-muted-foreground">
+            Cada venta pagada descuenta inventario una vez y registra el neto que Mercado Libre liquida.{" "}
+            {sales ? `${sales.total} en total.` : ""}
+          </p>
+        </div>
+        <Button type="button" variant="outline" onClick={() => void loadSales()} disabled={isLoading}>
+          <RefreshCw className={cn("mr-2 h-4 w-4", isLoading && "animate-spin")} aria-hidden="true" />
+          Actualizar
+        </Button>
+      </div>
+
+      {linkedSale ? (
+        <section
+          aria-label="Venta enlazada"
+          className="rounded-xl border border-tint-lavender bg-tint-lavender/20 p-3"
+        >
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-primary">
+            Venta enlazada desde el aviso
+          </p>
+          <SaleMobileCard
+            sale={linkedSale}
+            busySaleId={busySaleId}
+            onResync={resync}
+            onConfirmReturn={confirmReturn}
+            highlighted
+          />
+        </section>
+      ) : null}
+
+      {feedback ? (
+        <div
+          className={cn(
+            "flex items-start gap-2 rounded-md border p-3 text-sm",
+            feedback.type === "error"
+              ? "border-tint-pink bg-tint-pink/20 text-primary"
+              : "border-tint-mint bg-tint-mint/30 text-primary",
           )}
+          role={feedback.type === "error" ? "alert" : "status"}
+        >
+          {feedback.type === "error" ? (
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          ) : (
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          )}
+          <p className="flex-1">{feedback.message}</p>
+          <button
+            type="button"
+            className="text-xs underline underline-offset-2"
+            onClick={() => setFeedback(null)}
+          >
+            Cerrar
+          </button>
+        </div>
+      ) : null}
 
-          {inspection ? (
-            <div className="space-y-4 rounded-md border bg-muted/20 p-4">
-              <div className="flex flex-wrap items-center gap-2 text-sm">
-                <Badge variant="secondary">
-                  {inspection.referenceType === "pack" ? "Pack" : "Orden"}
-                </Badge>
-                {inspection.pack ? (
-                  <span>Pack {inspection.pack.id}</span>
-                ) : null}
-                <span className="text-muted-foreground">
-                  Esta revisión todavía no cambia inventario.
-                </span>
-              </div>
-              {inspection.orders.length > 1 ? (
-                <Select
-                  value={selectedOrderId}
-                  onValueChange={setSelectedOrderId}
-                >
-                  <SelectTrigger aria-label="Orden de Mercado Libre">
-                    <SelectValue placeholder="Selecciona una orden pagada" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {inspection.orders.map((order) => (
-                        <SelectItem
-                          key={order.externalOrderId}
-                          value={order.externalOrderId}
-                        >
-                          {order.externalOrderId} ·{" "}
-                          {getRawOrderStatusMeta(order.status).label} ·{" "}
-                          {formatCurrency(order.totalAmount)}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              ) : null}
-              {selectedOrder ? (
-                <div className="space-y-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge
-                      variant={selectedOrderStatusMeta?.variant ?? "secondary"}
-                    >
-                      {selectedOrderStatusMeta?.label}
-                    </Badge>
-                    {selectedOrder.alreadyImported ? (
-                      <Badge variant="secondary">Ya conciliada</Badge>
-                    ) : null}
-                    <span className="text-sm text-muted-foreground">
-                      {selectedOrder.externalOrderId} ·{" "}
-                      {formatDate(selectedOrder.paidAt)}
-                    </span>
-                  </div>
-                  <div className="grid gap-3 text-sm sm:grid-cols-2">
-                    {selectedOrder.items.map((item) => {
-                      const product =
-                        item.linkedProduct ?? item.suggestedProduct;
-                      return (
-                        <div
-                          key={`${item.externalItemId}-${item.title}`}
-                          className="rounded-md border bg-background p-3"
-                        >
-                          <p className="font-medium">{item.title}</p>
-                          <p className="text-muted-foreground">
-                            {item.quantity} × {formatCurrency(item.unitPrice)}
-                          </p>
-                          {product ? (
-                            <p className="mt-2 text-success">
-                              Producto local: {product.name} · Stock actual:{" "}
-                              {product.stock}
-                            </p>
-                          ) : (
-                            <p className="mt-2 text-destructive">
-                              Sin vínculo local. Verifica que el SKU de Mercado
-                              Libre sea igual al SKU del producto.
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {!selectedOrder.alreadyImported &&
-                  selectedOrder.status === "paid" ? (
-                    <div className="space-y-3 rounded-md border bg-background p-4">
-                      <p className="text-sm font-medium">
-                        Resumen financiero de Mercado Libre
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Copia los tres cargos del resumen de la venta. El neto
-                        se calcula automáticamente.
-                      </p>
-                      <div className="grid gap-3 sm:grid-cols-3">
-                        <CurrencyInput
-                          aria-label="Cargo por venta"
-                          value={toCurrencyInputValue(marketplaceFee)}
-                          onChange={(value) =>
-                            setMarketplaceFee(
-                              value === undefined ? "" : String(value),
-                            )
-                          }
-                          inputMode="numeric"
-                          placeholder="Cargo por venta"
-                        />
-                        <CurrencyInput
-                          aria-label="Envíos"
-                          value={toCurrencyInputValue(shippingCost)}
-                          onChange={(value) =>
-                            setShippingCost(
-                              value === undefined ? "" : String(value),
-                            )
-                          }
-                          inputMode="numeric"
-                          placeholder="Envíos"
-                        />
-                        <CurrencyInput
-                          aria-label="Impuestos"
-                          value={toCurrencyInputValue(taxesAmount)}
-                          onChange={(value) =>
-                            setTaxesAmount(
-                              value === undefined ? "" : String(value),
-                            )
-                          }
-                          inputMode="numeric"
-                          placeholder="Impuestos"
-                        />
-                      </div>
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                        <span>
-                          Total cobrado:{" "}
-                          {formatCurrency(selectedOrder.totalAmount)}
-                        </span>
-                        <span
-                          className={
-                            calculatedNet !== null && calculatedNet >= 0
-                              ? "font-semibold text-success"
-                              : "font-semibold text-destructive"
-                          }
-                        >
-                          Neto recibido: {formatCurrency(calculatedNet)}
-                        </span>
-                      </div>
-                      <Button
-                        type="button"
-                        onClick={() => void reconcileSale()}
-                        disabled={
-                          isReconciling ||
-                          !hasMappedItems ||
-                          !hasFinancialDetails ||
-                          calculatedNet === null ||
-                          calculatedNet < 0
-                        }
-                      >
-                        {isReconciling
-                          ? "Conciliando…"
-                          : "Conciliar venta pagada"}
-                      </Button>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
-          {feedback ? (
-            <div
-              className={
-                feedback.type === "error"
-                  ? "flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
-                  : "flex items-start gap-2 rounded-md border border-success/30 bg-success/10 p-3 text-sm text-success"
-              }
-              role={feedback.type === "error" ? "alert" : "status"}
-            >
-              {feedback.type === "error" ? (
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              ) : (
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+      <div role="tablist" aria-label="Vistas de ventas" className="flex max-w-full gap-1 overflow-x-auto self-start rounded-full border bg-white p-1">
+        {SALES_VIEWS.map((item) => {
+          const active = item.id === view;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setView(item.id)}
+              className={cn(
+                "flex h-9 shrink-0 items-center gap-2 rounded-full px-3.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                active ? "bg-primary text-primary-foreground" : "text-primary hover:bg-accent",
               )}
-              <p>{feedback.message}</p>
-            </div>
-          ) : null}
+            >
+              {item.label}
+              <span className={cn("rounded-full px-1.5 text-xs", active ? "bg-white/20" : "bg-muted")}>
+                {isLoading && !sales ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> : counts[item.id]}
+              </span>
+            </button>
+          );
+        })}
+      </div>
 
-          <div id="mercadolibre-orders" className="space-y-3 border-t pt-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="font-medium">Ventas registradas</p>
-                <p className="text-sm text-muted-foreground">
-                  {sales?.total ?? 0} ventas importadas o recibidas desde
-                  Mercado Libre.
-                </p>
-              </div>
-              {isLoadingSales ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : null}
-            </div>
-            {sales?.data.length ? (
-              <div className="space-y-2">
-                {sales.data.map((sale) => {
-                  const statusMeta = getSaleStatusMeta(sale.status);
-                  return (
-                    <div
-                      key={sale.id}
-                      id={`mercadolibre-order-${sale.id}`}
-                      className={
-                        sale.id === highlightedOrderId
-                          ? "scroll-mt-6 rounded-md border border-amber-400 bg-amber-50/40 p-3 text-sm"
-                          : "scroll-mt-6 rounded-md border p-3 text-sm"
-                      }
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <Badge variant={statusMeta.variant}>
-                            {statusMeta.label}
-                          </Badge>
-                          <span className="font-medium">
-                            Orden {sale.externalOrderId}
-                          </span>
-                        </div>
-                        <span>{formatDate(sale.paidAt)}</span>
-                      </div>
-                      <p className="mt-2 text-muted-foreground">
-                        {sale.items
-                          .map(
-                            (item) =>
-                              `${item.quantity} × ${item.product?.name ?? item.title}`,
-                          )
-                          .join(" · ")}
-                      </p>
-                      <div className="mt-3 grid gap-2 rounded-md bg-muted/50 p-2.5 text-xs sm:grid-cols-4">
-                        <div className="sm:order-4">
-                          <span className="block text-muted-foreground">
-                            Cobrado al cliente
-                          </span>
-                          <span>{formatCurrency(sale.totalAmount)}</span>
-                        </div>
-                        <div className="sm:order-2">
-                          <span className="block text-muted-foreground">
-                            Cargos Mercado Libre
-                          </span>
-                          <span>{formatCurrency(sale.marketplaceFee)}</span>
-                        </div>
-                        <div className="sm:order-3">
-                          <span className="block text-muted-foreground">
-                            Envíos e impuestos
-                          </span>
-                          <span>
-                            {formatCurrency(
-                              (sale.shippingCost ?? 0) +
-                                (getTaxesAmount(sale.metadata) ?? 0),
-                            )}
-                          </span>
-                        </div>
-                        <div className="sm:order-1">
-                          <span className="block text-muted-foreground">
-                            Neto para P de Papel
-                          </span>
-                          <span
-                            className={
-                              sale.netAmount === null
-                                ? "font-medium text-amber-700"
-                                : "font-semibold text-success"
-                            }
-                          >
-                            {sale.netAmount === null
-                              ? "Pendiente"
-                              : formatCurrency(sale.netAmount)}
-                          </span>
-                        </div>
-                      </div>
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        {getSettlementLabel(sale)}
-                      </p>
-                    </div>
-                  );
-                })}
-                {sales.pageCount > 1 ? (
-                  <div className="flex items-center justify-end gap-2 pt-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={sales.page <= 1 || isLoadingSales}
-                      onClick={() => void loadSales(sales.page - 1)}
-                    >
-                      Anterior
-                    </Button>
-                    <span className="text-xs text-muted-foreground">
-                      Página {sales.page} de {sales.pageCount}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={sales.page >= sales.pageCount || isLoadingSales}
-                      onClick={() => void loadSales(sales.page + 1)}
-                    >
-                      Siguiente
-                    </Button>
-                  </div>
-                ) : null}
-              </div>
-            ) : !isLoadingSales ? (
-              <p className="text-sm text-muted-foreground">
-                Aún no hay ventas de Mercado Libre registradas.
-              </p>
-            ) : null}
-          </div>
-        </CardContent>
-      </Card>
+      <DataTable
+        tableKey={Models.MarketplaceSales}
+        searchPlaceholder="Buscar por número de venta, pack, comprador o producto…"
+        columns={columns}
+        data={rows}
+        getRowId={(row) => row.id}
+        isLoading={isLoading && !sales}
+        error={loadError}
+        onRetry={() => void loadSales()}
+        renderMobileCard={(row) => (
+          <SaleMobileCard
+            sale={row.original}
+            busySaleId={busySaleId}
+            onResync={resync}
+            onConfirmReturn={confirmReturn}
+            highlighted={row.original.id === highlightedOrderId}
+          />
+        )}
+        emptyState={
+          view === "todas"
+            ? {
+                title: "Aún no hay ventas de Mercado Libre",
+                description: "Las ventas pagadas llegan solas por webhook. Una venta anterior a la integración se importa desde la tarjeta de abajo.",
+              }
+            : view === "por-atender"
+              ? { title: "Todo al día", description: "No hay excepciones de inventario, retornos por confirmar ni liquidaciones pendientes." }
+              : { title: "Nada en esta vista", description: "Cuando una venta entre en este estado aparecerá aquí." }
+        }
+      />
+
+      <HistoricalImportCard
+        storeId={storeId}
+        canReconcile={canReconcile}
+        onFeedback={setFeedback}
+        onImported={loadSales}
+      />
       {confirmationDialog}
-    </>
+    </div>
   );
 }

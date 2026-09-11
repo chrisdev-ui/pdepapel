@@ -15,6 +15,17 @@ import { enqueueMercadoLibreWebhookEvent } from "./queue";
 const RETRY_DELAY_MS = 5 * 60 * 1000;
 const STALE_PROCESSING_EVENT_MS = 15 * 60 * 1000;
 const MAX_EVENTS_PER_RECOVERY = 50;
+/**
+ * Después de estos intentos el evento pasa a FAILED y aparece en la salud de
+ * Mercado Libre («webhook_failed»). Antes no había tope: una orden imposible
+ * de leer se volvía a pedir a Mercado Libre cada recuperación, para siempre.
+ */
+export const MAX_WEBHOOK_EVENT_ATTEMPTS = 12;
+
+/** Filtro compartido: solo eventos cuyo reintento ya venció. */
+function dueFilter(now: Date) {
+  return { OR: [{ nextRetryAt: null }, { nextRetryAt: { lte: now } }] };
+}
 
 function isOrderTopic(topic: string) {
   return topic === "orders" || topic === "orders_v2";
@@ -46,6 +57,8 @@ export async function processMercadoLibreWebhookEvent(eventId: string) {
       topic: true,
       resource: true,
       status: true,
+      attempts: true,
+      nextRetryAt: true,
       connection: { select: { storeId: true } },
     },
   });
@@ -66,6 +79,16 @@ export async function processMercadoLibreWebhookEvent(eventId: string) {
     return { processed: false, reason: "unknown_connection" as const };
   }
 
+  if (event.status === MarketplaceWebhookEventStatus.FAILED) {
+    return { processed: false, reason: "failed" as const };
+  }
+  const now = new Date();
+  // El reintento tiene fecha: antes se ignoraba y un 429 de Mercado Libre se
+  // volvía a intentar en segundos. Si aún no toca, se responde 200 para que la
+  // cola no insista; la recuperación lo retoma cuando venza.
+  if (event.nextRetryAt && event.nextRetryAt > now) {
+    return { processed: false, reason: "not_due" as const };
+  }
   const claim = await prismadb.marketplaceWebhookEvent.updateMany({
     where: {
       id: event.id,
@@ -75,6 +98,7 @@ export async function processMercadoLibreWebhookEvent(eventId: string) {
           MarketplaceWebhookEventStatus.RETRY,
         ],
       },
+      ...dueFilter(now),
     },
     data: {
       status: MarketplaceWebhookEventStatus.PROCESSING,
@@ -86,6 +110,7 @@ export async function processMercadoLibreWebhookEvent(eventId: string) {
   if (claim.count === 0) {
     return { processed: false, reason: "claimed_elsewhere" as const };
   }
+  const attempts = event.attempts + 1;
 
   try {
     const isSupportedTopic =
@@ -124,15 +149,39 @@ export async function processMercadoLibreWebhookEvent(eventId: string) {
     });
     return { processed: true, reason: "processed" as const };
   } catch (error) {
+    const lastError = getSafeErrorMessage(error);
+    if (attempts >= MAX_WEBHOOK_EVENT_ATTEMPTS) {
+      await prismadb.marketplaceWebhookEvent.update({
+        where: { id: event.id },
+        data: {
+          status: MarketplaceWebhookEventStatus.FAILED,
+          nextRetryAt: null,
+          lastError: `Se agotaron los ${MAX_WEBHOOK_EVENT_ATTEMPTS} intentos. Último error: ${lastError}`,
+        },
+      });
+      console.error("Mercado Libre webhook event failed permanently", {
+        eventId: event.id,
+        topic: event.topic,
+        lastError,
+      });
+      return { processed: false, reason: "failed" as const };
+    }
     await prismadb.marketplaceWebhookEvent.update({
       where: { id: event.id },
       data: {
         status: MarketplaceWebhookEventStatus.RETRY,
         nextRetryAt: new Date(Date.now() + RETRY_DELAY_MS),
-        lastError: getSafeErrorMessage(error),
+        lastError,
       },
     });
-    throw error;
+    // Se responde 200 a propósito: los reintentos inmediatos de QStash solo
+    // encontrarían «not_due». La recuperación programada lo reintenta.
+    console.warn("Mercado Libre webhook event scheduled for retry", {
+      eventId: event.id,
+      attempts,
+      lastError,
+    });
+    return { processed: false, reason: "retry_scheduled" as const };
   }
 }
 
@@ -160,6 +209,7 @@ export async function recoverMercadoLibreWebhookEvents(connectionId: string) {
           MarketplaceWebhookEventStatus.RETRY,
         ],
       },
+      ...dueFilter(new Date()),
     },
     select: { id: true, connectionId: true },
     orderBy: { createdAt: "asc" },

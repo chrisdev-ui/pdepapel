@@ -1,6 +1,7 @@
 import { MarketplaceOrderStatus, type Prisma } from "@prisma/client";
 
 import prismadb from "@/lib/prismadb";
+import { REVENUE_MARKETPLACE_ORDER_STATUSES } from "./order-status";
 
 import {
   getMercadoLibreOrderFinancials,
@@ -185,7 +186,7 @@ async function getMercadoLibreCashflowOrders(connectionId: string) {
   return prismadb.marketplaceOrder.findMany({
     where: {
       connectionId,
-      status: MarketplaceOrderStatus.PAID,
+      status: { in: [...REVENUE_MARKETPLACE_ORDER_STATUSES] },
     },
     select: {
       id: true,

@@ -1,4 +1,5 @@
 import prismadb from "@/lib/prismadb";
+import { REVENUE_MARKETPLACE_ORDER_STATUSES } from "@/lib/mercadolibre/order-status";
 import { MarketplaceOrderStatus, OrderStatus, RestockOrderStatus } from "@prisma/client";
 
 /**
@@ -65,7 +66,7 @@ export async function getTaxReadiness(storeId: string, year = new Date().getFull
   const end = new Date(Date.UTC(year + 1, 0, 1, 5) - 1);
   const [paidWithoutDate, marketplacePendingSettlement, restockCompleted, purchasesRegistered] = await Promise.all([
     prismadb.order.count({ where: { storeId, status: { in: [OrderStatus.PAID, OrderStatus.SENT] }, paidAt: null, createdAt: { gte: start, lte: end } } }),
-    prismadb.marketplaceOrder.count({ where: { connection: { storeId }, status: MarketplaceOrderStatus.PAID, netAmount: null } }).catch(() => 0),
+    prismadb.marketplaceOrder.count({ where: { connection: { storeId }, status: { in: [...REVENUE_MARKETPLACE_ORDER_STATUSES] }, netAmount: null } }).catch(() => 0),
     prismadb.restockOrder.count({ where: { storeId, status: RestockOrderStatus.COMPLETED, updatedAt: { gte: start, lte: end } } }).catch(() => 0),
     prismadb.taxPurchase.count({ where: { storeId, issuedAt: { gte: start, lte: end } } }).catch(() => 0),
   ]);

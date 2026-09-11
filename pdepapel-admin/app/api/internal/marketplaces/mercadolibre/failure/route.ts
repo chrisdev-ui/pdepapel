@@ -1,4 +1,5 @@
 import {
+  MarketplaceOutboxAction,
   MarketplaceOutboxStatus,
   MarketplaceWebhookEventStatus,
 } from "@prisma/client";
@@ -9,6 +10,8 @@ import {
   parseMercadoLibreQueueFailureCallback,
   verifyMercadoLibreProcessorRequest,
 } from "@/lib/mercadolibre/queue";
+import { MAX_OUTBOX_EVENT_ATTEMPTS } from "@/lib/mercadolibre/outbox";
+import { MAX_WEBHOOK_EVENT_ATTEMPTS } from "@/lib/mercadolibre/webhook-processor";
 import prismadb from "@/lib/prismadb";
 
 export async function POST(request: Request) {
@@ -35,42 +38,65 @@ export async function POST(request: Request) {
       );
     }
 
+    // QStash agotó sus entregas. Mismo tope que el procesador: el evento que
+    // ya gastó sus intentos pasa a FAILED y sale en la salud; el resto vuelve a
+    // RETRY para la recuperación programada.
     if (failure.kind === "webhook") {
-      await prismadb.marketplaceWebhookEvent.updateMany({
+      const openStatuses = [
+        MarketplaceWebhookEventStatus.PENDING,
+        MarketplaceWebhookEventStatus.PROCESSING,
+        MarketplaceWebhookEventStatus.RETRY,
+      ];
+      const failed = await prismadb.marketplaceWebhookEvent.updateMany({
         where: {
           id: failure.eventId,
-          status: {
-            in: [
-              MarketplaceWebhookEventStatus.PENDING,
-              MarketplaceWebhookEventStatus.PROCESSING,
-              MarketplaceWebhookEventStatus.RETRY,
-            ],
-          },
+          status: { in: openStatuses },
+          attempts: { gte: MAX_WEBHOOK_EVENT_ATTEMPTS },
         },
         data: {
-          status: MarketplaceWebhookEventStatus.RETRY,
-          nextRetryAt: new Date(),
-          lastError: failure.message,
+          status: MarketplaceWebhookEventStatus.FAILED,
+          nextRetryAt: null,
+          lastError: `Se agotaron los ${MAX_WEBHOOK_EVENT_ATTEMPTS} intentos. Último error: ${failure.message}`,
         },
       });
+      if (failed.count === 0) {
+        await prismadb.marketplaceWebhookEvent.updateMany({
+          where: { id: failure.eventId, status: { in: openStatuses } },
+          data: {
+            status: MarketplaceWebhookEventStatus.RETRY,
+            nextRetryAt: new Date(),
+            lastError: failure.message,
+          },
+        });
+      }
     } else if (failure.kind === "stock-sync") {
-      await prismadb.marketplaceOutboxEvent.updateMany({
+      const openStatuses = [
+        MarketplaceOutboxStatus.PENDING,
+        MarketplaceOutboxStatus.PROCESSING,
+        MarketplaceOutboxStatus.RETRY,
+      ];
+      const failed = await prismadb.marketplaceOutboxEvent.updateMany({
         where: {
           id: failure.eventId,
-          status: {
-            in: [
-              MarketplaceOutboxStatus.PENDING,
-              MarketplaceOutboxStatus.PROCESSING,
-              MarketplaceOutboxStatus.RETRY,
-            ],
-          },
+          status: { in: openStatuses },
+          attempts: { gte: MAX_OUTBOX_EVENT_ATTEMPTS },
+          action: { not: MarketplaceOutboxAction.SYNC_ORDER_FINANCIALS },
         },
         data: {
-          status: MarketplaceOutboxStatus.RETRY,
-          availableAt: new Date(),
-          lastError: failure.message,
+          status: MarketplaceOutboxStatus.FAILED,
+          lastError: `Se agotaron los ${MAX_OUTBOX_EVENT_ATTEMPTS} intentos. Último error: ${failure.message}`,
         },
       });
+      if (failed.count === 0) {
+        await prismadb.marketplaceOutboxEvent.updateMany({
+          where: { id: failure.eventId, status: { in: openStatuses } },
+          data: {
+            status: MarketplaceOutboxStatus.RETRY,
+            availableAt: new Date(),
+            lastError: failure.message,
+          },
+        });
+      }
     } else {
       await prismadb.marketplaceConnection.updateMany({
         where: { id: failure.connectionId },

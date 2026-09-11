@@ -3,6 +3,7 @@
 import { MercadoLibreLogo } from "@/components/mercadolibre-logo";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { TintBadge } from "@/components/ui/tint-badge";
 import { useActionConfirmation } from "@/hooks/use-action-confirmation";
 import {
   getClaimStatusMeta,
@@ -145,6 +146,8 @@ function getQuestionStatusLabel(status: string) {
   return status === "ANSWERED" ? "Respondida" : "Por responder";
 }
 
+const PROFITABILITY_PREVIEW_ROWS = 20;
+
 export type OperationsSection =
   | "resumen"
   | "preguntas"
@@ -198,6 +201,7 @@ export function MercadoLibreOperationsCenter({
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [claims, setClaims] = useState<Claim[]>([]);
   const [profitability, setProfitability] = useState<Profitability[]>([]);
+  const [showAllProfitability, setShowAllProfitability] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshingQuestions, setIsRefreshingQuestions] = useState(false);
@@ -212,60 +216,54 @@ export function MercadoLibreOperationsCenter({
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Cada pestaña pide solo lo que pinta: la de Ventas no debe caerse porque
+  // /questions falló, ni cargar reclamos que nunca muestra.
+  const needsHealth = show("resumen");
+  const needsQuestions = show("preguntas");
+  const needsShipments = show("envios");
+  const needsClaims = show("reclamos") || show("resumen");
+  const needsProfitability = show("rentabilidad");
+
   const loadData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
       const baseUrl = `/api/${storeId}/marketplaces/mercadolibre`;
-      const [
-        healthResponse,
-        questionsResponse,
-        shipmentsResponse,
-        claimsResponse,
-        profitabilityResponse,
-      ] = await Promise.all([
-        fetch(`${baseUrl}/health`),
-        fetch(`${baseUrl}/questions`),
-        fetch(`${baseUrl}/shipments`),
-        fetch(`${baseUrl}/claims`),
-        fetch(`${baseUrl}/profitability`),
-      ]);
-      const failedResponse = [
-        healthResponse,
-        questionsResponse,
-        shipmentsResponse,
-        claimsResponse,
-        profitabilityResponse,
-      ].find((response) => !response.ok);
-      if (failedResponse)
-        throw new Error(await getErrorMessage(failedResponse));
-
+      const fetchJson = async <T,>(path: string, fallback: T): Promise<T> => {
+        const response = await fetch(`${baseUrl}/${path}`);
+        if (!response.ok) throw new Error(await getErrorMessage(response));
+        return (await response.json()) as T;
+      };
       const [
         nextHealth,
         nextQuestions,
         nextShipments,
         nextClaims,
         nextProfitability,
-      ] = (await Promise.all([
-        healthResponse.json(),
-        questionsResponse.json(),
-        shipmentsResponse.json(),
-        claimsResponse.json(),
-        profitabilityResponse.json(),
-      ])) as [HealthSummary, Question[], Shipment[], Claim[], Profitability[]];
-      setHealth(nextHealth);
-      setQuestions(nextQuestions);
-      setShipments(nextShipments);
-      setClaims(nextClaims);
-      setProfitability(nextProfitability);
-      setDrafts((current) =>
-        Object.fromEntries(
-          nextQuestions.map((question) => [
-            question.id,
-            current[question.id] ?? question.suggestedAnswer,
-          ]),
-        ),
-      );
+      ] = await Promise.all([
+        needsHealth ? fetchJson<HealthSummary | null>("health", null) : Promise.resolve(null),
+        needsQuestions ? fetchJson<Question[]>("questions", []) : Promise.resolve([] as Question[]),
+        needsShipments ? fetchJson<Shipment[]>("shipments", []) : Promise.resolve([] as Shipment[]),
+        needsClaims ? fetchJson<Claim[]>("claims", []) : Promise.resolve([] as Claim[]),
+        needsProfitability
+          ? fetchJson<Profitability[]>("profitability", [])
+          : Promise.resolve([] as Profitability[]),
+      ]);
+      if (needsHealth) setHealth(nextHealth);
+      if (needsQuestions) {
+        setQuestions(nextQuestions);
+        setDrafts((current) =>
+          Object.fromEntries(
+            nextQuestions.map((question) => [
+              question.id,
+              current[question.id] ?? question.suggestedAnswer,
+            ]),
+          ),
+        );
+      }
+      if (needsShipments) setShipments(nextShipments);
+      if (needsClaims) setClaims(nextClaims);
+      if (needsProfitability) setProfitability(nextProfitability);
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -275,7 +273,7 @@ export function MercadoLibreOperationsCenter({
     } finally {
       setIsLoading(false);
     }
-  }, [storeId]);
+  }, [needsClaims, needsHealth, needsProfitability, needsQuestions, needsShipments, storeId]);
 
   useEffect(() => {
     void loadData();
@@ -489,7 +487,7 @@ export function MercadoLibreOperationsCenter({
             </p>
           ) : null}
           {notice ? (
-            <p className="rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">
+            <p className="rounded-md border border-tint-mint bg-tint-mint/30 p-3 text-sm text-primary">
               {notice}
             </p>
           ) : null}
@@ -519,11 +517,11 @@ export function MercadoLibreOperationsCenter({
           ) : null}
 
           {!show("resumen") ? null : health?.issues.length ? (
-            <div className="rounded-md border border-amber-300 bg-amber-50/60 p-4">
-              <p className="flex items-center gap-2 font-medium text-amber-900">
+            <div className="rounded-md border border-tint-cream bg-tint-cream/40 p-4">
+              <p className="flex items-center gap-2 font-medium text-primary">
                 <AlertTriangle className="h-4 w-4" /> Alertas del día
               </p>
-              <ul className="mt-2 space-y-2 text-sm text-amber-900">
+              <ul className="mt-2 space-y-2 text-sm text-primary">
                 {health.issues.map((issue, index) => (
                   <li key={`${issue.kind}-${issue.title}-${index}`}>
                     <span className="font-medium">{issue.title}:</span>{" "}
@@ -782,7 +780,10 @@ export function MercadoLibreOperationsCenter({
                       </tr>
                     </thead>
                     <tbody>
-                      {profitability.slice(0, 20).map((item) => {
+                      {(showAllProfitability
+                        ? profitability
+                        : profitability.slice(0, PROFITABILITY_PREVIEW_ROWS)
+                      ).map((item) => {
                         const costIssue =
                           item.costStatus === "AVAILABLE"
                             ? null
@@ -802,13 +803,7 @@ export function MercadoLibreOperationsCenter({
                               ) : null}
                               {costIssue ? (
                                 <div className="mt-2 space-y-1">
-                                  <Badge
-                                    variant="outline"
-                                    className="border-amber-300 bg-amber-50 text-amber-900"
-                                  >
-                                    <AlertTriangle className="mr-1 h-3 w-3" />
-                                    {costIssue.label}
-                                  </Badge>
+                                  <TintBadge label={costIssue.label} tone="cream" />
                                   <p className="max-w-md text-xs text-muted-foreground">
                                     {costIssue.detail}
                                   </p>
@@ -867,6 +862,19 @@ export function MercadoLibreOperationsCenter({
                       })}
                     </tbody>
                   </table>
+                  {profitability.length > PROFITABILITY_PREVIEW_ROWS ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="mt-2"
+                      onClick={() => setShowAllProfitability((value) => !value)}
+                    >
+                      {showAllProfitability
+                        ? "Mostrar solo las primeras"
+                        : `Ver las ${profitability.length - PROFITABILITY_PREVIEW_ROWS} publicaciones restantes`}
+                    </Button>
+                  ) : null}
                 </div>
               )}
             </section>

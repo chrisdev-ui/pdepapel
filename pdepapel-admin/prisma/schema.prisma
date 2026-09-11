@@ -2002,6 +2002,8 @@ model MarketplaceOrder {
   marketplaceFee       Float?
   shippingCost         Float?
   netAmount            Float?
+  /// Suma de `transaction_amount_refunded` de los pagos de Mercado Libre. Se resta del neto.
+  refundedAmount       Float?
   lastRemoteUpdateAt   DateTime?
   inventoryAppliedAt   DateTime?
   inventoryRestockedAt DateTime?
@@ -2311,6 +2313,10 @@ enum MarketplaceOrderStatus {
   DELIVERED
   RETURN_PENDING
   RETURNED
+  /// Mercado Libre devolvió parte del pago; la venta sigue contando como ingreso por su neto real.
+  PARTIALLY_REFUNDED
+  /// Reembolso total o contracargo: no cuenta como ingreso; el inventario se devuelve solo al confirmar el retorno físico.
+  REFUNDED
 }
 
 enum MarketplaceInventoryStatus {

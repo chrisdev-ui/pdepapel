@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import { isFairIssueReference } from "@/lib/fair-issue-reference";
+import { isExternalIssueReference } from "@/lib/fair-issue-reference";
 import type { OpenInventoryIssue } from "@/lib/order-inventory-issues";
 import axios from "axios";
 import { PackageX, RotateCcw } from "lucide-react";
@@ -125,7 +125,7 @@ export function InventoryIssuesPanel({
                       ) : (
                         <span>
                           {issue.orderNumber}
-                          {isFairIssueReference(issue.orderNumber)
+                          {isExternalIssueReference(issue.orderNumber)
                             ? ""
                             : " (pedido eliminado)"}
                         </span>

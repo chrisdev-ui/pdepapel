@@ -151,6 +151,15 @@ la tienda (nunca se copian solos); el inventario local es la fuente de verdad
 cobrado o queda «Liquidación pendiente» hasta que llegue la liquidación. Lo
 urgente aparece también en Inicio y en el correo diario.
 
+Ventas: la lista abre en «Por atender». Cada fila muestra el estado de la
+venta y el del inventario. «Inventario con excepción» → corrige la causa y
+pulsa «Re-sincronizar»; «Retorno físico pendiente» (venta cancelada o
+reembolsada) → con la mercancía en la mano pulsa «Confirmar retorno físico»;
+«Esperando liquidación» → nada, se reintenta solo. Un reembolso parcial
+sigue contando como venta por su neto; uno total no. La tarjeta «Importar
+una venta anterior a la integración» es solo para ventas de antes de
+conectar la cuenta y puede traer los cargos desde Mercado Libre.
+
 ## 8. Envíos (`/envios`)
 
 Vistas: Por despachar, Despachados hoy, En camino, Con novedad, Entregados.

@@ -1,4 +1,5 @@
 import { MarketplaceOrderStatus, OrderStatus, OrderType } from "@prisma/client";
+import { REVENUE_MARKETPLACE_ORDER_STATUSES } from "@/lib/mercadolibre/order-status";
 
 import { getMarketplaceSaleDate } from "@/lib/mercadolibre/reporting";
 import prismadb from "@/lib/prismadb";
@@ -160,7 +161,7 @@ export async function getTaxReport(
       prismadb.marketplaceOrder.findMany({
         where: {
           connection: { storeId },
-          status: MarketplaceOrderStatus.PAID,
+          status: { in: [...REVENUE_MARKETPLACE_ORDER_STATUSES] },
           netAmount: { not: null },
           ...marketplaceDateFilter,
         },
@@ -176,7 +177,7 @@ export async function getTaxReport(
       prismadb.marketplaceOrder.count({
         where: {
           connection: { storeId },
-          status: MarketplaceOrderStatus.PAID,
+          status: { in: [...REVENUE_MARKETPLACE_ORDER_STATUSES] },
           netAmount: null,
           ...marketplaceDateFilter,
         },

@@ -70,6 +70,119 @@ describe("Mercado Libre order financials", () => {
     });
   });
 
+  it("subtracts what Mercado Libre already refunded to the buyer and never goes below zero", () => {
+    const partial = parseMercadoLibreOrderFinancials(
+      {
+        results: [
+          {
+            order_id: "2000017813937484",
+            payment_info: [
+              {
+                money_release_date: "2026-08-08T12:00:00",
+                money_release_status: "released",
+                tax_details: [
+                  {
+                    tax_status: "applied",
+                    original_amount: 933,
+                    refunded_amount: 0,
+                  },
+                ],
+              },
+            ],
+            details: [
+              {
+                charge_info: {
+                  debited_from_operation: "YES",
+                  detail_type: "CHARGE",
+                  detail_sub_type: "CV",
+                  detail_amount: 13_110,
+                },
+                marketplace_info: { marketplace: "CORE" },
+              },
+              {
+                charge_info: {
+                  debited_from_operation: "YES",
+                  detail_type: "CHARGE",
+                  detail_sub_type: "CXD",
+                  detail_amount: 8_500,
+                },
+                marketplace_info: { marketplace: "SHIPPING" },
+                shipping_info: { shipping_id: "123" },
+              },
+              {
+                charge_info: {
+                  debited_from_operation: "NO",
+                  detail_type: "CHARGE",
+                  detail_amount: 5_000,
+                },
+              },
+            ],
+          },
+        ],
+      },
+      "2000017813937484",
+      69_000,
+      10_000,
+    );
+    expect(partial.netAmount).toBe(36_457);
+
+    const full = parseMercadoLibreOrderFinancials(
+      {
+        results: [
+          {
+            order_id: "2000017813937484",
+            payment_info: [
+              {
+                money_release_date: "2026-08-08T12:00:00",
+                money_release_status: "released",
+                tax_details: [
+                  {
+                    tax_status: "applied",
+                    original_amount: 933,
+                    refunded_amount: 0,
+                  },
+                ],
+              },
+            ],
+            details: [
+              {
+                charge_info: {
+                  debited_from_operation: "YES",
+                  detail_type: "CHARGE",
+                  detail_sub_type: "CV",
+                  detail_amount: 13_110,
+                },
+                marketplace_info: { marketplace: "CORE" },
+              },
+              {
+                charge_info: {
+                  debited_from_operation: "YES",
+                  detail_type: "CHARGE",
+                  detail_sub_type: "CXD",
+                  detail_amount: 8_500,
+                },
+                marketplace_info: { marketplace: "SHIPPING" },
+                shipping_info: { shipping_id: "123" },
+              },
+              {
+                charge_info: {
+                  debited_from_operation: "NO",
+                  detail_type: "CHARGE",
+                  detail_amount: 5_000,
+                },
+              },
+            ],
+          },
+        ],
+      },
+      "2000017813937484",
+      69_000,
+      69_000,
+    );
+    expect(full.netAmount).toBe(0);
+    expect(full.marketplaceFee).toBe(13_110);
+  });
+
   it("does not estimate the net amount before Mercado Libre publishes the details", () => {
     expect(() =>
       parseMercadoLibreOrderFinancials(

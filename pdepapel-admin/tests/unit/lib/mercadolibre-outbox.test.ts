@@ -61,6 +61,26 @@ describe("Mercado Libre outbox", () => {
     );
   });
 
+  it("re-opens the financial reconciliation when a refund changes an already written net", async () => {
+    const upsert = vi.fn().mockResolvedValue({ id: "event-id" });
+
+    await queueMarketplaceOrderFinancials(
+      { marketplaceOutboxEvent: { upsert } } as never,
+      {
+        connectionId: "connection-id",
+        externalOrderId: "2000017813937484",
+        marketplaceOrderId: "marketplace-order-id",
+        reset: true,
+      },
+    );
+
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({ status: "PENDING", lastError: null }),
+      }),
+    );
+  });
+
   it("creates an idempotent price synchronization event", async () => {
     const upsert = vi.fn().mockResolvedValue({ id: "event-id" });
 

@@ -125,6 +125,8 @@ export function parseMercadoLibreOrderFinancials(
   payload: unknown,
   externalOrderId: string,
   totalAmount: number,
+  /** Lo que Mercado Libre ya devolvió al comprador: nunca es ingreso. */
+  refundedAmount = 0,
 ): MercadoLibreOrderFinancials {
   if (!isRecord(payload) || !Array.isArray(payload.results)) {
     throw new MercadoLibreFinancialsPendingError();
@@ -145,8 +147,14 @@ export function parseMercadoLibreOrderFinancials(
   return {
     ...charges,
     taxesAmount,
-    netAmount:
-      totalAmount - charges.marketplaceFee - charges.shippingCost - taxesAmount,
+    netAmount: Math.max(
+      0,
+      totalAmount -
+        charges.marketplaceFee -
+        charges.shippingCost -
+        taxesAmount -
+        Math.max(0, refundedAmount),
+    ),
     ...moneyRelease,
   };
 }
@@ -155,6 +163,7 @@ export async function getMercadoLibreOrderFinancials(
   connectionId: string,
   externalOrderId: string,
   totalAmount: number,
+  refundedAmount = 0,
 ) {
   const resource = new URL(
     BILLING_ORDER_DETAILS_RESOURCE,
@@ -200,5 +209,6 @@ export async function getMercadoLibreOrderFinancials(
     response.payload,
     externalOrderId,
     totalAmount,
+    refundedAmount,
   );
 }

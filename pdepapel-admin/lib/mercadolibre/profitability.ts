@@ -1,6 +1,7 @@
 import { MarketplaceOrderStatus } from "@prisma/client";
 
 import prismadb from "@/lib/prismadb";
+import { REVENUE_MARKETPLACE_ORDER_STATUSES } from "./order-status";
 
 import {
   getMarketplaceItemAcquisitionCost,
@@ -33,7 +34,7 @@ export async function getMercadoLibreListingProfitability(
   const orders = await prismadb.marketplaceOrder.findMany({
     where: {
       connectionId,
-      status: MarketplaceOrderStatus.PAID,
+      status: { in: [...REVENUE_MARKETPLACE_ORDER_STATUSES] },
       netAmount: { not: null },
     },
     select: {

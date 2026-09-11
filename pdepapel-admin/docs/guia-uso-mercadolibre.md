@@ -141,13 +141,23 @@ No vincules una publicación si no estás segura del producto. Es mejor dejarla 
 
 P de Papel recibe la venta pagada, la muestra en la sección de Mercado Libre y descuenta las unidades una sola vez. También recibirás un correo cuando exista una nueva venta enlazada.
 
-1. Abre **Ventas → Mercado Libre → Ventas de Mercado Libre**.
-2. Comprueba los productos, cantidad y estado.
-3. Revisa el campo **Neto recibido**. Es el dinero que Mercado Libre liquidó para P de Papel; no es el precio total que pagó el cliente.
+1. Abre **Ventas → Mercado Libre → Ventas**. La lista abre en **Por atender**: ahí solo aparecen las ventas que piden algo de ti. Si está vacía, todo está al día y la lista pasa a **Todas**.
+2. Cada fila tiene dos insignias: el **estado de la venta** (Pagada, Reembolso parcial, Reembolsada, Cancelada…) y el **estado del inventario** (Inventario descontado, Inventario con excepción, Retorno físico pendiente, Inventario devuelto). Si algo falló, el motivo aparece debajo de la insignia.
+3. Revisa la columna **Neto**. Es el dinero que Mercado Libre liquidó para P de Papel; no es el precio total que pagó el cliente. Mientras Mercado Libre no publique la liquidación dice **Pendiente** y los cargos muestran «—» (no un cero).
 4. Prepara el paquete siguiendo el proceso habitual de Mercado Libre.
-5. En **Envíos y despachos**, revisa el estado de la guía. El despacho real se realiza en Mercado Libre o en el punto de entrega que indique Mercado Libre.
+5. En **Envíos**, revisa el estado de la guía. El despacho real se realiza en Mercado Libre o en el punto de entrega que indique Mercado Libre.
 
 **Importante:** no crees otra venta manual en P de Papel por una venta que ya aparece como pagada desde Mercado Libre. Eso duplicaría los ingresos y puede descontar stock dos veces.
+
+### Qué hacer con cada aviso de la lista
+
+| Insignia de inventario | Qué pasó | Qué haces |
+| --- | --- | --- |
+| **Inventario con excepción** | La venta se cobró, pero no se pudo descontar: un producto sin vincular o sin stock suficiente. | Corrige la causa (vincula la publicación en **Publicaciones** o repón stock) y pulsa **Re-sincronizar** en la fila. Vuelve a leer la venta en Mercado Libre y descuenta una sola vez. |
+| **Retorno físico pendiente** | La venta se canceló o Mercado Libre la reembolsó después de haber descontado inventario. Nada vuelve solo. | Cuando tengas la mercancía en la mano, pulsa **Confirmar retorno físico**. Las unidades vuelven al inventario (los kits devuelven sus componentes) y se actualiza la publicación. |
+| **Esperando liquidación** (texto, sin botón) | Mercado Libre aún no publicó cuánto queda para P de Papel. | Nada. Se reintenta solo cada seis horas. |
+
+**Reembolsos.** Si Mercado Libre devuelve parte del dinero, la venta aparece como **Reembolso parcial** (o sigue **Pagada** con el texto «Reembolsado …» cuando Mercado Libre la mantiene como pagada) y el neto se recalcula solo. Un reembolso total o un contracargo la deja como **Reembolsada**: ya no cuenta como ingreso y pide confirmar el retorno físico igual que una cancelación.
 
 ### Consultar cuándo se puede retirar el dinero
 
@@ -182,14 +192,14 @@ Las respuestas nunca se envían solas.
 
 ## 8. Registrar una venta antigua de Mercado Libre
 
-Usa esta opción solo para una venta que Mercado Libre ya marcó como pagada **antes** de conectar la herramienta.
+Usa esta opción solo para una venta que Mercado Libre ya marcó como pagada **antes** de conectar la herramienta. Las ventas nuevas llegan solas: si una venta reciente no descontó inventario, usa **Re-sincronizar** en su fila (sección 6), no esta herramienta.
 
 1. En Mercado Libre copia el número de **Venta #...**.
-2. En P de Papel abre **Ventas de Mercado Libre** y busca la opción para revisar una venta anterior.
-3. Pega el número y revisa que cada producto sugerido sea el correcto.
-4. Comprueba que esa venta todavía no haya sido descontada manualmente del inventario.
-5. Copia los cargos, envío e impuestos que muestra el resumen de Mercado Libre.
-6. Pulsa **Conciliar venta pagada** y confirma.
+2. En P de Papel abre **Ventas → Mercado Libre → Ventas** y baja hasta la tarjeta **Importar una venta anterior a la integración**.
+3. Pega el número, pulsa **Revisar venta** y comprueba que cada producto sugerido sea el correcto. Si la venta ya está registrada, la tarjeta lo dice y no deja importarla dos veces.
+4. Comprueba que esa venta todavía no haya sido descontada manualmente del inventario y que el stock actual alcance (la tarjeta lo marca en rojo si no).
+5. Pulsa **Traer cargos de Mercado Libre** para rellenar cargo por venta, envío e impuestos desde la facturación real. Si Mercado Libre aún no la publicó, cópialos a mano del resumen de la venta.
+6. Pulsa **Importar venta pagada** y lee la confirmación: dice el neto que se guardará (ingresado a mano, no verificado por Mercado Libre), que el inventario se descuenta una vez, cuántas publicaciones se crearán vinculadas y que se enviará el stock a Mercado Libre.
 
 No concilies una venta antigua si ya creaste una venta manual o ya ajustaste el inventario por ella. Si tienes duda, detente y revisa primero el historial de movimientos del producto.
 
@@ -204,7 +214,10 @@ No concilies una venta antigua si ya creaste una venta manual o ya ajustaste el 
 | El paso “Ficha técnica” no muestra campos    | Pulsa **Actualizar campos**. Si dice que no hay campos adicionales, continúa: esa categoría no exige más datos.                |
 | La categoría dejó de estar disponible        | El asistente conserva el borrador, elimina solo la categoría antigua y muestra opciones verificadas. Escoge una y vuelve a cargar la ficha técnica. |
 | Me quedó un borrador que no usaré            | Usa **Eliminar borrador**. Solo borra intentos locales sin publicar, sin ventas y sin preguntas.                               |
-| Una venta no aparece al instante            | Espera unos minutos y actualiza la sección. No crees una venta manual mientras revisas.                                         |
+| Una venta no aparece al instante            | Espera unos minutos y pulsa **Actualizar**. No crees una venta manual mientras revisas.                                         |
+| Una venta dice «Inventario con excepción»   | Vincula la publicación o repón stock y pulsa **Re-sincronizar** en la fila. No ajustes el inventario a mano: se descontaría dos veces. |
+| Una venta cancelada sigue «Retorno físico pendiente» | Es normal hasta que confirmes que la mercancía volvió. Con el paquete en la mano, pulsa **Confirmar retorno físico**.        |
+| Resumen muestra «Se agotaron los intentos»  | Un aviso de Mercado Libre falló doce veces seguidas (por ejemplo, una venta que ya no existe). Revisa la venta en Mercado Libre; si sigue siendo real, usa **Re-sincronizar**. |
 | No puedo relacionar una publicación vieja   | Elige el producto local manualmente o déjala sin vincular hasta confirmar cuál es.                                              |
 | Una publicación muestra poco stock          | Revisa el inventario real y la reserva de seguridad. Nunca aumentes la cantidad solo para que vuelva a estar activa.            |
 

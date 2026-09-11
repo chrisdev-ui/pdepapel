@@ -1,4 +1,6 @@
-import { MarketplaceOrderStatus, type Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
+
+import { REVENUE_MARKETPLACE_ORDER_STATUSES } from "./order-status";
 
 export type MarketplaceReportingPeriod = {
   start: Date;
@@ -30,7 +32,7 @@ export function createSettledMarketplaceSalesWhere(
 ): Prisma.MarketplaceOrderWhereInput {
   return {
     connection: { storeId },
-    status: MarketplaceOrderStatus.PAID,
+    status: { in: [...REVENUE_MARKETPLACE_ORDER_STATUSES] },
     netAmount: { not: null },
     ...(period
       ? {
