@@ -1,6 +1,7 @@
 "use client";
 
 import { useFormPersist } from "@/hooks/use-form-persist";
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -123,6 +124,7 @@ export const BoxForm: React.FC<BoxFormProps> = ({
     key: `box-form-${params.storeId}-${initialData?.id ?? "new"}`,
     enabled: !initialData,
   });
+  const { confirmLeave, confirmationDialog: leaveDialog } = useUnsavedChangesGuard(form, { enabled: !loading });
 
   useFormValidationToast({ form });
 
@@ -190,6 +192,7 @@ export const BoxForm: React.FC<BoxFormProps> = ({
 
   return (
     <>
+      {leaveDialog}
       <AlertModal
         isOpen={open}
         onClose={() => setOpen(false)}
@@ -216,7 +219,9 @@ export const BoxForm: React.FC<BoxFormProps> = ({
                   variant="outline"
                   size="icon"
                   aria-label="Volver a Envíos y empaques"
-                  onClick={() => router.push(listUrl)}
+                  onClick={async () => {
+                    if (await confirmLeave()) router.push(listUrl);
+                  }}
                 >
                   <ArrowLeft className="h-4 w-4" aria-hidden="true" />
                 </Button>

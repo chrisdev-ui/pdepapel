@@ -158,6 +158,7 @@ model Post {
   updatedAt DateTime @updatedAt
   store     Store    @relation("StoreToPost", fields: [storeId], references: [id])
 
+  @@unique([storeId, social, postId])
   @@index([storeId])
 }
 
@@ -921,7 +922,9 @@ model Shipping {
   status                ShippingStatus          @default(Preparing)
   provider              ShippingProvider        @default(MANUAL)
   boxId                 String?
-  box                   Box?                    @relation(fields: [boxId], references: [id])
+  /// Una caja con envíos no se borra (Restrict emulado por Prisma): la API lo
+  /// rechaza con 409 y el cliente de Prisma también, así ningún script la deja huérfana.
+  box                   Box?                    @relation(fields: [boxId], references: [id], onDelete: Restrict)
   envioClickIdRate      Int? // ⭐ idRate de cotización (guardado al cotizar)
   envioClickIdOrder     Int? // ⭐ idOrder de guía (retornado al crear guía)
   myShipmentReference   String? // Referencia de tu sistema (orderNumber)

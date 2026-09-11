@@ -1,6 +1,7 @@
 "use client";
 
 import { useFormPersist } from "@/hooks/use-form-persist";
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, Eraser, ExternalLink, Trash } from "lucide-react";
@@ -121,6 +122,7 @@ export const PostForm: React.FC<PostFormProps> = ({ initialData }) => {
     key: `post-form-${params.storeId}-${initialData?.id ?? "new"}`,
     enabled: !initialData,
   });
+  const { confirmLeave, confirmationDialog: leaveDialog } = useUnsavedChangesGuard(form, { enabled: !loading });
 
   useFormValidationToast({ form });
 
@@ -218,6 +220,7 @@ export const PostForm: React.FC<PostFormProps> = ({ initialData }) => {
 
   return (
     <>
+      {leaveDialog}
       <AlertModal
         isOpen={open}
         onClose={() => setOpen(false)}
@@ -229,8 +232,10 @@ export const PostForm: React.FC<PostFormProps> = ({ initialData }) => {
           <Button
             variant="outline"
             size="icon"
-            onClick={() => router.back()}
-            aria-label="Volver"
+            onClick={async () => {
+              if (await confirmLeave()) router.push(`/${params.storeId}/contenido?tab=redes`);
+            }}
+            aria-label="Volver a Redes en la tienda"
           >
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           </Button>

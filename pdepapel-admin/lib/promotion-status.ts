@@ -79,3 +79,16 @@ export function formatDiscount(type: "PERCENTAGE" | "FIXED", amount: number, cur
 export function daysUntilEnd(endDate: Date | string, now = new Date()): number {
   return Math.ceil((new Date(endDate).getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
 }
+
+/**
+ * Orden de la columna «Descuento»: primero los porcentajes (de menor a mayor)
+ * y luego los montos fijos (de menor a mayor). Mezclar 20 (%) con 5 000 ($)
+ * en una sola escala no ordena nada.
+ */
+export function compareDiscounts(
+  a: { type: "PERCENTAGE" | "FIXED"; amount: number },
+  b: { type: "PERCENTAGE" | "FIXED"; amount: number },
+): number {
+  if (a.type !== b.type) return a.type === "PERCENTAGE" ? -1 : 1;
+  return a.amount - b.amount;
+}

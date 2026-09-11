@@ -71,7 +71,7 @@ describe("PostForm", () => {
     expect(
       screen.getByRole("button", { name: "Guardar cambios" }),
     ).toHaveAttribute("type", "submit");
-    expect(screen.getByRole("button", { name: "Volver" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Volver a Redes en la tienda" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Eliminar publicación" }),
     ).toBeInTheDocument();

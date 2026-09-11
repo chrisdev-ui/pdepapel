@@ -27,6 +27,7 @@ import { useActionConfirmation } from "@/hooks/use-action-confirmation";
 import { useFormPersist } from "@/hooks/use-form-persist";
 import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useToast } from "@/hooks/use-toast";
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { getErrorMessage } from "@/lib/api-errors";
 import type { CouponDetail } from "@/lib/coupon-availability";
 import { COUPON_CODE_MESSAGE, COUPON_CODE_PATTERN } from "@/lib/coupons";
@@ -125,6 +126,7 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData }) => {
 
   const { clearStorage } = useFormPersist({ form, key: `coupon-form-${storeId}-${initialData?.id ?? "new"}`, enabled: !initialData });
   useFormValidationToast({ form });
+  const { confirmLeave, confirmationDialog: leaveDialog } = useUnsavedChangesGuard(form, { enabled: !loading });
 
   const type = form.watch("type");
   const limitUses = form.watch("limitUses");
@@ -199,6 +201,7 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData }) => {
   return (
     <>
       {confirmationDialog}
+      {leaveDialog}
       <AlertModal
         isOpen={deleteOpen}
         onClose={() => setDeleteOpen(false)}
@@ -210,10 +213,15 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData }) => {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
-          <Button variant="outline" size="icon-sm" asChild aria-label="Volver a cupones">
-            <Link href={listHref}>
-              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            </Link>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            aria-label="Volver a cupones"
+            onClick={async () => {
+              if (await confirmLeave()) router.push(listHref);
+            }}
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           </Button>
           <div className="flex min-w-0 flex-col gap-0.5">
             <div className="flex flex-wrap items-center gap-2">

@@ -6,7 +6,7 @@ import Link from "next/link";
 
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { UsageCount } from "@/components/usage-count";
-import { PROMOTION_STATUS, formatDiscount, getPromotionStatus } from "@/lib/promotion-status";
+import { PROMOTION_STATUS, compareDiscounts, formatDiscount, getPromotionStatus } from "@/lib/promotion-status";
 import { currencyFormatter } from "@/lib/utils";
 
 import { TintBadge } from "../../pedidos/components/order-badges";
@@ -42,6 +42,7 @@ export function buildCouponColumns(storeId: string): ColumnDef<CouponColumn>[] {
     {
       id: "discount",
       accessorKey: "amount",
+      sortingFn: (a, b) => compareDiscounts(a.original, b.original),
       header: ({ column }) => <DataTableColumnHeader column={column} title="Descuento" />,
       cell: ({ row }) => (
         <div className="flex flex-col">

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { daysUntilEnd, formatDiscount, getPromotionStatus, isPromotionExhausted, summarizePromotions } from "@/lib/promotion-status";
+import { compareDiscounts, daysUntilEnd, formatDiscount, getPromotionStatus, isPromotionExhausted, summarizePromotions } from "@/lib/promotion-status";
 
 const NOW = new Date("2026-09-08T15:00:00Z");
 
@@ -41,5 +41,20 @@ describe("promotion-status", () => {
     expect(formatDiscount("FIXED", 5000, (value) => `$ ${value}`)).toBe("$ 5000");
     expect(daysUntilEnd("2026-09-10T15:00:00Z", NOW)).toBe(2);
     expect(daysUntilEnd("2026-09-06T15:00:00Z", NOW)).toBe(-2);
+  });
+
+  it("sorts discounts by type first and then by amount", () => {
+    const rows = [
+      { type: "FIXED" as const, amount: 5000 },
+      { type: "PERCENTAGE" as const, amount: 20 },
+      { type: "FIXED" as const, amount: 500 },
+      { type: "PERCENTAGE" as const, amount: 10 },
+    ];
+    expect([...rows].sort(compareDiscounts)).toEqual([
+      { type: "PERCENTAGE", amount: 10 },
+      { type: "PERCENTAGE", amount: 20 },
+      { type: "FIXED", amount: 500 },
+      { type: "FIXED", amount: 5000 },
+    ]);
   });
 });

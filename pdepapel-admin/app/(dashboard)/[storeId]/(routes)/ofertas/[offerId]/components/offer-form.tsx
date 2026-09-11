@@ -28,6 +28,7 @@ import { discountOptions } from "@/constants";
 import { useFormPersist } from "@/hooks/use-form-persist";
 import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useToast } from "@/hooks/use-toast";
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { getErrorMessage } from "@/lib/api-errors";
 import { getDatePresets } from "@/lib/date-presets";
 import { OFFER_LABEL_MAX, OFFER_NAME_MAX } from "@/lib/offers";
@@ -130,6 +131,7 @@ export const OfferForm: React.FC<OfferFormProps> = ({ initialData, picker }) => 
   const form = useForm<OfferFormValues>({ resolver: zodResolver(formSchema), defaultValues });
   const { clearStorage } = useFormPersist({ form, key: `offer-form-${storeId}-${initialData?.id ?? "new"}`, enabled: !initialData });
   useFormValidationToast({ form });
+  const { confirmLeave, confirmationDialog: leaveDialog } = useUnsavedChangesGuard(form, { enabled: !loading });
 
   const type = form.watch("type");
   const amount = form.watch("amount");
@@ -242,6 +244,7 @@ export const OfferForm: React.FC<OfferFormProps> = ({ initialData, picker }) => 
 
   return (
     <>
+      {leaveDialog}
       <AlertModal
         isOpen={deleteOpen}
         onClose={() => setDeleteOpen(false)}
@@ -253,10 +256,15 @@ export const OfferForm: React.FC<OfferFormProps> = ({ initialData, picker }) => 
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
-          <Button variant="outline" size="icon-sm" asChild aria-label="Volver a ofertas">
-            <Link href={listHref}>
-              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            </Link>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            aria-label="Volver a ofertas"
+            onClick={async () => {
+              if (await confirmLeave()) router.push(listHref);
+            }}
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           </Button>
           <div className="flex min-w-0 flex-col gap-0.5">
             <div className="flex flex-wrap items-center gap-2">

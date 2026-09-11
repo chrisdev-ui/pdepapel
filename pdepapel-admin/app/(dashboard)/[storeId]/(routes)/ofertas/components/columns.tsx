@@ -4,7 +4,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
 
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
-import { PROMOTION_STATUS, formatDiscount, getPromotionStatus } from "@/lib/promotion-status";
+import { PROMOTION_STATUS, compareDiscounts, formatDiscount, getPromotionStatus } from "@/lib/promotion-status";
 import { currencyFormatter } from "@/lib/utils";
 
 import { TintBadge } from "../../pedidos/components/order-badges";
@@ -50,6 +50,7 @@ export function buildOfferColumns(storeId: string): ColumnDef<OfferColumn>[] {
     {
       id: "discount",
       accessorKey: "amount",
+      sortingFn: (a, b) => compareDiscounts(a.original, b.original),
       header: ({ column }) => <DataTableColumnHeader column={column} title="Descuento" />,
       cell: ({ row }) => <span className="text-sm font-semibold tabular-nums">{formatDiscount(row.original.type, row.original.amount, currencyFormatter)}</span>,
     },
