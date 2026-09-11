@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/prismadb", () => ({ default: {} }));
 
 import { buildTodaySummary, channelForOrderType, getColombiaDayBounds, paidWithin, type TodayRawInput } from "@/lib/dashboard-today";
-import { OrderType, PaymentMethod } from "@prisma/client";
+import { OrderType, PaymentMethod, ShippingStatus } from "@prisma/client";
 
 const now = new Date("2026-09-07T21:52:00.000Z"); // 16:52 en Colombia
 
@@ -111,5 +111,29 @@ describe("dashboard today", () => {
       { productId: "p8", name: "Sticker pack", units: 8 },
       { productId: null, name: "Ítem manual", units: 1 },
     ]);
+  });
+
+  it("puts unreconciled inventory first and points at Movimientos when the orders are gone", () => {
+    const withOrders = buildTodaySummary({ ...base(), inventoryIssues: { open: 2, orphans: 0 } }, "store");
+    expect(withOrders.pending[0]).toMatchObject({ kind: "inventory-issue", title: "2 líneas de inventario sin cuadrar", href: "/store/pedidos?vista=por-atender", action: "Cuadrar" });
+
+    const orphans = buildTodaySummary({ ...base(), inventoryIssues: { open: 1, orphans: 1 } }, "store");
+    expect(orphans.pending[0]).toMatchObject({ kind: "inventory-issue", title: "1 línea de inventario sin cuadrar", href: "/store/movimientos-inventario#incidencias-inventario" });
+
+    const none = buildTodaySummary({ ...base(), inventoryIssues: { open: 0, orphans: 0 } }, "store");
+    expect(none.pending.some((item) => item.kind === "inventory-issue")).toBe(false);
+  });
+
+  it("surfaces shipping issues on Inicio with the first case named", () => {
+    const summary = buildTodaySummary(
+      { ...base(), shippingIssues: { count: 2, sample: [{ orderNumber: "ORD-9", fullName: "Sofía Mesa", status: ShippingStatus.InTransit, stale: true }] } },
+      "store",
+    );
+    const item = summary.pending.find((entry) => entry.kind === "shipping-issue");
+    expect(item).toMatchObject({ title: "2 envíos con novedad", href: "/store/pedidos?vista=con-novedad", action: "Revisar" });
+    expect(item?.meta).toContain("ORD-9 · Sofía Mesa: en tránsito sin novedades hace días y más");
+    const kinds = summary.pending.map((entry) => entry.kind);
+    expect(kinds.indexOf("shipping-issue")).toBeGreaterThan(kinds.indexOf("verify-payment"));
+    expect(kinds.indexOf("shipping-issue")).toBeLessThan(kinds.indexOf("create-guide"));
   });
 });

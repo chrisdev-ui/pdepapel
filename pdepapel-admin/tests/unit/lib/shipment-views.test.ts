@@ -9,8 +9,7 @@ import {
   isReadyToDispatch,
   isStaleDispatch,
   shipmentMatchesView,
-  type ViewableShipment,
-} from "@/lib/shipment-views";
+  type ViewableShipment, getStaleInTransitBadge, isStaleInTransit } from "@/lib/shipment-views";
 
 const NOW = new Date("2026-09-08T15:00:00Z"); // 10:00 en Colombia
 
@@ -119,5 +118,20 @@ describe("shipment-views", () => {
       { name: "Lapicero", sku: "LAP-1", quantity: 1, orders: 1 },
       { name: "Libreta", sku: "LIB-1", quantity: 5, orders: 2 },
     ]);
+  });
+
+  it("flags a guide in transit with no news for more than five days and lists it under con-novedad", () => {
+    const now = new Date("2026-09-10T12:00:00.000Z");
+    const days = (n: number) => new Date(now.getTime() - n * 24 * 60 * 60 * 1000);
+    const stale = { status: ShippingStatus.InTransit, createdAt: days(9), updatedAt: days(6) };
+    const fresh = { status: ShippingStatus.InTransit, createdAt: days(3), updatedAt: days(2) };
+    const delivered = { status: ShippingStatus.Delivered, createdAt: days(20), updatedAt: days(10) };
+    expect(isStaleInTransit(stale, now)).toBe(true);
+    expect(isStaleInTransit(fresh, now)).toBe(false);
+    expect(isStaleInTransit(delivered, now)).toBe(false);
+    expect(getStaleInTransitBadge(stale, now)).toEqual({ label: "Sin novedades hace 6 días", tone: "pink" });
+    expect(getStaleInTransitBadge(fresh, now)).toBeNull();
+    expect(shipmentMatchesView({ ...stale, order: null }, "con-novedad", now)).toBe(true);
+    expect(shipmentMatchesView({ ...fresh, order: null }, "con-novedad", now)).toBe(false);
   });
 });

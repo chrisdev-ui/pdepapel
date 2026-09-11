@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
-import { getShipmentStatusBadge } from "@/lib/shipment-views";
+import { getShipmentStatusBadge, getStaleInTransitBadge } from "@/lib/shipment-views";
 
 import { TintBadge } from "../../pedidos/components/order-badges";
 import { relativeDate } from "../../pedidos/components/columns";
@@ -10,6 +10,7 @@ import { carrierLabel, PROVIDER_LABELS, type ShipmentColumn } from "./columns";
 
 export function ShipmentMobileCard({ shipment, storeId }: { shipment: ShipmentColumn; storeId: string }) {
   const badge = getShipmentStatusBadge(shipment.status);
+  const stale = getStaleInTransitBadge(shipment);
   const order = shipment.order;
   const carrier = carrierLabel(shipment);
   return (
@@ -29,6 +30,7 @@ export function ShipmentMobileCard({ shipment, storeId }: { shipment: ShipmentCo
           </span>
         </div>
         <TintBadge label={badge.label} tone={badge.tone} />
+        {stale && <TintBadge label={stale.label} tone={stale.tone} />}
       </div>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
         <span>{carrier ? `${carrier} · ${PROVIDER_LABELS[shipment.provider]}` : "Sin transportadora"}</span>

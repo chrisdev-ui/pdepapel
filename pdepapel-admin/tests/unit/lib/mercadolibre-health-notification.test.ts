@@ -205,4 +205,25 @@ describe("sendMercadoLibreHealthNotification", () => {
       sendMercadoLibreHealthNotification({ storeId: "store-1", summary }),
     ).rejects.toThrow("Resend rechazó la alerta de Mercado Libre: quota");
   });
+
+  it("puts inventory exceptions first and gives the new operational kinds a direct action", () => {
+    const digest = buildMercadoLibreHealthDigest({
+      storeId: "store-1",
+      summary: {
+        ...summary,
+        issues: [
+          { kind: "settlement_pending", title: "Venta 2001 sin liquidación", detail: "Pagada hace 9 días", orderId: "mo-2" },
+          { kind: "outbox_failed", title: "Libreta · stock sin sincronizar", detail: "422 from ML", listingId: "listing-9" },
+          { kind: "webhook_failed", title: "2 avisos de Mercado Libre sin procesar", detail: "Ejecuta la recuperación" },
+          { kind: "inventory_exception", title: "Venta 2000 sin inventario aplicado", detail: "Stock insuficiente", orderId: "mo-1", externalOrderId: "2000" },
+        ],
+      },
+      now: new Date("2026-09-06T15:57:00.000Z"),
+    });
+    expect(digest.groups.map((group) => group.kind)).toEqual(["inventory_exception", "outbox_failed", "webhook_failed", "settlement_pending"]);
+    expect(digest.groups[0].items[0].actions[0]).toMatchObject({ label: "Reprocesar venta", primary: true });
+    expect(digest.groups[1].items[0].actions.map((action) => action.label)).toEqual(["Ver publicación", "Recuperar cola"]);
+    expect(digest.groups[2].items[0].actions[0]).toMatchObject({ label: "Recuperar cola", primary: true });
+    expect(digest.groups[3].items[0].actions.map((action) => action.label)).toEqual(["Ver flujo de caja", "Ver venta"]);
+  });
 });

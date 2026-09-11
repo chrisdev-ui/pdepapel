@@ -153,6 +153,9 @@ describe("order editing guards with MySQL", () => {
 
     const cancelled = await PATCH(json("PATCH", { status: OrderStatus.CANCELLED, expectedStatus: OrderStatus.PAID }), { params: { storeId: fixture.store.id, orderId: order.id } });
     expect(cancelled.status).toBe(200);
+    // La columna de stock del kit es derivada: que "falle" su línea no es deuda
+    // con el kardex y no debe abrir incidencias fantasma.
+    expect(await testPrisma.orderInventoryIssue.count({ where: { orderId: order.id } })).toBe(0);
     component = await testPrisma.product.findUniqueOrThrow({ where: { id: fixture.component.id } });
     expect(component.stock).toBe(6);
   });

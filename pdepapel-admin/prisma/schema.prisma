@@ -86,6 +86,9 @@ model Store {
   businessCashPolicy             BusinessCashPolicy?
   businessCashMovements          BusinessCashMovement[]
   growthCampaigns                GrowthCampaign[]
+  orderInventoryIssues           OrderInventoryIssue[]
+  jobRuns                        JobRun[]
+  shippingWebhookEvents          ShippingWebhookEvent[]
 }
 
 model Offer {
@@ -673,9 +676,10 @@ model Order {
   // Sender Info
   createdBy String? // Admin User ID
 
-  quoteRequests QuoteRequest[]
-  invoices      Invoice[]
-  fairEvent     FairEvent?     @relation(fields: [fairEventId], references: [id])
+  quoteRequests   QuoteRequest[]
+  invoices        Invoice[]
+  fairEvent       FairEvent?            @relation(fields: [fairEventId], references: [id])
+  inventoryIssues OrderInventoryIssue[]
 
   @@index([storeId])
   @@index([couponId])
@@ -948,6 +952,11 @@ model Shipping {
   notes                 String?                 @db.Text
   courier               String?
   cost                  Float?
+  /// Último intento fallido de crear la guía en EnvioClick (mensaje y momento).
+  /// Se limpia cuando la guía se crea. Sin esto el pedido se quedaba en
+  /// «Por despachar» sin decir por qué.
+  guideError            String?                 @db.Text
+  guideAttemptedAt      DateTime?
   createdAt             DateTime                @default(now())
   updatedAt             DateTime                @updatedAt
   storeId               String
@@ -1181,6 +1190,79 @@ model Box {
   shippings Shipping[]
 
   @@index([storeId])
+}
+
+/// Línea de inventario que no se pudo mover cuando el pedido cambió de estado
+/// (pago confirmado, cancelación, borrado). El pedido siguió adelante; esta
+/// fila es la deuda pendiente con el kardex hasta que alguien la reintenta o
+/// la concilia a mano.
+model OrderInventoryIssue {
+  id          String                  @id @default(uuid())
+  storeId     String
+  /// Null cuando el pedido se borró después: la deuda con el kardex sigue viva.
+  orderId     String?
+  orderNumber String
+  kind        OrderInventoryIssueKind
+  productId   String
+  productName String
+  /// Unidades que faltaron por mover (siempre positivas; `kind` dice el sentido).
+  quantity    Int
+  reason      String                  @db.Text
+  createdAt   DateTime                @default(now())
+  resolvedAt  DateTime?
+  /// Usuario que reintentó o concilió, o "SYSTEM" cuando el reintento fue automático.
+  resolvedBy  String?
+  /// Movimiento de inventario creado al reintentar con éxito.
+  movementId  String?
+
+  store Store  @relation(fields: [storeId], references: [id])
+  order Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([storeId, resolvedAt])
+  @@index([orderId])
+  @@index([productId])
+}
+
+enum OrderInventoryIssueKind {
+  DECREMENT
+  RESTOCK
+}
+
+/// Última ejecución de cada tarea programada o de fondo (crons, revalidación
+/// de la tienda). Una fila por nombre: se sobreescribe en cada corrida.
+model JobRun {
+  id      String   @id @default(uuid())
+  storeId String?
+  name    String
+  ranAt   DateTime
+  ok      Boolean
+  detail  String?  @db.Text
+
+  store Store? @relation(fields: [storeId], references: [id])
+
+  @@unique([name, storeId])
+  @@index([storeId])
+  @@index([ranAt])
+}
+
+/// Webhook de EnvioClick que llegó sin un envío que lo reclame. Antes se
+/// respondía 200 y el evento se perdía; ahora queda guardado para revisarlo.
+model ShippingWebhookEvent {
+  id                  String    @id @default(uuid())
+  storeId             String?
+  provider            String    @default("ENVIOCLICK")
+  idOrder             String?
+  myShipmentReference String?
+  payload             Json
+  reason              String
+  createdAt           DateTime  @default(now())
+  resolvedAt          DateTime?
+
+  store Store? @relation(fields: [storeId], references: [id])
+
+  @@index([storeId, resolvedAt])
+  @@index([idOrder])
+  @@index([myShipmentReference])
 }
 
 model InventoryMovement {

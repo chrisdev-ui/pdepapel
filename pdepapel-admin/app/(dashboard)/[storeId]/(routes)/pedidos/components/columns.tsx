@@ -7,6 +7,7 @@ import { WhatsappButton } from "@/components/whatsapp-button";
 import {
   getNextStep,
   getOrderChannel,
+  getInventoryIssueBadge,
   getOrderQueue,
   getPaymentBadge,
   getShippingBadge,
@@ -92,7 +93,13 @@ export const buildColumns = (storeId: string): ColumnDef<OrderColumn>[] => [
     header: ({ column }) => <DataTableColumnHeader column={column} title="Envío" />,
     cell: ({ row }) => {
       const badge = getShippingBadge(row.original);
-      return badge ? <TintBadge label={badge.label} tone={badge.tone} /> : <span className="text-xs text-muted-foreground">—</span>;
+      const issue = getInventoryIssueBadge(row.original);
+      return (
+        <span className="flex flex-wrap items-center gap-1">
+          {badge ? <TintBadge label={badge.label} tone={badge.tone} /> : <span className="text-xs text-muted-foreground">—</span>}
+          {issue && <TintBadge label={issue.label} tone={issue.tone} />}
+        </span>
+      );
     },
   },
   {

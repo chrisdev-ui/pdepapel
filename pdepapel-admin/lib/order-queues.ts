@@ -61,8 +61,22 @@ export interface QueueableOrder {
   paidAt?: Date | string | null;
   expiresAt?: Date | string | null;
   payment?: { method: PaymentMethod } | null;
-  shipping?: { status: ShippingStatus; trackingCode?: string | null } | null;
+  shipping?: { status: ShippingStatus; trackingCode?: string | null; updatedAt?: Date | string | null } | null;
+  /** Líneas de inventario que fallaron al mover y siguen sin resolver. */
+  openInventoryIssues?: number;
 }
+
+/** Deuda con el kardex: el pedido cambió de estado pero alguna línea no se movió. */
+export function hasOpenInventoryIssues(order?: QueueableOrder): boolean {
+  return Boolean(order && (order.openInventoryIssues ?? 0) > 0);
+}
+
+export function getInventoryIssueBadge(order?: QueueableOrder): { label: string; tone: "pink" } | null {
+  return hasOpenInventoryIssues(order) ? { label: "Inventario sin cuadrar", tone: "pink" } : null;
+}
+
+/** Días sin novedad en tránsito a partir de los cuales el pedido pide atención (misma ventana que Envíos). */
+export const STALE_IN_TRANSIT_DAYS = 5;
 
 const QUOTE_STATUSES: OrderStatus[] = [OrderStatus.DRAFT, OrderStatus.QUOTATION, OrderStatus.VIEWED, OrderStatus.ACCEPTED];
 const ISSUE_STATUSES: ShippingStatus[] = [ShippingStatus.FailedDelivery, ShippingStatus.Exception, ShippingStatus.Returned];
@@ -151,6 +165,8 @@ export function orderMatchesView(queue: OrderQueue, view: OrderView, order?: Que
       return true;
     case "por-atender":
       return (
+        hasOpenInventoryIssues(order) ||
+        (queue === "in-transit" && Boolean(order && isShippingStale(order, now))) ||
         queue === "verify" ||
         queue === "dispatch" ||
         queue === "issue" ||
@@ -164,7 +180,7 @@ export function orderMatchesView(queue: OrderQueue, view: OrderView, order?: Que
     case "en-camino":
       return queue === "in-transit";
     case "con-novedad":
-      return queue === "issue";
+      return queue === "issue" || (queue === "in-transit" && Boolean(order && isShippingStale(order, now)));
     case "cotizaciones":
       return queue === "quote";
   }
@@ -222,11 +238,24 @@ export interface ShippingBadge {
   tone: "mint" | "cream" | "sky" | "slate" | "pink" | "lavender";
 }
 
-export function getShippingBadge(order: QueueableOrder): ShippingBadge | null {
+/** Guía en camino sin ningún cambio en más de STALE_IN_TRANSIT_DAYS: nadie sabe dónde está el paquete. */
+export function isShippingStale(order: QueueableOrder, now = new Date()): boolean {
+  const shipping = order.shipping;
+  if (!shipping || !IN_TRANSIT_STATUSES.includes(shipping.status)) return false;
+  const updated = toDate(shipping.updatedAt);
+  if (!updated) return false;
+  return now.getTime() - updated.getTime() > STALE_IN_TRANSIT_DAYS * 24 * 60 * 60 * 1000;
+}
+
+export function getShippingBadge(order: QueueableOrder, now = new Date()): ShippingBadge | null {
   const inStore = order.type === OrderType.POINT_OF_SALE || order.type === OrderType.FESTIVAL;
   if (inStore) return null;
   const status = order.shipping?.status;
   if (!status || (!order.shipping?.trackingCode && status === ShippingStatus.Preparing)) return { label: "Sin guía", tone: "slate" };
+  if (isShippingStale(order, now)) {
+    const days = Math.floor((now.getTime() - toDate(order.shipping?.updatedAt)!.getTime()) / (24 * 60 * 60 * 1000));
+    return { label: `Sin novedades hace ${days} días`, tone: "pink" };
+  }
   switch (status) {
     case ShippingStatus.Preparing:
       return { label: "Preparando", tone: "lavender" };

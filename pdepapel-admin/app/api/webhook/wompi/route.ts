@@ -4,7 +4,12 @@ import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { createInventoryMovementBatchResilient } from "@/lib/inventory";
 import { invalidateStoreProductsCache } from "@/lib/cache";
-import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
+import {
+  OrderInventoryIssueKind,
+  OrderStatus,
+  PaymentMethod,
+  ShippingStatus,
+} from "@prisma/client";
 import { calculateOrderFinancials } from "@/lib/financial";
 import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
 import {
@@ -15,6 +20,7 @@ import { explodeKitMovements } from "@/lib/order-stock-movements";
 import { safeHexEquals } from "@/lib/webhook-auth";
 import crypto from "crypto";
 import { NextResponse } from "next/server";
+import { recordInventoryIssues } from "@/lib/order-inventory-issues";
 
 const HASH_ALGORITHM = "sha256";
 
@@ -130,7 +136,12 @@ async function processWebhookPayment(response: any) {
 function isValidChecksum(response: any): boolean {
   const { signature, data, timestamp } = response;
 
-  if (!signature || !data || !timestamp || !Array.isArray(signature.properties)) {
+  if (
+    !signature ||
+    !data ||
+    !timestamp ||
+    !Array.isArray(signature.properties)
+  ) {
     return false;
   }
 
@@ -181,7 +192,11 @@ function isPaymentValid(order: any, transaction: any): boolean {
   const currency = transaction?.currency;
 
   if (payment?.method !== PaymentMethod.Wompi) return false;
-  if (!Number.isFinite(amountInCents) || Math.round(amountInCents) !== expectedCents) return false;
+  if (
+    !Number.isFinite(amountInCents) ||
+    Math.round(amountInCents) !== expectedCents
+  )
+    return false;
   // Wompi opera en COP; otra moneda con el mismo número sería otro importe.
   if (currency && currency !== "COP") return false;
   return true;
@@ -271,6 +286,23 @@ async function updateOrderData(order: any, transaction: any) {
           tx,
           stockMovements,
         );
+        if (stockResult.failed.length > 0) {
+          console.error(
+            "[WOMPI_WEBHOOK] Descuento de inventario incompleto en un pago confirmado:",
+            {
+              orderNumber: order.orderNumber,
+              transactionId: transaction.id,
+              failed: stockResult.failed,
+            },
+          );
+          await recordInventoryIssues(tx, {
+            storeId: order.storeId,
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            kind: OrderInventoryIssueKind.DECREMENT,
+            failed: stockResult.failed,
+          });
+        }
 
         // Calculate and persist financial metrics
         const financials = await calculateOrderFinancials(
@@ -371,6 +403,13 @@ async function updateOrderData(order: any, transaction: any) {
               failed: stockResult.failed,
               success: stockResult.success,
             });
+            await recordInventoryIssues(tx, {
+              storeId: order.storeId,
+              orderId: order.id,
+              orderNumber: order.orderNumber,
+              kind: OrderInventoryIssueKind.RESTOCK,
+              failed: stockResult.failed,
+            });
           }
         }
 
@@ -422,7 +461,10 @@ async function updateOrderData(order: any, transaction: any) {
     });
 
     if (!result.processed) {
-      if (currentStatus === OrderStatus.PAID && order.status === OrderStatus.PAID) {
+      if (
+        currentStatus === OrderStatus.PAID &&
+        order.status === OrderStatus.PAID
+      ) {
         try {
           await recordPaidOrderInGoogleAnalytics(order.id);
         } catch (analyticsError) {

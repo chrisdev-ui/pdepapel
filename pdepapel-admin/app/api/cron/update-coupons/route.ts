@@ -4,6 +4,7 @@ import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { NextRequest, NextResponse } from "next/server";
+import { recordJobRun } from "@/lib/job-runs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -61,6 +62,11 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
+    await recordJobRun("update-coupons", {
+      ok: true,
+      detail: `${expiredCoupons.count} vencidos, ${validCoupons.count} activados`,
+    });
+
     return NextResponse.json(
       {
         deactivated: expiredCoupons.count,
@@ -69,6 +75,10 @@ export async function GET(req: NextRequest) {
       { headers: corsHeaders },
     );
   } catch (error) {
+    await recordJobRun("update-coupons", {
+      ok: false,
+      detail: error instanceof Error ? error.message : String(error),
+    });
     return handleErrorResponse(error, "COUPONS_CRON", { headers: corsHeaders });
   }
 }

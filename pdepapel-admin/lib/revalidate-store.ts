@@ -1,6 +1,7 @@
 import axios from "axios";
 
 import { sendRevalidationFailureAlert } from "@/lib/revalidation-alert";
+import { recordJobRun } from "@/lib/job-runs";
 
 interface RevalidateParams {
   productId?: string;
@@ -29,6 +30,10 @@ export async function triggerStorefrontRevalidation(
       const message =
         "Storefront revalidation skipped: REVALIDATION_SECRET is not configured.";
       console.warn(message);
+      await recordJobRun("storefront-revalidation", {
+        ok: false,
+        detail: message,
+      });
       await sendRevalidationFailureAlert({
         endpoints: [storefrontUrl],
         details: [message],
@@ -104,8 +109,22 @@ export async function triggerStorefrontRevalidation(
         details: failures.map((failure) => failure.detail),
       });
     }
+    // Solo cuenta la tienda pública: el fallo de localhost en desarrollo no es noticia.
+    const publicFailure = failures.find(
+      (failure) => !failure.endpoint.includes("localhost"),
+    );
+    await recordJobRun("storefront-revalidation", {
+      ok: !publicFailure,
+      detail: publicFailure
+        ? `${publicFailure.endpoint}: ${publicFailure.detail}`
+        : `Actualizada ${(params.tags ?? [params.tag ?? "products"]).filter(Boolean).join(", ")}`,
+    });
   } catch (error) {
     console.error("Error triggering storefront revalidation:", error);
+    await recordJobRun("storefront-revalidation", {
+      ok: false,
+      detail: error instanceof Error ? error.message : String(error),
+    });
     await sendRevalidationFailureAlert({
       endpoints: ["storefront revalidation"],
       details: [error instanceof Error ? error.message : String(error)],

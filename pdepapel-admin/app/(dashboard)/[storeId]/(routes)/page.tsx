@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { YearSelector } from "@/components/year-selector";
 import { getTodaySummary } from "@/lib/dashboard-today";
+import { getSystemsStatus } from "@/lib/job-runs";
 import { getColombiaDate } from "@/lib/date-utils";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -17,6 +18,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { PendingActions } from "./components/pending-actions";
+import { SystemsStatus } from "./components/systems-status";
 import { TodayKpis } from "./components/today-kpis";
 import { TopProducts } from "./components/top-products";
 import { WeekSummary } from "./components/week-summary";
@@ -34,12 +36,18 @@ interface DashboardPageProps {
   searchParams: { year?: string };
 }
 
-export default async function DashboardPage({ params, searchParams }: DashboardPageProps) {
-  const year = searchParams.year ? parseInt(searchParams.year) : new Date().getFullYear();
-  const [summary, graphRevenue, salesCount] = await Promise.all([
+export default async function DashboardPage({
+  params,
+  searchParams,
+}: DashboardPageProps) {
+  const year = searchParams.year
+    ? parseInt(searchParams.year)
+    : new Date().getFullYear();
+  const [summary, graphRevenue, salesCount, systems] = await Promise.all([
     getTodaySummary(params.storeId),
     getGraphRevenue(params.storeId, year),
     getSalesCount(params.storeId, year),
+    getSystemsStatus(params.storeId),
   ]);
   const local = getColombiaDate(summary.generatedAt);
   const title = `Hoy, ${format(local, "EEEE d 'de' MMMM", { locale: es })}`;
@@ -49,9 +57,12 @@ export default async function DashboardPage({ params, searchParams }: DashboardP
     <div className="flex flex-col gap-5 p-4 sm:p-8 sm:pt-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-bold tracking-tight text-primary first-letter:uppercase">{title}</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-primary first-letter:uppercase">
+            {title}
+          </h1>
           <p className="text-sm text-muted-foreground">
-            Lo que necesita tu atención primero. Cifras de la administración, actualizadas a las {updated}.
+            Lo que necesita tu atención primero. Cifras de la administración,
+            actualizadas a las {updated}.
           </p>
         </div>
         <Button asChild variant="outline">
@@ -69,11 +80,17 @@ export default async function DashboardPage({ params, searchParams }: DashboardP
         <div className="flex flex-col gap-4">
           <WeekSummary week={summary.week} />
           <TopProducts storeId={params.storeId} items={summary.topProducts} />
+          <SystemsStatus rows={systems} />
         </div>
       </div>
 
-      <section aria-labelledby="mas-analisis" className="flex flex-col gap-3 pt-2">
-        <h2 id="mas-analisis" className="text-[15px] font-bold text-primary">Más análisis</h2>
+      <section
+        aria-labelledby="mas-analisis"
+        className="flex flex-col gap-3 pt-2"
+      >
+        <h2 id="mas-analisis" className="text-[15px] font-bold text-primary">
+          Más análisis
+        </h2>
         <Tabs defaultValue="overview" className="w-full">
           <TabsList>
             <TabsTrigger value="overview">Ventas por año</TabsTrigger>

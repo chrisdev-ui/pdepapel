@@ -63,7 +63,10 @@ export async function OPTIONS() {
 // Verificación de EnvioClick: solo confirma el endpoint a quien trae el secreto.
 export async function GET(req: Request) {
   if (!isAuthorized(req)) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401, headers: corsHeaders });
+    return NextResponse.json(
+      { error: "No autorizado" },
+      { status: 401, headers: corsHeaders },
+    );
   }
   return NextResponse.json(
     { status: "active", timestamp: new Date().toISOString() },
@@ -77,7 +80,9 @@ function isAuthorized(req: Request): boolean {
 
 export async function POST(req: Request) {
   if (!isAuthorized(req)) {
-    console.warn("[ENVIOCLICK_WEBHOOK] Petición rechazada: secreto inválido o ausente");
+    console.warn(
+      "[ENVIOCLICK_WEBHOOK] Petición rechazada: secreto inválido o ausente",
+    );
     return NextResponse.json(
       { error: "No autorizado" },
       { status: 401, headers: corsHeaders },
@@ -86,7 +91,9 @@ export async function POST(req: Request) {
 
   try {
     const payload = await req.json().catch(() => {
-      throw new InvalidWebhookPayloadError("El cuerpo del webhook no es JSON válido");
+      throw new InvalidWebhookPayloadError(
+        "El cuerpo del webhook no es JSON válido",
+      );
     });
     const scopedStoreId = readWebhookStoreId(req);
 
@@ -121,14 +128,21 @@ export async function POST(req: Request) {
     // llega a Prisma como Invalid Date ni provoca un 500 con reintentos.
     const pickupDate = parseProviderDate(realPickupDate, "realPickupDate");
     const estimatedDeliveryDate = parseProviderDate(arrivalDate, "arrivalDate");
-    const actualDeliveryDate = parseProviderDate(realDeliveryDate, "realDeliveryDate");
+    const actualDeliveryDate = parseProviderDate(
+      realDeliveryDate,
+      "realDeliveryDate",
+    );
 
     // Wrap DB operations in a transaction for atomicity
     const result = await prismadb.$transaction(async (tx: any) => {
       // Find shipping by EnvioClick order ID or reference
       const identifiers = [
-        ...(idOrder === undefined || idOrder === null ? [] : [{ envioClickIdOrder: Number(idOrder) }]),
-        ...(myShipmentReference ? [{ myShipmentReference: String(myShipmentReference) }] : []),
+        ...(idOrder === undefined || idOrder === null
+          ? []
+          : [{ envioClickIdOrder: Number(idOrder) }]),
+        ...(myShipmentReference
+          ? [{ myShipmentReference: String(myShipmentReference) }]
+          : []),
       ];
 
       const shipping = await tx.shipping.findFirst({
@@ -165,9 +179,12 @@ export async function POST(req: Request) {
         where: { id: shipping.id },
         data: {
           status: newStatus,
-          trackingCode: trackingCode ? String(trackingCode) : shipping.trackingCode,
+          trackingCode: trackingCode
+            ? String(trackingCode)
+            : shipping.trackingCode,
           pickupDate: pickupDate ?? shipping.pickupDate,
-          estimatedDeliveryDate: estimatedDeliveryDate ?? shipping.estimatedDeliveryDate,
+          estimatedDeliveryDate:
+            estimatedDeliveryDate ?? shipping.estimatedDeliveryDate,
           actualDeliveryDate: actualDeliveryDate ?? shipping.actualDeliveryDate,
         },
       });
@@ -250,6 +267,30 @@ export async function POST(req: Request) {
         idOrder,
         myShipmentReference,
       });
+      // Antes se respondía 200 y el evento se perdía. Sigue siendo 200 (EnvioClick
+      // no debe reintentar contra un envío que no tenemos), pero el aviso queda
+      // guardado para que alguien lo revise.
+      try {
+        await prismadb.shippingWebhookEvent.create({
+          data: {
+            storeId: scopedStoreId ?? null,
+            idOrder:
+              idOrder === undefined || idOrder === null
+                ? null
+                : String(idOrder),
+            myShipmentReference: myShipmentReference
+              ? String(myShipmentReference)
+              : null,
+            payload,
+            reason: "shipping_not_found",
+          },
+        });
+      } catch (error) {
+        console.error(
+          "[ENVIOCLICK_WEBHOOK] No se pudo guardar el aviso huérfano:",
+          error,
+        );
+      }
       // Return 200 to allow webhook tests to pass even if our DB doesn't have the ID
       return NextResponse.json(
         {

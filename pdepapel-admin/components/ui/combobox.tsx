@@ -113,6 +113,14 @@ export function Combobox({
             onValueChange={setQuery}
           />
           <CommandList>
+            {/* cmdk no pinta `CommandEmpty` cuando la lista nace vacía y aún
+                no se ha escrito nada; sin esto el desplegable queda en blanco
+                (pasa con una tienda sin opciones de catálogo todavía). */}
+            {options.length === 0 && !query.trim() && (
+              <p className="px-3 py-2 text-sm text-muted-foreground">
+                {emptyText}
+              </p>
+            )}
             <CommandEmpty>
               {onCreate && query.trim() ? (
                 <button

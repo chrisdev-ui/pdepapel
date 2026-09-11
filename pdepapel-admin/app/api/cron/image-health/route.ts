@@ -5,6 +5,7 @@ import { env } from "@/lib/env.mjs";
 import { refreshImageHealth } from "@/lib/image-health";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
+import { recordJobRun } from "@/lib/job-runs";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -20,15 +21,36 @@ export async function GET(request: NextRequest) {
     if (!token || token !== env.CRON_SECRET) throw ErrorFactory.Unauthorized();
 
     const stores = await prismadb.store.findMany({ select: { id: true } });
-    const results = await Promise.allSettled(stores.map(async (store) => ({ storeId: store.id, ...(await refreshImageHealth(store.id)) })));
+    const results = await Promise.allSettled(
+      stores.map(async (store) => ({
+        storeId: store.id,
+        ...(await refreshImageHealth(store.id)),
+      })),
+    );
     const reports = results.flatMap((result) => {
       if (result.status === "fulfilled") return [result.value];
       console.error("Image health check failed:", result.reason);
       return [];
     });
+    await Promise.all(
+      results.map((result, index) =>
+        recordJobRun("image-health", {
+          storeId: stores[index].id,
+          ok: result.status === "fulfilled",
+          detail:
+            result.status === "fulfilled"
+              ? JSON.stringify(result.value).slice(0, 300)
+              : result.reason instanceof Error
+                ? result.reason.message
+                : String(result.reason),
+        }),
+      ),
+    );
 
     return NextResponse.json({ reports }, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {
-    return handleErrorResponse(error, "IMAGE_HEALTH_CRON", { headers: CACHE_HEADERS.NO_CACHE });
+    return handleErrorResponse(error, "IMAGE_HEALTH_CRON", {
+      headers: CACHE_HEADERS.NO_CACHE,
+    });
   }
 }

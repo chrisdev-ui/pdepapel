@@ -8,15 +8,24 @@ import {
   getBoldWebhookSecretKey,
   verifyBoldWebhookSignature,
 } from "@/lib/bold";
-import { OrderStatus, PaymentMethod, ShippingStatus } from "@prisma/client";
+import {
+  OrderInventoryIssueKind,
+  OrderStatus,
+  PaymentMethod,
+  ShippingStatus,
+} from "@prisma/client";
 import { calculateOrderFinancials } from "@/lib/financial";
 import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
 import {
   markWelcomeBenefitRedeemed,
   releaseWelcomeBenefitReservation,
 } from "@/lib/customer-benefits";
-import { InvalidWebhookPayloadError, readWebhookStoreId } from "@/lib/webhook-auth";
+import {
+  InvalidWebhookPayloadError,
+  readWebhookStoreId,
+} from "@/lib/webhook-auth";
 import { NextResponse } from "next/server";
+import { recordInventoryIssues } from "@/lib/order-inventory-issues";
 
 export async function POST(req: Request) {
   try {
@@ -76,13 +85,21 @@ export async function POST(req: Request) {
       case "SALE_APPROVED":
       case "PAYMENT_APPROVED":
       case "transaction.approved":
-        return await processBoldPayment(transactionData, OrderStatus.PAID, scopedStoreId);
+        return await processBoldPayment(
+          transactionData,
+          OrderStatus.PAID,
+          scopedStoreId,
+        );
 
       case "SALE_REJECTED":
       case "VOID_APPROVED":
       case "transaction.declined":
       case "transaction.voided":
-        return await processBoldPayment(transactionData, OrderStatus.CANCELLED, scopedStoreId);
+        return await processBoldPayment(
+          transactionData,
+          OrderStatus.CANCELLED,
+          scopedStoreId,
+        );
 
       default:
         console.log(`Bold event received: ${eventType}`);
@@ -189,7 +206,10 @@ async function processBoldPayment(
     try {
       await recordPaidOrderInGoogleAnalytics(order.id);
     } catch (analyticsError) {
-      console.error("[BOLD_WEBHOOK] GA4 purchase tracking failed:", analyticsError);
+      console.error(
+        "[BOLD_WEBHOOK] GA4 purchase tracking failed:",
+        analyticsError,
+      );
     }
 
     return NextResponse.json(
@@ -247,11 +267,24 @@ async function processBoldPayment(
           })),
       );
 
-      const stockResult = await createInventoryMovementBatchResilient(tx, stockMovements);
+      const stockResult = await createInventoryMovementBatchResilient(
+        tx,
+        stockMovements,
+      );
       if (stockResult.failed.length > 0) {
-        console.error("[BOLD_WEBHOOK] Descuento de inventario incompleto en un pago confirmado:", {
+        console.error(
+          "[BOLD_WEBHOOK] Descuento de inventario incompleto en un pago confirmado:",
+          {
+            orderNumber: order.orderNumber,
+            transactionId,
+            failed: stockResult.failed,
+          },
+        );
+        await recordInventoryIssues(tx, {
+          storeId: order.storeId,
+          orderId: order.id,
           orderNumber: order.orderNumber,
-          transactionId,
+          kind: OrderInventoryIssueKind.DECREMENT,
           failed: stockResult.failed,
         });
       }
@@ -370,9 +403,19 @@ async function processBoldPayment(
           restockMovements,
         );
         if (restockResult.failed.length > 0) {
-          console.error("[BOLD_WEBHOOK] Reingreso de inventario incompleto tras la anulación:", {
+          console.error(
+            "[BOLD_WEBHOOK] Reingreso de inventario incompleto tras la anulación:",
+            {
+              orderNumber: order.orderNumber,
+              transactionId,
+              failed: restockResult.failed,
+            },
+          );
+          await recordInventoryIssues(tx, {
+            storeId: order.storeId,
+            orderId: order.id,
             orderNumber: order.orderNumber,
-            transactionId,
+            kind: OrderInventoryIssueKind.RESTOCK,
             failed: restockResult.failed,
           });
         }

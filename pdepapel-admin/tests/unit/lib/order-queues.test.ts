@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getNextStep, getOrderQueue, getPaymentBadge, getShippingBadge, isAwaitingPaymentStale, isExpiringSoon, orderMatchesView } from "@/lib/order-queues";
+import { getInventoryIssueBadge, getNextStep, getOrderQueue, getPaymentBadge, getShippingBadge, hasOpenInventoryIssues, isAwaitingPaymentStale, isExpiringSoon, orderMatchesView } from "@/lib/order-queues";
 import { OrderStatus, OrderType, PaymentMethod, ShippingStatus } from "@prisma/client";
 
 const order = (overrides: Partial<Parameters<typeof getOrderQueue>[0]>) => ({
@@ -88,5 +88,28 @@ describe("order queues", () => {
     expect(getShippingBadge(order({ status: OrderStatus.PAID }))).toEqual({ label: "Sin guía", tone: "slate" });
     expect(getShippingBadge(order({ status: OrderStatus.SENT, shipping: { status: ShippingStatus.OutForDelivery, trackingCode: "X" } }))).toEqual({ label: "En reparto", tone: "sky" });
     expect(getShippingBadge(order({ type: OrderType.POINT_OF_SALE, status: OrderStatus.PAID }))).toBeNull();
+  });
+
+  it("keeps an order with unreconciled inventory in por-atender whatever its queue", () => {
+    const paidAndShipped = order({ status: OrderStatus.SENT, shipping: { status: ShippingStatus.InTransit, trackingCode: "X" }, openInventoryIssues: 2 });
+    expect(getOrderQueue(paidAndShipped)).toBe("in-transit");
+    expect(orderMatchesView("in-transit", "por-atender", paidAndShipped)).toBe(true);
+    expect(orderMatchesView("in-transit", "por-atender", order({ ...paidAndShipped, openInventoryIssues: 0 }))).toBe(false);
+    expect(hasOpenInventoryIssues(paidAndShipped)).toBe(true);
+    expect(getInventoryIssueBadge(paidAndShipped)).toEqual({ label: "Inventario sin cuadrar", tone: "pink" });
+    expect(getInventoryIssueBadge(order({}))).toBeNull();
+  });
+
+  it("turns a guide with no news for days into a pink badge and a por-atender item", () => {
+    const now = new Date("2026-09-10T12:00:00.000Z");
+    const days = (n: number) => new Date(now.getTime() - n * 24 * 60 * 60 * 1000);
+    const stale = order({ status: OrderStatus.SENT, shipping: { status: ShippingStatus.InTransit, trackingCode: "X", updatedAt: days(7) } });
+    const fresh = order({ status: OrderStatus.SENT, shipping: { status: ShippingStatus.InTransit, trackingCode: "X", updatedAt: days(1) } });
+    expect(getShippingBadge(stale, now)).toEqual({ label: "Sin novedades hace 7 días", tone: "pink" });
+    expect(getShippingBadge(fresh, now)).toEqual({ label: "En camino", tone: "sky" });
+    expect(orderMatchesView("in-transit", "con-novedad", stale, now)).toBe(true);
+    expect(orderMatchesView("in-transit", "por-atender", stale, now)).toBe(true);
+    expect(orderMatchesView("in-transit", "con-novedad", fresh, now)).toBe(false);
+    expect(orderMatchesView("in-transit", "por-atender", fresh, now)).toBe(false);
   });
 });

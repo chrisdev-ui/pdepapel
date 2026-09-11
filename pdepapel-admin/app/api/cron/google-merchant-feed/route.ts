@@ -5,6 +5,7 @@ import { env } from "@/lib/env.mjs";
 import { refreshGoogleMerchantFeed } from "@/lib/google-merchant-feed";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
+import { recordJobRun } from "@/lib/job-runs";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,20 @@ export async function GET(request: NextRequest) {
       console.error("Google Merchant feed refresh failed:", result.reason);
       return [];
     });
+    await Promise.all(
+      results.map((result, index) =>
+        recordJobRun("google-merchant-feed", {
+          storeId: stores[index].id,
+          ok: result.status === "fulfilled",
+          detail:
+            result.status === "fulfilled"
+              ? `${result.value.exportedProducts} productos exportados`
+              : result.reason instanceof Error
+                ? result.reason.message
+                : String(result.reason),
+        }),
+      ),
+    );
 
     return NextResponse.json(
       { refreshed, failed: results.length - refreshed.length },

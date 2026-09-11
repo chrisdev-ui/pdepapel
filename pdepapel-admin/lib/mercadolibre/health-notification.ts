@@ -67,6 +67,30 @@ const GROUP_META: Record<
     description:
       "El precio de Mercado Libre no cubre el margen mínimo antes de comisión, envío e impuestos.",
   },
+  inventory_exception: {
+    order: 0,
+    title: "Ventas sin inventario aplicado",
+    description:
+      "Mercado Libre cobró la venta pero el inventario local no se movió. Reprocesa la venta o ajusta el stock a mano antes de que la tienda venda unidades que no existen.",
+  },
+  outbox_failed: {
+    order: 8,
+    title: "Cambios que Mercado Libre no aceptó",
+    description:
+      "Precio, stock o contenido que se intentó enviar y agotó los reintentos: la publicación puede mostrar datos viejos. Corrige el motivo y vuelve a sincronizar.",
+  },
+  webhook_failed: {
+    order: 9,
+    title: "Avisos sin procesar",
+    description:
+      "Notificaciones de Mercado Libre que no se pudieron aplicar. Ejecuta la recuperación de la cola desde el centro de operaciones.",
+  },
+  settlement_pending: {
+    order: 10,
+    title: "Liquidaciones pendientes",
+    description:
+      "Ventas pagadas hace más de una semana sin neto reportado. Refresca el flujo de caja; si sigue vacío, revisa la liquidación en la cuenta.",
+  },
 };
 
 export type MercadoLibreHealthDigest = {
@@ -146,6 +170,28 @@ function buildIssueActions(
         href: orderUrl ?? `${dashboardUrl}#mercadolibre-operations`,
         primary: true,
       });
+      break;
+    case "inventory_exception":
+      actions.push({
+        label: "Reprocesar venta",
+        href: orderUrl ?? `${dashboardUrl}#mercadolibre-orders`,
+        primary: true,
+      });
+      break;
+    case "outbox_failed":
+      if (listingUrl) actions.push({ label: "Ver publicación", href: listingUrl, primary: true });
+      actions.push({ label: "Recuperar cola", href: `${dashboardUrl}#mercadolibre-operations` });
+      break;
+    case "webhook_failed":
+      actions.push({ label: "Recuperar cola", href: `${dashboardUrl}#mercadolibre-operations`, primary: true });
+      break;
+    case "settlement_pending":
+      actions.push({
+        label: "Ver flujo de caja",
+        href: `${dashboardUrl}#mercadolibre-cashflow`,
+        primary: true,
+      });
+      if (orderUrl) actions.push({ label: "Ver venta", href: orderUrl });
       break;
   }
 

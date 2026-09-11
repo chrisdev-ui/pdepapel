@@ -747,6 +747,16 @@ export function ShippingSection({
                       ? " Lleva más de 2 h guardada: cotiza de nuevo antes de crear la guía."
                       : ""}
                   </span>
+                  {initialData?.shipping?.guideError &&
+                    savedRateId === rateId && (
+                      <span className="mt-1 block text-destructive">
+                        Último intento de crear la guía falló
+                        {initialData.shipping.guideAttemptedAt
+                          ? ` (${new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "America/Bogota" }).format(new Date(initialData.shipping.guideAttemptedAt))})`
+                          : ""}
+                        : {initialData.shipping.guideError}
+                      </span>
+                    )}
                   {codMismatch && (
                     <span className="mt-1 block text-destructive">
                       Según EnvioClick, {carrierName} no recauda contra entrega:

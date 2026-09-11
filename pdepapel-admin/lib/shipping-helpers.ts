@@ -290,8 +290,12 @@ export async function createGuideForOrder(
       },
       ...(order.shipping.isCOD && {
         codValue: order.total,
-        codPaymentMethod: order.shipping.codPaymentMethod || ENVIOCLICK_DEFAULTS.codPaymentMethod,
-        includeGuideCost: order.shipping.includeGuideCost || ENVIOCLICK_DEFAULTS.includeGuideCost,
+        codPaymentMethod:
+          order.shipping.codPaymentMethod ||
+          ENVIOCLICK_DEFAULTS.codPaymentMethod,
+        includeGuideCost:
+          order.shipping.includeGuideCost ||
+          ENVIOCLICK_DEFAULTS.includeGuideCost,
       }),
     };
 
@@ -336,6 +340,9 @@ export async function createGuideForOrder(
   await db.shipping.update({
     where: { id: order.shipping.id },
     data: {
+      // La guía existe: el último intento fallido deja de ser noticia.
+      guideError: null,
+      guideAttemptedAt: null,
       envioClickIdOrder: result.data.idOrder,
       trackingCode: result.data.tracker,
       guideUrl: result.data.url,

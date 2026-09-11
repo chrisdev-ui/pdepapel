@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { getNextStep, getOrderChannel, getOrderQueue, getPaymentBadge, getShippingBadge } from "@/lib/order-queues";
+import { getInventoryIssueBadge, getNextStep, getOrderChannel, getOrderQueue, getPaymentBadge, getShippingBadge } from "@/lib/order-queues";
 import { currencyFormatter } from "@/lib/utils";
 import Link from "next/link";
 import { CellAction } from "./cell-action";
@@ -10,6 +10,7 @@ export function OrderMobileCard({ order, storeId }: { order: OrderColumn; storeI
   const channel = getOrderChannel(order.type);
   const payment = getPaymentBadge(order);
   const shipping = getShippingBadge(order);
+  const issue = getInventoryIssueBadge(order);
   const step = getNextStep(getOrderQueue(order), order);
   return (
     <article className="flex flex-col gap-2.5 rounded-xl border bg-white p-3.5 shadow-sm">
@@ -29,6 +30,7 @@ export function OrderMobileCard({ order, storeId }: { order: OrderColumn; storeI
         <TintBadge label={channel.label} tone={CHANNEL_TONE[channel.id]} />
         <TintBadge label={payment.label} tone={payment.tone} />
         {shipping && <TintBadge label={shipping.label} tone={shipping.tone} />}
+        {issue && <TintBadge label={issue.label} tone={issue.tone} />}
         <span className="ml-auto text-xs text-muted-foreground">{relativeDate(order.createdAt)}</span>
       </div>
       <div className="flex items-center gap-2">

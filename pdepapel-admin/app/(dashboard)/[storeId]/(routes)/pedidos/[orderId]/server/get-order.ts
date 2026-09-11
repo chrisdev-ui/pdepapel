@@ -1,5 +1,6 @@
 "use server";
 
+import { OPEN_INVENTORY_ISSUE_SELECT } from "@/lib/order-inventory-issues";
 import prismadb from "@/lib/prismadb";
 import { headers } from "next/headers";
 
@@ -18,6 +19,11 @@ export async function getOrder(orderId: string, storeId: string) {
         orderBy: {
           createdAt: "desc",
         },
+      },
+      inventoryIssues: {
+        where: { resolvedAt: null },
+        orderBy: { createdAt: "asc" },
+        select: OPEN_INVENTORY_ISSUE_SELECT,
       },
     },
   });

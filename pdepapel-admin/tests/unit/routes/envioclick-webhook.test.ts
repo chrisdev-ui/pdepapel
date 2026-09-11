@@ -4,13 +4,18 @@ const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
   findUpdatedOrder: vi.fn(),
   sendShippingEmail: vi.fn(),
+  createOrphanEvent: vi.fn(),
 }));
 
 vi.mock("@/lib/env.mjs", () => ({
   env: { ENVIOCLICK_WEBHOOK_SECRET: "secreto-de-pruebas-envioclick-1234" },
 }));
 vi.mock("@/lib/prismadb", () => ({
-  default: { $transaction: mocks.transaction, order: { findUnique: mocks.findUpdatedOrder } },
+  default: {
+    $transaction: mocks.transaction,
+    order: { findUnique: mocks.findUpdatedOrder },
+    shippingWebhookEvent: { create: mocks.createOrphanEvent },
+  },
 }));
 vi.mock("@/lib/email", () => ({ sendShippingEmail: mocks.sendShippingEmail }));
 
@@ -150,12 +155,23 @@ describe("POST /api/webhook/envioclick", () => {
     });
   });
 
-  it("acknowledges an unknown shipment with 200 so the provider stops retrying", async () => {
+  it("acknowledges an unknown shipment with 200 so the provider stops retrying, but keeps the payload", async () => {
     mocks.transaction.mockResolvedValue({ type: "NOT_FOUND" });
+    mocks.createOrphanEvent.mockResolvedValue({});
 
     const response = await post({ idOrder: 999999, events: [] });
 
     expect(response.status).toBe(200);
+    expect(mocks.createOrphanEvent).toHaveBeenCalledWith({
+      data: expect.objectContaining({ idOrder: "999999", reason: "shipping_not_found", payload: expect.objectContaining({ idOrder: 999999 }) }),
+    });
+  });
+
+  it("still answers 200 when the orphan payload cannot be stored", async () => {
+    mocks.transaction.mockResolvedValue({ type: "NOT_FOUND" });
+    mocks.createOrphanEvent.mockRejectedValue(new Error("db down"));
+
+    expect((await post({ myShipmentReference: "ORD-X", events: [] })).status).toBe(200);
   });
 });
 

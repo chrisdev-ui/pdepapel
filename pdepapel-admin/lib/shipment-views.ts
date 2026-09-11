@@ -61,6 +61,24 @@ const CLOSED_ORDER: OrderStatus[] = [
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** Días sin novedad en tránsito a partir de los cuales el envío pide atención. */
+export const STALE_IN_TRANSIT_DAYS = 5;
+
+/** Guía en camino cuyo último cambio (evento o estado) es más viejo que la ventana: nadie sabe dónde está el paquete. */
+export function isStaleInTransit(shipment: Pick<ViewableShipment, "status" | "updatedAt">, now = new Date()): boolean {
+  return IN_TRANSIT.includes(shipment.status) && now.getTime() - shipment.updatedAt.getTime() > STALE_IN_TRANSIT_DAYS * DAY_MS;
+}
+
+export function daysWithoutNews(shipment: Pick<ViewableShipment, "updatedAt">, now = new Date()): number {
+  return Math.floor((now.getTime() - shipment.updatedAt.getTime()) / DAY_MS);
+}
+
+/** Insignia rosa «Sin novedades hace N días» para un envío en tránsito estancado; null si no aplica. */
+export function getStaleInTransitBadge(shipment: Pick<ViewableShipment, "status" | "updatedAt">, now = new Date()): { label: string; tone: "pink" } | null {
+  if (!isStaleInTransit(shipment, now)) return null;
+  return { label: `Sin novedades hace ${daysWithoutNews(shipment, now)} días`, tone: "pink" };
+}
+
 /** Envíos en preparación más antiguos que la ventana de despacho: datos históricos, no trabajo de hoy. */
 export function isStaleDispatch(shipment: ViewableShipment, now = new Date()): boolean {
   return (
@@ -111,7 +129,7 @@ export function shipmentMatchesView(shipment: ViewableShipment, view: ShipmentVi
     case "en-camino":
       return IN_TRANSIT.includes(shipment.status);
     case "con-novedad":
-      return WITH_ISSUE.includes(shipment.status);
+      return WITH_ISSUE.includes(shipment.status) || isStaleInTransit(shipment, now);
     case "entregados":
       return shipment.status === ShippingStatus.Delivered;
     case "todos":

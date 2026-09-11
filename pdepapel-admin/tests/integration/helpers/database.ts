@@ -215,5 +215,6 @@ export async function deleteInventoryFixture(fixture: InventoryFixture) {
   await testPrisma.size.deleteMany({ where: { storeId: fixture.store.id } });
   await testPrisma.color.deleteMany({ where: { storeId: fixture.store.id } });
   await testPrisma.design.deleteMany({ where: { storeId: fixture.store.id } });
+  await testPrisma.orderInventoryIssue.deleteMany({ where: { storeId: fixture.store.id } });
   await testPrisma.store.delete({ where: { id: fixture.store.id } });
 }

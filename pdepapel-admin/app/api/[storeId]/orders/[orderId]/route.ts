@@ -47,6 +47,8 @@ import {
 } from "@prisma/client";
 import { NextResponse } from "next/server";
 import crypto from "crypto";
+import { recordInventoryIssues } from "@/lib/order-inventory-issues";
+import { OrderInventoryIssueKind } from "@prisma/client";
 
 export async function OPTIONS(req: Request) {
   return NextResponse.json(
@@ -801,8 +803,16 @@ export async function PATCH(
         } catch (error: any) {
           guideCreation.error = error?.message || "No se pudo crear la guía";
           console.error("[ORDER_UPDATE] Failed to create guide:", error);
-          // Guide creation failed, but order update should still succeed
-          // User can manually create guide later
+          // Guide creation failed, but order update should still succeed.
+          // El motivo se guarda en el envío: el toast se va, y la siguiente
+          // persona que abra el pedido debe ver por qué sigue sin guía.
+          await tx.shipping.update({
+            where: { id: updated.shipping.id },
+            data: {
+              guideError: String(guideCreation.error).slice(0, 2000),
+              guideAttemptedAt: new Date(),
+            },
+          });
         }
       } else {
         if (
@@ -851,7 +861,13 @@ export async function PATCH(
             "Partial stock update failure (Upgrade to Paid):",
             stockResult.failed,
           );
-          // Optionally throw here if strict
+          await recordInventoryIssues(tx, {
+            storeId: params.storeId,
+            orderId: updated.id,
+            orderNumber: updated.orderNumber,
+            kind: OrderInventoryIssueKind.DECREMENT,
+            failed: stockResult.failed,
+          });
         }
 
         // Invalidate cache since stock changed
@@ -1096,6 +1112,15 @@ export async function DELETE(
             orderNumber: order.orderNumber,
             failed: stockResult.failed,
             success: stockResult.success,
+          });
+          // El pedido se borra enseguida: la fila queda con `orderId` en null
+          // y el número del pedido, para que la deuda no muera con él.
+          await recordInventoryIssues(tx, {
+            storeId: params.storeId,
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            kind: OrderInventoryIssueKind.RESTOCK,
+            failed: stockResult.failed,
           });
         }
       }

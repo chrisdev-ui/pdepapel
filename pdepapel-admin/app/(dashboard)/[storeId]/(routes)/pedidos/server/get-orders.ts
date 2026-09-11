@@ -5,7 +5,7 @@ import { headers } from "next/headers";
 
 export async function getOrders(storeId: string) {
   headers();
-  return await prismadb.order.findMany({
+  const orders = await prismadb.order.findMany({
     where: {
       storeId,
     },
@@ -46,6 +46,7 @@ export async function getOrders(storeId: string) {
           status: true,
           trackingCode: true,
           courier: true,
+          updatedAt: true,
         },
       },
       payment: {
@@ -53,9 +54,16 @@ export async function getOrders(storeId: string) {
           method: true,
         },
       },
+      _count: {
+        select: { inventoryIssues: { where: { resolvedAt: null } } },
+      },
     },
     orderBy: {
       createdAt: "desc",
     },
   });
+  return orders.map(({ _count, ...order }) => ({
+    ...order,
+    openInventoryIssues: _count.inventoryIssues,
+  }));
 }

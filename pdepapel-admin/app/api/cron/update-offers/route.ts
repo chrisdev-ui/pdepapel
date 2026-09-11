@@ -5,6 +5,7 @@ import prismadb from "@/lib/prismadb";
 import { refreshSoldCounts } from "@/lib/sold-count";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { NextRequest, NextResponse } from "next/server";
+import { recordJobRun } from "@/lib/job-runs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -76,6 +77,11 @@ export async function GET(req: NextRequest) {
       console.error("Redis cache invalidation error:", error);
     }
 
+    await recordJobRun("update-offers", {
+      ok: true,
+      detail: `${expiredOffers.count} vencidas, ${validOffers.count} activadas`,
+    });
+
     return NextResponse.json(
       {
         deactivated: expiredOffers.count,
@@ -85,6 +91,10 @@ export async function GET(req: NextRequest) {
       { headers: corsHeaders },
     );
   } catch (error) {
+    await recordJobRun("update-offers", {
+      ok: false,
+      detail: error instanceof Error ? error.message : String(error),
+    });
     return handleErrorResponse(error, "OFFERS_CRON", { headers: corsHeaders });
   }
 }

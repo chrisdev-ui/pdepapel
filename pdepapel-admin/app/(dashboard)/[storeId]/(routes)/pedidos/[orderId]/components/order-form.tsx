@@ -46,6 +46,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { getErrorMessage } from "@/lib/api-errors";
+import type { OpenInventoryIssue } from "@/lib/order-inventory-issues";
+import { InventoryIssuesPanel } from "@/components/inventory/inventory-issues-panel";
 import { focusFirstInvalidField } from "@/lib/focus-invalid-field";
 import { isPaidLike, ORDER_STATUS_LABELS } from "@/lib/order-transitions";
 import { currencyFormatter } from "@/lib/utils";
@@ -107,6 +109,8 @@ interface OrderFormProps {
   freeShippingThreshold?: number | null;
   /** Estado real del envío (guía, seguimiento), renderizado en el servidor. */
   shippingInfo?: React.ReactNode;
+  /** Líneas de inventario que fallaron al mover y siguen abiertas. */
+  inventoryIssues?: OpenInventoryIssue[];
 }
 
 const TYPE_PARAM: Record<string, CreatableOrderType> = {
@@ -156,6 +160,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   boxes,
   freeShippingThreshold = null,
   shippingInfo,
+  inventoryIssues = [],
 }) => {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -857,6 +862,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   tone="care"
                   description="Acciones que cierran o borran el pedido. Cada una confirma antes de aplicarse."
                 >
+                  <InventoryIssuesPanel storeId={storeId} issues={inventoryIssues} />
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusActions
                       status={initialData.status}

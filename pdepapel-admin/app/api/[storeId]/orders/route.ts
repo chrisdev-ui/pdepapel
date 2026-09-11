@@ -51,6 +51,11 @@ import {
 } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
+import {
+  recordInventoryIssues,
+  recordInventoryIssuesForBatch,
+} from "@/lib/order-inventory-issues";
+import { OrderInventoryIssueKind } from "@prisma/client";
 
 type OrderData = {
   storeId: string;
@@ -629,6 +634,13 @@ async function createOrder(
             failed: stockResult.failed,
             success: stockResult.success,
           });
+          await recordInventoryIssues(tx, {
+            storeId: params.storeId,
+            orderId: createdOrder.id,
+            orderNumber: createdOrder.orderNumber,
+            kind: OrderInventoryIssueKind.DECREMENT,
+            failed: stockResult.failed,
+          });
         }
       }
 
@@ -886,9 +898,13 @@ export async function DELETE(
 
         if (stockMovements.length > 0) {
           // Un kit devuelve tambien sus componentes (ver explodeKitMovements).
+          const restockMovements = await explodeKitMovements(
+            tx,
+            stockMovements,
+          );
           const stockResult = await createInventoryMovementBatchResilient(
             tx,
-            await explodeKitMovements(tx, stockMovements),
+            restockMovements,
           );
 
           // Log any stock update failures but don't throw errors
@@ -901,6 +917,17 @@ export async function DELETE(
                 success: stockResult.success,
               },
             );
+            // Los pedidos se borran enseguida: la fila queda con `orderId`
+            // en null y el número del pedido, para que la deuda no muera con él.
+            await recordInventoryIssuesForBatch(tx, {
+              storeId: params.storeId,
+              attempted: restockMovements,
+              failed: stockResult.failed,
+              orders: paidOrders.map((o) => ({
+                id: o.id,
+                orderNumber: o.orderNumber,
+              })),
+            });
           }
 
           await invalidateStoreProductsCache(params.storeId);
@@ -1134,9 +1161,10 @@ export async function PATCH(
 
       // Batch execute stock updates using resilient method
       if (stockUpdates.length > 0) {
+        const attemptedMovements = await explodeKitMovements(tx, stockUpdates);
         const stockResult = await createInventoryMovementBatchResilient(
           tx,
-          await explodeKitMovements(tx, stockUpdates),
+          attemptedMovements,
         );
 
         // Log stock update results but don't throw errors
@@ -1145,6 +1173,15 @@ export async function PATCH(
             orderIds: orders.map((o) => o.id),
             failed: stockResult.failed,
             success: stockResult.success,
+          });
+          await recordInventoryIssuesForBatch(tx, {
+            storeId: params.storeId,
+            attempted: attemptedMovements,
+            failed: stockResult.failed,
+            orders: orders.map((o) => ({
+              id: o.id,
+              orderNumber: o.orderNumber,
+            })),
           });
         }
       }

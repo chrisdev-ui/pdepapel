@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { WhatsappButton } from "@/components/whatsapp-button";
-import { getOrderChannel, getPaymentBadge, getShippingBadge } from "@/lib/order-queues";
+import { getInventoryIssueBadge, getOrderChannel, getPaymentBadge, getShippingBadge } from "@/lib/order-queues";
 import { buildOrderTimeline, getNextStepCard, type TimelineOrder } from "@/lib/order-timeline";
 import { cn, currencyFormatter } from "@/lib/utils";
 import { Check, Clock, ExternalLink } from "lucide-react";
@@ -37,6 +37,7 @@ export function OrderWorkspaceHeader({ storeId, order }: OrderWorkspaceHeaderPro
   const channel = getOrderChannel(order.type);
   const payment = getPaymentBadge(order);
   const shipping = getShippingBadge(order);
+  const inventoryIssue = getInventoryIssueBadge(order);
   const steps = buildOrderTimeline(order);
   const next = getNextStepCard(order, storeId);
 
@@ -49,6 +50,11 @@ export function OrderWorkspaceHeader({ storeId, order }: OrderWorkspaceHeaderPro
             <TintBadge label={channel.label} tone={CHANNEL_TONE[channel.id]} />
             <TintBadge label={payment.label} tone={payment.tone} />
             {shipping && <TintBadge label={shipping.label} tone={shipping.tone} />}
+            {inventoryIssue && (
+              <a href="#zona-de-cuidado" className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <TintBadge label={inventoryIssue.label} tone={inventoryIssue.tone} />
+              </a>
+            )}
             <span className="text-xs text-muted-foreground">
               {order.fullName} · {currencyFormatter(order.total)} · creado el {fmt(order.createdAt)}
             </span>

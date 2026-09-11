@@ -1,10 +1,12 @@
 import { Button } from "@/components/ui/button";
 import type { TodayPendingAction } from "@/lib/dashboard-today";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, CheckCircle2, Clock, CreditCard, ImageOff, Link2, ListChecks, MessageCircle, Truck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, CreditCard, ImageOff, Link2, ListChecks, MessageCircle, PackageSearch, PackageX, Truck } from "lucide-react";
 import Link from "next/link";
 
 const ICONS: Record<TodayPendingAction["kind"], { icon: React.ReactNode; tint: string }> = {
+  "inventory-issue": { icon: <PackageX className="h-[18px] w-[18px]" aria-hidden="true" />, tint: "bg-tint-pink" },
+  "shipping-issue": { icon: <PackageSearch className="h-[18px] w-[18px]" aria-hidden="true" />, tint: "bg-tint-pink" },
   "verify-payment": { icon: <CreditCard className="h-[18px] w-[18px]" aria-hidden="true" />, tint: "bg-tint-cream" },
   "awaiting-payment": { icon: <Link2 className="h-[18px] w-[18px]" aria-hidden="true" />, tint: "bg-tint-pink" },
   "create-guide": { icon: <Truck className="h-[18px] w-[18px]" aria-hidden="true" />, tint: "bg-tint-sky" },
@@ -57,7 +59,7 @@ export function PendingActions({ storeId, items }: PendingActionsProps) {
                   <span className="truncate text-sm font-semibold text-primary">{item.title}</span>
                   <span className="truncate text-xs text-muted-foreground">{item.meta}</span>
                 </div>
-                <Button asChild size="xs" variant={item.kind === "verify-payment" || item.kind === "awaiting-payment" ? "default" : "outline"}>
+                <Button asChild size="xs" variant={item.kind === "verify-payment" || item.kind === "awaiting-payment" || item.kind === "inventory-issue" || item.kind === "shipping-issue" ? "default" : "outline"}>
                   <Link href={item.href}>{item.action}</Link>
                 </Button>
               </li>

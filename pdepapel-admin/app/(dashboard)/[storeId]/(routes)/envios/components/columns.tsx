@@ -8,7 +8,7 @@ import Link from "next/link";
 import { DataTableCellCurrency } from "@/components/ui/data-table-cell-currency";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { getCarrierInfo } from "@/constants/shipping";
-import { getShipmentStatusBadge } from "@/lib/shipment-views";
+import { getShipmentStatusBadge, getStaleInTransitBadge } from "@/lib/shipment-views";
 import { ShippingProvider } from "@prisma/client";
 
 import { TintBadge } from "../../pedidos/components/order-badges";
@@ -137,7 +137,13 @@ export function buildColumns(storeId: string): ColumnDef<ShipmentColumn>[] {
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
       cell: ({ row }) => {
         const badge = getShipmentStatusBadge(row.original.status);
-        return <TintBadge label={badge.label} tone={badge.tone} />;
+        const stale = getStaleInTransitBadge(row.original);
+        return (
+          <span className="flex flex-wrap items-center gap-1">
+            <TintBadge label={badge.label} tone={badge.tone} />
+            {stale && <TintBadge label={stale.label} tone={stale.tone} />}
+          </span>
+        );
       },
     },
     {

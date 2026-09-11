@@ -1,8 +1,8 @@
 import { CAPSULAS_SORPRESA_ID, KITS_ID, TRESHOLD_LOW_STOCK } from "@/constants";
 import { createSettledMarketplaceSalesWhere } from "@/lib/mercadolibre/reporting";
-import { AWAITING_PAYMENT_STALE_HOURS, AWAITING_PAYMENT_WINDOW_DAYS } from "@/lib/order-queues";
+import { AWAITING_PAYMENT_STALE_HOURS, AWAITING_PAYMENT_WINDOW_DAYS, STALE_IN_TRANSIT_DAYS } from "@/lib/order-queues";
 import prismadb from "@/lib/prismadb";
-import { OrderStatus, OrderType, PaymentMethod } from "@prisma/client";
+import { OrderStatus, OrderType, PaymentMethod, ShippingStatus } from "@prisma/client";
 import { addDays, startOfDay, subDays, subHours } from "date-fns";
 import { utcToZonedTime, zonedTimeToUtc } from "date-fns-tz";
 
@@ -30,7 +30,7 @@ const ONLINE_METHODS: PaymentMethod[] = [PaymentMethod.Bold, PaymentMethod.Wompi
 export type SalesChannel = "tienda" | "presencial" | "feria" | "mercadolibre";
 
 export interface TodayPendingAction {
-  kind: "verify-payment" | "awaiting-payment" | "create-guide" | "answer-question" | "restock" | "expiring-quote" | "broken-image";
+  kind: "inventory-issue" | "shipping-issue" | "verify-payment" | "awaiting-payment" | "create-guide" | "answer-question" | "restock" | "expiring-quote" | "broken-image";
   title: string;
   meta: string;
   href: string;
@@ -93,6 +93,10 @@ export interface TodayRawInput {
   outOfStockCount: number;
   /** Productos activos con alguna imagen que ya no existe en Cloudinary. */
   brokenImageProducts?: number;
+  /** Líneas de inventario que fallaron al mover y siguen abiertas; `orphans` son las de pedidos ya borrados. */
+  inventoryIssues?: { open: number; orphans: number };
+  /** Envíos con novedad de la transportadora o en tránsito sin cambios en más de STALE_IN_TRANSIT_DAYS. */
+  shippingIssues?: { count: number; sample: { orderNumber: string; fullName: string; status: ShippingStatus; stale: boolean }[] };
   unansweredQuestions: { id: string; question: string; productName: string | null; askedAt: Date | null }[];
   unansweredCount: number;
   expiringQuotes: { id: string; orderNumber: string; fullName: string; total: number; expiresAt: Date | null }[];
@@ -102,6 +106,12 @@ export interface TodayRawInput {
   previousWeekMarketplaceNet: number;
   weekItems: { productId: string | null; name: string; quantity: number }[];
 }
+
+const SHIPPING_ISSUE_LABEL: Partial<Record<ShippingStatus, string>> = {
+  FailedDelivery: "entrega fallida",
+  Returned: "devuelto",
+  Exception: "incidencia",
+};
 
 const relative = (date: Date | null | undefined, now: Date) => {
   if (!date) return "";
@@ -182,6 +192,32 @@ export function buildTodaySummary(input: TodayRawInput, storeId: string): TodayS
       href: `/${storeId}/productos/${product.id}`,
       action: "Aprovisionar",
       weight: 5,
+    });
+  }
+  if ((input.inventoryIssues?.open ?? 0) > 0) {
+    const { open, orphans } = input.inventoryIssues!;
+    pending.push({
+      kind: "inventory-issue",
+      title: `${open} ${open === 1 ? "línea de inventario sin cuadrar" : "líneas de inventario sin cuadrar"}`,
+      meta: "Un pedido cambió de estado pero el kardex no se movió. Reintenta o concilia antes de que el stock engañe a la tienda.",
+      // Sin pedido (borrado) solo se ve en Movimientos; con pedido, la cola «Por atender» ya lo muestra.
+      href: orphans > 0 && orphans === open ? `/${storeId}/movimientos-inventario#incidencias-inventario` : `/${storeId}/pedidos?vista=por-atender`,
+      action: "Cuadrar",
+      weight: -1,
+    });
+  }
+  if ((input.shippingIssues?.count ?? 0) > 0) {
+    const { count, sample } = input.shippingIssues!;
+    const first = sample[0];
+    pending.push({
+      kind: "shipping-issue",
+      title: `${count} ${count === 1 ? "envío con novedad" : "envíos con novedad"}`,
+      meta: first
+        ? `${first.orderNumber} · ${first.fullName}: ${first.stale ? "en tránsito sin novedades hace días" : SHIPPING_ISSUE_LABEL[first.status] ?? "novedad de la transportadora"}${count > 1 ? " y más" : ""}`
+        : "La transportadora reportó un problema o el paquete lleva días sin moverse.",
+      href: `/${storeId}/pedidos?vista=con-novedad`,
+      action: "Revisar",
+      weight: 0.5,
     });
   }
   if ((input.brokenImageProducts ?? 0) > 0) {
@@ -272,6 +308,20 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
   const transferSince = subDays(now, TRANSFER_WINDOW_DAYS);
   const awaitingSince = subDays(now, AWAITING_PAYMENT_WINDOW_DAYS);
   const awaitingUntil = subHours(now, AWAITING_PAYMENT_STALE_HOURS);
+  const staleTransitBefore = subDays(now, STALE_IN_TRANSIT_DAYS);
+  // Novedad de la transportadora, o guía en camino sin cambios: lo mismo que
+  // la pestaña «Con novedad» de Pedidos, para que Inicio no la esconda.
+  const shippingIssueWhere = {
+    storeId,
+    type: { in: SHIPPABLE_TYPES },
+    status: { in: [OrderStatus.PAID, OrderStatus.SENT, OrderStatus.PENDING, OrderStatus.CREATED] },
+    shipping: {
+      OR: [
+        { status: { in: [ShippingStatus.FailedDelivery, ShippingStatus.Exception, ShippingStatus.Returned] } },
+        { status: { in: [ShippingStatus.Shipped, ShippingStatus.PickedUp, ShippingStatus.InTransit, ShippingStatus.OutForDelivery] }, updatedAt: { lt: staleTransitBefore } },
+      ],
+    },
+  };
   const dispatchWhere = {
     storeId,
     status: OrderStatus.PAID,
@@ -297,6 +347,10 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
     previousWeekMarketplace,
     weekItems,
     brokenImageProducts,
+    openInventoryIssues,
+    orphanInventoryIssues,
+    shippingIssueSample,
+    shippingIssueCount,
   ] = await Promise.all([
     prismadb.order.findMany({ where: { storeId, status: { in: PAID_STATUSES }, ...paidWithin(dayStart, dayEnd) }, select: { total: true } }),
     prismadb.marketplaceOrder.findMany({ where: createSettledMarketplaceSalesWhere(storeId, { start: dayStart, end: dayEnd }), select: { netAmount: true } }),
@@ -350,6 +404,15 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
       select: { productId: true, name: true, quantity: true },
     }),
     prismadb.product.count({ where: { storeId, isArchived: false, images: { some: { brokenAt: { not: null } } } } }),
+    prismadb.orderInventoryIssue.count({ where: { storeId, resolvedAt: null } }).catch(() => 0),
+    prismadb.orderInventoryIssue.count({ where: { storeId, resolvedAt: null, orderId: null } }).catch(() => 0),
+    prismadb.order.findMany({
+      where: shippingIssueWhere,
+      orderBy: { updatedAt: "asc" },
+      take: 3,
+      select: { orderNumber: true, fullName: true, shipping: { select: { status: true, updatedAt: true } } },
+    }),
+    prismadb.order.count({ where: shippingIssueWhere }),
   ]);
 
   return buildTodaySummary(
@@ -373,6 +436,16 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
       previousWeekMarketplaceNet: previousWeekMarketplace.reduce((sum, o) => sum + Number(o.netAmount ?? 0), 0),
       weekItems,
       brokenImageProducts,
+      inventoryIssues: { open: openInventoryIssues, orphans: orphanInventoryIssues },
+      shippingIssues: {
+        count: shippingIssueCount,
+        sample: shippingIssueSample.map((o) => ({
+          orderNumber: o.orderNumber,
+          fullName: o.fullName,
+          status: o.shipping?.status ?? ShippingStatus.Exception,
+          stale: Boolean(o.shipping && !([ShippingStatus.FailedDelivery, ShippingStatus.Exception, ShippingStatus.Returned] as ShippingStatus[]).includes(o.shipping.status)),
+        })),
+      },
     },
     storeId,
   );
