@@ -16,7 +16,13 @@ import {
   type InventoryFixture,
 } from "./helpers/database";
 import { recalculateKitStock } from "@/lib/inventory";
-import { OrderStatus, OrderType, PaymentMethod } from "@prisma/client";
+import {
+  OrderStatus,
+  OrderType,
+  PaymentMethod,
+  ShippingProvider,
+  ShippingStatus,
+} from "@prisma/client";
 
 /**
  * Un pedido «Enviado» ya descontó su inventario: PAID y SENT son el mismo
@@ -159,6 +165,81 @@ describe("ciclo de vida de un pedido pagado o enviado", () => {
       where: { referenceId: order.id, type: "ORDER_CANCELLED" },
     });
     expect(returns).toHaveLength(0);
+  });
+
+  it("marcar como enviado deja el envío «en camino» aunque la petición no traiga envío", async () => {
+    fixture = await createInventoryFixture();
+    session.userId = fixture.store.userId;
+    await recalculateKitStock(testPrisma, [fixture.kit.id]);
+    const order = await createKitOrder(fixture, {
+      status: OrderStatus.PAID,
+      shipping: {
+        create: {
+          storeId: fixture.store.id,
+          provider: ShippingProvider.MANUAL,
+          status: ShippingStatus.Preparing,
+          cost: 0,
+        },
+      },
+    });
+    const { PATCH } = await patchRoute();
+
+    // El diálogo «Marcar como enviado» de un domiciliario: sin guía y sin
+    // bloque de envío en el cuerpo.
+    const sent = await PATCH(
+      json("PATCH", {
+        status: OrderStatus.SENT,
+        expectedStatus: OrderStatus.PAID,
+      }),
+      { params: { storeId: fixture.store.id, orderId: order.id } },
+    );
+    expect(sent.status).toBe(200);
+    const after = await testPrisma.order.findUniqueOrThrow({
+      where: { id: order.id },
+      include: { shipping: true },
+    });
+    expect(after.status).toBe(OrderStatus.SENT);
+    expect(after.shipping?.status).toBe(ShippingStatus.Shipped);
+  });
+
+  it("poner el envío en camino desde el formulario deja el pedido pagado como «Enviado»", async () => {
+    fixture = await createInventoryFixture();
+    session.userId = fixture.store.userId;
+    await recalculateKitStock(testPrisma, [fixture.kit.id]);
+    const order = await createKitOrder(fixture, {
+      status: OrderStatus.PAID,
+      shipping: {
+        create: {
+          storeId: fixture.store.id,
+          provider: ShippingProvider.MANUAL,
+          status: ShippingStatus.Preparing,
+          cost: 0,
+        },
+      },
+    });
+    const { PATCH } = await patchRoute();
+
+    const saved = await PATCH(
+      json("PATCH", {
+        expectedStatus: OrderStatus.PAID,
+        shippingProvider: ShippingProvider.MANUAL,
+        shipping: { status: ShippingStatus.Shipped, cost: 0, courier: "Domiciliario" },
+      }),
+      { params: { storeId: fixture.store.id, orderId: order.id } },
+    );
+    expect(saved.status).toBe(200);
+    const after = await testPrisma.order.findUniqueOrThrow({
+      where: { id: order.id },
+      include: { shipping: true },
+    });
+    expect(after.status).toBe(OrderStatus.SENT);
+    expect(after.shipping?.status).toBe(ShippingStatus.Shipped);
+    // Enviar no mueve mercancía: ya salió de bodega al cobrarse... y aquí
+    // nunca se descontó porque el pedido nació pagado en la fixture.
+    const movements = await testPrisma.inventoryMovement.findMany({
+      where: { referenceId: order.id },
+    });
+    expect(movements).toHaveLength(0);
   });
 
   it("cancelar un pedido ya enviado devuelve el inventario", async () => {

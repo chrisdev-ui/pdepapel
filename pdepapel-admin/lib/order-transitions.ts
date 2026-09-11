@@ -1,4 +1,4 @@
-import { OrderStatus, OrderType, PaymentMethod } from "@prisma/client";
+import { OrderStatus, OrderType, PaymentMethod, ShippingStatus } from "@prisma/client";
 
 /**
  * Transiciones de estado de un pedido, en un solo lugar: la API las hace
@@ -142,4 +142,58 @@ export function getStatusActions(from: OrderStatus, context: TransitionContext &
   }
   push(OrderStatus.CANCELLED, isPaidLike(from) ? "Cancelar y devolver el inventario" : "Cancelar pedido", false, "cancel", true);
   return actions;
+}
+
+/** Estados del envío que significan que el paquete ya salió (o llegó). */
+export const MOVING_SHIPPING_STATUSES: ShippingStatus[] = [
+  ShippingStatus.Shipped,
+  ShippingStatus.PickedUp,
+  ShippingStatus.InTransit,
+  ShippingStatus.OutForDelivery,
+  ShippingStatus.Delivered,
+];
+
+export interface ReconcileShipmentInput {
+  from: OrderStatus;
+  /** Estado pedido en la petición, si lo hay. */
+  to?: OrderStatus | null;
+  /** Estado actual del envío guardado (undefined si el pedido no tiene envío). */
+  shippingStatus?: ShippingStatus | null;
+  /** Estado del envío pedido en la petición, si lo hay. */
+  requestedShippingStatus?: ShippingStatus | null;
+  context: TransitionContext;
+}
+
+export interface ReconciledShipment {
+  /** Estado del pedido que debe quedar (solo si cambia respecto a lo pedido). */
+  status?: OrderStatus;
+  /** Estado del envío que debe quedar (solo si cambia respecto a lo pedido). */
+  shippingStatus?: ShippingStatus;
+}
+
+/**
+ * Mantiene coherentes el estado del pedido y el del envío, que se editan por
+ * separado: «Marcar como enviado» debe dejar el envío en camino, y poner el
+ * envío en camino sobre un pedido pagado debe dejar el pedido «Enviado».
+ * Nunca fuerza una transición que `canTransition` no permita.
+ */
+export function reconcileShipmentStatus({ from, to, shippingStatus, requestedShippingStatus, context }: ReconcileShipmentInput): ReconciledShipment {
+  const result: ReconciledShipment = {};
+  const effectiveShipping = requestedShippingStatus ?? shippingStatus ?? null;
+  const becomesSent = to === OrderStatus.SENT && from !== OrderStatus.SENT;
+
+  if (becomesSent && (effectiveShipping === null || effectiveShipping === ShippingStatus.Preparing)) {
+    result.shippingStatus = ShippingStatus.Shipped;
+  }
+
+  const orderStatusUntouched = !to || to === from;
+  const shipmentStartsMoving =
+    Boolean(requestedShippingStatus) &&
+    MOVING_SHIPPING_STATUSES.includes(requestedShippingStatus as ShippingStatus) &&
+    requestedShippingStatus !== shippingStatus;
+  if (orderStatusUntouched && shipmentStartsMoving && from !== OrderStatus.SENT && canTransition(from, OrderStatus.SENT, context)) {
+    result.status = OrderStatus.SENT;
+  }
+
+  return result;
 }

@@ -3,9 +3,10 @@ import { WhatsappButton } from "@/components/whatsapp-button";
 import { getInventoryIssueBadge, getOrderChannel, getPaymentBadge, getShippingBadge } from "@/lib/order-queues";
 import { buildOrderTimeline, getNextStepCard, type TimelineOrder } from "@/lib/order-timeline";
 import { cn, currencyFormatter } from "@/lib/utils";
-import { Check, Clock, ExternalLink } from "lucide-react";
+import { Check, Clock } from "lucide-react";
 import Link from "next/link";
 import { CHANNEL_TONE, TintBadge } from "../../components/order-badges";
+import { NextStepPanel } from "./next-step-panel";
 
 interface OrderWorkspaceHeaderProps {
   storeId: string;
@@ -20,14 +21,6 @@ interface OrderWorkspaceHeaderProps {
   };
 }
 
-const TONE_BG: Record<string, string> = {
-  cream: "bg-tint-cream border-[#F3E2A0]",
-  sky: "bg-tint-sky border-[#B9DDF2]",
-  pink: "bg-tint-pink border-[#F5C1DA]",
-  mint: "bg-tint-mint border-[#B8E8C8]",
-  lavender: "bg-tint-lavender border-[#D0C4F0]",
-  slate: "bg-muted border-border",
-};
 
 const fmt = (value: Date | string) =>
   new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", timeZone: "America/Bogota" }).format(new Date(value));
@@ -105,34 +98,7 @@ export function OrderWorkspaceHeader({ storeId, order }: OrderWorkspaceHeaderPro
         ))}
       </ol>
 
-      {next && (
-        <section aria-labelledby="siguiente-paso" className={cn("flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between", TONE_BG[next.tone])}>
-          <div className="flex min-w-0 flex-col gap-1">
-            <h2 id="siguiente-paso" className="text-[15px] font-bold text-primary">{next.title}</h2>
-            <p className="text-sm text-primary/90">{next.description}</p>
-            {next.consequence && <p className="text-xs text-primary/70">{next.consequence}</p>}
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {next.secondary && (
-              <Button asChild variant="outline" size="sm">
-                <a href={next.secondary.href} target={next.secondary.href.startsWith("http") ? "_blank" : undefined} rel="noreferrer">
-                  {next.secondary.label}
-                </a>
-              </Button>
-            )}
-            <Button asChild size="sm">
-              {next.primary.href.startsWith("http") ? (
-                <a href={next.primary.href} target="_blank" rel="noreferrer">
-                  {next.primary.label}
-                  <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                </a>
-              ) : (
-                <a href={next.primary.href}>{next.primary.label}</a>
-              )}
-            </Button>
-          </div>
-        </section>
-      )}
+      {next && <NextStepPanel next={next} />}
     </div>
   );
 }

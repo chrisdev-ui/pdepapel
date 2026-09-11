@@ -32,6 +32,7 @@ import {
   describeForbiddenTransition,
   isPaidLike,
   ORDER_STATUS_LABELS,
+  reconcileShipmentStatus,
 } from "@/lib/order-transitions";
 import { round2 } from "@/lib/order-totals";
 import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
@@ -146,7 +147,7 @@ export async function PATCH(
       phone,
       address,
       orderItems: orderItemsInput,
-      status,
+      status: statusInput,
       expectedStatus,
       payment,
       shipping,
@@ -218,13 +219,14 @@ export async function PATCH(
       );
     }
 
+    let status = statusInput as OrderStatus | undefined;
+    const transitionType: OrderType =
+      (type as OrderType | undefined) || order.type;
+    const transitionMethod =
+      (payment?.method as PaymentMethod | undefined) ??
+      order.payment?.method ??
+      null;
     if (status && status !== order.status) {
-      const transitionType: OrderType =
-        (type as OrderType | undefined) || order.type;
-      const transitionMethod =
-        (payment?.method as PaymentMethod | undefined) ??
-        order.payment?.method ??
-        null;
       if (
         !canTransition(order.status, status, {
           type: transitionType,
@@ -236,6 +238,26 @@ export async function PATCH(
         );
       }
     }
+
+    // El estado del pedido y el del envío se editan por separado, pero cuentan
+    // la misma historia: «Marcar como enviado» deja el envío en camino y poner
+    // el envío en camino deja el pedido «Enviado». Solo transiciones permitidas.
+    const reconciled = reconcileShipmentStatus({
+      from: order.status,
+      to: status,
+      shippingStatus: order.shipping?.status ?? null,
+      requestedShippingStatus:
+        (shipping?.status as ShippingStatus | undefined) ?? null,
+      context: { type: transitionType, paymentMethod: transitionMethod },
+    });
+    if (reconciled.status) status = reconciled.status;
+    if (reconciled.shippingStatus && shipping) {
+      shipping.status = reconciled.shippingStatus;
+    }
+    const syncShippingStatus =
+      reconciled.shippingStatus && !shipping && order.shipping
+        ? reconciled.shippingStatus
+        : null;
 
     // Un pedido pagado es un registro histórico: sus productos, precios y
     // descuentos no cambian aunque el catálogo cambie. Solo cliente, envío,
@@ -390,12 +412,14 @@ export async function PATCH(
         "El cupón de un pedido pagado no se puede cambiar: el descuento ya se cobró. Cancela el pedido y crea uno nuevo si hace falta.",
       );
     }
-    const isActiveStatus = [
-      OrderStatus.CREATED,
-      OrderStatus.PENDING,
-      OrderStatus.PAID,
-      OrderStatus.SENT,
-    ].includes(targetStatus);
+    const isActiveStatus = (
+      [
+        OrderStatus.CREATED,
+        OrderStatus.PENDING,
+        OrderStatus.PAID,
+        OrderStatus.SENT,
+      ] as OrderStatus[]
+    ).includes(targetStatus);
 
     const targetType = type || order.type;
     const isStandardType = targetType === OrderType.STANDARD;
@@ -431,12 +455,14 @@ export async function PATCH(
       const productMap = new Map(products.map((p) => [p.id, p]));
 
       // Validate products existence based on status
-      const isDraftOrQuote = [
-        OrderStatus.DRAFT,
-        OrderStatus.QUOTATION,
-        OrderStatus.SENT,
-        OrderStatus.VIEWED,
-      ].includes(status || order.status);
+      const isDraftOrQuote = (
+        [
+          OrderStatus.DRAFT,
+          OrderStatus.QUOTATION,
+          OrderStatus.SENT,
+          OrderStatus.VIEWED,
+        ] as OrderStatus[]
+      ).includes(status || order.status);
 
       for (const item of orderItems) {
         if (item.productId) {
@@ -463,9 +489,9 @@ export async function PATCH(
       // STRICT VALIDATION: Check if we are transitioning to an active state
       if (
         status &&
-        [OrderStatus.PENDING, OrderStatus.PAID, OrderStatus.ACCEPTED].includes(
-          status,
-        )
+        (
+          [OrderStatus.PENDING, OrderStatus.PAID, OrderStatus.ACCEPTED] as OrderStatus[]
+        ).includes(status)
       ) {
         const hasManualItems = orderItems.some((item: any) => !item.productId);
         if (hasManualItems) {
@@ -649,6 +675,15 @@ export async function PATCH(
           );
         }
         await Promise.all(createOperations);
+      }
+
+      // Estado del envío derivado de «Marcar como enviado» cuando la petición
+      // no trae el bloque de envío.
+      if (syncShippingStatus && order.shipping) {
+        await tx.shipping.update({
+          where: { id: order.shipping.id },
+          data: { status: syncShippingStatus },
+        });
       }
 
       // Update the order

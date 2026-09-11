@@ -18,6 +18,7 @@ import {
   ORDER_STATUS_LABELS,
   type StatusAction,
 } from "@/lib/order-transitions";
+import { ORDER_ACTION_EVENT, type OrderActionEventDetail } from "@/lib/order-actions";
 import { currencyFormatter } from "@/lib/utils";
 import {
   OrderStatus,
@@ -25,7 +26,7 @@ import {
   PaymentMethod,
   ShippingProvider,
 } from "@prisma/client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export interface TransitionPayload {
   to: OrderStatus;
@@ -85,14 +86,17 @@ export function StatusActions({
   const actions = getStatusActions(status, { type, paymentMethod }).filter(
     (action) => (variant === "care" ? action.destructive : !action.destructive),
   );
-  if (actions.length === 0) return null;
 
   const needsReference =
     pending?.confirm === "pay" && paymentMethod === PaymentMethod.BankTransfer;
-  const needsGuide =
+  // Un envío manual (domiciliario, mensajería sin rastreo) puede no tener guía:
+  // se pide solo cuando la transportadora la emite y aún no está registrada.
+  const asksGuideNumber =
     pending?.confirm === "ship" &&
     shippingProvider !== ShippingProvider.NONE &&
     !trackingCode;
+  const needsGuide =
+    asksGuideNumber && shippingProvider === ShippingProvider.ENVIOCLICK;
   // La guía se decide aquí mismo, en el diálogo de pago, en lugar de un
   // segundo modal después de confirmar.
   const asksGuide = pending?.confirm === "pay" && guideRate !== null;
@@ -112,6 +116,23 @@ export function StatusActions({
       setSubmitting(false);
     }
   };
+
+  // La cabecera («Siguiente paso») pide abrir una acción concreta; solo la
+  // tarjeta de estado responde, para no abrir dos diálogos.
+  useEffect(() => {
+    if (variant !== "card") return;
+    const onRequest = (event: Event) => {
+      const detail = (event as CustomEvent<OrderActionEventDetail>).detail;
+      const action = actions.find((item) => item.confirm === detail?.action);
+      if (action && !loading && !submitting) void run(action);
+    };
+    window.addEventListener(ORDER_ACTION_EVENT, onRequest);
+    return () => window.removeEventListener(ORDER_ACTION_EVENT, onRequest);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [variant, loading, submitting, status, type, paymentMethod, transactionId]);
+
+  if (actions.length === 0) return null;
+
 
   const confirm = async () => {
     if (!pending) return;
@@ -268,9 +289,11 @@ export function StatusActions({
               />
             </div>
           )}
-          {needsGuide && (
+          {asksGuideNumber && (
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="envio-guia">Número de guía</Label>
+              <Label htmlFor="envio-guia">
+                {needsGuide ? "Número de guía" : "Número de guía (opcional)"}
+              </Label>
               <Input
                 id="envio-guia"
                 value={guide}
@@ -278,6 +301,12 @@ export function StatusActions({
                 placeholder="Ej: SER123456789"
                 autoFocus
               />
+              {!needsGuide && (
+                <p className="text-xs text-muted-foreground">
+                  Si va con domiciliario o sin rastreo, déjalo vacío: el envío
+                  queda «En camino» igual.
+                </p>
+              )}
             </div>
           )}
           <DialogFooter className="gap-2 sm:gap-0">

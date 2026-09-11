@@ -19,7 +19,7 @@ describe("order timeline", () => {
     expect(steps[1].meta).toBe("Esperando el comprobante");
     const card = getNextStepCard(base, "s1", now)!;
     expect(card.queue).toBe("verify");
-    expect(card.primary.href).toBe("#estado");
+    expect(card.primary).toEqual({ label: "Marcar como pagado", href: "#pago", action: "pay" });
     expect(card.consequence).toContain("inventario");
   });
 

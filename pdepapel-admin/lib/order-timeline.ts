@@ -90,13 +90,25 @@ export function buildOrderTimeline(order: TimelineOrder, now = new Date()): Time
   return steps;
 }
 
+export type NextStepAction = "pay" | "ship";
+
+export interface NextStepLink {
+  label: string;
+  href: string;
+  action?: NextStepAction;
+}
+
 export interface NextStepCard {
   queue: OrderQueue;
   title: string;
   description: string;
-  /** Acción principal: enlace a una sección del formulario (#ancla) o a otra página. */
-  primary: { label: string; href: string };
-  secondary?: { label: string; href: string };
+  /**
+   * Acción principal: enlace a una sección del formulario (#ancla) o a otra
+   * página. Con `action`, el botón además abre la acción de estado
+   * correspondiente (el diálogo de «Marcar como pagado» o «Marcar como enviado»).
+   */
+  primary: NextStepLink;
+  secondary?: NextStepLink;
   consequence?: string;
   tone: "cream" | "sky" | "pink" | "mint" | "lavender" | "slate";
 }
@@ -105,7 +117,7 @@ export function getNextStepCard(order: TimelineOrder, storeId: string, now = new
   const queue = getOrderQueue(order, now);
   switch (queue) {
     case "verify":
-      return { queue, title: "Siguiente paso: verificar la transferencia", description: "Revisa el comprobante del cliente y marca el pedido como pagado con el número de la transacción.", primary: { label: "Marcar como pagado", href: "#estado" }, consequence: "Al confirmar: se descuenta el inventario y se habilita la guía.", tone: "cream" };
+      return { queue, title: "Siguiente paso: verificar la transferencia", description: "Revisa el comprobante del cliente y marca el pedido como pagado con el número de la transacción.", primary: { label: "Marcar como pagado", href: "#pago", action: "pay" }, consequence: "Al confirmar: se descuenta el inventario y se habilita la guía.", tone: "cream" };
     case "awaiting-payment":
       return isAwaitingPaymentStale(order, now)
         ? { queue, title: "El pago en línea no se completó", description: "Lleva más de dos horas sin pagarse: la sesión de Bold o Wompi ya venció. Reenvía el enlace por WhatsApp, cambia el método a transferencia o cancela el pedido.", primary: { label: "Reenviar enlace de pago", href: "#pago" }, secondary: { label: "Cambiar método", href: "#pago" }, consequence: "Si el cliente paga, Bold o Wompi marcarán el pedido como pagado automáticamente.", tone: "pink" }
@@ -117,7 +129,7 @@ export function getNextStepCard(order: TimelineOrder, storeId: string, now = new
     case "issue":
       return { queue, title: "Novedad de la transportadora", description: "Revisa el estado del envío y contacta al cliente para reintentar la entrega o gestionar la devolución.", primary: { label: "Ver envío", href: "#envio" }, consequence: "Una devolución no reingresa stock hasta que el producto llegue físicamente.", tone: "pink" };
     case "quote":
-      return { queue, title: order.status === OrderStatus.ACCEPTED ? "Cotización aceptada" : "Cotización en curso", description: order.status === OrderStatus.ACCEPTED ? "El cliente aceptó. Conviértela en pedido registrando el pago." : order.expiresAt ? `Válida hasta ${fmt(order.expiresAt)}. Comparte el enlace o recuérdala por WhatsApp.` : "Comparte el enlace con el cliente.", primary: { label: order.status === OrderStatus.ACCEPTED ? "Registrar pago" : "Ver estado", href: "#estado" }, tone: "lavender" };
+      return { queue, title: order.status === OrderStatus.ACCEPTED ? "Cotización aceptada" : "Cotización en curso", description: order.status === OrderStatus.ACCEPTED ? "El cliente aceptó. Conviértela en pedido registrando el pago." : order.expiresAt ? `Válida hasta ${fmt(order.expiresAt)}. Comparte el enlace o recuérdala por WhatsApp.` : "Comparte el enlace con el cliente.", primary: order.status === OrderStatus.ACCEPTED ? { label: "Registrar pago", href: "#pago", action: "pay" } : { label: "Ver estado", href: "#pago" }, tone: "lavender" };
     case "delivered":
       return { queue, title: "Pedido entregado", description: "Cerrado. Puedes pedir una reseña por WhatsApp.", primary: { label: "Ver pedidos", href: `/${storeId}/pedidos` }, tone: "mint" };
     case "completed":
