@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { DateField } from "@/components/ui/date-field";
 import { format, parseISO } from "date-fns";
+import { toDateInputValue } from "@/lib/date-input";
 import {
   FormControl,
   FormDescription,
@@ -420,7 +421,7 @@ export function CustomerCard({
                 <FormControl>
                   <DateField
                     id="cotizacion-vence"
-                    value={field.value ? format(field.value, "yyyy-MM-dd") : ""}
+                    value={toDateInputValue(field.value)}
                     onChange={(iso) =>
                       field.onChange(iso ? parseISO(iso) : undefined)
                     }

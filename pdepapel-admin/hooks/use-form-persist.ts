@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { FieldValues, UseFormReturn } from "react-hook-form";
+import { reviveDates } from "@/lib/date-input";
 import { useFormPersistenceStore } from "./use-form-persistence-store";
 
 interface UseFormPersistProps<T extends FieldValues> {
@@ -31,10 +32,12 @@ export function useFormPersist<T extends FieldValues>({
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // Skip restoration for existing records - server data is authoritative
-    // Keys for existing orders look like: 'order-form-{storeId}-{orderId}'
-    // Keys for new orders look like: 'order-form-{storeId}-new'
-    const isNewRecord = key.endsWith("-new");
+    // Skip restoration for existing records - server data is authoritative.
+    // Keys for new records end in '-new' (e.g. 'order-form-{storeId}-new');
+    // a form that passes `enabled: false` (existing record) never restores,
+    // whatever its key looks like, so a draft started for a *new* record can
+    // never be merged over server data.
+    const isNewRecord = enabled && key.endsWith("-new");
 
     if (!isLoaded.current) {
       if (isNewRecord) {
@@ -45,16 +48,19 @@ export function useFormPersist<T extends FieldValues>({
 
         if (savedData && typeof savedData === "object") {
           try {
+            // Drafts travel through JSON: Date values come back as ISO
+            // strings, which date-fns refuses. Revive them before resetting.
+            const draft = reviveDates({ ...savedData });
             if (excludeRef.current.length > 0) {
               excludeRef.current.forEach((k) => {
-                if (k in savedData) {
-                  delete savedData[k];
+                if (k in draft) {
+                  delete draft[k];
                 }
               });
             }
 
             const currentValues = form.getValues();
-            const merged = { ...currentValues, ...savedData };
+            const merged = { ...currentValues, ...draft };
 
             form.reset(merged);
           } catch (error) {
@@ -65,7 +71,7 @@ export function useFormPersist<T extends FieldValues>({
       // For existing records, we skip restoration - form already has fresh server data
       isLoaded.current = true;
     }
-  }, [key, form]);
+  }, [key, form, enabled]);
 
   // Save data on change
   useEffect(() => {

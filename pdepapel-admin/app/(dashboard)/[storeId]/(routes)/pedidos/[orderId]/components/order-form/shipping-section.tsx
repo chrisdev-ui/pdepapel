@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { DateField } from "@/components/ui/date-field";
+import { toDateInputValue } from "@/lib/date-input";
 import {
   FormControl,
   FormDescription,
@@ -40,7 +41,7 @@ import { shippingOptions } from "@/constants";
 import { getCarrierInfo, SHIPPING_QUOTE_CACHE } from "@/constants/shipping";
 import { cn, currencyFormatter } from "@/lib/utils";
 import { PaymentMethod, ShippingProvider, type Box } from "@prisma/client";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import {
   Check,
   Clock,
@@ -906,9 +907,7 @@ export function ShippingSection({
                   <FormControl>
                     <DateField
                       id="envio-entrega-estimada"
-                      value={
-                        field.value ? format(field.value, "yyyy-MM-dd") : ""
-                      }
+                      value={toDateInputValue(field.value)}
                       onChange={(iso) =>
                         field.onChange(iso ? parseISO(iso) : undefined)
                       }

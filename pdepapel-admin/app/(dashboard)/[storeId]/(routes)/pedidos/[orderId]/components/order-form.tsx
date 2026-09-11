@@ -258,7 +258,8 @@ export const OrderForm: React.FC<OrderFormProps> = ({
 
   const { clearStorage } = useFormPersist({
     form,
-    key: `order-form-${storeId}-${currentType}-new`,
+    // Existing orders never persist nor restore drafts: the server is authoritative.
+    key: `order-form-${storeId}-${initialData ? initialData.id : `${currentType}-new`}`,
     enabled: !initialData,
   });
   useFormValidationToast({ form });
