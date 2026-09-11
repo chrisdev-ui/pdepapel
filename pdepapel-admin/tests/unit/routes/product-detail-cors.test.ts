@@ -4,6 +4,8 @@ const mocks = vi.hoisted(() => ({
   findProduct: vi.fn(),
   findProductSlugAlias: vi.fn(),
   calculateDiscountedPrice: vi.fn(),
+  auth: vi.fn(),
+  checkIfStoreOwner: vi.fn(),
 }));
 
 vi.mock("@/lib/api-errors", () => ({
@@ -41,6 +43,7 @@ vi.mock("@/lib/utils", () => ({
   generateRandomSKU: vi.fn(),
   getPublicIdFromCloudinaryUrl: vi.fn(),
   verifyStoreOwner: vi.fn(),
+  checkIfStoreOwner: mocks.checkIfStoreOwner,
 }));
 vi.mock("@/lib/variant-generator", () => ({ generateSemanticSKU: vi.fn() }));
 vi.mock("@/lib/slugify", () => ({ generateProductSlug: vi.fn() }));
@@ -56,7 +59,7 @@ vi.mock("@/lib/product-slugs", () => ({
 vi.mock("@/lib/discount-engine", () => ({
   calculateDiscountedPrice: mocks.calculateDiscountedPrice,
 }));
-vi.mock("@clerk/nextjs/server", () => ({ auth: vi.fn() }));
+vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
 
 import {
   GET,
@@ -67,6 +70,8 @@ import { handleErrorResponse } from "@/lib/api-errors";
 describe("public product detail CORS", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.auth.mockResolvedValue({ userId: null });
+    mocks.checkIfStoreOwner.mockResolvedValue(false);
     mocks.findProduct.mockResolvedValue({
       id: "product-id",
       name: "Resaltador lila",
@@ -178,5 +183,36 @@ describe("public product detail CORS", () => {
     );
 
     expect(response.headers.has("Access-Control-Allow-Origin")).toBe(false);
+  });
+
+  it("answers anonymous callers through the public select, never a full row", async () => {
+    await GET(
+      new Request("https://admin.example.com/api/store-id/products/resaltador-lila?scope=storefront"),
+      { params: { storeId: "store-id", productId: "resaltador-lila" } },
+    );
+
+    const query = mocks.findProduct.mock.calls[0][0];
+    expect(query.include).toBeUndefined();
+    expect(query.select).toEqual(
+      expect.objectContaining({ id: true, price: true, images: expect.any(Object) }),
+    );
+    for (const field of ["acqPrice", "transportationCost", "supplierId", "supplier", "abcClassification"]) {
+      expect(query.select).not.toHaveProperty(field);
+    }
+  });
+
+  it("gives the store owner the full row the admin product picker relies on", async () => {
+    mocks.auth.mockResolvedValue({ userId: "owner-1" });
+    mocks.checkIfStoreOwner.mockResolvedValue(true);
+
+    await GET(
+      new Request("https://admin.example.com/api/store-id/products/product-id"),
+      { params: { storeId: "store-id", productId: "product-id" } },
+    );
+
+    expect(mocks.checkIfStoreOwner).toHaveBeenCalledWith("owner-1", "store-id");
+    const query = mocks.findProduct.mock.calls[0][0];
+    expect(query.select).toBeUndefined();
+    expect(query.include).toEqual(expect.objectContaining({ supplier: true, images: true }));
   });
 });

@@ -32,9 +32,14 @@ export async function GET(
   { params }: { params: { storeId: string; productGroupId: string } },
 ) {
   try {
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.productGroupId) {
       throw ErrorFactory.InvalidRequest("Product Group ID is required");
     }
+    // Solo el panel: devuelve las variantes como filas completas de Product.
+    const { userId } = await auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    await verifyStoreOwner(userId, params.storeId);
 
     const productGroup = await prismadb.productGroup.findFirst({
       where: {

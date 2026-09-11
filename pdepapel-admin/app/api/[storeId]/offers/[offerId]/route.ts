@@ -14,6 +14,9 @@ export async function GET(
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.offerId)
       throw ErrorFactory.InvalidRequest("ID de oferta requerido");
+    const { userId } = await auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    await verifyStoreOwner(userId, params.storeId);
 
     const offer = await prismadb.offer.findUnique({
       where: {

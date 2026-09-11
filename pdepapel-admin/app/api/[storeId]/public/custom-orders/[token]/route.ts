@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createCorsHeaders } from "@/lib/cors";
 import prismadb from "@/lib/prismadb";
+import { PUBLIC_QUOTATION_SELECT } from "@/lib/public-orders";
 
 const getCorsHeaders = (request: Request) =>
   createCorsHeaders(request, { methods: "GET, OPTIONS" });
@@ -22,35 +23,18 @@ export async function GET(
       });
     }
 
-    // ⭐ Unified System: Query the Order table, not CustomOrder
-    // We look for orders that have this token.
-    const order = await prismadb.order.findUnique({
+    // Sistema unificado: la cotización vive en Order. El token es la llave y
+    // la tienda entra en la misma consulta; la forma es un `select` de
+    // clienta (sin notas internas, costos ni utilidad).
+    const order = await prismadb.order.findFirst({
       where: {
         token: params.token,
+        storeId: params.storeId,
       },
-      include: {
-        shipping: true,
-        orderItems: {
-          include: {
-            product: {
-              select: {
-                id: true,
-                name: true,
-                description: true,
-                images: true,
-                price: true,
-                sku: true,
-                size: { select: { name: true } },
-                color: { select: { name: true } },
-                design: { select: { name: true } },
-              },
-            },
-          },
-        },
-      },
+      select: PUBLIC_QUOTATION_SELECT,
     });
 
-    if (!order || order.storeId !== params.storeId) {
+    if (!order) {
       return new NextResponse("Order not found", {
         status: 404,
         headers: corsHeaders,
@@ -63,10 +47,11 @@ export async function GET(
       // For now, let's assume client handles "Expired" UI based on this date
     }
 
+    const { adminNotes, ...quotation } = order;
     return NextResponse.json(
       {
-        ...order,
-        description: order.adminNotes,
+        ...quotation,
+        description: adminNotes,
         validUntil: order.expiresAt,
       },
       { headers: corsHeaders },

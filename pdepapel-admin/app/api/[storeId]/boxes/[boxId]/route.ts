@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
 import prismadb from "@/lib/prismadb";
-import { checkIfStoreOwner, CACHE_HEADERS } from "@/lib/utils";
+import { checkIfStoreOwner, CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 
 export async function GET(
@@ -10,15 +10,21 @@ export async function GET(
   { params }: { params: { boxId: string; storeId: string } },
 ) {
   try {
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.boxId) {
       throw ErrorFactory.InvalidRequest("Box id is required");
     }
+    const { userId } = await auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    await verifyStoreOwner(userId, params.storeId);
 
-    const box = await prismadb.box.findUnique({
+    const box = await prismadb.box.findFirst({
       where: {
         id: params.boxId,
+        storeId: params.storeId,
       },
     });
+    if (!box) throw ErrorFactory.NotFound("Caja no encontrada");
 
     return NextResponse.json(box, { headers: CACHE_HEADERS.STATIC });
   } catch (error) {

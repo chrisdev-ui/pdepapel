@@ -8,10 +8,15 @@ import {
   resolveCouponForOrderUpdate,
 } from "@/lib/order-coupons";
 import prismadb from "@/lib/prismadb";
+import {
+  CUSTOMER_ORDER_SELECT,
+  toCustomerOrderResponse,
+} from "@/lib/public-orders";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
 import {
   CACHE_HEADERS,
   calculateOrderTotals,
+  checkIfStoreOwner,
   processOrderItemsInBatches,
   verifyStoreOwner,
 } from "@/lib/utils";
@@ -60,37 +65,54 @@ export async function OPTIONS(req: Request) {
   );
 }
 
+/**
+ * Lectura de un pedido por id. La tienda en línea la usa sin sesión (la
+ * página del pedido y su sondeo de pago), así que el id hace de llave y la
+ * respuesta es el `select` de clienta: nunca el token, las notas internas,
+ * los costos ni la utilidad. La dueña del panel recibe la fila completa.
+ */
 export async function GET(
   req: Request,
-  { params }: { params: { orderId: string } },
+  { params }: { params: { storeId: string; orderId: string } },
 ) {
   const corsHeaders = createCorsHeaders(req, { methods: "GET, OPTIONS" });
 
   try {
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.orderId)
       throw ErrorFactory.InvalidRequest("Se requiere el ID de la orden");
 
-    const order = await prismadb.order.findUnique({
-      where: { id: params.orderId },
-      include: {
-        orderItems: {
-          orderBy: { createdAt: "asc" },
-          include: {
-            product: {
-              include: {
-                images: true,
-              },
-            },
+    const { userId } = await auth();
+    const isOwner = await checkIfStoreOwner(userId, params.storeId);
+    const where = { id: params.orderId, storeId: params.storeId };
+
+    if (isOwner) {
+      const order = await prismadb.order.findFirst({
+        where,
+        include: {
+          orderItems: {
+            orderBy: { createdAt: "asc" },
+            include: { product: { include: { images: true } } },
           },
+          payment: true,
+          shipping: true,
+          coupon: true,
         },
-        payment: true,
-        shipping: true,
-        coupon: true,
-      },
+      });
+      if (!order)
+        throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
+      return NextResponse.json(order, {
+        headers: { ...corsHeaders, ...CACHE_HEADERS.DYNAMIC },
+      });
+    }
+
+    const order = await prismadb.order.findFirst({
+      where,
+      select: CUSTOMER_ORDER_SELECT,
     });
     if (!order)
       throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
-    return NextResponse.json(order, {
+    return NextResponse.json(toCustomerOrderResponse(order), {
       headers: { ...corsHeaders, ...CACHE_HEADERS.DYNAMIC },
     });
   } catch (error) {

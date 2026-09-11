@@ -198,7 +198,6 @@ export interface HomeReviewsResponse {
 
 export interface Review {
   id: string;
-  userId: string;
   name: string;
   rating: number;
   comment: string;
@@ -251,7 +250,8 @@ export interface Order {
   documentId?: string | null;
   coupon?: Coupon | null;
   couponDiscount?: number;
-  createdBy?: string | null;
+  /** El panel creó el pedido; el id de quien lo hizo nunca llega a la tienda. */
+  createdByAdmin?: boolean;
   createdAt: string;
   /** Set by the admin only when a genuine payment was confirmed. */
   paidAt?: string | null;

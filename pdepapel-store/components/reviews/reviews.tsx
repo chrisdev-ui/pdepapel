@@ -78,7 +78,7 @@ export function Reviews({ productId, reviews = [] }: ReviewsProps) {
         ) : (
           <p className="font-sans text-sm text-gray-600">Todavía no hay reseñas. Sé la primera en contar qué te pareció.</p>
         )}
-        <ReviewForm productId={productId} reviews={reviews} />
+        <ReviewForm productId={productId} />
       </div>
       <div className="mt-8 flex flex-col gap-3 lg:mt-0">
         {sorted.length > 0 && (

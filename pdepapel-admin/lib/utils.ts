@@ -215,7 +215,10 @@ export interface CheckoutOrder extends Order {
   payment?: PaymentDetails | null;
 }
 
-export type CheckoutOrderItem = OrderItem & { product: Product };
+/** El enlace de pago solo necesita identificar y nombrar el producto de cada línea. */
+export type CheckoutOrderItem = OrderItem & {
+  product: Pick<Product, "id" | "name" | "price"> | null;
+};
 
 export async function generateWompiPayment(
   order: CheckoutOrder,

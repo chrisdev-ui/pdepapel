@@ -68,6 +68,7 @@ describe("public review shape", () => {
   it("never exposes the moderation note and only lists published reviews", () => {
     expect(PUBLIC_REVIEW_SELECT).not.toHaveProperty("moderationNote");
     expect(PUBLIC_REVIEW_SELECT).not.toHaveProperty("moderatedBy");
+    expect(PUBLIC_REVIEW_SELECT).not.toHaveProperty("userId");
     expect(PUBLIC_REVIEW_SELECT).toMatchObject({ reply: true, repliedAt: true, rating: true });
     expect(PUBLIC_REVIEW_INCLUDE.where).toEqual({ status: "PUBLISHED" });
   });

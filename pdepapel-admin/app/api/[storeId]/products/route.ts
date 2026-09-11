@@ -12,18 +12,18 @@ import { normalizeSearchTerm, productGroupNameSearchWhere, productNameSearchWher
 import cloudinaryInstance from "@/lib/cloudinary";
 import { parseTransportationCost } from "@/lib/product-costs";
 import prismadb from "@/lib/prismadb";
-import { PUBLIC_REVIEW_INCLUDE, PUBLIC_REVIEW_WHERE } from "@/lib/review-moderation";
 import {
-  Prisma,
-  Product,
-  Image,
-  Category,
-  Design,
-  Color,
-  Size,
-  Supplier,
-  Review,
-} from "@prisma/client";
+  PUBLIC_CATEGORY_SELECT,
+  PUBLIC_COLOR_SELECT,
+  PUBLIC_DESIGN_SELECT,
+  PUBLIC_IMAGE_SELECT,
+  PUBLIC_PRODUCTS_CACHE_VERSION,
+  PUBLIC_PRODUCT_SELECT,
+  PUBLIC_SIZE_SELECT,
+  type PublicProductRecord,
+} from "@/lib/public-catalog";
+import { PUBLIC_REVIEW_WHERE } from "@/lib/review-moderation";
+import { Prisma } from "@prisma/client";
 import {
   CACHE_HEADERS,
   generateRandomSKU,
@@ -57,6 +57,7 @@ import {
  */
 interface UnifiedProduct {
   id: string;
+  /** Solo para ordenar «más vendidos»; se quita antes de responder. */
   soldCount?: number;
   slug?: string;
   name: string;
@@ -74,13 +75,12 @@ interface UnifiedProduct {
   discountedPrice?: number;
   sku: string;
   createdAt: Date;
-  images?: Image[];
-  category?: Category;
-  design?: Design;
-  color?: Color;
-  size?: Size;
+  images?: PublicProductRecord["images"];
+  category?: PublicProductRecord["category"];
+  design?: PublicProductRecord["design"];
+  color?: PublicProductRecord["color"];
+  size?: PublicProductRecord["size"];
   reviews?: { rating: number }[];
-  supplier?: Supplier | null;
   stock: number;
   isFeatured?: boolean;
   availableAt?: Date | null;
@@ -92,11 +92,11 @@ interface GroupVariantProduct {
   price: number | Prisma.Decimal;
   stock: number;
   categoryId: string;
-  images: Image[];
-  category: Category;
-  color: Color;
-  size: Size;
-  design: Design;
+  images: PublicProductRecord["images"];
+  category: PublicProductRecord["category"];
+  color: PublicProductRecord["color"];
+  size: PublicProductRecord["size"];
+  design: PublicProductRecord["design"];
 }
 
 interface GroupVariant {
@@ -377,7 +377,6 @@ export async function GET(
     const optionValueId =
       searchParams.get("optionValueId")?.split(",").filter(Boolean) || [];
     const isFeatured = searchParams.get("isFeatured");
-    const includeSupplier = searchParams.get("includeSupplier") || false;
     const onlyNew = searchParams.get("onlyNew") || undefined;
     const fromShop = searchParams.get("fromShop") || undefined;
     let search = searchParams.get("search") || "";
@@ -405,7 +404,9 @@ export async function GET(
       : undefined;
 
     // Create cache key based on query parameters
-    const cacheKey = `store:${params.storeId}:products:${JSON.stringify({
+    // La versión forma parte de la llave: al cambiar lo que se devuelve, las
+    // entradas guardadas con la forma anterior dejan de leerse y caducan solas.
+    const cacheKey = `store:${params.storeId}:products:${PUBLIC_PRODUCTS_CACHE_VERSION}:${JSON.stringify({
       page,
       itemsPerPage,
       typeId: typeId.sort(),
@@ -415,7 +416,6 @@ export async function GET(
       designId: designId.sort(),
       optionValueId: optionValueId.sort(),
       isFeatured,
-      includeSupplier,
       onlyNew,
       fromShop,
       limit,
@@ -606,14 +606,7 @@ export async function GET(
           id: { in: ids },
           isArchived: false,
         },
-        include: {
-          images: true,
-          category: true,
-          color: true,
-          size: true,
-          design: true,
-          productGroup: true,
-        },
+        select: PUBLIC_PRODUCT_SELECT,
       });
 
       // Calculate prices/discounts for these specific items
@@ -665,7 +658,9 @@ export async function GET(
     }
 
     // Custom type for unified product response
-    type StorefrontProduct = Partial<Product> & {
+    // Todo lo que sale de aquí nace de `PUBLIC_PRODUCT_SELECT`: nunca una fila
+    // completa de Product (costos, proveedor, clasificación interna).
+    type StorefrontProduct = Partial<PublicProductRecord> & {
       id: string; // Required
       price: number | Prisma.Decimal; // Required
       categoryId: string; // Required for discount engine
@@ -678,13 +673,8 @@ export async function GET(
       hasDiscount?: boolean;
       discountedPrice?: number;
       originalPrice?: number;
-      images?: Image[];
-      category?: Category;
-      design?: Design;
-      color?: Color;
-      size?: Size;
-      reviews?: (Pick<Review, "rating"> & Partial<Review>)[]; // Reviews in group are flattened
-      supplier?: Supplier | null;
+      reviews?: { rating: number }[]; // Reviews in group are flattened
+      kitComponents?: { quantity: number; component: { stock: number } | null }[];
     };
 
     let products: StorefrontProduct[] = [];
@@ -753,8 +743,12 @@ export async function GET(
       const [allGroups, allStandaloneProducts] = await Promise.all([
         prismadb.productGroup.findMany({
           where: baseGroupWhere,
-          include: {
-            images: true,
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            createdAt: true,
+            images: { select: PUBLIC_IMAGE_SELECT },
             products: {
               where: productFilters,
               select: {
@@ -762,15 +756,15 @@ export async function GET(
                 stock: true,
                 id: true,
                 slug: true,
-                category: true,
+                category: { select: PUBLIC_CATEGORY_SELECT },
                 categoryId: true,
                 colorId: true,
                 sizeId: true,
                 designId: true,
-                images: true,
-                color: true,
-                size: true,
-                design: true,
+                images: { select: PUBLIC_IMAGE_SELECT },
+                color: { select: PUBLIC_COLOR_SELECT },
+                size: { select: PUBLIC_SIZE_SELECT },
+                design: { select: PUBLIC_DESIGN_SELECT },
                 isFeatured: true,
                 soldCount: true,
                 availableAt: true,
@@ -787,13 +781,7 @@ export async function GET(
         }),
         prismadb.product.findMany({
           where: standaloneWhere,
-          include: {
-            images: true,
-            category: true,
-            color: true,
-            size: true,
-            design: true,
-          },
+          select: PUBLIC_PRODUCT_SELECT,
           orderBy: { createdAt: "desc" },
         }),
       ]);
@@ -1040,7 +1028,13 @@ export async function GET(
       totalItems = sortedItems.length;
       totalPages = Math.ceil(totalItems / itemsPerPage);
       const offset = (page - 1) * itemsPerPage;
-      const finalResponse = sortedItems.slice(offset, offset + itemsPerPage);
+      // `soldCount` solo sirvió para ordenar; no es dato público.
+      const finalResponse = sortedItems
+        .slice(offset, offset + itemsPerPage)
+        .map((item) => {
+          const { soldCount: _soldCount, ...publicItem } = item;
+          return publicItem;
+        });
 
       // Facetas siempre, también sin categoría: la barra lateral y la hoja
       // móvil muestran conteos de tipos, opciones y rangos de precio.
@@ -1143,16 +1137,7 @@ export async function GET(
           isArchived: false,
         ...availabilityFilter,
         },
-        include: {
-          images: true,
-          category: true,
-          color: true,
-          design: true,
-          size: true,
-          productGroup: true,
-          supplier: includeSupplier ? true : undefined,
-          reviews: PUBLIC_REVIEW_INCLUDE,
-        },
+        select: PUBLIC_PRODUCT_SELECT,
         orderBy: {
           createdAt: "desc",
         },
@@ -1227,15 +1212,7 @@ export async function GET(
           where: whereSales,
           take: itemsPerPage,
           skip: offset, // Standard skip within the sale list
-          include: {
-            images: true,
-            category: true,
-            color: true,
-            design: true,
-            size: true,
-            supplier: includeSupplier ? true : undefined,
-            reviews: PUBLIC_REVIEW_INCLUDE,
-          },
+          select: PUBLIC_PRODUCT_SELECT,
           orderBy: { createdAt: "desc" }, // Secondary sort
         });
       }
@@ -1252,15 +1229,7 @@ export async function GET(
           where: whereRegular,
           take: itemsNeeded,
           skip: regularSkip,
-          include: {
-            images: true,
-            category: true,
-            color: true,
-            design: true,
-            size: true,
-            supplier: includeSupplier ? true : undefined,
-            reviews: PUBLIC_REVIEW_INCLUDE,
-          },
+          select: PUBLIC_PRODUCT_SELECT,
           orderBy: { createdAt: "desc" }, // Secondary sort
         });
       }
@@ -1358,22 +1327,15 @@ export async function GET(
       ] = await Promise.all([
         prismadb.product.findMany({
           where: whereClause,
-          include: {
-            images: true,
-            category: true,
-            color: true,
-            design: true,
-            size: true,
-            productGroup: true,
-            supplier: includeSupplier ? true : undefined,
+          select: {
+            ...PUBLIC_PRODUCT_SELECT,
+            // Solo el stock de cada componente: sirve para el stock efectivo del kit.
             kitComponents: {
-              include: {
-                component: {
-                  select: { stock: true },
-                },
+              select: {
+                quantity: true,
+                component: { select: { stock: true } },
               },
             },
-            reviews: PUBLIC_REVIEW_INCLUDE,
           },
           orderBy: SORT_OPTIONS[sortOption as SortOption],
           skip: fromShop ? (page - 1) * itemsPerPage : undefined,
@@ -1445,9 +1407,10 @@ export async function GET(
 
       // Compute effective stock for kit products based on component availability
       let effectiveStock = product.stock;
-      if (product.isKit && (product as any).kitComponents?.length > 0) {
+      const kitComponents = product.kitComponents ?? [];
+      if (product.isKit && kitComponents.length > 0) {
         effectiveStock = Math.min(
-          ...(product as any).kitComponents.map((c: any) =>
+          ...kitComponents.map((c) =>
             c.quantity > 0
               ? Math.floor((c.component?.stock || 0) / c.quantity)
               : 0,

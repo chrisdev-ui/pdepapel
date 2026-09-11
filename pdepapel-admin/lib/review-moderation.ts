@@ -25,11 +25,14 @@ export interface ReviewModerationInput {
   note?: string;
 }
 
-/** Lo que la tienda puede ver de una reseña; excluye la nota de moderación. */
+/**
+ * Lo que la tienda puede ver de una reseña: excluye la nota de moderación y
+ * el id de Clerk de la autora (la clienta averigua si ya opinó con
+ * `GET /products/[id]/reviews/mine`, con sesión).
+ */
 export const PUBLIC_REVIEW_SELECT = {
   id: true,
   productId: true,
-  userId: true,
   name: true,
   rating: true,
   comment: true,

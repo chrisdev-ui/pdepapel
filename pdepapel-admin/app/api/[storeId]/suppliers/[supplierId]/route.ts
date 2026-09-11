@@ -15,6 +15,9 @@ export async function GET(
     if (!params.supplierId) {
       throw ErrorFactory.InvalidRequest("El ID del proveedor es requerido");
     }
+    const { userId } = await auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    await verifyStoreOwner(userId, params.storeId);
 
     const supplier = await prismadb.supplier.findUnique({
       where: { id: params.supplierId, storeId: params.storeId },

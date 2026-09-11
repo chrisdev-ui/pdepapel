@@ -56,6 +56,21 @@ const PROTECTED_ROUTES: ProtectedRoute[] = [
   { path: "orders/[orderId]/shipping/clear-rate", methods: ["DELETE"], params: { orderId: "x" } },
   { path: "products", methods: ["POST", "DELETE"] },
   { path: "coupons", methods: ["POST"] },
+  // Lecturas que solo usa el panel (auditoría de exposición pública, 2026-09-11):
+  // devolvían filas completas (costos, proveedor, cupones, cajas, reseñas con
+  // nota de moderación) a cualquier visitante.
+  { path: "product-groups", methods: ["GET"] },
+  { path: "product-groups/[productGroupId]", methods: ["GET"], params: { productGroupId: "x" } },
+  { path: "suppliers", methods: ["GET"] },
+  { path: "suppliers/[supplierId]", methods: ["GET"], params: { supplierId: "x" } },
+  { path: "products/catalog", methods: ["GET"] },
+  { path: "offers", methods: ["GET"] },
+  { path: "offers/[offerId]", methods: ["GET"], params: { offerId: "x" } },
+  { path: "boxes", methods: ["GET"] },
+  { path: "boxes/[boxId]", methods: ["GET"], params: { boxId: "x" } },
+  { path: "coupons", methods: ["GET"] },
+  { path: "coupons/[couponId]", methods: ["GET"], params: { couponId: "x" } },
+  { path: "products/[productId]/reviews/[reviewId]", methods: ["GET"], params: { productId: "x", reviewId: "x" } },
 ];
 // Bulk handlers (products PATCH, orders PATCH/DELETE, coupons PATCH/DELETE,
 // shipments/bulk-manual-update) validate the id list before authorizing, so an
@@ -127,6 +142,11 @@ describe("store-owner authorization on dashboard API handlers", () => {
       ["whatsapp/templates", "GET"],
       ["customers/search", "GET"],
       ["products/selectable", "GET"],
+      ["product-groups", "GET"],
+      ["suppliers", "GET"],
+      ["offers", "GET"],
+      ["boxes", "GET"],
+      ["products/catalog", "GET"],
     ] as const) {
       const handler = await loadHandler(path, method);
       const response = await call(handler, method, storeId);

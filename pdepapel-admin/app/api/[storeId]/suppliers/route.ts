@@ -64,6 +64,10 @@ export async function GET(
 ) {
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    // La lista de proveedores es información del negocio: solo la dueña.
+    const { userId } = await auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    await verifyStoreOwner(userId, params.storeId);
 
     const suppliers = await prismadb.supplier.findMany({
       where: { storeId: params.storeId },

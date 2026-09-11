@@ -8,9 +8,11 @@ import cloudinaryInstance from "@/lib/cloudinary";
 import { createCorsHeaders } from "@/lib/cors";
 import { parseTransportationCost } from "@/lib/product-costs";
 import prismadb from "@/lib/prismadb";
+import { PUBLIC_PRODUCT_DETAIL_SELECT } from "@/lib/public-catalog";
 import { PUBLIC_REVIEW_INCLUDE } from "@/lib/review-moderation";
 import {
   CACHE_HEADERS,
+  checkIfStoreOwner,
   getPublicIdFromCloudinaryUrl,
   verifyStoreOwner,
   generateRandomSKU,
@@ -26,6 +28,7 @@ import {
   synchronizeProductGroupSlugs,
 } from "@/lib/product-slugs";
 import { auth } from "@clerk/nextjs/server";
+import type { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 export async function OPTIONS(req: Request) {
@@ -53,7 +56,15 @@ export async function GET(
     if (!params.productId)
       throw ErrorFactory.InvalidRequest("El ID del producto es requerido");
 
-    const productInclude = {
+    // La ruta no pide sesión (la tienda en línea la usa), así que la forma
+    // depende de quién pregunta: la dueña del panel recibe la fila completa
+    // (el selector de productos, el asistente de Mercado Libre y el
+    // aprovisionamiento leen acqPrice y transportationCost de aquí); cualquier
+    // otra persona recibe solo el `select` público, sin costos ni proveedor.
+    const { userId } = await auth();
+    const isOwner = await checkIfStoreOwner(userId, params.storeId);
+
+    const ownerInclude = {
       images: true,
       category: true,
       size: true,
@@ -79,14 +90,18 @@ export async function GET(
         },
       },
     } as const;
+    const findProduct = (where: Prisma.ProductWhereInput) =>
+      isOwner
+        ? prismadb.product.findFirst({ where, include: ownerInclude })
+        : prismadb.product.findFirst({
+            where,
+            select: PUBLIC_PRODUCT_DETAIL_SELECT,
+          });
 
-    let product = await prismadb.product.findFirst({
-      where: {
-        storeId: params.storeId,
-        ...(isStorefrontRequest ? { isArchived: false } : {}),
-        OR: [{ id: params.productId }, { slug: params.productId }],
-      },
-      include: productInclude,
+    let product = await findProduct({
+      storeId: params.storeId,
+      ...(isStorefrontRequest ? { isArchived: false } : {}),
+      OR: [{ id: params.productId }, { slug: params.productId }],
     });
 
     if (!product) {
@@ -101,13 +116,10 @@ export async function GET(
       });
 
       if (alias) {
-        product = await prismadb.product.findFirst({
-          where: {
-            id: alias.productId,
-            storeId: params.storeId,
-            ...(isStorefrontRequest ? { isArchived: false } : {}),
-          },
-          include: productInclude,
+        product = await findProduct({
+          id: alias.productId,
+          storeId: params.storeId,
+          ...(isStorefrontRequest ? { isArchived: false } : {}),
         });
       }
     }

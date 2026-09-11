@@ -1,7 +1,7 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createCorsHeaders } from "@/lib/cors";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS } from "@/lib/utils";
+import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
@@ -28,6 +28,11 @@ export async function GET(
       throw ErrorFactory.InvalidRequest("El ID del producto es requerido");
     if (!params.reviewId)
       throw ErrorFactory.InvalidRequest("El ID de la reseña es requerido");
+    // Fila completa (con nota de moderación): solo el panel. La tienda lee
+    // reseñas publicadas por `GET /products/[id]/reviews`.
+    const { userId } = await auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    await verifyStoreOwner(userId, params.storeId);
 
     const review = await prismadb.review.findUnique({
       where: {

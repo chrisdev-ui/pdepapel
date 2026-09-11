@@ -130,6 +130,12 @@ export async function GET(
 ) {
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    // Cada código es una llave de descuento: la lista completa (incluidos los
+    // vencidos y el beneficio de bienvenida) es solo del panel. La tienda
+    // valida un código concreto con `POST /coupons/validate`.
+    const { userId } = await auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    await verifyStoreOwner(userId, params.storeId);
 
     const { searchParams } = req.nextUrl;
     const isActive = searchParams.get("isActive");

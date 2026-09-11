@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
 import prismadb from "@/lib/prismadb";
-import { checkIfStoreOwner, CACHE_HEADERS } from "@/lib/utils";
+import { checkIfStoreOwner, CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 
 export async function POST(
@@ -83,6 +83,10 @@ export async function GET(
     if (!params.storeId) {
       throw ErrorFactory.MissingStoreId();
     }
+    // Medidas de empaque internas: solo el panel.
+    const { userId } = await auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    await verifyStoreOwner(userId, params.storeId);
 
     const boxes = await prismadb.box.findMany({
       where: {

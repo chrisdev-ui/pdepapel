@@ -29,14 +29,17 @@ export async function POST(
     if (!params.orderId)
       throw ErrorFactory.InvalidRequest("Se requiere el ID de la orden");
 
+    // El id del pedido es la llave pública; la tienda entra en la consulta y
+    // del producto solo se lee el nombre (la referencia de Bold no usa más).
     const order = await prismadb.order.findUnique({
       where: {
         id: params.orderId,
+        storeId: params.storeId,
       },
       include: {
         orderItems: {
           include: {
-            product: true,
+            product: { select: { id: true, name: true } },
           },
         },
         payment: true,

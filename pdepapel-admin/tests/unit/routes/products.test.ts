@@ -323,7 +323,7 @@ describe("GET /api/[storeId]/products", () => {
     });
     expect(mocks.findProductGroups).toHaveBeenCalledWith(
       expect.objectContaining({
-        include: expect.objectContaining({
+        select: expect.objectContaining({
           products: expect.objectContaining({
             where: expect.objectContaining({ colorId: { in: ["blue"] } }),
           }),
@@ -609,5 +609,33 @@ describe("GET /api/[storeId]/products", () => {
       { params: { storeId: "store-id" } },
     );
     expect((await response.json()).searchCorrection).toBeNull();
+  });
+
+  it("never selects cost, supplier or classification fields on any public branch", async () => {
+    const internal = ["acqPrice", "transportationCost", "supplierId", "supplier", "abcClassification", "soldCount", "hasNoProductIdentifier", "storeId"];
+    const assertPublicSelect = (query: { select?: Record<string, unknown>; include?: unknown }) => {
+      expect(query.include).toBeUndefined();
+      expect(query.select).toEqual(expect.objectContaining({ id: true, price: true, stock: true }));
+      for (const field of internal) expect(query.select).not.toHaveProperty(field);
+    };
+
+    mocks.findProducts.mockResolvedValue([]);
+    mocks.countProducts.mockResolvedValue(0);
+    mocks.groupProducts.mockResolvedValue([]);
+    mocks.getProductsPrices.mockResolvedValue(new Map());
+
+    for (const query of [
+      "products?skipCache=true",
+      "products?onlyNew=true&limit=8&skipCache=true",
+      "products?ids=a,b&skipCache=true",
+      "products?includeSupplier=true&skipCache=true",
+    ]) {
+      mocks.findProducts.mockClear();
+      await GET(new Request(`https://admin.example.com/api/store-id/${query}`), {
+        params: { storeId: "store-id" },
+      });
+      expect(mocks.findProducts).toHaveBeenCalled();
+      for (const call of mocks.findProducts.mock.calls) assertPublicSelect(call[0]);
+    }
   });
 });

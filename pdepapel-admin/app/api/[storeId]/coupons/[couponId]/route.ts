@@ -16,12 +16,14 @@ export async function GET(
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.couponId)
       throw ErrorFactory.InvalidRequest("Se requiere el ID del cupón");
+    const { userId } = await auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    await verifyStoreOwner(userId, params.storeId);
 
-    const coupon = await prismadb.coupon.findUnique({
-      where: { id: params.couponId },
-      include: {
-        orders: true,
-      },
+    // Sin `orders`: los pedidos de un cupón se consultan desde Pedidos, y
+    // traerlos aquí devolvía datos personales de cada compra.
+    const coupon = await prismadb.coupon.findFirst({
+      where: { id: params.couponId, storeId: params.storeId },
     });
 
     if (!coupon) {

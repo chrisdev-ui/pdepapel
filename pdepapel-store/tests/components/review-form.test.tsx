@@ -1,11 +1,11 @@
 /* @vitest-environment jsdom */
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { post, patch, toast, refresh } = vi.hoisted(() => ({ post: vi.fn(), patch: vi.fn(), toast: vi.fn(), refresh: vi.fn() }));
+const { get, post, patch, toast, refresh } = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), toast: vi.fn(), refresh: vi.fn() }));
 
-vi.mock("axios", () => ({ default: { post, patch } }));
+vi.mock("axios", () => ({ default: { get, post, patch } }));
 vi.mock("@clerk/nextjs", () => ({
   useAuth: () => ({ userId: "u1", getToken: async () => "token" }),
   SignedIn: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -22,10 +22,14 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+beforeEach(() => {
+  get.mockResolvedValue({ data: { review: null } });
+});
+
 describe("ReviewForm", () => {
   it("posts a new review to the product id, not to the route param", async () => {
     post.mockResolvedValue({});
-    render(<ReviewForm productId="prod-123" reviews={[]} />);
+    render(<ReviewForm productId="prod-123" />);
 
     fireEvent.click(screen.getByRole("button", { name: "5 estrellas" }));
     fireEvent.change(screen.getByLabelText("Comentario"), { target: { value: "Hermoso" } });
@@ -35,18 +39,25 @@ describe("ReviewForm", () => {
     expect(refresh).toHaveBeenCalled();
   });
 
-  it("updates the existing review of the signed-in customer", async () => {
+  it("updates the existing review of the signed-in customer, found through the authenticated endpoint", async () => {
     patch.mockResolvedValue({});
-    render(<ReviewForm productId="prod-123" reviews={[{ id: "r9", userId: "u1", name: "Yo", rating: 3, comment: "ok" }]} />);
+    get.mockResolvedValue({ data: { review: { id: "r9", name: "Yo", rating: 3, comment: "ok" } } });
+    render(<ReviewForm productId="prod-123" />);
 
-    fireEvent.click(screen.getByRole("button", { name: "4 estrellas" }));
-    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() =>
+      expect(get).toHaveBeenCalledWith(
+        "https://admin.example.com/api/store/products/prod-123/reviews/mine",
+        expect.objectContaining({ headers: { Authorization: "Bearer token" } }),
+      ),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "4 estrellas" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Guardar cambios" }));
 
     await waitFor(() => expect(patch).toHaveBeenCalledWith("https://admin.example.com/api/store/products/prod-123/reviews/r9", { rating: 4, comment: "" }, expect.anything()));
   });
 
   it("asks for a rating before sending", () => {
-    render(<ReviewForm productId="prod-123" reviews={[]} />);
+    render(<ReviewForm productId="prod-123" />);
     fireEvent.click(screen.getByRole("button", { name: "Publicar reseña" }));
     expect(post).not.toHaveBeenCalled();
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ variant: "warning" }));

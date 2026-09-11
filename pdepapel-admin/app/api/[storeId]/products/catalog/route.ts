@@ -2,7 +2,8 @@ import { CAPSULAS_SORPRESA_ID, KITS_ID } from "@/constants";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { calculateDiscountedPrice } from "@/lib/discount-engine";
 import prismadb from "@/lib/prismadb";
-import { CACHE_HEADERS } from "@/lib/utils";
+import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 // Enable Edge Runtime for faster response times
@@ -13,6 +14,12 @@ export async function GET(
 ) {
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    // Alimenta el catálogo PDF de Productos (panel): trae filas completas de
+    // Product y el bloque de contacto de la tienda. Nunca fue de la tienda en
+    // línea, que arma su catálogo con `GET /products`.
+    const { userId } = await auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    await verifyStoreOwner(userId, params.storeId);
 
     const [products, store] = await Promise.all([
       prismadb.product.findMany({

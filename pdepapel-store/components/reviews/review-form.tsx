@@ -4,23 +4,23 @@ import { SignedIn, SignedOut, useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { StarRating } from "@/components/ui/star-rating";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { getMyReview } from "@/actions/get-my-review";
 import { env } from "@/lib/env.mjs";
 import { accountAccessPath, STOREFRONT_ROUTES } from "@/lib/routes";
 import { Review } from "@/types";
 
 interface ReviewFormProps {
   productId: string;
-  reviews: Review[];
 }
 
 /** Publica o actualiza la reseña de la clienta con sesión; pasa por moderación. */
-export function ReviewForm({ productId, reviews }: ReviewFormProps) {
+export function ReviewForm({ productId }: ReviewFormProps) {
   const { userId, getToken } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
@@ -28,7 +28,30 @@ export function ReviewForm({ productId, reviews }: ReviewFormProps) {
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const existing = reviews.find((review) => review.userId === userId);
+  const [existing, setExisting] = useState<Review | null>(null);
+
+  // Con sesión, pregunta si la clienta ya opinó sobre este producto: las
+  // reseñas públicas no dicen quién las escribió.
+  useEffect(() => {
+    let cancelled = false;
+    if (!userId) {
+      setExisting(null);
+      return;
+    }
+    (async () => {
+      try {
+        const sessionToken = await getToken();
+        if (!sessionToken) return;
+        const mine = await getMyReview(productId, sessionToken);
+        if (!cancelled) setExisting(mine);
+      } catch (error) {
+        console.error("[REVIEW_MINE_ERROR]", error);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [productId, userId, getToken]);
 
   const submit = async () => {
     if (rating < 1) {
