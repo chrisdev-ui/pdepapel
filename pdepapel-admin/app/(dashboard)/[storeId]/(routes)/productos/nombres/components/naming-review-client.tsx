@@ -532,7 +532,6 @@ export function NamingReviewClient({
                         fill
                         sizes="56px"
                         className="object-cover"
-                        unoptimized
                       />
                     ) : (
                       <ImageOff className="m-4 h-6 w-6 text-muted-foreground" />

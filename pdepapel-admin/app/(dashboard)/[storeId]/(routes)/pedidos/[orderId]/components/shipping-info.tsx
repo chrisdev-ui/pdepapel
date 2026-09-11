@@ -340,6 +340,7 @@ export const ShippingInfo: React.FC<ShippingInfoProps> = ({
                 width={80}
                 height={48}
                 className="h-full w-full object-contain"
+                unoptimized
               />
             </div>
           )}

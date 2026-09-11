@@ -48,7 +48,14 @@ const newDashboardRoutePairs = [
 const nextConfig = {
   reactStrictMode: true,
   images: {
-    unoptimized: true,
+    // El panel no usa el optimizador de Vercel: Cloudinary entrega las fotos
+    // del catálogo al ancho pedido (lib/cloudinary-image-loader.ts) y cualquier
+    // otra URL se sirve sin tocar. Anchos cortos: cada uno es una copia
+    // derivada más por foto en Cloudinary (ver docs/imagenes-cloudinary.md).
+    loader: "custom",
+    loaderFile: "./lib/cloudinary-image-loader.ts",
+    deviceSizes: [640, 1080, 1600],
+    imageSizes: [64, 128, 256, 384],
     remotePatterns: [
       {
         protocol: "https",

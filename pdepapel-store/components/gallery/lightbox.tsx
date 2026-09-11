@@ -1,11 +1,10 @@
 "use client";
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import Image from "next/image";
 import { useEffect, useState } from "react";
 
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { cloudinaryImageLoader } from "@/lib/cloudinary-image-loader";
+import { CloudinaryImage } from "@/components/ui/cloudinary-image";
 import { cn } from "@/lib/utils";
 import { Image as ImageType } from "@/types";
 
@@ -69,9 +68,8 @@ export function Lightbox({ images, productName, index, open, onOpenChange, onInd
             aria-label={zoom ? "Alejar imagen" : "Acercar imagen"}
             className={cn("relative h-[min(92vh,92vw)] w-[min(92vh,92vw)] overflow-hidden rounded-xl bg-black/20", zoom ? "cursor-zoom-out" : "cursor-zoom-in")}
           >
-            <Image
+            <CloudinaryImage
               fill
-              loader={cloudinaryImageLoader}
               src={image.url}
               alt={`${productName}, foto ${index + 1} de ${total}`}
               sizes="92vw"

@@ -54,7 +54,6 @@ export const ProductList: React.FC<ProductListProps> = ({ products, compact = fa
                 width={40}
                 height={40}
                 className="rounded-md"
-                unoptimized
               />
               <div className="flex flex-col">
                 <span className="text-xs font-medium">{product.name}</span>

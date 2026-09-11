@@ -3,7 +3,7 @@
 import { Heart } from "lucide-react";
 import Link from "next/link";
 
-import { CldImage } from "@/components/ui/CldImage";
+import { CloudinaryImage } from "@/components/ui/cloudinary-image";
 import { useCart } from "@/hooks/use-cart";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { productPath, STOREFRONT_ROUTES } from "@/lib/routes";
@@ -39,7 +39,7 @@ export function SavedForLater() {
           return (
             <li key={item.id} className="flex items-center gap-3.5 rounded-xl border border-dashed border-blue-baby p-3">
               <Link href={productPath(item.slug || item.id)} className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-gray-100" aria-label={`Ver ${item.name}`}>
-                {image?.url ? <CldImage fill src={image.url} alt="" sizes="56px" className="object-cover" /> : <Heart aria-hidden="true" className="m-auto h-5 w-5 text-gray-400" />}
+                {image?.url ? <CloudinaryImage src={image.url} alt="" width={56} height={56} className="h-full w-full object-cover" /> : <Heart aria-hidden="true" className="m-auto h-5 w-5 text-gray-400" />}
               </Link>
               <div className="min-w-0 flex-1">
                 <p className="truncate font-sans text-sm font-semibold text-blue-yankees">{item.name}</p>

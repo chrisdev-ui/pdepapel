@@ -40,10 +40,11 @@ describe("Gallery", () => {
       "sizes",
       "(max-width: 639px) calc(100vw - 2rem), (max-width: 1023px) calc(100vw - 3rem), (max-width: 1279px) calc(50vw - 3rem), 608px",
     );
-    expect(screen.getByAltText("Vista 1 de Cuaderno Snoopy")).toHaveAttribute(
-      "sizes",
-      "64px",
-    );
+    // Las miniaturas son de tamaño fijo: width/height (srcset 1x/2x), sin sizes.
+    const thumbnail = screen.getByAltText("Vista 1 de Cuaderno Snoopy");
+    expect(thumbnail).toHaveAttribute("width", "64");
+    expect(thumbnail).toHaveAttribute("height", "64");
+    expect(thumbnail).not.toHaveAttribute("sizes");
   });
 
   it("updates the main image without creating another gallery", () => {

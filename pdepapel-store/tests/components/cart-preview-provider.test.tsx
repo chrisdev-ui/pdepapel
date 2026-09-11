@@ -26,8 +26,8 @@ vi.mock("@/hooks/use-scroll-position", () => ({
   useScrollPosition: () => scrollPositionMock,
 }));
 
-vi.mock("@/components/ui/CldImage", () => ({
-  CldImage: ({ alt }: { alt: string }) => <img alt={alt} />,
+vi.mock("@/components/ui/cloudinary-image", () => ({
+  CloudinaryImage: ({ alt }: { alt: string }) => <img alt={alt} />,
 }));
 
 const product = {

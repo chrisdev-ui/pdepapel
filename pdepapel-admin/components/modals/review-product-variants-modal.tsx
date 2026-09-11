@@ -275,7 +275,6 @@ export function ReviewProductVariantsModal({
                     fill
                     sizes="112px"
                     className="object-cover"
-                    unoptimized
                   />
                 </div>
 

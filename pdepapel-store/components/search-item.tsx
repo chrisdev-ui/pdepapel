@@ -1,7 +1,7 @@
-import NextImage from "next/image";
 import Link from "next/link";
 import { Fragment, ReactNode } from "react";
 
+import { CloudinaryImage } from "@/components/ui/cloudinary-image";
 import { Currency } from "@/components/ui/currency";
 import { productPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
@@ -62,7 +62,7 @@ export const SearchItem: React.FC<SearchItemProps> = ({ id, slug, image, name, p
         )}
       >
         <span className="relative block h-11 w-11 overflow-hidden rounded-[10px] bg-gray-100">
-          {image?.url ? <NextImage src={image.url} alt="" fill sizes="44px" className="object-cover" /> : null}
+          {image?.url ? <CloudinaryImage src={image.url} alt="" width={44} height={44} className="h-full w-full object-cover" /> : null}
         </span>
         <span className="flex min-w-0 flex-col gap-0.5">
           <span className="truncate font-sans text-sm font-semibold leading-tight text-blue-yankees">{highlightMatch(name, query)}</span>

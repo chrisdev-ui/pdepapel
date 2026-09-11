@@ -4,7 +4,7 @@ import { AlertCircle, Expand, Heart, ImageOff, Plus, ShoppingCart, Star } from "
 import Link from "next/link";
 import { MouseEventHandler, useCallback, useEffect, useState } from "react";
 
-import { CldImage } from "@/components/ui/CldImage";
+import { CloudinaryImage } from "@/components/ui/cloudinary-image";
 import { useCart } from "@/hooks/use-cart";
 import { usePreviewModal } from "@/hooks/use-preview-modal";
 import { useToast } from "@/hooks/use-toast";
@@ -182,26 +182,24 @@ const ProductCard: React.FC<ProductCardProps> = ({
         }
       >
         {mainImage?.url ? (
-          <CldImage
+          <CloudinaryImage
             src={mainImage.url}
             alt={product.name ?? "Imagen principal del producto"}
             fill
             sizes={sizes}
             priority={priority}
             className={cn("object-cover transition-opacity duration-300", (soldOut || comingSoon) && "opacity-60 saturate-50", hoverImage && "can-hover:group-hover:opacity-0")}
-            format="auto"
           />
         ) : (
           <div aria-hidden="true" className="flex h-full w-full items-center justify-center text-gray-400"><ImageOff className="h-8 w-8" /></div>
         )}
         {hoverImage?.url && (
-          <CldImage
+          <CloudinaryImage
             src={hoverImage.url}
             alt=""
             fill
             sizes={sizes}
             className="hidden object-cover opacity-0 transition-opacity duration-300 can-hover:block can-hover:group-hover:opacity-100"
-            format="auto"
           />
         )}
       </Link>

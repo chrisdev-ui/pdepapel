@@ -3,7 +3,7 @@
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("next/image", () => ({ default: (props: React.ComponentProps<"img">) => <img {...props} /> }));
+vi.mock("@/components/ui/cloudinary-image", () => ({ CloudinaryImage: (props: React.ComponentProps<"img">) => <img {...props} /> }));
 vi.mock("@/hooks/use-add-product-to-cart", () => ({ useAddProductToCart: () => vi.fn() }));
 
 import { ProductStickyBar } from "@/components/product-sticky-bar";

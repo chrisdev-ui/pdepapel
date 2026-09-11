@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { AccountPrompt } from "@/components/account-prompt";
 import { FreeShippingProgress } from "@/components/free-shipping-progress";
-import { CldImage } from "@/components/ui/CldImage";
+import { CloudinaryImage } from "@/components/ui/cloudinary-image";
 import { Currency } from "@/components/ui/currency";
 import { NoResults } from "@/components/ui/no-results";
 import {
@@ -107,15 +107,15 @@ export const NavbarCartContent: React.FC<NavbarCartContentProps> = ({
                 >
                   {(item.images.find((image) => image.isMain)?.url ??
                   item.images[0]?.url) ? (
-                    <CldImage
+                    <CloudinaryImage
                       src={
                         item.images.find((image) => image.isMain)?.url ??
                         item.images[0]!.url
                       }
                       alt={item.name ?? "Imagen del producto"}
-                      fill
-                      sizes="(max-width: 640px) 80px, 120px"
-                      className="object-cover"
+                      width={80}
+                      height={80}
+                      className="h-full w-full object-cover"
                     />
                   ) : (
                     <>

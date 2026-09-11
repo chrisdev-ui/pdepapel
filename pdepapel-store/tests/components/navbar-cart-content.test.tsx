@@ -43,8 +43,8 @@ vi.mock("@/components/account-prompt", () => ({
   ),
 }));
 
-vi.mock("@/components/ui/CldImage", () => ({
-  CldImage: ({ alt }: { alt: string }) => <img alt={alt} />,
+vi.mock("@/components/ui/cloudinary-image", () => ({
+  CloudinaryImage: ({ alt }: { alt: string }) => <img alt={alt} />,
 }));
 
 vi.mock("@/lib/customer-analytics", () => ({

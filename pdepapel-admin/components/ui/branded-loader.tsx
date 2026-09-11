@@ -13,6 +13,7 @@ export const BrandedLoader = () => {
             fill
             className="object-contain"
             priority
+            unoptimized
           />
         </div>
         {/* Infinite Progressive Bar */}

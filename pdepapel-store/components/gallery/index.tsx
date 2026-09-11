@@ -1,7 +1,6 @@
 "use client";
 
 import { ChevronLeft, ChevronRight, Expand } from "lucide-react";
-import Image from "next/image";
 import {
   KeyboardEvent,
   PointerEvent,
@@ -11,7 +10,7 @@ import {
 } from "react";
 
 import { Lightbox } from "@/components/gallery/lightbox";
-import { cloudinaryImageLoader } from "@/lib/cloudinary-image-loader";
+import { CloudinaryImage } from "@/components/ui/cloudinary-image";
 import { cn } from "@/lib/utils";
 import { Image as ImageType } from "@/types";
 
@@ -109,9 +108,8 @@ export const Gallery: React.FC<GalleryProps> = ({
           onPointerCancel={() => (pointerStart.current = null)}
           className="group relative aspect-square w-full touch-pan-y select-none overflow-hidden rounded-xl bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kawaii-pink focus-visible:ring-offset-2"
         >
-          <Image
+          <CloudinaryImage
             fill
-            loader={cloudinaryImageLoader}
             src={selectedImage.url}
             alt={productName}
             sizes={PRODUCT_IMAGE_SIZES}
@@ -209,13 +207,12 @@ export const Gallery: React.FC<GalleryProps> = ({
                       : "border-transparent hover:border-gray-300",
                   )}
                 >
-                  <Image
+                  <CloudinaryImage
                     src={image.url}
                     alt={`Vista ${index + 1} de ${productName}`}
-                    fill
-                    loader={cloudinaryImageLoader}
-                    sizes="64px"
-                    className="object-cover object-center"
+                    width={64}
+                    height={64}
+                    className="h-full w-full object-cover object-center"
                   />
                 </button>
               );

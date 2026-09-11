@@ -1,7 +1,7 @@
 import { ShoppingBag } from "lucide-react";
 import Link from "next/link";
 
-import { CldImage } from "@/components/ui/CldImage";
+import { CloudinaryImage } from "@/components/ui/cloudinary-image";
 import { Currency } from "@/components/ui/currency";
 import { getCustomerFacingProductOptions } from "@/lib/product-options";
 import { countOrderUnits, formatUnits } from "@/lib/order-status";
@@ -55,12 +55,12 @@ export function OrderItemsCard({ order, allowReorder }: OrderItemsCardProps) {
             <li key={item.id} className="flex gap-4 py-4 first:pt-0 last:pb-0">
               <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted">
                 {imageUrl ? (
-                  <CldImage
+                  <CloudinaryImage
                     src={imageUrl}
                     alt=""
-                    fill
-                    sizes="64px"
-                    className="object-cover"
+                    width={64}
+                    height={64}
+                    className="h-full w-full object-cover"
                   />
                 ) : (
                   <span className="flex h-full w-full items-center justify-center text-[10px] text-muted-foreground">

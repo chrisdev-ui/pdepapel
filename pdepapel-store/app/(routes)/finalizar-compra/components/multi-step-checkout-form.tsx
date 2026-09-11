@@ -8,7 +8,7 @@ import * as z from "zod";
 import { FreeShippingProgress } from "@/components/free-shipping-progress";
 import { Icons } from "@/components/icons";
 import { Button } from "@/components/ui/button";
-import { CldImage } from "@/components/ui/CldImage";
+import { CloudinaryImage } from "@/components/ui/cloudinary-image";
 import { Currency } from "@/components/ui/currency";
 import { Form } from "@/components/ui/form";
 import { NoResults } from "@/components/ui/no-results";
@@ -1138,12 +1138,12 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                 className="relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-md bg-gray-100"
               >
                 {getProductImageUrl(item) ? (
-                  <CldImage
+                  <CloudinaryImage
                     src={getProductImageUrl(item)!}
                     alt={item.name ?? "Imagen del producto"}
-                    fill
-                    sizes="64px"
-                    className="object-cover"
+                    width={64}
+                    height={64}
+                    className="h-full w-full object-cover"
                   />
                 ) : (
                   <>

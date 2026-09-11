@@ -43,7 +43,7 @@ export function CarrierCell({ shipment }: { shipment: ShipmentColumn }) {
           className="flex h-8 w-12 shrink-0 items-center justify-center rounded-md p-1"
           style={{ backgroundColor: info.color || "#f3f4f6" }}
         >
-          <Image src={info.logoUrl} alt="" width={40} height={20} className="h-full w-full object-contain" />
+          <Image src={info.logoUrl} alt="" width={40} height={20} className="h-full w-full object-contain" unoptimized />
         </span>
       ) : null}
       <span className="flex min-w-0 flex-col">

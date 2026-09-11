@@ -4,7 +4,11 @@ import "./lib/env.mjs";
 const nextConfig = {
   reactStrictMode: true,
   images: {
-    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384, 512, 768, 1024],
+    // Cada ancho de esta lista es una copia derivada más por foto en Cloudinary
+    // (ver docs/imagenes-cloudinary.md). Las miniaturas fijas usan width/height
+    // (dos candidatos); fill + sizes elige entre estos anchos.
+    deviceSizes: [640, 750, 1080, 1200, 1600],
+    imageSizes: [64, 128, 256, 384],
     formats: ["image/avif", "image/webp"],
     remotePatterns: [
       {

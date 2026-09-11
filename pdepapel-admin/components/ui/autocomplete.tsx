@@ -211,7 +211,6 @@ export const AutoComplete = ({
                               width={36}
                               height={36}
                               className="rounded-md"
-                              unoptimized
                             />
                           )}
                           <div className="flex flex-1 flex-col">

@@ -4,21 +4,14 @@ const CLOUDINARY_HOSTNAME = "res.cloudinary.com";
 const UPLOAD_SEGMENT = "/image/upload/";
 const VERSION_SEGMENT = /^v\d+$/;
 
-/**
- * Ancho máximo que se pide a Cloudinary. Ninguna vista de la tienda muestra
- * una foto por encima de 1600 px y las fotos del catálogo se suben a 2000 px
- * como mucho; pedir anchos mayores solo crea copias derivadas idénticas que
- * ocupan almacenamiento en Cloudinary.
- */
+/** Ancho máximo que se pide a Cloudinary; por encima solo se crean copias idénticas. */
 export const CLOUDINARY_MAX_WIDTH = 1600;
 
 /**
- * Única cadena de transformación de la tienda. Cada combinación distinta de
- * parámetros genera (y almacena para siempre) una copia derivada por foto y
- * por ancho, y cada copia nueva cuenta como transformación en el plan. Por eso
- * la calidad numérica de `next/image` se ignora a propósito y esta cadena no
- * se cambia a la ligera: modificarla regenera todo el catálogo.
- * Ver docs/imagenes-cloudinary.md.
+ * Misma cadena de transformación que la tienda (`pdepapel-store/lib/cloudinary-loader.ts`)
+ * para que el panel y el storefront compartan las copias derivadas. Cada
+ * combinación distinta genera y almacena una copia nueva por foto y por ancho,
+ * así que no se cambia sin leer docs/imagenes-cloudinary.md.
  */
 const DELIVERY_TRANSFORMATION = "f_auto,q_auto,c_limit";
 
@@ -33,11 +26,10 @@ export function isCloudinaryUrl(src: string): boolean {
 }
 
 /**
- * Devuelve la URL de entrega de Cloudinary para un ancho dado: formato y
- * calidad automáticos, sin ampliar la foto y sin superar `CLOUDINARY_MAX_WIDTH`.
- * Descarta transformaciones y parámetros previos de la URL para que la misma
- * foto y el mismo ancho apunten siempre a la misma copia derivada. Cualquier
- * otra URL se devuelve tal cual.
+ * URL de entrega de Cloudinary para un ancho dado (formato y calidad
+ * automáticos, sin ampliar). Descarta transformaciones y parámetros previos.
+ * Las URL que no son de Cloudinary (placeholders locales, logos de
+ * transportadoras, data URLs) se devuelven tal cual.
  */
 export function getCloudinaryImageUrl(src: string, width: number): string {
   if (!isCloudinaryUrl(src)) return src;
@@ -60,7 +52,11 @@ export function getCloudinaryImageUrl(src: string, width: number): string {
   return url.toString();
 }
 
-/** Loader de `next/image` para las fotos alojadas en Cloudinary. */
-export function cloudinaryLoader({ src, width }: ImageLoaderProps): string {
+/**
+ * Loader global de `next/image` del panel (`images.loaderFile` en next.config):
+ * el panel no usa el optimizador de Vercel; Cloudinary entrega las fotos del
+ * catálogo al ancho pedido y todo lo demás se sirve sin tocar.
+ */
+export default function cloudinaryImageLoader({ src, width }: ImageLoaderProps): string {
   return getCloudinaryImageUrl(src, width);
 }

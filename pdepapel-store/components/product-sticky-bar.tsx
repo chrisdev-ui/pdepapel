@@ -1,12 +1,11 @@
 "use client";
 
 import { Bell, Heart, ShoppingCart } from "lucide-react";
-import Image from "next/image";
 import { RefObject, useEffect, useState } from "react";
 
 import { useAddProductToCart } from "@/hooks/use-add-product-to-cart";
 import { useWishlist } from "@/hooks/use-wishlist";
-import { cloudinaryImageLoader } from "@/lib/cloudinary-image-loader";
+import { CloudinaryImage } from "@/components/ui/cloudinary-image";
 import { ProductAvailability } from "@/lib/product-availability";
 import { cn, currencyFormatter } from "@/lib/utils";
 import { Product } from "@/types";
@@ -77,7 +76,7 @@ export function ProductStickyBar({ product, availability, quantity, targetRef, o
       <div className="flex h-14 items-center gap-3 rounded-full border border-blue-baby bg-white pl-4 pr-1.5 shadow-[0_8px_24px_rgba(34,27,65,0.22)] lg:h-[68px] lg:pl-2.5 lg:pr-2.5">
         {image && (
           <span className="relative hidden h-12 w-12 shrink-0 overflow-hidden rounded-full bg-gray-100 lg:block">
-            <Image fill loader={cloudinaryImageLoader} src={image.url} alt="" sizes="48px" className="object-cover" />
+            <CloudinaryImage src={image.url} alt="" width={48} height={48} className="h-full w-full object-cover" />
           </span>
         )}
         <span className="hidden min-w-0 flex-col lg:flex">

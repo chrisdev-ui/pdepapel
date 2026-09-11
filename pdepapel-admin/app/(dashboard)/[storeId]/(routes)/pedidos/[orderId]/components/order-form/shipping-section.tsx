@@ -189,6 +189,7 @@ function RateOption({
                 width={56}
                 height={28}
                 className="h-full w-full object-contain"
+                unoptimized
               />
             </span>
           )}
@@ -397,6 +398,7 @@ export function ShippingSection({
           width={20}
           height={20}
           className="h-5 w-5 object-contain"
+          unoptimized
         />
       ),
     },
@@ -955,6 +957,7 @@ export function ShippingSection({
                   width={56}
                   height={28}
                   className="h-full w-full object-contain"
+                  unoptimized
                 />
               </span>
               <span className="text-sm font-medium">

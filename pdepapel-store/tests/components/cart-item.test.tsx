@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/components/ui/CldImage", () => ({ CldImage: (props: React.ComponentProps<"img">) => <img {...props} /> }));
+vi.mock("@/components/ui/cloudinary-image", () => ({ CloudinaryImage: (props: React.ComponentProps<"img">) => <img {...props} /> }));
 vi.mock("@/hooks/use-toast", () => ({ toast: vi.fn() }));
 
 import { CartItem } from "@/app/(routes)/carrito/components/cart-item";

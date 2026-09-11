@@ -71,7 +71,7 @@ export function InventoryClient({ data }: { data: InventoryRow[] }) {
       header: ({ column }) => <DataTableColumnHeader column={column} title="Producto" />,
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
-          {row.original.image ? <Image src={row.original.image} alt="" width={40} height={40} className="h-10 w-10 shrink-0 rounded-lg object-cover" unoptimized /> : <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"><Package className="h-4 w-4" aria-hidden="true" /></span>}
+          {row.original.image ? <Image src={row.original.image} alt="" width={40} height={40} className="h-10 w-10 shrink-0 rounded-lg object-cover" /> : <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"><Package className="h-4 w-4" aria-hidden="true" /></span>}
           <div className="flex min-w-0 max-w-[280px] flex-col gap-0.5">
             <Link href={`/${storeId}/productos/${row.original.id}`} className="truncate font-semibold text-primary hover:underline" title={row.original.name}>{row.original.name}</Link>
             <span className="truncate text-xs text-muted-foreground">{row.original.sku}{row.original.categoryName ? ` · ${row.original.categoryName}` : ""}{row.original.isKit ? " · kit" : ""}</span>

@@ -122,6 +122,7 @@ Shared core:
 - Tailwind CSS 3, Radix UI, shadcn-style components, `class-variance-authority`, `lucide-react`, and Framer Motion.
 - `react-hook-form` plus Zod validation.
 - Cloudinary for images/media.
+  **Image delivery (2026-09):** one frozen transformation (`f_auto,q_auto,c_limit,w_≤1600`) in `pdepapel-store/lib/cloudinary-loader.ts` (used only through `components/ui/cloudinary-image.tsx`) and in `pdepapel-admin/lib/cloudinary-image-loader.ts` (the admin's global `images.loaderFile`; no Vercel optimizer). Every distinct transformation/width is a derived copy stored forever and billed, so never add loaders, `quality`, crops or wider `deviceSizes`; fixed thumbnails use `width`/`height`; the upload widget caps originals at 2000 px. Runbook: `docs/imagenes-cloudinary.md`.
 - Resend plus React Email for email.
 - Vitest for unit/component tests and Playwright for E2E tests.
 

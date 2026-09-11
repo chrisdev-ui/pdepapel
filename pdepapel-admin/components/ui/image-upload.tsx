@@ -142,13 +142,17 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
       <CldUploadWidget
         onUpload={onUpload}
         uploadPreset="u0dp1v1y"
-        options={
-          env.NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME
-            ? {
-                folder: env.NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME,
-              }
-            : {}
-        }
+        options={{
+          // El widget reduce la foto en el navegador antes de subirla, así el
+          // original guardado en Cloudinary nunca supera 2000 px por lado
+          // (una foto de celular de 3024×4032 pesaba ~3 MB). Ver
+          // docs/imagenes-cloudinary.md.
+          maxImageWidth: 2000,
+          maxImageHeight: 2000,
+          ...(env.NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME
+            ? { folder: env.NEXT_PUBLIC_CLOUDINARY_FOLDER_NAME }
+            : {}),
+        }}
       >
         {({ open }) => {
           const onClick = (

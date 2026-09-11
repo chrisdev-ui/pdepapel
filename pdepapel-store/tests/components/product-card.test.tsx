@@ -11,8 +11,8 @@ vi.mock("@/lib/customer-analytics", () => ({
   toAnalyticsItem: vi.fn(() => ({})),
   getAnalyticsValue: vi.fn(() => 0),
 }));
-vi.mock("@/components/ui/CldImage", () => ({
-  CldImage: ({ alt }: { alt: string }) => <img alt={alt} />,
+vi.mock("@/components/ui/cloudinary-image", () => ({
+  CloudinaryImage: ({ alt }: { alt: string }) => <img alt={alt} />,
 }));
 vi.mock("@/providers/cart-preview-provider", () => ({
   useCartPreview: () => ({ showCartPreview: vi.fn() }),

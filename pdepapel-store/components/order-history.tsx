@@ -20,7 +20,7 @@ import { useMemo, useState } from "react";
 import { getOrders } from "@/actions/get-orders";
 import { OrderHistorySkeleton } from "@/components/order-history-skeleton";
 import { OrderStageBadge } from "@/components/order-stage-badge";
-import { CldImage } from "@/components/ui/CldImage";
+import { CloudinaryImage } from "@/components/ui/cloudinary-image";
 import { Button } from "@/components/ui/button";
 import { Currency } from "@/components/ui/currency";
 import { PaymentMethod } from "@/constants";
@@ -138,7 +138,7 @@ function OrderCard({ order }: { order: Order }) {
                 index > 0 && "-ml-3",
               )}
             >
-              <CldImage src={url} alt="" fill sizes="48px" className="object-cover" />
+              <CloudinaryImage src={url} alt="" width={48} height={48} className="h-full w-full object-cover" />
             </span>
           ))
         ) : (

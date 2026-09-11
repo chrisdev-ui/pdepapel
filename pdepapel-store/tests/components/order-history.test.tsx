@@ -19,9 +19,9 @@ const { auth, getOrders } = vi.hoisted(() => ({
 
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => auth }));
 vi.mock("@/actions/get-orders", () => ({ getOrders }));
-vi.mock("@/components/ui/CldImage", () => ({
+vi.mock("@/components/ui/cloudinary-image", () => ({
   // eslint-disable-next-line @next/next/no-img-element
-  CldImage: ({ src, alt }: { src: string; alt: string }) => <img src={src} alt={alt} />,
+  CloudinaryImage: ({ src, alt }: { src: string; alt: string }) => <img src={src} alt={alt} />,
 }));
 
 const paidOrder = {

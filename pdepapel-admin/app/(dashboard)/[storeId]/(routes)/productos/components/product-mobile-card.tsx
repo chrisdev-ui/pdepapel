@@ -10,7 +10,7 @@ import { FeaturedBadge, ReadinessBadge, ShapeBadge, StockBadge } from "./product
 export function ProductMobileCard({ product, storeId, lowStockThreshold }: { product: ProductColumn; storeId: string; lowStockThreshold?: number }) {
   return (
     <article className="flex gap-3 rounded-xl border bg-white p-3 shadow-sm">
-      <Image src={productImage(product)} alt="" width={64} height={64} className="h-16 w-16 shrink-0 rounded-lg object-cover" unoptimized />
+      <Image src={productImage(product)} alt="" width={64} height={64} className="h-16 w-16 shrink-0 rounded-lg object-cover" />
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 flex-col">

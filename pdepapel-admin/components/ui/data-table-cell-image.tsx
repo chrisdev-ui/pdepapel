@@ -27,7 +27,6 @@ export function DataTableCellImage({
           fill
           alt={alt}
           className="rounded-md object-cover"
-          unoptimized
         />
       </AspectRatio>
       {numberOfImages > 1 && (

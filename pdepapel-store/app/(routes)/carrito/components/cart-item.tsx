@@ -3,7 +3,7 @@
 import { ArrowDown, ArrowUp, Flame, Heart, PackageX, ShoppingBag, X } from "lucide-react";
 import Link from "next/link";
 
-import { CldImage } from "@/components/ui/CldImage";
+import { CloudinaryImage } from "@/components/ui/cloudinary-image";
 import { QuantitySelector } from "@/components/ui/quantity-selector";
 import { useCart } from "@/hooks/use-cart";
 import { toast } from "@/hooks/use-toast";
@@ -60,7 +60,7 @@ export const CartItem: React.FC<CartItemProps> = ({ item, priceChange, onRemove 
     <li className="flex gap-4 border-b border-border py-5 sm:gap-5">
       <Link href={href} className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-gray-100 sm:h-28 sm:w-28" aria-label={`Ver ${item.name}`}>
         {mainImage?.url ? (
-          <CldImage fill src={mainImage.url} alt="" sizes="112px" className={cn("object-cover object-center", soldOut && "opacity-60 saturate-50")} />
+          <CloudinaryImage src={mainImage.url} alt="" width={112} height={112} className={cn("h-full w-full object-cover object-center", soldOut && "opacity-60 saturate-50")} />
         ) : (
           <span className="flex h-full w-full items-center justify-center text-gray-400">
             <ShoppingBag aria-hidden="true" className="h-8 w-8" />

@@ -1,6 +1,6 @@
-import Image from "next/image";
 import Link from "next/link";
 
+import { CloudinaryImage } from "@/components/ui/cloudinary-image";
 import { productPath } from "@/lib/routes";
 import { Product } from "@/types";
 
@@ -33,7 +33,7 @@ export const KitContents: React.FC<KitContentsProps> = ({ components }) => {
             >
               <span className="relative h-[72px] w-[72px] flex-shrink-0 overflow-hidden rounded-lg bg-gray-100">
                 {item.component.images?.[0]?.url ? (
-                  <Image src={item.component.images[0].url} alt={item.component.name} fill sizes="72px" className="object-cover" />
+                  <CloudinaryImage src={item.component.images[0].url} alt={item.component.name} width={72} height={72} className="h-full w-full object-cover" />
                 ) : (
                   <span className="flex h-full w-full items-center justify-center text-xs text-gray-400">Sin foto</span>
                 )}

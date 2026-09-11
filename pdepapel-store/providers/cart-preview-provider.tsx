@@ -11,7 +11,7 @@ import {
   useState,
 } from "react";
 
-import { CldImage } from "@/components/ui/CldImage";
+import { CloudinaryImage } from "@/components/ui/cloudinary-image";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/hooks/use-cart";
 import { useScrollPosition } from "@/hooks/use-scroll-position";
@@ -195,13 +195,12 @@ export function CartPreviewProvider({
               <div className="flex items-start gap-3">
                 <div className="relative h-[72px] w-[72px] shrink-0 overflow-hidden rounded-xl bg-gray-100">
                   {image?.url ? (
-                    <CldImage
+                    <CloudinaryImage
                       src={image.url}
                       alt=""
-                      fill
-                      sizes="72px"
-                      className="object-cover"
-                      format="auto"
+                      width={72}
+                      height={72}
+                      className="h-full w-full object-cover"
                     />
                   ) : (
                     <ShoppingBag
