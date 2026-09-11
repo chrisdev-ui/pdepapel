@@ -1,22 +1,16 @@
 name: Public health checks
 
+# Corre semanalmente y a mano. Antes también corría tras cada despliegue de
+# producción: con ~50 pushes por semana eran 21 pruebas de navegador contra la
+# tienda en cada uno, y Vercel cobra la CPU de esos renders (2026-09-10, 301 %
+# del plan gratuito). El chequeo tras desplegar lo cubre la revisión manual.
 on:
-  deployment_status:
   schedule:
     - cron: "0 14 * * 1"
   workflow_dispatch:
 
 jobs:
   public-routes:
-    # Vercel names GitHub deployment environments "Production – <project>",
-    # so an exact match on "Production" never fired and every post-deploy run
-    # was skipped. Match the prefix (case-insensitive) and skip admin deploys,
-    # since this job only exercises the storefront.
-    if: >-
-      github.event_name != 'deployment_status' ||
-      (github.event.deployment_status.state == 'success' &&
-      startsWith(github.event.deployment.environment, 'production') &&
-      !contains(github.event.deployment.environment, 'pdepapel-admin'))
     runs-on: ubuntu-latest
     defaults:
       run:
