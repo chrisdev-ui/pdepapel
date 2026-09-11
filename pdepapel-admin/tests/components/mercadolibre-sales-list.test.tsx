@@ -81,6 +81,8 @@ describe("Ventas de Mercado Libre", () => {
     expect(screen.getAllByText("Neto confirmado por Mercado Libre").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Se conocen al liquidar").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Liquidación pendiente de Mercado Libre").length).toBeGreaterThan(0);
+    // La venta cancelada conserva un neto calculado antes; no se muestra como ingreso.
+    expect(screen.getAllByText("Sin ingreso: la venta fue cancelada").length).toBeGreaterThan(0);
   });
 
   it("keeps the import tool below the list and marks it as the exception", async () => {

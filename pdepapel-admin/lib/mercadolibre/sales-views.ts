@@ -88,10 +88,26 @@ export function countSalesByView(sales: SalesViewOrder[]): Record<SalesView, num
  * se presenta como «confirmado por Mercado Libre»: nadie lo verificó.
  */
 export function getSettlementLabel(sale: SalesViewOrder): string {
+  if (isReturnMarketplaceOrderStatus(sale.status)) {
+    return sale.status === "REFUNDED"
+      ? "Sin ingreso: la venta fue reembolsada"
+      : "Sin ingreso: la venta fue cancelada";
+  }
   if (sale.historical) return "Neto ingresado a mano al importar la venta";
   if (sale.netAmount === null) return "Liquidación pendiente de Mercado Libre";
   if (sale.moneyReleaseStatus === "released") {
     return "Liquidación liberada por Mercado Libre";
   }
   return "Neto confirmado por Mercado Libre";
+}
+
+/**
+ * Qué se muestra en la columna Neto. Una venta cancelada o reembolsada puede
+ * conservar el neto que se calculó antes de cancelarse; mostrarlo se lee como
+ * dinero ganado, así que va «—».
+ */
+export function getSaleNetDisplay(sale: SalesViewOrder, format: (value: number) => string): string {
+  if (isReturnMarketplaceOrderStatus(sale.status)) return "—";
+  if (sale.netAmount === null) return "Pendiente";
+  return format(sale.netAmount);
 }

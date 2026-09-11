@@ -2,7 +2,7 @@
 
 import { TintBadge } from "@/components/ui/tint-badge";
 import { getInventoryStatusMeta, getSaleStatusMeta } from "@/lib/mercadolibre/order-status";
-import { getSettlementLabel } from "@/lib/mercadolibre/sales-views";
+import { getSaleNetDisplay, getSettlementLabel } from "@/lib/mercadolibre/sales-views";
 
 import { SaleRowActions } from "./sale-row-actions";
 import { formatSaleAmount, formatSaleDate, type MarketplaceSale } from "./sale-types";
@@ -41,7 +41,7 @@ export function SaleMobileCard({
           </span>
         </div>
         <span className="whitespace-nowrap text-base font-bold text-primary">
-          {sale.netAmount === null ? "Pendiente" : formatSaleAmount(sale.netAmount)}
+          {getSaleNetDisplay(sale, formatSaleAmount)}
         </span>
       </div>
       <p className="text-sm text-muted-foreground">{describeSaleItems(sale)}</p>

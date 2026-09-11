@@ -9,7 +9,7 @@ import {
   getSaleStatusMeta,
   isRevenueMarketplaceOrderStatus,
 } from "@/lib/mercadolibre/order-status";
-import { getSettlementLabel } from "@/lib/mercadolibre/sales-views";
+import { getSaleNetDisplay, getSettlementLabel } from "@/lib/mercadolibre/sales-views";
 
 import { SaleRowActions } from "./sale-row-actions";
 import { formatSaleAmount, formatSaleDate, type MarketplaceSale } from "./sale-types";
@@ -157,7 +157,7 @@ export function buildSalesColumns({
         return (
           <span className="flex max-w-[200px] flex-col gap-0.5">
             <span className="whitespace-nowrap text-sm font-semibold text-primary">
-              {sale.netAmount === null ? "Pendiente" : formatSaleAmount(sale.netAmount)}
+              {getSaleNetDisplay(sale, formatSaleAmount)}
             </span>
             <span className="text-xs text-muted-foreground">{getSettlementLabel(sale)}</span>
           </span>

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   countSalesByView,
   getSaleAttention,
+  getSaleNetDisplay,
   getSettlementLabel,
   isSalesView,
   saleMatchesView,
@@ -52,5 +53,16 @@ describe("Mercado Libre sales views", () => {
     expect(getSettlementLabel(sale({ netAmount: null }))).toBe("Liquidación pendiente de Mercado Libre");
     expect(getSettlementLabel(sale({ moneyReleaseStatus: "released" }))).toBe("Liquidación liberada por Mercado Libre");
     expect(getSettlementLabel(sale({}))).toBe("Neto confirmado por Mercado Libre");
+    expect(getSettlementLabel(sale({ status: "CANCELLED" }))).toBe("Sin ingreso: la venta fue cancelada");
+    expect(getSettlementLabel(sale({ status: "REFUNDED" }))).toBe("Sin ingreso: la venta fue reembolsada");
+  });
+
+  it("never shows a net for a cancelled or refunded sale, even if one was computed before", () => {
+    const format = (value: number) => `$${value}`;
+    expect(getSaleNetDisplay(sale({}), format)).toBe("$46457");
+    expect(getSaleNetDisplay(sale({ netAmount: null }), format)).toBe("Pendiente");
+    expect(getSaleNetDisplay(sale({ status: "CANCELLED", netAmount: 80_000 }), format)).toBe("—");
+    expect(getSaleNetDisplay(sale({ status: "REFUNDED", netAmount: 80_000 }), format)).toBe("—");
+    expect(getSaleNetDisplay(sale({ status: "PARTIALLY_REFUNDED", netAmount: 36_457 }), format)).toBe("$36457");
   });
 });
