@@ -27,6 +27,7 @@ import {
   CreateInventoryMovementParams,
 } from "@/lib/inventory";
 import { invalidateStoreProductsCache } from "@/lib/cache";
+import { describeInPersonOrdersInBatch } from "@/lib/in-person-orders";
 import { calculateOrderFinancials } from "@/lib/financial";
 import { explodeKitMovements } from "@/lib/order-stock-movements";
 import {
@@ -858,6 +859,12 @@ export async function DELETE(
         );
       }
 
+      // Las ventas presenciales (mostrador y feria) no se eliminan desde
+      // Pedidos, ni de a una ni por lote: una de feria nunca descontó el
+      // stock en línea y "reponerla" lo duplicaría. Todo o nada.
+      const inPersonDelete = describeInPersonOrdersInBatch(orders, "delete");
+      if (inPersonDelete) throw ErrorFactory.Conflict(inPersonDelete);
+
       // Ninguna guia viva se queda huerfana: al borrar el pedido se borra en
       // cascada la fila `Shipping` con su `envioClickIdOrder`, y la guia queda
       // cobrada y activa sin registro. Mismo criterio que el borrado individual.
@@ -1038,6 +1045,11 @@ export async function PATCH(
           "Algunas órdenes no se han encontrado en esta tienda",
         );
       }
+
+      // Misma guarda que la página del pedido: las ventas presenciales
+      // (mostrador y feria) son comprobantes y no se editan desde Pedidos.
+      const inPersonEdit = describeInPersonOrdersInBatch(orders, "edit");
+      if (inPersonEdit) throw ErrorFactory.Conflict(inPersonEdit);
 
       // Las mismas reglas que en la página del pedido: si alguna orden no
       // admite el cambio, no se aplica ninguna. Un lote a medias deja el

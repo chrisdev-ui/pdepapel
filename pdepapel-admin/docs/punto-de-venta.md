@@ -54,11 +54,15 @@ Las cápsulas sorpresa siguen siendo diferentes:
 
 ## Si te equivocas
 
-No borres una venta presencial desde **Pedidos**. Para que las cuentas y el inventario queden claros:
+No borres una venta presencial desde **Pedidos**: el panel lo impide, tanto de una en una como en acciones masivas. Para que las cuentas y el inventario queden claros:
 
 1. Ve a **Inventario → Movimientos de inventario**.
 2. Registra una devolución, ajuste, daño o pérdida según lo que ocurrió realmente.
 3. Escribe una nota corta, por ejemplo: `Devolución de venta presencial ORD-...`.
+
+Una venta hecha **dentro de una feria** se anula desde la propia feria (**Últimas ventas → Anular**), nunca desde Pedidos ni con un ajuste: sus unidades pertenecen a la reserva de la feria.
+
+Si al buscar un producto aparece «Sin stock en línea. Revisa en Inventario.», el producto existe pero no tiene unidades disponibles; corrige el stock desde Inventario antes de venderlo.
 
 ## Cierre del día
 

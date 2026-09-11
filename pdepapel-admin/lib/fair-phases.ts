@@ -109,10 +109,87 @@ export function getFairNextStep(input: { status: FairEventStatus; allocated: num
     case "OPEN":
       return input.sold === 0
         ? { label: "Registrar la primera venta", anchor: "#ventas" }
-        : { label: "Seguir vendiendo o conciliar al terminar", anchor: "#ventas" };
+        : { label: "Seguir vendiendo; al terminar, pasar a conciliación", anchor: "#cierre" };
     case "RECONCILING":
-      return { label: "Terminar la conciliación", anchor: "#cierre" };
+      return { label: "Contar lo no vendido y cerrar la feria", anchor: "#cierre" };
     default:
       return null;
   }
+}
+
+/** Estados en los que la feria acepta ventas y en los que aún se puede anular una venta. */
+export function canSellInFair(status: FairEventStatus): boolean {
+  return status === "OPEN";
+}
+
+export function canCancelFairSale(status: FairEventStatus): boolean {
+  return status === "OPEN" || status === "RECONCILING";
+}
+
+export interface ReconciliationCount {
+  returnedQuantity: number;
+  damagedQuantity: number;
+  lostQuantity: number;
+}
+
+export type ReconciliationRowStatus = "balanced" | "missing" | "over" | "sold-out";
+
+export interface ReconciliationRowState {
+  /** Unidades que la feria espera ver contadas (reservado − vendido). */
+  expected: number;
+  entered: number;
+  /** expected − entered: positivo faltan, negativo sobran. */
+  delta: number;
+  status: ReconciliationRowStatus;
+  label: string;
+  tone: "mint" | "cream" | "pink" | "slate";
+}
+
+/** Estado de una fila de conciliación: cuadra, faltan N, sobran N o no hay nada que contar. */
+export function getReconciliationRowState(
+  item: { allocatedQuantity: number; soldQuantity: number },
+  count: ReconciliationCount | undefined,
+): ReconciliationRowState {
+  const expected = item.allocatedQuantity - item.soldQuantity;
+  const entered = count ? count.returnedQuantity + count.damagedQuantity + count.lostQuantity : 0;
+  const delta = expected - entered;
+  if (expected === 0 && entered === 0) {
+    return { expected, entered, delta, status: "sold-out", label: "Todo vendido", tone: "slate" };
+  }
+  if (delta === 0) {
+    return { expected, entered, delta, status: "balanced", label: "Cuadra", tone: "mint" };
+  }
+  if (delta > 0) {
+    return { expected, entered, delta, status: "missing", label: `Faltan ${delta}`, tone: "cream" };
+  }
+  return { expected, entered, delta, status: "over", label: `Sobran ${-delta}`, tone: "pink" };
+}
+
+export interface ReconciliationSummary {
+  returned: number;
+  damaged: number;
+  lost: number;
+  /** Filas que aún no cuadran. */
+  unbalanced: number;
+  balanced: boolean;
+}
+
+/** Totales de la conciliación tal como está escrita ahora mismo, y si ya cuadra completa. */
+export function summarizeReconciliation(
+  items: { productId: string; allocatedQuantity: number; soldQuantity: number }[],
+  counts: Record<string, ReconciliationCount | undefined>,
+): ReconciliationSummary {
+  let returned = 0;
+  let damaged = 0;
+  let lost = 0;
+  let unbalanced = 0;
+  for (const item of items) {
+    const count = counts[item.productId];
+    const state = getReconciliationRowState(item, count);
+    if (state.status === "missing" || state.status === "over") unbalanced += 1;
+    returned += count?.returnedQuantity ?? 0;
+    damaged += count?.damagedQuantity ?? 0;
+    lost += count?.lostQuantity ?? 0;
+  }
+  return { returned, damaged, lost, unbalanced, balanced: unbalanced === 0 };
 }

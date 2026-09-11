@@ -42,10 +42,15 @@ export async function GET(
         images: { orderBy: { isMain: "desc" }, take: 1 },
       },
     });
-    if (!product || product.stock <= 0) {
-      throw ErrorFactory.NotFound(
-        "No hay inventario disponible para este código",
-      );
+    if (!product) {
+      throw ErrorFactory.NotFound("Ningún producto activo tiene este código");
+    }
+    if (product.stock <= 0) {
+      throw ErrorFactory.Conflict("Sin stock en línea. Revisa en Inventario.", {
+        code: "OUT_OF_STOCK",
+        productId: product.id,
+        productName: product.name,
+      });
     }
 
     return NextResponse.json({ product });

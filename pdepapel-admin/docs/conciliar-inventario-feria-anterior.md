@@ -12,7 +12,7 @@ Usa esta guía cuando ya registraste las ventas de una feria como pedidos y solo
 
 ## Paso a paso
 
-1. Entra al panel y abre **Movimientos de Inventario**.
+1. Entra al panel y abre **Movimientos de Inventario**. También llegas desde **Ferias → Conciliar feria anterior** o, en una feria ya cerrada, desde la tarjeta **Después del cierre → ¿Faltó registrar ventas?** (abre la herramienta con esa feria como contexto).
 2. Pulsa **Conciliar feria anterior**.
 3. Pulsa **Descargar plantilla**. Siempre descarga una nueva el mismo día en que vas a hacer el conteo.
 4. Abre el archivo descargado. Lee primero la pestaña **LEEME**.

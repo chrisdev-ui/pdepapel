@@ -1,7 +1,7 @@
 "use client";
 
 import axios from "axios";
-import { CalendarDays, MapPin, PartyPopper, Plus } from "lucide-react";
+import { CalendarDays, FileSpreadsheet, MapPin, PartyPopper, Plus } from "lucide-react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useCallback, useMemo, useState } from "react";
@@ -116,10 +116,18 @@ export function FairEventsClient({ data }: { data: FairEventSummary[] }) {
             Reserva el inventario que llevas, vende con el lector y concilia al volver. Cada venta queda como pedido pagado.
           </p>
         </div>
-        <Button type="button" onClick={() => setIsCreating(true)}>
-          <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
-          Nueva feria
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button asChild type="button" variant="outline">
+            <Link href={`/${storeId}/movimientos-inventario?feria=`}>
+              <FileSpreadsheet className="mr-2 h-4 w-4" aria-hidden="true" />
+              Conciliar feria anterior
+            </Link>
+          </Button>
+          <Button type="button" onClick={() => setIsCreating(true)}>
+            <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+            Nueva feria
+          </Button>
+        </div>
       </div>
 
       <div role="tablist" aria-label="Vistas de ferias" className="flex max-w-full gap-1 overflow-x-auto self-start rounded-full border bg-white p-1">

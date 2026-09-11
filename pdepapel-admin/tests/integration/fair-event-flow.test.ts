@@ -1,9 +1,12 @@
 import {
   allocateFairInventory,
+  cancelFairSale,
   createFairSale,
   openFairEvent,
   packFairCapsules,
   reconcileFairEvent,
+  reopenFairEvent,
+  startFairReconciliation,
 } from "@/lib/fair-events";
 import {
   FairCapsuleStatus,
@@ -161,7 +164,50 @@ describe("fair event flow with MySQL", () => {
       testPrisma.fairCapsule.findUniqueOrThrow({ where: { id: capsule.id } }),
     ).resolves.toMatchObject({ status: FairCapsuleStatus.SOLD });
 
-    await reconcileFairEvent({
+    // Cerrar exige haber pasado a conciliación: detiene las ventas primero.
+    await expect(
+      reconcileFairEvent({
+        storeId: fixture.store.id,
+        fairEventId: fairEvent.id,
+        items: [
+          {
+            productId: fixture.component.id,
+            returnedQuantity: 2,
+            damagedQuantity: 0,
+            lostQuantity: 0,
+          },
+        ],
+        userId: fixture.store.userId,
+      }),
+    ).rejects.toMatchObject({ statusCode: 409 });
+
+    await startFairReconciliation({
+      storeId: fixture.store.id,
+      fairEventId: fairEvent.id,
+    });
+    await expect(
+      createFairSale({
+        storeId: fixture.store.id,
+        fairEventId: fairEvent.id,
+        items: [{ productId: fixture.component.id, quantity: 1 }],
+        paymentMethod: PaymentMethod.CASH,
+        idempotencyKey: "fair-event-test-sale-while-reconciling",
+        userId: fixture.store.userId,
+      }),
+    ).rejects.toMatchObject({ statusCode: 409 });
+    await reopenFairEvent({
+      storeId: fixture.store.id,
+      fairEventId: fairEvent.id,
+    });
+    await expect(
+      testPrisma.fairEvent.findUniqueOrThrow({ where: { id: fairEvent.id } }),
+    ).resolves.toMatchObject({ status: FairEventStatus.OPEN });
+    await startFairReconciliation({
+      storeId: fixture.store.id,
+      fairEventId: fairEvent.id,
+    });
+
+    const closed = await reconcileFairEvent({
       storeId: fixture.store.id,
       fairEventId: fairEvent.id,
       items: [
@@ -174,6 +220,12 @@ describe("fair event flow with MySQL", () => {
       ],
       userId: fixture.store.userId,
     });
+    expect(closed.inventoryIssues).toBe(0);
+    await expect(
+      testPrisma.orderInventoryIssue.count({
+        where: { storeId: fixture.store.id },
+      }),
+    ).resolves.toBe(0);
 
     await expect(
       testPrisma.product.findUniqueOrThrow({
@@ -213,6 +265,121 @@ describe("fair event flow with MySQL", () => {
         expect.objectContaining({ type: "FESTIVAL_RETURN", quantity: 2 }),
       ]),
     );
+  });
+
+  it("cancels a fair sale by returning the fair counters, never the online stock", async () => {
+    fixture = await createInventoryFixture();
+    const fairEvent = await testPrisma.fairEvent.create({
+      data: {
+        storeId: fixture.store.id,
+        name: "Feria anulaciones",
+        createdBy: fixture.store.userId,
+      },
+    });
+    await allocateFairInventory({
+      storeId: fixture.store.id,
+      fairEventId: fairEvent.id,
+      allocations: [{ productId: fixture.component.id, quantity: 4 }],
+      userId: fixture.store.userId,
+    });
+    const [capsule] = await packFairCapsules({
+      storeId: fixture.store.id,
+      fairEventId: fairEvent.id,
+      productId: fixture.component.id,
+      quantity: 1,
+      salePrice: 10000,
+      minimumMarginPct: 30,
+    });
+    await openFairEvent({ storeId: fixture.store.id, fairEventId: fairEvent.id });
+    const sale = await createFairSale({
+      storeId: fixture.store.id,
+      fairEventId: fairEvent.id,
+      items: [
+        { productId: fixture.component.id, quantity: 2 },
+        { capsuleCode: capsule.code },
+      ],
+      paymentMethod: PaymentMethod.CASH,
+      idempotencyKey: "fair-event-test-cancel-001",
+      userId: fixture.store.userId,
+    });
+    const stockAfterSale = (
+      await testPrisma.product.findUniqueOrThrow({
+        where: { id: fixture.component.id },
+      })
+    ).stock;
+    const movementsAfterSale = await testPrisma.inventoryMovement.count({
+      where: { storeId: fixture.store.id },
+    });
+
+    const cancelled = await cancelFairSale({
+      storeId: fixture.store.id,
+      fairEventId: fairEvent.id,
+      orderId: sale.order.id,
+      userId: fixture.store.userId,
+    });
+
+    expect(cancelled).toMatchObject({
+      status: OrderStatus.CANCELLED,
+      paidAt: null,
+    });
+    await expect(
+      testPrisma.fairEventInventoryItem.findUniqueOrThrow({
+        where: {
+          fairEventId_productId: {
+            fairEventId: fairEvent.id,
+            productId: fixture.component.id,
+          },
+        },
+      }),
+    ).resolves.toMatchObject({
+      allocatedQuantity: 4,
+      soldQuantity: 0,
+      packedQuantity: 1,
+    });
+    await expect(
+      testPrisma.fairCapsule.findUniqueOrThrow({ where: { id: capsule.id } }),
+    ).resolves.toMatchObject({
+      status: FairCapsuleStatus.PACKED,
+      orderItemId: null,
+    });
+    // El stock en línea y el kardex no se tocan: la reserva sigue vigente.
+    await expect(
+      testPrisma.product.findUniqueOrThrow({
+        where: { id: fixture.component.id },
+      }),
+    ).resolves.toMatchObject({ stock: stockAfterSale });
+    await expect(
+      testPrisma.inventoryMovement.count({
+        where: { storeId: fixture.store.id },
+      }),
+    ).resolves.toBe(movementsAfterSale);
+
+    // Después del cierre ya no se puede anular.
+    await startFairReconciliation({
+      storeId: fixture.store.id,
+      fairEventId: fairEvent.id,
+    });
+    await reconcileFairEvent({
+      storeId: fixture.store.id,
+      fairEventId: fairEvent.id,
+      items: [
+        {
+          productId: fixture.component.id,
+          returnedQuantity: 4,
+          damagedQuantity: 0,
+          lostQuantity: 0,
+        },
+      ],
+      userId: fixture.store.userId,
+    });
+    await expect(
+      cancelFairSale({
+        storeId: fixture.store.id,
+        fairEventId: fairEvent.id,
+        orderId: sale.order.id,
+        userId: fixture.store.userId,
+      }),
+    ).rejects.toMatchObject({ statusCode: 409 });
   });
 
   it("does not reserve a derived kit as independent fair inventory", async () => {

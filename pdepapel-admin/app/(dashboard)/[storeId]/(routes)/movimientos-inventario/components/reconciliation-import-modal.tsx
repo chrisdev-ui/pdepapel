@@ -29,6 +29,8 @@ interface ReconciliationImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   onComplete: () => void;
+  /** Feria desde la que se llegó: solo contexto; la plantilla sigue siendo por SKU. */
+  fairContext?: { id: string; name: string; status: string } | null;
 }
 
 function getRequestError(error: unknown, fallback: string) {
@@ -40,7 +42,7 @@ function getRequestError(error: unknown, fallback: string) {
 
 export const ReconciliationImportModal: React.FC<
   ReconciliationImportModalProps
-> = ({ isOpen, onClose, onComplete }) => {
+> = ({ isOpen, onClose, onComplete, fairContext = null }) => {
   const params = useParams<{ storeId: string }>();
   const router = useRouter();
   const { toast } = useToast();
@@ -149,6 +151,21 @@ export const ReconciliationImportModal: React.FC<
         className="max-h-[90vh] max-w-6xl overflow-y-auto"
       >
         <div className="space-y-5">
+          {fairContext && (
+            <div
+              role="status"
+              className="rounded-lg border border-tint-pink bg-tint-pink/20 p-4 text-sm text-primary"
+            >
+              <p className="font-semibold">
+                Conciliando después de «{fairContext.name}»
+              </p>
+              <p className="mt-1 text-muted-foreground">
+                {fairContext.status === "CLOSED"
+                  ? "La feria ya está cerrada: lo que cuentes aquí corrige el stock de la tienda en línea, no la feria. Cuenta cada producto tal como quedó hoy."
+                  : "Esta feria todavía no está cerrada: los productos que tiene reservados no se pueden conciliar con la plantilla hasta cerrarla."}
+              </p>
+            </div>
+          )}
           <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm text-muted-foreground">
             <p className="font-semibold text-foreground">Antes de empezar</p>
             <p className="mt-1">

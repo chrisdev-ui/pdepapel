@@ -17,6 +17,10 @@ import {
 } from "./helpers/database";
 import { recalculateKitStock } from "@/lib/inventory";
 import {
+  formatFairIssueReference,
+  recordInventoryIssues,
+} from "@/lib/order-inventory-issues";
+import {
   OrderInventoryIssueKind,
   OrderStatus,
   OrderType,
@@ -243,6 +247,56 @@ describe("incidencias de inventario de un pedido", () => {
       params: { storeId: fixture.store.id, issueId: issue.id },
     });
     expect(foreign.status).toBe(403);
+  });
+
+  it("una devolución de feria que no entró queda como deuda sin pedido y se reintenta como «Devuelto de feria»", async () => {
+    fixture = await createInventoryFixture();
+    session.userId = fixture.store.userId;
+    const stockBefore = await componentStock(fixture);
+    const created = await recordInventoryIssues(testPrisma, {
+      storeId: fixture.store.id,
+      orderId: null,
+      orderNumber: formatFairIssueReference("Feria de pruebas"),
+      kind: OrderInventoryIssueKind.RESTOCK,
+      failed: [
+        {
+          productId: fixture.component.id,
+          quantity: 3,
+          productName: fixture.component.name,
+          reason: "Producto no encontrado",
+        },
+      ],
+    });
+    expect(created).toBe(1);
+    const issue = await testPrisma.orderInventoryIssue.findFirstOrThrow({
+      where: { storeId: fixture.store.id },
+    });
+    expect(issue).toMatchObject({
+      orderId: null,
+      orderNumber: "Feria: Feria de pruebas",
+      kind: OrderInventoryIssueKind.RESTOCK,
+      quantity: 3,
+    });
+
+    const { POST } = await issueRoute();
+    const retry = await POST(json("POST", { action: "retry" }), {
+      params: { storeId: fixture.store.id, issueId: issue.id },
+    });
+    expect(retry.status).toBe(200);
+    const resolved = await testPrisma.orderInventoryIssue.findUniqueOrThrow({
+      where: { id: issue.id },
+    });
+    expect(resolved.resolvedAt).not.toBeNull();
+    const movement = await testPrisma.inventoryMovement.findUniqueOrThrow({
+      where: { id: resolved.movementId! },
+    });
+    expect(movement).toMatchObject({
+      productId: fixture.component.id,
+      quantity: 3,
+      type: "FESTIVAL_RETURN",
+      referenceId: null,
+    });
+    expect(await componentStock(fixture)).toBe(stockBefore + 3);
   });
 
   it("la deuda sobrevive al borrado del pedido con el número guardado", async () => {

@@ -10,8 +10,16 @@ import {
 import { v4 as uuidv4 } from "uuid";
 
 import { ErrorFactory } from "@/lib/api-errors";
-import { recalculateKitStock } from "@/lib/inventory";
+import {
+  createInventoryMovementBatchResilient,
+  recalculateKitStock,
+  type CreateInventoryMovementParams,
+} from "@/lib/inventory";
 import { queueMarketplaceStockSyncEvents } from "@/lib/mercadolibre/outbox";
+import {
+  formatFairIssueReference,
+  recordInventoryIssues,
+} from "@/lib/order-inventory-issues";
 import prismadb from "@/lib/prismadb";
 import { generateOrderNumber } from "@/lib/utils";
 
@@ -141,11 +149,12 @@ export async function getFairEventDetail(storeId: string, fairEventId: string) {
         orderBy: { packedAt: "desc" },
       },
       orders: {
-        take: 20,
+        take: 200,
         orderBy: { createdAt: "desc" },
         select: {
           id: true,
           orderNumber: true,
+          status: true,
           total: true,
           createdAt: true,
           payment: { select: { method: true } },
@@ -299,6 +308,57 @@ export async function openFairEvent({
   return prismadb.fairEvent.update({
     where: { id: fairEventId },
     data: { status: FairEventStatus.OPEN, openedAt: new Date() },
+  });
+}
+
+/**
+ * Vender → Conciliar. Detiene las ventas (createFairSale exige OPEN) para
+ * contar con calma; se puede volver a abrir si faltaba vender.
+ */
+export async function startFairReconciliation({
+  storeId,
+  fairEventId,
+}: {
+  storeId: string;
+  fairEventId: string;
+}) {
+  const fairEvent = await prismadb.fairEvent.findFirst({
+    where: { id: fairEventId, storeId },
+    select: { id: true, status: true },
+  });
+  if (!fairEvent) throw ErrorFactory.NotFound("Feria no encontrada");
+  if (fairEvent.status !== FairEventStatus.OPEN) {
+    throw ErrorFactory.Conflict(
+      "Solo una feria abierta puede pasar a conciliación",
+    );
+  }
+  return prismadb.fairEvent.update({
+    where: { id: fairEventId },
+    data: { status: FairEventStatus.RECONCILING },
+  });
+}
+
+/** Conciliar → Vender, mientras la feria no se haya cerrado. */
+export async function reopenFairEvent({
+  storeId,
+  fairEventId,
+}: {
+  storeId: string;
+  fairEventId: string;
+}) {
+  const fairEvent = await prismadb.fairEvent.findFirst({
+    where: { id: fairEventId, storeId },
+    select: { id: true, status: true },
+  });
+  if (!fairEvent) throw ErrorFactory.NotFound("Feria no encontrada");
+  if (fairEvent.status !== FairEventStatus.RECONCILING) {
+    throw ErrorFactory.Conflict(
+      "Solo una feria en conciliación se puede volver a abrir",
+    );
+  }
+  return prismadb.fairEvent.update({
+    where: { id: fairEventId },
+    data: { status: FairEventStatus.OPEN },
   });
 }
 
@@ -663,6 +723,112 @@ export async function createFairSale({
   });
 }
 
+/**
+ * Anular una venta de feria. Una venta de feria nunca descontó
+ * `Product.stock` (lo hizo la reserva), así que aquí NO se devuelve nada al
+ * kardex: solo vuelve el contador `soldQuantity` del inventario de la feria y
+ * una cápsula vendida regresa a «empacada». El pedido queda cancelado sin
+ * `paidAt`. Después del cierre no se puede: lo conciliado ya es historia.
+ */
+export async function cancelFairSale({
+  storeId,
+  fairEventId,
+  orderId,
+  userId,
+}: {
+  storeId: string;
+  fairEventId: string;
+  orderId: string;
+  userId: string;
+}) {
+  return prismadb.$transaction(async (tx) => {
+    const fairEvent = await tx.fairEvent.findFirst({
+      where: { id: fairEventId, storeId },
+      select: { id: true, status: true, name: true },
+    });
+    if (!fairEvent) throw ErrorFactory.NotFound("Feria no encontrada");
+    if (
+      fairEvent.status !== FairEventStatus.OPEN &&
+      fairEvent.status !== FairEventStatus.RECONCILING
+    ) {
+      throw ErrorFactory.Conflict(
+        "La feria ya está cerrada: sus ventas no se pueden anular",
+      );
+    }
+
+    const order = await tx.order.findFirst({
+      where: { id: orderId, storeId, fairEventId },
+      include: { orderItems: true },
+    });
+    if (!order) throw ErrorFactory.NotFound("La venta no pertenece a esta feria");
+    if (order.type !== OrderType.FESTIVAL) {
+      throw ErrorFactory.Conflict("Solo se anulan ventas de feria");
+    }
+    if (order.status === OrderStatus.CANCELLED) {
+      return order;
+    }
+    if (order.status !== OrderStatus.PAID) {
+      throw ErrorFactory.Conflict(
+        "Solo se puede anular una venta de feria pagada",
+      );
+    }
+
+    const soldCapsules = await tx.fairCapsule.findMany({
+      where: {
+        fairEventId,
+        orderItemId: { in: order.orderItems.map((item) => item.id) },
+      },
+      select: { id: true, productId: true, orderItemId: true },
+    });
+    const capsuleByItem = new Map(
+      soldCapsules.map((capsule) => [capsule.orderItemId, capsule]),
+    );
+
+    for (const item of order.orderItems) {
+      if (!item.productId) continue;
+      const capsule = capsuleByItem.get(item.id);
+      const reverted = await tx.fairEventInventoryItem.updateMany({
+        where: {
+          fairEventId,
+          productId: item.productId,
+          soldQuantity: { gte: item.quantity },
+        },
+        data: capsule
+          ? {
+              soldQuantity: { decrement: item.quantity },
+              packedQuantity: { increment: item.quantity },
+            }
+          : { soldQuantity: { decrement: item.quantity } },
+      });
+      if (reverted.count !== 1) {
+        throw ErrorFactory.Conflict(
+          "El inventario de feria ya no cuadra con esta venta. Actualiza e intenta de nuevo",
+        );
+      }
+      if (capsule) {
+        await tx.fairCapsule.update({
+          where: { id: capsule.id },
+          data: {
+            status: FairCapsuleStatus.PACKED,
+            orderItemId: null,
+            soldAt: null,
+          },
+        });
+      }
+    }
+
+    return tx.order.update({
+      where: { id: order.id },
+      data: {
+        status: OrderStatus.CANCELLED,
+        paidAt: null,
+        adminNotes: `${order.adminNotes ? `${order.adminNotes}\n` : ""}Anulada desde la feria por ${userId}`,
+      },
+      include: { orderItems: true, payment: true },
+    });
+  });
+}
+
 export async function reconcileFairEvent({
   storeId,
   fairEventId,
@@ -682,11 +848,12 @@ export async function reconcileFairEvent({
       },
     });
     if (!fairEvent) throw ErrorFactory.NotFound("Feria no encontrada");
-    if (
-      fairEvent.status !== FairEventStatus.OPEN &&
-      fairEvent.status !== FairEventStatus.RECONCILING
-    ) {
-      throw ErrorFactory.Conflict("La feria no está lista para conciliación");
+    if (fairEvent.status !== FairEventStatus.RECONCILING) {
+      throw ErrorFactory.Conflict(
+        fairEvent.status === FairEventStatus.OPEN
+          ? "Primero pasa la feria a conciliación para detener las ventas"
+          : "La feria no está lista para conciliación",
+      );
     }
 
     const itemsByProduct = new Map(items.map((item) => [item.productId, item]));
@@ -723,31 +890,41 @@ export async function reconcileFairEvent({
       }
     }
 
+    // Las devoluciones entran por el helper del kardex, línea por línea: si
+    // una no puede (producto borrado en medio de la feria) la feria se cierra
+    // igual y la deuda queda como incidencia en Movimientos, en vez de dejar
+    // la feria abierta para siempre.
+    const returnMovements: CreateInventoryMovementParams[] = [];
     for (const inventoryItem of fairEvent.inventoryItems) {
       const reconciliation = itemsByProduct.get(inventoryItem.productId)!;
       if (reconciliation.returnedQuantity > 0) {
-        await tx.product.update({
-          where: { id: inventoryItem.productId },
-          data: { stock: { increment: reconciliation.returnedQuantity } },
-        });
-        await tx.inventoryMovement.create({
-          data: {
-            storeId,
-            productId: inventoryItem.productId,
-            type: InventoryMovementType.FESTIVAL_RETURN,
-            quantity: reconciliation.returnedQuantity,
-            previousStock: inventoryItem.product.stock,
-            newStock:
-              inventoryItem.product.stock + reconciliation.returnedQuantity,
-            cost: inventoryItem.product.acqPrice ?? undefined,
-            price: inventoryItem.product.price,
-            reason: `Devuelto de feria: ${fairEvent.name}`,
-            referenceId: fairEventId,
-            createdBy: `USER_${userId}`,
-          },
+        returnMovements.push({
+          productId: inventoryItem.productId,
+          storeId,
+          type: InventoryMovementType.FESTIVAL_RETURN,
+          quantity: reconciliation.returnedQuantity,
+          reason: `Devuelto de feria: ${fairEvent.name}`,
+          referenceId: fairEventId,
+          cost: Number(inventoryItem.product.acqPrice) || 0,
+          price: Number(inventoryItem.product.price) || 0,
+          createdBy: `USER_${userId}`,
         });
       }
+    }
+    const returns = await createInventoryMovementBatchResilient(
+      tx,
+      returnMovements,
+    );
+    const issueCount = await recordInventoryIssues(tx, {
+      storeId,
+      orderId: null,
+      orderNumber: formatFairIssueReference(fairEvent.name),
+      kind: "RESTOCK",
+      failed: returns.failed,
+    });
 
+    for (const inventoryItem of fairEvent.inventoryItems) {
+      const reconciliation = itemsByProduct.get(inventoryItem.productId)!;
       await tx.fairEventInventoryItem.update({
         where: { id: inventoryItem.id },
         data: {
@@ -769,9 +946,10 @@ export async function reconcileFairEvent({
     );
     await queueMarketplaceStockSyncEvents(tx, [...productIds, ...kitIds]);
 
-    return tx.fairEvent.update({
+    const closed = await tx.fairEvent.update({
       where: { id: fairEventId },
       data: { status: FairEventStatus.CLOSED, closedAt: new Date() },
     });
+    return { ...closed, inventoryIssues: issueCount };
   });
 }

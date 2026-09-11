@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  Banknote,
-  CheckCircle2,
-  Landmark,
-  Package,
-  ReceiptText,
-  ScanLine,
-  Trash2,
-} from "lucide-react";
+import { Banknote, Landmark, Package, ReceiptText, Trash2 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
@@ -25,17 +17,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { BarcodeScanner } from "@/components/ui/barcode-scanner";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { QuantitySelector } from "@/components/ui/quantity-selector";
+import { RadioCards } from "@/components/ui/radio-cards";
+import { SectionCard } from "@/components/ui/section-card";
 import { Separator } from "@/components/ui/separator";
+import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
+import { TintBadge } from "@/components/ui/tint-badge";
 import { useToast } from "@/hooks/use-toast";
 import {
   addLineToCart,
@@ -46,11 +34,17 @@ import {
   type SellLine,
   type SellPaymentMethod,
 } from "@/lib/sell-cart";
-import { cn, currencyFormatter } from "@/lib/utils";
+import { currencyFormatter } from "@/lib/utils";
 
-export type { SellLine, SellPaymentMethod } from "@/lib/sell-cart";
+export type {
+  SellLine,
+  SellLineKind,
+  SellPaymentMethod,
+  SellSaleItem,
+} from "@/lib/sell-cart";
 
 export interface SellSubmitInput {
+  /** Líneas con `kind` y, en cápsulas, `capsuleCode` explícitos. */
   lines: SellLine[];
   paymentMethod: SellPaymentMethod;
   idempotencyKey: string;
@@ -59,6 +53,22 @@ export interface SellSubmitInput {
 export interface SellSubmitResult {
   orderNumber: string;
   duplicate?: boolean;
+}
+
+/** Textos que cambian según la fuente; todo lo demás es igual en ambas pantallas. */
+export interface SellSourceCopy {
+  /** Ayuda bajo «Productos»: qué se puede escanear o buscar aquí. */
+  addDescription?: string;
+  /** Etiqueta del selector alterno (catálogo, reservados). */
+  pickerLabel?: string;
+  /** Ayuda del lector de cámara. */
+  scannerDescription?: string;
+  /** Nota bajo «Registrar pago». */
+  confirmNote?: string;
+  /** Descripción del error de cobro cuando el servidor no devuelve mensaje. */
+  submitError?: string;
+  /** Cómo se llama la venta en el diálogo («venta presencial», «venta de feria»). */
+  saleNoun?: string;
 }
 
 /**
@@ -72,23 +82,34 @@ export interface SellSource {
   submit: (input: SellSubmitInput) => Promise<SellSubmitResult>;
   /** Selector alterno al lector (catálogo, productos reservados). */
   renderPicker?: (add: (line: SellLine) => void) => ReactNode;
-  copy?: {
-    addDescription?: string;
-    pickerLabel?: string;
-    scannerDescription?: string;
-    confirmNote?: string;
-  };
+  copy?: SellSourceCopy;
 }
 
 interface SellPanelProps {
   source: SellSource;
   /** Contenido bajo la tarjeta de cobro (por ejemplo, el cierre del día). */
   aside?: ReactNode;
-  /** Sin tarjetas propias, para vivir dentro de otra tarjeta (feria). */
-  embedded?: boolean;
-  /** Mensaje de error genérico al cobrar. */
-  submitErrorHint?: string;
+  /** Bloquea la venta (por ejemplo, feria en conciliación) y explica por qué. */
+  lockedReason?: ReactNode;
 }
+
+const PAYMENT_OPTIONS = [
+  {
+    value: "CASH" as const,
+    title: "Efectivo",
+    icon: <Banknote className="h-4 w-4" aria-hidden="true" />,
+  },
+  {
+    value: "BankTransfer" as const,
+    title: "Transferencia",
+    icon: <Landmark className="h-4 w-4" aria-hidden="true" />,
+  },
+];
+
+const PAYMENT_LABELS: Record<SellPaymentMethod, string> = {
+  CASH: "efectivo",
+  BankTransfer: "transferencia",
+};
 
 function getErrorDescription(error: unknown, fallback: string) {
   const data = (error as { response?: { data?: { error?: string } } })?.response
@@ -96,12 +117,7 @@ function getErrorDescription(error: unknown, fallback: string) {
   return data?.error || fallback;
 }
 
-export function SellPanel({
-  source,
-  aside,
-  embedded = false,
-  submitErrorHint,
-}: SellPanelProps) {
+export function SellPanel({ source, aside, lockedReason }: SellPanelProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [cart, setCart] = useState<SellLine[]>([]);
@@ -115,6 +131,8 @@ export function SellPanel({
   );
 
   const totals = useMemo(() => cartTotals(cart), [cart]);
+  const locked = Boolean(lockedReason);
+  const copy = source.copy ?? {};
 
   const addLine = useCallback(
     (line: SellLine) => {
@@ -195,7 +213,7 @@ export function SellPanel({
         title: "No se pudo registrar la venta",
         description: getErrorDescription(
           error,
-          submitErrorHint ??
+          copy.submitError ??
             "No se descontó inventario. Revisa los productos e intenta de nuevo.",
         ),
         variant: "destructive",
@@ -205,230 +223,171 @@ export function SellPanel({
     }
   };
 
-  const Section = ({
-    title,
-    description,
-    icon,
-    children,
-    className,
-  }: {
-    title: string;
-    description?: string;
-    icon?: ReactNode;
-    children: ReactNode;
-    className?: string;
-  }) =>
-    embedded ? (
-      <section className={cn("space-y-4 rounded-lg border p-4", className)}>
-        <div>
-          <p className="flex items-center gap-2 font-semibold">
-            {icon}
-            {title}
-          </p>
-          {description && (
-            <p className="text-sm text-muted-foreground">{description}</p>
-          )}
-        </div>
-        {children}
-      </section>
-    ) : (
-      <Card className={className}>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            {icon}
-            {title}
-          </CardTitle>
-          {description && <CardDescription>{description}</CardDescription>}
-        </CardHeader>
-        <CardContent className="space-y-4">{children}</CardContent>
-      </Card>
-    );
-
   return (
-    <div
-      className={cn(
-        "grid gap-6",
-        embedded
-          ? "lg:grid-cols-[minmax(0,1fr)_320px]"
-          : "lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_400px]",
-      )}
-    >
-      <div className={embedded ? "space-y-4" : "space-y-6"}>
-        <Section
-          title="Agregar productos"
-          description={
-            source.copy?.addDescription ??
-            "Escanea una etiqueta, escribe el SKU o busca el producto. Cada lectura suma una unidad."
-          }
-          icon={
-            <ScanLine className="h-4 w-4 text-primary" aria-hidden="true" />
-          }
-        >
-          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
-            <div className="grid gap-2">
-              <Label htmlFor="sell-panel-code">Código de barras o QR</Label>
-              <Input
-                id="sell-panel-code"
-                value={manualCode}
-                onChange={(event) => setManualCode(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    void lookupCode(manualCode);
-                  }
-                }}
-                placeholder="Escanea o escribe el código"
-                autoComplete="off"
-              />
-            </div>
-            <BarcodeScanner
-              onDetected={lookupCode}
-              description={
-                source.copy?.scannerDescription ??
-                "Apunta la cámara a la etiqueta QR o al código de barras del producto."
-              }
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_400px]">
+      <SectionCard
+        id="sell-productos"
+        title="Productos"
+        description={
+          copy.addDescription ??
+          "Escanea el QR o busca por nombre o SKU. El stock que ves es el de este momento."
+        }
+        action={
+          totals.units > 0 ? (
+            <TintBadge
+              tone="sky"
+              label={`${totals.units} unidad${totals.units === 1 ? "" : "es"}`}
             />
-            <Button
-              type="button"
-              onClick={() => void lookupCode(manualCode)}
-              disabled={!manualCode.trim()}
-              isLoading={isLookingUp}
-            >
-              Agregar código
-            </Button>
+          ) : undefined
+        }
+      >
+        {lockedReason && (
+          <div
+            role="status"
+            className="rounded-lg border border-tint-cream bg-tint-cream/60 p-3 text-sm text-primary"
+          >
+            {lockedReason}
           </div>
-          {source.renderPicker && (
-            <div className="grid gap-2">
-              <Label>
-                {source.copy?.pickerLabel ?? "Producto del catálogo"}
-              </Label>
-              {source.renderPicker(addLine)}
-            </div>
-          )}
-        </Section>
+        )}
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
+          <div className="grid gap-2">
+            <Label htmlFor="sell-panel-code">Código de barras o QR</Label>
+            <Input
+              id="sell-panel-code"
+              value={manualCode}
+              onChange={(event) => setManualCode(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void lookupCode(manualCode);
+                }
+              }}
+              placeholder="Escanea o escribe el código"
+              autoComplete="off"
+              disabled={locked}
+            />
+          </div>
+          <BarcodeScanner
+            onDetected={lookupCode}
+            description={
+              copy.scannerDescription ??
+              "Apunta la cámara a la etiqueta QR o al código de barras del producto."
+            }
+          />
+          <Button
+            type="button"
+            onClick={() => void lookupCode(manualCode)}
+            disabled={locked || !manualCode.trim()}
+            isLoading={isLookingUp}
+          >
+            Agregar código
+          </Button>
+        </div>
+        {source.renderPicker && !locked && (
+          <div className="grid gap-2">
+            <Label>{copy.pickerLabel ?? "Producto del catálogo"}</Label>
+            {source.renderPicker(addLine)}
+          </div>
+        )}
 
-        <Section
-          title="Venta actual"
-          description="Revisa las cantidades antes de confirmar el pago."
-        >
-          {cart.length === 0 ? (
-            <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-              Aún no hay productos en esta venta.
-            </div>
-          ) : (
-            <ul className="space-y-3">
-              {cart.map((item) => (
-                <li
-                  key={item.key}
-                  className="flex flex-wrap items-center gap-3 rounded-lg border p-3"
-                >
-                  <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md border bg-muted">
-                    {item.imageUrl ? (
-                      <Image
-                        src={item.imageUrl}
-                        alt=""
-                        fill
-                        className="object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-muted-foreground">
-                        <Package className="h-5 w-5" aria-hidden="true" />
-                      </div>
+        <Separator />
+
+        {cart.length === 0 ? (
+          <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+            Aún no hay productos en esta venta.
+          </div>
+        ) : (
+          <ul className="space-y-3" aria-label="Productos en la venta">
+            {cart.map((item) => (
+              <li
+                key={item.key}
+                className="flex flex-wrap items-center gap-3 rounded-lg border p-3"
+              >
+                <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md border bg-muted">
+                  {item.imageUrl ? (
+                    <Image
+                      src={item.imageUrl}
+                      alt=""
+                      fill
+                      className="object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-muted-foreground">
+                      <Package className="h-5 w-5" aria-hidden="true" />
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="flex flex-wrap items-center gap-2 font-medium">
+                    <span className="truncate">{item.name}</span>
+                    {item.kind === "capsule" && item.capsuleCode && (
+                      <TintBadge tone="lavender" label={item.capsuleCode} />
                     )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{item.name}</p>
-                    {item.detail && (
-                      <p className="truncate text-xs text-muted-foreground">
-                        {item.detail}
-                      </p>
-                    )}
-                    <p className="text-sm font-semibold">
-                      {currencyFormatter(item.price)}
+                  </p>
+                  {item.detail && (
+                    <p className="truncate text-xs text-muted-foreground">
+                      {item.detail}
                     </p>
-                  </div>
-                  {!item.fixedQuantity && (
-                    <div className="hidden sm:block">
-                      <QuantitySelector
-                        value={item.quantity}
-                        min={1}
-                        max={item.maxQuantity ?? undefined}
-                        onChange={(quantity) =>
-                          updateQuantity(item.key, quantity)
-                        }
-                      />
-                    </div>
                   )}
-                  <span className="w-24 text-right text-sm font-semibold tabular-nums">
-                    {currencyFormatter(item.price * item.quantity)}
-                  </span>
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant="ghost"
-                    onClick={() =>
-                      setCart((current) => removeLine(current, item.key))
-                    }
-                    aria-label={`Quitar ${item.name}`}
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                  {!item.fixedQuantity && (
-                    <div className="basis-full sm:hidden">
-                      <QuantitySelector
-                        value={item.quantity}
-                        min={1}
-                        max={item.maxQuantity ?? undefined}
-                        onChange={(quantity) =>
-                          updateQuantity(item.key, quantity)
-                        }
-                      />
-                    </div>
+                  <p className="text-sm font-semibold">
+                    {currencyFormatter(item.price)}
+                  </p>
+                </div>
+                <span className="w-24 text-right text-sm font-semibold tabular-nums">
+                  {currencyFormatter(item.price * item.quantity)}
+                </span>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  onClick={() =>
+                    setCart((current) => removeLine(current, item.key))
+                  }
+                  aria-label={`Quitar ${item.name}`}
+                >
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                </Button>
+                <div className="basis-full sm:order-none sm:basis-auto">
+                  {item.fixedQuantity ? (
+                    <span className="text-xs text-muted-foreground">
+                      1 unidad · cantidad fija
+                    </span>
+                  ) : (
+                    <StockQuantityInput
+                      value={item.quantity}
+                      min={1}
+                      max={item.maxQuantity ?? undefined}
+                      size="sm"
+                      className="w-36"
+                      ariaLabel={`Cantidad de ${item.name}`}
+                      onChange={(quantity) =>
+                        updateQuantity(item.key, quantity)
+                      }
+                    />
                   )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </Section>
-      </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </SectionCard>
 
       <aside className="space-y-4 lg:sticky lg:top-6 lg:h-fit">
-        <Section
-          title="Cobrar"
+        <SectionCard
+          id="sell-cobro"
+          title="Cobro"
           description="El inventario se descuenta solo al confirmar."
-          className={embedded ? "border-primary/30" : "border-primary/30"}
+          action={<TintBadge tone="mint" label="Todo o nada" />}
         >
-          <div className="grid gap-2">
-            <Label>Método de pago</Label>
-            <div
-              className="grid grid-cols-2 gap-2"
-              role="radiogroup"
-              aria-label="Método de pago"
-            >
-              <Button
-                type="button"
-                role="radio"
-                aria-checked={paymentMethod === "CASH"}
-                variant={paymentMethod === "CASH" ? "default" : "outline"}
-                onClick={() => setPaymentMethod("CASH")}
-              >
-                <Banknote className="mr-2 h-4 w-4" aria-hidden="true" />
-                Efectivo
-              </Button>
-              <Button
-                type="button"
-                role="radio"
-                aria-checked={paymentMethod === "BankTransfer"}
-                variant={
-                  paymentMethod === "BankTransfer" ? "default" : "outline"
-                }
-                onClick={() => setPaymentMethod("BankTransfer")}
-              >
-                <Landmark className="mr-2 h-4 w-4" aria-hidden="true" />
-                Transferencia
-              </Button>
-            </div>
-          </div>
+          <RadioCards
+            value={paymentMethod}
+            onChange={setPaymentMethod}
+            options={PAYMENT_OPTIONS}
+            label="Método de pago"
+            idPrefix="sell-panel-payment"
+            columns={2}
+            disabled={locked}
+          />
           <Separator />
           <div className="space-y-1">
             <p className="text-sm text-muted-foreground">Total a cobrar</p>
@@ -443,7 +402,7 @@ export function SellPanel({
             type="button"
             size="lg"
             className="w-full"
-            disabled={cart.length === 0}
+            disabled={locked || cart.length === 0}
             isLoading={isSelling}
             onClick={() => setIsConfirmationOpen(true)}
           >
@@ -452,15 +411,11 @@ export function SellPanel({
             )}
             Registrar pago
           </Button>
-          <p className="flex gap-2 text-xs text-muted-foreground">
-            <CheckCircle2
-              className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600"
-              aria-hidden="true"
-            />
-            {source.copy?.confirmNote ??
+          <p className="text-xs text-muted-foreground">
+            {copy.confirmNote ??
               "Si falta inventario, la venta no se registra ni descuenta parcialmente."}
           </p>
-        </Section>
+        </SectionCard>
         {aside}
       </aside>
 
@@ -472,10 +427,10 @@ export function SellPanel({
           <AlertDialogHeader>
             <AlertDialogTitle>¿Confirmar pago?</AlertDialogTitle>
             <AlertDialogDescription>
-              Se registrará una venta presencial por{" "}
+              Se registrará una {copy.saleNoun ?? "venta presencial"} por{" "}
               {currencyFormatter(totals.total)} en{" "}
-              {paymentMethod === "CASH" ? "efectivo" : "transferencia"} y se
-              descontará el inventario de todos los productos.
+              {PAYMENT_LABELS[paymentMethod]} y se descontará el inventario de
+              todos los productos.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

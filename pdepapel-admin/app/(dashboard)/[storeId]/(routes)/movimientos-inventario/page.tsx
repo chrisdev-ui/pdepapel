@@ -8,10 +8,37 @@ import prismadb from "@/lib/prismadb";
 
 export default async function InventoryMovementsPage({
   params,
+  searchParams,
 }: {
   params: { storeId: string };
+  searchParams?: { referencia?: string; feria?: string };
 }) {
-  const movements = await getInventoryMovements(params.storeId);
+  const referenceId = searchParams?.referencia?.trim() || null;
+  const fairParam = searchParams?.feria;
+  const fairId = fairParam?.trim() || null;
+  // `?feria` sin valor (desde la lista de Ferias) abre el importador sin feria concreta.
+  const openImporter = fairParam !== undefined;
+  // Enlaces desde una feria: `referencia` filtra el kardex por sus
+  // movimientos (reserva y devolución) y `feria` abre «Conciliar feria
+  // anterior» con la feria como contexto.
+  const [allMovements, referencedFair, contextFair] = await Promise.all([
+    getInventoryMovements(params.storeId),
+    referenceId
+      ? prismadb.fairEvent.findFirst({
+          where: { id: referenceId, storeId: params.storeId },
+          select: { id: true, name: true },
+        })
+      : null,
+    fairId
+      ? prismadb.fairEvent.findFirst({
+          where: { id: fairId, storeId: params.storeId },
+          select: { id: true, name: true, status: true },
+        })
+      : null,
+  ]);
+  const movements = referenceId
+    ? allMovements.filter((movement) => movement.referenceId === referenceId)
+    : allMovements;
   const products = await prismadb.product.findMany({
     where: { storeId: params.storeId, isArchived: false },
     select: { id: true, name: true, stock: true },
@@ -38,6 +65,13 @@ export default async function InventoryMovementsPage({
         <InventoryMovementClient
           data={formattedMovements}
           products={products}
+          reference={
+            referenceId
+              ? { id: referenceId, label: referencedFair?.name ?? null }
+              : null
+          }
+          fairContext={contextFair}
+          openImporter={openImporter}
         />
       </div>
     </div>

@@ -1,7 +1,7 @@
-import { Banknote, CreditCard, Landmark, Wallet } from "lucide-react";
+import { Banknote, CreditCard, Landmark } from "lucide-react";
 import Link from "next/link";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { SectionCard } from "@/components/ui/section-card";
 import { Separator } from "@/components/ui/separator";
 import {
   METHOD_LABELS,
@@ -31,7 +31,8 @@ interface DayCloseCardProps {
 
 /**
  * Cierre del día: lo vendido hoy en el punto de venta por método de pago.
- * Es una lectura del servidor; se refresca al registrar cada venta.
+ * Es una lectura del servidor (la página la vuelve a calcular con el
+ * `router.refresh()` que dispara cada venta registrada).
  */
 export function DayCloseCard({ storeId, summary }: DayCloseCardProps) {
   const methods = METHOD_ORDER.filter(
@@ -39,19 +40,15 @@ export function DayCloseCard({ storeId, summary }: DayCloseCardProps) {
   );
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Wallet className="h-4 w-4 text-primary" aria-hidden="true" />
-          Cierre del día
-        </CardTitle>
-        <CardDescription>
-          {summary.sales === 0
-            ? "Aún no hay ventas presenciales hoy."
-            : `${summary.sales} venta${summary.sales === 1 ? "" : "s"} · ${summary.units} unidad${summary.units === 1 ? "" : "es"}${summary.lastSaleAt ? ` · última a las ${TIME.format(summary.lastSaleAt)}` : ""}`}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <SectionCard
+      id="cierre-del-dia"
+      title="Cierre del día"
+      description={
+        summary.sales === 0
+          ? "Aún no hay ventas presenciales hoy."
+          : `${summary.sales} venta${summary.sales === 1 ? "" : "s"} · ${summary.units} unidad${summary.units === 1 ? "" : "es"}${summary.lastSaleAt ? ` · última a las ${TIME.format(summary.lastSaleAt)}` : ""}`
+      }
+    >
         <ul className="space-y-2" aria-label="Total por método de pago">
           {methods.map((method) => {
             const Icon = METHOD_ICONS[method];
@@ -112,7 +109,6 @@ export function DayCloseCard({ storeId, summary }: DayCloseCardProps) {
           </Link>{" "}
           con el tipo Presencial. Si te equivocaste, registra la devolución en Movimientos.
         </p>
-      </CardContent>
-    </Card>
+    </SectionCard>
   );
 }

@@ -21,6 +21,7 @@ Este módulo mantiene separado el inventario llevado a una feria del inventario 
 4. Selecciona **Efectivo** o **Transferencia**, pulsa **Registrar pago** y confirma en el diálogo una sola vez. Es la misma pantalla del Punto de venta, pero solo ofrece lo reservado para la feria.
 5. Espera el mensaje de venta registrada antes de entregar el producto. El sistema evita cobrar dos veces un mismo envío del formulario y no permite superar el inventario reservado.
 6. Para una cápsula, escanea únicamente su QR. El pedido se muestra como **Cápsula sorpresa** y la relación interna conserva el producto real y su costo.
+7. Si te equivocaste en una venta, anúlala desde **Últimas ventas** en la misma feria (botón **Anular**). Las unidades vuelven a la reserva de la feria y una cápsula vuelve a «empacada»; el inventario de la tienda en línea no cambia porque la reserva sigue vigente. Desde **Pedidos** no se puede editar ni borrar una venta de feria: hacerlo duplicaría inventario.
 
 ## Conexión y seguridad
 
@@ -31,11 +32,12 @@ Este módulo mantiene separado el inventario llevado a una feria del inventario 
 
 ## Al terminar
 
-1. Cuenta físicamente cada producto no vendido.
-2. En **Conciliar y cerrar**, registra para cada producto cuántas unidades regresan, cuántas se dañaron y cuántas se perdieron.
-3. Para cada producto, la suma debe coincidir exactamente con las unidades no vendidas. El botón se activa cuando todo cuadra.
-4. Pulsa **Conciliar y cerrar** solo después de revisar el conteo: el cierre es irreversible.
-5. Las unidades en **Devuelto** se reincorporan al inventario disponible de la tienda en línea. Las unidades en daño o pérdida quedan registradas en la feria y no vuelven al inventario.
+1. Pulsa **Pasar a conciliación**. La feria queda en **Conciliando**: el panel de venta se bloquea y aparece la tabla de conteo. Si todavía falta vender, **Reabrir ventas** la devuelve a **Abierta** sin perder nada.
+2. Cuenta físicamente cada producto no vendido.
+3. En **Conciliación**, reparte para cada producto las unidades no vendidas entre **Devuelto**, **Dañado** y **Perdido**. Cada fila muestra «Cuadra», «Faltan N» o «Sobran N»; las cápsulas que sigan empacadas se cuentan por el producto que contienen.
+4. Debajo de la tabla ves el resumen: cuántas unidades vuelven al stock en línea, cuántas quedan como daño o pérdida y cuántas cápsulas empacadas se anularán. El botón **Cerrar la feria** se activa cuando todas las filas cuadran.
+5. Al pulsarlo, el diálogo repite esas cifras y pide confirmar que contaste físicamente. El cierre es definitivo: no se puede reabrir la feria, registrar más ventas ni anular las existentes.
+6. Las unidades en **Devuelto** entran al inventario de la tienda en línea como «Devolución de feria». Las unidades en daño o pérdida quedan registradas solo en la feria. Si alguna devolución no pudo entrar (por ejemplo, el producto ya no existe), la feria se cierra igual y la línea queda como incidencia en **Movimientos de inventario** para reintentarla o conciliarla a mano.
 
 ## Qué no hace falta configurar
 
@@ -45,6 +47,7 @@ Este módulo mantiene separado el inventario llevado a una feria del inventario 
 
 ## Revisión posterior
 
-- En **Pedidos**, filtra o revisa las ventas creadas desde la feria.
-- En **Movimientos de inventario** verás las asignaciones y devoluciones asociadas a la feria.
-- En **Reportes tributarios**, las ventas pagadas de feria se incluyen en el período de su fecha real de pago.
+- La feria cerrada muestra sus cifras (ventas, vendidas/reservadas, devueltas, dañadas o perdidas), la tabla conciliada y la tarjeta **Después del cierre** con los enlaces de abajo.
+- **Movimientos en el kardex** abre Movimientos de inventario filtrado por esta feria (reserva y devolución).
+- **Ventas de la feria** lista todos sus pedidos pagados; también aparecen en **Pedidos** y en **Reportes tributarios** en el período de su fecha real de pago.
+- **¿Faltó registrar ventas?** abre «Conciliar feria anterior» con la feria como contexto. Es la única forma de corregir después del cierre y solo ajusta cantidades, nunca crea ventas: sigue [Arreglar el inventario después de una feria anterior](./conciliar-inventario-feria-anterior.md) o la [guía rápida](./guia-rapida-conciliar-stock-feria-anterior.md).

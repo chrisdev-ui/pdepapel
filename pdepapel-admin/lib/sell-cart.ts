@@ -9,12 +9,19 @@
 
 export type SellPaymentMethod = "CASH" | "BankTransfer";
 
+export type SellLineKind = "product" | "capsule";
+
 export interface SellLine {
   /** Identidad de la línea: `product-<id>` o `capsule-<código>`. */
   key: string;
-  productId: string | null;
+  /** Producto normal o cápsula sorpresa. Nunca se infiere de otros campos. */
+  kind: SellLineKind;
+  /** Producto vendido. En una cápsula, el producto empacado dentro. */
+  productId: string;
+  /** Código QR de la cápsula; solo cuando `kind === "capsule"`. */
+  capsuleCode?: string;
   name: string;
-  /** Texto pequeño bajo el nombre: SKU, código de cápsula, disponibilidad. */
+  /** Texto pequeño bajo el nombre: SKU, disponibilidad, contenido. */
   detail?: string;
   price: number;
   quantity: number;
@@ -30,11 +37,74 @@ export interface CartChange {
   error?: { title: string; description?: string };
 }
 
+/** Lo que el servidor recibe por línea: producto con cantidad o cápsula por su código. */
+export type SellSaleItem = { productId: string; quantity: number } | { capsuleCode: string };
+
+export function productLine(input: {
+  productId: string;
+  name: string;
+  price: number;
+  maxQuantity: number | null;
+  detail?: string;
+  imageUrl?: string | null;
+  quantity?: number;
+}): SellLine {
+  return {
+    key: `product-${input.productId}`,
+    kind: "product",
+    productId: input.productId,
+    name: input.name,
+    detail: input.detail,
+    price: input.price,
+    quantity: input.quantity ?? 1,
+    maxQuantity: input.maxQuantity,
+    imageUrl: input.imageUrl ?? null,
+  };
+}
+
+export function capsuleLine(input: {
+  code: string;
+  productId: string;
+  price: number;
+  name?: string;
+  detail?: string;
+  imageUrl?: string | null;
+}): SellLine {
+  const code = input.code.trim().toUpperCase();
+  return {
+    key: `capsule-${code}`,
+    kind: "capsule",
+    productId: input.productId,
+    capsuleCode: code,
+    name: input.name ?? "Cápsula sorpresa",
+    detail: input.detail ?? `Código ${code}`,
+    price: input.price,
+    quantity: 1,
+    maxQuantity: 1,
+    imageUrl: input.imageUrl ?? null,
+    fixedQuantity: true,
+  };
+}
+
+export function isCapsuleLine(line: SellLine): boolean {
+  return line.kind === "capsule";
+}
+
+/** Convierte el carrito en el cuerpo que esperan `/point-of-sale/sales` y `/fair-events/[id]/sales`. */
+export function toSaleItems(cart: SellLine[]): SellSaleItem[] {
+  return cart.map((line) =>
+    line.kind === "capsule" ? { capsuleCode: line.capsuleCode as string } : { productId: line.productId, quantity: line.quantity },
+  );
+}
+
 export function addLineToCart(cart: SellLine[], line: SellLine): CartChange {
   const existing = cart.find((item) => item.key === line.key);
   if (existing) {
     if (existing.fixedQuantity) {
-      return { cart, error: { title: `${existing.name} ya está en la venta`, description: existing.detail ? `Código ${existing.detail}.` : undefined } };
+      return {
+        cart,
+        error: { title: `${existing.name} ya está en la venta`, description: existing.capsuleCode ? `Código ${existing.capsuleCode}.` : undefined },
+      };
     }
     if (existing.maxQuantity !== null && existing.quantity >= existing.maxQuantity) {
       return {

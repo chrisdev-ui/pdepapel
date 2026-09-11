@@ -119,13 +119,43 @@ test.describe("ventas en feria", () => {
       timeout: 30_000,
     });
 
-    await page.getByRole("button", { name: "Conciliar y cerrar" }).click();
+    // Vender → Conciliar: las ventas se detienen y aparece la tabla de conteo.
+    await page
+      .getByRole("button", { name: "Pasar a conciliación" })
+      .first()
+      .click();
+    await expect(page.getByText("Conciliando", { exact: true })).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.getByText("Las ventas están detenidas.")).toBeVisible();
+    // Se reservaron 2 y se vendió 1: la fila propone 1 devuelta y ya cuadra.
+    await expect(page.getByText("Cuadra", { exact: true })).toBeVisible();
+
+    await page.getByRole("button", { name: "Cerrar la feria" }).first().click();
     await expect(
-      page.getByRole("heading", { name: "¿Cerrar esta feria?" }),
+      page.getByRole("heading", { name: `¿Cerrar «${fairName}»?` }),
     ).toBeVisible({ timeout: 30_000 });
-    await page.getByRole("button", { name: "Sí, conciliar y cerrar" }).click();
     await expect(
-      page.getByRole("heading", { name: "Feria cerrada" }),
+      page.getByText("1 unidades vuelven al stock en línea"),
+    ).toBeVisible();
+    const confirmClose = page.getByRole("alertdialog").getByRole("button", {
+      name: "Cerrar la feria",
+    });
+    await expect(confirmClose).toBeDisabled();
+    await page
+      .getByRole("checkbox", {
+        name: "Confirmo que conté la mercancía físicamente",
+      })
+      .click();
+    await confirmClose.click();
+    await expect(
+      page.getByRole("heading", { name: "Después del cierre" }),
     ).toBeVisible({ timeout: 30_000 });
+    // «Cerrada» aparece en la insignia de estado y en el paso 4 del recorrido.
+    await expect(
+      page
+        .getByRole("list", { name: "Recorrido de la feria" })
+        .locator('li[aria-current="step"]'),
+    ).toContainText("Cerrada");
   });
 });

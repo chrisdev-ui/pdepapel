@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Printer, QrCode, Trash2 } from "lucide-react";
+import { Plus, Printer, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import {
@@ -10,15 +10,8 @@ import {
 } from "@/components/labels/qr-label-print-sheet";
 import { AsyncProductSelect } from "@/components/ui/async-product-select";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { CountInput } from "@/components/ui/count-input";
 import { Label } from "@/components/ui/label";
+import { SectionCard } from "@/components/ui/section-card";
 import {
   Select,
   SelectContent,
@@ -26,6 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
+import { TintBadge } from "@/components/ui/tint-badge";
 import { useToast } from "@/hooks/use-toast";
 import { LABEL_PRINT_FORMATS, type LabelPrintFormat } from "@/lib/label-printing";
 
@@ -95,17 +90,11 @@ export function LabelsPanel() {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_400px]">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <QrCode className="h-4 w-4 text-primary" aria-hidden="true" />
-            Etiquetas de productos
-          </CardTitle>
-          <CardDescription>
-            Una etiqueta se reutiliza: pégala en la caja o exhibidor del producto y escanéala cada vez que lo vendas. Las cápsulas sorpresa usan su propio QR desde Ferias.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <SectionCard
+        id="etiquetas-productos"
+        title="Etiquetas de productos"
+        description="Una etiqueta se reutiliza: pégala en la caja o exhibidor del producto y escanéala cada vez que lo vendas. Las cápsulas sorpresa usan su propio QR desde Ferias."
+      >
           <div className="grid gap-2">
             <Label>Producto</Label>
             <AsyncProductSelect
@@ -121,7 +110,7 @@ export function LabelsPanel() {
           <div className="grid gap-4 sm:grid-cols-[minmax(0,0.6fr)_minmax(0,1fr)_auto] sm:items-end">
             <div className="grid gap-2">
               <Label htmlFor="label-copies">Cantidad</Label>
-              <CountInput
+              <StockQuantityInput
                 id="label-copies"
                 min={1}
                 max={100}
@@ -156,20 +145,23 @@ export function LabelsPanel() {
           <p className="text-xs text-muted-foreground">
             {LABEL_PRINT_FORMATS[labelPrintFormat].description}. Hoja adhesiva A4 para inkjet, escala 100%, sin «ajustar a página».
           </p>
-        </CardContent>
-      </Card>
+      </SectionCard>
 
       <aside className="space-y-4 lg:sticky lg:top-6 lg:h-fit">
-        <Card className="border-primary/30">
-          <CardHeader>
-            <CardTitle className="text-base">Hoja para imprimir</CardTitle>
-            <CardDescription>
-              {totalLabels === 0
-                ? "Agrega productos para armar la hoja."
-                : `${totalLabels} etiqueta${totalLabels === 1 ? "" : "s"} · ${LABEL_PRINT_FORMATS[labelPrintFormat].name}`}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <SectionCard
+          id="etiquetas-hoja"
+          title="Hoja para imprimir"
+          description={
+            totalLabels === 0
+              ? "Agrega productos para armar la hoja."
+              : LABEL_PRINT_FORMATS[labelPrintFormat].name
+          }
+          action={
+            totalLabels > 0 ? (
+              <TintBadge tone="sky" label={`${totalLabels} etiqueta${totalLabels === 1 ? "" : "s"}`} />
+            ) : undefined
+          }
+        >
             {batches.length > 0 && (
               <ul className="divide-y text-sm">
                 {batches.map((batch) => (
@@ -206,8 +198,7 @@ export function LabelsPanel() {
                 Vaciar la hoja
               </Button>
             )}
-          </CardContent>
-        </Card>
+        </SectionCard>
       </aside>
 
       {totalLabels > 0 && (

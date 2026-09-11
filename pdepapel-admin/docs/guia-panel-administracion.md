@@ -127,14 +127,20 @@ Fases: **Preparar** (reservar stock y armar cápsulas) › **Vender** › **Conc
    línea). Opcional: arma cápsulas sorpresa eligiendo el producto reservado,
    la cantidad y el precio; se valida el margen mínimo y se genera un QR por
    cápsula.
-3. «Abrir feria» al llegar al evento.
+3. «Abrir para ventas» al llegar al evento.
 4. Vender: mismo punto de venta, pero solo con lo reservado y las cápsulas.
-   Cada venta queda como pedido pagado del canal Feria.
-5. Conciliar y cerrar: por producto, devuelto, dañado y perdido. Lo devuelto
-   vuelve a la tienda en línea; daños y pérdidas quedan como movimientos.
+   Cada venta queda como pedido pagado del canal Feria. Una venta equivocada
+   se anula desde «Últimas ventas» en la feria (vuelve a la reserva; el
+   inventario en línea no cambia); Pedidos no deja editarla ni borrarla.
+5. «Pasar a conciliación» detiene las ventas (se puede «Reabrir ventas»).
+   Por producto: devuelto, dañado y perdido; cada fila dice si cuadra. El
+   botón «Cerrar la feria» se activa cuando todo cuadra y el diálogo repite
+   las cifras: lo devuelto vuelve a la tienda en línea, daños y pérdidas
+   quedan solo en la feria, las cápsulas empacadas se anulan.
 
-El cierre es irreversible. Una feria pasada sin conciliar se resuelve con
-«Conciliar feria anterior» en Movimientos (crea movimientos, no ventas).
+El cierre es irreversible. La feria cerrada muestra sus cifras y enlaces al
+kardex, a sus ventas y a «Conciliar feria anterior» (también desde el botón
+en la lista de Ferias), que crea movimientos, no ventas.
 
 ## 7. Mercado Libre (`/mercadolibre`)
 

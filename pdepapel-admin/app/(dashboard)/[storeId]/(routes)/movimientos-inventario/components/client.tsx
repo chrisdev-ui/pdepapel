@@ -1,6 +1,7 @@
 "use client";
 
-import { FileSpreadsheet, Plus } from "lucide-react";
+import { FileSpreadsheet, Plus, X } from "lucide-react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -17,15 +18,29 @@ import { ReconciliationImportModal } from "./reconciliation-import-modal";
 interface InventoryMovementClientProps {
   data: InventoryMovementColumn[];
   products: { id: string; name: string; stock: number }[];
+  /** Filtro por `referenceId` llegado en la URL (por ejemplo, una feria). */
+  reference?: { id: string; label: string | null } | null;
+  /** Feria desde la que se llegó a «Conciliar feria anterior». */
+  fairContext?: { id: string; name: string; status: string } | null;
+  /** Abrir el importador al cargar (enlace desde Ferias). */
+  openImporter?: boolean;
 }
 
 export const InventoryMovementClient: React.FC<
   InventoryMovementClientProps
-> = ({ data, products }) => {
+> = ({
+  data,
+  products,
+  reference = null,
+  fairContext = null,
+  openImporter = false,
+}) => {
   const params = useParams();
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [reconciliationOpen, setReconciliationOpen] = useState(false);
+  const [reconciliationOpen, setReconciliationOpen] = useState(
+    openImporter || fairContext !== null,
+  );
 
   const filters = [
     {
@@ -56,6 +71,7 @@ export const InventoryMovementClient: React.FC<
           setReconciliationOpen(false);
           router.refresh();
         }}
+        fairContext={fairContext}
       />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <Heading
@@ -74,6 +90,27 @@ export const InventoryMovementClient: React.FC<
         </div>
       </div>
       <Separator />
+      {reference && (
+        <div
+          role="status"
+          className="flex flex-wrap items-center gap-2 rounded-lg border border-tint-lavender bg-tint-lavender/30 px-3 py-2 text-sm text-primary"
+        >
+          <span>
+            Mostrando solo los movimientos de{" "}
+            <span className="font-semibold">
+              {reference.label ?? `la referencia ${reference.id}`}
+            </span>{" "}
+            ({data.length}).
+          </span>
+          <Link
+            href={`/${params.storeId}/movimientos-inventario`}
+            className="inline-flex items-center gap-1 font-semibold underline underline-offset-2"
+          >
+            <X className="h-3.5 w-3.5" aria-hidden="true" />
+            Ver todos
+          </Link>
+        </div>
+      )}
       <DataTable
         searchKey="productName"
         columns={columns}

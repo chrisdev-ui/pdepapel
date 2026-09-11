@@ -31,6 +31,7 @@ import {
 import { round2 } from "@/lib/order-totals";
 import { recordPaidOrderInGoogleAnalytics } from "@/lib/google-analytics";
 import { invalidateStoreProductsCache } from "@/lib/cache";
+import { getInPersonOrderGuard } from "@/lib/in-person-orders";
 import {
   assertWelcomeBenefitEligibility,
   markWelcomeBenefitRedeemed,
@@ -176,16 +177,14 @@ export async function PATCH(
     });
     if (!order)
       throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
-    if (order.type === OrderType.POINT_OF_SALE) {
-      throw ErrorFactory.Conflict(
-        "Las ventas presenciales se conservan como comprobantes. Registra una devolución o ajuste de inventario en lugar de editar esta orden.",
-      );
-    }
-    if (type === OrderType.POINT_OF_SALE) {
-      throw ErrorFactory.InvalidRequest(
-        "No puedes convertir una orden existente en venta presencial. Regístrala desde Punto de venta.",
-      );
-    }
+    // Ventas presenciales (mostrador y feria): comprobantes, no se editan
+    // aquí. Una venta de feria se anula desde la feria para que su
+    // inventario reservado cuadre; una de mostrador se corrige con una
+    // devolución o un ajuste.
+    const editGuard = getInPersonOrderGuard(order.type, "edit");
+    if (editGuard) throw ErrorFactory.Conflict(editGuard);
+    const convertGuard = type ? getInPersonOrderGuard(type, "convert") : null;
+    if (convertGuard) throw ErrorFactory.InvalidRequest(convertGuard);
 
     // Concurrencia: el formulario envía el estado con el que se cargó. Si el
     // pedido cambió mientras tanto (un webhook lo marcó pagado, otra pestaña
@@ -1065,11 +1064,8 @@ export async function DELETE(
       });
       if (!order)
         throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
-      if (order.type === OrderType.POINT_OF_SALE) {
-        throw ErrorFactory.Conflict(
-          "Las ventas presenciales no se eliminan. Registra una devolución o ajuste de inventario para conservar la trazabilidad.",
-        );
-      }
+      const deleteGuard = getInPersonOrderGuard(order.type, "delete");
+      if (deleteGuard) throw ErrorFactory.Conflict(deleteGuard);
 
       // Un pedido se puede eliminar en cualquier estado (los guardas se
       // quitaron a proposito), pero no si arrastra una guia de EnvioClick

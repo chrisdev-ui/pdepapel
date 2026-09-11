@@ -153,6 +153,7 @@ export const getInventoryMovements = async (storeId: string) => {
       quantity: item.quantity,
       reason: item.reason || "",
       description: item.description || "",
+      referenceId: item.referenceId ?? null,
       createdAt: item.createdAt,
       userName,
       userImage,

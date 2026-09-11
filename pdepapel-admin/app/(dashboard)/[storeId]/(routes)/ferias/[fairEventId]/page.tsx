@@ -61,6 +61,7 @@ export default async function FairEventPage({
     orders: fairEvent.orders.map((order) => ({
       id: order.id,
       orderNumber: order.orderNumber,
+      status: order.status === "CANCELLED" ? "CANCELLED" : "PAID",
       total: Number(order.total),
       createdAt: order.createdAt.toISOString(),
       payment: order.payment

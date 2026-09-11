@@ -16,6 +16,23 @@ export interface FailedInventoryLine {
 }
 
 /**
+ * Una feria no es un pedido, pero su cierre también puede dejar deuda con el
+ * kardex (una devolución que no pudo entrar porque el producto ya no existe).
+ * Se reutiliza la misma tabla con `orderId` nulo y este prefijo en
+ * `orderNumber`, para que Movimientos la muestre y el reintento sepa que el
+ * movimiento correcto es «Devuelto de feria», no «Orden cancelada».
+ */
+export const FAIR_ISSUE_PREFIX = "Feria: ";
+
+export function formatFairIssueReference(fairName: string): string {
+  return `${FAIR_ISSUE_PREFIX}${fairName}`;
+}
+
+export function isFairIssueReference(orderNumber: string): boolean {
+  return orderNumber.startsWith(FAIR_ISSUE_PREFIX);
+}
+
+/**
  * Deuda con el kardex: `createInventoryMovementBatchResilient` deja pasar la
  * transacción aunque alguna línea falle (stock insuficiente por una venta
  * cruzada, producto borrado). Antes eso solo quedaba en `console.error`, así
@@ -28,7 +45,8 @@ export async function recordInventoryIssues(
   tx: PrismaTx,
   input: {
     storeId: string;
-    orderId: string;
+    /** Null para deuda que no pertenece a un pedido (cierre de feria). */
+    orderId: string | null;
     orderNumber: string;
     kind: OrderInventoryIssueKind;
     failed: FailedInventoryLine[];
@@ -136,12 +154,19 @@ export async function retryOrderInventoryIssue(
     select: { acqPrice: true, price: true },
   });
   const decrement = issue.kind === OrderInventoryIssueKind.DECREMENT;
+  const fromFair = issue.orderId === null && isFairIssueReference(issue.orderNumber);
   const movement = await createInventoryMovement(tx, {
     productId: issue.productId,
     storeId: input.storeId,
-    type: decrement ? "ORDER_PLACED" : "ORDER_CANCELLED",
+    type: fromFair
+      ? "FESTIVAL_RETURN"
+      : decrement
+        ? "ORDER_PLACED"
+        : "ORDER_CANCELLED",
     quantity: decrement ? -issue.quantity : issue.quantity,
-    reason: `Reintento de inventario · pedido #${issue.orderNumber}`,
+    reason: fromFair
+      ? `Reintento de devolución · ${issue.orderNumber}`
+      : `Reintento de inventario · pedido #${issue.orderNumber}`,
     description: `Línea que falló al ${decrement ? "descontar" : "devolver"}: ${issue.reason}`,
     referenceId: issue.orderId ?? undefined,
     cost: Number(product?.acqPrice) || 0,
