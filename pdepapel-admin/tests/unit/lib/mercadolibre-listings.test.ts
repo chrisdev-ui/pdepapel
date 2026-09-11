@@ -123,9 +123,15 @@ describe("Mercado Libre listing publication", () => {
         mode: "me2",
         free_shipping: true,
         local_pick_up: false,
+        // Las medidas con las que se cotizó el envío viajan con el ítem.
+        dimensions: "4x20x28,500",
       },
       attributes: expect.arrayContaining([
         { id: "COLOR", value_name: "Rosado" },
+        { id: "PACKAGE_HEIGHT", value_name: "4 cm" },
+        { id: "PACKAGE_WIDTH", value_name: "20 cm" },
+        { id: "PACKAGE_LENGTH", value_name: "28 cm" },
+        { id: "PACKAGE_WEIGHT", value_name: "500 g" },
         { id: "BRAND", value_name: "P de Papel" },
         { id: "MPN", value_name: "AGENDA-01" },
         { id: "GTIN", value_name: "7701234567890" },
@@ -280,6 +286,48 @@ describe("Mercado Libre listing publication", () => {
     expect(request).toHaveBeenCalledTimes(1);
   });
 
+  it("treats a Mercado Libre outage during the category check as transient, not as a draft problem", async () => {
+    const request = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ message: "Category not found" }), {
+        status: 503,
+      }),
+    );
+
+    await expect(
+      publishMercadoLibreListing(
+        {
+          id: "listing-id",
+          connectionId: "connection-id",
+          categoryId: "MCO1234",
+          listingType: "gold_special",
+          marketplacePrice: 19_900,
+          stockSafetyBuffer: 0,
+          metadata: { attributes: [] },
+          product: {
+            id: "product-id",
+            name: "Agenda kawaii",
+            description: "",
+            stock: 5,
+            sku: "AGENDA-01",
+            brand: null,
+            gtin: null,
+            mpn: null,
+            isArchived: false,
+            images: [{ url: "https://images.example.com/agenda.jpg" }],
+          },
+        },
+        request,
+      ),
+    ).rejects.toMatchObject({
+      kind: "transient",
+      message: expect.stringContaining("intenta nuevamente"),
+      requiresDraftReview: false,
+    });
+
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+
   it("stops before creating an item when a required category attribute is missing", async () => {
     const request = vi
       .fn()
@@ -369,5 +417,56 @@ describe("Mercado Libre listing publication", () => {
     });
 
     expect(request).not.toHaveBeenCalled();
+  });
+
+  it("refuses to publish below the acquisition cost unless the loss was authorized with a reason", async () => {
+    const request = vi.fn();
+    const base = {
+      id: "listing-id",
+      connectionId: "connection-id",
+      categoryId: "MCO1234",
+      listingType: "gold_special",
+      marketplacePrice: 3_500,
+      stockSafetyBuffer: 0,
+      product: {
+        id: "product-id",
+        name: "Agenda kawaii",
+        description: "",
+        stock: 5,
+        sku: "AGENDA-01",
+        brand: null,
+        gtin: null,
+        mpn: null,
+        isArchived: false,
+        acqPrice: 4_000,
+        images: [{ url: "https://images.example.com/agenda.jpg" }],
+      },
+    };
+
+    await expect(
+      publishMercadoLibreListing({ ...base, metadata: { attributes: [] } }, request),
+    ).rejects.toMatchObject({
+      kind: "review",
+      step: "precio",
+      field: "marketplacePrice",
+      message: expect.stringContaining("por debajo del costo"),
+    });
+    expect(request).not.toHaveBeenCalled();
+
+    // Con la autorización guardada, la validación sigue hacia la categoría.
+    request.mockResolvedValueOnce(new Response(JSON.stringify({ message: "not found" }), { status: 404 }));
+    await expect(
+      publishMercadoLibreListing(
+        {
+          ...base,
+          metadata: {
+            attributes: [],
+            belowCostOverride: { reason: "liquidación", floor: 4_000, price: 3_500, at: "2026-09-11T00:00:00.000Z" },
+          },
+        },
+        request,
+      ),
+    ).rejects.toMatchObject({ step: "categoria" });
+    expect(request).toHaveBeenCalledTimes(1);
   });
 });

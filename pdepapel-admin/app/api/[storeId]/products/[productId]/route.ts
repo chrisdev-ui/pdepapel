@@ -6,6 +6,7 @@ import {
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import cloudinaryInstance from "@/lib/cloudinary";
 import { createCorsHeaders } from "@/lib/cors";
+import { parseTransportationCost } from "@/lib/product-costs";
 import prismadb from "@/lib/prismadb";
 import { PUBLIC_REVIEW_INCLUDE } from "@/lib/review-moderation";
 import {
@@ -167,6 +168,7 @@ export async function PATCH(
       name,
       price,
       acqPrice,
+      transportationCost,
       categoryId,
       colorId,
       sizeId,
@@ -350,6 +352,7 @@ export async function PATCH(
           ...(newSku && { sku: newSku }),
           price,
           acqPrice,
+          transportationCost: parseTransportationCost(transportationCost),
           categoryId,
           colorId,
           sizeId,

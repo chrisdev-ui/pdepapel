@@ -12,6 +12,18 @@ export type MercadoLibreCategorySuggestion = {
   categoryName: string;
   domainId: string | null;
   domainName: string | null;
+  /** Ruta desde la raíz (nombres), por ejemplo Hogar › Cocina › Termos. */
+  path: string[];
+};
+
+/** Inspecciones simultáneas contra Mercado Libre por búsqueda de categoría. */
+export const MAX_CONCURRENT_CATEGORY_INSPECTIONS = 3;
+
+/** Respuesta de `GET /marketplaces/mercadolibre/categories`. */
+export type MercadoLibreCategorySearchResponse = {
+  suggestions: MercadoLibreCategorySuggestion[];
+  /** Sugerencias que no se pudieron verificar porque Mercado Libre no respondió. */
+  unavailableCount: number;
 };
 
 export type MercadoLibreCategoryAttribute = {
@@ -72,8 +84,21 @@ export function parseMercadoLibreCategorySuggestions(
           typeof suggestion.domain_name === "string"
             ? suggestion.domain_name
             : null,
+        path: [],
       },
     ];
+  });
+}
+
+/** Nombres de `path_from_root` de una categoría (`GET /categories/{id}`). */
+export function parseMercadoLibreCategoryPath(payload: unknown): string[] {
+  const category = asRecord(payload);
+  if (!category || !Array.isArray(category.path_from_root)) return [];
+  return category.path_from_root.flatMap((node) => {
+    const record = asRecord(node);
+    return record && typeof record.name === "string" && record.name.trim()
+      ? [record.name.trim()]
+      : [];
   });
 }
 

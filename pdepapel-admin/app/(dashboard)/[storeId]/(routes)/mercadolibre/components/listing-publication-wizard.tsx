@@ -11,7 +11,8 @@ import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MeasurementInput } from "@/components/ui/measurement-input";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { RadioCards } from "@/components/ui/radio-cards";
+import { SectionCard } from "@/components/ui/section-card";
 import {
   Select,
   SelectContent,
@@ -23,7 +24,16 @@ import {
 import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  getListingWizardStepError,
+  BELOW_COST_REASON_MAX_LENGTH,
+  getListingCostFloor,
+  isPriceBelowCost,
+} from "@/lib/mercadolibre/listing-price-guard";
+import { cn } from "@/lib/utils";
+import {
+  LISTING_WIZARD_STEPS,
+  getListingWizardStepIssue,
+  getListingWizardStepLabel,
+  type ListingWizardField,
   type ListingWizardStep,
 } from "@/lib/mercadolibre/listing-wizard";
 import {
@@ -36,7 +46,12 @@ import {
   Truck,
 } from "lucide-react";
 import Image from "next/image";
-import { useState, type Dispatch, type SetStateAction } from "react";
+import {
+  useEffect,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 
 export type ListingPublicationForm = {
   productId: string;
@@ -55,6 +70,8 @@ export type ListingPublicationForm = {
   packageWidthCm: string;
   packageLengthCm: string;
   packageWeightGrams: string;
+  /** Motivo para publicar por debajo del costo de adquisición (vacío si no aplica). */
+  belowCostReason: string;
 };
 
 export type ListingPublicationProduct = {
@@ -63,16 +80,50 @@ export type ListingPublicationProduct = {
   sku: string;
   stock: number;
   acqPrice: number | null;
+  transportationCost: number | null;
   images: { url: string; isMain?: boolean }[];
   price: number;
   category?: { id: string; name: string } | null;
+  /** Sin GTIN legítimo: la ficha no exige el código de barras. */
+  hasNoProductIdentifier?: boolean;
 };
+
+/** Error señalado sobre un campo concreto del asistente (o general si es null). */
+export type ListingPublicationIssue = {
+  field: ListingWizardField | null;
+  message: string;
+};
+
+/** Id DOM del control asociado a cada campo validado. */
+function getWizardFieldElementId(field: ListingWizardField): string {
+  if (field.startsWith("attribute:")) {
+    return `mercadolibre-attribute-${field.slice("attribute:".length)}`;
+  }
+  switch (field) {
+    case "productId":
+      return "mercadolibre-product";
+    case "familyName":
+      return "mercadolibre-family-name";
+    case "marketplacePrice":
+      return "mercadolibre-price";
+    case "categoryId":
+      return "mercadolibre-category";
+    case "imageUrls":
+      return "mercadolibre-images";
+    case "belowCostReason":
+      return "mercadolibre-below-cost-reason";
+    default:
+      return "mercadolibre-attributes";
+  }
+}
 
 export type ListingPublicationCategorySuggestion = {
   categoryId: string;
   categoryName: string;
   domainId: string | null;
   domainName: string | null;
+  /** Ruta desde la raíz (nombres) que Mercado Libre reporta para la categoría. */
+  path: string[];
 };
 
 export type ListingPublicationCategoryAttribute = {
@@ -145,6 +196,23 @@ export type ListingPublicationActiveSaleConditions = {
 type ListingPublicationWizardProps = {
   storeId: string;
   editing: boolean;
+  /** El producto ya no se cambia: la publicación (o el borrador) existe. */
+  productLocked?: boolean;
+  /** Hay borrador guardado: cerrar no pierde lo completado. */
+  draftSaved?: boolean;
+  /** Paso donde abrir (por ejemplo el que Mercado Libre rechazó). */
+  initialStep?: ListingWizardStep;
+  /** Campo y mensaje a señalar al abrir (rechazo de Mercado Libre). */
+  initialIssue?: ListingPublicationIssue | null;
+  /**
+   * Guarda lo completado hasta el paso indicado antes de avanzar. Devuelve
+   * false para quedarse en el paso (el error ya fue mostrado).
+   */
+  onPersistStep?: (step: ListingWizardStep) => Promise<boolean>;
+  /** Avisa el paso visible para que el diálogo cambie su título. */
+  onStepChange?: (step: ListingWizardStep) => void;
+  /** Aviso no bloqueante de la búsqueda de categorías (resultados parciales). */
+  suggestionsNotice?: string | null;
   activePublication: boolean;
   activeSaleConditions: ListingPublicationActiveSaleConditions | null;
   canPublishDirectly: boolean;
@@ -170,7 +238,6 @@ type ListingPublicationWizardProps = {
   isSaving: boolean;
   isSavingTemplate: boolean;
   isSavingQuickProfile: boolean;
-  onError: (message: string) => void;
   onFormChange: (key: keyof ListingPublicationForm, value: string) => void;
   onProductChange: (
     productId: string,
@@ -179,7 +246,7 @@ type ListingPublicationWizardProps = {
   onSearchCategories: () => Promise<void>;
   onCategoryChange: (categoryId: string) => void;
   onLoadCategoryAttributes: () => Promise<boolean>;
-  onLoadPriceEstimate: () => Promise<void>;
+  onLoadPriceEstimate: () => Promise<boolean>;
   onLoadShippingComparison: () => Promise<unknown>;
   onApplyActiveSaleConditions: () => Promise<void>;
   onListingTypeChange: (listingType: string) => void;
@@ -191,12 +258,8 @@ type ListingPublicationWizardProps = {
   onSaveAndPublish: () => Promise<void>;
 };
 
-const steps: { number: ListingWizardStep; label: string }[] = [
-  { number: 1, label: "Producto" },
-  { number: 2, label: "Categoría y fotos" },
-  { number: 3, label: "Ficha técnica" },
-  { number: 4, label: "Revisar y publicar" },
-];
+/** Valor centinela del selector de lista: "ninguna coincide, escribo otro". */
+const OTHER_LIST_VALUE = "__otro_valor__";
 
 const currencyFormatter = new Intl.NumberFormat("es-CO", {
   style: "currency",
@@ -258,6 +321,13 @@ function updateAttributeValue(
 export function ListingPublicationWizard({
   storeId,
   editing,
+  productLocked = editing,
+  draftSaved = editing,
+  initialStep = 1,
+  initialIssue = null,
+  onPersistStep,
+  onStepChange,
+  suggestionsNotice = null,
   activePublication,
   activeSaleConditions,
   canPublishDirectly,
@@ -283,7 +353,6 @@ export function ListingPublicationWizard({
   isSaving,
   isSavingTemplate,
   isSavingQuickProfile,
-  onError,
   onFormChange,
   onProductChange,
   onSearchCategories,
@@ -300,10 +369,48 @@ export function ListingPublicationWizard({
   onSave,
   onSaveAndPublish,
 }: ListingPublicationWizardProps) {
-  const [step, setStep] = useState<ListingWizardStep>(1);
+  const [step, setStep] = useState<ListingWizardStep>(initialStep);
+  const [issue, setIssue] = useState<ListingPublicationIssue | null>(
+    initialIssue,
+  );
+  /** Atributos de lista en los que se eligió escribir un valor libre. */
+  const [freeValueAttributeIds, setFreeValueAttributeIds] = useState<
+    string[]
+  >([]);
+
+  useEffect(() => {
+    onStepChange?.(step);
+  }, [step, onStepChange]);
+  const productHasNoIdentifier = Boolean(
+    selectedProduct?.hasNoProductIdentifier,
+  );
   const requiredAttributes = categoryAttributes.filter(
     (attribute) => attribute.required,
   );
+  const issueFor = (field: ListingWizardField) =>
+    issue?.field === field ? issue.message : null;
+
+  // Al señalar un campo se lleva el foco allí (y el paso ya es el correcto).
+  useEffect(() => {
+    if (!issue?.field) return;
+    const element = document.getElementById(
+      getWizardFieldElementId(issue.field),
+    );
+    if (!(element instanceof HTMLElement)) return;
+    element.scrollIntoView?.({ block: "center" });
+    element.focus({ preventScroll: true });
+  }, [issue, step]);
+
+  const changeField = (key: keyof ListingPublicationForm, value: string) => {
+    setIssue((current) => {
+      if (!current?.field) return current;
+      const clears =
+        current.field === key ||
+        (key === "attributes" && current.field.startsWith("attribute:"));
+      return clears ? null : current;
+    });
+    onFormChange(key, value);
+  };
   const unitsToPublish = Math.max(
     (selectedProduct?.stock ?? 0) -
       Math.max(Number(form.stockSafetyBuffer) || 0, 0),
@@ -311,6 +418,17 @@ export function ListingPublicationWizard({
   );
   const hasPublishableStock = unitsToPublish > 0;
   const marketplacePrice = Number(form.marketplacePrice);
+  const costFloor = getListingCostFloor({
+    acqPrice: selectedProduct?.acqPrice ?? null,
+    transportationCost: selectedProduct?.transportationCost ?? null,
+  });
+  const isBelowCost =
+    Number.isFinite(marketplacePrice) &&
+    isPriceBelowCost(marketplacePrice, {
+      acqPrice: selectedProduct?.acqPrice ?? null,
+      transportationCost: selectedProduct?.transportationCost ?? null,
+    });
+  const unitExtraCosts = Math.max(0, selectedProduct?.transportationCost ?? 0);
   const hasMarketplacePrice =
     Number.isFinite(marketplacePrice) && marketplacePrice > 0;
   const priceDifference =
@@ -335,11 +453,13 @@ export function ListingPublicationWizard({
       ? shippingComparison.sellerOffersFree
       : shippingComparison.buyerPays
     : null;
-  const estimatedSellerShippingCost = selectedShippingEstimate
-    ? selectedShippingEstimate.sellerCost
-    : form.freeShipping || shippingComparison
-      ? null
-      : 0;
+  // Solo cuesta el envío que la tienda regala; si lo paga el comprador, la
+  // ganancia no lo descuenta.
+  const estimatedSellerShippingCost = !form.freeShipping
+    ? 0
+    : selectedShippingEstimate
+      ? selectedShippingEstimate.sellerCost
+      : null;
   const financingCost = priceEstimate?.financingAddOnFee ?? 0;
   const baseMarketplaceFee = priceEstimate
     ? Math.max(priceEstimate.saleFeeAmount - financingCost, 0)
@@ -349,7 +469,8 @@ export function ListingPublicationWizard({
       ? marketplacePrice -
         priceEstimate.saleFeeAmount -
         estimatedSellerShippingCost -
-        (selectedProduct?.acqPrice ?? 0)
+        (selectedProduct?.acqPrice ?? 0) -
+        unitExtraCosts
       : null;
   const profitDifference =
     estimatedProfit !== null && hasTargetProfit
@@ -367,7 +488,7 @@ export function ListingPublicationWizard({
       : null;
 
   const goToNextStep = async () => {
-    const validationError = getListingWizardStepError({
+    const validationIssue = getListingWizardStepIssue({
       step,
       productId: form.productId,
       familyName: form.familyName,
@@ -376,22 +497,52 @@ export function ListingPublicationWizard({
       imageUrls: form.imageUrls,
       attributes: form.attributes,
       categoryAttributes,
+      acquisitionCost: selectedProduct?.acqPrice ?? null,
+      transportationCost: selectedProduct?.transportationCost ?? null,
+      belowCostReason: form.belowCostReason,
+      productHasNoIdentifier,
     });
-    if (validationError) {
-      onError(validationError);
+    if (validationIssue) {
+      setIssue({ field: validationIssue.field, message: validationIssue.message });
       return;
     }
+    setIssue(null);
 
+    // Primero se guarda lo completado; si falla, no se avanza.
+    if (onPersistStep && !(await onPersistStep(step))) return;
+
+    // Solo se vuelve a pedir la ficha o las comisiones cuando cambió lo que
+    // las determina; el padre decide si el dato cargado sigue vigente.
     if (step === 2) {
       const didLoadAttributes = await onLoadCategoryAttributes();
       if (!didLoadAttributes) return;
     }
 
     if (step === 3) {
-      await onLoadPriceEstimate();
+      const didLoadPrices = await onLoadPriceEstimate();
+      if (!didLoadPrices) return;
     }
 
     setStep((currentStep) => Math.min(currentStep + 1, 4) as ListingWizardStep);
+  };
+
+  const goToPreviousStep = () => {
+    setIssue(null);
+    setStep((currentStep) => Math.max(currentStep - 1, 1) as ListingWizardStep);
+  };
+
+  const renderFieldIssue = (field: ListingWizardField) => {
+    const message = issueFor(field);
+    if (!message) return null;
+    return (
+      <p
+        id={`${getWizardFieldElementId(field)}-error`}
+        className="text-xs font-medium text-destructive"
+        role="alert"
+      >
+        {message}
+      </p>
+    );
   };
 
   return (
@@ -404,11 +555,25 @@ export function ListingPublicationWizard({
           {error}
         </p>
       ) : null}
+      {issue && !issue.field ? (
+        <p
+          className="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
+          role="alert"
+        >
+          {issue.message}
+        </p>
+      ) : null}
+      {draftSaved && !editing ? (
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Check className="h-3.5 w-3.5 text-success" />
+          Borrador guardado: puedes cerrar y seguir después desde la lista.
+        </p>
+      ) : null}
       <ol
         className="grid grid-cols-4 gap-2"
         aria-label="Pasos de la publicación"
       >
-        {steps.map((wizardStep) => {
+        {LISTING_WIZARD_STEPS.map((wizardStep) => {
           const isCurrent = wizardStep.number === step;
           const isComplete = wizardStep.number < step;
           return (
@@ -434,20 +599,43 @@ export function ListingPublicationWizard({
           );
         })}
       </ol>
+      <p className="text-sm font-medium text-foreground sm:hidden">
+        Paso {step} de {LISTING_WIZARD_STEPS.length} ·{" "}
+        {getListingWizardStepLabel(step)}
+      </p>
 
       {step === 1 ? (
         <div className="space-y-4">
+          <SectionCard
+            id="mercadolibre-paso-producto"
+            title="Producto"
+            description="El producto local que se publica y el nombre de familia que verá Mercado Libre."
+          >
           <div className="grid gap-2">
-            <Label htmlFor="mercadolibre-product">Producto de P de Papel</Label>
+            <Label htmlFor="mercadolibre-product" required>
+              Producto de P de Papel
+            </Label>
             <AsyncProductSelect
               value={form.productId ?? ""}
               id="mercadolibre-product"
               modal
-              disabled={editing}
+              disabled={productLocked}
               ariaLabel="Producto local para la publicación"
               placeholder="Buscar por nombre o SKU..."
-              onChange={onProductChange}
+              onChange={(productId, product) => {
+                setIssue((current) =>
+                  current?.field === "productId" ? null : current,
+                );
+                onProductChange(productId, product);
+              }}
             />
+            {renderFieldIssue("productId")}
+            {productLocked && !editing ? (
+              <p className="text-xs text-muted-foreground">
+                El borrador ya quedó ligado a este producto. Para publicar otro,
+                cierra y crea una publicación nueva.
+              </p>
+            ) : null}
             {selectedProduct ? (
               <div className="space-y-1 text-xs text-muted-foreground">
                 <p>
@@ -464,18 +652,25 @@ export function ListingPublicationWizard({
               </div>
             ) : null}
             <div className="grid gap-2 pt-1">
-              <Label htmlFor="mercadolibre-family-name">
+              <Label htmlFor="mercadolibre-family-name" required>
                 Nombre de familia en Mercado Libre
               </Label>
               <Input
                 id="mercadolibre-family-name"
                 value={form.familyName}
                 onChange={(event) =>
-                  onFormChange("familyName", event.target.value)
+                  changeField("familyName", event.target.value)
                 }
                 placeholder="Ej. Termo Owala"
                 maxLength={120}
+                aria-invalid={issueFor("familyName") ? true : undefined}
+                aria-describedby={
+                  issueFor("familyName")
+                    ? "mercadolibre-family-name-error"
+                    : undefined
+                }
               />
+              {renderFieldIssue("familyName")}
               <p className="text-xs text-muted-foreground">
                 Es el nombre común de todas las variaciones. Usa el producto
                 base sin color, talla o diseño; Mercado Libre completa el título
@@ -495,8 +690,14 @@ export function ListingPublicationWizard({
               </div>
             ) : null}
           </div>
+          </SectionCard>
+          <SectionCard
+            id="mercadolibre-paso-precio"
+            title="Precio en Mercado Libre"
+            description="Independiente del precio de la tienda en línea; incluye la comisión antes de guardar."
+          >
           <div className="grid gap-2">
-            <Label htmlFor="mercadolibre-price">
+            <Label htmlFor="mercadolibre-price" required>
               Precio de venta en Mercado Libre
             </Label>
             <CurrencyInput
@@ -504,13 +705,15 @@ export function ListingPublicationWizard({
               inputMode="numeric"
               value={toCurrencyInputValue(form.marketplacePrice)}
               onChange={(value) =>
-                onFormChange(
+                changeField(
                   "marketplacePrice",
                   value === undefined ? "" : String(value),
                 )
               }
               placeholder="Ej. 18500"
+              aria-invalid={issueFor("marketplacePrice") ? true : undefined}
             />
+            {renderFieldIssue("marketplacePrice")}
             <div className="space-y-1 text-xs text-muted-foreground">
               <p>
                 Es el precio que verá la clienta en Mercado Libre. Nunca cambia
@@ -578,7 +781,7 @@ export function ListingPublicationWizard({
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="mercadolibre-minimum-margin">
-                  Ganancia objetivo después de costo y comisión (opcional)
+                  Ganancia objetivo después de costo y comisión
                 </Label>
                 <CurrencyInput
                   id="mercadolibre-minimum-margin"
@@ -631,16 +834,17 @@ export function ListingPublicationWizard({
               </div>
             </div>
           </details>
+          </SectionCard>
         </div>
       ) : null}
 
       {step === 2 ? (
         <div className="space-y-4">
-          <div className="grid gap-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <Label htmlFor="mercadolibre-category">
-                Categoría de Mercado Libre
-              </Label>
+          <SectionCard
+            id="mercadolibre-paso-categoria"
+            title="Categoría"
+            description="Administración comprueba que sea una categoría final de Mercado Libre antes de cargar la ficha técnica."
+            action={
               <Button
                 type="button"
                 size="sm"
@@ -650,19 +854,30 @@ export function ListingPublicationWizard({
               >
                 {isSearchingCategories ? "Buscando…" : "Sugerir categoría"}
               </Button>
-            </div>
+            }
+          >
+          <div className="grid gap-2">
+            <Label htmlFor="mercadolibre-category" required>
+              Categoría de Mercado Libre
+            </Label>
             <Input
               id="mercadolibre-category"
               value={form.categoryId}
-              onChange={(event) => onCategoryChange(event.target.value)}
+              onChange={(event) => {
+                setIssue((current) =>
+                  current?.field === "categoryId" ? null : current,
+                );
+                onCategoryChange(event.target.value);
+              }}
               placeholder="Ej. MCO..."
               autoCapitalize="characters"
               spellCheck={false}
+              aria-invalid={issueFor("categoryId") ? true : undefined}
             />
+            {renderFieldIssue("categoryId")}
             <p className="text-xs text-muted-foreground">
-              Usa una sugerencia y continúa: Administración comprueba que sea
-              una categoría final de Mercado Libre antes de cargar la ficha
-              técnica y de publicar.
+              Elige una sugerencia (la lista se queda mientras escribes) o pega
+              el código MCO de una categoría final.
             </p>
             {verifiedCategoryId === form.categoryId.trim().toUpperCase() ? (
               <p className="flex items-center gap-1.5 text-xs font-medium text-success">
@@ -671,43 +886,99 @@ export function ListingPublicationWizard({
               </p>
             ) : null}
             {suggestions.length > 0 ? (
-              <div className="grid gap-2 rounded-md border p-2">
-                {suggestions.map((suggestion) => (
-                  <Button
-                    key={`${suggestion.domainId}-${suggestion.categoryId}`}
-                    type="button"
-                    variant="ghost"
-                    className="h-auto justify-start whitespace-normal px-2 py-2 text-left"
-                    onClick={() => onCategoryChange(suggestion.categoryId)}
-                  >
-                    <span>
-                      <span className="block font-medium">
-                        {suggestion.categoryName}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {suggestion.categoryId}
-                      </span>
-                    </span>
-                  </Button>
-                ))}
-              </div>
+              <ul
+                className="grid gap-1 rounded-md border p-1"
+                aria-label="Categorías sugeridas por Mercado Libre"
+              >
+                {suggestions.map((suggestion) => {
+                  const selected =
+                    form.categoryId.trim().toUpperCase() ===
+                    suggestion.categoryId.toUpperCase();
+                  const path =
+                    suggestion.path.length > 0
+                      ? suggestion.path.join(" › ")
+                      : suggestion.domainName;
+                  return (
+                    <li key={`${suggestion.domainId}-${suggestion.categoryId}`}>
+                      <button
+                        type="button"
+                        className={cn(
+                          "flex w-full items-start gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                          selected && "bg-accent/60",
+                        )}
+                        aria-pressed={selected}
+                        onClick={() => {
+                          setIssue((current) =>
+                            current?.field === "categoryId" ? null : current,
+                          );
+                          onCategoryChange(suggestion.categoryId);
+                        }}
+                      >
+                        <span
+                          className={cn(
+                            "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
+                            selected
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-border",
+                          )}
+                          aria-hidden="true"
+                        >
+                          {selected ? <Check className="h-3 w-3" /> : null}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block font-medium">
+                            {suggestion.categoryName}
+                          </span>
+                          {path ? (
+                            <span className="block truncate text-xs text-muted-foreground">
+                              {path}
+                            </span>
+                          ) : null}
+                          <span className="block text-xs text-muted-foreground">
+                            {suggestion.categoryId}
+                            {suggestion.domainName && suggestion.path.length > 0
+                              ? ` · ${suggestion.domainName}`
+                              : ""}
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+            {suggestionsNotice ? (
+              <p
+                className="flex items-start gap-1.5 text-xs text-muted-foreground"
+                role="status"
+              >
+                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                {suggestionsNotice}
+              </p>
             ) : null}
           </div>
-          <div className="grid gap-3 rounded-md border bg-muted/20 p-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <p className="text-sm font-medium">Fotos para Mercado Libre</p>
-                <p className="text-xs text-muted-foreground">
-                  Selecciona al menos una para publicar. Tres o más ayudan a la
-                  clienta a conocer mejor el producto. La primera será la
-                  portada.
-                </p>
-              </div>
+          </SectionCard>
+          <SectionCard
+            id="mercadolibre-paso-fotos"
+            title="Fotos para Mercado Libre"
+            description="Al menos una es obligatoria. Tres o más ayudan a la clienta a conocer mejor el producto; la primera será la portada."
+            action={
               <Badge variant="secondary">
                 {form.imageUrls.length} seleccionada
                 {form.imageUrls.length === 1 ? "" : "s"}
               </Badge>
-            </div>
+            }
+          >
+          <div
+            id="mercadolibre-images"
+            tabIndex={-1}
+            className={cn(
+              "grid gap-3 rounded-md outline-none",
+              issueFor("imageUrls") && "rounded-md border border-destructive p-2",
+            )}
+            aria-invalid={issueFor("imageUrls") ? true : undefined}
+          >
+            {renderFieldIssue("imageUrls")}
             {selectedProduct?.images.length ? (
               <>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -718,6 +989,9 @@ export function ListingPublicationWizard({
                         key={image.url}
                         type="button"
                         onClick={() =>
+                          (setIssue((current) =>
+                            current?.field === "imageUrls" ? null : current,
+                          ),
                           setForm((current) => ({
                             ...current,
                             imageUrls: selected
@@ -725,7 +999,7 @@ export function ListingPublicationWizard({
                                   (url) => url !== image.url,
                                 )
                               : [...current.imageUrls, image.url],
-                          }))
+                          })))
                         }
                         className={`relative aspect-square overflow-hidden rounded-md border-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? "border-primary" : "border-transparent opacity-60 hover:opacity-100"}`}
                         aria-label={
@@ -806,31 +1080,31 @@ export function ListingPublicationWizard({
               </div>
             )}
           </div>
+          </SectionCard>
         </div>
       ) : null}
 
       {step === 3 ? (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/20 p-3">
-            <div>
-              <p className="text-sm font-medium">Ficha técnica</p>
-              <p className="text-xs text-muted-foreground">
-                Completa los campos que Mercado Libre pide para esta categoría.
-              </p>
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => void onLoadCategoryAttributes()}
-              disabled={isLoadingCategoryAttributes}
-            >
-              {isLoadingCategoryAttributes ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : null}
-              Actualizar campos
-            </Button>
-          </div>
+          <SectionCard
+            id="mercadolibre-paso-ficha"
+            title="Ficha técnica"
+            description="Completa los campos que Mercado Libre pide para esta categoría."
+            action={
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void onLoadCategoryAttributes()}
+                disabled={isLoadingCategoryAttributes}
+              >
+                {isLoadingCategoryAttributes ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
+                Actualizar campos
+              </Button>
+            }
+          >
           <div
             className="rounded-md border border-dashed bg-background/60 p-3 text-sm"
             aria-live="polite"
@@ -917,28 +1191,122 @@ export function ListingPublicationWizard({
               {requiredAttributes.map((attribute) => {
                 const currentValue =
                   getAttributeValues(form.attributes).get(attribute.id) ?? "";
+                const attributeField: ListingWizardField = `attribute:${attribute.id.toUpperCase()}`;
+                const attributeIssue = issueFor(attributeField);
+                const gtinExempt =
+                  attribute.id.toUpperCase() === "GTIN" && productHasNoIdentifier;
+                const hasList = attribute.values.length > 0;
+                const valueInList = attribute.values.some(
+                  (option) => option.name === currentValue,
+                );
+                // Valor libre: se pidió explícitamente o el valor guardado no
+                // está en la lista (por ejemplo, viene de otra versión de ella).
+                const usesFreeValue =
+                  hasList &&
+                  (freeValueAttributeIds.includes(attribute.id) ||
+                    (currentValue !== "" && !valueInList));
                 return (
                   <div key={attribute.id} className="grid gap-1">
-                    <Label htmlFor={`mercadolibre-attribute-${attribute.id}`}>
-                      {attribute.name}{" "}
-                      <span className="text-destructive">*</span>
+                    <Label
+                      htmlFor={`mercadolibre-attribute-${attribute.id}`}
+                      required={!gtinExempt}
+                    >
+                      {attribute.name}
                     </Label>
-                    {attribute.values.length > 0 ? (
+                    {gtinExempt ? (
+                      <>
+                        <Input
+                          id={`mercadolibre-attribute-${attribute.id}`}
+                          value={currentValue}
+                          readOnly={!currentValue}
+                          placeholder="Sin código de barras (marcado en el producto)"
+                          onChange={(event) =>
+                            changeField(
+                              "attributes",
+                              updateAttributeValue(
+                                form.attributes,
+                                attribute.id,
+                                event.target.value,
+                              ),
+                            )
+                          }
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          El producto está marcado sin identificador: Mercado
+                          Libre recibe el motivo en lugar del código.
+                        </p>
+                      </>
+                    ) : hasList && usesFreeValue ? (
+                      <>
+                        <Input
+                          id={`mercadolibre-attribute-${attribute.id}`}
+                          value={currentValue}
+                          onChange={(event) =>
+                            changeField(
+                              "attributes",
+                              updateAttributeValue(
+                                form.attributes,
+                                attribute.id,
+                                event.target.value,
+                              ),
+                            )
+                          }
+                          aria-invalid={attributeIssue ? true : undefined}
+                          placeholder={`Escribe ${attribute.name.toLowerCase()}`}
+                        />
+                        <button
+                          type="button"
+                          className="justify-self-start text-xs text-primary underline-offset-2 hover:underline"
+                          onClick={() => {
+                            setFreeValueAttributeIds((current) =>
+                              current.filter((id) => id !== attribute.id),
+                            );
+                            changeField(
+                              "attributes",
+                              updateAttributeValue(
+                                form.attributes,
+                                attribute.id,
+                                "",
+                              ),
+                            );
+                          }}
+                        >
+                          Elegir de la lista de Mercado Libre
+                        </button>
+                      </>
+                    ) : hasList ? (
                       <Select
                         value={currentValue}
-                        onValueChange={(value) =>
-                          onFormChange(
+                        onValueChange={(value) => {
+                          if (value === OTHER_LIST_VALUE) {
+                            setFreeValueAttributeIds((current) =>
+                              current.includes(attribute.id)
+                                ? current
+                                : [...current, attribute.id],
+                            );
+                            changeField(
+                              "attributes",
+                              updateAttributeValue(
+                                form.attributes,
+                                attribute.id,
+                                "",
+                              ),
+                            );
+                            return;
+                          }
+                          changeField(
                             "attributes",
                             updateAttributeValue(
                               form.attributes,
                               attribute.id,
                               value,
                             ),
-                          )
-                        }
+                          );
+                        }}
                       >
                         <SelectTrigger
                           id={`mercadolibre-attribute-${attribute.id}`}
+                          aria-invalid={attributeIssue ? true : undefined}
                         >
                           <SelectValue placeholder="Selecciona una opción" />
                         </SelectTrigger>
@@ -949,6 +1317,11 @@ export function ListingPublicationWizard({
                                 {option.name}
                               </SelectItem>
                             ))}
+                          </SelectGroup>
+                          <SelectGroup>
+                            <SelectItem value={OTHER_LIST_VALUE}>
+                              Ninguna coincide: escribir otro valor
+                            </SelectItem>
                           </SelectGroup>
                         </SelectContent>
                       </Select>
@@ -962,7 +1335,7 @@ export function ListingPublicationWizard({
                             : undefined
                         }
                         onChange={(event) =>
-                          onFormChange(
+                          changeField(
                             "attributes",
                             updateAttributeValue(
                               form.attributes,
@@ -971,6 +1344,7 @@ export function ListingPublicationWizard({
                             ),
                           )
                         }
+                        aria-invalid={attributeIssue ? true : undefined}
                         placeholder={
                           attribute.valueType === "number"
                             ? "Ej. 12"
@@ -978,6 +1352,7 @@ export function ListingPublicationWizard({
                         }
                       />
                     )}
+                    {renderFieldIssue(attributeField)}
                   </div>
                 );
               })}
@@ -990,14 +1365,14 @@ export function ListingPublicationWizard({
           )}
           <details className="rounded-md border p-3">
             <summary className="cursor-pointer text-sm font-medium">
-              Características adicionales (opcional)
+              Características adicionales
             </summary>
             <div className="mt-3 grid gap-2">
               <Textarea
                 id="mercadolibre-attributes"
                 value={form.attributes}
                 onChange={(event) =>
-                  onFormChange("attributes", event.target.value)
+                  changeField("attributes", event.target.value)
                 }
                 placeholder={
                   "Una por línea, por ejemplo:\nCOLOR=Rosado\nMATERIAL=Plástico"
@@ -1010,12 +1385,18 @@ export function ListingPublicationWizard({
               </p>
             </div>
           </details>
+          </SectionCard>
         </div>
       ) : null}
 
       {step === 4 ? (
         <div className="space-y-4">
-          <div className="grid gap-3 rounded-md border bg-muted/20 p-4 text-sm sm:grid-cols-2">
+          <SectionCard
+            id="mercadolibre-paso-resumen"
+            title="Resumen"
+            description="Lo que se enviará a Mercado Libre al publicar."
+          >
+          <div className="grid gap-3 text-sm sm:grid-cols-2">
             <p>
               <span className="block text-xs text-muted-foreground">
                 Producto
@@ -1053,6 +1434,19 @@ export function ListingPublicationWizard({
                 <span className="block text-xs text-muted-foreground">
                   Diferencia frente a tienda:{" "}
                   {formatSignedCurrency(priceDifference)}
+                </span>
+              ) : null}
+              {costFloor !== null ? (
+                <span
+                  className={cn(
+                    "block text-xs",
+                    isBelowCost ? "font-semibold text-destructive" : "text-muted-foreground",
+                  )}
+                >
+                  Costo por unidad (adquisición
+                  {unitExtraCosts > 0 ? " + envío y otros gastos" : ""}):{" "}
+                  {currencyFormatter.format(costFloor)}
+                  {isBelowCost ? " · por debajo del costo" : ""}
                 </span>
               ) : null}
             </p>
@@ -1103,17 +1497,13 @@ export function ListingPublicationWizard({
               </span>
             </p>
           </div>
-          <section className="space-y-4 rounded-md border p-4 text-sm">
-            <div className="flex items-start gap-3">
-              <Truck className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
-              <div>
-                <h3 className="font-semibold">Condiciones de venta</h3>
-                <p className="text-xs text-muted-foreground">
-                  Define quién asume el envío y qué tipo de publicación usarás.
-                  Administración calcula el impacto antes de publicar.
-                </p>
-              </div>
-            </div>
+          </SectionCard>
+          <SectionCard
+            id="mercadolibre-paso-condiciones"
+            title="Condiciones de venta"
+            description="Define quién asume el envío y qué tipo de publicación usarás. Administración calcula el impacto antes de publicar."
+            className="text-sm"
+          >
 
             {isLoadingSaleConditions ? (
               <div className="flex items-center gap-2 rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
@@ -1131,64 +1521,60 @@ export function ListingPublicationWizard({
             ) : (
               <>
                 <div className="grid gap-2">
-                  <Label>Cuotas sin interés ofrecidas</Label>
-                  <RadioGroup
+                  <p className="text-sm font-medium">
+                    Cuotas sin interés ofrecidas
+                  </p>
+                  <RadioCards
                     value={form.listingType}
-                    onValueChange={onListingTypeChange}
-                    className="grid gap-2 sm:grid-cols-2"
-                  >
-                    {priceOptions.map((option) => {
+                    onChange={onListingTypeChange}
+                    label="Cuotas sin interés ofrecidas"
+                    idPrefix="mercadolibre-listing-type"
+                    columns={2}
+                    options={priceOptions.flatMap((option) => {
                       const optionId =
                         option.listingTypeId ?? option.listingTypeName;
-                      if (!optionId) return null;
+                      if (!optionId) return [];
                       const financingCost = option.financingAddOnFee ?? 0;
                       const feeDifference =
                         lowestSaleFee === null
                           ? 0
                           : option.saleFeeAmount - lowestSaleFee;
-                      return (
-                        <Label
-                          key={optionId}
-                          htmlFor={`mercadolibre-listing-type-${optionId}`}
-                          className="flex cursor-pointer items-start gap-3 rounded-md border p-3 font-normal has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/[0.03]"
-                        >
-                          <RadioGroupItem
-                            id={`mercadolibre-listing-type-${optionId}`}
-                            value={optionId}
-                            className="mt-0.5"
-                          />
-                          <span className="min-w-0 space-y-1">
-                            <span className="block font-medium">
-                              {option.installmentLabel ??
-                                option.listingTypeName ??
-                                optionId}
-                            </span>
-                            <span className="block text-xs text-muted-foreground">
-                              Cargo total por vender: {" "}
-                              {currencyFormatter.format(option.saleFeeAmount)}
-                            </span>
-                            {financingCost > 0 ? (
-                              <span className="block text-xs text-muted-foreground">
-                                Incluye {currencyFormatter.format(financingCost)}
-                                {" "}por ofrecer más cuotas.
+                      return [
+                        {
+                          value: optionId,
+                          title:
+                            option.installmentLabel ??
+                            option.listingTypeName ??
+                            optionId,
+                          hint: (
+                            <>
+                              <span className="block">
+                                Cargo total por vender:{" "}
+                                {currencyFormatter.format(option.saleFeeAmount)}
                               </span>
-                            ) : null}
-                            {feeDifference > 0 ? (
-                              <span className="block text-xs font-medium text-warning">
-                                P de Papel recibe {" "}
-                                {currencyFormatter.format(feeDifference)} menos
-                                que con la opción de menor cargo.
-                              </span>
-                            ) : (
-                              <span className="block text-xs text-success">
-                                Menor cargo disponible para esta publicación.
-                              </span>
-                            )}
-                          </span>
-                        </Label>
-                      );
+                              {financingCost > 0 ? (
+                                <span className="block">
+                                  Incluye {currencyFormatter.format(financingCost)}{" "}
+                                  por ofrecer más cuotas.
+                                </span>
+                              ) : null}
+                              {feeDifference > 0 ? (
+                                <span className="block font-medium text-warning">
+                                  P de Papel recibe{" "}
+                                  {currencyFormatter.format(feeDifference)} menos
+                                  que con la opción de menor cargo.
+                                </span>
+                              ) : (
+                                <span className="block text-success">
+                                  Menor cargo disponible para esta publicación.
+                                </span>
+                              )}
+                            </>
+                          ),
+                        },
+                      ];
                     })}
-                  </RadioGroup>
+                  />
                   <p className="text-xs text-muted-foreground">
                     Solo aparecen planes que Mercado Libre permite actualmente
                     para esta categoría y cuenta. Más cuotas pueden facilitar
@@ -1197,84 +1583,68 @@ export function ListingPublicationWizard({
                 </div>
 
                 <div className="grid gap-2">
-                  <Label>¿Quién asume el costo del envío?</Label>
-                  <RadioGroup
+                  <p className="text-sm font-medium">
+                    ¿Quién asume el costo del envío?
+                  </p>
+                  <RadioCards<"buyer" | "seller">
                     value={form.freeShipping ? "seller" : "buyer"}
-                    onValueChange={(value) =>
+                    onChange={(value) =>
                       setForm((current) => ({
                         ...current,
                         freeShipping: value === "seller",
                       }))
                     }
-                    className="grid gap-2 sm:grid-cols-2"
-                  >
-                    <Label
-                      htmlFor="mercadolibre-shipping-buyer"
-                      className="flex cursor-pointer items-start gap-3 rounded-md border p-3 font-normal has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/[0.03]"
-                    >
-                      <RadioGroupItem
-                        id="mercadolibre-shipping-buyer"
-                        value="buyer"
-                        className="mt-0.5"
-                        disabled={
+                    label="¿Quién asume el costo del envío?"
+                    idPrefix="mercadolibre-shipping"
+                    columns={2}
+                    options={[
+                      {
+                        value: "buyer",
+                        title: "La compradora paga el envío",
+                        disabled:
                           shippingComparison?.mandatoryFreeShipping === true ||
                           activeSaleConditions?.current
-                            .mandatoryFreeShipping === true
-                        }
-                      />
-                      <span>
-                        <span className="block font-medium">
-                          La compradora paga el envío
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {shippingComparison?.buyerPays
-                            ? `Costo estimado para P de Papel: ${currencyFormatter.format(shippingComparison.buyerPays.sellerCost)}.`
-                            : shippingComparison?.mandatoryFreeShipping ||
-                                activeSaleConditions?.current
-                                  .mandatoryFreeShipping
-                              ? "No disponible: Mercado Libre exige envío gratis."
-                              : "Normalmente protege mejor la utilidad de P de Papel."}
-                        </span>
-                      </span>
-                    </Label>
-                    <Label
-                      htmlFor="mercadolibre-shipping-seller"
-                      className="flex cursor-pointer items-start gap-3 rounded-md border p-3 font-normal has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/[0.03]"
-                    >
-                      <RadioGroupItem
-                        id="mercadolibre-shipping-seller"
-                        value="seller"
-                        className="mt-0.5"
-                      />
-                      <span>
-                        <span className="block font-medium">
-                          P de Papel ofrece envío gratis
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {shippingComparison
-                            ? `P de Papel paga aproximadamente ${currencyFormatter.format(shippingComparison.sellerOffersFree.sellerCost)} por venta.`
-                            : "Puede mejorar conversión, pero el costo se descuenta de la utilidad."}
-                        </span>
-                        {shippingComparison?.sellerOffersFree.promotedAmount !==
-                          null &&
-                        shippingComparison?.sellerOffersFree.promotedAmount !==
-                          undefined &&
-                        shippingComparison.sellerOffersFree.promotedAmount >
-                          shippingComparison.sellerOffersFree.sellerCost ? (
-                          <span className="block text-xs text-success">
-                            Mercado Libre reduce el costo desde {" "}
-                            <span className="line-through">
-                              {currencyFormatter.format(
-                                shippingComparison.sellerOffersFree
-                                  .promotedAmount,
-                              )}
-                            </span>{" "}
-                            por la reputación actual.
-                          </span>
-                        ) : null}
-                      </span>
-                    </Label>
-                  </RadioGroup>
+                            .mandatoryFreeShipping === true,
+                        hint: shippingComparison?.buyerPays
+                          ? `Costo estimado para P de Papel: ${currencyFormatter.format(shippingComparison.buyerPays.sellerCost)}.`
+                          : shippingComparison?.mandatoryFreeShipping ||
+                              activeSaleConditions?.current
+                                .mandatoryFreeShipping
+                            ? "No disponible: Mercado Libre exige envío gratis."
+                            : "Normalmente protege mejor la utilidad de P de Papel.",
+                      },
+                      {
+                        value: "seller",
+                        title: "P de Papel ofrece envío gratis",
+                        hint: (
+                          <>
+                            <span className="block">
+                              {shippingComparison
+                                ? `P de Papel paga aproximadamente ${currencyFormatter.format(shippingComparison.sellerOffersFree.sellerCost)} por venta.`
+                                : "Puede mejorar conversión, pero el costo se descuenta de la utilidad."}
+                            </span>
+                            {shippingComparison?.sellerOffersFree
+                              .promotedAmount !== null &&
+                            shippingComparison?.sellerOffersFree
+                              .promotedAmount !== undefined &&
+                            shippingComparison.sellerOffersFree.promotedAmount >
+                              shippingComparison.sellerOffersFree.sellerCost ? (
+                              <span className="block text-success">
+                                Mercado Libre reduce el costo desde{" "}
+                                <span className="line-through">
+                                  {currencyFormatter.format(
+                                    shippingComparison.sellerOffersFree
+                                      .promotedAmount,
+                                  )}
+                                </span>{" "}
+                                por la reputación actual.
+                              </span>
+                            ) : null}
+                          </>
+                        ),
+                      },
+                    ]}
+                  />
                 </div>
 
                 <div className="space-y-3 rounded-md bg-muted/30 p-3">
@@ -1472,31 +1842,64 @@ export function ListingPublicationWizard({
                 ) : null}
               </>
             )}
-          </section>
+          </SectionCard>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3 text-sm">
-            <div>
-              <p className="font-medium">Costos oficiales estimados</p>
-              <p className="text-xs text-muted-foreground">
-                Consulta nuevamente si cambias precio, categoría o tipo de
-                publicación.
-              </p>
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => void onLoadPriceEstimate()}
-              disabled={isLoadingPriceEstimate}
+          <SectionCard
+            id="mercadolibre-paso-costos"
+            title="Costos oficiales estimados"
+            description="Consulta nuevamente si cambias precio, categoría o tipo de publicación."
+            action={
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void onLoadPriceEstimate()}
+                disabled={isLoadingPriceEstimate}
+              >
+                {isLoadingPriceEstimate ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <CircleDollarSign className="mr-2 h-4 w-4" />
+                )}
+                Actualizar comisiones
+              </Button>
+            }
+          >
+          {isBelowCost && costFloor !== null ? (
+            <div
+              className="flex flex-col gap-3 rounded-md border border-tint-pink bg-tint-pink/20 p-3 text-sm"
+              role="alert"
             >
-              {isLoadingPriceEstimate ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <CircleDollarSign className="mr-2 h-4 w-4" />
-              )}
-              Actualizar comisiones
-            </Button>
-          </div>
+              <div>
+                <p className="font-semibold text-primary">
+                  Este precio está por debajo del costo por unidad (
+                  {currencyFormatter.format(costFloor)}).
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Se vendería con pérdida antes de comisiones y envío. Súbelo,
+                  o escribe por qué se autoriza; el motivo queda guardado en la
+                  publicación.
+                </p>
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="mercadolibre-below-cost-reason" required>
+                  Motivo para publicar por debajo del costo
+                </Label>
+                <Textarea
+                  id="mercadolibre-below-cost-reason"
+                  value={form.belowCostReason}
+                  maxLength={BELOW_COST_REASON_MAX_LENGTH}
+                  rows={2}
+                  placeholder="Ej.: liquidación de stock descontinuado"
+                  aria-invalid={issueFor("belowCostReason") ? true : undefined}
+                  onChange={(event) =>
+                    changeField("belowCostReason", event.target.value)
+                  }
+                />
+                {renderFieldIssue("belowCostReason")}
+              </div>
+            </div>
+          ) : null}
           {hasTargetProfit ? (
             <div className="flex flex-col gap-3 rounded-md border border-primary/20 bg-primary/[0.03] p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -1615,6 +2018,7 @@ export function ListingPublicationWizard({
             definitiva. Al publicar, Administración enviará producto, fotos,
             precio, stock, ficha técnica y condiciones de envío.
           </p>
+          </SectionCard>
         </div>
       ) : null}
 
@@ -1623,9 +2027,7 @@ export function ListingPublicationWizard({
           <Button
             type="button"
             variant="outline"
-            onClick={() =>
-              setStep((currentStep) => (currentStep - 1) as ListingWizardStep)
-            }
+            onClick={goToPreviousStep}
             disabled={isSaving}
           >
             <ChevronLeft className="mr-2 h-4 w-4" />
@@ -1638,9 +2040,10 @@ export function ListingPublicationWizard({
           <Button
             type="button"
             onClick={() => void goToNextStep()}
-            disabled={isLoadingCategoryAttributes}
+            disabled={isLoadingCategoryAttributes || isLoadingPriceEstimate}
           >
-            {step === 2 && isLoadingCategoryAttributes ? (
+            {(step === 2 && isLoadingCategoryAttributes) ||
+            (step === 3 && isLoadingPriceEstimate) ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
               <ChevronRight className="mr-2 h-4 w-4" />

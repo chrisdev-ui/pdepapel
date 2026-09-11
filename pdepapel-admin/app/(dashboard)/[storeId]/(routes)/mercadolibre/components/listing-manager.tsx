@@ -51,7 +51,18 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { ListingPublicationWizard } from "./listing-publication-wizard";
+import {
+  ListingPublicationWizard,
+  type ListingPublicationIssue,
+} from "./listing-publication-wizard";
+import {
+  LISTING_WIZARD_STEPS,
+  getInitialListingWizardStep,
+  getListingWizardStepLabel,
+  prefillListingAttributes,
+  type ListingWizardStep,
+} from "@/lib/mercadolibre/listing-wizard";
+import type { MercadoLibreCategorySearchResponse } from "@/lib/mercadolibre/categories";
 import { ProductVideoLibrary } from "./product-video-library";
 
 type ProductReference = {
@@ -61,8 +72,17 @@ type ProductReference = {
   stock: number;
   price: number;
   acqPrice: number | null;
+  /** Envío y otros gastos por unidad; entra al piso y a la ganancia. */
+  transportationCost: number | null;
   images: { url: string; isMain?: boolean }[];
   category?: { id: string; name: string } | null;
+  /** Datos que rellenan la ficha técnica sin volver a teclearlos. */
+  brand?: string | null;
+  gtin?: string | null;
+  mpn?: string | null;
+  hasNoProductIdentifier?: boolean;
+  colorName?: string | null;
+  sizeName?: string | null;
 };
 
 type SelectedProduct = ProductReference;
@@ -78,6 +98,13 @@ function toSelectedProduct(
     sku: product.sku ?? "",
     stock: product.stock,
     acqPrice: product.acqPrice ?? null,
+    transportationCost: product.transportationCost ?? null,
+    brand: product.brand ?? null,
+    gtin: product.gtin ?? null,
+    mpn: product.mpn ?? null,
+    hasNoProductIdentifier: product.hasNoProductIdentifier ?? false,
+    colorName: product.color?.name ?? null,
+    sizeName: product.size?.name ?? null,
     images: product.images ?? [],
     price: Number(product.price ?? 0),
     category: product.category?.id
@@ -114,6 +141,14 @@ type Listing = {
         weightGrams: number;
       } | null;
     };
+    belowCostOverride?: { reason: string; floor: number; price: number; at: string } | null;
+    publicationError?: {
+      kind: "review" | "transient" | "reauth" | "unknown";
+      step: "producto" | "categoria" | "ficha" | "precio" | null;
+      field: string | null;
+      message: string;
+      at: string;
+    } | null;
   } | null;
   product: ProductReference;
 };
@@ -133,6 +168,7 @@ type CategorySuggestion = {
   categoryName: string;
   domainId: string | null;
   domainName: string | null;
+  path: string[];
 };
 
 type ListingForm = {
@@ -152,6 +188,8 @@ type ListingForm = {
   packageWidthCm: string;
   packageLengthCm: string;
   packageWeightGrams: string;
+  /** Motivo para publicar por debajo del costo de adquisición (vacío si no aplica). */
+  belowCostReason: string;
 };
 
 type CategoryAttribute = {
@@ -302,6 +340,7 @@ const emptyForm: ListingForm = {
   packageWidthCm: "",
   packageLengthCm: "",
   packageWeightGrams: "",
+  belowCostReason: "",
 };
 
 const currencyFormatter = new Intl.NumberFormat("es-CO", {
@@ -400,6 +439,21 @@ export function MercadoLibreListingManager({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  /** Borrador creado por el propio asistente al avanzar del paso 1. */
+  const [draftId, setDraftId] = useState<string | null>(null);
+  /** Copia del formulario tal como quedó guardado: decide si cerrar pide confirmación. */
+  const [persistedForm, setPersistedForm] = useState<string>("");
+  /** Precio|categoría con los que se calcularon las comisiones cargadas. */
+  const [priceEstimateKey, setPriceEstimateKey] = useState<string | null>(null);
+  const [initialWizardStep, setInitialWizardStep] = useState<ListingWizardStep>(1);
+  /** Paso visible del asistente; da el título del diálogo. */
+  const [wizardStep, setWizardStep] = useState<ListingWizardStep>(1);
+  /** Aviso de resultados parciales al sugerir categorías (no bloquea). */
+  const [suggestionsNotice, setSuggestionsNotice] = useState<string | null>(
+    null,
+  );
+  const [initialWizardIssue, setInitialWizardIssue] =
+    useState<ListingPublicationIssue | null>(null);
   const [editingListing, setEditingListing] = useState<Listing | null>(null);
   const [form, setForm] = useState<ListingForm>(emptyForm);
 
@@ -561,6 +615,7 @@ export function MercadoLibreListingManager({
     if (key === "marketplacePrice") {
       setPriceEstimate(null);
       setPriceOptions([]);
+      setPriceEstimateKey(null);
       setShippingComparison(null);
     }
     if (
@@ -585,7 +640,8 @@ export function MercadoLibreListingManager({
             attributes: "",
           },
     );
-    setSuggestions([]);
+    // La lista de sugerencias se queda: escribir o pegar un código no la
+    // borra; solo cambiar de producto o volver a sugerir la reemplaza.
     setCategoryAttributes([]);
     setVerifiedCategoryId(null);
     setPriceEstimate(null);
@@ -599,6 +655,7 @@ export function MercadoLibreListingManager({
     setEditingListing(null);
     setForm(emptyForm);
     setSuggestions([]);
+    setSuggestionsNotice(null);
     setCategoryAttributes([]);
     setVerifiedCategoryId(null);
     setPriceEstimate(null);
@@ -610,6 +667,11 @@ export function MercadoLibreListingManager({
     setSelectedProduct(null);
     setQuickProfile(null);
     setError(null);
+    setDraftId(null);
+    setPriceEstimateKey(null);
+    setPersistedForm(JSON.stringify(emptyForm));
+    setInitialWizardStep(1);
+    setInitialWizardIssue(null);
     setIsDialogOpen(true);
   };
 
@@ -617,7 +679,7 @@ export function MercadoLibreListingManager({
     const requestId = saleConditionsRequestId.current + 1;
     saleConditionsRequestId.current = requestId;
     setEditingListing(listing);
-    setForm({
+    const editForm: ListingForm = {
       productId: listing.product.id,
       familyName: listing.metadata?.familyName ?? listing.product.name,
       marketplacePrice: String(listing.marketplacePrice ?? ""),
@@ -644,12 +706,47 @@ export function MercadoLibreListingManager({
       packageWeightGrams: String(
         listing.metadata?.saleConditions?.packageDimensions?.weightGrams ?? "",
       ),
-    });
+      belowCostReason: listing.metadata?.belowCostOverride?.reason ?? "",
+    };
+    setForm(editForm);
+    setDraftId(null);
+    setPriceEstimateKey(null);
+    setPersistedForm(JSON.stringify(editForm));
+    // Se abre en el paso que Mercado Libre rechazó (con el campo señalado) o
+    // en el primer paso incompleto; nunca desde cero.
+    const failure = listing.metadata?.publicationError ?? null;
+    setInitialWizardStep(
+      getInitialListingWizardStep({
+        productId: editForm.productId,
+        familyName: editForm.familyName,
+        marketplacePrice: editForm.marketplacePrice,
+        categoryId: editForm.categoryId,
+        imageUrls: editForm.imageUrls,
+        publicationErrorStep: failure?.kind === "review" ? failure.step : null,
+      }),
+    );
+    setInitialWizardIssue(
+      failure?.kind === "review" && failure.step
+        ? {
+            field:
+              failure.step === "ficha" && failure.field
+                ? `attribute:${failure.field}`
+                : failure.field === "familyName" ||
+                    failure.field === "marketplacePrice" ||
+                    failure.field === "categoryId" ||
+                    failure.field === "imageUrls"
+                  ? failure.field
+                  : null,
+            message: failure.message,
+          }
+        : null,
+    );
     setSelectedProduct({
       ...listing.product,
       price: listing.product.price,
     });
     setSuggestions([]);
+    setSuggestionsNotice(null);
     setCategoryAttributes([]);
     setVerifiedCategoryId(null);
     setPriceEstimate(null);
@@ -817,15 +914,21 @@ export function MercadoLibreListingManager({
     }
 
     setIsSearchingCategories(true);
+    setSuggestionsNotice(null);
     if (!preserveError) setError(null);
     try {
       const response = await fetch(
         `/api/${storeId}/marketplaces/mercadolibre/categories?query=${encodeURIComponent(query)}`,
       );
       if (!response.ok) throw new Error(await getErrorMessage(response));
-      const verifiedSuggestions =
-        (await response.json()) as CategorySuggestion[];
+      const result = (await response.json()) as MercadoLibreCategorySearchResponse;
+      const verifiedSuggestions: CategorySuggestion[] = result.suggestions;
       setSuggestions(verifiedSuggestions);
+      setSuggestionsNotice(
+        result.unavailableCount > 0
+          ? `Mercado Libre no respondió por ${result.unavailableCount} de las categorías sugeridas; puede haber más opciones. Vuelve a sugerir en unos minutos si ninguna de estas encaja.`
+          : null,
+      );
       if (verifiedSuggestions.length === 0 && !preserveError) {
         setError(
           "Mercado Libre no encontró una categoría final y publicable para este nombre. Ajusta el nombre de familia con el tipo de producto y vuelve a sugerir.",
@@ -842,11 +945,14 @@ export function MercadoLibreListingManager({
     }
   };
 
-  const loadCategoryAttributes = async (): Promise<boolean> => {
+  const loadCategoryAttributes = async ({ force = false } = {}): Promise<boolean> => {
     if (!form.categoryId) {
       setError("Selecciona una categoría antes de cargar sus características");
       return false;
     }
+    const normalizedCategoryId = form.categoryId.trim().toUpperCase();
+    // Ya verificada y cargada: volver atrás y adelante no vuelve a pedirla.
+    if (!force && verifiedCategoryId === normalizedCategoryId) return true;
 
     setIsLoadingCategoryAttributes(true);
     setError(null);
@@ -863,17 +969,25 @@ export function MercadoLibreListingManager({
           setPriceOptions([]);
           setShippingComparison(null);
           setQuickProfile(null);
-          setForm((current) => ({
-            ...current,
-            categoryId: "",
-            attributes: "",
-          }));
+          // La ficha técnica se conserva: al elegir la nueva categoría solo
+          // se completan los campos que falten.
+          setForm((current) => ({ ...current, categoryId: "" }));
           await searchCategories({ preserveError: true });
         }
         throw new Error(responseError.message);
       }
-      setCategoryAttributes((await response.json()) as CategoryAttribute[]);
-      setVerifiedCategoryId(form.categoryId.trim().toUpperCase());
+      const attributes = (await response.json()) as CategoryAttribute[];
+      setCategoryAttributes(attributes);
+      setVerifiedCategoryId(normalizedCategoryId);
+      // Marca, GTIN, MPN, color y tamaño salen del producto; solo se llenan
+      // los vacíos y nunca se adivina un valor de lista cerrada.
+      if (selectedProduct) {
+        const product = selectedProduct;
+        setForm((current) => ({
+          ...current,
+          attributes: prefillListingAttributes(current.attributes, attributes, product),
+        }));
+      }
       return true;
     } catch (requestError) {
       setError(
@@ -887,11 +1001,15 @@ export function MercadoLibreListingManager({
     }
   };
 
-  const loadPriceEstimate = async () => {
+  const loadPriceEstimate = async (): Promise<boolean> => {
     if (!form.marketplacePrice || !form.categoryId) {
       setError("Define precio y categoría para calcular los costos");
-      return;
+      return false;
     }
+    const key = `${form.marketplacePrice}|${form.categoryId.trim().toUpperCase()}`;
+    // Mismo precio y categoría: las comisiones ya cargadas siguen valiendo y
+    // la comparación de envío no se pierde.
+    if (priceEstimateKey === key && priceOptions.length > 0) return true;
 
     setIsLoadingPriceEstimate(true);
     setError(null);
@@ -938,12 +1056,15 @@ export function MercadoLibreListingManager({
         }));
       }
       setShippingComparison(null);
+      setPriceEstimateKey(key);
+      return true;
     } catch (requestError) {
       setError(
         requestError instanceof Error
           ? requestError.message
           : "No fue posible calcular los costos de Mercado Libre",
       );
+      return false;
     } finally {
       setIsLoadingPriceEstimate(false);
     }
@@ -1239,6 +1360,7 @@ export function MercadoLibreListingManager({
       const recommendation = await recommendMercadoLibreListingPrice({
         acquisitionCost: product.acqPrice,
         targetProfit: profile.minimumMarginAmount,
+        additionalCosts: Math.max(0, product.transportationCost ?? 0),
         initialPrice: product.price,
         getFeeQuote: (price) => getPriceEstimate(price, profile.categoryId),
       });
@@ -1291,16 +1413,19 @@ export function MercadoLibreListingManager({
         );
         return;
       }
-      const estimatedShippingCost = shippingComparison
-        ? form.freeShipping
+      // Solo el envío que paga la tienda entra al costo: si lo paga el
+      // comprador, no se descuenta de la ganancia.
+      const estimatedShippingCost =
+        shippingComparison && form.freeShipping
           ? shippingComparison.sellerOffersFree.sellerCost
-          : (shippingComparison.buyerPays?.sellerCost ?? 0)
-        : 0;
+          : 0;
+      // Envío y otros gastos por unidad del producto: parte del costo real.
+      const unitExtraCosts = Math.max(0, selectedProduct.transportationCost ?? 0);
       const initialPrice = Number(form.marketplacePrice);
       const recommendation = await recommendMercadoLibreListingPrice({
         acquisitionCost: selectedProduct.acqPrice,
         targetProfit,
-        additionalCosts: estimatedShippingCost,
+        additionalCosts: estimatedShippingCost + unitExtraCosts,
         initialPrice:
           Number.isFinite(initialPrice) && initialPrice > 0
             ? initialPrice
@@ -1349,6 +1474,7 @@ export function MercadoLibreListingManager({
     setSelectedProduct(selected);
     setQuickProfile(profile ?? null);
     setSuggestions([]);
+    setSuggestionsNotice(null);
     setCategoryAttributes([]);
     setVerifiedCategoryId(null);
     setPriceEstimate(null);
@@ -1552,11 +1678,14 @@ export function MercadoLibreListingManager({
         syncPrice: form.syncPrice,
         imageUrls: form.imageUrls,
         attributes,
+        ...(form.belowCostReason.trim()
+          ? { priceOverride: { reason: form.belowCostReason.trim() } }
+          : {}),
       };
-      let savedListingId = editingListing?.id;
-      if (editingListing) {
+      let savedListingId = editingListing?.id ?? draftId ?? undefined;
+      if (savedListingId) {
         const response = await fetch(
-          `/api/${storeId}/marketplaces/mercadolibre/listings/${editingListing.id}`,
+          `/api/${storeId}/marketplaces/mercadolibre/listings/${savedListingId}`,
           {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
@@ -1592,6 +1721,7 @@ export function MercadoLibreListingManager({
         },
       };
 
+      setPersistedForm(JSON.stringify(form));
       setIsDialogOpen(false);
       await loadListings();
       return savedListing;
@@ -1680,6 +1810,110 @@ export function MercadoLibreListingManager({
       setDeletingDraftId(null);
     }
   };
+
+  /**
+   * Borrador paso a paso: al salir del paso 1 se crea el borrador; al salir
+   * de 2 y 3 se guarda lo completado. Cerrar el diálogo ya no pierde nada.
+   */
+  const persistWizardStep = async (step: ListingWizardStep): Promise<boolean> => {
+    const existingId = editingListing?.id ?? draftId;
+    try {
+      if (step === 1 && !existingId) {
+        const response = await fetch(
+          `/api/${storeId}/marketplaces/mercadolibre/listings`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              productId: form.productId,
+              familyName: form.familyName,
+              // Las fotos se confirman en el paso 2; aquí solo van si ya hay
+              // una selección válida (sin fotos el borrador igual se crea).
+              ...(form.imageUrls.length > 0 && form.imageUrls.length <= 10
+                ? { imageUrls: form.imageUrls }
+                : {}),
+              stockSafetyBuffer: form.stockSafetyBuffer,
+              minimumMarginAmount: form.minimumMarginAmount,
+              syncStock: true,
+              syncPrice: form.syncPrice,
+              attributes: [],
+            }),
+          },
+        );
+        if (!response.ok) {
+          const message = await getErrorMessage(response);
+          throw new Error(
+            response.status === 409
+              ? "Este producto ya tiene un borrador de Mercado Libre. Ciérralo y ábrelo desde la lista con «Editar»."
+              : message,
+          );
+        }
+        const created = (await response.json()) as { id: string };
+        setDraftId(created.id);
+        void loadListings();
+      } else if (existingId && (step === 2 || step === 3)) {
+        const body =
+          step === 2
+            ? {
+                categoryId: form.categoryId,
+                imageUrls: form.imageUrls,
+                familyName: form.familyName,
+              }
+            : { attributes: parseAttributes(form.attributes) };
+        const response = await fetch(
+          `/api/${storeId}/marketplaces/mercadolibre/listings/${existingId}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          },
+        );
+        if (!response.ok) {
+          const responseError = await getResponseError(response);
+          // «No hay cambios para guardar» no es un fallo: el paso ya estaba igual.
+          if (response.status !== 400 || !/cambios/i.test(responseError.message)) {
+            throw new Error(responseError.message);
+          }
+        }
+      }
+      setPersistedForm(JSON.stringify(form));
+      return true;
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "No fue posible guardar el borrador",
+      );
+      return false;
+    }
+  };
+
+  const isWizardDirty = () => JSON.stringify(form) !== persistedForm;
+
+  const requestCloseWizard = async (): Promise<boolean> => {
+    if (isSaving) return false;
+    if (!isWizardDirty()) return true;
+    return requestConfirmation({
+      title: "¿Cerrar sin guardar?",
+      description:
+        editingListing || draftId
+          ? "Se perderán los cambios hechos desde el último paso guardado. El borrador sigue disponible en la lista."
+          : "Todavía no hay borrador: se perderá todo lo escrito en este asistente.",
+      confirmLabel: "Cerrar de todos modos",
+      destructive: true,
+    });
+  };
+
+  useEffect(() => {
+    if (!isDialogOpen) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      if (JSON.stringify(form) === persistedForm) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [isDialogOpen, form, persistedForm]);
 
   const saveAndPublishListing = async () => {
     if (!canPublish) {
@@ -2518,8 +2752,15 @@ export function MercadoLibreListingManager({
       <Dialog
         open={isDialogOpen}
         onOpenChange={(open) => {
-          setIsDialogOpen(open);
-          if (!open) saleConditionsRequestId.current += 1;
+          if (open) {
+            setIsDialogOpen(true);
+            return;
+          }
+          void requestCloseWizard().then((canClose) => {
+            if (!canClose) return;
+            setIsDialogOpen(false);
+            saleConditionsRequestId.current += 1;
+          });
         }}
       >
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
@@ -2535,16 +2776,26 @@ export function MercadoLibreListingManager({
                 : editingListing
                   ? "Editar borrador"
                   : "Preparar publicación"}
+              <span className="font-normal text-muted-foreground">
+                · {getListingWizardStepLabel(wizardStep)}
+              </span>
             </DialogTitle>
             <DialogDescription>
-              El precio corresponde solo a Mercado Libre. Incluye su comisión
-              antes de guardar.
+              Paso {wizardStep} de {LISTING_WIZARD_STEPS.length}. El precio
+              corresponde solo a Mercado Libre e incluye su comisión.
             </DialogDescription>
           </DialogHeader>
           <ListingPublicationWizard
             key={editingListing?.id ?? "new-listing"}
             storeId={storeId}
             editing={Boolean(editingListing)}
+            productLocked={Boolean(editingListing) || Boolean(draftId)}
+            draftSaved={Boolean(editingListing) || Boolean(draftId)}
+            initialStep={initialWizardStep}
+            initialIssue={initialWizardIssue}
+            onPersistStep={persistWizardStep}
+            onStepChange={setWizardStep}
+            suggestionsNotice={suggestionsNotice}
             activePublication={Boolean(editingListing?.externalItemId)}
             activeSaleConditions={activeSaleConditions}
             canPublishDirectly={canPublish && !editingListing?.externalItemId}
@@ -2572,7 +2823,6 @@ export function MercadoLibreListingManager({
             isSaving={isSaving}
             isSavingTemplate={isSavingTemplate}
             isSavingQuickProfile={isSavingQuickProfile}
-            onError={setError}
             onFormChange={updateForm}
             onProductChange={updateSelectedProduct}
             onSearchCategories={() => searchCategories()}

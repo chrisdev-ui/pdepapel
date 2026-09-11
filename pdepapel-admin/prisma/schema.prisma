@@ -378,6 +378,8 @@ model Product {
   stock                       Int                          @default(0)
   price                       Float                        @default(0)
   acqPrice                    Float?                       @default(0)
+  /// Envío y otros gastos por unidad. Entra en el precio sugerido de Productos y en el piso de precio de Mercado Libre.
+  transportationCost          Float?                       @default(0)
   isFeatured                  Boolean                      @default(false)
   isArchived                  Boolean                      @default(false)
   availableAt                 DateTime?

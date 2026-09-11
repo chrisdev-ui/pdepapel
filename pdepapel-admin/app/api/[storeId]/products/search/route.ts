@@ -82,6 +82,12 @@ export async function GET(
         stock: true,
         price: true,
         acqPrice: true,
+        transportationCost: true,
+        brand: true,
+        mpn: true,
+        hasNoProductIdentifier: true,
+        color: { select: { name: true } },
+        size: { select: { name: true } },
         isKit: true,
         category: {
           select: { id: true, name: true },

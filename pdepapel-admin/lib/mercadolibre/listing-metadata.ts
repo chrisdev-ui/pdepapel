@@ -20,9 +20,29 @@ export type MercadoLibreSaleConditions = {
   packageDimensions: MercadoLibrePackageDimensions | null;
 };
 
+/** Último rechazo al publicar, guardado para que el asistente vuelva al paso y campo exactos. */
+export type MercadoLibrePublicationFailureRecord = {
+  kind: "review" | "transient" | "reauth" | "unknown";
+  step: "producto" | "categoria" | "ficha" | "precio" | null;
+  field: string | null;
+  message: string;
+  code: string | null;
+  at: string;
+};
+
+export type MercadoLibreBelowCostOverride = {
+  reason: string;
+  floor: number;
+  price: number;
+  at: string;
+};
+
 export type MercadoLibreListingMetadata = {
   attributes: MercadoLibreAttribute[];
   familyName: string | null;
+  publicationError: MercadoLibrePublicationFailureRecord | null;
+  /** Autorización explícita para vender por debajo del costo de adquisición. */
+  belowCostOverride: MercadoLibreBelowCostOverride | null;
   media: {
     imageUrls: string[];
   } | null;
@@ -137,6 +157,60 @@ export function getMercadoLibreAttributes(
   });
 }
 
+const FAILURE_KINDS = ["review", "transient", "reauth", "unknown"] as const;
+const FAILURE_STEPS = ["producto", "categoria", "ficha", "precio"] as const;
+
+export function parseMercadoLibrePublicationFailure(
+  value: unknown,
+): MercadoLibrePublicationFailureRecord | null {
+  if (!isRecord(value) || typeof value.message !== "string") return null;
+  const kind = FAILURE_KINDS.find((item) => item === value.kind) ?? "unknown";
+  const step = FAILURE_STEPS.find((item) => item === value.step) ?? null;
+  return {
+    kind,
+    step,
+    field: typeof value.field === "string" ? value.field : null,
+    message: value.message,
+    code: typeof value.code === "string" ? value.code : null,
+    at: getIsoDate(value.at) ?? new Date(0).toISOString(),
+  };
+}
+
+/**
+ * Escribe (o borra con `null`) el último rechazo de publicación sin tocar el
+ * resto de la metadata. Se usa fuera del constructor normal porque ocurre en
+ * la cola, donde no hay formulario.
+ */
+export function withMercadoLibrePublicationFailure(
+  current: Prisma.JsonValue | null,
+  failure: Omit<MercadoLibrePublicationFailureRecord, "at"> | null,
+): Prisma.InputJsonValue {
+  const base = isRecord(current) ? { ...current } : {};
+  delete base.publicationError;
+  if (!failure) return base as Prisma.InputJsonValue;
+  return {
+    ...base,
+    publicationError: { ...failure, at: new Date().toISOString() },
+  } as Prisma.InputJsonValue;
+}
+
+export function parseMercadoLibreBelowCostOverride(
+  value: unknown,
+): MercadoLibreBelowCostOverride | null {
+  if (!isRecord(value) || typeof value.reason !== "string" || !value.reason.trim()) {
+    return null;
+  }
+  const floor = getPositiveNumber(value.floor);
+  const price = getPositiveNumber(value.price);
+  if (floor === null || price === null) return null;
+  return {
+    reason: value.reason.trim(),
+    floor,
+    price,
+    at: getIsoDate(value.at) ?? new Date(0).toISOString(),
+  };
+}
+
 export function getMercadoLibreListingMetadata(
   value: Prisma.JsonValue | null,
 ): MercadoLibreListingMetadata {
@@ -157,6 +231,12 @@ export function getMercadoLibreListingMetadata(
   return {
     attributes: getMercadoLibreAttributes(value),
     familyName,
+    publicationError: isRecord(value)
+      ? parseMercadoLibrePublicationFailure(value.publicationError)
+      : null,
+    belowCostOverride: isRecord(value)
+      ? parseMercadoLibreBelowCostOverride(value.belowCostOverride)
+      : null,
     media: imageUrls.length > 0 ? { imageUrls } : null,
     quality: videoRecommendationSnoozedUntil
       ? { videoRecommendationSnoozedUntil }
@@ -172,6 +252,7 @@ export function buildMercadoLibreListingMetadata({
   imageUrls,
   videoRecommendationSnoozedUntil,
   saleConditions,
+  belowCostOverride,
 }: {
   current: Prisma.JsonValue | null;
   attributes?: MercadoLibreAttribute[];
@@ -179,6 +260,8 @@ export function buildMercadoLibreListingMetadata({
   imageUrls?: string[];
   videoRecommendationSnoozedUntil?: string | null;
   saleConditions?: MercadoLibreSaleConditions | null;
+  /** `undefined` conserva la autorización actual; `null` la retira. */
+  belowCostOverride?: MercadoLibreBelowCostOverride | null;
 }): Prisma.InputJsonValue {
   const currentMetadata = getMercadoLibreListingMetadata(current);
   const normalizedImages =
@@ -197,9 +280,19 @@ export function buildMercadoLibreListingMetadata({
     saleConditions === undefined
       ? currentMetadata.saleConditions
       : saleConditions;
+  const normalizedBelowCostOverride =
+    belowCostOverride === undefined
+      ? currentMetadata.belowCostOverride
+      : belowCostOverride;
 
   return {
     attributes: attributes ?? currentMetadata.attributes,
+    ...(currentMetadata.publicationError
+      ? { publicationError: currentMetadata.publicationError }
+      : {}),
+    ...(normalizedBelowCostOverride
+      ? { belowCostOverride: normalizedBelowCostOverride }
+      : {}),
     ...(normalizedFamilyName ? { familyName: normalizedFamilyName } : {}),
     ...(normalizedImages?.length
       ? { media: { imageUrls: normalizedImages } }

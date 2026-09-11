@@ -1,26 +1,27 @@
 import { auth } from "@clerk/nextjs/server";
 import {
   MarketplaceConnectionStatus,
-  MarketplaceListingStatus,
+  MarketplaceOutboxStatus,
 } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import {
-  MercadoLibrePublicationError,
-  publishMercadoLibreListing,
-} from "@/lib/mercadolibre/listings";
+  getMarketplaceListingPublicationKey,
+  processMarketplaceOutboxEvent,
+  queueMarketplaceListingPublicationEvent,
+} from "@/lib/mercadolibre/outbox";
 import { getMercadoLibreQueueConfigurationStatus } from "@/lib/mercadolibre/queue";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
-function getListingStatus(status: string | null) {
-  if (status === "active") return MarketplaceListingStatus.ACTIVE;
-  if (status === "paused") return MarketplaceListingStatus.PAUSED;
-  if (status === "closed") return MarketplaceListingStatus.CLOSED;
-  return MarketplaceListingStatus.ERROR;
-}
-
+/**
+ * Publica un borrador ahora. La ruta ya no llama a Mercado Libre por su
+ * cuenta: encola (o reutiliza) el mismo evento PUBLISH_LISTING que usa la
+ * publicación masiva y lo procesa en línea. Así hay un único camino que crea
+ * el ítem, y la reserva atómica del evento (PENDING → PROCESSING) garantiza
+ * que dos clics, dos pestañas o un clic más la cola no lo creen dos veces.
+ */
 export async function POST(
   _request: Request,
   { params }: { params: { storeId: string; listingId: string } },
@@ -35,26 +36,12 @@ export async function POST(
         id: params.listingId,
         connection: { storeId: params.storeId },
       },
-      include: {
+      select: {
+        id: true,
+        connectionId: true,
+        productId: true,
+        externalItemId: true,
         connection: { select: { status: true, recoveryScheduleId: true } },
-        product: {
-          select: {
-            id: true,
-            name: true,
-            description: true,
-            stock: true,
-            sku: true,
-            brand: true,
-            gtin: true,
-            mpn: true,
-            isArchived: true,
-            images: {
-              select: { url: true, isMain: true },
-              orderBy: { isMain: "desc" },
-              take: 10,
-            },
-          },
-        },
       },
     });
     if (!listing) throw ErrorFactory.NotFound("Publicación no encontrada");
@@ -77,50 +64,59 @@ export async function POST(
       );
     }
 
-    try {
-      const publishedItem = await publishMercadoLibreListing(listing);
-      const updatedListing = await prismadb.marketplaceListing.update({
-        where: { id: listing.id },
-        data: {
-          externalItemId: publishedItem.id,
-          externalPermalink: publishedItem.permalink,
-          status: getListingStatus(publishedItem.status),
-          lastSyncedStock: Math.max(
-            0,
-            listing.product.stock - listing.stockSafetyBuffer,
-          ),
-          lastSyncedPrice: listing.marketplacePrice,
-          lastRemoteUpdateAt: new Date(),
-          lastError: publishedItem.descriptionWarning,
-        },
-      });
-      return NextResponse.json(updatedListing, {
-        status: 201,
-        headers: CACHE_HEADERS.NO_CACHE,
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message.slice(0, 1_000)
-          : "No fue posible publicar en Mercado Libre";
-      if (
-        error instanceof MercadoLibrePublicationError &&
-        error.requiresDraftReview
-      ) {
-        await prismadb.marketplaceListing.update({
-          where: { id: listing.id },
-          data: { status: MarketplaceListingStatus.DRAFT, lastError: message },
+    const deduplicationKey = getMarketplaceListingPublicationKey(
+      listing.connectionId,
+      listing.id,
+    );
+    const existingEvent = await prismadb.marketplaceOutboxEvent.findUnique({
+      where: { deduplicationKey },
+      select: { id: true, status: true },
+    });
+    if (existingEvent?.status === MarketplaceOutboxStatus.PROCESSING) {
+      throw ErrorFactory.Conflict(
+        "Esta publicación ya se está enviando a Mercado Libre. Espera un momento y actualiza la lista.",
+      );
+    }
+    await queueMarketplaceListingPublicationEvent(prismadb, {
+      connectionId: listing.connectionId,
+      listingId: listing.id,
+      productId: listing.productId,
+    });
+    const event = await prismadb.marketplaceOutboxEvent.findUniqueOrThrow({
+      where: { deduplicationKey },
+      select: { id: true },
+    });
+
+    const result = await processMarketplaceOutboxEvent(event.id);
+    const refreshed = await prismadb.marketplaceListing.findUniqueOrThrow({
+      where: { id: listing.id },
+    });
+
+    switch (result.reason) {
+      case "processed":
+      case "superseded":
+        return NextResponse.json(refreshed, {
+          status: 201,
+          headers: CACHE_HEADERS.NO_CACHE,
         });
-        throw ErrorFactory.InvalidRequest(message);
-      }
-      await prismadb.marketplaceListing.update({
-        where: { id: listing.id },
-        data: { status: MarketplaceListingStatus.ERROR, lastError: message },
-      });
-      if (error instanceof MercadoLibrePublicationError) {
-        throw ErrorFactory.InvalidRequest(error.message);
-      }
-      throw error;
+      case "claimed_elsewhere":
+      case "not_due":
+        throw ErrorFactory.Conflict(
+          "Esta publicación ya se está enviando a Mercado Libre. Espera un momento y actualiza la lista.",
+        );
+      case "listing_requires_review":
+      case "failed":
+        throw ErrorFactory.InvalidRequest(
+          refreshed.lastError ?? "No fue posible publicar en Mercado Libre",
+        );
+      case "retry_scheduled":
+        throw ErrorFactory.InvalidRequest(
+          `${refreshed.lastError ?? "Mercado Libre no respondió"}. Se reintentará automáticamente en unos minutos; no hace falta volver a publicar.`,
+        );
+      default:
+        throw ErrorFactory.InvalidRequest(
+          refreshed.lastError ?? "No fue posible publicar en Mercado Libre",
+        );
     }
   } catch (error) {
     return handleErrorResponse(error, "MERCADOLIBRE_LISTING_PUBLISH_POST", {

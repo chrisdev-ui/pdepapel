@@ -101,21 +101,12 @@ const FormLabel = React.forwardRef<
       ref={ref}
       className={cn(error && "text-destructive", className)}
       htmlFor={formItemId}
+      // Regla del panel: lo obligatorio lleva asterisco; lo opcional es el
+      // silencio. La marca vive en `Label` para que todos los formularios,
+      // con o sin react-hook-form, la pinten igual.
+      required={isRequired}
       {...props}
-    >
-      {props.children}
-      {/* Regla del panel: lo obligatorio lleva asterisco; lo opcional es el
-          silencio. Antes era al reves (todo lo no marcado decia "Opcional",
-          incluidos valores calculados), asi que la marca no decia nada. */}
-      {isRequired ? (
-        <>
-          <span aria-hidden="true" className="ml-0.5 text-destructive">
-            *
-          </span>
-          <span className="sr-only"> (obligatorio)</span>
-        </>
-      ) : null}
-    </Label>
+    />
   );
 });
 FormLabel.displayName = "FormLabel";

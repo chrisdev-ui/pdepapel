@@ -15,6 +15,10 @@ import {
   enqueuePendingMarketplaceOutboxEvents,
   queueMarketplacePriceSyncEvent,
 } from "@/lib/mercadolibre/outbox";
+import {
+  evaluateListingPrice,
+  parsePriceOverride,
+} from "@/lib/mercadolibre/listing-price-guard";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
@@ -135,13 +139,23 @@ export async function PATCH(
         marketplacePrice: true,
         syncPrice: true,
         metadata: true,
-        product: { select: { images: { select: { url: true } } } },
+        product: {
+          select: {
+            acqPrice: true,
+            transportationCost: true,
+            images: { select: { url: true } },
+          },
+        },
       },
     });
     if (!listing) throw ErrorFactory.NotFound("Publicación no encontrada");
 
     const body = (await request.json()) as Record<string, unknown>;
     const data: Prisma.MarketplaceListingUpdateInput = {};
+    /** `undefined` = no se tocó el precio; `null` = retirar la autorización. */
+    let belowCostOverride:
+      | ReturnType<typeof evaluateListingPrice>
+      | undefined;
     const imageUrls = parseImageUrls(body.imageUrls);
     const familyName = parseFamilyName(body.familyName);
     const saleConditions = parseSaleConditions(body.saleConditions);
@@ -169,6 +183,18 @@ export async function PATCH(
       if (!Number.isFinite(price) || price <= 0) {
         throw ErrorFactory.InvalidRequest(
           "El precio de Mercado Libre debe ser mayor que cero",
+        );
+      }
+      // Mismo piso que al crear: por debajo del costo solo con motivo escrito.
+      belowCostOverride = evaluateListingPrice({
+        price,
+        product: listing.product,
+        override: parsePriceOverride(body.priceOverride),
+      });
+      if (!belowCostOverride.ok) {
+        throw ErrorFactory.InvalidRequest(
+          belowCostOverride.message,
+          belowCostOverride.details,
         );
       }
       data.marketplacePrice = price;
@@ -244,7 +270,8 @@ export async function PATCH(
       body.attributes !== undefined ||
       familyName !== undefined ||
       imageUrls !== undefined ||
-      saleConditions !== undefined
+      saleConditions !== undefined ||
+      belowCostOverride !== undefined
     ) {
       data.metadata = buildMercadoLibreListingMetadata({
         current: listing.metadata,
@@ -254,6 +281,10 @@ export async function PATCH(
         ...(familyName !== undefined ? { familyName } : {}),
         ...(imageUrls !== undefined ? { imageUrls } : {}),
         ...(saleConditions !== undefined ? { saleConditions } : {}),
+        // Un precio nuevo por encima del costo retira la autorización anterior.
+        ...(belowCostOverride !== undefined
+          ? { belowCostOverride: belowCostOverride.ok ? belowCostOverride.override : null }
+          : {}),
       });
     }
     if (Object.keys(data).length === 0) {

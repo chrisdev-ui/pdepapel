@@ -4,6 +4,7 @@ import {
   getMercadoLibreCategoryPublicationError,
   parseMercadoLibreCategoryAttributes,
   parseMercadoLibreCategorySuggestions,
+  parseMercadoLibreCategoryPath,
 } from "@/lib/mercadolibre/categories";
 
 describe("Mercado Libre category helpers", () => {
@@ -24,8 +25,25 @@ describe("Mercado Libre category helpers", () => {
         categoryName: "Papelería",
         domainId: "MCO-STATIONERY",
         domainName: "Papelería",
+        path: [],
       },
     ]);
+  });
+
+  it("reads the path from the root of a category payload", () => {
+    expect(
+      parseMercadoLibreCategoryPath({
+        id: "MCO1234",
+        path_from_root: [
+          { id: "MCO1", name: "Hogar" },
+          { id: "MCO12", name: " Cocina " },
+          { id: "MCO1234", name: "Termos" },
+          { id: "MCO9", name: "" },
+        ],
+      }),
+    ).toEqual(["Hogar", "Cocina", "Termos"]);
+    expect(parseMercadoLibreCategoryPath({ id: "MCO1234" })).toEqual([]);
+    expect(parseMercadoLibreCategoryPath(null)).toEqual([]);
   });
 
   it("keeps only editable attributes that Mercado Libre marks as required", () => {

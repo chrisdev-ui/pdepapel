@@ -5,6 +5,7 @@ import {
   getMercadoLibreCategoryPublicationError,
   isMercadoLibreCategoryId,
   parseMercadoLibreCategoryAttributes,
+  parseMercadoLibreCategoryPath,
   type MercadoLibreCategoryAttribute,
   type MercadoLibreCategoryPublicationRequirements,
 } from "./categories";
@@ -15,6 +16,8 @@ export type MercadoLibreCategoryInspection =
       ok: true;
       categoryId: string;
       attributes: MercadoLibreCategoryAttribute[] | null;
+      /** Ruta desde la raíz (nombres) para mostrar junto a la sugerencia. */
+      path: string[];
     }
   | {
       ok: false;
@@ -111,11 +114,13 @@ export async function inspectMercadoLibreCategory(
     };
   }
 
+  const path = parseMercadoLibreCategoryPath(categoryResult.payload);
   if (!includeAttributes) {
     return {
       ok: true,
       categoryId: normalizedCategoryId,
       attributes: null,
+      path,
     };
   }
 
@@ -142,6 +147,7 @@ export async function inspectMercadoLibreCategory(
     ok: true,
     categoryId: normalizedCategoryId,
     attributes: parseMercadoLibreCategoryAttributes(attributesResult.payload),
+    path,
   };
 }
 

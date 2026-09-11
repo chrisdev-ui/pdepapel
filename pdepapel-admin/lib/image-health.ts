@@ -1,4 +1,5 @@
 import prismadb from "@/lib/prismadb";
+import { mapWithConcurrency } from "@/lib/concurrency";
 
 export type ImageHealth = "ok" | "broken" | "unknown";
 
@@ -31,19 +32,6 @@ export async function checkImageUrl(url: string, fetchImpl: FetchLike = fetch): 
   }
 }
 
-async function mapWithConcurrency<T, R>(items: T[], limit: number, worker: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let next = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, async () => {
-      while (next < items.length) {
-        const index = next++;
-        results[index] = await worker(items[index]);
-      }
-    }),
-  );
-  return results;
-}
 
 export interface ImageHealthReport {
   checked: number;

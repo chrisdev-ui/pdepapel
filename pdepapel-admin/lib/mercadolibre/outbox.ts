@@ -1,4 +1,5 @@
 import {
+  MarketplaceConnectionStatus,
   MarketplaceListingStatus,
   MarketplaceOutboxAction,
   MarketplaceOutboxStatus,
@@ -14,9 +15,12 @@ import {
   MercadoLibreFinancialsPendingError,
   type MercadoLibreOrderFinancials,
 } from "./order-financials";
+import { withMercadoLibrePublicationFailure } from "./listing-metadata";
 import {
+  createMercadoLibreItem,
+  createMercadoLibreItemDescription,
+  getMarketplaceListingStatusFromRemote,
   MercadoLibrePublicationError,
-  publishMercadoLibreListing,
   syncMercadoLibreListingContent,
 } from "./listings";
 import { enqueueMercadoLibreOutboxEvent } from "./queue";
@@ -265,6 +269,13 @@ export async function queueMarketplaceListingStatusSyncEvent(
   });
 }
 
+export function getMarketplaceListingPublicationKey(
+  connectionId: string,
+  listingId: string,
+) {
+  return `${connectionId}:publish:${listingId}`;
+}
+
 export async function queueMarketplaceListingPublicationEvent(
   transaction: MarketplaceListingSyncTransaction,
   {
@@ -277,16 +288,32 @@ export async function queueMarketplaceListingPublicationEvent(
     productId: string;
   },
 ) {
-  const deduplicationKey = `${connectionId}:publish:${listingId}`;
-  await transaction.marketplaceOutboxEvent.upsert({
-    where: { deduplicationKey },
-    update: {
+  const deduplicationKey = getMarketplaceListingPublicationKey(
+    connectionId,
+    listingId,
+  );
+  // Nunca se pisa un evento en PROCESSING: otro proceso está creando el ítem
+  // en este momento y devolverlo a PENDING permitiría una segunda creación.
+  const reopened = await transaction.marketplaceOutboxEvent.updateMany({
+    where: {
+      deduplicationKey,
+      status: { not: MarketplaceOutboxStatus.PROCESSING },
+    },
+    data: {
       payload: {},
       status: MarketplaceOutboxStatus.PENDING,
       availableAt: new Date(),
       lastError: null,
     },
-    create: {
+  });
+  if (reopened.count > 0) return;
+  const existing = await transaction.marketplaceOutboxEvent.findUnique({
+    where: { deduplicationKey },
+    select: { id: true },
+  });
+  if (existing) return;
+  await transaction.marketplaceOutboxEvent.create({
+    data: {
       connectionId,
       listingId,
       productId,
@@ -568,6 +595,9 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
               gtin: true,
               mpn: true,
               isArchived: true,
+              acqPrice: true,
+              transportationCost: true,
+              hasNoProductIdentifier: true,
               images: {
                 select: { url: true, isMain: true },
                 orderBy: { isMain: "desc" },
@@ -625,6 +655,16 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
   }
   const attempts = event.attempts + 1;
 
+  // Fuera del try: el catch necesita saber si el ítem ya quedó creado.
+  let publishedItem: {
+    id: string;
+    permalink: string | null;
+    status: string | null;
+    descriptionWarning: string | null;
+  } | null = null;
+  /** La publicación ya existía en Mercado Libre: el evento solo concilia. */
+  let reconciledPublication = false;
+
   try {
     let syncedQuantity: number | null = null;
     /** Stock local leído justo antes de enviar la cantidad a Mercado Libre. */
@@ -632,12 +672,6 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
     let syncedPrice: number | null = null;
     let syncedListingContent = false;
     let syncedListingStatus: MarketplaceListingStatus | null = null;
-    let publishedItem: {
-      id: string;
-      permalink: string | null;
-      status: string | null;
-      descriptionWarning: string | null;
-    } | null = null;
     let financialsUpdate: MarketplaceOrderFinancialsUpdate | null = null;
     if (event.action === MarketplaceOutboxAction.SYNC_ORDER_FINANCIALS) {
       const payload = event.payload as Record<string, unknown> | null;
@@ -815,20 +849,56 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
       syncedListingStatus = toMarketplaceListingStatus(targetStatus);
     } else if (event.action === MarketplaceOutboxAction.PUBLISH_LISTING) {
       if (event.listing!.externalItemId) {
-        throw new Error(
-          "La publicación ya tiene un identificador de Mercado Libre",
-        );
+        // Ya está publicada (por la ruta, por importación o por un intento
+        // anterior que guardó el id): no se vuelve a crear ni se marca error.
+        reconciledPublication = true;
+      } else {
+        const created = await createMercadoLibreItem({
+          id: event.listing!.id,
+          connectionId: event.listing!.connectionId,
+          categoryId: event.listing!.categoryId,
+          listingType: event.listing!.listingType,
+          marketplacePrice: event.listing!.marketplacePrice,
+          stockSafetyBuffer: event.listing!.stockSafetyBuffer,
+          metadata: event.listing!.metadata,
+          product: event.listing!.product,
+        });
+        // El id se guarda YA, antes de la descripción y de cualquier otra
+        // escritura: desde este punto la publicación existe y ningún
+        // reintento puede crearla dos veces.
+        const remote = getMarketplaceListingStatusFromRemote(created.status);
+        await prismadb.marketplaceListing.update({
+          where: { id: event.listing!.id },
+          data: {
+            externalItemId: created.id,
+            externalPermalink: created.permalink,
+            status: remote.status,
+            lastSyncedStock: Math.max(
+              0,
+              event.listing!.product.stock - event.listing!.stockSafetyBuffer,
+            ),
+            lastSyncedPrice: event.listing!.marketplacePrice,
+            lastRemoteUpdateAt: new Date(),
+            lastError: remote.note,
+            metadata: withMercadoLibrePublicationFailure(
+              event.listing!.metadata,
+              null,
+            ),
+          },
+        });
+        // El stock pudo moverse mientras se publicaba: se sincroniza ya.
+        await queueMarketplaceStockSyncEvents(prismadb, [
+          event.listing!.product.id,
+        ]);
+        publishedItem = {
+          ...created,
+          descriptionWarning: await createMercadoLibreItemDescription(
+            event.listing!.connectionId,
+            created.id,
+            event.listing!.product.description,
+          ),
+        };
       }
-      publishedItem = await publishMercadoLibreListing({
-        id: event.listing!.id,
-        connectionId: event.listing!.connectionId,
-        categoryId: event.listing!.categoryId,
-        listingType: event.listing!.listingType,
-        marketplacePrice: event.listing!.marketplacePrice,
-        stockSafetyBuffer: event.listing!.stockSafetyBuffer,
-        metadata: event.listing!.metadata,
-        product: event.listing!.product,
-      });
     } else {
       throw new Error(
         "La acción de sincronización todavía no está implementada",
@@ -877,6 +947,7 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
       }
       if (
         event.listing &&
+        !reconciledPublication &&
         (syncedQuantity !== null ||
           syncedPrice !== null ||
           syncedListingContent ||
@@ -903,10 +974,9 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
               ? {
                   externalItemId: publishedItem.id,
                   externalPermalink: publishedItem.permalink,
-                  status:
-                    publishedItem.status === "active"
-                      ? MarketplaceListingStatus.ACTIVE
-                      : MarketplaceListingStatus.PAUSED,
+                  status: getMarketplaceListingStatusFromRemote(
+                    publishedItem.status,
+                  ).status,
                   lastSyncedStock: Math.max(
                     0,
                     event.listing.product.stock -
@@ -915,8 +985,32 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
                   lastSyncedPrice: event.listing.marketplacePrice,
                 }
               : {}),
-            lastError: publishedItem?.descriptionWarning ?? null,
+            lastError: publishedItem
+              ? [
+                  getMarketplaceListingStatusFromRemote(publishedItem.status)
+                    .note,
+                  publishedItem.descriptionWarning,
+                ]
+                  .filter(Boolean)
+                  .join(" ") || null
+              : null,
           },
+        });
+      }
+      if (reconciledPublication && event.listing) {
+        // Solo se corrige un estado local equivocado (DRAFT/ERROR con id
+        // remoto); PAUSED o CLOSED se respetan porque los dice Mercado Libre.
+        await transaction.marketplaceListing.updateMany({
+          where: {
+            id: event.listing.id,
+            status: {
+              in: [
+                MarketplaceListingStatus.DRAFT,
+                MarketplaceListingStatus.ERROR,
+              ],
+            },
+          },
+          data: { status: MarketplaceListingStatus.ACTIVE, lastError: null },
         });
       }
       await transaction.marketplaceConnection.update({
@@ -948,27 +1042,58 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
     const financialsPending =
       error instanceof MercadoLibreFinancialsPendingError;
     const errorMessage = getSafeErrorMessage(error);
-    const publicationNeedsReview =
-      error instanceof MercadoLibrePublicationError &&
-      error.requiresDraftReview;
-    if (
-      event.action === MarketplaceOutboxAction.PUBLISH_LISTING &&
-      event.listing?.id
-    ) {
-      await prismadb.marketplaceListing.update({
-        where: { id: event.listing.id },
-        data: {
-          status: publicationNeedsReview
-            ? MarketplaceListingStatus.DRAFT
-            : MarketplaceListingStatus.ERROR,
-          lastError: errorMessage,
-        },
-      });
-    }
+    const publicationFailure =
+      error instanceof MercadoLibrePublicationError ? error.toFailure() : null;
+    const publicationNeedsReview = publicationFailure?.kind === "review";
     const exhausted =
       !financialsPending &&
       !publicationNeedsReview &&
       attempts >= MAX_OUTBOX_EVENT_ATTEMPTS;
+    if (
+      event.action === MarketplaceOutboxAction.PUBLISH_LISTING &&
+      event.listing?.id &&
+      // Si el ítem ya se creó y su id quedó guardado, un fallo posterior no
+      // convierte la publicación en ERROR: el reintento la concilia.
+      publishedItem === null &&
+      !reconciledPublication
+    ) {
+      // review → DRAFT (la persona corrige); transitorio o reautenticación →
+      // el estado se queda como estaba y solo cambia el mensaje, porque el
+      // reintento es automático; agotado o desconocido → ERROR.
+      const keepStatus =
+        publicationFailure?.kind === "transient" ||
+        publicationFailure?.kind === "reauth";
+      await prismadb.marketplaceListing.update({
+        where: { id: event.listing.id },
+        data: {
+          ...(publicationNeedsReview
+            ? { status: MarketplaceListingStatus.DRAFT }
+            : keepStatus && !exhausted
+              ? {}
+              : { status: MarketplaceListingStatus.ERROR }),
+          lastError: errorMessage,
+          metadata: withMercadoLibrePublicationFailure(
+            event.listing.metadata,
+            publicationFailure ?? {
+              kind: "unknown",
+              step: null,
+              field: null,
+              code: null,
+              message: errorMessage,
+            },
+          ),
+        },
+      });
+      if (publicationFailure?.kind === "reauth") {
+        await prismadb.marketplaceConnection.update({
+          where: { id: event.connectionId },
+          data: {
+            status: MarketplaceConnectionStatus.REAUTH_REQUIRED,
+            lastError: errorMessage,
+          },
+        });
+      }
+    }
     await prismadb.marketplaceOutboxEvent.update({
       where: { id: event.id },
       data: {

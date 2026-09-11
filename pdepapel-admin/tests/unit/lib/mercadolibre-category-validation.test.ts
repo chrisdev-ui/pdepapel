@@ -48,6 +48,10 @@ describe("Mercado Libre category validation", () => {
         payload: {
           id: "MCO1234",
           children_categories: [],
+          path_from_root: [
+            { id: "MCO1", name: "Papelería" },
+            { id: "MCO1234", name: "Lapiceros" },
+          ],
           settings: { listing_allowed: true, item_conditions: ["new"] },
         },
       })
@@ -80,6 +84,7 @@ describe("Mercado Libre category validation", () => {
           values: [],
         },
       ],
+      path: ["Papelería", "Lapiceros"],
     });
   });
 

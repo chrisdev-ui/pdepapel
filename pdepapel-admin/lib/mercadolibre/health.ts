@@ -6,6 +6,7 @@ import {
   MarketplaceWebhookEventStatus,
 } from "@prisma/client";
 
+import { getUnitCostFloor } from "@/lib/product-costs";
 import prismadb from "@/lib/prismadb";
 import {
   RETURN_MARKETPLACE_ORDER_STATUSES,
@@ -104,6 +105,7 @@ export async function getMercadoLibreHealthSummary(
               name: true,
               stock: true,
               acqPrice: true,
+              transportationCost: true,
               images: { select: { url: true } },
             },
           },
@@ -177,7 +179,7 @@ export async function getMercadoLibreHealthSummary(
                 select: {
                   quantity: true,
                   unitPrice: true,
-                  product: { select: { acqPrice: true } },
+                  product: { select: { acqPrice: true, transportationCost: true } },
                 },
               },
             },
@@ -283,7 +285,8 @@ export async function getMercadoLibreHealthSummary(
     if (
       listing.minimumMarginAmount !== null &&
       listing.marketplacePrice !== null &&
-      listing.marketplacePrice - Number(listing.product.acqPrice ?? 0) <
+      listing.marketplacePrice -
+        (getUnitCostFloor(listing.product) ?? 0) <
         listing.minimumMarginAmount
     ) {
       issues.push({

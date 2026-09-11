@@ -19,6 +19,7 @@ const product = {
   sku: "LAP-KAW-01",
   stock: 8,
   acqPrice: 7000,
+  transportationCost: null,
   price: 12000,
   category: { id: "category-1", name: "Lapiceros" },
   images: [{ url: "https://example.com/lapicero.jpg" }],
@@ -28,18 +29,42 @@ function WizardHarness({
   onPublish,
   onSuggestPrice = async () => undefined,
   onApplyActiveConditions = async () => undefined,
+  onLoadPriceEstimate = async () => true,
+  onPersistStep,
   activePublication = false,
   error = null,
+  familyName = "Lapicero kawaii",
+  hasNoProductIdentifier = false,
+  initialStep,
+  initialIssue,
+  suggestions = [],
+  suggestionsNotice = null,
+  withColorList = false,
 }: {
   onPublish: () => Promise<void>;
   onSuggestPrice?: () => Promise<void>;
   onApplyActiveConditions?: () => Promise<void>;
+  onLoadPriceEstimate?: () => Promise<boolean>;
+  onPersistStep?: (step: 1 | 2 | 3 | 4) => Promise<boolean>;
   activePublication?: boolean;
   error?: string | null;
+  familyName?: string;
+  hasNoProductIdentifier?: boolean;
+  initialStep?: 1 | 2 | 3 | 4;
+  initialIssue?: { field: "attribute:BRAND" | "familyName"; message: string } | null;
+  suggestions?: {
+    categoryId: string;
+    categoryName: string;
+    domainId: string | null;
+    domainName: string | null;
+    path: string[];
+  }[];
+  suggestionsNotice?: string | null;
+  withColorList?: boolean;
 }) {
   const [form, setForm] = useState({
     productId: product.id,
-    familyName: "Lapicero kawaii",
+    familyName,
     marketplacePrice: "24000",
     categoryId: "MCO123",
     listingType: "gold_special",
@@ -54,6 +79,7 @@ function WizardHarness({
     packageWidthCm: "",
     packageLengthCm: "",
     packageWeightGrams: "",
+    belowCostReason: "",
   });
 
   const priceEstimate = {
@@ -98,14 +124,18 @@ function WizardHarness({
     <ListingPublicationWizard
       storeId="store-1"
       editing={activePublication}
+      initialStep={initialStep}
+      initialIssue={initialIssue}
+      onPersistStep={onPersistStep}
       activePublication={activePublication}
       activeSaleConditions={activeSaleConditions}
       canPublishDirectly={!activePublication}
       form={form}
       setForm={setForm}
       error={error}
-      selectedProduct={product}
-      suggestions={[]}
+      selectedProduct={{ ...product, hasNoProductIdentifier }}
+      suggestions={suggestions}
+      suggestionsNotice={suggestionsNotice}
       categoryAttributes={[
         {
           id: "BRAND",
@@ -114,6 +144,31 @@ function WizardHarness({
           valueType: "string",
           values: [],
         },
+        ...(withColorList
+          ? [
+              {
+                id: "COLOR",
+                name: "Color",
+                required: true,
+                valueType: "string",
+                values: [
+                  { id: "1", name: "Rosado" },
+                  { id: "2", name: "Azul" },
+                ],
+              },
+            ]
+          : []),
+        ...(hasNoProductIdentifier
+          ? [
+              {
+                id: "GTIN",
+                name: "Código universal de producto",
+                required: true,
+                valueType: "string",
+                values: [],
+              },
+            ]
+          : []),
       ]}
       verifiedCategoryId="MCO123"
       categoryTemplates={[]}
@@ -160,7 +215,6 @@ function WizardHarness({
       isSaving={false}
       isSavingTemplate={false}
       isSavingQuickProfile={false}
-      onError={() => undefined}
       onFormChange={(key, value) =>
         setForm((current) => ({ ...current, [key]: value }))
       }
@@ -170,7 +224,7 @@ function WizardHarness({
         setForm((current) => ({ ...current, categoryId }))
       }
       onLoadCategoryAttributes={async () => true}
-      onLoadPriceEstimate={async () => undefined}
+      onLoadPriceEstimate={onLoadPriceEstimate}
       onLoadShippingComparison={async () => undefined}
       onApplyActiveSaleConditions={onApplyActiveConditions}
       onListingTypeChange={(listingType) =>
@@ -204,11 +258,11 @@ describe("ListingPublicationWizard", () => {
     ).toHaveValue("0");
     expect(screen.getByText(/Precio de la tienda en línea:/)).toBeVisible();
     expect(
-      screen.getByLabelText("Nombre de familia en Mercado Libre"),
+      screen.getByLabelText(/Nombre de familia en Mercado Libre/),
     ).toHaveValue("Lapicero kawaii");
 
     fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
-    expect(screen.getByLabelText("Categoría de Mercado Libre")).toBeVisible();
+    expect(screen.getByLabelText(/^Categoría de Mercado Libre/)).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
     expect(await screen.findByLabelText(/Marca/)).toBeVisible();
@@ -240,7 +294,7 @@ describe("ListingPublicationWizard", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
-    expect(screen.getByLabelText("Categoría de Mercado Libre")).toBeVisible();
+    expect(screen.getByLabelText(/^Categoría de Mercado Libre/)).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
     fireEvent.change(await screen.findByLabelText(/Marca/), {
       target: { value: "P de Papel" },
@@ -301,5 +355,198 @@ describe("ListingPublicationWizard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Aplicar condiciones" }));
 
     expect(onApplyActiveConditions).toHaveBeenCalledOnce();
+  });
+
+  it("marks the exact field that blocks a step and clears it when corrected", async () => {
+    render(<WizardHarness onPublish={async () => undefined} familyName="" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+
+    const familyName = screen.getByLabelText(/Nombre de familia en Mercado Libre/);
+    expect(familyName).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Escribe el nombre de familia",
+    );
+    expect(familyName).toHaveFocus();
+    // Sigue en el paso 1.
+    expect(
+      screen.queryByLabelText("Categoría de Mercado Libre"),
+    ).not.toBeInTheDocument();
+
+    fireEvent.change(familyName, { target: { value: "Lapicero kawaii" } });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Continuar" }));
+    // Marca obligatoria vacía: el error queda junto al campo de la ficha.
+    const brand = await screen.findByLabelText(/Marca/);
+    expect(brand).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByRole("alert")).toHaveTextContent("Completa «BRAND»");
+    expect(brand).toHaveFocus();
+  });
+
+  it("stays on the technical sheet when the pricing lookup fails", async () => {
+    const onLoadPriceEstimate = vi.fn(async () => false);
+    render(
+      <WizardHarness
+        onPublish={async () => undefined}
+        onLoadPriceEstimate={onLoadPriceEstimate}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    fireEvent.change(await screen.findByLabelText(/Marca/), {
+      target: { value: "P de Papel" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+
+    expect(onLoadPriceEstimate).toHaveBeenCalledOnce();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByText("Condiciones de venta")).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/Marca/)).toBeVisible();
+  });
+
+  it("saves each step before moving on and stops when saving fails", async () => {
+    const onPersistStep = vi
+      .fn<(step: 1 | 2 | 3 | 4) => Promise<boolean>>()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+    render(
+      <WizardHarness
+        onPublish={async () => undefined}
+        onPersistStep={onPersistStep}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    expect(
+      await screen.findByLabelText(/^Categoría de Mercado Libre/),
+    ).toBeVisible();
+    expect(onPersistStep).toHaveBeenLastCalledWith(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(onPersistStep).toHaveBeenLastCalledWith(2);
+    // El guardado del paso 2 falló: no se avanza a la ficha técnica.
+    expect(screen.getByLabelText(/^Categoría de Mercado Libre/)).toBeVisible();
+    expect(screen.queryByLabelText(/Marca/)).not.toBeInTheDocument();
+  });
+
+  it("reopens on the rejected step with Mercado Libre's message on the field", () => {
+    render(
+      <WizardHarness
+        onPublish={async () => undefined}
+        initialStep={3}
+        initialIssue={{
+          field: "attribute:BRAND",
+          message: "Mercado Libre rechazó el atributo BRAND",
+        }}
+      />,
+    );
+
+    const brand = screen.getByLabelText(/Marca/);
+    expect(brand).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Mercado Libre rechazó el atributo BRAND",
+    );
+  });
+
+  it("does not require a GTIN for a product flagged without identifier", async () => {
+    render(
+      <WizardHarness onPublish={async () => undefined} hasNoProductIdentifier />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    const gtin = await screen.findByLabelText(/Código universal de producto/);
+    expect(gtin).toHaveAttribute(
+      "placeholder",
+      "Sin código de barras (marcado en el producto)",
+    );
+    fireEvent.change(screen.getByLabelText(/Marca/), {
+      target: { value: "P de Papel" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+
+    expect(await screen.findByText("Condiciones de venta")).toBeVisible();
+  });
+
+  it("shows the path beside each suggestion and keeps the list while typing", () => {
+    render(
+      <WizardHarness
+        onPublish={async () => undefined}
+        initialStep={2}
+        suggestions={[
+          {
+            categoryId: "MCO123",
+            categoryName: "Lapiceros",
+            domainId: "MCO-PENS",
+            domainName: "Lapiceros y bolígrafos",
+            path: ["Papelería", "Escritura", "Lapiceros"],
+          },
+          {
+            categoryId: "MCO456",
+            categoryName: "Marcadores",
+            domainId: null,
+            domainName: "Marcadores",
+            path: [],
+          },
+        ]}
+        suggestionsNotice="Mercado Libre no respondió por 1 de las categorías sugeridas."
+      />,
+    );
+
+    const list = screen.getByRole("list", {
+      name: "Categorías sugeridas por Mercado Libre",
+    });
+    expect(list).toHaveTextContent("Papelería › Escritura › Lapiceros");
+    expect(list).toHaveTextContent("Marcadores");
+    expect(screen.getByRole("status")).toHaveTextContent("no respondió por 1");
+    // La sugerencia que coincide con el código escrito aparece marcada.
+    expect(screen.getByRole("button", { name: /Lapiceros/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    fireEvent.change(screen.getByLabelText(/^Categoría de Mercado Libre/), {
+      target: { value: "MCO4" },
+    });
+    expect(
+      screen.getByRole("list", { name: "Categorías sugeridas por Mercado Libre" }),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: /Lapiceros/ })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+  });
+
+  it("lets a list attribute take a free value when no option matches", async () => {
+    render(
+      <WizardHarness
+        onPublish={async () => undefined}
+        initialStep={3}
+        withColorList
+      />,
+    );
+
+    // Un valor guardado fuera de la lista se edita como texto libre.
+    expect(screen.getByLabelText(/^Color/)).toHaveAttribute("role", "combobox");
+    fireEvent.change(screen.getByLabelText(/^Marca/), {
+      target: { value: "P de Papel" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Completa «COLOR»");
+  });
+
+  it("names the current step at phone width and marks required fields", () => {
+    render(<WizardHarness onPublish={async () => undefined} />);
+
+    expect(screen.getByText("Paso 1 de 4 · Producto")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Nombre de familia en Mercado Libre* (obligatorio)"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/\(opcional\)/)).not.toBeInTheDocument();
   });
 });

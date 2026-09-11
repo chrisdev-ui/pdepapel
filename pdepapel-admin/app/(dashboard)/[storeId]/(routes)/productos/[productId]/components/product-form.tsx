@@ -326,7 +326,11 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               }),
             ),
             percentageIncrease: INITIAL_PERCENTAGE_INCREASE,
-            transportationCost: INITIAL_TRANSPORTATION_COST + INITIAL_MISC_COST,
+            // Se guarda con el producto; el valor sembrado solo aplica a los
+            // productos creados antes de que existiera la columna.
+            transportationCost:
+              initialData.transportationCost ??
+              INITIAL_TRANSPORTATION_COST + INITIAL_MISC_COST,
             miscCost: 0,
             productGroupId: initialData.productGroupId || "",
             stock: initialData.stock,
@@ -1412,7 +1416,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                         />
                       </FormControl>
                       <FormDescription>
-                        Por unidad. Entra solo en el precio sugerido.
+                        Por unidad. Se guarda con el producto: entra en el precio sugerido y en el piso de precio de Mercado Libre.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

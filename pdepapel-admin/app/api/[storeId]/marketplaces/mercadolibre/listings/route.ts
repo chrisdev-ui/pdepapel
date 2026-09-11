@@ -16,6 +16,10 @@ import {
   parseMercadoLibreSaleConditions,
   type MercadoLibreAttribute,
 } from "@/lib/mercadolibre/listing-metadata";
+import {
+  evaluateListingPrice,
+  parsePriceOverride,
+} from "@/lib/mercadolibre/listing-price-guard";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
@@ -213,6 +217,13 @@ export async function GET(
             stock: true,
             price: true,
             acqPrice: true,
+            transportationCost: true,
+            gtin: true,
+            brand: true,
+            mpn: true,
+            hasNoProductIdentifier: true,
+            color: { select: { name: true } },
+            size: { select: { name: true } },
             images: {
               select: { url: true, isMain: true },
               orderBy: { isMain: "desc" },
@@ -268,9 +279,29 @@ export async function POST(
 
     const product = await prismadb.product.findFirst({
       where: { id: productId, storeId: params.storeId },
-      select: { id: true, name: true, images: { select: { url: true } } },
+      select: {
+        id: true,
+        name: true,
+        acqPrice: true,
+        transportationCost: true,
+        images: { select: { url: true } },
+      },
     });
     if (!product) throw ErrorFactory.NotFound("Producto no encontrado");
+
+    // Piso de precio: por debajo del costo solo con motivo escrito.
+    const marketplacePrice = parseOptionalPrice(body.marketplacePrice);
+    const priceGuard =
+      marketplacePrice === null
+        ? null
+        : evaluateListingPrice({
+            price: marketplacePrice,
+            product,
+            override: parsePriceOverride(body.priceOverride),
+          });
+    if (priceGuard && !priceGuard.ok) {
+      throw ErrorFactory.InvalidRequest(priceGuard.message, priceGuard.details);
+    }
 
     const categoryId = parseOptionalCategory(body.categoryId);
     if (categoryId) {
@@ -294,7 +325,7 @@ export async function POST(
       data: {
         connectionId: connection.id,
         productId: product.id,
-        marketplacePrice: parseOptionalPrice(body.marketplacePrice),
+        marketplacePrice,
         categoryId,
         listingType: parseListingType(body.listingType),
         stockSafetyBuffer: parseSafetyBuffer(body.stockSafetyBuffer),
@@ -307,6 +338,7 @@ export async function POST(
           familyName,
           imageUrls,
           saleConditions: parseSaleConditions(body.saleConditions),
+          belowCostOverride: priceGuard?.ok ? priceGuard.override : null,
         }),
       },
     });

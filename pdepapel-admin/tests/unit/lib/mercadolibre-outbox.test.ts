@@ -129,10 +129,12 @@ describe("Mercado Libre outbox", () => {
   });
 
   it("queues a publication once and keeps it safe for retry", async () => {
-    const upsert = vi.fn().mockResolvedValue({ id: "event-id" });
+    const updateMany = vi.fn().mockResolvedValue({ count: 0 });
+    const findUnique = vi.fn().mockResolvedValue(null);
+    const create = vi.fn().mockResolvedValue({ id: "event-id" });
 
     await queueMarketplaceListingPublicationEvent(
-      { marketplaceOutboxEvent: { upsert } } as never,
+      { marketplaceOutboxEvent: { updateMany, findUnique, create } } as never,
       {
         connectionId: "connection-id",
         listingId: "listing-id",
@@ -140,15 +142,37 @@ describe("Mercado Libre outbox", () => {
       },
     );
 
-    expect(upsert).toHaveBeenCalledWith(
+    expect(updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { deduplicationKey: "connection-id:publish:listing-id" },
-        create: expect.objectContaining({
+        where: {
+          deduplicationKey: "connection-id:publish:listing-id",
+          status: { not: "PROCESSING" },
+        },
+        data: expect.objectContaining({ status: "PENDING" }),
+      }),
+    );
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
           action: MarketplaceOutboxAction.PUBLISH_LISTING,
+          deduplicationKey: "connection-id:publish:listing-id",
           payload: {},
         }),
       }),
     );
+  });
+
+  it("never reopens a publication event that is being processed right now", async () => {
+    const updateMany = vi.fn().mockResolvedValue({ count: 0 });
+    const findUnique = vi.fn().mockResolvedValue({ id: "event-id" });
+    const create = vi.fn();
+
+    await queueMarketplaceListingPublicationEvent(
+      { marketplaceOutboxEvent: { updateMany, findUnique, create } } as never,
+      { connectionId: "connection-id", listingId: "listing-id", productId: "product-id" },
+    );
+
+    expect(create).not.toHaveBeenCalled();
   });
 
   it("queues an explicit pause or activation instead of changing remote status inline", async () => {

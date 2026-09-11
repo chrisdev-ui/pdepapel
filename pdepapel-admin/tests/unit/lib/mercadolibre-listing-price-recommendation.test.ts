@@ -58,4 +58,29 @@ describe("recommendMercadoLibreListingPrice", () => {
     expect(recommendation?.expectedProfit).toBeGreaterThanOrEqual(6_000);
     expect(recommendation?.price).toBeGreaterThan(30_000);
   });
+
+  it("also covers a fixed listing fee when Mercado Libre charges one", async () => {
+    const withoutListingFee = await recommendMercadoLibreListingPrice({
+      acquisitionCost: 4_000,
+      targetProfit: 6_000,
+      initialPrice: 10_000,
+      getFeeQuote: async (price) => ({ saleFeeAmount: Math.ceil(price * 0.13) + 3_000, percentageFee: 13, fixedFee: 3_000 }),
+    });
+    const withListingFee = await recommendMercadoLibreListingPrice({
+      acquisitionCost: 4_000,
+      targetProfit: 6_000,
+      initialPrice: 10_000,
+      getFeeQuote: async (price) => ({
+        saleFeeAmount: Math.ceil(price * 0.13) + 3_000,
+        percentageFee: 13,
+        fixedFee: 3_000,
+        listingFeeAmount: 2_000,
+      }),
+    });
+    // Ejemplo del informe: costo 4.000, meta 6.000, 13 % + 3.000 → 14.943.
+    expect(withoutListingFee?.price).toBe(14_943);
+    expect(withoutListingFee?.expectedProfit).toBeGreaterThanOrEqual(6_000);
+    expect(withListingFee?.price).toBeGreaterThan(withoutListingFee!.price);
+    expect(withListingFee?.expectedProfit).toBeGreaterThanOrEqual(6_000);
+  });
 });

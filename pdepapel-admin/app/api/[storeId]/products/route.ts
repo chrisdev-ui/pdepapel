@@ -10,6 +10,7 @@ import { PRICE_RANGE_BUCKETS, priceBucketWhere, typeFacetsFromCategories, type P
 import { getStoreVocabulary, suggestQuery } from "@/lib/search-suggestions";
 import { normalizeSearchTerm, productGroupNameSearchWhere, productNameSearchWhere } from "@/lib/search-terms";
 import cloudinaryInstance from "@/lib/cloudinary";
+import { parseTransportationCost } from "@/lib/product-costs";
 import prismadb from "@/lib/prismadb";
 import { PUBLIC_REVIEW_INCLUDE, PUBLIC_REVIEW_WHERE } from "@/lib/review-moderation";
 import {
@@ -133,6 +134,7 @@ export async function POST(
       name,
       price,
       acqPrice,
+      transportationCost,
       categoryId,
       colorId,
       sizeId,
@@ -253,6 +255,7 @@ export async function POST(
         slug,
         price,
         acqPrice,
+        transportationCost: parseTransportationCost(transportationCost),
         description: sanitizedDescription,
         stock: 0, // Stock is initialized to 0 and set via INITIAL_INTAKE movement below
         isArchived,

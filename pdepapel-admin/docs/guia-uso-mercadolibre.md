@@ -22,15 +22,18 @@ Haz esta revisión una vez y cada vez que agregues productos nuevos:
 1. Abre **Ventas → Mercado Libre**.
 2. Pulsa **Preparar publicación**.
 3. En **Producto**, busca y selecciona el producto de P de Papel que quieres vender.
-4. Revisa cada paso del asistente. Puedes guardar como borrador y volver después; nada se publica hasta que lo confirmes.
+4. Revisa cada paso del asistente. El título de la ventana dice en qué paso vas y, en el celular, el nombre del paso aparece bajo los números.
+5. El borrador se guarda solo a medida que avanzas: al pasar del paso 1 se crea, y al pasar de los pasos 2 y 3 se guarda lo completado. Puedes cerrar y seguir después desde la lista con **Editar**. Si cierras con cambios sin guardar, el asistente pregunta antes. Nada se publica hasta que lo confirmes.
+6. Si un paso tiene algo pendiente, el asistente no avanza: marca el campo exacto con el mensaje debajo y lo enfoca. Corrígelo y vuelve a pulsar **Continuar**.
 
 ### Paso 1: producto, precio y stock
 
 - Confirma que escogiste el producto correcto mirando su foto y nombre.
 - Revisa el **Nombre de familia en Mercado Libre**. Es el nombre común del artículo, sin color, talla ni diseño. Mercado Libre usa ese dato para completar el título de la publicación.
 - Escribe el precio para Mercado Libre. El precio de la tienda es solo una referencia y no se cambia.
-- Si aparece un valor sugerido, tómalo como una ayuda. Revísalo y cámbialo si es necesario.
-- Define la **reserva de seguridad**. Normalmente 1 unidad funciona bien para productos con pocas existencias.
+- Si aparece un valor sugerido, tómalo como una ayuda. Revísalo y cámbialo si es necesario. La sugerencia ya incluye el cargo por vender, el cargo por publicar y el gasto de **Envío y otros gastos** que tenga el producto en Productos.
+- Si el precio queda por debajo del costo por unidad (precio de compra más envío y otros gastos), el paso 4 lo avisa y pide un motivo antes de guardar o publicar. Es una decisión consciente, no un bloqueo.
+- Define la **reserva de seguridad** en **Ajustes de stock y precio**. Empieza en 0; 1 unidad suele funcionar bien para productos con pocas existencias.
 - Activa la actualización de precio solamente si quieres que los cambios de este precio desde P de Papel se envíen a Mercado Libre.
 
 **Ejemplo sencillo:** un producto cuesta $10.000 y quieres recibir al menos $6.000 de utilidad después del cargo estimado de Mercado Libre. La sugerencia de precio intenta cubrir esos $16.000 y el cargo estimado. Los valores finales de envío, impuestos, descuentos o devoluciones pueden cambiar lo que realmente recibes.
@@ -39,30 +42,38 @@ Haz esta revisión una vez y cada vez que agregues productos nuevos:
 
 ### Paso 2: categoría y fotos
 
-1. Pulsa **Sugerir categoría** y escoge la categoría verificada que mejor describa el producto. No escribas ni reutilices manualmente un código de categoría antiguo.
-2. Revisa las fotos. La primera será la foto principal.
-3. Deja seleccionadas solo fotos que correspondan exactamente al artículo y muestren bien color, tamaño o contenido.
-4. Se necesita al menos **una** foto para publicar. Procura usar **tres o más** (frente, detalle y contenido) para que la clienta tenga más confianza.
-5. Si no hay fotos, usa **Agregar fotos**: abrirá el producto en una pestaña nueva. Carga las fotos, guarda el producto y vuelve al asistente para continuar.
+1. Pulsa **Sugerir categoría** y escoge la categoría verificada que mejor describa el producto. Cada sugerencia muestra su ruta completa (por ejemplo, Papelería › Escritura › Lapiceros) para distinguir categorías con nombres parecidos. La lista se queda a la vista aunque escribas o pegues un código, y la opción elegida aparece marcada. No escribas ni reutilices manualmente un código de categoría antiguo.
+2. Si aparece el aviso «Mercado Libre no respondió por N de las categorías sugeridas», la lista está incompleta por un problema momentáneo de Mercado Libre. Si ninguna encaja, vuelve a pulsar **Sugerir categoría** en unos minutos.
+3. Revisa las fotos. La primera será la foto principal.
+4. Deja seleccionadas solo fotos que correspondan exactamente al artículo y muestren bien color, tamaño o contenido.
+5. Se necesita al menos **una** foto para publicar. Procura usar **tres o más** (frente, detalle y contenido) para que la clienta tenga más confianza.
+6. Si no hay fotos, usa **Agregar fotos**: abrirá el producto en una pestaña nueva. Carga las fotos, guarda el producto y vuelve al asistente para continuar.
 
 **Consejo:** una foto clara del producto completo suele ser mejor portada que una foto con muchos artículos diferentes.
 
 ### Paso 3: ficha del producto
 
-1. Completa los datos que Mercado Libre pida, por ejemplo marca, color, material, medida o unidades.
-2. Escribe datos reales. No inventes medidas, marca o características.
-3. Si ves información que no aplica, no la uses solo para completar el formulario.
-4. Pulsa **Actualizar campos** después de escoger o cambiar la categoría. Si el aviso dice que no hay campos adicionales, ese paso ya está listo: no es un error ni hay nada más que llenar.
-5. Pulsa **Revisar contenido** si quieres una lista de cosas para comprobar. Esta revisión no cambia ni publica nada.
+1. Completa los datos que Mercado Libre pida, por ejemplo marca, color, material, medida o unidades. Los campos con asterisco son obligatorios.
+2. Marca, GTIN, MPN, color y tamaño llegan llenos desde la ficha del producto en Productos cuando ya existen. Solo se completan los vacíos; nunca se pisa lo que ya escribiste.
+3. Si el producto está marcado «No tiene identificador global», el campo de código universal (GTIN) no es obligatorio: muestra «Sin código de barras (marcado en el producto)» y Mercado Libre recibe ese motivo en lugar del código.
+4. En los campos de lista, si ninguna opción describe el producto, elige **Ninguna coincide: escribir otro valor** y escribe el dato real. Puedes volver a la lista con el enlace que aparece debajo.
+5. Escribe datos reales. No inventes medidas, marca o características.
+6. Si ves información que no aplica, no la uses solo para completar el formulario.
+7. Los campos ya cargados se conservan aunque vuelvas al paso anterior y regreses. Pulsa **Actualizar campos** solo si cambiaste la categoría o quieres volver a pedirlos a Mercado Libre. Si el aviso dice que no hay campos adicionales, ese paso ya está listo: no es un error ni hay nada más que llenar.
 
 ### Paso 4: revisar y decidir
 
-Antes de terminar confirma: producto, precio, fotos, categoría, datos y cantidad disponible.
+Antes de terminar confirma: producto, precio, fotos, categoría, datos y cantidad disponible. Si las comisiones no se pudieron consultar, el asistente se queda en el paso 3 y lo dice; inténtalo de nuevo con **Continuar**.
 
+- Si el precio está por debajo del costo por unidad, aparece un aviso rosado con el costo. Sube el precio o escribe el **Motivo para publicar por debajo del costo** (mínimo 5 caracteres). El motivo queda guardado con la publicación.
 - Pulsa **Guardar borrador** si necesitas revisarlo después.
-- Pulsa **Publicar ahora** solo cuando todo esté correcto.
+- Pulsa **Publicar ahora** solo cuando todo esté correcto. P de Papel pregunta **¿Guardar y publicar?** con el producto y el precio antes de enviar nada.
 
-P de Papel siempre pide una confirmación antes de enviar una publicación a Mercado Libre.
+Después de confirmar pueden pasar tres cosas:
+
+- **Se publicó.** La publicación queda activa (o en revisión de Mercado Libre, con su aviso) y el stock se sincroniza en seguida.
+- **Mercado Libre la rechazó.** Vuelve a ser borrador con el motivo. Al pulsar **Editar**, el asistente abre en el paso que Mercado Libre rechazó y marca el campo. Corrige y vuelve a publicar.
+- **Mercado Libre no respondió.** El aviso dice que se reintentará solo en unos minutos. No vuelvas a publicar: se crearía una sola vez de todos modos, pero el reintento ya está programado.
 
 ## 3. Usar un perfil rápido para publicar más fácil
 
@@ -90,7 +101,8 @@ Un perfil rápido **no publica productos por sí solo** y tampoco modifica publi
 
 En la lista de publicaciones puedes:
 
-- **Editar:** cambiar precio, reserva, fotos o datos antes de enviar una actualización.
+- **Editar:** cambiar precio, reserva, fotos o datos antes de enviar una actualización. Un borrador se abre en el primer paso incompleto, o en el paso que Mercado Libre rechazó; nunca desde cero.
+- **Revisar contenido:** ver una lista de cosas para comprobar antes de publicar o sincronizar. No cambia ni publica nada.
 - **Eliminar borrador:** borrar un intento que nunca llegó a publicarse. Solo aparece para borradores o errores sin ventas ni preguntas; no elimina publicaciones que ya estén en Mercado Libre.
 - **Sincronizar contenido:** enviar las fotos, descripción y datos seleccionados a Mercado Libre. Revisa la confirmación porque reemplaza esos datos allá.
 - **Pausar o activar:** dejar de ofrecer temporalmente una publicación o volver a ofrecerla.
@@ -209,10 +221,15 @@ No concilies una venta antigua si ya creaste una venta manual o ya ajustaste el 
 | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | No aparece el botón para publicar           | Guarda el producto, revisa que tenga fotos y vuelve a entrar. Si continúa, avisa a la persona responsable de la administración. |
 | El precio sugerido no me convence           | Cámbialo. Es una ayuda, no una obligación.                                                                                      |
-| El producto no tiene una categoría adecuada | Busca una categoría más específica en el selector; no publiques hasta estar conforme.                                           |
+| El producto no tiene una categoría adecuada | Busca una categoría más específica en el selector; la ruta completa de cada sugerencia ayuda a distinguirlas. No publiques hasta estar conforme. |
+| «Mercado Libre no respondió por N de las categorías sugeridas» | La lista está incompleta por un fallo momentáneo. Si ninguna sirve, pulsa **Sugerir categoría** de nuevo en unos minutos.          |
+| El precio está por debajo del costo por unidad | Sube el precio o escribe el motivo en el paso 4. El costo incluye el precio de compra y **Envío y otros gastos** del producto.   |
+| La publicación volvió a borrador con un mensaje | Mercado Libre la rechazó. Pulsa **Editar**: el asistente abre en el paso rechazado con el campo marcado. Corrige y publica de nuevo. |
+| «Se reintentará automáticamente en unos minutos» | Mercado Libre no respondió. No vuelvas a publicar; el reintento ya está programado y la publicación no se duplica.             |
+| Cerré el asistente sin terminar              | Lo completado hasta el último paso guardado está en la lista como borrador. Ábrelo con **Editar** y sigue donde ibas.             |
 | Mercado Libre pide “nombre de familia”       | En **Editar**, escribe el nombre común del producto sin color, talla ni diseño; guarda y vuelve a publicar.                    |
 | El paso “Ficha técnica” no muestra campos    | Pulsa **Actualizar campos**. Si dice que no hay campos adicionales, continúa: esa categoría no exige más datos.                |
-| La categoría dejó de estar disponible        | El asistente conserva el borrador, elimina solo la categoría antigua y muestra opciones verificadas. Escoge una y vuelve a cargar la ficha técnica. |
+| La categoría dejó de estar disponible        | El asistente conserva el borrador y la ficha técnica, quita solo la categoría antigua y muestra opciones verificadas. Escoge una: se completan solo los campos que falten. |
 | Me quedó un borrador que no usaré            | Usa **Eliminar borrador**. Solo borra intentos locales sin publicar, sin ventas y sin preguntas.                               |
 | Una venta no aparece al instante            | Espera unos minutos y pulsa **Actualizar**. No crees una venta manual mientras revisas.                                         |
 | Una venta dice «Inventario con excepción»   | Vincula la publicación o repón stock y pulsa **Re-sincronizar** en la fila. No ajustes el inventario a mano: se descontaría dos veces. |
@@ -242,6 +259,7 @@ Marca cada punto antes de pulsar **Publicar ahora**:
 - [ ] Hay al menos una foto y la primera muestra bien el producto.
 - [ ] La categoría y los datos describen el artículo real.
 - [ ] Revisé que las variantes, colores, tamaños o cantidades sean correctos.
+- [ ] Si el precio está por debajo del costo, escribí el motivo a propósito.
 - [ ] Elegí publicar ahora o guardar borrador de manera consciente.
 
-Si los siete puntos están correctos, puedes publicar con tranquilidad.
+Si todos los puntos están correctos, puedes publicar con tranquilidad.

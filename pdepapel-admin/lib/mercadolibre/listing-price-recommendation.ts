@@ -2,6 +2,8 @@ export type MercadoLibreListingFeeQuote = {
   saleFeeAmount: number;
   percentageFee?: number | null;
   fixedFee?: number | null;
+  /** Costo fijo de publicar (algunos tipos lo cobran); también sale del neto. */
+  listingFeeAmount?: number | null;
 };
 
 type PriceRecommendationInput = {
@@ -48,8 +50,9 @@ export async function recommendMercadoLibreListingPrice({
 
   for (let attempt = 0; attempt < 8; attempt += 1) {
     quote = await getFeeQuote(price);
+    const listingFee = Math.max(0, quote.listingFeeAmount ?? 0);
     const percentageFee = quote.percentageFee ?? null;
-    const fixedFee = quote.fixedFee ?? 0;
+    const fixedFee = (quote.fixedFee ?? 0) + listingFee;
     const percentageMultiplier =
       percentageFee !== null && percentageFee >= 0 && percentageFee < 100
         ? 1 - percentageFee / 100
@@ -59,7 +62,7 @@ export async function recommendMercadoLibreListingPrice({
       : 0;
     const nextPrice = Math.max(
       price,
-      toPositiveInteger(requiredNetAmount + quote.saleFeeAmount),
+      toPositiveInteger(requiredNetAmount + quote.saleFeeAmount + listingFee),
       priceFromPercentage,
     );
     if (nextPrice <= price) {
@@ -67,7 +70,11 @@ export async function recommendMercadoLibreListingPrice({
         price,
         saleFeeAmount: quote.saleFeeAmount,
         expectedProfit:
-          price - quote.saleFeeAmount - acquisitionCost - additionalCosts,
+          price -
+          quote.saleFeeAmount -
+          listingFee -
+          acquisitionCost -
+          additionalCosts,
       };
     }
     price = nextPrice;
@@ -75,10 +82,15 @@ export async function recommendMercadoLibreListingPrice({
 
   if (!quote) return null;
   const finalQuote = await getFeeQuote(price);
+  const finalListingFee = Math.max(0, finalQuote.listingFeeAmount ?? 0);
   return {
     price,
     saleFeeAmount: finalQuote.saleFeeAmount,
     expectedProfit:
-      price - finalQuote.saleFeeAmount - acquisitionCost - additionalCosts,
+      price -
+      finalQuote.saleFeeAmount -
+      finalListingFee -
+      acquisitionCost -
+      additionalCosts,
   };
 }

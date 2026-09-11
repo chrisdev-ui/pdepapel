@@ -32,6 +32,12 @@ export type AsyncProductOption = {
   stock: number;
   price?: number | null;
   acqPrice?: number | null;
+  transportationCost?: number | null;
+  brand?: string | null;
+  mpn?: string | null;
+  hasNoProductIdentifier?: boolean;
+  color?: { name: string } | null;
+  size?: { name: string } | null;
   isArchived?: boolean;
   isKit?: boolean;
   category?: { id?: string; name: string } | null;
