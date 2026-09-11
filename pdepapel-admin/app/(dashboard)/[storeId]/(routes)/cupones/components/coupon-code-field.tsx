@@ -1,65 +1,54 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { FormLabel } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { useToast } from "@/hooks/use-toast";
-import { normalizeCouponCode } from "@/lib/coupon-code";
 import { Copy, Dice6, RefreshCw } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useState } from "react";
-import { UseFormReturn } from "react-hook-form";
+import type { UseFormReturn } from "react-hook-form";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
+import { normalizeCouponCode } from "@/lib/coupon-code";
+
 import { generateUniqueCouponCode } from "../server/utils";
 
 interface CouponCodeFieldProps {
   form: UseFormReturn<any>;
   fieldName?: string;
-  label?: string;
   placeholder?: string;
   disabled?: boolean;
-  isRequired?: boolean;
+  /** Id del control, para que `FormLabel` lo enlace. */
+  id?: string;
 }
 
+/**
+ * Campo del código con «proponer uno» y «copiar». Solo pinta el control: la
+ * etiqueta y el mensaje de error los pone el `FormItem` que lo envuelve.
+ */
 export const CouponCodeField: React.FC<CouponCodeFieldProps> = ({
   form,
   fieldName = "code",
-  label = "Código del cupón",
-  placeholder = "Ingresa o genera un código",
+  placeholder = "Escribe o genera un código",
   disabled = false,
-  isRequired = false,
+  id,
 }) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const { toast } = useToast();
   const params = useParams();
-  const storeId = params.storeId as string;
+  const storeId = String(params.storeId);
 
   const generateAndSetCode = async () => {
     setIsGenerating(true);
     try {
       const result = await generateUniqueCouponCode(storeId);
-
       if (result.success && result.code) {
-        // Set the generated code in the form
-        form.setValue(fieldName, result.code);
-
-        toast({
-          title: "¡Código generado!",
-          description: `Código ${result.code} generado exitosamente`,
-          variant: "success",
-        });
+        form.setValue(fieldName, result.code, { shouldDirty: true, shouldValidate: true });
+        toast({ description: `Código ${result.code} propuesto`, variant: "success" });
       } else {
-        toast({
-          title: "Error",
-          description: result.error || "No se pudo generar el código",
-          variant: "destructive",
-        });
+        toast({ description: result.error || "No se pudo generar el código", variant: "destructive" });
       }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Error inesperado al generar el código",
-        variant: "destructive",
-      });
+    } catch {
+      toast({ description: "No se pudo generar el código", variant: "destructive" });
     } finally {
       setIsGenerating(false);
     }
@@ -67,19 +56,12 @@ export const CouponCodeField: React.FC<CouponCodeFieldProps> = ({
 
   const copyToClipboard = async () => {
     const currentValue = form.getValues(fieldName);
-    if (currentValue) {
-      try {
-        await navigator.clipboard.writeText(currentValue);
-        toast({
-          description: "Código copiado al portapapeles",
-          variant: "success",
-        });
-      } catch (error) {
-        toast({
-          description: "Error al copiar al portapapeles",
-          variant: "destructive",
-        });
-      }
+    if (!currentValue) return;
+    try {
+      await navigator.clipboard.writeText(currentValue);
+      toast({ description: "Código copiado al portapapeles", variant: "success" });
+    } catch {
+      toast({ description: "No se pudo copiar al portapapeles", variant: "destructive" });
     }
   };
 
@@ -87,57 +69,30 @@ export const CouponCodeField: React.FC<CouponCodeFieldProps> = ({
   const inputRegistration = form.register(fieldName);
 
   return (
-    <div className="space-y-2">
-      <FormLabel htmlFor={fieldName} isRequired={isRequired}>
-        {label}
-      </FormLabel>
-      <div className="flex space-x-2">
-        <div className="flex-1">
-          <Input
-            id={fieldName}
-            placeholder={placeholder}
-            disabled={disabled}
-            {...inputRegistration}
-            onChange={(event) => {
-              event.target.value = normalizeCouponCode(event.target.value);
-              inputRegistration.onChange(event);
-            }}
-            className="uppercase"
-          />
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={generateAndSetCode}
-          disabled={disabled || isGenerating}
-          className="px-3"
-          title="Generar código aleatorio"
-        >
-          {isGenerating ? (
-            <RefreshCw className="h-4 w-4 animate-spin" />
-          ) : (
-            <Dice6 className="h-4 w-4" />
-          )}
+    <div className="flex gap-2">
+      <Input
+        id={id ?? fieldName}
+        placeholder={placeholder}
+        disabled={disabled}
+        autoComplete="off"
+        autoCapitalize="characters"
+        spellCheck={false}
+        maxLength={20}
+        {...inputRegistration}
+        onChange={(event) => {
+          event.target.value = normalizeCouponCode(event.target.value);
+          inputRegistration.onChange(event);
+        }}
+        className="font-mono uppercase"
+      />
+      <Button type="button" variant="outline" size="icon" onClick={generateAndSetCode} disabled={disabled || isGenerating} aria-label="Proponer un código aleatorio" title="Proponer un código aleatorio">
+        {isGenerating ? <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Dice6 className="h-4 w-4" aria-hidden="true" />}
+      </Button>
+      {currentValue ? (
+        <Button type="button" variant="outline" size="icon" onClick={copyToClipboard} aria-label="Copiar código" title="Copiar código">
+          <Copy className="h-4 w-4" aria-hidden="true" />
         </Button>
-        {currentValue && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={copyToClipboard}
-            className="px-3"
-            title="Copiar código"
-          >
-            <Copy className="h-4 w-4" />
-          </Button>
-        )}
-      </div>
-      {form.formState.errors[fieldName] && (
-        <p className="text-sm text-red-500">
-          {form.formState.errors[fieldName]?.message as string}
-        </p>
-      )}
+      ) : null}
     </div>
   );
 };

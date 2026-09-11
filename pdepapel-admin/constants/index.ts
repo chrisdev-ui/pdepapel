@@ -380,7 +380,7 @@ export const ModelsColumns: Record<Models, { [key: string]: string }> = {
     name: "Nombre",
     type: "Tipo",
     dimensions: "Dimensiones",
-    isDefault: "Por defecto",
+    isDefault: "Uso",
     createdAt: "Fecha de creación",
   },
   [Models.RestockOrders]: {

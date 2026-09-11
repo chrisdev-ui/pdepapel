@@ -1,16 +1,9 @@
 import prismadb from "@/lib/prismadb";
 
-export const getOffer = async (offerId: string) => {
-  const offer = await prismadb.offer.findUnique({
-    where: {
-      id: offerId,
-    },
-    include: {
-      products: true,
-      categories: true,
-      productGroups: true,
-    },
+/** Oferta de la tienda con sus destinos; `null` si no existe o es de otra tienda. */
+export const getOffer = async (offerId: string, storeId: string) => {
+  return prismadb.offer.findFirst({
+    where: { id: offerId, storeId },
+    include: { products: true, categories: true, productGroups: true },
   });
-
-  return offer;
 };

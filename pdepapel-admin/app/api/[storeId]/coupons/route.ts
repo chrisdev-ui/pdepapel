@@ -1,12 +1,10 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { normalizeCouponCode } from "@/lib/coupon-code";
+import { findOtherActiveWelcomeBenefit } from "@/lib/coupon-availability";
+import { COUPON_SELECT, parseCouponInput } from "@/lib/coupons";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs/server";
-import { DiscountType } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-
-// Enable Edge Runtime for faster response times
 
 export async function POST(
   req: Request,
@@ -17,108 +15,31 @@ export async function POST(
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
-    const body = await req.json();
-    const {
-      code,
-      type,
-      amount,
-      startDate,
-      endDate,
-      maxUses,
-      minOrderValue,
-      isActive,
-      isWelcomeBenefit,
-    } = body;
-    const normalizedCode = normalizeCouponCode(code ?? "");
-
     await verifyStoreOwner(userId, params.storeId);
 
-    if (!normalizedCode) throw ErrorFactory.InvalidRequest("Código requerido");
-    if (!type) throw ErrorFactory.InvalidRequest("Tipo de descuento requerido");
-    if (!amount) throw ErrorFactory.InvalidRequest("Monto requerido");
-    if (!startDate)
-      throw ErrorFactory.InvalidRequest("Fecha inicial requerida");
-    if (!endDate) throw ErrorFactory.InvalidRequest("Fecha final requerida");
-
-    if (type === DiscountType.PERCENTAGE && amount > 100) {
-      throw ErrorFactory.InvalidRequest(
-        "El descuento no puede ser mayor al 100%",
-      );
-    }
-
-    if (amount < 0) {
-      throw ErrorFactory.InvalidRequest("El monto no puede ser negativo");
-    }
-
-    if (new Date(startDate) > new Date(endDate)) {
-      throw ErrorFactory.InvalidRequest(
-        "La fecha inicial no puede ser mayor a la fecha final",
-      );
-    }
+    const input = parseCouponInput(await req.json());
 
     const existingCoupon = await prismadb.coupon.findFirst({
-      where: {
-        storeId: params.storeId,
-        code: normalizedCode,
-      },
-      select: {
-        id: true,
-      },
+      where: { storeId: params.storeId, code: input.code },
+      select: { id: true },
     });
+    if (existingCoupon) throw ErrorFactory.Conflict("Ya existe un cupón con este código");
 
-    if (existingCoupon?.id) {
-      throw ErrorFactory.Conflict("Ya existe un cupón con este código");
-    }
-
-    if (isWelcomeBenefit && isActive !== false) {
-      const activeWelcomeBenefit = await prismadb.coupon.findFirst({
-        where: {
-          storeId: params.storeId,
-          isWelcomeBenefit: true,
-          isActive: true,
-          endDate: { gte: new Date() },
-        },
-        select: { code: true },
-      });
-
-      if (activeWelcomeBenefit) {
+    if (input.isWelcomeBenefit && input.isActive) {
+      const other = await findOtherActiveWelcomeBenefit(prismadb, params.storeId);
+      if (other) {
         throw ErrorFactory.Conflict(
-          `El beneficio de bienvenida ${activeWelcomeBenefit.code} ya está activo. Desactívalo antes de crear otro.`,
+          `El beneficio de bienvenida ${other.code} ya está activo. Desactívalo antes de crear otro.`,
         );
       }
     }
 
     const coupon = await prismadb.coupon.create({
-      data: {
-        storeId: params.storeId,
-        code: normalizedCode,
-        type,
-        amount,
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
-        maxUses: maxUses || 99,
-        minOrderValue: minOrderValue || 0,
-        isActive,
-        isWelcomeBenefit: Boolean(isWelcomeBenefit),
-      },
-      select: {
-        id: true,
-        code: true,
-        type: true,
-        amount: true,
-        startDate: true,
-        endDate: true,
-        maxUses: true,
-        usedCount: true,
-        isActive: true,
-        minOrderValue: true,
-        isWelcomeBenefit: true,
-      },
+      data: { storeId: params.storeId, ...input },
+      select: COUPON_SELECT,
     });
 
-    return NextResponse.json(coupon, {
-      headers: CACHE_HEADERS.NO_CACHE,
-    });
+    return NextResponse.json(coupon, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {
     return handleErrorResponse(error, "COUPON_POST");
   }
@@ -137,45 +58,32 @@ export async function GET(
     if (!userId) throw ErrorFactory.Unauthenticated();
     await verifyStoreOwner(userId, params.storeId);
 
-    const { searchParams } = req.nextUrl;
-    const isActive = searchParams.get("isActive");
-
-    const whereClause: any = {
-      storeId: params.storeId,
-    };
-
-    if (isActive !== null) {
-      whereClause.isActive = isActive === "true";
-    }
+    const isActive = req.nextUrl.searchParams.get("isActive");
 
     const coupons = await prismadb.coupon.findMany({
-      where: whereClause,
-      select: {
-        id: true,
-        code: true,
-        type: true,
-        amount: true,
-        startDate: true,
-        endDate: true,
-        maxUses: true,
-        usedCount: true,
-        isActive: true,
-        minOrderValue: true,
-        isWelcomeBenefit: true,
+      where: {
+        storeId: params.storeId,
+        ...(isActive !== null ? { isActive: isActive === "true" } : {}),
       },
-      orderBy: {
-        createdAt: "desc",
-      },
+      select: COUPON_SELECT,
+      orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json(coupons, {
-      headers: CACHE_HEADERS.DYNAMIC,
-    });
+    return NextResponse.json(coupons, { headers: CACHE_HEADERS.DYNAMIC });
   } catch (error) {
     return handleErrorResponse(error, "COUPONS_GET");
   }
 }
 
+function parseIds(body: unknown): string[] {
+  const ids = (body as { ids?: unknown } | null)?.ids;
+  if (!Array.isArray(ids) || ids.length === 0 || !ids.every((id) => typeof id === "string" && id)) {
+    throw ErrorFactory.InvalidRequest("Se requieren IDs de cupones válidos en formato de arreglo");
+  }
+  return Array.from(new Set(ids as string[]));
+}
+
+/** Borra varios cupones; ninguno puede tener pedidos asociados (misma regla que el borrado individual). */
 export async function DELETE(
   req: NextRequest,
   { params }: { params: { storeId: string } },
@@ -185,58 +93,37 @@ export async function DELETE(
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
-    const { ids }: { ids: string[] } = await req.json();
-
-    if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      throw ErrorFactory.InvalidRequest(
-        "Se requieren IDs de cupones válidos en formato de arreglo",
-      );
-    }
+    const ids = parseIds(await req.json());
 
     await verifyStoreOwner(userId, params.storeId);
 
     await prismadb.$transaction(async (tx) => {
       const coupons = await tx.coupon.findMany({
-        where: {
-          id: {
-            in: ids,
-          },
-          storeId: params.storeId,
-        },
+        where: { id: { in: ids }, storeId: params.storeId },
+        select: { id: true, code: true, _count: { select: { orders: true } } },
       });
 
       if (coupons.length !== ids.length) {
-        throw ErrorFactory.NotFound(
-          "Algunos cupones no se han encontrado o no pertenecen a esta tienda",
+        throw ErrorFactory.NotFound("Algunos cupones no se han encontrado o no pertenecen a esta tienda");
+      }
+
+      const used = coupons.find((coupon) => coupon._count.orders > 0);
+      if (used) {
+        throw ErrorFactory.Conflict(
+          `El cupón ${used.code} tiene pedidos asociados y no puede eliminarse. Desactívalo para que nadie más lo use.`,
         );
       }
 
-      for (const coupon of coupons) {
-        if (coupon.usedCount && coupon.usedCount > 0) {
-          throw ErrorFactory.Conflict(
-            `El cupón ${coupon.code} no puede eliminarse porque ya ha sido utilizado`,
-          );
-        }
-      }
-
-      await tx.coupon.deleteMany({
-        where: {
-          storeId: params.storeId,
-          id: {
-            in: ids,
-          },
-        },
-      });
+      await tx.coupon.deleteMany({ where: { storeId: params.storeId, id: { in: ids } } });
     });
 
-    return NextResponse.json("Los cupones han sido eliminados", {
-      headers: CACHE_HEADERS.STATIC,
-    });
+    return NextResponse.json({ deleted: ids.length }, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {
     return handleErrorResponse(error, "COUPONS_DELETE");
   }
 }
 
+/** Desactiva varios cupones. Solo apaga el interruptor: la vigencia se conserva. */
 export async function PATCH(
   req: Request,
   { params }: { params: { storeId: string } },
@@ -246,50 +133,23 @@ export async function PATCH(
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
-    const body = await req.json();
-    const { ids } = body;
-
-    if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      throw ErrorFactory.InvalidRequest(
-        "Se requieren IDs de cupones válidos en formato de arreglo",
-      );
-    }
+    const ids = parseIds(await req.json());
 
     await verifyStoreOwner(userId, params.storeId);
 
     const result = await prismadb.$transaction(async (tx) => {
-      const coupons = await tx.coupon.findMany({
-        where: {
-          id: {
-            in: ids,
-          },
-          storeId: params.storeId,
-        },
-      });
-
-      if (coupons.length !== ids.length) {
-        throw ErrorFactory.NotFound(
-          "Algunos cupones no se han encontrado en esta tienda",
-        );
+      const found = await tx.coupon.count({ where: { id: { in: ids }, storeId: params.storeId } });
+      if (found !== ids.length) {
+        throw ErrorFactory.NotFound("Algunos cupones no se han encontrado en esta tienda");
       }
-
-      const updatedCoupons = await Promise.all(
-        coupons
-          .filter((coupon) => coupon.isActive)
-          .map((coupons) =>
-            tx.coupon.update({
-              where: { id: coupons.id },
-              data: { isActive: false, endDate: new Date() },
-            }),
-          ),
-      );
-
-      return updatedCoupons;
+      const updated = await tx.coupon.updateMany({
+        where: { id: { in: ids }, storeId: params.storeId, isActive: true },
+        data: { isActive: false },
+      });
+      return updated.count;
     });
 
-    return NextResponse.json(result, {
-      headers: CACHE_HEADERS.STATIC,
-    });
+    return NextResponse.json({ deactivated: result }, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {
     return handleErrorResponse(error, "COUPONS_PATCH");
   }

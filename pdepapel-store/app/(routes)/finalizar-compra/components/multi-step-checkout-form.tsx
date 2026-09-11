@@ -24,6 +24,7 @@ import { useConfetti } from "@/hooks/use-confetti";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useGuestUser } from "@/hooks/use-guest-user";
 import { useToast } from "@/hooks/use-toast";
+import { useCouponMinimumGuard } from "@/hooks/use-coupon-minimum-guard";
 import useValidateCoupon from "@/hooks/use-validate-coupon";
 import {
   getCheckoutRequestFailureAnalytics,
@@ -499,6 +500,22 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       ),
     [activeItems, couponState.coupon, shippingCost, freeShippingThreshold],
   );
+
+  // Mismo cuidado que en el carrito: sin la compra mínima el cupón se quita
+  // con aviso en vez de fallar al final con un 409.
+  const dropCouponBelowMinimum = useCallback(
+    (dropped: { code: string; minOrderValue: number | null }) => {
+      setCouponState((previous) => ({ ...previous, coupon: null, isValid: null }));
+      form.setValue("couponCode", "");
+      toast({
+        title: "Cupón retirado",
+        description: `${dropped.code} pide una compra mínima de ${currencyFormatter.format(Number(dropped.minOrderValue ?? 0))}.`,
+        variant: "warning",
+      });
+    },
+    [form, toast],
+  );
+  useCouponMinimumGuard(couponState.coupon, subtotal, dropCouponBelowMinimum);
 
   const analyticsItems = useMemo(
     () => activeItems.map((item) => toAnalyticsItem(item, item.quantity ?? 1)),

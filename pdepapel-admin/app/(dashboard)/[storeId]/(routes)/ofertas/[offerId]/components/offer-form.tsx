@@ -1,163 +1,124 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
+import { DiscountType, type Offer, type OfferCategory, type OfferProduct, type OfferProductGroup } from "@prisma/client";
+import axios from "axios";
+import { ArrowLeft, Trash } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+
 import { AlertModal } from "@/components/modals/alert-modal";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Heading } from "@/components/ui/heading";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { PercentageInput } from "@/components/ui/percentage-input";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
+import { ProductPlaceholder } from "@/components/ui/product-placeholder";
+import { SectionCard } from "@/components/ui/section-card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Models, discountOptions } from "@/constants";
+import { TintBadge } from "@/components/ui/tint-badge";
+import { discountOptions } from "@/constants";
 import { useFormPersist } from "@/hooks/use-form-persist";
 import { useFormValidationToast } from "@/hooks/use-form-validation-toast";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import { getDatePresets } from "@/lib/date-presets";
-import { currencyFormatter } from "@/lib/utils";
-import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  DiscountType,
-  Offer,
-  OfferCategory,
-  OfferProduct,
-  OfferProductGroup,
-} from "@prisma/client";
-import axios from "axios";
-import {
-  ArrowLeft,
-  CheckSquare,
-  Eraser,
-  Loader2,
-  Square,
-  Trash,
-} from "lucide-react";
-import Image from "next/image";
-import { useParams, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
-import * as z from "zod";
+import { OFFER_LABEL_MAX, OFFER_NAME_MAX } from "@/lib/offers";
+import { formatDiscount, getPromotionStatus, PROMOTION_STATUS } from "@/lib/promotion-status";
+import { localDateToPromotionDay, promotionDayToLocalDate } from "@/lib/promotion-window";
+import { cn, currencyFormatter } from "@/lib/utils";
 
-const formSchema = z.object({
-  name: z.string().min(1, "El nombre es requerido"),
-  label: z.string().optional(),
-  type: z.nativeEnum(DiscountType),
-  amount: z.coerce.number().min(0),
-  dateRange: z.object({
-    from: z.date({
-      required_error: "La fecha de inicio es requerida",
-      invalid_type_error: "La fecha de inicio debe ser una fecha válida",
+import type { OfferPickerData } from "../server/get-offer-picker";
+
+const formSchema = z
+  .object({
+    name: z.string().trim().min(1, "Escribe el nombre interno").max(OFFER_NAME_MAX, `Hasta ${OFFER_NAME_MAX} caracteres`),
+    label: z.string().trim().max(OFFER_LABEL_MAX, `Hasta ${OFFER_LABEL_MAX} caracteres`),
+    type: z.nativeEnum(DiscountType, { errorMap: () => ({ message: "Elige el tipo de descuento" }) }),
+    amount: z.coerce.number({ invalid_type_error: "Escribe el descuento" }).positive("El descuento debe ser mayor a 0"),
+    dateRange: z.object({
+      from: z.date({ required_error: "Elige la fecha de inicio", invalid_type_error: "Elige la fecha de inicio" }),
+      to: z.date({ required_error: "Elige la fecha de finalización", invalid_type_error: "Elige la fecha de finalización" }),
     }),
-    to: z.date({
-      required_error: "La fecha de finalización es requerida",
-      invalid_type_error: "La fecha de finalización debe ser una fecha válida",
-    }),
-  }),
-  isActive: z.boolean().default(true),
-  productIds: z.array(z.string()).optional(),
-  categoryIds: z.array(z.string()).optional(),
-  productGroupIds: z.array(z.string()).optional(),
-});
+    isActive: z.boolean(),
+    productIds: z.array(z.string()),
+    categoryIds: z.array(z.string()),
+    productGroupIds: z.array(z.string()),
+  })
+  .superRefine((value, ctx) => {
+    if (value.type === DiscountType.PERCENTAGE && value.amount > 100) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["amount"], message: "El porcentaje no puede ser mayor a 100" });
+    }
+    if (value.productIds.length + value.categoryIds.length + value.productGroupIds.length === 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["productIds"], message: "Elige al menos un producto, grupo o subcategoría" });
+    }
+  });
 
 type OfferFormValues = z.infer<typeof formSchema>;
 
+type ScopeTab = "productIds" | "productGroupIds" | "categoryIds";
+
 interface OfferFormProps {
-  initialData:
-    | (Offer & {
-        products: OfferProduct[];
-        categories: OfferCategory[];
-        productGroups: OfferProductGroup[];
-      })
-    | null;
-  products: {
-    id: string;
-    name: string;
-    price: number;
-    stock: number;
-    images: { url: string; isMain: boolean }[];
-    category: { name: string };
-    categoryId: string;
-    productGroupId: string | null;
-    isArchived?: boolean;
-  }[];
-  categories: {
-    id: string;
-    name: string;
-    type: { name: string };
-  }[];
-  productGroups: {
-    id: string;
-    name: string;
-  }[];
+  initialData: (Offer & { products: OfferProduct[]; categories: OfferCategory[]; productGroups: OfferProductGroup[] }) | null;
+  picker: OfferPickerData;
 }
 
-export const OfferForm: React.FC<OfferFormProps> = ({
-  initialData,
-  products,
-  categories,
-  productGroups,
-}) => {
+const SCOPE_TABS: { id: ScopeTab; label: string; search: string }[] = [
+  { id: "productIds", label: "Productos", search: "Buscar por nombre…" },
+  { id: "productGroupIds", label: "Grupos", search: "Buscar grupo…" },
+  { id: "categoryIds", label: "Subcategorías", search: "Buscar subcategoría o categoría…" },
+];
+
+const PAGE_SIZE = 40;
+const LONG_DATE = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "long", timeZone: "America/Bogota" });
+
+function includes(haystack: string, needle: string) {
+  return haystack.toLowerCase().includes(needle.trim().toLowerCase());
+}
+
+export const OfferForm: React.FC<OfferFormProps> = ({ initialData, picker }) => {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
-  const [open, setOpen] = useState(false);
+  const storeId = String(params.storeId);
+  const listHref = `/${storeId}/promociones`;
+
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [productSearch, setProductSearch] = useState("");
-  const [categorySearch, setCategorySearch] = useState("");
-  const [groupSearch, setGroupSearch] = useState("");
+  const [tab, setTab] = useState<ScopeTab>("productIds");
+  const [search, setSearch] = useState("");
+  const [includeOutOfStock, setIncludeOutOfStock] = useState(false);
+  const [visible, setVisible] = useState(PAGE_SIZE);
 
-  const title = initialData ? "Editar oferta" : "Crear oferta";
-  const description = initialData
-    ? "Editar una oferta"
-    : "Agregar una nueva oferta";
-  const toastMessage = initialData ? "Oferta actualizada" : "Oferta creada";
-  const action = initialData ? "Guardar cambios" : "Crear";
-  const pendingText = initialData ? "Actualizando..." : "Creando...";
+  const status = initialData ? getPromotionStatus(initialData) : null;
 
-  const defaultValues = useMemo(
+  const defaultValues = useMemo<OfferFormValues>(
     () =>
       initialData
         ? {
-            ...initialData,
-            label: initialData.label || "",
-            dateRange: {
-              from: initialData.startDate,
-              to: initialData.endDate,
-            },
-            productIds: initialData.products.map((p) => p.productId),
-            categoryIds: initialData.categories.map((c) => c.categoryId),
-            productGroupIds: initialData.productGroups.map(
-              (g) => g.productGroupId,
-            ),
+            name: initialData.name,
+            label: initialData.label ?? "",
+            type: initialData.type,
+            amount: initialData.amount,
+            dateRange: { from: promotionDayToLocalDate(initialData.startDate), to: promotionDayToLocalDate(initialData.endDate) },
+            isActive: initialData.isActive,
+            productIds: initialData.products.map((item) => item.productId),
+            categoryIds: initialData.categories.map((item) => item.categoryId),
+            productGroupIds: initialData.productGroups.map((item) => item.productGroupId),
           }
         : {
             name: "",
             label: "",
             type: DiscountType.PERCENTAGE,
-            amount: 0,
-            dateRange: {
-              from: undefined,
-              to: undefined,
-            },
+            amount: undefined as unknown as number,
+            dateRange: { from: undefined as unknown as Date, to: undefined as unknown as Date },
             isActive: true,
             productIds: [],
             categoryIds: [],
@@ -166,687 +127,403 @@ export const OfferForm: React.FC<OfferFormProps> = ({
     [initialData],
   );
 
-  const form = useForm<OfferFormValues>({
-    resolver: zodResolver(formSchema),
-    defaultValues,
-  });
-
-  const { clearStorage } = useFormPersist({
-    form,
-    key: `offer-form-${params.storeId}-${initialData?.id ?? "new"}`,
-  });
-
+  const form = useForm<OfferFormValues>({ resolver: zodResolver(formSchema), defaultValues });
+  const { clearStorage } = useFormPersist({ form, key: `offer-form-${storeId}-${initialData?.id ?? "new"}`, enabled: !initialData });
   useFormValidationToast({ form });
 
-  const onClear = () => {
-    form.reset(defaultValues);
-    clearStorage();
-    toast({
-      title: "Formulario limpiado",
-      description: "Los datos han sido restablecidos.",
-    });
+  const type = form.watch("type");
+  const amount = form.watch("amount");
+  const label = form.watch("label");
+  const dateRange = form.watch("dateRange");
+  const selectedProductIds = form.watch("productIds");
+  const selectedCategoryIds = form.watch("categoryIds");
+  const selectedGroupIds = form.watch("productGroupIds");
+
+  const selected: Record<ScopeTab, string[]> = { productIds: selectedProductIds, categoryIds: selectedCategoryIds, productGroupIds: selectedGroupIds };
+
+  const discountedPrice = (price: number) => {
+    if (!amount || amount <= 0) return null;
+    return type === DiscountType.PERCENTAGE ? Math.max(0, price * (1 - amount / 100)) : Math.max(0, price - amount);
   };
+
+  /** Filas del tab activo ya filtradas por la búsqueda (y por stock en productos). */
+  const rows = useMemo(() => {
+    if (tab === "productIds") {
+      return picker.products
+        .filter((product) => includeOutOfStock || product.stock > 0 || selectedProductIds.includes(product.id))
+        .filter((product) => !search || includes(product.name, search))
+        .map((product) => ({ id: product.id, title: product.name, subtitle: product.categoryName, price: product.price, stock: product.stock, imageUrl: product.imageUrl }));
+    }
+    if (tab === "productGroupIds") {
+      return picker.productGroups
+        .filter((group) => !search || includes(group.name, search))
+        .map((group) => ({ id: group.id, title: group.name, subtitle: `${group.productCount} ${group.productCount === 1 ? "variante" : "variantes"}`, price: null, stock: null, imageUrl: null }));
+    }
+    return picker.categories
+      .filter((category) => !search || includes(category.name, search) || includes(category.typeName, search))
+      .map((category) => ({ id: category.id, title: category.name, subtitle: `Categoría: ${category.typeName} · ${category.productCount} ${category.productCount === 1 ? "producto" : "productos"}`, price: null, stock: null, imageUrl: null }));
+  }, [tab, picker, includeOutOfStock, search, selectedProductIds]);
+
+  const visibleRows = rows.slice(0, visible);
+  const currentSelected = selected[tab];
+  const filteredIds = rows.map((row) => row.id);
+  const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => currentSelected.includes(id));
+
+  const toggle = (field: ScopeTab, id: string, checked: boolean) => {
+    const current = form.getValues(field);
+    form.setValue(field, checked ? Array.from(new Set([...current, id])) : current.filter((value) => value !== id), { shouldDirty: true, shouldValidate: form.formState.isSubmitted });
+  };
+
+  /** Une los filtrados a la selección actual (o los quita) sin pisar lo que ya estaba marcado. */
+  const toggleFiltered = () => {
+    const current = form.getValues(tab);
+    const next = allFilteredSelected ? current.filter((id) => !filteredIds.includes(id)) : Array.from(new Set([...current, ...filteredIds]));
+    form.setValue(tab, next, { shouldDirty: true, shouldValidate: form.formState.isSubmitted });
+  };
+
+  const affectedProducts = useMemo(
+    () =>
+      picker.products.filter(
+        (product) =>
+          selectedProductIds.includes(product.id) ||
+          selectedCategoryIds.includes(product.categoryId) ||
+          (product.productGroupId !== null && selectedGroupIds.includes(product.productGroupId)),
+      ),
+    [picker.products, selectedProductIds, selectedCategoryIds, selectedGroupIds],
+  );
+
+  const freeProducts = useMemo(
+    () => (type === DiscountType.FIXED && amount > 0 ? affectedProducts.filter((product) => product.price <= amount) : []),
+    [affectedProducts, amount, type],
+  );
 
   const onSubmit = async ({ dateRange, ...data }: OfferFormValues) => {
     const payload = {
       ...data,
-      startDate: dateRange.from,
-      endDate: dateRange.to,
+      label: data.label || null,
+      startDate: localDateToPromotionDay(dateRange.from),
+      endDate: localDateToPromotionDay(dateRange.to),
     };
     try {
       setLoading(true);
       if (initialData) {
-        await axios.patch(
-          `/api/${params.storeId}/${Models.Offers}/${params.offerId}`,
-          payload,
-        );
+        await axios.patch(`/api/${storeId}/offers/${initialData.id}`, payload);
       } else {
-        await axios.post(`/api/${params.storeId}/${Models.Offers}`, payload);
+        await axios.post(`/api/${storeId}/offers`, payload);
       }
       clearStorage();
       router.refresh();
-      router.push(`/${params.storeId}/${Models.Offers}`);
-      toast({
-        description: toastMessage,
-        variant: "success",
-      });
+      router.push(listHref);
+      toast({ description: initialData ? "Oferta actualizada" : "Oferta creada", variant: "success" });
     } catch (error) {
-      toast({
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
+      toast({ description: getErrorMessage(error), variant: "destructive" });
     } finally {
       setLoading(false);
     }
   };
 
   const onDelete = async () => {
+    if (!initialData) return;
     try {
       setLoading(true);
-      await axios.delete(
-        `/api/${params.storeId}/${Models.Offers}/${params.offerId}`,
-      );
+      await axios.delete(`/api/${storeId}/offers/${initialData.id}`);
       router.refresh();
-      router.push(`/${params.storeId}/${Models.Offers}`);
-      toast({
-        description: "Oferta eliminada",
-        variant: "success",
-      });
+      router.push(listHref);
+      toast({ description: "Oferta eliminada", variant: "success" });
     } catch (error) {
-      toast({
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
+      toast({ description: getErrorMessage(error), variant: "destructive" });
     } finally {
       setLoading(false);
-      setOpen(false);
+      setDeleteOpen(false);
     }
   };
 
-  const selectedProductIds = form.watch("productIds");
-  const selectedCategoryIds = form.watch("categoryIds");
-  const selectedGroupIds = form.watch("productGroupIds");
-
-  const filteredProducts = useMemo(() => {
-    const currentSelectedIds = selectedProductIds || [];
-    return products.filter((product) => {
-      // Exclude archived products
-      if (product.isArchived) return false;
-
-      // Exclude out of stock products unless already selected in this offer
-      const isSelected = currentSelectedIds.includes(product.id);
-      if (product.stock <= 0 && !isSelected) return false;
-
-      return product.name.toLowerCase().includes(productSearch.toLowerCase());
-    });
-  }, [products, selectedProductIds, productSearch]);
-
-  const filteredCategories = categories.filter(
-    (category) =>
-      category.name.toLowerCase().includes(categorySearch.toLowerCase()) ||
-      category.type.name.toLowerCase().includes(categorySearch.toLowerCase()),
-  );
-
-  const filteredGroups = productGroups.filter((group) =>
-    group.name.toLowerCase().includes(groupSearch.toLowerCase()),
-  );
-
-  const affectedProducts = useMemo(() => {
-    const currentProductIds = selectedProductIds || [];
-    const currentCategoryIds = selectedCategoryIds || [];
-    const currentGroupIds = selectedGroupIds || [];
-
-    return products.filter((product) => {
-      // Do not list archived or out of stock products in affected summary
-      if (product.isArchived || product.stock <= 0) return false;
-
-      const isDirectlySelected = currentProductIds.includes(product.id);
-      const isincategory = currentCategoryIds.includes(product.categoryId);
-      const isInGroup =
-        product.productGroupId &&
-        currentGroupIds.includes(product.productGroupId);
-
-      return isDirectlySelected || isincategory || isInGroup;
-    });
-  }, [products, selectedProductIds, selectedCategoryIds, selectedGroupIds]);
+  const scopeError = form.formState.errors.productIds?.message;
 
   return (
     <>
       <AlertModal
-        isOpen={open}
-        onClose={() => setOpen(false)}
+        isOpen={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
         onConfirm={onDelete}
         loading={loading}
+        title={`¿Eliminar la oferta ${initialData?.name ?? ""}?`}
+        description="Los pedidos ya hechos conservan sus precios. La tienda vuelve al precio normal al instante."
       />
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="outline" size="icon" onClick={() => router.back()}>
-            <ArrowLeft className="h-4 w-4" />
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-3">
+          <Button variant="outline" size="icon-sm" asChild aria-label="Volver a ofertas">
+            <Link href={listHref}>
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            </Link>
           </Button>
-          <Heading title={title} description={description} />
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-bold tracking-tight text-primary">{initialData ? "Editar oferta" : "Nueva oferta"}</h1>
+              {status && <TintBadge label={PROMOTION_STATUS[status].label} tone={PROMOTION_STATUS[status].tone} />}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {initialData
+                ? `${initialData.name} · ${formatDiscount(initialData.type, initialData.amount, currencyFormatter)} · hasta el ${LONG_DATE.format(new Date(initialData.endDate))}`
+                : "Rebaja el precio de productos, grupos o subcategorías durante un periodo. El nombre interno nunca sale en la tienda."}
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={onClear} type="button">
-            <Eraser className="mr-2 h-4 w-4" />
-            Limpiar Formulario
-          </Button>
           {initialData && (
-            <Button
-              disabled={loading}
-              variant="destructive"
-              size="sm"
-              onClick={() => setOpen(true)}
-            >
-              <Trash className="h-4 w-4" />
+            <Button type="button" variant="outline" className="text-destructive" onClick={() => setDeleteOpen(true)} disabled={loading}>
+              <Trash className="mr-2 h-4 w-4" aria-hidden="true" />
+              Eliminar
             </Button>
           )}
+          <Button type="submit" form="offer-form" isLoading={loading} loadingText={initialData ? "Guardando…" : "Creando…"}>
+            {initialData ? "Guardar cambios" : "Crear oferta"}
+          </Button>
         </div>
       </div>
-      <Separator />
+
       <Form {...form}>
-        <form
-          onSubmit={form.handleSubmit(onSubmit)}
-          className="w-full space-y-8"
-        >
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>Nombre interno</FormLabel>
-                  <FormControl>
-                    <Input
-                      disabled={loading}
-                      placeholder="Ej: Oferta de Verano"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="label"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Etiqueta pública</FormLabel>
-                  <FormControl>
-                    <Input
-                      disabled={loading}
-                      placeholder="Ej: 20% OFF"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Texto que se mostrará en la tienda
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="type"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>Tipo de descuento</FormLabel>
-                  <Select
-                    disabled={loading}
-                    onValueChange={field.onChange}
-                    value={field.value}
-                    defaultValue={DiscountType.PERCENTAGE}
-                  >
+        <form id="offer-form" onSubmit={form.handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
+          <SectionCard id="oferta-datos" title="Datos de la oferta" description="Sin etiqueta pública, la tienda muestra solo el precio rebajado.">
+            <div className="grid gap-4 md:grid-cols-3">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel isRequired>Nombre interno</FormLabel>
                     <FormControl>
-                      <SelectTrigger>
-                        <SelectValue defaultValue={DiscountType.PERCENTAGE} />
-                      </SelectTrigger>
+                      <Input disabled={loading} placeholder="Ej. Regreso a clases" maxLength={OFFER_NAME_MAX} {...field} />
                     </FormControl>
-                    <SelectContent>
-                      {Object.values(DiscountType).map((type) => (
-                        <SelectItem key={type} value={type}>
-                          {discountOptions[type]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="amount"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>Monto del descuento</FormLabel>
-                  <FormControl>
-                    {form.watch("type") === DiscountType.PERCENTAGE ? (
-                      <PercentageInput
-                        disabled={loading}
-                        placeholder="10"
-                        value={field.value}
-                        onChange={field.onChange}
-                      />
-                    ) : (
-                      <CurrencyInput
-                        placeholder="$ 10.000"
-                        disabled={loading}
-                        value={field.value}
-                        onChange={field.onChange}
-                      />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="label"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Etiqueta pública</FormLabel>
+                    <FormControl>
+                      <Input disabled={loading} placeholder="Ej. Hasta agotar existencias" maxLength={OFFER_LABEL_MAX} {...field} />
+                    </FormControl>
+                    <FormDescription className="flex flex-wrap items-center gap-1.5">
+                      {label?.trim() ? (
+                        <>
+                          En la tienda: <TintBadge label={label.trim()} tone="pink" />
+                        </>
+                      ) : (
+                        "Vacía: la tienda no muestra ninguna insignia, solo el precio rebajado."
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="flex flex-col gap-2">
+                <FormLabel isRequired>Descuento</FormLabel>
+                <div className="flex gap-2">
+                  <FormField
+                    control={form.control}
+                    name="type"
+                    render={({ field }) => (
+                      <FormItem className="w-36 shrink-0 space-y-0">
+                        <Select disabled={loading} onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger aria-label="Tipo de descuento">
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {Object.values(DiscountType).map((option) => (
+                              <SelectItem key={option} value={option}>
+                                {discountOptions[option]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
                     )}
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="dateRange"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel isRequired>
-                    Fecha de inicio y finalización
-                  </FormLabel>
-                  <FormControl>
-                    <DateRangePicker
-                      customDates={getDatePresets}
-                      name={field.name}
-                      control={form.control}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="isActive"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                  <div className="space-y-0.5">
-                    <FormLabel isRequired>Estado de la oferta</FormLabel>
+                  />
+                  <FormField
+                    control={form.control}
+                    name="amount"
+                    render={({ field }) => (
+                      <FormItem className="flex-1 space-y-0">
+                        <FormControl>
+                          {type === DiscountType.PERCENTAGE ? (
+                            <PercentageInput disabled={loading} placeholder="10" value={field.value} onChange={field.onChange} />
+                          ) : (
+                            <CurrencyInput placeholder="$ 5.000" disabled={loading} value={field.value} onChange={field.onChange} />
+                          )}
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <FormDescription>
+                  {freeProducts.length > 0
+                    ? `Dejaría en $ 0 a ${freeProducts.slice(0, 2).map((product) => product.name).join(", ")}${freeProducts.length > 2 ? ` y ${freeProducts.length - 2} más` : ""}: baja el monto o usa un porcentaje.`
+                    : "Nunca deja un producto por debajo de $ 0."}
+                </FormDescription>
+              </div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              <FormField
+                control={form.control}
+                name="dateRange"
+                render={({ field }) => (
+                  <FormItem className="md:col-span-2">
+                    <FormLabel isRequired>Fecha de inicio y finalización</FormLabel>
+                    <FormControl>
+                      <DateRangePicker customDates={getDatePresets} name={field.name} control={form.control} />
+                    </FormControl>
                     <FormDescription>
-                      Activar o desactivar la oferta
+                      {dateRange?.to instanceof Date && !Number.isNaN(dateRange.to.getTime())
+                        ? `Aplica de 00:00 a 23:59 hora de Colombia; termina el ${LONG_DATE.format(dateRange.to)}. La tienda se actualiza sola al empezar y al terminar.`
+                        : "Días completos en hora de Colombia. La tienda se actualiza sola al empezar y al terminar."}
                     </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-          </div>
-
-          <Separator />
-          <Heading
-            title="Alcance de la oferta"
-            description="Selecciona categorías o productos específicos"
-          />
-
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-            <FormField
-              control={form.control}
-              name="categoryIds"
-              render={() => (
-                <FormItem>
-                  <div className="mb-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <FormLabel isRequired className="text-base">
-                        Sub-Categorías
-                      </FormLabel>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const currentValues =
-                            form.getValues("categoryIds") || [];
-                          const allCategoryIds = filteredCategories.map(
-                            (c) => c.id,
-                          );
-                          if (currentValues.length === allCategoryIds.length) {
-                            form.setValue("categoryIds", []);
-                          } else {
-                            form.setValue("categoryIds", allCategoryIds);
-                          }
-                        }}
-                        className="group flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-all hover:bg-primary/10"
-                      >
-                        {(form.watch("categoryIds")?.length || 0) ===
-                          filteredCategories.length &&
-                        filteredCategories.length > 0 ? (
-                          <>
-                            <CheckSquare className="h-4 w-4 text-primary" />
-                            <span className="text-primary">
-                              Deseleccionar todo
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <Square className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
-                            <span className="text-muted-foreground group-hover:text-primary">
-                              Seleccionar todo
-                            </span>
-                          </>
-                        )}
-                      </button>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="isActive"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between gap-3 self-end rounded-lg border bg-muted/30 p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel>Oferta activa</FormLabel>
+                      <FormDescription>Apagada a mano se queda apagada: el recálculo diario no la enciende.</FormDescription>
                     </div>
-                    <FormDescription>
-                      Aplica el descuento a todos los productos de estas
-                      sub-categorías.
-                    </FormDescription>
-                    <Input
-                      placeholder="Buscar sub-categorías..."
-                      value={categorySearch}
-                      onChange={(e) => setCategorySearch(e.target.value)}
-                    />
-                  </div>
-                  <ScrollArea className="h-96 rounded-md border p-4">
-                    {filteredCategories.map((category) => (
-                      <FormField
-                        key={category.id}
-                        control={form.control}
-                        name="categoryIds"
-                        render={({ field }) => {
-                          return (
-                            <FormItem
-                              key={category.id}
-                              className="mb-3 flex flex-row items-start space-x-3 space-y-0 rounded-md border p-2 hover:bg-accent"
-                            >
-                              <FormControl>
-                                <Checkbox
-                                  checked={field.value?.includes(category.id)}
-                                  onCheckedChange={(checked) => {
-                                    return checked
-                                      ? field.onChange([
-                                          ...(field.value || []),
-                                          category.id,
-                                        ])
-                                      : field.onChange(
-                                          field.value?.filter(
-                                            (value) => value !== category.id,
-                                          ),
-                                        );
-                                  }}
-                                />
-                              </FormControl>
-                              <div className="flex-1 space-y-0.5">
-                                <FormLabel className="cursor-pointer font-normal">
-                                  {category.name}
-                                </FormLabel>
-                                <p className="text-xs text-muted-foreground">
-                                  Categoría: {category.type.name}
-                                </p>
-                              </div>
-                            </FormItem>
-                          );
-                        }}
-                      />
-                    ))}
-                  </ScrollArea>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                    <FormControl>
+                      <Switch checked={field.value} onCheckedChange={field.onChange} disabled={loading} aria-label="Oferta activa" />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </div>
+          </SectionCard>
 
-            <FormField
-              control={form.control}
-              name="productGroupIds"
-              render={() => (
-                <FormItem>
-                  <div className="mb-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <FormLabel isRequired className="text-base">
-                        Grupos de Productos
-                      </FormLabel>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const currentValues =
-                            form.getValues("productGroupIds") || [];
-                          const allGroupIds = filteredGroups.map((g) => g.id);
-                          if (currentValues.length === allGroupIds.length) {
-                            form.setValue("productGroupIds", []);
-                          } else {
-                            form.setValue("productGroupIds", allGroupIds);
-                          }
-                        }}
-                        className="group flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-all hover:bg-primary/10"
-                      >
-                        {(form.watch("productGroupIds")?.length || 0) ===
-                          filteredGroups.length && filteredGroups.length > 0 ? (
-                          <>
-                            <CheckSquare className="h-4 w-4 text-primary" />
-                            <span className="text-primary">
-                              Deseleccionar todo
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <Square className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
-                            <span className="text-muted-foreground group-hover:text-primary">
-                              Seleccionar todo
-                            </span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                    <FormDescription>
-                      Aplica el descuento a todas las variantes de estos grupos.
-                    </FormDescription>
-                    <Input
-                      placeholder="Buscar grupos..."
-                      value={groupSearch}
-                      onChange={(e) => setGroupSearch(e.target.value)}
-                    />
-                  </div>
-                  <ScrollArea className="h-96 rounded-md border p-4">
-                    {filteredGroups.map((group) => (
-                      <FormField
-                        key={group.id}
-                        control={form.control}
-                        name="productGroupIds"
-                        render={({ field }) => {
-                          return (
-                            <FormItem
-                              key={group.id}
-                              className="mb-3 flex flex-row items-center space-x-3 space-y-0 rounded-md border p-2 hover:bg-accent"
-                            >
-                              <FormControl>
-                                <Checkbox
-                                  checked={field.value?.includes(group.id)}
-                                  onCheckedChange={(checked) => {
-                                    return checked
-                                      ? field.onChange([
-                                          ...(field.value || []),
-                                          group.id,
-                                        ])
-                                      : field.onChange(
-                                          field.value?.filter(
-                                            (value) => value !== group.id,
-                                          ),
-                                        );
-                                  }}
-                                />
-                              </FormControl>
-                              <div className="flex-1 space-y-0.5">
-                                <FormLabel className="cursor-pointer font-normal">
-                                  {group.name}
-                                </FormLabel>
-                              </div>
-                            </FormItem>
-                          );
-                        }}
-                      />
-                    ))}
-                  </ScrollArea>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="productIds"
-              render={() => (
-                <FormItem>
-                  <div className="mb-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <FormLabel isRequired className="text-base">
-                        Productos
-                      </FormLabel>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const currentValues =
-                            form.getValues("productIds") || [];
-                          const allProductIds = filteredProducts.map(
-                            (p) => p.id,
-                          );
-                          if (currentValues.length === allProductIds.length) {
-                            form.setValue("productIds", []);
-                          } else {
-                            form.setValue("productIds", allProductIds);
-                          }
-                        }}
-                        className="group flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-all hover:bg-primary/10"
-                      >
-                        {(form.watch("productIds")?.length || 0) ===
-                          filteredProducts.length &&
-                        filteredProducts.length > 0 ? (
-                          <>
-                            <CheckSquare className="h-4 w-4 text-primary" />
-                            <span className="text-primary">
-                              Deseleccionar todo
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <Square className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
-                            <span className="text-muted-foreground group-hover:text-primary">
-                              Seleccionar todo
-                            </span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                    <FormDescription>
-                      Aplica el descuento a productos específicos.
-                    </FormDescription>
-                    <Input
-                      placeholder="Buscar productos..."
-                      value={productSearch}
-                      onChange={(e) => setProductSearch(e.target.value)}
-                    />
-                  </div>
-                  <ScrollArea className="h-96 rounded-md border p-4">
-                    {filteredProducts.map((product) => (
-                      <FormField
-                        key={product.id}
-                        control={form.control}
-                        name="productIds"
-                        render={({ field }) => {
-                          const mainImage =
-                            product.images.find((img) => img.isMain) ||
-                            product.images[0];
-                          return (
-                            <FormItem
-                              key={product.id}
-                              className="mb-3 flex flex-row items-center space-x-3 space-y-0 rounded-md border p-2 hover:bg-accent"
-                            >
-                              <FormControl>
-                                <Checkbox
-                                  checked={field.value?.includes(product.id)}
-                                  onCheckedChange={(checked) => {
-                                    return checked
-                                      ? field.onChange([
-                                          ...(field.value || []),
-                                          product.id,
-                                        ])
-                                      : field.onChange(
-                                          field.value?.filter(
-                                            (value) => value !== product.id,
-                                          ),
-                                        );
-                                  }}
-                                />
-                              </FormControl>
-                              {mainImage && (
-                                <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded">
-                                  <Image
-                                    src={mainImage.url}
-                                    alt={product.name}
-                                    fill
-                                    className="object-cover"
-                                  />
-                                </div>
-                              )}
-                              <div className="flex-1 space-y-0.5">
-                                <FormLabel className="cursor-pointer font-normal">
-                                  {product.name}
-                                </FormLabel>
-                                <p className="text-xs text-muted-foreground">
-                                  {currencyFormatter(product.price)} •{" "}
-                                  {product.category.name}
-                                  {product.stock <= 5 && (
-                                    <span className="ml-2 font-medium text-red-500">
-                                      {product.stock <= 0
-                                        ? "Sin stock"
-                                        : `Stock: ${product.stock}`}
-                                    </span>
-                                  )}
-                                </p>
-                              </div>
-                            </FormItem>
-                          );
-                        }}
-                      />
-                    ))}
-                  </ScrollArea>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
+          <SectionCard
+            id="oferta-alcance"
+            title="Alcance"
+            description="Elige al menos un producto, grupo o subcategoría. Si un producto cae en varias ofertas, gana la del precio más bajo."
+            action={
+              <div className="flex flex-wrap justify-end gap-1.5">
+                <TintBadge label={`${selectedProductIds.length} ${selectedProductIds.length === 1 ? "producto" : "productos"}`} tone={selectedProductIds.length ? "sky" : "slate"} />
+                <TintBadge label={`${selectedGroupIds.length} ${selectedGroupIds.length === 1 ? "grupo" : "grupos"}`} tone={selectedGroupIds.length ? "sky" : "slate"} />
+                <TintBadge label={`${selectedCategoryIds.length} ${selectedCategoryIds.length === 1 ? "subcategoría" : "subcategorías"}`} tone={selectedCategoryIds.length ? "sky" : "slate"} />
+              </div>
+            }
+          >
+            <div role="tablist" aria-label="Tipo de destino" className="flex max-w-full gap-1 overflow-x-auto self-start rounded-full border bg-white p-1">
+              {SCOPE_TABS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={item.id === tab}
+                  onClick={() => {
+                    setTab(item.id);
+                    setSearch("");
+                    setVisible(PAGE_SIZE);
+                  }}
+                  className={cn("flex h-8 shrink-0 items-center rounded-full px-3 text-[13px] font-semibold transition-colors", item.id === tab ? "bg-primary text-primary-foreground" : "text-primary hover:bg-accent")}
+                >
+                  {item.label}
+                  {selected[item.id].length > 0 ? ` · ${selected[item.id].length}` : ""}
+                </button>
+              ))}
+            </div>
 
-          <Button disabled={loading} className="ml-auto" type="submit">
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {pendingText}
-              </>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <Input
+                value={search}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setVisible(PAGE_SIZE);
+                }}
+                placeholder={SCOPE_TABS.find((item) => item.id === tab)?.search}
+                aria-label={`Buscar en ${SCOPE_TABS.find((item) => item.id === tab)?.label.toLowerCase()}`}
+                className="sm:max-w-sm"
+              />
+              {tab === "productIds" && (
+                <label className="flex items-center gap-2 text-sm text-primary">
+                  <Checkbox checked={includeOutOfStock} onCheckedChange={(checked) => setIncludeOutOfStock(checked === true)} aria-label="Incluir agotados" />
+                  Incluir agotados
+                </label>
+              )}
+              <Button type="button" variant="link" size="sm" className="sm:ml-auto" onClick={toggleFiltered} disabled={filteredIds.length === 0}>
+                {allFilteredSelected ? `Quitar los ${filteredIds.length} filtrados` : `Seleccionar los ${filteredIds.length} filtrados`}
+              </Button>
+            </div>
+
+            {rows.length === 0 ? (
+              <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">Nada coincide con la búsqueda.</p>
             ) : (
-              action
+              <ul className="grid gap-2 md:grid-cols-2" aria-label={SCOPE_TABS.find((item) => item.id === tab)?.label}>
+                {visibleRows.map((row) => {
+                  const checked = currentSelected.includes(row.id);
+                  const after = row.price !== null ? discountedPrice(row.price) : null;
+                  return (
+                    <li key={row.id}>
+                      <label className={cn("flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 text-sm transition-colors", checked ? "border-primary bg-muted/40" : "hover:bg-accent/40", row.stock === 0 && !checked && "opacity-70")}>
+                        <Checkbox checked={checked} onCheckedChange={(value) => toggle(tab, row.id, value === true)} aria-label={row.title} disabled={loading} />
+                        {tab === "productIds" && (row.imageUrl ? <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-md bg-muted"><Image src={row.imageUrl} alt="" fill sizes="36px" className="object-cover" /></span> : <ProductPlaceholder size="sm" className="shrink-0" />)}
+                        <span className="flex min-w-0 flex-1 flex-col">
+                          <span className="truncate font-medium text-primary">{row.title}</span>
+                          <span className="truncate text-xs text-muted-foreground">{row.subtitle}</span>
+                        </span>
+                        {row.price !== null && (
+                          <span className="shrink-0 text-right text-xs text-muted-foreground">
+                            {after !== null && after < row.price ? (
+                              <>
+                                <span className="line-through">{currencyFormatter(row.price)}</span>
+                                <span className="ml-1 font-semibold text-primary">{currencyFormatter(after)}</span>
+                              </>
+                            ) : (
+                              currencyFormatter(row.price)
+                            )}
+                            {row.stock === 0 && <span className="block">Agotado</span>}
+                          </span>
+                        )}
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
-          </Button>
+            {rows.length > visible && (
+              <Button type="button" variant="outline" size="sm" className="self-center" onClick={() => setVisible((count) => count + PAGE_SIZE)}>
+                Ver más ({rows.length - visible} restantes)
+              </Button>
+            )}
+            {scopeError && (
+              <p className="text-sm font-medium text-destructive" role="alert">
+                {scopeError}
+              </p>
+            )}
+          </SectionCard>
+
+          <SectionCard id="oferta-afectados" title={`Productos afectados (${affectedProducts.length})`} description="Todo lo que recibirá el descuento, sumando productos, grupos y subcategorías.">
+            {affectedProducts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Todavía no hay productos en el alcance.</p>
+            ) : (
+              <p className="text-sm">
+                {affectedProducts
+                  .slice(0, 8)
+                  .map((product) => product.name)
+                  .join(", ")}
+                {affectedProducts.length > 8 ? ` y ${affectedProducts.length - 8} más.` : "."}
+              </p>
+            )}
+          </SectionCard>
         </form>
       </Form>
-      <Separator className="my-4" />
-      <div className="space-y-4">
-        <Heading
-          title={`Productos Afectados (${affectedProducts.length})`}
-          description="Resumen de productos que recibirán el descuento"
-        />
-        <ScrollArea className="h-72 w-full rounded-md border">
-          <div className="p-4">
-            {affectedProducts.length === 0 ? (
-              <p className="text-center text-sm text-muted-foreground">
-                No hay productos seleccionados.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {affectedProducts.map((product) => (
-                  <div
-                    key={product.id}
-                    className="flex items-center justify-between rounded-lg border p-2 text-sm"
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className="relative h-8 w-8 overflow-hidden rounded">
-                        <Image
-                          src={
-                            product.images.find((i) => i.isMain)?.url ||
-                            "/placeholder.png"
-                          }
-                          alt={product.name}
-                          fill
-                          className="object-cover"
-                        />
-                      </div>
-                      <span className="font-medium">{product.name}</span>
-                    </div>
-                    <div className="text-muted-foreground">
-                      {product.category.name}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </ScrollArea>
-      </div>
     </>
   );
 };

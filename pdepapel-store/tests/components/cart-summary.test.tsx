@@ -60,6 +60,16 @@ describe("Summary", () => {
     expect(useCheckoutStore.getState().couponState.coupon).toBeNull();
   });
 
+  it("drops an applied coupon with a warning when the cart falls under its minimum", () => {
+    useCheckoutStore.setState({
+      couponState: { coupon: { id: "c1", code: "GRANDE", type: "FIXED", amount: 5000, isActive: true, minOrderValue: 50000 } as Coupon, isValid: true },
+    });
+    render(<Summary />);
+    expect(useCheckoutStore.getState().couponState.coupon).toBeNull();
+    expect(toast).toHaveBeenCalledWith(expect.objectContaining({ description: expect.stringContaining("Quitamos el cupón GRANDE") }));
+    expect(screen.queryByText("Cupón GRANDE")).not.toBeInTheDocument();
+  });
+
   it("explains why checkout is blocked and disables the button", () => {
     render(<Summary disabledReason="Revisa «Producto a»: está agotado." />);
     expect(screen.getByRole("alert")).toHaveTextContent("está agotado");

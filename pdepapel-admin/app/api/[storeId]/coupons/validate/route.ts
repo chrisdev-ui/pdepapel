@@ -1,11 +1,12 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { assertWelcomeBenefitEligibility } from "@/lib/customer-benefits";
+import { activeCouponWhere, assertCouponHasUses } from "@/lib/coupon-availability";
+import { PUBLIC_COUPON_SELECT } from "@/lib/coupons";
 import { createCorsHeaders } from "@/lib/cors";
-import { getColombiaDate } from "@/lib/date-utils";
+import { assertWelcomeBenefitEligibility } from "@/lib/customer-benefits";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, currencyFormatter } from "@/lib/utils";
-import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
 
 const getCorsHeaders = (request: Request) => ({
   ...createCorsHeaders(request, { methods: "POST, OPTIONS" }),
@@ -16,6 +17,7 @@ export async function OPTIONS(req: Request) {
   return NextResponse.json({}, { headers: getCorsHeaders(req) });
 }
 
+/** Valida un código para la tienda. Público a propósito; devuelve solo lo que el carrito necesita. */
 export async function POST(
   req: Request,
   { params }: { params: { storeId: string } },
@@ -25,32 +27,15 @@ export async function POST(
     const { userId } = await auth();
     const { code, subtotal } = await req.json();
 
-    if (!code) {
+    if (typeof code !== "string" || !code.trim()) {
       throw ErrorFactory.InvalidRequest("Se requiere el código del cupón");
     }
-
-    if (!subtotal) {
+    if (typeof subtotal !== "number" || !Number.isFinite(subtotal) || subtotal <= 0) {
       throw ErrorFactory.InvalidRequest("Se requiere el subtotal del pedido");
     }
 
-    const now = getColombiaDate();
     const coupon = await prismadb.coupon.findFirst({
-      where: {
-        storeId: params.storeId,
-        code: code.toUpperCase(),
-        isActive: true,
-        startDate: { lte: now },
-        endDate: { gte: now },
-        OR: [
-          { maxUses: null },
-          {
-            AND: [
-              { maxUses: { not: null } },
-              { usedCount: { lt: prismadb.coupon.fields.maxUses } },
-            ],
-          },
-        ],
-      },
+      where: activeCouponWhere(prismadb, params.storeId, code),
     });
 
     if (!coupon) {
@@ -59,7 +44,9 @@ export async function POST(
       );
     }
 
-    if (subtotal && subtotal < Number(coupon.minOrderValue ?? 0)) {
+    await assertCouponHasUses(prismadb, coupon);
+
+    if (subtotal < Number(coupon.minOrderValue ?? 0)) {
       throw ErrorFactory.Conflict(
         `El pedido debe ser mayor a ${currencyFormatter(coupon.minOrderValue ?? 0)} para usar este cupón`,
       );
@@ -72,10 +59,12 @@ export async function POST(
       database: prismadb,
     });
 
-    return NextResponse.json(coupon, { headers: corsHeaders });
+    const publicCoupon = Object.fromEntries(
+      Object.keys(PUBLIC_COUPON_SELECT).map((key) => [key, coupon[key as keyof typeof PUBLIC_COUPON_SELECT]]),
+    );
+
+    return NextResponse.json(publicCoupon, { headers: corsHeaders });
   } catch (error) {
-    return handleErrorResponse(error, "COUPON_VALIDATE", {
-      headers: corsHeaders,
-    });
+    return handleErrorResponse(error, "COUPON_VALIDATE", { headers: corsHeaders });
   }
 }

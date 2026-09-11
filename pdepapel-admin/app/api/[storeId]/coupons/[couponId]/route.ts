@@ -1,12 +1,10 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { normalizeCouponCode } from "@/lib/coupon-code";
+import { findOtherActiveWelcomeBenefit, getCouponDetail } from "@/lib/coupon-availability";
+import { COUPON_SELECT, parseCouponInput } from "@/lib/coupons";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs/server";
-import { DiscountType } from "@prisma/client";
 import { NextResponse } from "next/server";
-
-// Enable Edge Runtime for faster response times
 
 export async function GET(
   _req: Request,
@@ -14,25 +12,16 @@ export async function GET(
 ) {
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
-    if (!params.couponId)
-      throw ErrorFactory.InvalidRequest("Se requiere el ID del cupón");
+    if (!params.couponId) throw ErrorFactory.InvalidRequest("Se requiere el ID del cupón");
     const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
     await verifyStoreOwner(userId, params.storeId);
 
-    // Sin `orders`: los pedidos de un cupón se consultan desde Pedidos, y
-    // traerlos aquí devolvía datos personales de cada compra.
-    const coupon = await prismadb.coupon.findFirst({
-      where: { id: params.couponId, storeId: params.storeId },
-    });
+    // Uso real (pagados y reservados) y los últimos pedidos sin datos personales.
+    const coupon = await getCouponDetail(prismadb, params.storeId, params.couponId);
+    if (!coupon) throw ErrorFactory.NotFound("Cupón no encontrado");
 
-    if (!coupon) {
-      throw ErrorFactory.NotFound("Cupón no encontrado");
-    }
-
-    return NextResponse.json(coupon, {
-      headers: CACHE_HEADERS.DYNAMIC,
-    });
+    return NextResponse.json(coupon, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {
     return handleErrorResponse(error, "COUPON_GET");
   }
@@ -46,79 +35,46 @@ export async function PATCH(
     const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
-    if (!params.couponId)
-      throw ErrorFactory.InvalidRequest("Se requiere el ID del cupón");
-
-    const body = await req.json();
-    const {
-      code,
-      type,
-      amount,
-      startDate,
-      endDate,
-      maxUses,
-      minOrderValue,
-      isActive,
-      isWelcomeBenefit,
-    } = body;
+    if (!params.couponId) throw ErrorFactory.InvalidRequest("Se requiere el ID del cupón");
 
     await verifyStoreOwner(userId, params.storeId);
 
-    if (isWelcomeBenefit && isActive !== false) {
-      const activeWelcomeBenefit = await prismadb.coupon.findFirst({
-        where: {
-          storeId: params.storeId,
-          id: { not: params.couponId },
-          isWelcomeBenefit: true,
-          isActive: true,
-          endDate: { gte: new Date() },
-        },
-        select: { code: true },
-      });
+    const current = await prismadb.coupon.findFirst({
+      where: { id: params.couponId, storeId: params.storeId },
+      select: { id: true, usedCount: true },
+    });
+    if (!current) throw ErrorFactory.NotFound("Cupón no encontrado");
 
-      if (activeWelcomeBenefit) {
+    const input = parseCouponInput(await req.json());
+
+    if (input.maxUses !== null && input.maxUses < current.usedCount) {
+      throw ErrorFactory.InvalidRequest(
+        `El máximo de usos no puede ser menor que los ${current.usedCount} usos ya registrados`,
+      );
+    }
+
+    const duplicate = await prismadb.coupon.findFirst({
+      where: { storeId: params.storeId, code: input.code, id: { not: params.couponId } },
+      select: { id: true },
+    });
+    if (duplicate) throw ErrorFactory.Conflict("Ya existe otro cupón con este código");
+
+    if (input.isWelcomeBenefit && input.isActive) {
+      const other = await findOtherActiveWelcomeBenefit(prismadb, params.storeId, params.couponId);
+      if (other) {
         throw ErrorFactory.Conflict(
-          `El beneficio de bienvenida ${activeWelcomeBenefit.code} ya está activo. Desactívalo antes de activar otro.`,
+          `El beneficio de bienvenida ${other.code} ya está activo. Desactívalo antes de activar otro.`,
         );
       }
     }
 
-    if (type === DiscountType.PERCENTAGE && amount > 100) {
-      throw ErrorFactory.InvalidRequest(
-        "El descuento no puede ser mayor al 100%",
-      );
-    }
-
-    if (amount < 0) {
-      throw ErrorFactory.InvalidRequest("El monto no puede ser negativo");
-    }
-
-    if (new Date(startDate) > new Date(endDate)) {
-      throw ErrorFactory.InvalidRequest(
-        "La fecha inicial no puede ser mayor a la fecha final",
-      );
-    }
-
     const coupon = await prismadb.coupon.update({
-      where: {
-        id: params.couponId,
-      },
-      data: {
-        code: code ? normalizeCouponCode(code) : undefined,
-        type,
-        amount,
-        startDate: startDate ? new Date(startDate) : undefined,
-        endDate: endDate ? new Date(endDate) : undefined,
-        maxUses,
-        minOrderValue,
-        isActive,
-        isWelcomeBenefit,
-      },
+      where: { id: params.couponId, storeId: params.storeId },
+      data: input,
+      select: COUPON_SELECT,
     });
 
-    return NextResponse.json(coupon, {
-      headers: CACHE_HEADERS.NO_CACHE,
-    });
+    return NextResponse.json(coupon, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {
     return handleErrorResponse(error, "COUPON_PATCH");
   }
@@ -131,40 +87,33 @@ export async function DELETE(
   try {
     const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
-
-    if (!params.couponId) {
-      throw ErrorFactory.InvalidRequest("Se requiere el ID del cupón");
-    }
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    if (!params.couponId) throw ErrorFactory.InvalidRequest("Se requiere el ID del cupón");
 
     await verifyStoreOwner(userId, params.storeId);
 
-    const coupon = await prismadb.coupon.findUnique({
-      where: { id: params.couponId },
-      include: { orders: true },
+    const coupon = await prismadb.coupon.findFirst({
+      where: { id: params.couponId, storeId: params.storeId },
+      select: { ...COUPON_SELECT, _count: { select: { orders: true } } },
     });
+    if (!coupon) throw ErrorFactory.NotFound("Cupón no encontrado");
 
-    if (!coupon) {
-      throw ErrorFactory.NotFound("Cupón no encontrado");
-    }
-
-    if (coupon.orders.length > 0) {
+    if (coupon._count.orders > 0) {
       throw ErrorFactory.Conflict(
-        "No se puede eliminar un cupón que ya ha sido usado",
+        `No se puede eliminar: ${coupon._count.orders} ${coupon._count.orders === 1 ? "pedido lo referencia" : "pedidos lo referencian"}. Desactívalo para que nadie más lo use.`,
       );
     }
 
-    await prismadb.coupon.delete({
-      where: { id: params.couponId },
-    });
+    await prismadb.coupon.delete({ where: { id: params.couponId, storeId: params.storeId } });
 
-    return NextResponse.json(coupon, {
-      headers: CACHE_HEADERS.NO_CACHE,
-    });
+    const { _count, ...deleted } = coupon;
+    return NextResponse.json(deleted, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {
     return handleErrorResponse(error, "COUPON_DELETE");
   }
 }
 
+/** Desactiva el cupón. Solo apaga el interruptor: la vigencia y los usos se conservan. */
 export async function PUT(
   _req: Request,
   { params }: { params: { storeId: string; couponId: string } },
@@ -173,35 +122,25 @@ export async function PUT(
     const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
-    if (!params.couponId)
-      throw ErrorFactory.InvalidRequest("Se requiere el ID del cupón");
+    if (!params.couponId) throw ErrorFactory.InvalidRequest("Se requiere el ID del cupón");
 
     await verifyStoreOwner(userId, params.storeId);
 
-    const coupon = await prismadb.coupon.findUnique({
-      where: { id: params.couponId },
+    const coupon = await prismadb.coupon.findFirst({
+      where: { id: params.couponId, storeId: params.storeId },
+      select: { id: true, isActive: true },
+    });
+    if (!coupon) throw ErrorFactory.NotFound("Cupón no encontrado");
+    if (!coupon.isActive) throw ErrorFactory.Conflict("El cupón ya está desactivado");
+
+    const deactivated = await prismadb.coupon.update({
+      where: { id: params.couponId, storeId: params.storeId },
+      data: { isActive: false },
+      select: COUPON_SELECT,
     });
 
-    if (!coupon) {
-      throw ErrorFactory.NotFound("Cupón no encontrado");
-    }
-
-    if (!coupon.isActive) {
-      throw ErrorFactory.Conflict("El cupón ya está inactivo");
-    }
-
-    const invalidatedCoupon = await prismadb.coupon.update({
-      where: { id: params.couponId },
-      data: {
-        isActive: false,
-        endDate: new Date(),
-      },
-    });
-
-    return NextResponse.json(invalidatedCoupon, {
-      headers: CACHE_HEADERS.NO_CACHE,
-    });
+    return NextResponse.json(deactivated, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {
-    return handleErrorResponse(error, "COUPON_INVALIDATE");
+    return handleErrorResponse(error, "COUPON_DEACTIVATE");
   }
 }

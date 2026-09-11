@@ -9,6 +9,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { formatBoxDimensions } from "@/lib/boxes";
 import { ColumnDef } from "@tanstack/react-table";
 import { Info } from "lucide-react";
 import { CellAction } from "./cell-action";
@@ -17,10 +18,27 @@ export type BoxColumn = {
   id: string;
   name: string;
   type: string;
+  /** Texto de respaldo "ancho x alto x largo" (sin unidad) que arma la página. */
   dimensions: string;
+  width?: number;
+  height?: number;
+  length?: number;
   isDefault: boolean;
+  /** Envíos que referencian la caja; decide si se puede eliminar desde la fila. */
+  shipmentsCount?: number;
   createdAt: Date;
 };
+
+function dimensionsLabel(row: BoxColumn) {
+  if (
+    typeof row.width === "number" &&
+    typeof row.height === "number" &&
+    typeof row.length === "number"
+  ) {
+    return formatBoxDimensions(row.width, row.height, row.length);
+  }
+  return `${row.dimensions} cm`;
+}
 
 export const columns: ColumnDef<BoxColumn>[] = [
   {
@@ -40,8 +58,13 @@ export const columns: ColumnDef<BoxColumn>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader
         column={column}
-        title="Dimensiones (Ancho x Alto x Largo)"
+        title="Dimensiones (ancho × alto × largo)"
       />
+    ),
+    cell: ({ row }) => (
+      <span className="whitespace-nowrap tabular-nums">
+        {dimensionsLabel(row.original)}
+      </span>
     ),
   },
   {
@@ -51,13 +74,13 @@ export const columns: ColumnDef<BoxColumn>[] = [
         <DataTableColumnHeader column={column} title="Uso" />
         <TooltipProvider>
           <Tooltip>
-            <TooltipTrigger>
-              <Info className="h-4 w-4 text-muted-foreground" />
+            <TooltipTrigger aria-label="Qué significa Uso">
+              <Info className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             </TooltipTrigger>
             <TooltipContent>
-              Las cajas &quot;Automáticas&quot; son seleccionadas por el
-              algoritmo para empacar órdenes. Solo se usa una por tipo (XS, S,
-              M, L, XL).
+              Las cajas &quot;Automáticas&quot; son las que el cotizador elige
+              al empacar un pedido: una por tipo (XS, S, M, L, XL). Las
+              &quot;Manuales&quot; solo se usan si las eliges en el envío.
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -75,6 +98,13 @@ export const columns: ColumnDef<BoxColumn>[] = [
         ) : (
           <Badge variant="secondary">Manual</Badge>
         )}
+        {typeof row.original.shipmentsCount === "number" &&
+          row.original.shipmentsCount > 0 && (
+            <span className="text-xs text-muted-foreground">
+              {row.original.shipmentsCount}{" "}
+              {row.original.shipmentsCount === 1 ? "envío" : "envíos"}
+            </span>
+          )}
       </div>
     ),
   },

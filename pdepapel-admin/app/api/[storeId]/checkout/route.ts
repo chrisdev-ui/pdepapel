@@ -14,7 +14,7 @@ import { createCorsHeaders } from "@/lib/cors";
 import { withIdempotency } from "@/lib/idempotency";
 import { normalizeGoogleAnalyticsClientId } from "@/lib/google-analytics";
 import { generateBoldCheckoutData } from "@/lib/bold";
-import { getColombiaDate } from "@/lib/date-utils";
+import { activeCouponWhere, assertCouponHasUses } from "@/lib/coupon-availability";
 import { getProductsPrices } from "@/lib/discount-engine";
 import prismadb from "@/lib/prismadb";
 import { verifyEarlyAccessToken } from "@/lib/early-access";
@@ -301,7 +301,7 @@ async function createCheckout(
       where: {
         storeId: params.storeId,
         destDaneCode: daneCode,
-        expiresAt: { gte: getColombiaDate() },
+        expiresAt: { gte: new Date() },
       },
       orderBy: {
         createdAt: "desc",
@@ -528,24 +528,8 @@ async function createCheckout(
 
     let coupon: Coupon | null = null;
     if (couponCode) {
-      const now = getColombiaDate();
       coupon = await prismadb.coupon.findFirst({
-        where: {
-          storeId: params.storeId,
-          code: couponCode.toUpperCase(),
-          isActive: true,
-          startDate: { lte: now },
-          endDate: { gte: now },
-          OR: [
-            { maxUses: null },
-            {
-              AND: [
-                { maxUses: { not: null } },
-                { usedCount: { lt: prismadb.coupon.fields.maxUses } },
-              ],
-            },
-          ],
-        },
+        where: activeCouponWhere(prismadb, params.storeId, couponCode),
       });
 
       if (!coupon) {
@@ -553,6 +537,10 @@ async function createCheckout(
           "Este cupón no es válido: puede estar inactivo, no haber iniciado aún o ya haber expirado",
         );
       }
+
+      // Usos pagados más reservados por pedidos pendientes: así varios
+      // pedidos no se reparten el último uso.
+      await assertCouponHasUses(prismadb, coupon);
 
       if (subtotal < Number(coupon.minOrderValue ?? 0)) {
         throw ErrorFactory.Conflict(

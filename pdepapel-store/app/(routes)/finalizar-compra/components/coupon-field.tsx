@@ -69,7 +69,8 @@ export const CouponField = ({
                   {...field}
                   onChange={(event) => {
                     setCouponState((prev) => ({ ...prev, isValid: null }));
-                    field.onChange(event.target.value.toUpperCase());
+                    // Sin espacios: el código se compara tal cual en el servidor.
+                    field.onChange(event.target.value.toUpperCase().replace(/\s+/g, ""));
                   }}
                   onKeyDown={(event) => {
                     if (event.key !== "Enter") return;
@@ -77,7 +78,7 @@ export const CouponField = ({
                     event.preventDefault();
                     if (field.value && !isApplied && !isPending) {
                       validateCouponMutate({
-                        code: field.value.toUpperCase(),
+                        code: field.value.trim().toUpperCase(),
                         subtotal,
                       });
                     }
@@ -106,7 +107,7 @@ export const CouponField = ({
                 }
                 if (!field.value) return;
                 validateCouponMutate({
-                  code: field.value.toUpperCase(),
+                  code: field.value.trim().toUpperCase(),
                   subtotal,
                 });
               }}

@@ -347,6 +347,7 @@ export async function PATCH(
       couponCode,
       couponCodeProvided,
       existingCoupon: order.coupon,
+      orderId: order.id,
     });
     const couponChanged = targetCoupon?.id !== order.coupon?.id;
 

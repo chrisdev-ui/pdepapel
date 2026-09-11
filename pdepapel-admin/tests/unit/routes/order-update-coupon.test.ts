@@ -78,7 +78,8 @@ vi.mock("@clerk/nextjs/server", () => ({
 
 vi.mock("@/lib/prismadb", () => ({
   default: {
-    order: { findUnique: mocks.findOrder },
+    // `count`: reservas de otros pedidos pendientes; ninguna en estas pruebas.
+    order: { findUnique: mocks.findOrder, count: vi.fn().mockResolvedValue(0) },
     coupon: {
       findFirst: mocks.findCoupon,
       fields: { maxUses: "maxUses-field-reference" },

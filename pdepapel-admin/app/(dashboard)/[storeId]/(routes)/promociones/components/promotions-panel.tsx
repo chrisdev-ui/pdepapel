@@ -21,7 +21,7 @@ import { getErrorMessage } from "@/lib/api-errors";
 import { PROMOTION_STATUS, formatDiscount, getPromotionStatus, summarizePromotions, type PromotionStatus } from "@/lib/promotion-status";
 import { cn, currencyFormatter } from "@/lib/utils";
 
-import { BulkCouponCodeGenerator } from "../../cupones/components/bulk-coupon-code-generator";
+import { CouponBatchDialog } from "../../cupones/components/coupon-batch-dialog";
 import { CellAction as CouponCellAction } from "../../cupones/components/cell-action";
 import { buildCouponColumns, CouponStatusBadge, type CouponColumn } from "../../cupones/components/columns";
 import { CellAction as OfferCellAction } from "../../ofertas/components/cell-action";
@@ -29,19 +29,21 @@ import { buildOfferColumns, offerScope, OfferStatusBadge, type OfferColumn } fro
 
 type PromotionsPanelProps = { kind: "ofertas"; data: OfferColumn[] } | { kind: "cupones"; data: CouponColumn[] };
 
+const SHORT_DATE = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short", year: "numeric", timeZone: "America/Bogota" });
+
 const STATUS_FILTER = (Object.keys(PROMOTION_STATUS) as PromotionStatus[]).map((status) => ({ label: PROMOTION_STATUS[status].label, value: status }));
 
 const COPY = {
   ofertas: {
     newLabel: "Nueva oferta",
-    newHref: "ofertas/new",
+    newHref: "ofertas/nuevo",
     model: Models.Offers,
     search: "Buscar oferta o etiqueta…",
     empty: { title: "Aún no hay ofertas", description: "Una oferta rebaja el precio de productos, categorías o grupos durante un periodo y se ve en la tienda." },
   },
   cupones: {
     newLabel: "Nuevo cupón",
-    newHref: "cupones/new",
+    newHref: "cupones/nuevo",
     model: Models.Coupons,
     search: "Buscar código…",
     empty: { title: "Aún no hay cupones", description: "Un cupón es un código que la persona escribe al pagar; puedes limitar usos y monto mínimo." },
@@ -76,13 +78,15 @@ export function PromotionsPanel(props: PromotionsPanelProps) {
   const metrics = [
     { label: "Vigentes", value: summary.vigentes, hint: "Aplican hoy en la tienda" },
     { label: "Programadas", value: summary.programadas, hint: "Empiezan más adelante" },
+    ...(props.kind === "cupones" ? [{ label: "Agotadas", value: summary.agotadas, hint: "Sin usos disponibles" }] : []),
     { label: "Vencidas", value: summary.vencidas, hint: "Ya terminaron" },
-    { label: "Desactivadas", value: summary.desactivadas, hint: "Apagadas antes de vencer" },
+    { label: "Desactivadas", value: summary.desactivadas, hint: "Apagadas a mano" },
   ];
+  const statusFilter = STATUS_FILTER.filter((option) => props.kind === "cupones" || option.value !== "agotada");
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className={cn("grid gap-3 sm:grid-cols-2", metrics.length === 5 ? "xl:grid-cols-5" : "xl:grid-cols-4")}>
         {metrics.map((metric) => (
           <div key={metric.label} className="rounded-xl border bg-white p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{metric.label}</p>
@@ -94,7 +98,7 @@ export function PromotionsPanel(props: PromotionsPanelProps) {
 
       <div className="flex flex-wrap items-center justify-end gap-2">
         <RefreshButton />
-        {props.kind === "cupones" && <BulkCouponCodeGenerator />}
+        {props.kind === "cupones" && <CouponBatchDialog />}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="icon" aria-label="Más acciones">
@@ -124,7 +128,7 @@ export function PromotionsPanel(props: PromotionsPanelProps) {
           data={props.data}
           getRowId={(row) => row.id}
           onRowClick={(row) => router.push(`/${storeId}/ofertas/${row.id}`)}
-          filters={[{ columnKey: "status", title: "Estado", options: STATUS_FILTER }]}
+          filters={[{ columnKey: "status", title: "Estado", options: statusFilter }]}
           renderMobileCard={(row) => (
             <article className="flex flex-col gap-2 rounded-xl border bg-white p-3.5 shadow-sm">
               <div className="flex items-start justify-between gap-2">
@@ -136,6 +140,9 @@ export function PromotionsPanel(props: PromotionsPanelProps) {
               <p className="text-sm">
                 <span className="font-semibold">{formatDiscount(row.original.type, row.original.amount, currencyFormatter)}</span>
                 <span className="text-muted-foreground"> · {offerScope(row.original)}</span>
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {SHORT_DATE.format(new Date(row.original.startDate))} – {SHORT_DATE.format(new Date(row.original.endDate))}
               </p>
               <div className="flex items-center justify-end">
                 <OfferCellAction data={row.original} />
@@ -152,7 +159,7 @@ export function PromotionsPanel(props: PromotionsPanelProps) {
           data={props.data}
           getRowId={(row) => row.id}
           onRowClick={(row) => router.push(`/${storeId}/cupones/${row.id}`)}
-          filters={[{ columnKey: "status", title: "Estado", options: STATUS_FILTER }]}
+          filters={[{ columnKey: "status", title: "Estado", options: statusFilter }]}
           renderMobileCard={(row) => (
             <article className="flex flex-col gap-2 rounded-xl border bg-white p-3.5 shadow-sm">
               <div className="flex items-start justify-between gap-2">

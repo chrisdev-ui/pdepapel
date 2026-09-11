@@ -53,7 +53,7 @@ export function buildCouponColumns(storeId: string): ColumnDef<CouponColumn>[] {
     {
       accessorKey: "usedCount",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Usos" />,
-      cell: ({ row }) => <UsageCount used={row.original.usedCount} limit={row.original.maxUses as number} />,
+      cell: ({ row }) => <UsageCount used={row.original.usedCount} limit={row.original.maxUses ?? 0} />,
     },
     {
       id: "status",

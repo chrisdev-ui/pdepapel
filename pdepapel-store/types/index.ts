@@ -207,20 +207,15 @@ export interface Review {
   createdAt?: string;
 }
 
+/** Lo que `POST /coupons/validate` devuelve a la tienda: nunca la fila completa. */
 export interface Coupon {
   id: string;
   code: string;
-  createdAt: Date;
-  updatedAt: Date;
   type: "PERCENTAGE" | "FIXED";
-  storeId: string;
   amount: number;
-  startDate: Date;
-  endDate: Date;
-  maxUses: number | null;
-  usedCount: number;
-  isActive: boolean;
   minOrderValue: number | null;
+  isActive: boolean;
+  isWelcomeBenefit?: boolean;
 }
 
 export interface Order {

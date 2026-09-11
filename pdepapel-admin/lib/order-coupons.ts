@@ -1,10 +1,10 @@
 import { ErrorFactory } from "@/lib/api-errors";
 import { normalizeCouponCode } from "@/lib/coupon-code";
-import { getColombiaDate } from "@/lib/date-utils";
+import { activeCouponWhere, assertCouponHasUses } from "@/lib/coupon-availability";
 import prismadb from "@/lib/prismadb";
 import type { Coupon, PrismaClient } from "@prisma/client";
 
-type CouponLookupDatabase = Pick<PrismaClient, "coupon">;
+type CouponLookupDatabase = Pick<PrismaClient, "coupon" | "order">;
 
 export async function resolveCouponForOrderUpdate({
   storeId,
@@ -12,7 +12,8 @@ export async function resolveCouponForOrderUpdate({
   couponCodeProvided,
   existingCoupon,
   database = prismadb,
-  now = getColombiaDate(),
+  now = new Date(),
+  orderId,
 }: {
   storeId: string;
   couponCode: unknown;
@@ -20,6 +21,8 @@ export async function resolveCouponForOrderUpdate({
   existingCoupon: Coupon | null;
   database?: CouponLookupDatabase;
   now?: Date;
+  /** Pedido que se está editando: su propia reserva no cuenta contra el cupón. */
+  orderId?: string;
 }): Promise<Coupon | null> {
   if (!couponCodeProvided) return existingCoupon;
 
@@ -38,27 +41,14 @@ export async function resolveCouponForOrderUpdate({
   }
 
   const coupon = await database.coupon.findFirst({
-    where: {
-      storeId,
-      code: normalizedCode,
-      isActive: true,
-      startDate: { lte: now },
-      endDate: { gte: now },
-      OR: [
-        { maxUses: null },
-        {
-          AND: [
-            { maxUses: { not: null } },
-            { usedCount: { lt: database.coupon.fields.maxUses } },
-          ],
-        },
-      ],
-    },
+    where: activeCouponWhere(database, storeId, normalizedCode, now),
   });
 
   if (!coupon) {
     throw ErrorFactory.NotFound("Código de cupón no válido o expirado");
   }
+
+  await assertCouponHasUses(database, coupon, { excludeOrderId: orderId });
 
   return coupon;
 }

@@ -2,7 +2,7 @@ import { BATCH_SIZE } from "@/constants";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createCorsHeaders } from "@/lib/cors";
 import { withIdempotency } from "@/lib/idempotency";
-import { getColombiaDate } from "@/lib/date-utils";
+import { activeCouponWhere, assertCouponHasUses } from "@/lib/coupon-availability";
 import { sendOrderEmail } from "@/lib/email";
 import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
@@ -316,29 +316,15 @@ async function createOrder(
     let coupon: Coupon | null = null;
 
     if (couponCode) {
-      const now = getColombiaDate();
       coupon = await prismadb.coupon.findFirst({
-        where: {
-          storeId: params.storeId,
-          code: couponCode.toUpperCase(),
-          isActive: true,
-          startDate: { lte: now },
-          endDate: { gte: now },
-          OR: [
-            { maxUses: null },
-            {
-              AND: [
-                { maxUses: { not: null } },
-                { usedCount: { lt: prismadb.coupon.fields.maxUses } },
-              ],
-            },
-          ],
-        },
+        where: activeCouponWhere(prismadb, params.storeId, couponCode),
       });
 
       if (!coupon) {
         throw ErrorFactory.NotFound("Código de cupón no válido o expirado");
       }
+
+      await assertCouponHasUses(prismadb, coupon);
 
       if (subtotal < Number(coupon.minOrderValue ?? 0)) {
         throw ErrorFactory.Conflict(

@@ -1,4 +1,3 @@
-import { getColombiaDate } from "@/lib/date-utils";
 import prismadb from "@/lib/prismadb";
 import { DiscountType, Product } from "@prisma/client";
 import { Redis } from "@upstash/redis";
@@ -31,7 +30,8 @@ export async function getActiveOffers(storeId: string) {
     console.error("Redis get error:", error);
   }
 
-  const now = getColombiaDate();
+  // Reloj real: las vigencias se guardan como instantes UTC (lib/promotion-window.ts).
+  const now = new Date();
 
   const activeOffers = await prismadb.offer.findMany({
     where: {
@@ -40,6 +40,8 @@ export async function getActiveOffers(storeId: string) {
       startDate: { lte: now },
       endDate: { gte: now },
     },
+    // Orden fijo: entre dos ofertas que dejan el mismo precio gana la creada primero.
+    orderBy: { createdAt: "asc" },
     include: {
       products: true,
       categories: true,
@@ -137,7 +139,8 @@ export async function calculateDiscountedPrice(
     price: bestPrice,
     originalPrice: product.price,
     discount: product.price - bestPrice,
-    offerLabel: bestOffer.label || bestOffer.name,
+    // Sin etiqueta pública la tienda solo muestra el precio rebajado: el nombre interno nunca sale.
+        offerLabel: bestOffer.label || null,
     matchedOfferId: bestOffer.id,
   };
 }
@@ -202,7 +205,8 @@ export async function getProductsPrices(
         price: bestPrice,
         originalPrice: product.price,
         discount: product.price - bestPrice,
-        offerLabel: bestOffer.label || bestOffer.name,
+        // Sin etiqueta pública la tienda solo muestra el precio rebajado: el nombre interno nunca sale.
+        offerLabel: bestOffer.label || null,
         matchedOfferId: bestOffer.id,
       });
     } else {

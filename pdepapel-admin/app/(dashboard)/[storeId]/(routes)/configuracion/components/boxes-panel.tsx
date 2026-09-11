@@ -20,7 +20,7 @@ export function BoxesPanel({ data }: { data: BoxColumn[] }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-base font-semibold text-primary">Cajas y empaques</h2>
-          <p className="text-sm text-muted-foreground">Medidas y pesos que usa el cotizador de envíos para elegir la caja. {data.length} en total.</p>
+          <p className="text-sm text-muted-foreground">Medidas que usa el cotizador de envíos para elegir la caja. {data.length} en total.</p>
         </div>
         <Button asChild>
           <Link href={`/${storeId}/cajas/new`}>

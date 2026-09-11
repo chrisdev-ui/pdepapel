@@ -71,6 +71,19 @@ const PROTECTED_ROUTES: ProtectedRoute[] = [
   { path: "coupons", methods: ["GET"] },
   { path: "coupons/[couponId]", methods: ["GET"], params: { couponId: "x" } },
   { path: "products/[productId]/reviews/[reviewId]", methods: ["GET"], params: { productId: "x", reviewId: "x" } },
+  // Promociones y cajas (auditoría Grupo A, 2026-09-11): escrituras por id
+  // acotadas a la tienda y recálculos de vigencia solo para el dueño.
+  { path: "coupons/[couponId]", methods: ["PATCH", "PUT", "DELETE"], params: { couponId: "x" } },
+  { path: "coupons/batch", methods: ["POST"] },
+  { path: "coupons/update-validity", methods: ["POST"] },
+  { path: "offers", methods: ["POST"] },
+  { path: "offers/[offerId]", methods: ["PATCH", "DELETE"], params: { offerId: "x" } },
+  { path: "offers/[offerId]/validate", methods: ["POST"], params: { offerId: "x" } },
+  { path: "offers/update-validity", methods: ["POST"] },
+  { path: "boxes", methods: ["POST"] },
+  { path: "boxes/[boxId]", methods: ["PATCH", "DELETE"], params: { boxId: "x" } },
+  { path: "posts", methods: ["POST"] },
+  { path: "posts/[postId]", methods: ["PATCH", "DELETE"], params: { postId: "x" } },
   // Gestión de publicaciones de Mercado Libre (auditoría 2026-09-11).
   { path: "marketplaces/mercadolibre/listings", methods: ["GET", "POST"] },
   { path: "marketplaces/mercadolibre/listings/bulk", methods: ["POST"] },

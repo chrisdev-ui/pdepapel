@@ -2,13 +2,14 @@
 
 import { Check, CreditCard, ShieldCheck, TicketPercent, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AccountPrompt } from "@/components/account-prompt";
 import { FreeShippingProgress } from "@/components/free-shipping-progress";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/hooks/use-cart";
 import { useCheckoutStore } from "@/hooks/use-checkout-store";
+import { useCouponMinimumGuard } from "@/hooks/use-coupon-minimum-guard";
 import { toast } from "@/hooks/use-toast";
 import useValidateCoupon from "@/hooks/use-validate-coupon";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
@@ -44,6 +45,17 @@ export const Summary: React.FC<SummaryProps> = ({ disabledReason = null }) => {
     [items, coupon, freeShippingThreshold],
   );
   const count = items.reduce((sum, item) => sum + Number(item.quantity ?? 1), 0);
+
+  // Si el carrito baja de la compra mínima, el cupón se quita con aviso en vez
+  // de quedarse «aplicado» con $ 0 hasta que el checkout lo rechace.
+  const dropCouponBelowMinimum = useCallback(
+    (dropped: { code: string; minOrderValue: number | null }) => {
+      setCouponState({ coupon: null, isValid: null });
+      toast({ description: `Quitamos el cupón ${dropped.code}: pide una compra mínima de ${currencyFormatter.format(Number(dropped.minOrderValue ?? 0))}.`, variant: "warning" });
+    },
+    [setCouponState],
+  );
+  useCouponMinimumGuard(coupon, subtotal, dropCouponBelowMinimum);
   const disabled = items.length === 0 || Boolean(disabledReason);
 
   const { mutate: validate, status } = useValidateCoupon({

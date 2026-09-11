@@ -1,11 +1,11 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { getColombiaDate } from "@/lib/date-utils";
+import { invalidateStorePromotionsCache } from "@/lib/cache";
 import { env } from "@/lib/env.mjs";
+import { recordJobRun } from "@/lib/job-runs";
 import prismadb from "@/lib/prismadb";
 import { refreshSoldCounts } from "@/lib/sold-count";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { NextRequest, NextResponse } from "next/server";
-import { recordJobRun } from "@/lib/job-runs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,6 +18,11 @@ export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
 }
 
+/**
+ * Cron diario: apaga las ofertas vencidas (nunca enciende ninguna) y refresca
+ * la caché y la tienda de cada tienda con alguna oferta que empezó o terminó
+ * en las últimas 24 h, para que los precios cambien aunque nadie edite nada.
+ */
 export async function GET(req: NextRequest) {
   try {
     const authToken = req.headers.get("authorization")?.split("Bearer ").at(1);
@@ -25,67 +30,41 @@ export async function GET(req: NextRequest) {
     if (!authToken || authToken !== env.CRON_SECRET)
       throw ErrorFactory.Unauthorized();
 
-    const now = getColombiaDate();
+    const now = new Date();
+    const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-    const [expiredOffers, validOffers] = await prismadb.$transaction([
-      // Deactivate expired offers
-      prismadb.offer.updateMany({
-        where: {
-          endDate: { lt: now },
-          isActive: true,
-        },
-        data: { isActive: false },
-      }),
-      // Activate valid offers
-      prismadb.offer.updateMany({
-        where: {
-          startDate: { lte: now },
-          endDate: { gt: now },
-          isActive: false,
-        },
-        data: { isActive: true },
-      }),
-    ]);
+    const expiredOffers = await prismadb.offer.updateMany({
+      where: { endDate: { lt: now }, isActive: true },
+      data: { isActive: false },
+    });
 
     // Orden «Más vendidos»: unidades de pedidos pagados o enviados.
     const refreshedSoldCounts = await refreshSoldCounts();
 
-    // Invalidate Redis cache for all stores (or could be more targeted)
-    try {
-      const { Redis } = await import("@upstash/redis");
-      const redis = Redis.fromEnv();
+    const touchedStores = await prismadb.offer.findMany({
+      where: {
+        OR: [
+          { startDate: { gte: dayAgo, lte: now } },
+          { endDate: { gte: dayAgo, lte: now } },
+        ],
+      },
+      select: { storeId: true },
+      distinct: ["storeId"],
+    });
 
-      // Get all unique store IDs from updated offers
-      const allStoreIds = await prismadb.offer.findMany({
-        where: {
-          OR: [
-            { endDate: { lt: now } },
-            {
-              AND: [{ startDate: { lte: now } }, { endDate: { gt: now } }],
-            },
-          ],
-        },
-        select: { storeId: true },
-        distinct: ["storeId"],
-      });
-
-      // Invalidate cache for each affected store
-      for (const { storeId } of allStoreIds) {
-        await redis.del(`store:${storeId}:active-offers`);
-      }
-    } catch (error) {
-      console.error("Redis cache invalidation error:", error);
+    for (const { storeId } of touchedStores) {
+      await invalidateStorePromotionsCache(storeId);
     }
 
     await recordJobRun("update-offers", {
       ok: true,
-      detail: `${expiredOffers.count} vencidas, ${validOffers.count} activadas`,
+      detail: `${expiredOffers.count} vencidas apagadas, ${touchedStores.length} tiendas refrescadas`,
     });
 
     return NextResponse.json(
       {
         deactivated: expiredOffers.count,
-        activated: validOffers.count,
+        refreshedStores: touchedStores.length,
         refreshedSoldCounts,
       },
       { headers: corsHeaders },

@@ -1,74 +1,42 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { getColombiaDate } from "@/lib/date-utils";
+import { invalidateStorePromotionsCache } from "@/lib/cache";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-// Enable Edge Runtime for faster response times
-
+/**
+ * «Recalcular vigencias ahora»: apaga las ofertas vencidas que sigan
+ * encendidas y refresca la tienda. Nunca enciende ninguna: una oferta apagada
+ * a mano se queda apagada, y una programada entra en vigencia sola por fechas.
+ */
 export async function POST(
-  req: Request,
+  _req: Request,
   { params }: { params: { storeId: string } },
 ) {
   try {
     const { userId } = await auth();
-    if (!userId) throw ErrorFactory.Unauthorized();
+    if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
     await verifyStoreOwner(userId, params.storeId);
 
-    const now = getColombiaDate();
+    const result = await prismadb.offer.updateMany({
+      where: { storeId: params.storeId, isActive: true, endDate: { lt: new Date() } },
+      data: { isActive: false },
+    });
 
-    await prismadb.$transaction([
-      prismadb.offer.updateMany({
-        where: {
-          storeId: params.storeId,
-        },
-        data: {
-          isActive: {
-            set: false,
-          },
-        },
-      }),
-      prismadb.offer.updateMany({
-        where: {
-          storeId: params.storeId,
-          startDate: {
-            lte: now,
-          },
-          endDate: {
-            gte: now,
-          },
-        },
-        data: {
-          isActive: true,
-        },
-      }),
-    ]);
-
-    // Invalidate Redis cache
-    try {
-      const { Redis } = await import("@upstash/redis");
-      const redis = Redis.fromEnv();
-      await redis.del(`store:${params.storeId}:active-offers`);
-      const productKeys = await redis.keys(
-        `store:${params.storeId}:products:*`,
-      );
-      if (productKeys.length > 0) {
-        await redis.del(...productKeys);
-      }
-    } catch (error) {
-      console.error("Redis delete error:", error);
-    }
+    await invalidateStorePromotionsCache(params.storeId);
 
     return NextResponse.json(
       {
-        message: "Se han activado todas las ofertas válidas",
+        deactivated: result.count,
+        message:
+          result.count === 0
+            ? "Todas las ofertas ya estaban al día; la tienda se refrescó"
+            : `Se ${result.count === 1 ? "apagó 1 oferta vencida" : `apagaron ${result.count} ofertas vencidas`} y la tienda se refrescó`,
       },
-      {
-        headers: CACHE_HEADERS.NO_CACHE,
-      },
+      { headers: CACHE_HEADERS.NO_CACHE },
     );
   } catch (error) {
     return handleErrorResponse(error, "OFFERS_UPDATE_VALIDITY");

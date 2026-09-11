@@ -1,9 +1,9 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { getColombiaDate } from "@/lib/date-utils";
+import { invalidateStorePromotionsCache } from "@/lib/cache";
+import { assertFixedAmountBelowPrices, assertOfferTargetsInStore, offerTargetsData, parseOfferInput } from "@/lib/offers";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs/server";
-import { DiscountType } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 export async function GET(
@@ -12,29 +12,19 @@ export async function GET(
 ) {
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
-    if (!params.offerId)
-      throw ErrorFactory.InvalidRequest("ID de oferta requerido");
+    if (!params.offerId) throw ErrorFactory.InvalidRequest("ID de oferta requerido");
     const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
     await verifyStoreOwner(userId, params.storeId);
 
-    const offer = await prismadb.offer.findUnique({
-      where: {
-        id: params.offerId,
-        storeId: params.storeId,
-      },
-      include: {
-        products: true,
-        categories: true,
-        productGroups: true,
-      },
+    const offer = await prismadb.offer.findFirst({
+      where: { id: params.offerId, storeId: params.storeId },
+      include: { products: true, categories: true, productGroups: true },
     });
 
     if (!offer) throw ErrorFactory.NotFound("Oferta no encontrada");
 
-    return NextResponse.json(offer, {
-      headers: CACHE_HEADERS.NO_CACHE,
-    });
+    return NextResponse.json(offer, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {
     return handleErrorResponse(error, "OFFER_GET");
   }
@@ -48,100 +38,37 @@ export async function PATCH(
     const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
-    if (!params.offerId)
-      throw ErrorFactory.InvalidRequest("ID de oferta requerido");
+    if (!params.offerId) throw ErrorFactory.InvalidRequest("ID de oferta requerido");
 
     await verifyStoreOwner(userId, params.storeId);
 
-    const body = await req.json();
-    const {
-      name,
-      label,
-      type,
-      amount,
-      startDate,
-      endDate,
-      isActive,
-      productIds,
-      categoryIds,
-      productGroupIds,
-    } = body;
+    const existing = await prismadb.offer.findFirst({
+      where: { id: params.offerId, storeId: params.storeId },
+      select: { id: true },
+    });
+    if (!existing) throw ErrorFactory.NotFound("Oferta no encontrada");
 
-    if (!name) throw ErrorFactory.InvalidRequest("El nombre es requerido");
-    if (!type)
-      throw ErrorFactory.InvalidRequest("El tipo de descuento es requerido");
-    if (amount === undefined || amount < 0)
-      throw ErrorFactory.InvalidRequest(
-        "El monto es requerido y debe ser positivo",
-      );
-    if (!startDate)
-      throw ErrorFactory.InvalidRequest("La fecha de inicio es requerida");
-    if (!endDate)
-      throw ErrorFactory.InvalidRequest("La fecha de fin es requerida");
+    const input = parseOfferInput(await req.json());
+    await assertOfferTargetsInStore(prismadb, params.storeId, input);
+    await assertFixedAmountBelowPrices(prismadb, params.storeId, input);
 
-    if (type === DiscountType.PERCENTAGE && amount > 100) {
-      throw ErrorFactory.InvalidRequest(
-        "El porcentaje no puede ser mayor a 100",
-      );
-    }
-
+    const { productIds, categoryIds, productGroupIds, ...data } = input;
+    const targets = offerTargetsData({ productIds, categoryIds, productGroupIds });
+    // Reemplazo atómico de los destinos dentro del mismo `update`.
     const offer = await prismadb.offer.update({
-      where: {
-        id: params.offerId,
-        storeId: params.storeId,
-      },
+      where: { id: params.offerId, storeId: params.storeId },
       data: {
-        name,
-        label,
-        type,
-        amount,
-        startDate: getColombiaDate(new Date(startDate)),
-        endDate: getColombiaDate(new Date(endDate)),
-        isActive: isActive,
-        products: {
-          deleteMany: {}, // Remove all existing links
-          create: (productIds || []).map((id: string) => ({
-            product: { connect: { id } },
-          })),
-        },
-        categories: {
-          deleteMany: {}, // Remove all existing links
-          create: (categoryIds || []).map((id: string) => ({
-            category: { connect: { id } },
-          })),
-        },
-        productGroups: {
-          deleteMany: {}, // Remove all existing links
-          create: (productGroupIds || []).map((id: string) => ({
-            productGroup: { connect: { id } },
-          })),
-        },
+        ...data,
+        products: { deleteMany: {}, ...targets.products },
+        categories: { deleteMany: {}, ...targets.categories },
+        productGroups: { deleteMany: {}, ...targets.productGroups },
       },
-      include: {
-        products: true,
-        categories: true,
-        productGroups: true,
-      },
+      include: { products: true, categories: true, productGroups: true },
     });
 
-    // Invalidate Redis cache
-    try {
-      const { Redis } = await import("@upstash/redis");
-      const redis = Redis.fromEnv();
-      await redis.del(`store:${params.storeId}:active-offers`);
-      const productKeys = await redis.keys(
-        `store:${params.storeId}:products:*`,
-      );
-      if (productKeys.length > 0) {
-        await redis.del(...productKeys);
-      }
-    } catch (error) {
-      console.error("Redis delete error:", error);
-    }
+    await invalidateStorePromotionsCache(params.storeId);
 
-    return NextResponse.json(offer, {
-      headers: CACHE_HEADERS.NO_CACHE,
-    });
+    return NextResponse.json(offer, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {
     return handleErrorResponse(error, "OFFER_PATCH");
   }
@@ -155,36 +82,23 @@ export async function DELETE(
     const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
-    if (!params.offerId)
-      throw ErrorFactory.InvalidRequest("ID de oferta requerido");
+    if (!params.offerId) throw ErrorFactory.InvalidRequest("ID de oferta requerido");
 
     await verifyStoreOwner(userId, params.storeId);
 
+    const existing = await prismadb.offer.findFirst({
+      where: { id: params.offerId, storeId: params.storeId },
+      select: { id: true },
+    });
+    if (!existing) throw ErrorFactory.NotFound("Oferta no encontrada");
+
     const offer = await prismadb.offer.delete({
-      where: {
-        id: params.offerId,
-        storeId: params.storeId,
-      },
+      where: { id: params.offerId, storeId: params.storeId },
     });
 
-    // Invalidate Redis cache
-    try {
-      const { Redis } = await import("@upstash/redis");
-      const redis = Redis.fromEnv();
-      await redis.del(`store:${params.storeId}:active-offers`);
-      const productKeys = await redis.keys(
-        `store:${params.storeId}:products:*`,
-      );
-      if (productKeys.length > 0) {
-        await redis.del(...productKeys);
-      }
-    } catch (error) {
-      console.error("Redis delete error:", error);
-    }
+    await invalidateStorePromotionsCache(params.storeId);
 
-    return NextResponse.json(offer, {
-      headers: CACHE_HEADERS.NO_CACHE,
-    });
+    return NextResponse.json(offer, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {
     return handleErrorResponse(error, "OFFER_DELETE");
   }

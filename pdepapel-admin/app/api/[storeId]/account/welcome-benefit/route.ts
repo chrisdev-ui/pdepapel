@@ -4,7 +4,6 @@ import {
   getWelcomeBenefitFilter,
 } from "@/lib/customer-benefits";
 import { createCorsHeaders } from "@/lib/cors";
-import { getColombiaDate } from "@/lib/date-utils";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { auth } from "@clerk/nextjs/server";
@@ -15,7 +14,7 @@ const getCorsHeaders = (request: Request) =>
 
 const getActiveWelcomeBenefit = async (storeId: string) => {
   const coupon = await prismadb.coupon.findFirst({
-    where: getWelcomeBenefitFilter(storeId, getColombiaDate()),
+    where: getWelcomeBenefitFilter(storeId, new Date()),
     orderBy: { createdAt: "desc" },
   });
 

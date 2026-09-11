@@ -97,12 +97,12 @@ export function ContentPanel(props: ContentPanelProps) {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">
-          Publicaciones de Instagram, TikTok o Facebook que se muestran en la tienda. Pega el identificador de la publicación. {props.posts.length} en total.
+          Publicaciones de Instagram, TikTok, Facebook, YouTube o Pinterest que se muestran en la página Nosotros de la tienda. Pega el enlace de la publicación y el panel extrae el identificador. {props.posts.length} en total.
         </p>
         <div className="flex items-center gap-2">
           <RefreshButton />
           <Button asChild>
-            <Link href={`/${storeId}/publicaciones/new`}>
+            <Link href={`/${storeId}/publicaciones/nuevo`}>
               <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
               Nueva publicación
             </Link>
@@ -125,7 +125,7 @@ export function ContentPanel(props: ContentPanelProps) {
             <PostCellAction data={row.original} />
           </article>
         )}
-        emptyState={{ title: "Aún no hay publicaciones", description: "Muestra en la tienda lo que publicas en redes.", action: <Button asChild><Link href={`/${storeId}/publicaciones/new`}>Nueva publicación</Link></Button> }}
+        emptyState={{ title: "Aún no hay publicaciones", description: "Muestra en la tienda lo que publicas en redes.", action: <Button asChild><Link href={`/${storeId}/publicaciones/nuevo`}>Nueva publicación</Link></Button> }}
       />
     </div>
   );

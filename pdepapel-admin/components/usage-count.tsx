@@ -60,10 +60,8 @@ export const UsageCount: React.FC<UsageCountProps> = ({
             <TooltipContent>
               <p>
                 {remaining === 0
-                  ? "No uses remaining"
-                  : `${remaining} ${
-                      remaining === 1 ? "use" : "uses"
-                    } remaining`}
+                  ? "Sin usos disponibles"
+                  : `${remaining} ${remaining === 1 ? "uso disponible" : "usos disponibles"}`}
               </p>
             </TooltipContent>
           </Tooltip>

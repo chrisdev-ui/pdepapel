@@ -70,3 +70,24 @@ export async function invalidateStoreProductsCache(
   }
 }
 
+
+/**
+ * Invalida lo que depende de las promociones: la lista de ofertas activas en
+ * Redis, las consultas de productos cacheadas (llevan precio con descuento) y
+ * las páginas ISR de la tienda. Se llama al crear, editar, borrar o apagar una
+ * oferta y desde el cron diario cuando alguna vigencia cambia.
+ */
+export async function invalidateStorePromotionsCache(storeId: string): Promise<void> {
+  const purgeActiveOffers = async () => {
+    try {
+      await getRedis().del(`store:${storeId}:active-offers`);
+    } catch (error) {
+      console.error(`Redis active-offers purge error for store ${storeId}:`, error);
+    }
+  };
+  await Promise.allSettled([
+    purgeActiveOffers(),
+    purgeRedisProductKeys(storeId),
+    triggerStorefrontRevalidation(),
+  ]);
+}
