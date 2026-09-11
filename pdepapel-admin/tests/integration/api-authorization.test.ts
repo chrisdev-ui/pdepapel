@@ -71,6 +71,18 @@ const PROTECTED_ROUTES: ProtectedRoute[] = [
   { path: "coupons", methods: ["GET"] },
   { path: "coupons/[couponId]", methods: ["GET"], params: { couponId: "x" } },
   { path: "products/[productId]/reviews/[reviewId]", methods: ["GET"], params: { productId: "x", reviewId: "x" } },
+  // Gestión de publicaciones de Mercado Libre (auditoría 2026-09-11).
+  { path: "marketplaces/mercadolibre/listings", methods: ["GET", "POST"] },
+  { path: "marketplaces/mercadolibre/listings/bulk", methods: ["POST"] },
+  { path: "marketplaces/mercadolibre/listings/import", methods: ["POST"] },
+  { path: "marketplaces/mercadolibre/listings/import/preview", methods: ["POST"] },
+  { path: "marketplaces/mercadolibre/listings/[listingId]", methods: ["PATCH", "DELETE"], params: { listingId: "x" } },
+  { path: "marketplaces/mercadolibre/listings/[listingId]/publish", methods: ["POST"], params: { listingId: "x" } },
+  { path: "marketplaces/mercadolibre/listings/[listingId]/sync-content", methods: ["POST"], params: { listingId: "x" } },
+  { path: "marketplaces/mercadolibre/listings/[listingId]/content-review", methods: ["GET"], params: { listingId: "x" } },
+  { path: "marketplaces/mercadolibre/listings/[listingId]/quality", methods: ["GET"], params: { listingId: "x" } },
+  { path: "marketplaces/mercadolibre/listings/[listingId]/quality/video-reminder", methods: ["POST", "DELETE"], params: { listingId: "x" } },
+  { path: "marketplaces/mercadolibre/listings/[listingId]/sale-conditions", methods: ["GET", "PATCH"], params: { listingId: "x" } },
 ];
 // Bulk handlers (products PATCH, orders PATCH/DELETE, coupons PATCH/DELETE,
 // shipments/bulk-manual-update) validate the id list before authorizing, so an

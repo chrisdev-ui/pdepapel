@@ -14,7 +14,8 @@ export type MercadoLibrePackageDimensions = {
 };
 
 export type MercadoLibreSaleConditions = {
-  shippingMode: "me2";
+  /** Modo de envío que reporta Mercado Libre (`me2`, `me1`, `custom`, `not_specified`). */
+  shippingMode: string;
   freeShipping: boolean;
   localPickUp: boolean;
   packageDimensions: MercadoLibrePackageDimensions | null;
@@ -114,11 +115,29 @@ export function parseMercadoLibreSaleConditions(
   }
 
   return {
-    shippingMode: "me2",
+    shippingMode:
+      typeof value.shippingMode === "string" && value.shippingMode.trim()
+        ? value.shippingMode.trim()
+        : "me2",
     freeShipping: value.freeShipping,
     localPickUp: value.localPickUp,
     packageDimensions,
   };
+}
+
+/**
+ * Versión del JSON de metadatos. Cada escritura del panel la incrementa y
+ * comprueba la que leyó (`updateMarketplaceListingMetadataGuarded`), así dos
+ * pestañas no se pisan la ficha: es la marca de concurrencia sin columna nueva.
+ */
+export function getMercadoLibreListingMetadataVersion(
+  value: Prisma.JsonValue | null,
+): number {
+  if (!isRecord(value)) return 0;
+  const version = value.version;
+  return typeof version === "number" && Number.isInteger(version) && version > 0
+    ? version
+    : 0;
 }
 
 export function normalizeMercadoLibreFamilyName(value: unknown) {
@@ -253,6 +272,7 @@ export function buildMercadoLibreListingMetadata({
   videoRecommendationSnoozedUntil,
   saleConditions,
   belowCostOverride,
+  publicationError,
 }: {
   current: Prisma.JsonValue | null;
   attributes?: MercadoLibreAttribute[];
@@ -262,6 +282,8 @@ export function buildMercadoLibreListingMetadata({
   saleConditions?: MercadoLibreSaleConditions | null;
   /** `undefined` conserva la autorización actual; `null` la retira. */
   belowCostOverride?: MercadoLibreBelowCostOverride | null;
+  /** `null` borra el rechazo guardado (el dato señalado ya se corrigió). */
+  publicationError?: null;
 }): Prisma.InputJsonValue {
   const currentMetadata = getMercadoLibreListingMetadata(current);
   const normalizedImages =
@@ -285,29 +307,34 @@ export function buildMercadoLibreListingMetadata({
       ? currentMetadata.belowCostOverride
       : belowCostOverride;
 
-  return {
-    attributes: attributes ?? currentMetadata.attributes,
-    ...(currentMetadata.publicationError
-      ? { publicationError: currentMetadata.publicationError }
-      : {}),
-    ...(normalizedBelowCostOverride
-      ? { belowCostOverride: normalizedBelowCostOverride }
-      : {}),
-    ...(normalizedFamilyName ? { familyName: normalizedFamilyName } : {}),
-    ...(normalizedImages?.length
-      ? { media: { imageUrls: normalizedImages } }
-      : {}),
-    ...(normalizedVideoReminder
-      ? {
-          quality: {
-            videoRecommendationSnoozedUntil: normalizedVideoReminder,
-          },
-        }
-      : {}),
-    ...(normalizedSaleConditions
-      ? { saleConditions: normalizedSaleConditions }
-      : {}),
-  } as Prisma.InputJsonValue;
+  // Se parte del JSON tal cual está guardado: las llaves que este módulo no
+  // conoce (`source` de una importación, `currencyId`, lo que venga después)
+  // sobreviven a cada edición. Antes se reconstruía desde cero y se perdían.
+  const next: Record<string, unknown> = isRecord(current) ? { ...current } : {};
+  const assign = (key: string, value: unknown) => {
+    if (value === null || value === undefined) delete next[key];
+    else next[key] = value;
+  };
+  next.attributes = attributes ?? currentMetadata.attributes;
+  assign(
+    "publicationError",
+    publicationError === null ? null : currentMetadata.publicationError,
+  );
+  assign("belowCostOverride", normalizedBelowCostOverride);
+  assign("familyName", normalizedFamilyName);
+  assign(
+    "media",
+    normalizedImages?.length ? { imageUrls: normalizedImages } : null,
+  );
+  assign(
+    "quality",
+    normalizedVideoReminder
+      ? { videoRecommendationSnoozedUntil: normalizedVideoReminder }
+      : null,
+  );
+  assign("saleConditions", normalizedSaleConditions);
+  next.version = getMercadoLibreListingMetadataVersion(current) + 1;
+  return next as Prisma.InputJsonValue;
 }
 
 export function getMercadoLibreListingImageUrls(

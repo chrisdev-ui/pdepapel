@@ -105,6 +105,12 @@ async function getPriceOptions(
     );
 }
 
+/**
+ * Guarda lo que Mercado Libre reporta después de un cambio hecho desde aquí.
+ * Solo la escribe el PATCH: consultar las condiciones (GET) no modifica la
+ * publicación. Se conserva el modo de envío real y nunca se borra
+ * `lastError` (ahí viven avisos de la publicación que no son de este diálogo).
+ */
 async function persistRemoteConditions(
   listing: ListingRecord,
   current: MercadoLibreRemoteSaleConditions,
@@ -117,13 +123,12 @@ async function persistRemoteConditions(
       metadata: buildMercadoLibreListingMetadata({
         current: listing.metadata,
         saleConditions: {
-          shippingMode: "me2",
+          shippingMode: current.shippingMode ?? "me2",
           freeShipping: current.freeShipping,
           localPickUp: current.localPickUp,
           packageDimensions: metadata.saleConditions?.packageDimensions ?? null,
         },
       }),
-      lastError: null,
     },
   });
 }
@@ -148,7 +153,6 @@ export async function GET(
       current,
       availableListingTypes,
     );
-    await persistRemoteConditions(listing, current);
 
     return NextResponse.json(
       { current, availableListingTypes, options },

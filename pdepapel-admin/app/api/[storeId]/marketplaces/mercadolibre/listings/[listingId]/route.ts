@@ -1,5 +1,9 @@
 import { auth } from "@clerk/nextjs/server";
-import { MarketplaceListingStatus, Prisma } from "@prisma/client";
+import {
+  MarketplaceConnectionStatus,
+  MarketplaceListingStatus,
+  Prisma,
+} from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
@@ -8,13 +12,19 @@ import { inspectMercadoLibreCategory } from "@/lib/mercadolibre/category-validat
 import { getMercadoLibreCategoryAppError } from "@/lib/mercadolibre/category-validation-error";
 import {
   buildMercadoLibreListingMetadata,
+  getMercadoLibreListingMetadata,
   normalizeMercadoLibreFamilyName,
   parseMercadoLibreSaleConditions,
 } from "@/lib/mercadolibre/listing-metadata";
 import {
   enqueuePendingMarketplaceOutboxEvents,
+  isMarketplaceListingPublicationInProgress,
+  queueMarketplaceListingContentSyncEvent,
   queueMarketplacePriceSyncEvent,
+  queueMarketplaceStockSyncEvents,
 } from "@/lib/mercadolibre/outbox";
+import { updateMarketplaceListingMetadataGuarded } from "@/lib/mercadolibre/listing-metadata-writes";
+import { getMercadoLibreQueueConfigurationStatus } from "@/lib/mercadolibre/queue";
 import {
   evaluateListingPrice,
   parsePriceOverride,
@@ -138,7 +148,10 @@ export async function PATCH(
         externalItemId: true,
         marketplacePrice: true,
         syncPrice: true,
+        syncStock: true,
+        stockSafetyBuffer: true,
         metadata: true,
+        connection: { select: { status: true, recoveryScheduleId: true } },
         product: {
           select: {
             acqPrice: true,
@@ -151,6 +164,20 @@ export async function PATCH(
     if (!listing) throw ErrorFactory.NotFound("Publicación no encontrada");
 
     const body = (await request.json()) as Record<string, unknown>;
+    // Un rechazo guardado por Mercado Libre se borra cuando se edita justo lo
+    // que señaló; así el asistente deja de abrir en un paso ya corregido.
+    const publicationFailure = getMercadoLibreListingMetadata(
+      listing.metadata,
+    ).publicationError;
+    const editedFieldsByStep: Record<string, boolean> = {
+      producto: body.familyName !== undefined,
+      categoria: body.categoryId !== undefined || body.imageUrls !== undefined,
+      ficha: body.attributes !== undefined,
+      precio: body.marketplacePrice !== undefined,
+    };
+    const clearsPublicationError = Boolean(
+      publicationFailure?.step && editedFieldsByStep[publicationFailure.step],
+    );
     const data: Prisma.MarketplaceListingUpdateInput = {};
     /** `undefined` = no se tocó el precio; `null` = retirar la autorización. */
     let belowCostOverride:
@@ -271,10 +298,12 @@ export async function PATCH(
       familyName !== undefined ||
       imageUrls !== undefined ||
       saleConditions !== undefined ||
-      belowCostOverride !== undefined
+      belowCostOverride !== undefined ||
+      clearsPublicationError
     ) {
       data.metadata = buildMercadoLibreListingMetadata({
         current: listing.metadata,
+        ...(clearsPublicationError ? { publicationError: null } : {}),
         ...(body.attributes !== undefined
           ? { attributes: parseAttributes(body.attributes) }
           : {}),
@@ -287,14 +316,49 @@ export async function PATCH(
           : {}),
       });
     }
+    if (clearsPublicationError) data.lastError = null;
     if (Object.keys(data).length === 0) {
       throw ErrorFactory.InvalidRequest("No hay cambios para guardar");
     }
 
+    // En una publicación ya creada, lo que cambia aquí debe llegar a Mercado
+    // Libre: contenido (categoría, fotos, ficha, nombre) por SYNC_CONTENT y
+    // una reserva de seguridad nueva por SYNC_STOCK. Antes se guardaba solo
+    // en Administración y la ficha quedaba distinta en cada lado.
+    const contentChanged =
+      body.attributes !== undefined ||
+      familyName !== undefined ||
+      imageUrls !== undefined ||
+      data.categoryId !== undefined;
+    const bufferChanged =
+      data.stockSafetyBuffer !== undefined &&
+      data.stockSafetyBuffer !== listing.stockSafetyBuffer;
+    const priceMayChange =
+      data.marketplacePrice !== undefined || body.syncPrice === true;
+    const needsQueue =
+      Boolean(listing.externalItemId) &&
+      (contentChanged || bufferChanged || priceMayChange);
+    if (
+      needsQueue &&
+      (listing.connection.status !== MarketplaceConnectionStatus.CONNECTED ||
+        !listing.connection.recoveryScheduleId ||
+        !getMercadoLibreQueueConfigurationStatus().configured)
+    ) {
+      throw ErrorFactory.InvalidRequest(
+        "Activa el procesamiento seguro de Mercado Libre antes de editar una publicación activa",
+      );
+    }
+
     const result = await prismadb.$transaction(async (transaction) => {
-      const updated = await transaction.marketplaceListing.update({
-        where: { id: listing.id },
+      // Escritura con control de versión: si otra pestaña cambió la ficha
+      // desde que se abrió, se responde 409 en vez de pisar sus cambios.
+      await updateMarketplaceListingMetadataGuarded(transaction, {
+        id: listing.id,
+        currentMetadata: listing.metadata,
         data,
+      });
+      const updated = await transaction.marketplaceListing.findUniqueOrThrow({
+        where: { id: listing.id },
       });
       const shouldSyncPrice =
         Boolean(updated.externalItemId) &&
@@ -310,9 +374,25 @@ export async function PATCH(
           targetPrice: updated.marketplacePrice!,
         });
       }
-      return { updated, shouldSyncPrice };
+      const shouldSyncContent = Boolean(updated.externalItemId) && contentChanged;
+      if (shouldSyncContent) {
+        await queueMarketplaceListingContentSyncEvent(transaction, {
+          connectionId: listing.connectionId,
+          listingId: listing.id,
+          productId: listing.productId,
+        });
+      }
+      const shouldSyncStock =
+        Boolean(updated.externalItemId) && bufferChanged && updated.syncStock;
+      if (shouldSyncStock) {
+        await queueMarketplaceStockSyncEvents(transaction, [listing.productId]);
+      }
+      return {
+        updated,
+        queued: shouldSyncPrice || shouldSyncContent || shouldSyncStock,
+      };
     });
-    if (result.shouldSyncPrice) {
+    if (result.queued) {
       await enqueuePendingMarketplaceOutboxEvents(listing.connectionId);
     }
 
@@ -342,12 +422,26 @@ export async function DELETE(
       },
       select: {
         id: true,
+        connectionId: true,
         externalItemId: true,
         status: true,
         _count: { select: { orderItems: true, questions: true } },
       },
     });
     if (!listing) throw ErrorFactory.NotFound("Publicación no encontrada");
+    // Mientras la cola está creando el ítem, el borrador aún no tiene id:
+    // borrarlo dejaría una publicación huérfana en Mercado Libre.
+    if (
+      await isMarketplaceListingPublicationInProgress(
+        prismadb,
+        listing.connectionId,
+        listing.id,
+      )
+    ) {
+      throw ErrorFactory.Conflict(
+        "Esta publicación se está enviando a Mercado Libre. Espera a que termine antes de eliminarla.",
+      );
+    }
 
     const canDeleteDraft =
       !listing.externalItemId &&

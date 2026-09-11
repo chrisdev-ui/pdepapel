@@ -97,6 +97,7 @@ describe("Mercado Libre listing import routes", () => {
           externalItemId: "MCO2000000001",
           externalVariationId: null,
           productId: "local-product-id",
+          replaceDraft: false,
         },
       ],
     });

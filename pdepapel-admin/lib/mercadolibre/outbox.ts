@@ -9,7 +9,7 @@ import {
 
 import prismadb from "@/lib/prismadb";
 
-import { getMercadoLibreAccessToken } from "./client";
+import { getMercadoLibreAccessToken, mutateMercadoLibreJson } from "./client";
 import {
   getMercadoLibreOrderFinancials,
   MercadoLibreFinancialsPendingError,
@@ -108,10 +108,26 @@ function getTargetListingStatus(payload: Prisma.JsonValue) {
   return targetStatus;
 }
 
-function toMarketplaceListingStatus(status: string) {
-  return status === "active"
-    ? MarketplaceListingStatus.ACTIVE
-    : MarketplaceListingStatus.PAUSED;
+/**
+ * ¿Hay una publicación de esta ficha en curso (evento PUBLISH_LISTING en
+ * PROCESSING)? La ruta de publicar, las acciones masivas y el borrado la
+ * consultan para no duplicar el envío ni borrar una ficha a medio crear.
+ */
+export async function isMarketplaceListingPublicationInProgress(
+  prisma: Prisma.TransactionClient | typeof prismadb,
+  connectionId: string,
+  listingId: string,
+) {
+  const event = await prisma.marketplaceOutboxEvent.findUnique({
+    where: {
+      deduplicationKey: getMarketplaceListingPublicationKey(
+        connectionId,
+        listingId,
+      ),
+    },
+    select: { status: true },
+  });
+  return event?.status === MarketplaceOutboxStatus.PROCESSING;
 }
 
 export async function queueMarketplaceStockSyncEvents(
@@ -542,24 +558,15 @@ async function updateMercadoLibreListingStatus(
   externalItemId: string,
   targetStatus: "active" | "paused",
 ) {
-  const accessToken = await getMercadoLibreAccessToken(connectionId);
-  const response = await fetch(
-    `https://api.mercadolibre.com/items/${encodeURIComponent(externalItemId)}`,
-    {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ status: targetStatus }),
-      cache: "no-store",
-    },
-  );
-  if (!response.ok) {
-    throw new Error(
-      `Mercado Libre rechazó la actualización de estado (${response.status})`,
-    );
-  }
+  // Mercado Libre responde con el ítem: su `status` real manda (puede quedar
+  // en revisión aunque se haya pedido activar). Un rechazo llega ya
+  // clasificado por el cliente (429, 5xx, token vencido…).
+  const payload = (await mutateMercadoLibreJson(
+    connectionId,
+    `/items/${encodeURIComponent(externalItemId)}`,
+    { method: "PUT", body: { status: targetStatus } },
+  )) as { status?: unknown } | null;
+  return typeof payload?.status === "string" ? payload.status : null;
 }
 
 export async function processMarketplaceOutboxEvent(eventId: string) {
@@ -672,6 +679,7 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
     let syncedPrice: number | null = null;
     let syncedListingContent = false;
     let syncedListingStatus: MarketplaceListingStatus | null = null;
+    let syncedListingNote: string | null = null;
     let financialsUpdate: MarketplaceOrderFinancialsUpdate | null = null;
     if (event.action === MarketplaceOutboxAction.SYNC_ORDER_FINANCIALS) {
       const payload = event.payload as Record<string, unknown> | null;
@@ -841,12 +849,18 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
       syncedListingContent = true;
     } else if (event.action === MarketplaceOutboxAction.SYNC_LISTING_STATUS) {
       const targetStatus = getTargetListingStatus(event.payload);
-      await updateMercadoLibreListingStatus(
+      const remoteStatus = await updateMercadoLibreListingStatus(
         event.connectionId,
         event.listing!.externalItemId!,
         targetStatus,
       );
-      syncedListingStatus = toMarketplaceListingStatus(targetStatus);
+      // Misma tabla de estados que la publicación: lo que Mercado Libre
+      // devuelve, no lo que se pidió.
+      const mapped = getMarketplaceListingStatusFromRemote(
+        remoteStatus ?? targetStatus,
+      );
+      syncedListingStatus = mapped.status;
+      syncedListingNote = mapped.note;
     } else if (event.action === MarketplaceOutboxAction.PUBLISH_LISTING) {
       if (event.listing!.externalItemId) {
         // Ya está publicada (por la ruta, por importación o por un intento
@@ -993,7 +1007,7 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
                 ]
                   .filter(Boolean)
                   .join(" ") || null
-              : null,
+              : syncedListingNote,
           },
         });
       }
@@ -1093,6 +1107,21 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
           },
         });
       }
+    }
+    if (
+      event.action === MarketplaceOutboxAction.SYNC_LISTING_CONTENT &&
+      event.listing?.id
+    ) {
+      // Un contenido que no llegó a Mercado Libre se ve en la fila, no solo
+      // en la cola: antes fallaba doce veces sin dejar rastro en la ficha.
+      await prismadb.marketplaceListing.update({
+        where: { id: event.listing.id },
+        data: {
+          lastError: exhausted
+            ? `No fue posible sincronizar el contenido tras ${MAX_OUTBOX_EVENT_ATTEMPTS} intentos: ${errorMessage}`
+            : `Sincronización de contenido pendiente de reintento: ${errorMessage}`,
+        },
+      });
     }
     await prismadb.marketplaceOutboxEvent.update({
       where: { id: event.id },

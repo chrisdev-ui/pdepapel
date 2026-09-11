@@ -1,20 +1,13 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   AsyncProductSelect,
   type AsyncProductOption,
 } from "@/components/ui/async-product-select";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { SectionCard } from "@/components/ui/section-card";
 import {
   Dialog,
   DialogContent,
@@ -26,30 +19,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useActionConfirmation } from "@/hooks/use-action-confirmation";
 import { MERCADOLIBRE_CATEGORY_REVIEW_REQUIRED } from "@/lib/mercadolibre/categories";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { getListingStatusMeta } from "@/lib/mercadolibre/listing-status";
 import { recommendMercadoLibreListingPrice } from "@/lib/mercadolibre/listing-price-recommendation";
-import {
-  BarChart3,
-  Download,
-  ImageIcon,
-  Loader2,
-  PackageOpen,
-  Pencil,
-  Plus,
-  Sparkles,
-  Trash2,
-  UploadCloud,
-  Video,
-} from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Download, Pencil, Plus, Video } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   ListingPublicationWizard,
@@ -64,28 +37,59 @@ import {
 } from "@/lib/mercadolibre/listing-wizard";
 import type { MercadoLibreCategorySearchResponse } from "@/lib/mercadolibre/categories";
 import { ProductVideoLibrary } from "./product-video-library";
-
-type ProductReference = {
-  id: string;
-  name: string;
-  sku: string;
-  stock: number;
-  price: number;
-  acqPrice: number | null;
-  /** Envío y otros gastos por unidad; entra al piso y a la ganancia. */
-  transportationCost: number | null;
-  images: { url: string; isMain?: boolean }[];
-  category?: { id: string; name: string } | null;
-  /** Datos que rellenan la ficha técnica sin volver a teclearlos. */
-  brand?: string | null;
-  gtin?: string | null;
-  mpn?: string | null;
-  hasNoProductIdentifier?: boolean;
-  colorName?: string | null;
-  sizeName?: string | null;
-};
+import { ListingDetailsSheet } from "./listings/listing-details-sheet";
+import type { ListingRowHandlers } from "./listings/listing-row-actions";
+import { ListingTable } from "./listings/listing-table";
+import {
+  bulkActionLabels,
+  currencyFormatter,
+  MAX_BULK_LISTINGS,
+  type BulkAction,
+  type BulkOutcome,
+  type ContentReview,
+  type Listing,
+  type ListingQuality,
+  type MarketplaceAttribute,
+  type ProductReference,
+} from "./listings/listing-types";
 
 type SelectedProduct = ProductReference;
+
+/**
+ * El producto de una publicación guardada llega con `color`/`size` anidados;
+ * el asistente lee `colorName`/`sizeName` (lo que `toSelectedProduct` mapea
+ * para un producto recién elegido). Sin este paso la ficha no rellenaba color
+ * ni tamaño al editar.
+ */
+function toSelectedProductFromListing(product: ProductReference): SelectedProduct {
+  return {
+    ...product,
+    sku: product.sku ?? "",
+    colorName: product.colorName ?? product.color?.name ?? null,
+    sizeName: product.sizeName ?? product.size?.name ?? null,
+  };
+}
+
+/**
+ * La ficha se edita como texto `CODIGO=Valor`; al guardar, un valor de lista
+ * cerrada recupera el `value_id` que tenía la publicación para no reenviarse
+ * como texto libre.
+ */
+function withKnownValueIds(
+  attributes: { id: string; value_name: string }[],
+  known: MarketplaceAttribute[] | undefined,
+) {
+  const knownById = new Map(
+    (known ?? []).map((attribute) => [attribute.id.toUpperCase(), attribute]),
+  );
+  return attributes.map((attribute) => {
+    const previous = knownById.get(attribute.id.toUpperCase());
+    return previous?.value_id &&
+      (previous.value_name ?? "").trim() === attribute.value_name
+      ? { ...attribute, value_id: previous.value_id }
+      : attribute;
+  });
+}
 
 function toSelectedProduct(
   product: AsyncProductOption | null | undefined,
@@ -113,54 +117,8 @@ function toSelectedProduct(
   };
 }
 
-type Listing = {
-  id: string;
-  categoryId: string | null;
-  listingType: string | null;
-  marketplacePrice: number | null;
-  stockSafetyBuffer: number;
-  syncStock: boolean;
-  syncPrice: boolean;
-  minimumMarginAmount: number | null;
-  status: "DRAFT" | "ACTIVE" | "PAUSED" | "CLOSED" | "ERROR" | "UNLINKED";
-  externalPermalink: string | null;
-  externalItemId: string | null;
-  lastError: string | null;
-  metadata: {
-    attributes?: MarketplaceAttribute[];
-    media?: { imageUrls?: string[] };
-    familyName?: string;
-    saleConditions?: {
-      shippingMode: "me2";
-      freeShipping: boolean;
-      localPickUp: boolean;
-      packageDimensions: {
-        heightCm: number;
-        widthCm: number;
-        lengthCm: number;
-        weightGrams: number;
-      } | null;
-    };
-    belowCostOverride?: { reason: string; floor: number; price: number; at: string } | null;
-    publicationError?: {
-      kind: "review" | "transient" | "reauth" | "unknown";
-      step: "producto" | "categoria" | "ficha" | "precio" | null;
-      field: string | null;
-      message: string;
-      at: string;
-    } | null;
-  } | null;
-  product: ProductReference;
-};
-
 type PublishableListing = Pick<Listing, "id" | "marketplacePrice"> & {
   product: Pick<ProductReference, "name">;
-};
-
-type MarketplaceAttribute = {
-  id: string;
-  value_id?: string | null;
-  value_name?: string | null;
 };
 
 type CategorySuggestion = {
@@ -264,48 +222,25 @@ type ActiveSaleConditions = {
   options: PriceEstimate[];
 };
 
-type ListingQualityRule = {
-  key: string | null;
-  link: string | null;
-  title: string;
-  label: string | null;
-  mode: "OPPORTUNITY" | "WARNING" | null;
-  isVideoRecommendation: boolean;
-};
-
-type ListingQuality = {
-  score: number | null;
-  level: string | null;
-  levelWording: string | null;
-  pendingRules: ListingQualityRule[];
-  videoRecommendation:
-    | (ListingQualityRule & {
-        preparedVideoCount: number;
-        snoozedUntil: string | null;
-      })
-    | null;
-};
-
-type ContentReview = {
-  familyName: string;
-  familyNameLength: number;
-  descriptionPreview: string;
-  checks: { label: string; ready: boolean; detail: string }[];
-};
-
 type ImportCandidate = {
   key: string;
   externalItemId: string;
   externalVariationId: string | null;
   title: string;
   status: Listing["status"];
+  statusNote: string | null;
   marketplacePrice: number | null;
+  currencyId: string | null;
+  catalogListing: boolean;
   sellerSku: string | null;
   availableQuantity: number | null;
   existingListingId: string | null;
   linkedProduct: ProductReference | null;
   suggestedProduct: ProductReference | null;
+  /** Borrador local del producto sugerido; vincular lo reemplaza. */
+  draftListingId: string | null;
   issue: string | null;
+  warnings: string[];
 };
 
 type ImportPreview = {
@@ -315,12 +250,21 @@ type ImportPreview = {
     alreadyLinked: number;
     readyToImport: number;
     needsReview: number;
+    unavailable: number;
   };
+  partial: boolean;
 };
 
 type ImportSelection = {
   productId: string;
   selected: boolean;
+  /** La persona aceptó reemplazar el borrador local del producto elegido. */
+  replaceDraft: boolean;
+};
+
+type ImportResult = {
+  importedCount: number;
+  imported: { listingId: string; title: string; replacedDraft: boolean }[];
 };
 
 const emptyForm: ListingForm = {
@@ -343,11 +287,6 @@ const emptyForm: ListingForm = {
   belowCostReason: "",
 };
 
-const currencyFormatter = new Intl.NumberFormat("es-CO", {
-  style: "currency",
-  currency: "COP",
-  maximumFractionDigits: 0,
-});
 
 function formatCurrencyDifference(value: number) {
   const sign = value > 0 ? "+" : value < 0 ? "-" : "";
@@ -362,17 +301,6 @@ function getSellerShippingCost(
   if (freeShipping) return comparison.sellerOffersFree.sellerCost;
   return comparison.buyerPays?.sellerCost ?? 0;
 }
-
-const bulkActionLabels = {
-  publish: "Publicar borradores",
-  sync_stock: "Sincronizar stock",
-  sync_price: "Sincronizar precios",
-  sync_content: "Sincronizar contenido",
-  pause: "Pausar publicaciones",
-  activate: "Activar publicaciones",
-} as const;
-
-type BulkAction = keyof typeof bulkActionLabels;
 
 function attributesToText(attributes: MarketplaceAttribute[] | undefined) {
   return (attributes ?? [])
@@ -405,23 +333,39 @@ function parseAttributes(value: string) {
 type ResponseError = {
   message: string;
   code: string | null;
+  /** Texto literal de Mercado Libre cuando el fallo vino de allá. */
+  upstreamMessage: string | null;
 };
 
 function getResponseError(response: Response): Promise<ResponseError> {
   return response
     .json()
-    .then((body: { error?: string; details?: { code?: string } }) => ({
-      message: body.error ?? "No fue posible completar la acción",
-      code: typeof body.details?.code === "string" ? body.details.code : null,
-    }))
+    .then(
+      (body: {
+        error?: string;
+        details?: { code?: string; upstreamMessage?: string };
+      }) => ({
+        message: body.error ?? "No fue posible completar la acción",
+        code: typeof body.details?.code === "string" ? body.details.code : null,
+        upstreamMessage:
+          typeof body.details?.upstreamMessage === "string"
+            ? body.details.upstreamMessage
+            : null,
+      }),
+    )
     .catch(() => ({
       message: "No fue posible completar la acción",
       code: null,
+      upstreamMessage: null,
     }));
 }
 
 function getErrorMessage(response: Response) {
-  return getResponseError(response).then((error) => error.message);
+  return getResponseError(response).then((error) =>
+    error.upstreamMessage && !error.message.includes(error.upstreamMessage)
+      ? `${error.message} Mercado Libre dijo: ${error.upstreamMessage}`
+      : error.message,
+  );
 }
 
 export function MercadoLibreListingManager({
@@ -527,9 +471,19 @@ export function MercadoLibreListingManager({
   >({});
   const [isLoadingImportPreview, setIsLoadingImportPreview] = useState(false);
   const [isImportingListings, setIsImportingListings] = useState(false);
-  const [selectedListingIds, setSelectedListingIds] = useState<string[]>([]);
-  const [bulkAction, setBulkAction] = useState<BulkAction>("sync_stock");
+  /** Resultado de la última vinculación, para decirlo en pantalla. */
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  /** Último resultado masivo, fila por fila, hasta que la persona lo cierre. */
+  const [bulkOutcome, setBulkOutcome] = useState<BulkOutcome | null>(null);
+  /** Selección de la tabla, por id; sobrevive a cada recarga de la lista. */
+  const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
   const [isRunningBulkAction, setIsRunningBulkAction] = useState(false);
+  const [changingStatusId, setChangingStatusId] = useState<string | null>(null);
+  /** Mensaje de éxito de la última acción (se cierra solo al actuar de nuevo). */
+  const [notice, setNotice] = useState<string | null>(null);
+  /** Publicación cuyo panel de calidad y contenido está abierto. */
+  const [detailsListingId, setDetailsListingId] = useState<string | null>(null);
+  const hasLoadedListings = useRef(false);
   const [categoryTemplates, setCategoryTemplates] = useState<
     CategoryTemplate[]
   >([]);
@@ -546,14 +500,29 @@ export function MercadoLibreListingManager({
   const [isSuggestingPrice, setIsSuggestingPrice] = useState(false);
 
   const loadListings = useCallback(async () => {
-    setIsLoading(true);
+    // Solo la primera carga muestra el esqueleto: una recarga tras una acción
+    // deja la tabla, la selección y el panel abierto en su sitio.
+    if (!hasLoadedListings.current) setIsLoading(true);
     try {
       const response = await fetch(
         `/api/${storeId}/marketplaces/mercadolibre/listings`,
       );
       if (!response.ok) throw new Error(await getErrorMessage(response));
-      setListings((await response.json()) as Listing[]);
-      setSelectedListingIds([]);
+      const nextListings = (await response.json()) as Listing[];
+      setListings(nextListings);
+      const ids = new Set(nextListings.map((listing) => listing.id));
+      setRowSelection((current) =>
+        Object.fromEntries(
+          Object.entries(current).filter(([id, selected]) => selected && ids.has(id)),
+        ),
+      );
+      setQualityByListingId((current) =>
+        Object.fromEntries(Object.entries(current).filter(([id]) => ids.has(id))),
+      );
+      setContentReviewByListingId((current) =>
+        Object.fromEntries(Object.entries(current).filter(([id]) => ids.has(id))),
+      );
+      hasLoadedListings.current = true;
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -568,6 +537,9 @@ export function MercadoLibreListingManager({
   useEffect(() => {
     void loadListings();
   }, [loadListings]);
+
+  const parseFormAttributes = (text: string) =>
+    withKnownValueIds(parseAttributes(text), editingListing?.metadata?.attributes);
 
   const loadCategoryTemplates = useCallback(async () => {
     try {
@@ -650,6 +622,7 @@ export function MercadoLibreListingManager({
     setQuickProfile(null);
   };
 
+  const openNewListingRef = useRef<() => void>(() => undefined);
   const openNewListing = () => {
     saleConditionsRequestId.current += 1;
     setEditingListing(null);
@@ -674,6 +647,8 @@ export function MercadoLibreListingManager({
     setInitialWizardIssue(null);
     setIsDialogOpen(true);
   };
+
+  openNewListingRef.current = openNewListing;
 
   const openEditListing = (listing: Listing) => {
     const requestId = saleConditionsRequestId.current + 1;
@@ -741,10 +716,7 @@ export function MercadoLibreListingManager({
           }
         : null,
     );
-    setSelectedProduct({
-      ...listing.product,
-      price: listing.product.price,
-    });
+    setSelectedProduct(toSelectedProductFromListing(listing.product));
     setSuggestions([]);
     setSuggestionsNotice(null);
     setCategoryAttributes([]);
@@ -779,10 +751,13 @@ export function MercadoLibreListingManager({
         Object.fromEntries(
           preview.listings.map((listing) => {
             const suggestedProductId = listing.suggestedProduct?.id ?? "";
+            // Con borrador local no se propone sola: reemplazarlo se confirma
+            // fila por fila.
             const canAutoSelect = Boolean(
               !listing.existingListingId &&
               suggestedProductId &&
               !listing.issue &&
+              !listing.draftListingId &&
               listing.status !== "ERROR" &&
               !automaticallySelectedProductIds.has(suggestedProductId),
             );
@@ -795,6 +770,7 @@ export function MercadoLibreListingManager({
               {
                 productId: suggestedProductId,
                 selected: canAutoSelect,
+                replaceDraft: false,
               },
             ];
           }),
@@ -820,9 +796,27 @@ export function MercadoLibreListingManager({
       [key]: {
         productId: current[key]?.productId ?? "",
         selected: current[key]?.selected ?? false,
+        replaceDraft: current[key]?.replaceDraft ?? false,
         ...update,
       },
     }));
+  };
+
+  /**
+   * Borrador local del producto elegido para una fila: el que la revisión
+   * detectó para el SKU sugerido, o el que ya está en la lista cuando la
+   * persona eligió otro producto a mano.
+   */
+  const getDraftForImportRow = (listing: ImportCandidate, productId: string) => {
+    if (!productId) return null;
+    if (listing.suggestedProduct?.id === productId && listing.draftListingId) {
+      return listing.draftListingId;
+    }
+    return (
+      listings.find(
+        (candidate) => !candidate.externalItemId && candidate.product.id === productId,
+      )?.id ?? null
+    );
   };
 
   const importExistingListings = async () => {
@@ -842,6 +836,7 @@ export function MercadoLibreListingManager({
           externalItemId: listing.externalItemId,
           externalVariationId: listing.externalVariationId,
           productId: selection.productId,
+          replaceDraft: selection.replaceDraft,
         },
       ];
     });
@@ -880,6 +875,8 @@ export function MercadoLibreListingManager({
         },
       );
       if (!response.ok) throw new Error(await getErrorMessage(response));
+      const result = (await response.json()) as ImportResult;
+      setImportResult(result);
       setImportPreview(null);
       setImportSelections({});
       await loadListings();
@@ -901,7 +898,9 @@ export function MercadoLibreListingManager({
           !listing.existingListingId &&
           listing.status !== "ERROR" &&
           selection?.selected &&
-          Boolean(selection.productId)
+          Boolean(selection.productId) &&
+          (!getDraftForImportRow(listing, selection.productId) ||
+            selection.replaceDraft)
         );
       }).length
     : 0;
@@ -1516,6 +1515,7 @@ export function MercadoLibreListingManager({
         ...current,
         [listing.id]: quality,
       }));
+      setDetailsListingId(listing.id);
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -1588,12 +1588,17 @@ export function MercadoLibreListingManager({
 
     setSyncingContentId(listing.id);
     setError(null);
+    setNotice(null);
     try {
       const response = await fetch(
         `/api/${storeId}/marketplaces/mercadolibre/listings/${listing.id}/sync-content`,
         { method: "POST" },
       );
       if (!response.ok) throw new Error(await getErrorMessage(response));
+      const body = (await response.json().catch(() => null)) as { message?: string } | null;
+      setNotice(
+        `${listing.product.name}: ${body?.message ?? "el contenido quedó programado para sincronizarse"}.`,
+      );
       await loadListings();
     } catch (requestError) {
       setError(
@@ -1619,6 +1624,7 @@ export function MercadoLibreListingManager({
         ...current,
         [listing.id]: review,
       }));
+      setDetailsListingId(listing.id);
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -1645,7 +1651,7 @@ export function MercadoLibreListingManager({
     setIsSaving(true);
     setError(null);
     try {
-      const attributes = parseAttributes(form.attributes);
+      const attributes = parseFormAttributes(form.attributes);
       const payload = {
         familyName: form.familyName,
         marketplacePrice: form.marketplacePrice,
@@ -1760,12 +1766,14 @@ export function MercadoLibreListingManager({
 
     setPublishingId(listing.id);
     setError(null);
+    setNotice(null);
     try {
       const response = await fetch(
         `/api/${storeId}/marketplaces/mercadolibre/listings/${listing.id}/publish`,
         { method: "POST" },
       );
       if (!response.ok) throw new Error(await getErrorMessage(response));
+      setNotice(`${listing.product.name} se envió a Mercado Libre.`);
       await loadListings();
     } catch (requestError) {
       setError(
@@ -1793,12 +1801,14 @@ export function MercadoLibreListingManager({
 
     setDeletingDraftId(listing.id);
     setError(null);
+    setNotice(null);
     try {
       const response = await fetch(
         `/api/${storeId}/marketplaces/mercadolibre/listings/${listing.id}`,
         { method: "DELETE" },
       );
       if (!response.ok) throw new Error(await getErrorMessage(response));
+      setNotice(`Se eliminó el borrador de ${listing.product.name}.`);
       await loadListings();
     } catch (requestError) {
       setError(
@@ -1859,7 +1869,7 @@ export function MercadoLibreListingManager({
                 imageUrls: form.imageUrls,
                 familyName: form.familyName,
               }
-            : { attributes: parseAttributes(form.attributes) };
+            : { attributes: parseFormAttributes(form.attributes) };
         const response = await fetch(
           `/api/${storeId}/marketplaces/mercadolibre/listings/${existingId}`,
           {
@@ -1904,16 +1914,18 @@ export function MercadoLibreListingManager({
     });
   };
 
+  const dirtyCheckRef = useRef({ form, persistedForm });
+  dirtyCheckRef.current = { form, persistedForm };
   useEffect(() => {
     if (!isDialogOpen) return;
     const warn = (event: BeforeUnloadEvent) => {
-      if (JSON.stringify(form) === persistedForm) return;
+      if (JSON.stringify(dirtyCheckRef.current.form) === dirtyCheckRef.current.persistedForm) return;
       event.preventDefault();
       event.returnValue = "";
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [isDialogOpen, form, persistedForm]);
+  }, [isDialogOpen]);
 
   const saveAndPublishListing = async () => {
     if (!canPublish) {
@@ -1951,45 +1963,85 @@ export function MercadoLibreListingManager({
     await publishListing(savedListing, true);
   };
 
-  const toggleListingSelection = (listingId: string) => {
-    setSelectedListingIds((current) =>
-      current.includes(listingId)
-        ? current.filter((id) => id !== listingId)
-        : [...current, listingId],
-    );
-  };
-
-  const runBulkAction = async () => {
-    if (selectedListingIds.length === 0) {
+  /**
+   * Envía una acción a la cola para las publicaciones indicadas y guarda el
+   * resultado fila por fila. La usan la barra de selección de la tabla y las
+   * acciones «Pausar»/«Activar» de una sola fila.
+   */
+  const queueBulkAction = async (
+    action: BulkAction,
+    listingIds: string[],
+    { confirmed = false, singleListing }: { confirmed?: boolean; singleListing?: Listing } = {},
+  ) => {
+    if (listingIds.length === 0) {
       setError("Selecciona al menos una publicación para continuar");
       return;
     }
-    const actionLabel = bulkActionLabels[bulkAction].toLowerCase();
+    if (listingIds.length > MAX_BULK_LISTINGS) {
+      setError(
+        `Las acciones masivas se aplican de a ${MAX_BULK_LISTINGS} publicaciones como máximo; tienes ${listingIds.length} seleccionadas.`,
+      );
+      return;
+    }
+    const actionLabel = bulkActionLabels[action];
     if (
+      !confirmed &&
       !(await requestConfirmation({
-        title: "¿Confirmar acción masiva?",
-        description: `Confirmas ${actionLabel} para ${selectedListingIds.length} publicación${selectedListingIds.length === 1 ? "" : "es"}. Las acciones se procesarán de forma segura en segundo plano.`,
-        confirmLabel: "Confirmar acción",
+        title: singleListing
+          ? `¿${action === "pause" ? "Pausar" : "Activar"} ${singleListing.product.name}?`
+          : `¿${actionLabel}?`,
+        description: singleListing
+          ? `El cambio se envía a Mercado Libre en segundo plano y la fila se actualiza cuando termine.`
+          : `Se aplicará «${actionLabel}» a ${listingIds.length} publicación${listingIds.length === 1 ? "" : "es"}, en segundo plano y con reintentos. Las que no cumplan la condición se omiten y se indica el motivo en su fila.`,
+        confirmLabel: singleListing
+          ? action === "pause"
+            ? "Pausar"
+            : "Activar"
+          : "Aplicar de forma segura",
       }))
     ) {
       return;
     }
 
-    setIsRunningBulkAction(true);
+    if (singleListing) setChangingStatusId(singleListing.id);
+    else setIsRunningBulkAction(true);
     setError(null);
+    setNotice(null);
     try {
       const response = await fetch(
         `/api/${storeId}/marketplaces/mercadolibre/listings/bulk`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: bulkAction,
-            listingIds: selectedListingIds,
-          }),
+          body: JSON.stringify({ action, listingIds }),
         },
       );
       if (!response.ok) throw new Error(await getErrorMessage(response));
+      const body = (await response.json()) as {
+        queued: number;
+        skipped: { listingId: string; reason: string }[];
+        results: { listingId: string; outcome: "queued" | "skipped"; reason: string | null }[];
+      };
+      setBulkOutcome({
+        action,
+        at: new Date().toISOString(),
+        queued: body.queued,
+        skipped: body.skipped.length,
+        byListingId: Object.fromEntries(
+          body.results.map((result) => [
+            result.listingId,
+            { outcome: result.outcome, reason: result.reason },
+          ]),
+        ),
+      });
+      setNotice(
+        singleListing
+          ? body.queued === 1
+            ? `${singleListing.product.name}: ${action === "pause" ? "pausa" : "activación"} programada en segundo plano.`
+            : (body.skipped[0]?.reason ?? "No se aplicó el cambio.")
+          : `${actionLabel}: ${body.queued} programada${body.queued === 1 ? "" : "s"} en segundo plano${body.skipped.length > 0 ? `, ${body.skipped.length} omitida${body.skipped.length === 1 ? "" : "s"} (el motivo aparece en cada fila)` : ""}.`,
+      );
+      if (!singleListing) setRowSelection({});
       await loadListings();
     } catch (requestError) {
       setError(
@@ -1999,6 +2051,7 @@ export function MercadoLibreListingManager({
       );
     } finally {
       setIsRunningBulkAction(false);
+      setChangingStatusId(null);
     }
   };
 
@@ -2039,7 +2092,7 @@ export function MercadoLibreListingManager({
     }
     let attributes: MarketplaceAttribute[];
     try {
-      attributes = parseAttributes(form.attributes);
+      attributes = parseFormAttributes(form.attributes);
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -2112,7 +2165,7 @@ export function MercadoLibreListingManager({
 
     let attributes: MarketplaceAttribute[];
     try {
-      attributes = parseAttributes(form.attributes);
+      attributes = parseFormAttributes(form.attributes);
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -2158,40 +2211,109 @@ export function MercadoLibreListingManager({
     }
   };
 
+  // La tabla está memorizada: recibe funciones de identidad fija que leen
+  // siempre la versión más reciente de cada acción a través de una ref.
+  const actionsRef = useRef({
+    openEditListing,
+    publishListing,
+    deleteDraft,
+    reviewListingContent,
+    syncListingContent,
+    loadListingQuality,
+    queueBulkAction,
+    updateVideoReminder,
+    setVideoLibraryTarget,
+  });
+  actionsRef.current = {
+    openEditListing,
+    publishListing,
+    deleteDraft,
+    reviewListingContent,
+    syncListingContent,
+    loadListingQuality,
+    queueBulkAction,
+    updateVideoReminder,
+    setVideoLibraryTarget,
+  };
+  const rowHandlers = useMemo<ListingRowHandlers>(
+    () => ({
+      onEdit: (listing) => actionsRef.current.openEditListing(listing),
+      onPublish: (listing) => void actionsRef.current.publishListing(listing),
+      onDeleteDraft: (listing) => void actionsRef.current.deleteDraft(listing),
+      onReviewContent: (listing) => void actionsRef.current.reviewListingContent(listing),
+      onSyncContent: (listing) => void actionsRef.current.syncListingContent(listing),
+      onReviewQuality: (listing) => void actionsRef.current.loadListingQuality(listing),
+      onPause: (listing) =>
+        void actionsRef.current.queueBulkAction("pause", [listing.id], { singleListing: listing }),
+      onActivate: (listing) =>
+        void actionsRef.current.queueBulkAction("activate", [listing.id], { singleListing: listing }),
+    }),
+    [],
+  );
+  const runBulkAction = useCallback(
+    (action: BulkAction, listingIds: string[]) => void actionsRef.current.queueBulkAction(action, listingIds),
+    [],
+  );
+  const busy = useMemo(
+    () => ({
+      publishingId,
+      deletingDraftId,
+      reviewingContentId,
+      syncingContentId,
+      loadingQualityId,
+      changingStatusId,
+      updatingVideoReminderId,
+    }),
+    [
+      publishingId,
+      deletingDraftId,
+      reviewingContentId,
+      syncingContentId,
+      loadingQualityId,
+      changingStatusId,
+      updatingVideoReminderId,
+    ],
+  );
+  const detailsListing = detailsListingId
+    ? (listings.find((listing) => listing.id === detailsListingId) ?? null)
+    : null;
+  const emptyAction = useMemo(
+    () => (
+      <Button type="button" onClick={() => openNewListingRef.current()} disabled={!canPublish}>
+        <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+        Preparar publicación
+      </Button>
+    ),
+    [canPublish],
+  );
+
   return (
-    <Card id="mercadolibre-listings">
-      <CardHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <CardTitle className="flex items-center gap-2">
-            <PackageOpen className="h-5 w-5 text-muted-foreground" />
-            Publicaciones
-          </CardTitle>
-          <CardDescription>
-            Define un precio exclusivo de Mercado Libre. Nunca se copiarán
-            descuentos ni precios de la tienda.
-          </CardDescription>
-        </div>
+    <SectionCard
+      id="mercadolibre-listings"
+      title="Publicaciones"
+      description="Define un precio exclusivo de Mercado Libre. Nunca se copiarán descuentos ni precios de la tienda."
+      action={
         <div className="flex flex-wrap gap-2">
           <Button
             type="button"
             variant="outline"
+            size="sm"
             onClick={() => void loadImportPreview()}
             disabled={!canPublish || isLoadingImportPreview}
+            isLoading={isLoadingImportPreview}
+            loadingText="Revisando…"
           >
-            {isLoadingImportPreview ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Download className="mr-2 h-4 w-4" />
-            )}
+            <Download className="mr-2 h-4 w-4" aria-hidden="true" />
             Importar existentes
           </Button>
-          <Button type="button" onClick={openNewListing} disabled={!canPublish}>
-            <Plus className="mr-2 h-4 w-4" />
+          <Button type="button" size="sm" onClick={openNewListing} disabled={!canPublish}>
+            <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
             Preparar publicación
           </Button>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
+      }
+    >
+
         {!canPublish ? (
           <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
             Conecta Mercado Libre y activa el procesamiento seguro antes de
@@ -2199,9 +2321,56 @@ export function MercadoLibreListingManager({
           </p>
         ) : null}
         {error ? (
-          <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-            {error}
-          </p>
+          <div
+            className="flex items-start justify-between gap-2 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
+            role="alert"
+          >
+            <p>{error}</p>
+            <Button type="button" variant="ghost" size="xs" onClick={() => setError(null)}>
+              Cerrar
+            </Button>
+          </div>
+        ) : null}
+        {notice ? (
+          <div
+            className="flex items-start justify-between gap-2 rounded-md border border-tint-mint bg-tint-mint/30 p-3 text-sm"
+            role="status"
+          >
+            <p>{notice}</p>
+            <Button type="button" variant="ghost" size="xs" onClick={() => setNotice(null)}>
+              Cerrar
+            </Button>
+          </div>
+        ) : null}
+        {importResult ? (
+          <div
+            className="flex flex-wrap items-start justify-between gap-2 rounded-md border border-tint-mint bg-tint-mint/30 p-3 text-sm"
+            role="status"
+          >
+            <div>
+              <p className="font-medium">
+                Se vincularon {importResult.importedCount} publicación
+                {importResult.importedCount === 1 ? "" : "es"} y su stock quedó
+                programado para sincronizarse.
+              </p>
+              <ul className="mt-1 list-disc pl-5 text-xs text-muted-foreground">
+                {importResult.imported.map((item) => (
+                  <li key={item.listingId}>
+                    {item.title}
+                    {item.replacedDraft ? " (reemplazó un borrador)" : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setImportResult(null)}
+            >
+              Entendido
+            </Button>
+          </div>
         ) : null}
         {importPreview ? (
           <div className="space-y-4 rounded-md border bg-muted/20 p-4">
@@ -2213,6 +2382,15 @@ export function MercadoLibreListingManager({
                   SKU se proponen automáticamente; si falta, elige el producto
                   local manualmente antes de vincularla.
                 </p>
+                {importPreview.partial ? (
+                  <p className="mt-1 text-sm text-warning" role="status">
+                    Mercado Libre no respondió por{" "}
+                    {importPreview.summary.unavailable} publicación
+                    {importPreview.summary.unavailable === 1 ? "" : "es"}; la
+                    lista está incompleta. Vuelve a revisar en unos minutos
+                    para verlas.
+                  </p>
+                ) : null}
               </div>
               <Button
                 type="button"
@@ -2261,6 +2439,12 @@ export function MercadoLibreListingManager({
                 const isAlreadyLinked = Boolean(listing.existingListingId);
                 const cannotImport =
                   isAlreadyLinked || listing.status === "ERROR";
+                const draftListingId = getDraftForImportRow(
+                  listing,
+                  selection.productId,
+                );
+                const needsDraftConfirmation =
+                  Boolean(draftListingId) && !selection.replaceDraft;
                 return (
                   <div
                     key={listing.key}
@@ -2268,8 +2452,12 @@ export function MercadoLibreListingManager({
                   >
                     <Checkbox
                       aria-label={`Importar ${listing.title}`}
-                      checked={selection.selected}
-                      disabled={cannotImport || !selection.productId}
+                      checked={selection.selected && !needsDraftConfirmation}
+                      disabled={
+                        cannotImport ||
+                        !selection.productId ||
+                        needsDraftConfirmation
+                      }
                       onCheckedChange={(checked) =>
                         updateImportSelection(listing.key, {
                           selected: checked === true,
@@ -2307,9 +2495,37 @@ export function MercadoLibreListingManager({
                           : ""}
                       </p>
                       {listing.issue ? (
-                        <p className="text-xs text-amber-700">
-                          {listing.issue}
-                        </p>
+                        <p className="text-xs text-warning">{listing.issue}</p>
+                      ) : null}
+                      {listing.warnings
+                        .filter(
+                          (warning) =>
+                            // El aviso de borrador se muestra junto a su casilla.
+                            !warning.startsWith("El producto local ya tiene un borrador"),
+                        )
+                        .map((warning) => (
+                          <p key={warning} className="text-xs text-warning">
+                            {warning}
+                          </p>
+                        ))}
+                      {draftListingId ? (
+                        <label className="flex items-start gap-2 text-xs text-warning">
+                          <Checkbox
+                            className="mt-0.5"
+                            checked={selection.replaceDraft}
+                            onCheckedChange={(checked) =>
+                              updateImportSelection(listing.key, {
+                                replaceDraft: checked === true,
+                              })
+                            }
+                          />
+                          <span>
+                            El producto elegido ya tiene un borrador en
+                            Administración. Reemplazar el borrador con esta
+                            publicación (el borrador se sobrescribe; su
+                            reserva de seguridad se conserva).
+                          </span>
+                        </label>
                       ) : null}
                     </div>
                     {isAlreadyLinked ? (
@@ -2363,391 +2579,38 @@ export function MercadoLibreListingManager({
             </div>
           </div>
         ) : null}
-        {isLoading ? (
-          <p className="text-sm text-muted-foreground">
-            Cargando publicaciones…
-          </p>
-        ) : listings.length === 0 ? (
-          <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-            Aún no hay publicaciones preparadas. Crea un borrador y revísalo
-            antes de enviarlo.
-          </p>
-        ) : (
-          <div className="grid gap-3">
-            <div className="flex flex-col gap-3 rounded-md border bg-muted/20 p-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <Checkbox
-                  id="mercadolibre-select-all-listings"
-                  checked={
-                    listings.length > 0 &&
-                    selectedListingIds.length === listings.length
-                  }
-                  onCheckedChange={(checked) =>
-                    setSelectedListingIds(
-                      checked === true
-                        ? listings.map((listing) => listing.id)
-                        : [],
-                    )
-                  }
-                />
-                <Label htmlFor="mercadolibre-select-all-listings">
-                  Seleccionar todas ({selectedListingIds.length})
-                </Label>
-              </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Select
-                  value={bulkAction}
-                  onValueChange={(value) => setBulkAction(value as BulkAction)}
-                >
-                  <SelectTrigger aria-label="Acción masiva para publicaciones">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {Object.entries(bulkActionLabels).map(
-                        ([value, label]) => (
-                          <SelectItem key={value} value={value}>
-                            {label}
-                          </SelectItem>
-                        ),
-                      )}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-                <Button
-                  type="button"
-                  onClick={() => void runBulkAction()}
-                  disabled={
-                    isRunningBulkAction || selectedListingIds.length === 0
-                  }
-                >
-                  {isRunningBulkAction ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : null}
-                  Aplicar de forma segura
-                </Button>
-              </div>
-            </div>
-            {listings.map((listing) => {
-              const quality = qualityByListingId[listing.id];
-              const contentReview = contentReviewByListingId[listing.id];
-              const nonVideoQualityRules = quality?.pendingRules.filter(
-                (rule) => !rule.isVideoRecommendation,
-              );
-              const videoRecommendation = quality?.videoRecommendation;
-              const isVideoReminderSnoozed = Boolean(
-                videoRecommendation?.snoozedUntil,
-              );
-              return (
-                <div
-                  key={listing.id}
-                  id={`mercadolibre-listing-${listing.id}`}
-                  className={cn(
-                    "flex scroll-mt-6 flex-col gap-4 rounded-md border p-4 lg:flex-row lg:items-center lg:justify-between",
-                    listing.id === highlightedListingId &&
-                      "border-amber-400 bg-amber-50/40",
-                  )}
-                >
-                  <div className="flex min-w-0 gap-3">
-                    <Checkbox
-                      aria-label={`Seleccionar ${listing.product.name}`}
-                      checked={selectedListingIds.includes(listing.id)}
-                      onCheckedChange={() => toggleListingSelection(listing.id)}
-                      className="mt-1 shrink-0"
-                    />
-                    <div className="min-w-0 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-semibold">{listing.product.name}</p>
-                        <Badge
-                          variant={getListingStatusMeta(listing.status).variant}
-                        >
-                          {getListingStatusMeta(listing.status).label}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        SKU {listing.product.sku} · Stock local{" "}
-                        {listing.product.stock} · Seguridad{" "}
-                        {listing.stockSafetyBuffer}
-                      </p>
-                      <p className="text-sm">
-                        Mercado Libre:{" "}
-                        {currencyFormatter.format(
-                          listing.marketplacePrice ?? 0,
-                        )}{" "}
-                        · {listing.categoryId ?? "Sin categoría"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {listing.externalItemId
-                          ? `Precio publicado: ${listing.syncPrice ? "se actualiza desde este panel" : "se mantiene manualmente en Mercado Libre"}`
-                          : "El precio se enviará al publicar este borrador."}
-                      </p>
-                      {listing.lastError ? (
-                        <p className="text-sm text-destructive">
-                          {listing.lastError}
-                        </p>
-                      ) : null}
-                      {listing.minimumMarginAmount !== null ? (
-                        <p className="text-xs text-muted-foreground">
-                          Utilidad objetivo configurada:{" "}
-                          {currencyFormatter.format(
-                            listing.minimumMarginAmount,
-                          )}
-                        </p>
-                      ) : null}
-                      {quality ? (
-                        <div className="mt-3 space-y-2 rounded-md bg-muted/50 p-3 text-sm">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-medium">
-                              Calidad de Mercado Libre
-                            </span>
-                            {quality.score !== null ? (
-                              <Badge variant="secondary">
-                                {Math.round(quality.score)} / 100
-                              </Badge>
-                            ) : null}
-                            {(quality.levelWording ?? quality.level) ? (
-                              <Badge variant="outline">
-                                {quality.levelWording ?? quality.level}
-                              </Badge>
-                            ) : null}
-                          </div>
-                          {nonVideoQualityRules?.length ? (
-                            <ul className="space-y-1 text-xs text-muted-foreground">
-                              {nonVideoQualityRules.slice(0, 3).map((rule) => (
-                                <li key={`${rule.mode}-${rule.title}`}>
-                                  • {rule.title}
-                                </li>
-                              ))}
-                            </ul>
-                          ) : !videoRecommendation ? (
-                            <p className="text-xs text-success">
-                              No hay acciones pendientes reportadas.
-                            </p>
-                          ) : null}
-                          {videoRecommendation ? (
-                            <div className="flex flex-col gap-2 rounded-md border border-primary/20 bg-primary/[0.03] p-3 text-xs">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <Video className="h-4 w-4 text-primary" />
-                                <p className="font-medium">Clip recomendado</p>
-                                <Badge variant="outline">
-                                  {videoRecommendation.preparedVideoCount} listo
-                                  {videoRecommendation.preparedVideoCount === 1
-                                    ? ""
-                                    : "s"}
-                                </Badge>
-                              </div>
-                              <p className="text-muted-foreground">
-                                {videoRecommendation.title}. P de Papel prepara
-                                el video y la carga final se confirma en Mercado
-                                Libre.
-                              </p>
-                              {isVideoReminderSnoozed ? (
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <p className="text-muted-foreground">
-                                    El recordatorio está pospuesto.
-                                  </p>
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() =>
-                                      void updateVideoReminder(listing, "show")
-                                    }
-                                    disabled={
-                                      updatingVideoReminderId === listing.id
-                                    }
-                                  >
-                                    Mostrar ahora
-                                  </Button>
-                                </div>
-                              ) : (
-                                <div className="flex flex-wrap gap-2">
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() =>
-                                      setVideoLibraryTarget({
-                                        listing,
-                                        uploadUrl: videoRecommendation.link,
-                                      })
-                                    }
-                                  >
-                                    <Video className="mr-2 h-4 w-4" />
-                                    {videoRecommendation.preparedVideoCount > 0
-                                      ? "Revisar clip"
-                                      : "Preparar clip"}
-                                  </Button>
-                                  {videoRecommendation.link ? (
-                                    <Button
-                                      asChild
-                                      type="button"
-                                      size="sm"
-                                      variant="outline"
-                                    >
-                                      <a
-                                        href={videoRecommendation.link}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                      >
-                                        Subir en Mercado Libre
-                                      </a>
-                                    </Button>
-                                  ) : null}
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() =>
-                                      void updateVideoReminder(
-                                        listing,
-                                        "snooze",
-                                      )
-                                    }
-                                    disabled={
-                                      updatingVideoReminderId === listing.id
-                                    }
-                                  >
-                                    Recordar en 30 días
-                                  </Button>
-                                </div>
-                              )}
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : null}
-                      {contentReview ? (
-                        <div className="mt-3 space-y-2 rounded-md border border-primary/20 bg-primary/[0.03] p-3 text-sm">
-                          <p className="flex items-center gap-2 font-medium">
-                            <Sparkles className="h-4 w-4 text-primary" />
-                            Revisión de contenido
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Nombre de familia: {contentReview.familyNameLength}{" "}
-                            caracteres ·{" "}
-                            {contentReview.descriptionPreview ||
-                              "Sin descripción visible"}
-                          </p>
-                          <ul className="space-y-1 text-xs">
-                            {contentReview.checks.map((check) => (
-                              <li
-                                key={check.label}
-                                className={
-                                  check.ready
-                                    ? "text-success"
-                                    : "text-amber-700"
-                                }
-                              >
-                                {check.ready ? "✓" : "•"} {check.label}:{" "}
-                                {check.detail}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {listing.externalPermalink ? (
-                      <Button asChild type="button" variant="outline">
-                        <a
-                          href={listing.externalPermalink}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Ver publicación
-                        </a>
-                      </Button>
-                    ) : null}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => openEditListing(listing)}
-                    >
-                      <Pencil className="mr-2 h-4 w-4" />
-                      Editar
-                    </Button>
-                    {!listing.externalItemId &&
-                    (listing.status === "DRAFT" ||
-                      listing.status === "ERROR") ? (
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        onClick={() => void deleteDraft(listing)}
-                        disabled={deletingDraftId === listing.id}
-                      >
-                        {deletingDraftId === listing.id ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="mr-2 h-4 w-4" />
-                        )}
-                        Eliminar borrador
-                      </Button>
-                    ) : null}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => void reviewListingContent(listing)}
-                      disabled={reviewingContentId === listing.id}
-                    >
-                      {reviewingContentId === listing.id ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Sparkles className="mr-2 h-4 w-4" />
-                      )}
-                      Revisar contenido
-                    </Button>
-                    {listing.externalItemId ? (
-                      <>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => void syncListingContent(listing)}
-                          disabled={syncingContentId === listing.id}
-                        >
-                          {syncingContentId === listing.id ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <ImageIcon className="mr-2 h-4 w-4" />
-                          )}
-                          Sincronizar contenido
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => void loadListingQuality(listing)}
-                          disabled={loadingQualityId === listing.id}
-                        >
-                          {loadingQualityId === listing.id ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <BarChart3 className="mr-2 h-4 w-4" />
-                          )}
-                          Revisar calidad
-                        </Button>
-                      </>
-                    ) : null}
-                    {!listing.externalItemId ? (
-                      <Button
-                        type="button"
-                        onClick={() => void publishListing(listing)}
-                        disabled={publishingId === listing.id}
-                      >
-                        {publishingId === listing.id ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <UploadCloud className="mr-2 h-4 w-4" />
-                        )}
-                        Publicar
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </CardContent>
+        <ListingTable
+          listings={listings}
+          isLoading={isLoading}
+          error={null}
+          onRetry={() => void loadListings()}
+          rowSelection={rowSelection}
+          onRowSelectionChange={setRowSelection}
+          highlightedListingId={highlightedListingId}
+          busy={busy}
+          bulkOutcome={bulkOutcome}
+          isRunningBulkAction={isRunningBulkAction}
+          onRunBulkAction={runBulkAction}
+          handlers={rowHandlers}
+          emptyAction={emptyAction}
+        />
+        <ListingDetailsSheet
+          listing={detailsListing}
+          quality={detailsListing ? qualityByListingId[detailsListing.id] : undefined}
+          contentReview={detailsListing ? contentReviewByListingId[detailsListing.id] : undefined}
+          isLoadingQuality={Boolean(detailsListing) && loadingQualityId === detailsListing?.id}
+          isLoadingContent={Boolean(detailsListing) && reviewingContentId === detailsListing?.id}
+          isUpdatingVideoReminder={Boolean(detailsListing) && updatingVideoReminderId === detailsListing?.id}
+          handlers={{
+            onRefreshQuality: (listing) => void loadListingQuality(listing),
+            onRefreshContent: (listing) => void reviewListingContent(listing),
+            onSnoozeVideoReminder: (listing) => void updateVideoReminder(listing, "snooze"),
+            onShowVideoReminder: (listing) => void updateVideoReminder(listing, "show"),
+            onPrepareClip: (listing, uploadUrl) => setVideoLibraryTarget({ listing, uploadUrl }),
+          }}
+          onClose={() => setDetailsListingId(null)}
+        />
+
 
       <Dialog
         open={isDialogOpen}
@@ -2908,7 +2771,7 @@ export function MercadoLibreListingManager({
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Video className="h-5 w-5 text-muted-foreground" />
+              <Video className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
               Clip para {videoLibraryTarget?.listing.product.name}
             </DialogTitle>
             <DialogDescription>
@@ -2927,6 +2790,6 @@ export function MercadoLibreListingManager({
         </DialogContent>
       </Dialog>
       {confirmationDialog}
-    </Card>
+    </SectionCard>
   );
 }

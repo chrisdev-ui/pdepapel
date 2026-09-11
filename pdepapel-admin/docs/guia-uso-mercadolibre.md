@@ -99,26 +99,27 @@ Un perfil rápido **no publica productos por sí solo** y tampoco modifica publi
 
 ## 4. Administrar publicaciones ya creadas
 
-En la lista de publicaciones puedes:
+La tabla de publicaciones busca por nombre, SKU o código de Mercado Libre, filtra por estado y muestra 25 por página; en el celular cada publicación es una tarjeta. Cada fila trae señales de un vistazo: si Mercado Libre rechazó algo (y en qué paso), si se autorizó vender bajo costo, si el stock y el precio se actualizan desde el panel, cuántas fotos tiene, si ofrece envío gratis y si fue importada. En **Stock** ves las unidades que se publican (stock local menos reserva).
 
-- **Editar:** cambiar precio, reserva, fotos o datos antes de enviar una actualización. Un borrador se abre en el primer paso incompleto, o en el paso que Mercado Libre rechazó; nunca desde cero.
-- **Revisar contenido:** ver una lista de cosas para comprobar antes de publicar o sincronizar. No cambia ni publica nada.
-- **Eliminar borrador:** borrar un intento que nunca llegó a publicarse. Solo aparece para borradores o errores sin ventas ni preguntas; no elimina publicaciones que ya estén en Mercado Libre.
-- **Sincronizar contenido:** enviar las fotos, descripción y datos seleccionados a Mercado Libre. Revisa la confirmación porque reemplaza esos datos allá.
-- **Pausar o activar:** dejar de ofrecer temporalmente una publicación o volver a ofrecerla.
-- **Revisar calidad:** ver sugerencias sobre fotos, nombre de familia, datos o condiciones. Tú decides si aplicarlas.
-- **Acciones masivas:** marcar hasta 20 publicaciones y confirmar una misma acción para todas. Úsalo solo cuando los productos sean parecidos y ya los hayas revisado uno por uno.
+En cada fila tienes **Editar**, **Publicar** (solo borradores) y el menú **Más acciones**:
 
-**Regla de oro:** una publicación de Mercado Libre no se actualiza sola por cambiar una foto o una descripción en P de Papel. Usa **Sincronizar contenido** cuando realmente quieras enviar ese cambio.
+- **Editar:** cambiar precio, reserva, fotos o datos. Un borrador se abre en el primer paso incompleto, o en el paso que Mercado Libre rechazó; nunca desde cero. En una publicación ya activa, cambiar fotos, ficha, nombre o categoría programa solo el envío del contenido, y cambiar la reserva programa el del stock; no hace falta sincronizar aparte. Si corriges justo el dato rechazado, el aviso de rechazo desaparece.
+- **Revisar contenido** y **Revisar calidad:** abren un panel al lado con la lista de cosas por comprobar, la puntuación de Mercado Libre, sus sugerencias y el recordatorio de clip. No cambian ni publican nada; tú decides.
+- **Sincronizar contenido:** reenviar a Mercado Libre las fotos, descripción y datos seleccionados. Revisa la confirmación porque reemplaza esos datos allá. Si falla, la fila lo dice en rojo.
+- **Pausar** o **Activar:** dejar de ofrecer una publicación o volver a ofrecerla. Se envía en segundo plano y la fila se actualiza cuando Mercado Libre confirma.
+- **Eliminar borrador:** borrar un intento que nunca llegó a publicarse. Solo aparece para borradores o errores sin ventas ni preguntas, y no mientras se está enviando a Mercado Libre.
+- **Acciones masivas:** marca varias filas y usa la barra que aparece abajo (máximo 20 a la vez; la barra avisa si te pasas). Cada fila dice después si se programó o por qué se omitió. Publicar en masa solo toma borradores sin rechazo pendiente; pausar solo lo activo y activar solo lo pausado.
+
+**Regla de oro:** un cambio en Productos (una foto, una descripción) no llega solo a Mercado Libre. Cámbialo desde **Editar** en la publicación o usa **Sincronizar contenido** cuando quieras enviarlo.
 
 ### Cuando Mercado Libre recomienda un clip
 
-1. En la publicación, pulsa **Revisar calidad**.
+1. En la publicación, abre **Más acciones → Revisar calidad**; se abre el panel lateral.
 2. Si aparece **Clip recomendado**, pulsa **Preparar clip**. Si ya habías guardado uno, el botón dirá **Revisar clip**.
 3. Pulsa **Cargar video** y elige el clip vertical del producto. Debe durar entre 10 y 61 segundos, medir al menos 360 px de ancho y pesar máximo 280 MB.
 4. Revísalo en la biblioteca. Guardarlo aquí no cambia la publicación ni cobra nada.
 5. Pulsa **Abrir cargador de Mercado Libre** o **Subir en Mercado Libre** y termina la carga en la pantalla oficial de Mercado Libre.
-6. Vuelve a P de Papel y pulsa **Revisar calidad** de nuevo para confirmar que Mercado Libre ya no lo pide.
+6. Vuelve a P de Papel y pulsa **Actualizar calidad** en el panel para confirmar que Mercado Libre ya no lo pide.
 
 **Ejemplo:** para unos marcadores pastel, graba un video vertical corto mostrando los colores sobre una hoja. Primero guárdalo en P de Papel y después súbelo en la pantalla de Mercado Libre que se abre con el botón. No se sube automáticamente porque Mercado Libre no ofrece una carga directa y verificada para este flujo.
 
@@ -143,9 +144,11 @@ Si una publicación fue creada directamente en Mercado Libre antes de usar esta 
 
 1. Ve a **Ventas → Mercado Libre → Publicaciones**.
 2. Pulsa **Importar existentes**.
-3. Revisa la propuesta de vínculo. Si el sistema no reconoce el producto, elige el producto correcto de P de Papel manualmente.
+3. Revisa la propuesta de vínculo. Si el sistema no reconoce el producto, elige el producto correcto de P de Papel manualmente. Si aparece «Mercado Libre no respondió por N publicaciones», la lista está incompleta: vuelve a pulsar **Importar existentes** en unos minutos.
 4. Marca solamente los vínculos correctos. Un mismo producto local solo puede quedar vinculado a una publicación o variación. Si varias publicaciones traen el mismo SKU, deja marcada solo la que de verdad corresponde a ese producto y revisa las demás una por una.
-5. Pulsa **Vincular y sincronizar** y confirma.
+5. Si el producto ya tiene un borrador en P de Papel, la fila lo avisa y pide marcar **Reemplazar el borrador** antes de poder elegirla: la publicación real ocupa el lugar del borrador.
+6. Lee los avisos en ámbar (otra moneda, publicación de catálogo, en revisión) antes de decidir.
+7. Pulsa **Vincular y sincronizar** y confirma. Al terminar verás la lista de lo vinculado.
 
 No vincules una publicación si no estás segura del producto. Es mejor dejarla pendiente que asociarla con un artículo equivocado.
 
@@ -227,6 +230,9 @@ No concilies una venta antigua si ya creaste una venta manual o ya ajustaste el 
 | La publicación volvió a borrador con un mensaje | Mercado Libre la rechazó. Pulsa **Editar**: el asistente abre en el paso rechazado con el campo marcado. Corrige y publica de nuevo. |
 | «Se reintentará automáticamente en unos minutos» | Mercado Libre no respondió. No vuelvas a publicar; el reintento ya está programado y la publicación no se duplica.             |
 | Cerré el asistente sin terminar              | Lo completado hasta el último paso guardado está en la lista como borrador. Ábrelo con **Editar** y sigue donde ibas.             |
+| «La publicación cambió mientras la editabas» | Otra pestaña (o la cola) guardó la misma publicación. Recarga la lista y repite solo tu cambio.                                    |
+| Una acción masiva no hizo nada en una fila   | Mira el motivo debajo de esa fila: no cumplía la condición (por ejemplo, ya estaba pausada o tiene un rechazo sin corregir).      |
+| La fila dice que el contenido no se sincronizó | Mercado Libre rechazó el envío; el texto explica por qué. Corrige desde **Editar** y vuelve a **Sincronizar contenido**.         |
 | Mercado Libre pide “nombre de familia”       | En **Editar**, escribe el nombre común del producto sin color, talla ni diseño; guarda y vuelve a publicar.                    |
 | El paso “Ficha técnica” no muestra campos    | Pulsa **Actualizar campos**. Si dice que no hay campos adicionales, continúa: esa categoría no exige más datos.                |
 | La categoría dejó de estar disponible        | El asistente conserva el borrador y la ficha técnica, quita solo la categoría antigua y muestra opciones verificadas. Escoge una: se completan solo los campos que falten. |

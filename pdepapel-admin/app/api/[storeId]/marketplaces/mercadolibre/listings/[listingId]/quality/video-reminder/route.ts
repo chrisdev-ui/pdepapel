@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { buildMercadoLibreListingMetadata } from "@/lib/mercadolibre/listing-metadata";
+import { updateMarketplaceListingMetadataGuarded } from "@/lib/mercadolibre/listing-metadata-writes";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
@@ -35,8 +36,9 @@ export async function POST(
     const snoozedUntil = new Date(
       Date.now() + VIDEO_REMINDER_DAYS * 24 * 60 * 60 * 1000,
     ).toISOString();
-    await prismadb.marketplaceListing.update({
-      where: { id: listing.id },
+    await updateMarketplaceListingMetadataGuarded(prismadb, {
+      id: listing.id,
+      currentMetadata: listing.metadata,
       data: {
         metadata: buildMercadoLibreListingMetadata({
           current: listing.metadata,
@@ -65,8 +67,9 @@ export async function DELETE(
     if (!userId) throw ErrorFactory.Unauthenticated();
 
     const listing = await getListing(userId, params.storeId, params.listingId);
-    await prismadb.marketplaceListing.update({
-      where: { id: listing.id },
+    await updateMarketplaceListingMetadataGuarded(prismadb, {
+      id: listing.id,
+      currentMetadata: listing.metadata,
       data: {
         metadata: buildMercadoLibreListingMetadata({
           current: listing.metadata,

@@ -125,11 +125,9 @@ describe("Mercado Libre sale conditions routes", () => {
         { installmentCount: 6, saleFeeAmount: 17_478 },
       ],
     });
-    expect(mocks.updateListing).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ listingType: "gold_special" }),
-      }),
-    );
+    // Consultar las condiciones no modifica la publicación (antes escribía
+    // `shippingMode: "me2"` y borraba `lastError` en cada apertura).
+    expect(mocks.updateListing).not.toHaveBeenCalled();
   });
 
   it("blocks disabling free shipping when Mercado Libre requires it", async () => {

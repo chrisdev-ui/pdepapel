@@ -1,13 +1,11 @@
 import { auth } from "@clerk/nextjs/server";
-import {
-  MarketplaceConnectionStatus,
-  MarketplaceOutboxStatus,
-} from "@prisma/client";
+import { MarketplaceConnectionStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import {
   getMarketplaceListingPublicationKey,
+  isMarketplaceListingPublicationInProgress,
   processMarketplaceOutboxEvent,
   queueMarketplaceListingPublicationEvent,
 } from "@/lib/mercadolibre/outbox";
@@ -68,11 +66,13 @@ export async function POST(
       listing.connectionId,
       listing.id,
     );
-    const existingEvent = await prismadb.marketplaceOutboxEvent.findUnique({
-      where: { deduplicationKey },
-      select: { id: true, status: true },
-    });
-    if (existingEvent?.status === MarketplaceOutboxStatus.PROCESSING) {
+    if (
+      await isMarketplaceListingPublicationInProgress(
+        prismadb,
+        listing.connectionId,
+        listing.id,
+      )
+    ) {
       throw ErrorFactory.Conflict(
         "Esta publicación ya se está enviando a Mercado Libre. Espera un momento y actualiza la lista.",
       );

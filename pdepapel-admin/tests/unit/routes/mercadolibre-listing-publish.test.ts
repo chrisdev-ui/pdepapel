@@ -22,6 +22,8 @@ vi.mock("@/lib/prismadb", () => ({
 }));
 vi.mock("@/lib/mercadolibre/outbox", () => ({
   getMarketplaceListingPublicationKey: (c: string, l: string) => `${c}:publish:${l}`,
+  isMarketplaceListingPublicationInProgress: async () =>
+    (await mocks.findEvent())?.status === "PROCESSING",
   queueMarketplaceListingPublicationEvent: mocks.queuePublication,
   processMarketplaceOutboxEvent: mocks.process,
 }));

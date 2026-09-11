@@ -1,9 +1,11 @@
 import { MarketplaceListingStatus, Prisma } from "@prisma/client";
 
-import { ErrorFactory } from "@/lib/api-errors";
+import { AppError, ErrorFactory } from "@/lib/api-errors";
+import { mapWithConcurrency } from "@/lib/concurrency";
 import prismadb from "@/lib/prismadb";
 
-import { getMercadoLibreJson } from "./client";
+import { getMercadoLibreJson, requestMercadoLibreJson } from "./client";
+import { getMarketplaceListingStatusFromRemote } from "./listings";
 import {
   enqueuePendingMarketplaceOutboxEvents,
   queueMarketplaceStockSyncEvents,
@@ -12,6 +14,11 @@ import {
 const ITEM_SEARCH_LIMIT = 100;
 const ITEM_BATCH_SIZE = 20;
 const MAX_IMPORTED_LISTINGS = 5_000;
+/** Multigets de `/items` en vuelo a la vez: Mercado Libre limita por aplicación. */
+const ITEM_BATCH_CONCURRENCY = 3;
+/** Moneda de la tienda: cualquier otra se avisa, porque el panel muestra pesos. */
+const STORE_CURRENCY = "COP";
+export const IMPORT_SOURCE = "MERCADOLIBRE_IMPORT";
 
 type RemoteListing = {
   externalItemId: string;
@@ -19,8 +26,12 @@ type RemoteListing = {
   externalUserProductId: string | null;
   title: string;
   status: MarketplaceListingStatus;
+  /** Aviso de la tabla de estados compartida (en revisión, pago pendiente…). */
+  statusNote: string | null;
   marketplacePrice: number | null;
   currencyId: string | null;
+  /** Publicación de catálogo: Mercado Libre controla precio y competencia. */
+  catalogListing: boolean;
   categoryId: string | null;
   listingType: string | null;
   permalink: string | null;
@@ -40,7 +51,12 @@ export type MercadoLibreListingImportCandidate = RemoteListing & {
   existingListingId: string | null;
   linkedProduct: LocalProduct | null;
   suggestedProduct: LocalProduct | null;
+  /** Borrador local del producto sugerido: vincular lo reemplazaría. */
+  draftListingId: string | null;
+  /** Impide proponerla automáticamente; se resuelve a mano. */
   issue: string | null;
+  /** No bloquea, pero la persona debe verlo antes de vincular. */
+  warnings: string[];
 };
 
 export type MercadoLibreListingImportPreview = {
@@ -50,14 +66,35 @@ export type MercadoLibreListingImportPreview = {
     alreadyLinked: number;
     readyToImport: number;
     needsReview: number;
+    /** Publicaciones que Mercado Libre no devolvió en esta revisión. */
+    unavailable: number;
   };
+  /** true cuando alguna tanda falló y la lista está incompleta. */
+  partial: boolean;
 };
 
 export type MercadoLibreListingImportSelection = {
   externalItemId: string;
   externalVariationId: string | null;
   productId: string;
+  /** Confirmación explícita para reemplazar un borrador local del producto. */
+  replaceDraft?: boolean;
 };
+
+/** Borradores locales por producto (sin id en Mercado Libre). */
+async function getDraftListingIdsByProduct(connectionId: string) {
+  const drafts = await prismadb.marketplaceListing.findMany({
+    where: { connectionId, externalItemId: null },
+    select: { id: true, productId: true, title: true },
+  });
+  return new Map(drafts.map((draft) => [draft.productId, draft]));
+}
+
+function describeListing(
+  listing: Pick<RemoteListing, "title" | "externalItemId" | "externalVariationId">,
+) {
+  return `«${listing.title}» (${listing.externalItemId}${listing.externalVariationId ? ` · variación ${listing.externalVariationId}` : ""})`;
+}
 
 function asRecord(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -76,18 +113,6 @@ function getOptionalNumber(value: unknown) {
   return Number.isFinite(numericValue) ? numericValue : null;
 }
 
-function getListingStatus(value: unknown) {
-  switch (getOptionalString(value)?.toLowerCase()) {
-    case "active":
-      return MarketplaceListingStatus.ACTIVE;
-    case "paused":
-      return MarketplaceListingStatus.PAUSED;
-    case "closed":
-      return MarketplaceListingStatus.CLOSED;
-    default:
-      return MarketplaceListingStatus.ERROR;
-  }
-}
 
 function getSellerSku(payload: Record<string, unknown>) {
   const directSku =
@@ -124,13 +149,20 @@ export function parseMercadoLibreListing(
   const externalItemId = getOptionalString(payload.id);
   if (!externalItemId) return [];
 
+  // Misma tabla de estados que la publicación y la cola: `under_review` y
+  // `payment_required` quedan pausadas con su aviso, no en error.
+  const mappedStatus = getMarketplaceListingStatusFromRemote(
+    getOptionalString(payload.status)?.toLowerCase() ?? null,
+  );
   const base = {
     externalItemId,
     externalUserProductId: getOptionalString(payload.user_product_id),
     title: getOptionalString(payload.title) ?? "Publicación de Mercado Libre",
-    status: getListingStatus(payload.status),
+    status: mappedStatus.status,
+    statusNote: mappedStatus.note,
     marketplacePrice: getOptionalNumber(payload.price),
     currencyId: getOptionalString(payload.currency_id),
+    catalogListing: payload.catalog_listing === true,
     categoryId: getOptionalString(payload.category_id),
     listingType: getOptionalString(payload.listing_type_id),
     permalink: getOptionalString(payload.permalink),
@@ -176,7 +208,10 @@ async function getSellerItemIds(connectionId: string, sellerId: string) {
     );
     const page = asRecord(payload);
     if (!page || !Array.isArray(page.results)) {
-      throw new Error("Mercado Libre no devolvió publicaciones del vendedor");
+      throw new AppError(
+        "Mercado Libre no devolvió publicaciones del vendedor. Intenta de nuevo en unos minutos.",
+        502,
+      );
     }
     return {
       ids: page.results.flatMap((value) => {
@@ -191,8 +226,8 @@ async function getSellerItemIds(connectionId: string, sellerId: string) {
   const firstPage = await getPage(`limit=${ITEM_SEARCH_LIMIT}&offset=0`);
   const total = firstPage.total ?? firstPage.ids.length;
   if (total > MAX_IMPORTED_LISTINGS) {
-    throw new Error(
-      "Hay demasiadas publicaciones para importar de una vez. Contacta soporte para hacer la importación por lotes.",
+    throw ErrorFactory.InvalidRequest(
+      `Hay más de ${MAX_IMPORTED_LISTINGS} publicaciones en la cuenta; la importación por lotes todavía no está disponible. Contacta soporte.`,
     );
   }
   if (total <= ITEM_SEARCH_LIMIT) return firstPage.ids;
@@ -222,28 +257,62 @@ async function getSellerItemIds(connectionId: string, sellerId: string) {
   return Array.from(new Set(ids));
 }
 
+/**
+ * Detalle de los ítems por tandas de 20 (el máximo del multiget), de a pocas
+ * a la vez. Una tanda que Mercado Libre no responde no tira toda la revisión:
+ * sus ítems se cuentan como no disponibles y se informan. Un 401 sí corta,
+ * porque hay que reconectar la cuenta.
+ */
+export async function getRemoteListingsByIds(
+  connectionId: string,
+  itemIds: string[],
+): Promise<{ listings: RemoteListing[]; unavailableItemIds: string[] }> {
+  const batches: string[][] = [];
+  for (let index = 0; index < itemIds.length; index += ITEM_BATCH_SIZE) {
+    batches.push(itemIds.slice(index, index + ITEM_BATCH_SIZE));
+  }
+  const results = await mapWithConcurrency(
+    batches,
+    ITEM_BATCH_CONCURRENCY,
+    async (itemBatch) => {
+      const response = await requestMercadoLibreJson(
+        connectionId,
+        `/items?ids=${itemBatch.map(encodeURIComponent).join(",")}`,
+      );
+      if (response.status === 401 || response.status === 403) {
+        throw new AppError(
+          "Mercado Libre no autorizó la consulta. Reconecta la cuenta y vuelve a intentarlo.",
+          401,
+          { upstreamStatus: response.status },
+        );
+      }
+      if (!response.ok || !Array.isArray(response.payload)) {
+        return { listings: [] as RemoteListing[], unavailableItemIds: itemBatch };
+      }
+      const listings: RemoteListing[] = [];
+      const seen = new Set<string>();
+      for (const entry of response.payload) {
+        const item = asRecord(asRecord(entry)?.body);
+        if (!item) continue;
+        const parsed = parseMercadoLibreListing(item);
+        parsed.forEach((listing) => seen.add(listing.externalItemId));
+        listings.push(...parsed);
+      }
+      return {
+        listings,
+        unavailableItemIds: itemBatch.filter((id) => !seen.has(id)),
+      };
+    },
+  );
+  return {
+    listings: results.flatMap((result) => result.listings),
+    unavailableItemIds: results.flatMap((result) => result.unavailableItemIds),
+  };
+}
+
 async function getRemoteListings(connectionId: string, sellerId: string) {
   const itemIds = await getSellerItemIds(connectionId, sellerId);
-  const listings: RemoteListing[] = [];
-
-  for (let index = 0; index < itemIds.length; index += ITEM_BATCH_SIZE) {
-    const itemBatch = itemIds.slice(index, index + ITEM_BATCH_SIZE);
-    const payload = await getMercadoLibreJson(
-      connectionId,
-      `/items?ids=${itemBatch.map(encodeURIComponent).join(",")}`,
-    );
-    if (!Array.isArray(payload)) {
-      throw new Error(
-        "Mercado Libre no devolvió el detalle de las publicaciones",
-      );
-    }
-    for (const response of payload) {
-      const item = asRecord(asRecord(response)?.body);
-      if (item) listings.push(...parseMercadoLibreListing(item));
-    }
-  }
-
-  return listings;
+  return getRemoteListingsByIds(connectionId, itemIds);
 }
 
 async function getImportCandidates(
@@ -251,7 +320,8 @@ async function getImportCandidates(
   storeId: string,
   sellerId: string,
 ) {
-  const remoteListings = await getRemoteListings(connectionId, sellerId);
+  const { listings: remoteListings, unavailableItemIds } =
+    await getRemoteListings(connectionId, sellerId);
   const externalItemIds = Array.from(
     new Set(remoteListings.map((listing) => listing.externalItemId)),
   );
@@ -262,7 +332,7 @@ async function getImportCandidates(
       ),
     ),
   );
-  const [existingListings, products] = await Promise.all([
+  const [existingListings, products, draftsByProduct] = await Promise.all([
     prismadb.marketplaceListing.findMany({
       where: { connectionId, externalItemId: { in: externalItemIds } },
       select: {
@@ -279,6 +349,7 @@ async function getImportCandidates(
           select: { id: true, name: true, sku: true, stock: true },
         })
       : Promise.resolve([]),
+    getDraftListingIdsByProduct(connectionId),
   ]);
   const productBySku = new Map(
     products.map((product) => [product.sku, product]),
@@ -336,7 +407,7 @@ async function getImportCandidates(
     );
   }
 
-  return candidateDetails.map(
+  const candidates = candidateDetails.map(
     ({
       listing,
       key,
@@ -347,6 +418,27 @@ async function getImportCandidates(
       const hasDuplicateSuggestedProduct =
         Boolean(suggestedProduct) &&
         (suggestedProductCounts.get(suggestedProduct!.id) ?? 0) > 1;
+      const draft =
+        suggestedProduct && !existingListing
+          ? (draftsByProduct.get(suggestedProduct.id) ?? null)
+          : null;
+      const warnings: string[] = [];
+      if (draft) {
+        warnings.push(
+          "El producto local ya tiene un borrador en Administración; al vincular se reemplazará por esta publicación.",
+        );
+      }
+      if (listing.currencyId && listing.currencyId !== STORE_CURRENCY) {
+        warnings.push(
+          `La publicación está en ${listing.currencyId}; el precio se guarda tal cual y el panel lo muestra como pesos.`,
+        );
+      }
+      if (listing.catalogListing) {
+        warnings.push(
+          "Publicación de catálogo: Mercado Libre controla el precio y la competencia; el precio local no se enviará.",
+        );
+      }
+      if (listing.statusNote) warnings.push(listing.statusNote);
 
       return {
         ...listing,
@@ -354,6 +446,8 @@ async function getImportCandidates(
         existingListingId: existingListing?.id ?? null,
         linkedProduct: existingListing?.product ?? null,
         suggestedProduct,
+        draftListingId: draft?.id ?? null,
+        warnings,
         issue: existingListing
           ? null
           : !listing.sellerSku
@@ -368,6 +462,7 @@ async function getImportCandidates(
       };
     },
   );
+  return { candidates, unavailableItemIds };
 }
 
 export async function previewMercadoLibreListingImport(
@@ -375,7 +470,8 @@ export async function previewMercadoLibreListingImport(
   storeId: string,
   sellerId: string,
 ): Promise<MercadoLibreListingImportPreview> {
-  const listings = await getImportCandidates(connectionId, storeId, sellerId);
+  const { candidates: listings, unavailableItemIds } =
+    await getImportCandidates(connectionId, storeId, sellerId);
   return {
     listings,
     summary: {
@@ -388,7 +484,9 @@ export async function previewMercadoLibreListingImport(
       needsReview: listings.filter(
         (listing) => !listing.existingListingId && Boolean(listing.issue),
       ).length,
+      unavailable: unavailableItemIds.length,
     },
+    partial: unavailableItemIds.length > 0,
   };
 }
 
@@ -448,26 +546,43 @@ export async function importMercadoLibreListings({
     throw ErrorFactory.InvalidRequest(selectionError);
   }
 
-  const candidates = await getImportCandidates(connectionId, storeId, sellerId);
+  // Solo se vuelven a leer los ítems elegidos (no toda la cuenta): son como
+  // máximo 25 consultas y confirman que siguen existiendo tal como se vieron.
+  const selectedItemIds = Array.from(
+    new Set(selections.map((selection) => selection.externalItemId)),
+  );
+  const { listings: remoteListings, unavailableItemIds } =
+    await getRemoteListingsByIds(connectionId, selectedItemIds);
+  if (unavailableItemIds.length > 0) {
+    throw new AppError(
+      `Mercado Libre no respondió por ${unavailableItemIds.length === 1 ? "la publicación" : "las publicaciones"} ${unavailableItemIds.join(", ")}. Vuelve a intentarlo en unos minutos.`,
+      502,
+      { unavailableItemIds },
+    );
+  }
   const remoteListingByKey = new Map(
-    candidates.map((listing) => [listing.key, listing]),
+    remoteListings.map((listing) => [
+      getListingKey(listing.externalItemId, listing.externalVariationId),
+      listing,
+    ]),
   );
   const selectedListings = selections.map((selection) => {
     const listing = remoteListingByKey.get(getRemoteSelectionKey(selection));
     if (!listing) {
       throw ErrorFactory.Conflict(
-        "Una publicación ya no está disponible en Mercado Libre. Actualiza la revisión antes de continuar.",
+        `La publicación ${selection.externalItemId}${selection.externalVariationId ? ` (variación ${selection.externalVariationId})` : ""} ya no existe en Mercado Libre. Vuelve a revisar las publicaciones antes de continuar.`,
       );
-    }
-    if (listing.existingListingId) {
-      throw ErrorFactory.Conflict("Una de las publicaciones ya está vinculada");
     }
     if (listing.status === MarketplaceListingStatus.ERROR) {
       throw ErrorFactory.InvalidRequest(
-        "Una publicación tiene un estado no compatible",
+        `${describeListing(listing)} tiene un estado que no se puede vincular${listing.statusNote ? `: ${listing.statusNote}` : ""}.`,
       );
     }
-    return { listing, productId: selection.productId };
+    return {
+      listing,
+      productId: selection.productId,
+      replaceDraft: selection.replaceDraft === true,
+    };
   });
 
   const productIds = Array.from(
@@ -492,6 +607,7 @@ export async function importMercadoLibreListings({
             externalItemId: true,
             externalVariationId: true,
             stockSafetyBuffer: true,
+            metadata: true,
           },
         })
       ).map((listing) => [listing.productId, listing]),
@@ -518,19 +634,31 @@ export async function importMercadoLibreListings({
       ]),
     );
 
-    const importedListingIds: string[] = [];
-    for (const { listing, productId } of selectedListings) {
+    const imported: {
+      listingId: string;
+      externalItemId: string;
+      externalVariationId: string | null;
+      title: string;
+      replacedDraft: boolean;
+    }[] = [];
+    for (const { listing, productId, replaceDraft } of selectedListings) {
+      const key = getListingKey(listing.externalItemId, listing.externalVariationId);
       const existingProductListing = existingByProduct.get(productId);
-      const existingRemoteListing = existingByRemoteKey.get(listing.key);
+      const existingRemoteListing = existingByRemoteKey.get(key);
+      if (existingRemoteListing && existingRemoteListing.productId === productId) {
+        throw ErrorFactory.Conflict(
+          `${describeListing(listing)} ya está vinculada a este producto.`,
+        );
+      }
       if (
         existingProductListing?.externalItemId &&
         getListingKey(
           existingProductListing.externalItemId,
           existingProductListing.externalVariationId,
-        ) !== getListingKey(listing.externalItemId, listing.externalVariationId)
+        ) !== key
       ) {
         throw ErrorFactory.Conflict(
-          "Un producto local ya está vinculado a otra publicación de Mercado Libre",
+          `El producto elegido para ${describeListing(listing)} ya está vinculado a otra publicación de Mercado Libre (${existingProductListing.externalItemId}).`,
         );
       }
       if (
@@ -538,7 +666,17 @@ export async function importMercadoLibreListings({
         existingRemoteListing.productId !== productId
       ) {
         throw ErrorFactory.Conflict(
-          "Una publicación de Mercado Libre ya está vinculada a otro producto local",
+          `${describeListing(listing)} ya está vinculada a otro producto local.`,
+        );
+      }
+      // Un borrador del asistente nunca se reemplaza sin decirlo: la persona
+      // lo confirma fila por fila en la revisión.
+      const replacesDraft = Boolean(
+        existingProductListing && !existingProductListing.externalItemId,
+      );
+      if (replacesDraft && !replaceDraft) {
+        throw ErrorFactory.Conflict(
+          `El producto elegido para ${describeListing(listing)} ya tiene un borrador en Administración. Marca «Reemplazar el borrador» en esa fila para continuar.`,
         );
       }
 
@@ -558,12 +696,26 @@ export async function importMercadoLibreListings({
         lastSyncedStock: listing.availableQuantity,
         lastSyncedPrice: listing.marketplacePrice,
         lastRemoteUpdateAt: new Date(),
-        lastError: null,
+        lastError: listing.statusNote,
       };
       const importedListing = existingProductListing
         ? await transaction.marketplaceListing.update({
             where: { id: existingProductListing.id },
-            data: listingData,
+            data: {
+              ...listingData,
+              // Un borrador reemplazado pasa a ser importación: la marca y la
+              // moneda se agregan sin perder el resto de sus metadatos.
+              metadata: {
+                ...(existingProductListing.metadata &&
+                typeof existingProductListing.metadata === "object" &&
+                !Array.isArray(existingProductListing.metadata)
+                  ? (existingProductListing.metadata as Record<string, unknown>)
+                  : { attributes: [] }),
+                source: IMPORT_SOURCE,
+                currencyId: listing.currencyId,
+                catalogListing: listing.catalogListing,
+              } as Prisma.InputJsonValue,
+            },
             select: { id: true },
           })
         : await transaction.marketplaceListing.create({
@@ -573,17 +725,25 @@ export async function importMercadoLibreListings({
               stockSafetyBuffer: 0,
               metadata: {
                 attributes: [],
-                source: "MERCADOLIBRE_IMPORT",
+                source: IMPORT_SOURCE,
+                currencyId: listing.currencyId,
+                catalogListing: listing.catalogListing,
               } as Prisma.InputJsonValue,
               ...listingData,
             },
             select: { id: true },
           });
-      importedListingIds.push(importedListing.id);
+      imported.push({
+        listingId: importedListing.id,
+        externalItemId: listing.externalItemId,
+        externalVariationId: listing.externalVariationId,
+        title: listing.title,
+        replacedDraft: replacesDraft,
+      });
     }
 
     await queueMarketplaceStockSyncEvents(transaction, productIds);
-    return importedListingIds;
+    return imported;
   });
 
   let queuedStockEvents = 0;
@@ -596,5 +756,5 @@ export async function importMercadoLibreListings({
     });
   }
 
-  return { importedCount: result.length, queuedStockEvents };
+  return { importedCount: result.length, imported: result, queuedStockEvents };
 }

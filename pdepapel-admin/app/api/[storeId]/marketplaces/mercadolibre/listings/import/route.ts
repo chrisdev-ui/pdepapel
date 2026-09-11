@@ -47,7 +47,12 @@ function parseSelections(value: unknown): MercadoLibreListingImportSelection[] {
         "Cada publicación debe tener un producto local seleccionado",
       );
     }
-    return { externalItemId, externalVariationId, productId };
+    return {
+      externalItemId,
+      externalVariationId,
+      productId,
+      replaceDraft: data.replaceDraft === true,
+    };
   });
   const selectionError = getMercadoLibreListingImportSelectionError(selections);
   if (selectionError) throw ErrorFactory.InvalidRequest(selectionError);

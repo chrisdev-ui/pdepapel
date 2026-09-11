@@ -219,17 +219,26 @@ La notificación no descuenta inventario por sí misma. P de Papel consulta la o
 
 ### Acciones masivas de publicaciones
 
-1. Marca máximo 20 publicaciones en la lista.
+1. Marca las publicaciones en la tabla (la casilla de cada fila o la del encabezado). Aparece la barra de selección con la acción y **Aplicar de forma segura**; el tope es 20 por tanda y la barra lo avisa antes de confirmar.
 2. Elige la acción: publicar borradores, sincronizar stock/precios/contenido, pausar o activar.
-3. Pulsa **Aplicar de forma segura** y confirma. P de Papel la envía a una cola con reintentos para no dejar acciones a medio camino.
-4. Espera la actualización de la lista. Si una publicación no cumplía la acción elegida, el panel la mantiene sin cambios y muestra el motivo.
+3. Confirma. P de Papel la envía a la cola con reintentos para no dejar acciones a medio camino.
+4. Cada fila muestra su resultado: «Programada en segundo plano» o el motivo por el que se omitió (por ejemplo «Solo se publican borradores o publicaciones con error», «Ya se está enviando a Mercado Libre», «Solo se pausan publicaciones activas»). Publicar solo acepta borradores o publicaciones con error sin un rechazo pendiente de Mercado Libre; pausar solo lo activo y activar solo lo pausado.
+
+## La tabla de publicaciones
+
+- Busca por producto, SKU o id de Mercado Libre; filtra por estado; ordena por precio o stock; 25 filas por página. En el celular cada fila es una tarjeta.
+- Las **señales** de cada fila dicen lo que antes había que abrir para saber: rechazo de Mercado Libre (paso y campo), venta bajo costo autorizada, si el stock y el precio se sincronizan desde el panel, cantidad de fotos, envío gratis, si fue importada, moneda distinta de pesos y publicaciones de catálogo. **Stock** muestra las unidades para publicar (stock local menos reserva) y, si difiere, lo que Mercado Libre tiene.
+- Acciones por fila: **Editar** y **Publicar** a la vista; en el menú **Más acciones**: ver en Mercado Libre, revisar contenido, revisar calidad, sincronizar contenido, pausar o activar (también por fila, sin pasar por la selección) y eliminar borrador.
+- **Revisar calidad** y **Revisar contenido** abren un panel lateral con la puntuación, las acciones pendientes, el recordatorio de clip y la revisión local; desde ahí se actualizan sin cerrar la tabla.
+- Las recargas después de una acción no borran la selección ni cierran el panel. Los mensajes de éxito y de error aparecen arriba de la tabla y se cierran al actuar de nuevo.
 
 ## Actualizar una publicación activa
 
-1. Pulsa **Editar** para modificar el precio, el colchón, las fotos elegidas o la ficha técnica guardada en P de Papel.
-2. Guarda los cambios. Si la casilla de sincronización de precio está activa, el nuevo precio se envía de manera segura a Mercado Libre. No cambies esta casilla si el precio se gestiona manualmente allá.
-3. Para actualizar fotos, descripción y características en Mercado Libre, pulsa **Sincronizar contenido** y confirma. Esta acción reemplaza esos tres elementos en Mercado Libre con la selección y los datos locales; nunca se ejecuta sola.
-4. Pulsa **Revisar calidad** para ver oportunidades y advertencias que Mercado Libre reporta sobre fotos, atributos, título o condiciones de venta. No corrige información automáticamente: el administrador decide cada ajuste.
+1. Pulsa **Editar** para modificar el precio, la reserva de seguridad, las fotos elegidas o la ficha técnica guardada en P de Papel. Si otra pestaña cambió la misma publicación mientras editabas, el guardado responde «La publicación cambió mientras la editabas»: recarga la lista y repite el cambio.
+2. Guarda los cambios. Si la casilla de sincronización de precio está activa, el nuevo precio se envía de manera segura a Mercado Libre. Un cambio de categoría, fotos, ficha técnica o nombre de familia programa una sincronización de contenido, y un cambio de reserva de seguridad programa una de stock: la publicación de Mercado Libre ya no queda distinta a la del panel. Editar una publicación activa exige el procesamiento seguro activo.
+3. Al editar justo el dato que Mercado Libre rechazó, el rechazo guardado se borra y el asistente deja de abrir en ese paso.
+4. **Sincronizar contenido** sigue disponible para reenviar fotos, descripción y características a demanda. Si la sincronización falla, la fila muestra el motivo en rojo hasta que se resuelva.
+5. **Revisar calidad** muestra oportunidades y advertencias que Mercado Libre reporta. No corrige información automáticamente. Abrir **Condiciones de venta** (cuotas y envío) solo consulta; nada se guarda hasta confirmar un cambio, y el modo de envío que se guarda es el real de Mercado Libre.
 
 ## Centro de operaciones
 
@@ -246,15 +255,17 @@ Después de reconectar Mercado Libre y activar los tópicos, abre **Ventas → M
 Usa este proceso para publicaciones que ya existían en Mercado Libre antes de activar la integración. No crea productos, no cambia precios y no modifica inventario hasta la confirmación final.
 
 1. Abre **Ventas** → **Mercado Libre** → **Publicaciones**.
-2. Pulsa **Importar existentes**. La revisión solo consulta Mercado Libre; todavía no cambia nada.
+2. Pulsa **Importar existentes**. La revisión solo consulta Mercado Libre; todavía no cambia nada. Los detalles se leen de a 20 publicaciones y tres tandas a la vez; si Mercado Libre no responde por alguna tanda, la lista se muestra igual con el aviso «Mercado Libre no respondió por N publicaciones» para volver a revisar en unos minutos.
 3. Revisa cada publicación:
    - Si tiene el mismo SKU que un producto local, P de Papel propone el vínculo automáticamente.
    - Si aparece **Sin SKU** o no reconoce el SKU, usa el selector **Producto local** para elegir manualmente el producto correcto.
    - Si ya está vinculada, no la selecciones otra vez.
    - Un producto local solo puede vincularse una vez. Si varias publicaciones tienen el mismo SKU, deja marcada únicamente la publicación que corresponde a ese producto y revisa las demás manualmente.
-4. Marca solo las publicaciones correctas y pulsa **Vincular y sincronizar**. Confirma la acción.
-5. Las publicaciones activas o pausadas recibirán el stock local de P de Papel. Las cerradas quedan registradas, pero no se actualiza su stock.
-6. Revisa el precio y el colchón de seguridad de cada publicación importada. El precio importado se conserva como referencia exclusiva de Mercado Libre y nunca altera el de la tienda.
+   - Si el producto elegido ya tiene un **borrador** en Administración, la fila lo dice y no se puede marcar hasta aceptar **Reemplazar el borrador**: la publicación de Mercado Libre pasa a ocupar ese borrador (su reserva de seguridad se conserva).
+   - Los avisos en ámbar no bloquean pero importan: publicación en otra moneda (el panel muestra el precio como pesos), publicación de catálogo (Mercado Libre controla el precio) y publicaciones en revisión o con pago pendiente (quedan pausadas con su nota, ya no en error).
+4. Marca solo las publicaciones correctas y pulsa **Vincular y sincronizar**. Confirma la acción. La vinculación vuelve a leer únicamente las publicaciones elegidas (no toda la cuenta) y, si alguna cambió o ya no existe, lo dice con su nombre e id.
+5. Al terminar, el panel lista las publicaciones vinculadas (y cuáles reemplazaron un borrador). Las activas o pausadas recibirán el stock local de P de Papel. Las cerradas quedan registradas, pero no se actualiza su stock.
+6. Revisa el precio y la reserva de seguridad de cada publicación importada. El precio importado se conserva como referencia exclusiva de Mercado Libre y nunca altera el de la tienda.
 
 Si aparece un aviso de que un producto local fue elegido varias veces, no es una falla de Mercado Libre: desmarca los vínculos repetidos. Cada publicación o variación necesita su propio producto local para que el stock pueda sincronizarse correctamente.
 

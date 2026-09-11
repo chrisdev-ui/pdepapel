@@ -1,10 +1,15 @@
 import { auth } from "@clerk/nextjs/server";
-import { MarketplaceConnectionStatus } from "@prisma/client";
+import {
+  MarketplaceConnectionStatus,
+  MarketplaceListingStatus,
+} from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { getMercadoLibreListingMetadata } from "@/lib/mercadolibre/listing-metadata";
 import {
   enqueuePendingMarketplaceOutboxEvents,
+  isMarketplaceListingPublicationInProgress,
   queueMarketplaceListingContentSyncEvent,
   queueMarketplaceListingPublicationEvent,
   queueMarketplaceListingStatusSyncEvent,
@@ -98,7 +103,9 @@ export async function POST(
         externalItemId: true,
         marketplacePrice: true,
         syncPrice: true,
+        syncStock: true,
         status: true,
+        metadata: true,
       },
     });
     if (listings.length !== listingIds.length) {
@@ -109,6 +116,7 @@ export async function POST(
 
     const skipped: { listingId: string; reason: string }[] = [];
     let queued = 0;
+    const listingById = new Map(listings.map((listing) => [listing.id, listing]));
     await prismadb.$transaction(async (transaction) => {
       const stockProductIds: string[] = [];
       for (const listing of listings) {
@@ -117,6 +125,42 @@ export async function POST(
             skipped.push({
               listingId: listing.id,
               reason: "Ya está publicada en Mercado Libre.",
+            });
+            continue;
+          }
+          if (
+            listing.status !== MarketplaceListingStatus.DRAFT &&
+            listing.status !== MarketplaceListingStatus.ERROR
+          ) {
+            skipped.push({
+              listingId: listing.id,
+              reason: "Solo se publican borradores o publicaciones con error.",
+            });
+            continue;
+          }
+          // Un rechazo de Mercado Libre pendiente de corregir volvería a
+          // fallar igual y gastaría una llamada real por intento.
+          if (
+            getMercadoLibreListingMetadata(listing.metadata).publicationError
+              ?.kind === "review"
+          ) {
+            skipped.push({
+              listingId: listing.id,
+              reason:
+                "Mercado Libre rechazó un dato de esta publicación; corrígelo desde Editar antes de volver a publicar.",
+            });
+            continue;
+          }
+          if (
+            await isMarketplaceListingPublicationInProgress(
+              transaction,
+              connection.id,
+              listing.id,
+            )
+          ) {
+            skipped.push({
+              listingId: listing.id,
+              reason: "Ya se está enviando a Mercado Libre.",
             });
             continue;
           }
@@ -138,7 +182,15 @@ export async function POST(
         }
 
         if (action === "sync_stock") {
+          if (!listing.syncStock) {
+            skipped.push({
+              listingId: listing.id,
+              reason: "La sincronización de stock está desactivada para esta publicación.",
+            });
+            continue;
+          }
           stockProductIds.push(listing.productId);
+          queued += 1;
           continue;
         }
         if (action === "sync_price") {
@@ -169,16 +221,31 @@ export async function POST(
         }
 
         const targetStatus = action === "pause" ? "paused" : "active";
+        // Pausar solo lo activo y activar solo lo pausado: una publicación
+        // cerrada o con error no cambia de estado desde aquí.
         if (
-          (targetStatus === "paused" && listing.status === "PAUSED") ||
-          (targetStatus === "active" && listing.status === "ACTIVE")
+          targetStatus === "paused" &&
+          listing.status !== MarketplaceListingStatus.ACTIVE
         ) {
           skipped.push({
             listingId: listing.id,
             reason:
-              targetStatus === "paused"
+              listing.status === MarketplaceListingStatus.PAUSED
                 ? "Ya está pausada."
-                : "Ya está activa.",
+                : "Solo se pausan publicaciones activas.",
+          });
+          continue;
+        }
+        if (
+          targetStatus === "active" &&
+          listing.status !== MarketplaceListingStatus.PAUSED
+        ) {
+          skipped.push({
+            listingId: listing.id,
+            reason:
+              listing.status === MarketplaceListingStatus.ACTIVE
+                ? "Ya está activa."
+                : "Solo se activan publicaciones pausadas.",
           });
           continue;
         }
@@ -193,7 +260,6 @@ export async function POST(
 
       if (stockProductIds.length > 0) {
         await queueMarketplaceStockSyncEvents(transaction, stockProductIds);
-        queued += stockProductIds.length;
       }
     });
 
@@ -201,8 +267,20 @@ export async function POST(
       queued > 0
         ? await enqueuePendingMarketplaceOutboxEvents(connection.id)
         : 0;
+    // Resultado fila por fila: el panel lo muestra junto a cada publicación
+    // en vez de un único mensaje anónimo para todo el lote.
+    const skippedById = new Map(skipped.map((entry) => [entry.listingId, entry.reason]));
+    const results = listingIds.map((listingId) => {
+      const reason = skippedById.get(listingId);
+      return {
+        listingId,
+        productId: listingById.get(listingId)?.productId ?? null,
+        outcome: reason ? ("skipped" as const) : ("queued" as const),
+        reason: reason ?? null,
+      };
+    });
     return NextResponse.json(
-      { queued, enqueued, skipped },
+      { action, queued, enqueued, skipped, results },
       { headers: CACHE_HEADERS.NO_CACHE },
     );
   } catch (error) {
