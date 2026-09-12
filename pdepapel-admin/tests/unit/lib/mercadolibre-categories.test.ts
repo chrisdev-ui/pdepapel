@@ -102,6 +102,19 @@ describe("Mercado Libre category helpers", () => {
     ]);
   });
 
+  it("keeps the first 100 list values and flags the attribute as truncated", () => {
+    const values = Array.from({ length: 101 }, (_, index) => ({ id: `v${index}`, name: `Valor ${index}` }));
+    const [long, short] = parseMercadoLibreCategoryAttributes([
+      { id: "COLOR", name: "Color", value_type: "list", tags: { required: true }, values },
+      { id: "SIZE", name: "Talla", value_type: "list", tags: { required: true }, values: values.slice(0, 50) },
+    ]);
+    expect(long.values).toHaveLength(100);
+    expect(long.values[99]).toEqual({ id: "v99", name: "Valor 99" });
+    expect(long.truncated).toBe(true);
+    expect(short.values).toHaveLength(50);
+    expect(short).not.toHaveProperty("truncated");
+  });
+
   it("blocks categories that are not final or do not allow new listings", () => {
     expect(
       getMercadoLibreCategoryPublicationError(

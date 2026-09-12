@@ -26,12 +26,17 @@ export type MercadoLibreCategorySearchResponse = {
   unavailableCount: number;
 };
 
+/** Valores de lista que se conservan por atributo; el resto se marca como recortado. */
+export const MERCADOLIBRE_ATTRIBUTE_VALUES_LIMIT = 100;
+
 export type MercadoLibreCategoryAttribute = {
   id: string;
   name: string;
   required: boolean;
   valueType: string;
   values: { id: string; name: string }[];
+  /** La lista de valores tenía más de `MERCADOLIBRE_ATTRIBUTE_VALUES_LIMIT` entradas y se recortó. */
+  truncated?: boolean;
 };
 
 export type MercadoLibreCategoryPublicationRequirements = {
@@ -127,18 +132,20 @@ export function parseMercadoLibreCategoryAttributes(
       return [];
     }
 
-    const values = Array.isArray(attribute.values)
-      ? attribute.values
-          .flatMap((value) => {
-            const option = asRecord(value);
-            return option &&
-              typeof option.id === "string" &&
-              typeof option.name === "string"
-              ? [{ id: option.id, name: option.name }]
-              : [];
-          })
-          .slice(0, 100)
+    const allValues = Array.isArray(attribute.values)
+      ? attribute.values.flatMap((value) => {
+          const option = asRecord(value);
+          return option &&
+            typeof option.id === "string" &&
+            typeof option.name === "string"
+            ? [{ id: option.id, name: option.name }]
+            : [];
+        })
       : [];
+    const truncated = allValues.length > MERCADOLIBRE_ATTRIBUTE_VALUES_LIMIT;
+    const values = truncated
+      ? allValues.slice(0, MERCADOLIBRE_ATTRIBUTE_VALUES_LIMIT)
+      : allValues;
 
     return [
       {
@@ -150,6 +157,7 @@ export function parseMercadoLibreCategoryAttributes(
             ? attribute.value_type
             : "string",
         values,
+        ...(truncated ? { truncated: true } : {}),
       },
     ];
   });

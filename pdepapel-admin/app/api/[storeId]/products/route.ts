@@ -389,7 +389,6 @@ export async function GET(
         : "default";
     const excludeProducts = searchParams.get("excludeProducts") || undefined;
     const groupBy = searchParams.get("groupBy"); // "parents"
-    const skipCache = searchParams.get("skipCache") === "true";
 
     const productGroupId = searchParams.get("productGroupId");
     const isOnSale = searchParams.get("isOnSale") === "true"; // New filter
@@ -402,6 +401,70 @@ export async function GET(
     const maxPrice = searchParams.get("maxPrice")
       ? Number(searchParams.get("maxPrice"))
       : undefined;
+
+    // ---------------------------------------------------------
+    // OPTIMIZED BULK FETCH (BY IDs)
+    // ---------------------------------------------------------
+    // Stock en vivo para el carrito y la caja: sale antes de la caché porque
+    // `ids` no forma parte de la llave y la respuesta debe ser la de ahora.
+    const ids = searchParams.get("ids")?.split(",").filter(Boolean) || [];
+    if (ids.length > 0) {
+      const products = await prismadb.product.findMany({
+        where: {
+          storeId: params.storeId,
+          id: { in: ids },
+          isArchived: false,
+        },
+        select: PUBLIC_PRODUCT_SELECT,
+      });
+
+      // Calculate prices/discounts for these specific items
+      const pricingMap = await getProductsPrices(
+        products.map((p) => ({
+          id: p.id,
+          categoryId: p.categoryId,
+          price: Number(p.price),
+          productGroupId: p.productGroupId,
+        })),
+        params.storeId,
+      );
+
+      const response = products.map((item) => {
+        const pricing = pricingMap.get(item.id);
+        const effectivePrice = pricing?.price ?? Number(item.price);
+
+        return {
+          id: item.id,
+          slug: item.slug,
+          name: item.name,
+          price: effectivePrice,
+          originalPrice: Number(item.price),
+          description: item.description,
+          images: item.images,
+          category: item.category,
+          categoryId: item.categoryId,
+          color: item.color,
+          size: item.size,
+          design: item.design,
+          sku: item.sku,
+          createdAt: item.createdAt,
+          stock: item.stock,
+          availableAt: item.availableAt,
+          isGroup: false, // Individual items only for id fetch
+          productGroupId: item.productGroupId,
+          offerLabel: pricing?.offerLabel ?? null,
+          hasDiscount: pricing ? pricing.discount > 0 : false,
+          discountedPrice: effectivePrice,
+        };
+      });
+
+      return NextResponse.json(response, {
+        headers: {
+          ...CACHE_HEADERS.NO_CACHE, // Always fresh for cart check
+          ...corsHeaders,
+        },
+      });
+    }
 
     // Create cache key based on query parameters
     // La versión forma parte de la llave: al cambiar lo que se devuelve, las
@@ -432,22 +495,22 @@ export async function GET(
       v: "10",
     })}`;
 
-    // Try to get from Redis cache
+    // Try to get from Redis cache. No hay forma de saltárselo desde fuera: la
+    // consulta de stock en vivo (`ids=`) sale antes y nunca pasa por aquí, y el
+    // panel invalida por llave al cambiar el catálogo.
     try {
-      if (!skipCache) {
-        const { Redis } = await import("@upstash/redis");
-        const redis = Redis.fromEnv();
-        const cached = await redis.get(cacheKey);
+      const { Redis } = await import("@upstash/redis");
+      const redis = Redis.fromEnv();
+      const cached = await redis.get(cacheKey);
 
-        if (cached) {
-          return NextResponse.json(cached, {
-            headers: {
-              ...CACHE_HEADERS.DYNAMIC,
-              "X-Cache": "HIT",
-              ...corsHeaders,
-            },
-          });
-        }
+      if (cached) {
+        return NextResponse.json(cached, {
+          headers: {
+            ...CACHE_HEADERS.DYNAMIC,
+            "X-Cache": "HIT",
+            ...corsHeaders,
+          },
+        });
       }
     } catch (error) {
       console.error("Redis get error:", error);
@@ -590,71 +653,6 @@ export async function GET(
         // If no active offers but filtered by onSale, return nothing
         onSaleFilter = { id: "NO_MATCH" }; // Impossible ID
       }
-    }
-
-    const ids = searchParams.get("ids")?.split(",") || [];
-
-    // ---------------------------------------------------------
-    // OPTIMIZED BULK FETCH (BY IDs)
-    // ---------------------------------------------------------
-    // Used for Cart Validation / Refresh
-    // Bypasses heavy filtering to return specific items fast
-    if (ids.length > 0) {
-      const products = await prismadb.product.findMany({
-        where: {
-          storeId: params.storeId,
-          id: { in: ids },
-          isArchived: false,
-        },
-        select: PUBLIC_PRODUCT_SELECT,
-      });
-
-      // Calculate prices/discounts for these specific items
-      const pricingMap = await getProductsPrices(
-        products.map((p) => ({
-          id: p.id,
-          categoryId: p.categoryId,
-          price: Number(p.price),
-          productGroupId: p.productGroupId,
-        })),
-        params.storeId,
-      );
-
-      const response = products.map((item) => {
-        const pricing = pricingMap.get(item.id);
-        const effectivePrice = pricing?.price ?? Number(item.price);
-
-        return {
-          id: item.id,
-          slug: item.slug,
-          name: item.name,
-          price: effectivePrice,
-          originalPrice: Number(item.price),
-          description: item.description,
-          images: item.images,
-          category: item.category,
-          categoryId: item.categoryId,
-          color: item.color,
-          size: item.size,
-          design: item.design,
-          sku: item.sku,
-          createdAt: item.createdAt,
-          stock: item.stock,
-          availableAt: item.availableAt,
-          isGroup: false, // Individual items only for id fetch
-          productGroupId: item.productGroupId,
-          offerLabel: pricing?.offerLabel ?? null,
-          hasDiscount: pricing ? pricing.discount > 0 : false,
-          discountedPrice: effectivePrice,
-        };
-      });
-
-      return NextResponse.json(response, {
-        headers: {
-          ...CACHE_HEADERS.NO_CACHE, // Always fresh for cart check
-          ...corsHeaders,
-        },
-      });
     }
 
     // Custom type for unified product response
@@ -1108,11 +1106,9 @@ export async function GET(
 
       // Cache the response
       try {
-        if (!skipCache) {
-          const { Redis } = await import("@upstash/redis");
-          const redisClient = Redis.fromEnv();
-          await redisClient.set(cacheKey, response, { ex: 5 * 60 }); // 5 minutes
-        }
+        const { Redis } = await import("@upstash/redis");
+        const redisClient = Redis.fromEnv();
+        await redisClient.set(cacheKey, response, { ex: 5 * 60 }); // 5 minutes
       } catch (error) {
         console.error("Redis set error:", error);
       }
@@ -1439,12 +1435,10 @@ export async function GET(
 
     // Cache the response (5 minutes for shop queries, 15 minutes for others)
     try {
-      if (!skipCache) {
-        const { Redis } = await import("@upstash/redis");
-        const redis = Redis.fromEnv();
-        const ttl = fromShop ? 5 * 60 : 15 * 60;
-        await redis.set(cacheKey, response, { ex: ttl });
-      }
+      const { Redis } = await import("@upstash/redis");
+      const redis = Redis.fromEnv();
+      const ttl = fromShop ? 5 * 60 : 15 * 60;
+      await redis.set(cacheKey, response, { ex: ttl });
     } catch (error) {
       console.error("Redis set error:", error);
     }

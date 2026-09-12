@@ -132,6 +132,8 @@ export type ListingPublicationCategoryAttribute = {
   required: boolean;
   valueType: string;
   values: { id: string; name: string }[];
+  /** Mercado Libre tenía más valores de los que se cargan; el formulario lo dice. */
+  truncated?: boolean;
 };
 
 export type ListingPublicationCategoryTemplate = {
@@ -1275,6 +1277,7 @@ export function ListingPublicationWizard({
                         </button>
                       </>
                     ) : hasList ? (
+                      <>
                       <Select
                         value={currentValue}
                         onValueChange={(value) => {
@@ -1325,6 +1328,15 @@ export function ListingPublicationWizard({
                           </SelectGroup>
                         </SelectContent>
                       </Select>
+                      {attribute.truncated && (
+                        <p className="text-xs text-muted-foreground">
+                          Mercado Libre tiene más opciones de las que caben
+                          aquí: se muestran las primeras {attribute.values.length}.
+                          Si la tuya no aparece, elige «escribir otro valor» y
+                          escríbela tal como la lista Mercado Libre.
+                        </p>
+                      )}
+                      </>
                     ) : (
                       <Input
                         id={`mercadolibre-attribute-${attribute.id}`}

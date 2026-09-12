@@ -131,7 +131,7 @@ describe("GET /api/[storeId]/products", () => {
   it("returns canonical slugs when refreshing specific products", async () => {
     const response = await GET(
       new Request(
-        "https://admin.example.com/api/store-id/products?ids=product-id&skipCache=true",
+        "https://admin.example.com/api/store-id/products?ids=product-id",
       ),
       { params: { storeId: "store-id" } },
     );
@@ -143,6 +143,45 @@ describe("GET /api/[storeId]/products", () => {
         slug: standaloneProduct.slug,
       },
     ]);
+  });
+
+  it("never reads or writes the catalog cache for a live-stock request by ids", async () => {
+    const { Redis } = await import("@upstash/redis");
+    const get = vi.fn().mockResolvedValue({ products: [{ id: "stale" }] });
+    const set = vi.fn();
+    vi.mocked(Redis.fromEnv).mockReturnValue({ get, set } as never);
+    try {
+      const response = await GET(
+        new Request("https://admin.example.com/api/store-id/products?ids=product-id"),
+        { params: { storeId: "store-id" } },
+      );
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toMatchObject([{ id: standaloneProduct.id }]);
+      expect(get).not.toHaveBeenCalled();
+      expect(set).not.toHaveBeenCalled();
+    } finally {
+      vi.mocked(Redis.fromEnv).mockReset();
+    }
+  });
+
+  it("serves the catalog from the cache and ignores a client cache-bypass flag", async () => {
+    const { Redis } = await import("@upstash/redis");
+    const get = vi.fn().mockResolvedValue({ products: [{ id: "cached" }], totalItems: 1, totalPages: 1 });
+    const set = vi.fn();
+    vi.mocked(Redis.fromEnv).mockReturnValue({ get, set } as never);
+    try {
+      const response = await GET(
+        new Request("https://admin.example.com/api/store-id/products?skipCache=true"),
+        { params: { storeId: "store-id" } },
+      );
+      expect(response.status).toBe(200);
+      expect(response.headers.get("X-Cache")).toBe("HIT");
+      await expect(response.json()).resolves.toMatchObject({ products: [{ id: "cached" }] });
+      expect(get).toHaveBeenCalledTimes(1);
+      expect(mocks.findProducts).not.toHaveBeenCalled();
+    } finally {
+      vi.mocked(Redis.fromEnv).mockReset();
+    }
   });
 
   it("prioritizes discounted grouped products when sorting by offers", async () => {

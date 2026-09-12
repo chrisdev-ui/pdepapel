@@ -185,6 +185,59 @@ describe("public API exposure with MySQL", () => {
     expect(ownerOrder.netProfit).toBe(1234);
   });
 
+  it("hides an account order from anyone but its customer or the owner, and keeps guest orders open by link", async () => {
+    fixture = await createInventoryFixture();
+    const accountOrder = await testPrisma.order.create({
+      data: {
+        storeId: fixture.store.id,
+        orderNumber: `ORD-${randomUUID().slice(0, 8)}`,
+        userId: "user_customer",
+        fullName: "Clienta con cuenta",
+        phone: "3000000002",
+        subtotal: 5000,
+        total: 5000,
+        orderItems: { create: [{ productId: fixture.component.id, quantity: 1, name: "Componente", price: 5000 }] },
+      },
+    });
+    const guestOrder = await testPrisma.order.create({
+      data: {
+        storeId: fixture.store.id,
+        orderNumber: `ORD-${randomUUID().slice(0, 8)}`,
+        guestId: `guest-${randomUUID()}`,
+        fullName: "Invitada",
+        phone: "3000000003",
+        subtotal: 5000,
+        total: 5000,
+        orderItems: { create: [{ productId: fixture.component.id, quantity: 1, name: "Componente", price: 5000 }] },
+      },
+    });
+    const { GET } = await import("@/app/api/[storeId]/orders/[orderId]/route");
+    const accountParams = { storeId: fixture.store.id, orderId: accountOrder.id };
+    const guestParams = { storeId: fixture.store.id, orderId: guestOrder.id };
+
+    // Sin sesión: el pedido con cuenta no existe para el visitante; el de invitada sí.
+    expect((await GET(get("http://admin.test/api/x/orders/o"), { params: accountParams })).status).toBe(404);
+    expect((await GET(get("http://admin.test/api/x/orders/o"), { params: guestParams })).status).toBe(200);
+
+    // Otra clienta con sesión: tampoco.
+    session.userId = "user_someone_else";
+    expect((await GET(get("http://admin.test/api/x/orders/o"), { params: accountParams })).status).toBe(404);
+
+    // La clienta del pedido: la forma pública, sin campos internos.
+    session.userId = "user_customer";
+    const own = await GET(get("http://admin.test/api/x/orders/o"), { params: accountParams });
+    expect(own.status).toBe(200);
+    const ownOrder = await own.json();
+    expect(ownOrder).toMatchObject({ id: accountOrder.id, createdByAdmin: false });
+    expectNoInternalFields(ownOrder, INTERNAL_ORDER_FIELDS);
+
+    // La dueña: la fila completa.
+    session.userId = fixture.store.userId;
+    const owner = await GET(get("http://admin.test/api/x/orders/o"), { params: accountParams });
+    expect(owner.status).toBe(200);
+    expect((await owner.json()).userId).toBe("user_customer");
+  });
+
   it("publishes reviews without the reviewer id and lets the author find her own", async () => {
     fixture = await createInventoryFixture();
     const review = await testPrisma.review.create({

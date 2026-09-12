@@ -1,3 +1,4 @@
+import { auth } from "@clerk/nextjs/server";
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
@@ -8,8 +9,14 @@ import SingleOrderPage from "./components/single-order-page";
 
 export const revalidate = 0;
 
-// `generateMetadata` and the page run in the same request: fetch the order once.
-const getOrderOnce = cache(getOrder);
+// `generateMetadata` and the page run in the same request: fetch the order
+// once, with the viewer's session so the API can answer 404 for someone
+// else's account order.
+const getOrderOnce = cache(async (orderId: string) => {
+  const { getToken } = await auth();
+  const sessionToken = await getToken().catch(() => null);
+  return getOrder(orderId, sessionToken);
+});
 
 export async function generateMetadata({
   params,

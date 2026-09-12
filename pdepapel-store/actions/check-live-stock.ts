@@ -24,8 +24,9 @@ export async function checkLiveStock(
 
   try {
     const url = new URL(API_URL);
+    // La consulta por `ids` nunca pasa por la caché del catálogo en la API;
+    // `_t` evita cualquier caché intermedia de HTTP.
     url.searchParams.append("ids", productIds.join(","));
-    url.searchParams.append("skipCache", "true");
     url.searchParams.append("_t", String(Date.now())); // Cache-buster
 
     const response = await fetch(url, {

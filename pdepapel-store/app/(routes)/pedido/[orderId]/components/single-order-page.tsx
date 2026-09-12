@@ -7,12 +7,11 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-import { Forbidden } from "@/components/forbidden";
 import { OrderAccountClaimCard } from "@/components/order-account-claim-card";
 import { OrderStageBadge } from "@/components/order-stage-badge";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
-import { ADMIN_USER_IDS, OrderStatus } from "@/constants";
+import { OrderStatus } from "@/constants";
 import { useCart } from "@/hooks/use-cart";
 import useCheckoutOrder from "@/hooks/use-checkout-order";
 import { useCheckoutStore } from "@/hooks/use-checkout-store";
@@ -269,21 +268,8 @@ const SingleOrderPage: React.FC<SingleOrderPageProps> = ({ order }) => {
   const timeline = useMemo(() => getOrderTimeline(activeOrder), [activeOrder]);
   const awaitingPayment = isAwaitingPayment(activeOrder);
 
-  const isAdmin = (user: string) => ADMIN_USER_IDS.includes(user);
-
-  const isOrderCreatedByAdmin =
-    (order?.userId ? isAdmin(order.userId) : false) ||
-    order?.createdByAdmin === true;
-
-  const hasAccess =
-    isOrderCreatedByAdmin ||
-    !order?.userId ||
-    (userId
-      ? userId === order?.userId || isAdmin(userId)
-      : guestId === order?.guestId || isAdmin(guestId));
-
-  if (!hasAccess) return <Forbidden />;
-
+  // Quién puede ver el pedido lo decide la API (`GET /orders/[id]` responde
+  // 404 a quien no sea la clienta del pedido ni la dueña); aquí ya llegó.
   const orderNumber = order.orderNumber ?? order.id;
   const canRefreshTracking = Boolean(
     order.shipping?.envioClickIdOrder &&

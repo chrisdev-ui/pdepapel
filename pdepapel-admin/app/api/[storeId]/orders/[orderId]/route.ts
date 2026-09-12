@@ -66,10 +66,13 @@ export async function OPTIONS(req: Request) {
 }
 
 /**
- * Lectura de un pedido por id. La tienda en línea la usa sin sesión (la
- * página del pedido y su sondeo de pago), así que el id hace de llave y la
- * respuesta es el `select` de clienta: nunca el token, las notas internas,
- * los costos ni la utilidad. La dueña del panel recibe la fila completa.
+ * Lectura de un pedido por id. La tienda en línea la usa desde la página del
+ * pedido: para un pedido de invitada el id hace de llave (llega por correo o
+ * WhatsApp); un pedido de una clienta con cuenta solo se entrega a su sesión
+ * o a la dueña, y a cualquier otra persona se le responde 404 como si no
+ * existiera. La respuesta de clienta es el `select` público: nunca el token,
+ * las notas internas, los costos ni la utilidad. La dueña recibe la fila
+ * completa.
  */
 export async function GET(
   req: Request,
@@ -110,7 +113,8 @@ export async function GET(
       where,
       select: CUSTOMER_ORDER_SELECT,
     });
-    if (!order)
+    // Un pedido con cuenta no se abre con el enlace: el 404 no confirma que exista.
+    if (!order || (order.userId && order.userId !== userId))
       throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
     return NextResponse.json(toCustomerOrderResponse(order), {
       headers: { ...corsHeaders, ...CACHE_HEADERS.DYNAMIC },

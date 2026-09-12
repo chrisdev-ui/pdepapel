@@ -114,12 +114,6 @@ export const SORT_OPTIONS = [
   { value: SortOptions.isOnSale, label: "Ofertas primero" },
 ];
 
-export const ADMIN_USER_IDS = [
-  "user_2YuMElx5guOjtnY3RT0vXi9UA3b",
-  "user_2edvPcKn4XDbCYSobmXRNJpGq9U",
-];
-
-
 export const INTERRAPIDISIMO_KEYSIZE = 256;
 export const INTERRAPIDISIMO_IVSIZE = 128;
 export const INTERRAPIDISIMO_SALTSIZE = 256;

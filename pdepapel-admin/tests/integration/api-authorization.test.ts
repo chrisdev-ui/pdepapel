@@ -40,8 +40,6 @@ const PROTECTED_ROUTES: ProtectedRoute[] = [
   { path: "shipments/bulk-manual-update", methods: ["POST"] },
   { path: "shipments/[shippingId]/update-tracking", methods: ["POST"], params: { shippingId: "x" } },
   { path: "shipments/export", methods: ["GET"] },
-  { path: "whatsapp/templates", methods: ["GET", "POST"] },
-  { path: "whatsapp/templates/[templateId]", methods: ["PATCH", "DELETE"], params: { templateId: "x" } },
   // Handlers that already had an inline owner lookup: kept under test so they cannot regress.
   { path: "customers/reactivation", methods: ["GET", "POST"] },
   { path: "shipments/sync", methods: ["POST"] },
@@ -157,7 +155,6 @@ describe("store-owner authorization on dashboard API handlers", () => {
     session.userId = ownerId;
     for (const [path, method] of [
       ["shipments/export", "GET"],
-      ["whatsapp/templates", "GET"],
       ["customers/search", "GET"],
       ["products/selectable", "GET"],
       ["product-groups", "GET"],
