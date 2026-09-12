@@ -20,7 +20,8 @@ describe("computeReplenishment", () => {
   });
 
   it("flags an out-of-stock product that was selling, and a dormant one that was not", () => {
-    expect(computeReplenishment({ stock: 0, sold30: 0, sold90: 5 })).toMatchObject({ outOfStockSelling: true, needsReplenishment: true, coverDays: null, suggested: 0 });
+    // Agotado que vendió 5 en 90 días: el ritmo de 90 días sugiere qué pedir (5/90 × 28 ≈ 2).
+    expect(computeReplenishment({ stock: 0, sold30: 0, sold90: 5 })).toMatchObject({ outOfStockSelling: true, needsReplenishment: true, coverDays: 0, suggested: 2, runsOutThisWeek: false });
     expect(computeReplenishment({ stock: 2, sold30: 0, sold90: 0 })).toMatchObject({ dormant: true, needsReplenishment: false, runsOutThisWeek: false });
   });
 
@@ -51,6 +52,8 @@ describe("describeCover", () => {
     expect(describeCover(computeReplenishment({ stock: 3, sold30: 8, sold90: 10 }), { limitingComponent: "el marcador lila" })).toMatchObject({ label: "11 días · limita el marcador lila", tone: "cream" });
     expect(describeCover(computeReplenishment({ stock: 4, sold30: 4, sold90: 9 }))).toMatchObject({ label: "30 días", tone: "mint" });
     expect(describeCover(computeReplenishment({ stock: 2, sold30: 0, sold90: 0 }))).toMatchObject({ label: "Sin ventas en 90 días", tone: "slate" });
+    // Con stock y solo ventas en 90 días: cobertura larga medida con ese ritmo.
+    expect(describeCover(computeReplenishment({ stock: 3, sold30: 0, sold90: 3 }))).toMatchObject({ label: "90 días", tone: "mint" });
   });
 });
 

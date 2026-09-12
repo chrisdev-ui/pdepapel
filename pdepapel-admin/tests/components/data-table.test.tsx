@@ -144,3 +144,15 @@ describe("DataTable", () => {
     expect(screen.queryByRole("region", { name: /seleccionadas/ })).toBeNull();
   });
 });
+
+describe("DataTable remembered page", () => {
+  it("snaps a remembered page that no longer exists back to the last page", async () => {
+    const { useTableStore } = await import("@/hooks/use-table-store");
+    const { Models } = await import("@/constants");
+    useTableStore.setState({ tables: { [Models.Inventory]: { pagination: { pageIndex: 5, pageSize: 10 }, sorting: [], columnFilters: [], columnVisibility: {} } } as never });
+    const rows = Array.from({ length: 12 }, (_, i) => ({ id: `r${i}`, name: `Fila ${i}` }));
+    render(<DataTable tableKey={Models.Inventory} columns={[{ accessorKey: "name", header: "Nombre" }]} data={rows} getRowId={(row) => row.id} />);
+    expect(await screen.findByText("Fila 10")).toBeInTheDocument();
+    expect(screen.queryByText("Nada coincide con estos filtros")).toBeNull();
+  });
+});

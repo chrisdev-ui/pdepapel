@@ -88,7 +88,7 @@ function SupplierCard({ group, storeId }: { group: SupplierGroup; storeId: strin
       action={
         group.id ? (
           <Button type="button" size="sm" onClick={createDraft} disabled={creating || selected.length === 0} isLoading={creating} loadingText="Creando…">
-            Crear borrador con {selected.length} {selected.length === 1 ? "línea" : "líneas"}
+            {selected.length === 0 ? "Marca líneas para crear un borrador" : `Crear borrador con ${selected.length} ${selected.length === 1 ? "línea" : "líneas"}`}
           </Button>
         ) : undefined
       }

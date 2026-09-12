@@ -209,6 +209,16 @@ export function DataTable<TData, TValue>({
     onPaginationChange: setPagination,
   });
 
+  // La página recordada puede quedar fuera de rango cuando la lista cambia de
+  // tamaño (otra vista, otro filtro): sin esto la tabla se ve vacía con un
+  // «201–57 de 57». Se vuelve a la última página que sí existe.
+  const pageCount = table.getPageCount();
+  useEffect(() => {
+    if (pageIndex > 0 && pageIndex >= pageCount) {
+      setPagination((prev) => ({ ...prev, pageIndex: Math.max(0, pageCount - 1) }));
+    }
+  }, [pageIndex, pageCount]);
+
   useEffect(() => {
     updateTableState(tableKey, {
       pagination: { pageIndex, pageSize },

@@ -46,7 +46,9 @@ const round1 = (value: number) => Math.round(value * 10) / 10;
 
 export function computeReplenishment({ stock, sold30, sold90, onOrder = 0, threshold = 0 }: ReplenishmentInput): ReplenishmentSignal {
   const safeStock = Math.max(0, stock);
-  const perDay = sold30 > 0 ? sold30 / SALES_WINDOW_DAYS : 0;
+  // Ritmo de venta: los últimos 30 días; si en ese tramo no vendió pero sí en
+  // 90 (típico de un agotado), el ritmo de 90 días sirve para sugerir cuánto pedir.
+  const perDay = sold30 > 0 ? sold30 / SALES_WINDOW_DAYS : sold90 > 0 ? sold90 / DORMANT_WINDOW_DAYS : 0;
   const weeklyRate = round1(perDay * 7);
   const coverDays = perDay > 0 ? Math.floor(safeStock / perDay) : null;
   const coverDaysWithOnOrder = perDay > 0 ? Math.floor((safeStock + Math.max(0, onOrder)) / perDay) : null;
