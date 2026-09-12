@@ -86,6 +86,16 @@ describe("API error helpers", () => {
     await expect(response.json()).resolves.toMatchObject({ error: expect.stringContaining("ocupada") });
   });
 
+  it("answers a connection closed by the server (P1017) with 503 and a longer Retry-After", async () => {
+    const { Prisma } = await import("@prisma/client");
+    const closed = new Prisma.PrismaClientKnownRequestError("Server has closed the connection.", { code: "P1017", clientVersion: "6.19.1" });
+    const response = handleErrorResponse(closed, "CATEGORIES_GET");
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Retry-After")).toBe("5");
+    await expect(response.json()).resolves.toMatchObject({ error: expect.stringContaining("conectar") });
+  });
+
   it("answers an unreachable database with 503", async () => {
     const { Prisma } = await import("@prisma/client");
     const down = new Prisma.PrismaClientInitializationError("Can't reach database server", "6.19.1");

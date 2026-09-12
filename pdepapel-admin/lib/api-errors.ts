@@ -146,6 +146,17 @@ export const handleErrorResponse = (
             503,
             { code: error.code, retryAfterSeconds: 2 },
           );
+        case "P1001":
+        case "P1002":
+        case "P1008":
+        case "P1017":
+          // La base de datos no responde o cerró la conexión (reinicio en
+          // Railway, red): Prisma reconecta en la siguiente consulta.
+          return new AppError(
+            "No se pudo conectar con la base de datos. Intenta de nuevo en unos segundos.",
+            503,
+            { code: error.code, retryAfterSeconds: 5 },
+          );
         default:
           return new AppError("Error en la base de datos", 500, {
             code: error.code,
@@ -159,7 +170,12 @@ export const handleErrorResponse = (
         status: prismaError.statusCode,
         headers:
           prismaError.statusCode === 503
-            ? { ...options.headers, "Retry-After": "2" }
+            ? {
+                ...options.headers,
+                "Retry-After": String(
+                  (prismaError.details as { retryAfterSeconds?: number } | undefined)?.retryAfterSeconds ?? 2,
+                ),
+              }
             : options.headers,
       },
     );
