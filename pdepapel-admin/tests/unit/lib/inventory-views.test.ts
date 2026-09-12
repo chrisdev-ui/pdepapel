@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { describeLowStockThreshold, inventoryMatchesView, inventoryRowValue, summarizeInventory } from "@/lib/inventory-views";
+import { describeLowStockThreshold, inventoryMatchesView, inventoryRowValue, normalizeInventoryView, summarizeInventory } from "@/lib/inventory-views";
+import { computeReplenishment } from "@/lib/replenishment";
 
 const rows = [
   { stock: 14, acqPrice: 18500, price: 32000 },
@@ -12,17 +13,29 @@ const rows = [
 
 describe("inventory views", () => {
   it("classifies rows into the work views", () => {
-    expect(rows.map((r) => inventoryMatchesView(r, "stock-critico"))).toEqual([false, true, false, false, false]);
+    expect(rows.map((r) => inventoryMatchesView(r, "por-reponer"))).toEqual([false, true, false, false, false]);
     expect(rows.map((r) => inventoryMatchesView(r, "agotados"))).toEqual([false, false, true, false, false]);
     expect(rows.map((r) => inventoryMatchesView(r, "sin-costo"))).toEqual([false, false, false, true, false]);
     expect(rows.map((r) => inventoryMatchesView(r, "kits"))).toEqual([false, false, false, false, true]);
   });
 
   it("moves the critical view with the store threshold and never counts the sold-out rows as critical", () => {
-    expect(rows.map((r) => inventoryMatchesView(r, "stock-critico", 10))).toEqual([false, true, false, true, false]);
-    expect(rows.map((r) => inventoryMatchesView(r, "stock-critico", 2))).toEqual([false, false, false, false, false]);
-    expect(inventoryMatchesView({ stock: 0, price: 1 }, "stock-critico", 50)).toBe(false);
+    expect(rows.map((r) => inventoryMatchesView(r, "por-reponer", 10))).toEqual([false, true, false, true, false]);
+    expect(rows.map((r) => inventoryMatchesView(r, "por-reponer", 2))).toEqual([false, false, false, false, false]);
+    expect(inventoryMatchesView({ stock: 0, price: 1 }, "por-reponer", 50)).toBe(false);
     expect(inventoryMatchesView({ stock: -1, price: 1 }, "agotados", 50)).toBe(true);
+  });
+
+  it("prefers the replenishment signal over the threshold when a row carries one", () => {
+    const selling = { stock: 8, price: 1, signal: computeReplenishment({ stock: 8, sold30: 20, sold90: 40 }) };
+    const dormant = { stock: 1, price: 1, signal: computeReplenishment({ stock: 1, sold30: 0, sold90: 0 }) };
+    expect(inventoryMatchesView(selling, "por-reponer", 5)).toBe(true);
+    expect(inventoryMatchesView(dormant, "por-reponer", 5)).toBe(false);
+    const totals = summarizeInventory([selling, dormant, { stock: 0, price: 1, signal: computeReplenishment({ stock: 0, sold30: 1, sold90: 3 }) }]);
+    expect(totals).toMatchObject({ lowStock: 2, runsOutThisWeek: 1, outOfStockSelling: 1, dormant: 1 });
+    expect(normalizeInventoryView("stock-critico")).toBe("por-reponer");
+    expect(normalizeInventoryView("agotados")).toBe("agotados");
+    expect(normalizeInventoryView("nada")).toBeNull();
   });
 
   it("values stock at cost and at retail, ignoring kits", () => {
@@ -32,7 +45,7 @@ describe("inventory views", () => {
   });
 
   it("summarises totals and counts with the default threshold", () => {
-    expect(summarizeInventory(rows)).toEqual({ products: 5, units: 25, costValue: 259000 + 1800, retailValue: 448000 + 3300 + 32000, lowStock: 1, outOfStock: 1, withoutCost: 1 });
+    expect(summarizeInventory(rows)).toEqual({ products: 5, units: 25, costValue: 259000 + 1800, retailValue: 448000 + 3300 + 32000, lowStock: 1, outOfStock: 1, withoutCost: 1, runsOutThisWeek: 0, outOfStockSelling: 0, dormant: 0 });
   });
 
   it("summarises the critical count with the store threshold", () => {

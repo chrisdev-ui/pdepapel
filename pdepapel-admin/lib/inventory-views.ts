@@ -1,4 +1,5 @@
 import { DEFAULT_LOW_STOCK_THRESHOLD, isLowStock, isOutOfStock } from "@/lib/product-readiness";
+import type { ReplenishmentSignal } from "@/lib/replenishment";
 
 /**
  * Vistas de la lista de Inventario y valorización por fila. Puro y testeable.
@@ -8,31 +9,39 @@ import { DEFAULT_LOW_STOCK_THRESHOLD, isLowStock, isOutOfStock } from "@/lib/pro
  * no lo pase.
  */
 
-export type InventoryView = "todo" | "stock-critico" | "agotados" | "sin-costo" | "kits";
+export type InventoryView = "todo" | "por-reponer" | "agotados" | "sin-costo" | "kits";
 
 export const INVENTORY_VIEWS: { id: InventoryView; label: string }[] = [
-  { id: "todo", label: "Todo" },
-  { id: "stock-critico", label: "Stock crítico" },
+  { id: "por-reponer", label: "Por reponer" },
   { id: "agotados", label: "Agotados" },
   { id: "sin-costo", label: "Sin costo" },
   { id: "kits", label: "Kits" },
+  { id: "todo", label: "Todo" },
 ];
 
 export const isInventoryView = (value: string | null | undefined): value is InventoryView => INVENTORY_VIEWS.some((v) => v.id === value);
+
+/** Acepta el id antiguo «stock-critico» (enlaces guardados) y lo lleva a «por-reponer». */
+export function normalizeInventoryView(value: string | null | undefined): InventoryView | null {
+  if (value === "stock-critico") return "por-reponer";
+  return isInventoryView(value) ? value : null;
+}
 
 export interface InventoryRowInput {
   stock: number;
   acqPrice?: number | null;
   price: number;
   isKit?: boolean | null;
+  /** Señal de reposición por cobertura; sin ella la vista «Por reponer» cae al umbral. */
+  signal?: ReplenishmentSignal | null;
 }
 
 export function inventoryMatchesView(row: InventoryRowInput, view: InventoryView, threshold = DEFAULT_LOW_STOCK_THRESHOLD): boolean {
   switch (view) {
     case "todo":
       return true;
-    case "stock-critico":
-      return isLowStock(row.stock, threshold);
+    case "por-reponer":
+      return row.signal ? row.signal.needsReplenishment : isLowStock(row.stock, threshold);
     case "agotados":
       return isOutOfStock(row.stock);
     case "sin-costo":
@@ -54,9 +63,16 @@ export interface InventoryTotals {
   units: number;
   costValue: number;
   retailValue: number;
+  /** Productos en la vista «Por reponer». */
   lowStock: number;
   outOfStock: number;
   withoutCost: number;
+  /** Se venden y se acaban en menos de una semana (o ya se acabaron). */
+  runsOutThisWeek: number;
+  /** Agotados que vendieron en los últimos 90 días. */
+  outOfStockSelling: number;
+  /** Con stock y sin ventas en 90 días. */
+  dormant: number;
 }
 
 export function summarizeInventory(rows: InventoryRowInput[], threshold = DEFAULT_LOW_STOCK_THRESHOLD): InventoryTotals {
@@ -67,12 +83,15 @@ export function summarizeInventory(rows: InventoryRowInput[], threshold = DEFAUL
       acc.units += row.isKit ? 0 : Math.max(0, row.stock);
       acc.costValue += value.cost;
       acc.retailValue += value.retail;
-      if (inventoryMatchesView(row, "stock-critico", threshold)) acc.lowStock += 1;
+      if (inventoryMatchesView(row, "por-reponer", threshold)) acc.lowStock += 1;
       if (inventoryMatchesView(row, "agotados", threshold)) acc.outOfStock += 1;
       if (inventoryMatchesView(row, "sin-costo", threshold)) acc.withoutCost += 1;
+      if (row.signal?.runsOutThisWeek) acc.runsOutThisWeek += 1;
+      if (row.signal?.outOfStockSelling) acc.outOfStockSelling += 1;
+      if (row.signal?.dormant) acc.dormant += 1;
       return acc;
     },
-    { products: 0, units: 0, costValue: 0, retailValue: 0, lowStock: 0, outOfStock: 0, withoutCost: 0 },
+    { products: 0, units: 0, costValue: 0, retailValue: 0, lowStock: 0, outOfStock: 0, withoutCost: 0, runsOutThisWeek: 0, outOfStockSelling: 0, dormant: 0 },
   );
 }
 

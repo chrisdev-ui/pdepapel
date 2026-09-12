@@ -196,7 +196,7 @@ export const NAV_GROUPS: NavGroup[] = [
         badge: "lowStock",
         children: [
           { label: "Todo el stock", segment: "inventario" },
-          { label: "Stock crítico", segment: "inventario?vista=stock-critico" },
+          { label: "Por reponer", segment: "inventario?vista=por-reponer" },
           { label: "Agotados", segment: "inventario?vista=agotados" },
           { label: "Sin costo", segment: "inventario?vista=sin-costo" },
         ],

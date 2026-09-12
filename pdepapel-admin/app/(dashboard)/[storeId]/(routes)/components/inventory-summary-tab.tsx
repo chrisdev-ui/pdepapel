@@ -1,6 +1,7 @@
 import { getInventory } from "@/app/(dashboard)/[storeId]/(routes)/inventario/server/get-inventory";
 import { TintBadge } from "@/components/ui/tint-badge";
-import { describeLowStockThreshold, inventoryMatchesView, summarizeInventory } from "@/lib/inventory-views";
+import { inventoryMatchesView, summarizeInventory } from "@/lib/inventory-views";
+import { compareUrgency, describeCover } from "@/lib/replenishment";
 import { hasStoreLowStockThreshold, resolveLowStockThreshold } from "@/lib/product-readiness";
 import prismadb from "@/lib/prismadb";
 import { cn, currencyFormatter } from "@/lib/utils";
@@ -41,8 +42,8 @@ export async function InventorySummaryTab({ storeId }: { storeId: string }) {
   const threshold = resolveLowStockThreshold(store);
   const totals = summarizeInventory(rows, threshold);
   const critical = rows
-    .filter((row) => inventoryMatchesView(row, "stock-critico", threshold))
-    .sort((a, b) => a.stock - b.stock)
+    .filter((row) => inventoryMatchesView(row, "por-reponer", threshold))
+    .sort(compareUrgency)
     .slice(0, TOP_CRITICAL);
   const base = `/${storeId}/inventario`;
 
@@ -51,7 +52,7 @@ export async function InventorySummaryTab({ storeId }: { storeId: string }) {
       <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
         <Metric label="Valor a costo" value={currencyFormatter(totals.costValue)} note={`${numberFormatter.format(totals.units)} unidades · a venta ${currencyFormatter(totals.retailValue)}`} href={base} linkLabel="Inventario" icon={<Wallet className="h-4 w-4" aria-hidden="true" />} tint="bg-tint-mint" />
         <Metric label="Productos activos" value={numberFormatter.format(totals.products)} note="Sin archivados ni cápsulas" href={base} linkLabel="Ver todo" icon={<Boxes className="h-4 w-4" aria-hidden="true" />} tint="bg-tint-sky" />
-        <Metric label="Stock crítico" value={numberFormatter.format(totals.lowStock)} note={`${describeLowStockThreshold(threshold, hasStoreLowStockThreshold(store))} · ${numberFormatter.format(totals.outOfStock)} agotados`} href={`${base}?vista=stock-critico`} linkLabel="Reponer" icon={<AlertTriangle className="h-4 w-4" aria-hidden="true" />} tint="bg-tint-pink" />
+        <Metric label="Por reponer" value={numberFormatter.format(totals.lowStock)} note={`${numberFormatter.format(totals.runsOutThisWeek)} se acaban esta semana · ${numberFormatter.format(totals.outOfStockSelling)} agotados que vendían`} href={`${base}?vista=por-reponer`} linkLabel="Reponer" icon={<AlertTriangle className="h-4 w-4" aria-hidden="true" />} tint="bg-tint-pink" />
         <Metric label="Sin costo registrado" value={numberFormatter.format(totals.withoutCost)} note="No entran en la valorización ni en el margen" href={`${base}?vista=sin-costo`} linkLabel="Completar" icon={<Package className="h-4 w-4" aria-hidden="true" />} tint="bg-tint-cream" />
       </div>
 
@@ -59,14 +60,14 @@ export async function InventorySummaryTab({ storeId }: { storeId: string }) {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 id="inventario-critico" className="text-[15px] font-bold text-primary">Por reponer primero</h3>
           <div className="flex flex-wrap gap-3 text-xs font-semibold text-primary">
-            <Link href={`${base}?vista=stock-critico`} className="hover:underline">Stock crítico ({numberFormatter.format(totals.lowStock)})</Link>
+            <Link href={`${base}?vista=por-reponer`} className="hover:underline">Por reponer ({numberFormatter.format(totals.lowStock)})</Link>
             <Link href={`${base}?vista=agotados`} className="hover:underline">Agotados ({numberFormatter.format(totals.outOfStock)})</Link>
           </div>
         </div>
         {critical.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            Ningún producto tiene entre 1 y {threshold} {threshold === 1 ? "unidad" : "unidades"}.
-            {totals.outOfStock > 0 ? ` Hay ${numberFormatter.format(totals.outOfStock)} agotados.` : ""}
+            Nada por reponer: todo lo que se vende tiene cobertura.
+            {totals.outOfStock > 0 ? ` Hay ${numberFormatter.format(totals.outOfStock)} agotados sin ventas recientes.` : ""}
           </p>
         ) : (
           <ul className="flex flex-col gap-2 text-[13px]">
@@ -76,7 +77,7 @@ export async function InventorySummaryTab({ storeId }: { storeId: string }) {
                   {row.name}
                 </Link>
                 {row.supplier && <span className="hidden truncate text-xs text-muted-foreground sm:inline">{row.supplier.name}</span>}
-                <TintBadge label={`${row.stock} und`} tone="cream" />
+                <TintBadge label={describeCover(row.signal, { limitingComponent: row.limitingComponent }).label} tone={describeCover(row.signal).tone} />
               </li>
             ))}
           </ul>

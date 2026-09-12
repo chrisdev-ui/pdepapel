@@ -90,7 +90,7 @@ test.describe("armazón del panel (rediseño 2026-09)", () => {
     await signIn(page, "pedidos");
 
     const redirects: Array<[string, RegExp]> = [
-      ["stock-bajo", /\/inventario\?vista=stock-critico$/],
+      ["stock-bajo", /\/inventario\?vista=por-reponer$/],
       ["agotados", /\/inventario\?vista=agotados$/],
       ["ofertas", /\/promociones$/],
       ["cupones", /\/promociones\?tab=cupones$/],

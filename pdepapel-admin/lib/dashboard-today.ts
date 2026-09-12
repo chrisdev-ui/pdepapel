@@ -1,4 +1,6 @@
 import { CAPSULAS_SORPRESA_ID } from "@/constants";
+import { compareUrgency, computeReplenishment, describeCover } from "@/lib/replenishment";
+import { getUnitsOnOrderByProduct, getUnitsSoldByProduct } from "@/lib/replenishment-db";
 import { createSettledMarketplaceSalesWhere } from "@/lib/mercadolibre/reporting";
 import { AWAITING_PAYMENT_STALE_HOURS, AWAITING_PAYMENT_WINDOW_DAYS, STALE_IN_TRANSIT_DAYS } from "@/lib/order-queues";
 import prismadb from "@/lib/prismadb";
@@ -46,9 +48,14 @@ export interface TodaySummary {
   toDispatch: number;
   pendingPayments: { count: number; amount: number };
   lowStock: {
+    /** Productos «Por reponer» (misma regla que Inventario: cobertura por ventas, umbral como respaldo). */
     count: number;
     outOfStock: number;
-    /** Umbral con el que se contó (`resolveLowStockThreshold`). */
+    /** Se venden y se acaban en menos de una semana (o ya se acabaron). */
+    runsOutThisWeek: number;
+    /** Agotados que vendieron en los últimos 90 días. */
+    outOfStockSelling: number;
+    /** Umbral de respaldo (`resolveLowStockThreshold`). */
     threshold: number;
     /** Si el umbral viene de Ajustes de la tienda. */
     thresholdFromSettings: boolean;
@@ -96,9 +103,11 @@ export interface TodayRawInput {
   awaitingPayments?: { id: string; orderNumber: string; fullName: string; total: number; createdAt: Date; method: PaymentMethod | null }[];
   toDispatch: { id: string; orderNumber: string; fullName: string; city: string | null; paidAt: Date | null; courier: string | null }[];
   toDispatchCount: number;
-  lowStockProducts: { id: string; name: string; stock: number }[];
+  lowStockProducts: { id: string; name: string; stock: number; coverLabel?: string }[];
   lowStockCount: number;
   outOfStockCount: number;
+  lowStockRunsOutThisWeek?: number;
+  lowStockOutOfStockSelling?: number;
   /** Umbral aplicado a los conteos; si falta se asume el valor por defecto. */
   lowStockThreshold?: number;
   lowStockThresholdFromSettings?: boolean;
@@ -199,7 +208,7 @@ export function buildTodaySummary(input: TodayRawInput, storeId: string): TodayS
     pending.push({
       kind: "restock",
       title: `Reponer · ${product.name}`,
-      meta: `${product.stock} ${product.stock === 1 ? "unidad" : "unidades"}`,
+      meta: product.coverLabel ?? `${product.stock} ${product.stock === 1 ? "unidad" : "unidades"}`,
       href: `/${storeId}/productos/${product.id}`,
       action: "Aprovisionar",
       weight: 5,
@@ -292,6 +301,8 @@ export function buildTodaySummary(input: TodayRawInput, storeId: string): TodayS
     lowStock: {
       count: input.lowStockCount,
       outOfStock: input.outOfStockCount,
+      runsOutThisWeek: input.lowStockRunsOutThisWeek ?? 0,
+      outOfStockSelling: input.lowStockOutOfStockSelling ?? 0,
       threshold: input.lowStockThreshold ?? resolveLowStockThreshold(null),
       thresholdFromSettings: input.lowStockThresholdFromSettings ?? false,
     },
@@ -344,26 +355,39 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
     type: { in: SHIPPABLE_TYPES },
     AND: [paidWithin(dispatchSince, now), { OR: [{ shipping: null }, { shipping: { trackingCode: null } }] }],
   };
-  // Stock crítico con la misma regla que Inventario y Productos: umbral de la
-  // tienda (o el por defecto), sin kits (su stock sale de los componentes) ni
-  // cápsulas sorpresa (se venden en feria, no se reponen).
+  // «Por reponer» con la misma regla que Inventario: cobertura por ventas de
+  // los últimos 30 días, umbral de la tienda como respaldo, sin kits (su stock
+  // sale de los componentes) ni cápsulas sorpresa (se venden en feria).
   const stockWhere = { storeId, isArchived: false, isKit: false, categoryId: { not: CAPSULAS_SORPRESA_ID } };
-  const lowStockBatch = prismadb.store
-    .findUnique({ where: { id: storeId }, select: { lowStockThreshold: true } })
-    .then(async (store) => {
-      const threshold = resolveLowStockThreshold(store);
-      const [products, count, outOfStock] = await Promise.all([
-        prismadb.product.findMany({
-          where: { ...stockWhere, stock: { gt: 0, lte: threshold } },
-          orderBy: { stock: "asc" },
-          take: 3,
-          select: { id: true, name: true, stock: true },
-        }),
-        prismadb.product.count({ where: { ...stockWhere, stock: { gt: 0, lte: threshold } } }),
-        prismadb.product.count({ where: { ...stockWhere, stock: { lte: 0 } } }),
-      ]);
-      return { threshold, fromSettings: hasStoreLowStockThreshold(store), products, count, outOfStock };
-    });
+  const lowStockBatch = Promise.all([
+    prismadb.store.findUnique({ where: { id: storeId }, select: { lowStockThreshold: true } }),
+    prismadb.product.findMany({ where: stockWhere, select: { id: true, name: true, stock: true } }),
+    getUnitsSoldByProduct(storeId, 30, now),
+    getUnitsSoldByProduct(storeId, 90, now),
+    getUnitsOnOrderByProduct(storeId),
+  ]).then(([store, products, sold30, sold90, onOrder]) => {
+    const threshold = resolveLowStockThreshold(store);
+    const rows = products.map((product) => ({
+      ...product,
+      signal: computeReplenishment({
+        stock: product.stock,
+        sold30: sold30.get(product.id) ?? 0,
+        sold90: sold90.get(product.id) ?? 0,
+        onOrder: onOrder.get(product.id) ?? 0,
+        threshold,
+      }),
+    }));
+    const needs = rows.filter((row) => row.signal.needsReplenishment).sort(compareUrgency);
+    return {
+      threshold,
+      fromSettings: hasStoreLowStockThreshold(store),
+      products: needs.slice(0, 3).map((row) => ({ id: row.id, name: row.name, stock: row.stock, coverLabel: describeCover(row.signal).label })),
+      count: needs.length,
+      outOfStock: rows.filter((row) => row.stock <= 0).length,
+      runsOutThisWeek: rows.filter((row) => row.signal.runsOutThisWeek).length,
+      outOfStockSelling: rows.filter((row) => row.signal.outOfStockSelling).length,
+    };
+  });
 
   const [
     todayOrders,
@@ -456,6 +480,8 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
       outOfStockCount: lowStock.outOfStock,
       lowStockThreshold: lowStock.threshold,
       lowStockThresholdFromSettings: lowStock.fromSettings,
+      lowStockRunsOutThisWeek: lowStock.runsOutThisWeek,
+      lowStockOutOfStockSelling: lowStock.outOfStockSelling,
       unansweredQuestions: unansweredQuestions.map((q) => ({ id: q.id, question: q.question, askedAt: q.askedAt, productName: q.product?.name ?? null })),
       unansweredCount: unansweredQuestions.length,
       expiringQuotes,

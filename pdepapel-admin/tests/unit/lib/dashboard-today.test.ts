@@ -6,10 +6,12 @@ const db = vi.hoisted(() => {
     order: { findMany: resolved([]), count: resolved(0) },
     marketplaceOrder: { findMany: resolved([]) },
     marketplaceQuestion: { findMany: resolved([]) },
-    orderItem: { findMany: resolved([]) },
+    orderItem: { findMany: resolved([]), groupBy: resolved([]) },
     orderInventoryIssue: { count: resolved(0) },
     product: { findMany: resolved([]), count: resolved(0) },
     store: { findUnique: resolved(null as { lowStockThreshold: number | null } | null) },
+    restockOrderItem: { findMany: resolved([]) },
+    marketplaceOrderItem: { groupBy: resolved([]) },
   };
 });
 
@@ -87,7 +89,7 @@ describe("dashboard today", () => {
     expect(summary.today).toEqual({ net: 170200, orders: 1, marketplaceNet: 131200 });
     expect(summary.pendingPayments).toEqual({ count: 2, amount: 77000 });
     expect(summary.toDispatch).toBe(3);
-    expect(summary.lowStock).toEqual({ count: 12, outOfStock: 4, threshold: DEFAULT_LOW_STOCK_THRESHOLD, thresholdFromSettings: false });
+    expect(summary.lowStock).toEqual({ count: 12, outOfStock: 4, runsOutThisWeek: 0, outOfStockSelling: 0, threshold: DEFAULT_LOW_STOCK_THRESHOLD, thresholdFromSettings: false });
   });
 
   it("orders pending actions by urgency with links to the record", () => {
@@ -152,39 +154,54 @@ describe("dashboard today", () => {
     expect(kinds.indexOf("shipping-issue")).toBeLessThan(kinds.indexOf("create-guide"));
   });
 
-  describe("low-stock loader", () => {
+  describe("replenishment loader", () => {
     beforeEach(() => {
       db.product.findMany.mockReset().mockResolvedValue([]);
       db.product.count.mockReset().mockResolvedValue(0);
       db.store.findUnique.mockResolvedValue(null);
+      db.orderItem.groupBy.mockReset().mockResolvedValue([]);
+      db.marketplaceOrderItem.groupBy.mockReset().mockResolvedValue([]);
+      db.restockOrderItem.findMany.mockReset().mockResolvedValue([]);
     });
 
-    it("counts critical stock with the store threshold, excluding kits by flag and cápsulas by category", async () => {
+    it("ranks by sales cover, excludes kits by flag and cápsulas by category, and keeps the store threshold as a fallback", async () => {
       db.store.findUnique.mockResolvedValue({ lowStockThreshold: 8 });
-      db.product.findMany.mockResolvedValue([{ id: "p1", name: "Regla", stock: 2 }]);
-      // Otros conteos de producto (imágenes rotas) corren en el mismo lote: se responde según el `where`.
-      db.product.count.mockImplementation(async ({ where }: { where: { stock?: { gt?: number; lte?: number } } }) =>
-        where.stock?.gt === 0 ? 9 : where.stock?.lte === 0 ? 3 : 0,
+      db.product.findMany.mockImplementation(async ({ where }: { where: { isKit?: boolean } }) =>
+        where.isKit === false
+          ? [
+              { id: "p1", name: "Regla", stock: 2 },
+              { id: "p2", name: "Cuaderno", stock: 6 },
+              { id: "p3", name: "Tijeras", stock: 30 },
+              { id: "p4", name: "Agenda", stock: 0 },
+            ]
+          : [],
       );
+      // Ventana de 30 días y de 90 días: la misma consulta responde según la fecha.
+      db.orderItem.groupBy.mockImplementation(async ({ where }: { where: { order: { paidAt: { gte: Date } } } }) => {
+        const days = Math.round((now.getTime() - where.order.paidAt.gte.getTime()) / 86400000);
+        return days <= 30
+          ? [{ productId: "p1", _sum: { quantity: 1 } }, { productId: "p2", _sum: { quantity: 20 } }]
+          : [{ productId: "p1", _sum: { quantity: 2 } }, { productId: "p2", _sum: { quantity: 40 } }, { productId: "p4", _sum: { quantity: 5 } }];
+      });
 
       const summary = await getTodaySummary("s1", now);
 
       expect(db.store.findUnique).toHaveBeenCalledWith({ where: { id: "s1" }, select: { lowStockThreshold: true } });
-      const expectedBase = { storeId: "s1", isArchived: false, isKit: false, categoryId: { not: CAPSULAS_SORPRESA_ID } };
-      expect(db.product.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { ...expectedBase, stock: { gt: 0, lte: 8 } }, take: 3 }));
-      expect(db.product.count).toHaveBeenCalledWith({ where: { ...expectedBase, stock: { gt: 0, lte: 8 } } });
-      expect(db.product.count).toHaveBeenCalledWith({ where: { ...expectedBase, stock: { lte: 0 } } });
+      expect(db.product.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { storeId: "s1", isArchived: false, isKit: false, categoryId: { not: CAPSULAS_SORPRESA_ID } } }));
       // Nunca por id de categoría de kits: un kit se reconoce por `isKit`.
-      const wheres = [...db.product.findMany.mock.calls, ...db.product.count.mock.calls].map((call) => JSON.stringify(call[0]));
+      const wheres = db.product.findMany.mock.calls.map((call) => JSON.stringify(call[0]));
       expect(wheres.every((where) => !where.includes("notIn"))).toBe(true);
-      expect(summary.lowStock).toEqual({ count: 9, outOfStock: 3, threshold: 8, thresholdFromSettings: true });
-      expect(summary.pending.find((item) => item.kind === "restock")).toMatchObject({ title: "Reponer · Regla", meta: "2 unidades" });
+      // p2 vende 20 en 30 días con 6 en stock (9 días de cobertura); p1 vende poco pero está bajo el umbral;
+      // p4 está agotada y vendió en 90 días (no en 30: no cuenta como «se acaba esta semana»); p3 no entra.
+      expect(summary.lowStock).toEqual({ count: 3, outOfStock: 1, runsOutThisWeek: 0, outOfStockSelling: 1, threshold: 8, thresholdFromSettings: true });
+      const restock = summary.pending.filter((item) => item.kind === "restock");
+      expect(restock[0]).toMatchObject({ title: "Reponer · Agenda", meta: "Agotado" });
+      expect(restock[1]).toMatchObject({ title: "Reponer · Cuaderno", meta: "9 días" });
     });
 
     it("falls back to the default threshold when the store has none", async () => {
       const summary = await getTodaySummary("s1", now);
-      expect(db.product.count).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ stock: { gt: 0, lte: DEFAULT_LOW_STOCK_THRESHOLD } }) }));
-      expect(summary.lowStock).toMatchObject({ threshold: DEFAULT_LOW_STOCK_THRESHOLD, thresholdFromSettings: false });
+      expect(summary.lowStock).toMatchObject({ count: 0, threshold: DEFAULT_LOW_STOCK_THRESHOLD, thresholdFromSettings: false });
     });
   });
 });

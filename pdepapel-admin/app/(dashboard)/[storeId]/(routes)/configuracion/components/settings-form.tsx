@@ -439,7 +439,9 @@ export const SettingsForm: React.FC<
                         </FormControl>
                         <FormDescription>
                           Un producto con esta cantidad o menos aparece en la
-                          vista «Stock crítico» de Productos y de Inventario.
+                          vista «Stock crítico» de Productos; en Inventario es
+                          el respaldo de «Por reponer» cuando un producto vende
+                          pero no tiene ventas suficientes para medir cobertura.
                           Déjalo vacío para usar el valor por defecto (
                           {DEFAULT_LOW_STOCK_THRESHOLD}).
                         </FormDescription>
