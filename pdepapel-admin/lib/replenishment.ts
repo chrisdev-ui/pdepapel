@@ -62,10 +62,14 @@ export function computeReplenishment({ stock, sold30, sold90, onOrder = 0, thres
   const dormant = sold90 <= 0 && safeStock > 0;
   const outOfStockSelling = safeStock <= 0 && sold90 > 0;
   const selling = perDay > 0;
+  // El umbral de unidades es un respaldo para lo que se vende ahora mismo:
+  // un producto que vendió una unidad en el trimestre y tiene tres no es una
+  // compra de esta semana, aunque esté bajo el umbral. Su cobertura ya lo
+  // trae a la vista cuando de verdad se acerca a agotarse.
   const needsReplenishment =
     outOfStockSelling ||
     (selling && coverDays !== null && coverDays <= REPLENISH_COVER_DAYS) ||
-    (selling && threshold > 0 && safeStock <= threshold);
+    (sold30 > 0 && threshold > 0 && safeStock <= threshold);
   const runsOutThisWeek = selling && safeStock > 0 && coverDays !== null && coverDays < 7;
   return { weeklyRate, rateWindowDays, coverDays, coverDaysWithOnOrder, suggested, dormant, outOfStockSelling, needsReplenishment, runsOutThisWeek };
 }

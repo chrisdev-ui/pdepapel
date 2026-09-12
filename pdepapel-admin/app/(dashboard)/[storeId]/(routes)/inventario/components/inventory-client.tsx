@@ -199,7 +199,7 @@ export function InventoryClient({ data, threshold, thresholdFromSettings = false
 
       {view === "por-reponer" && (
         <p className="text-xs text-muted-foreground">
-          Cobertura = stock ÷ ventas por día de los últimos {SALES_WINDOW_DAYS} días; si no vendió en {SALES_WINDOW_DAYS} días pero sí en {DORMANT_WINDOW_DAYS}, cuenta ese ritmo. Lo vendido dentro de kits suma a cada componente. Sugerido = {TARGET_WEEKS} semanas de venta menos el stock y lo que viene en camino. Un producto que se vende y está en {threshold} {threshold === 1 ? "unidad" : "unidades"} o menos ({thresholdFromSettings ? "umbral de Ajustes" : "umbral por defecto"}) también entra.
+          Cobertura = stock ÷ ventas por día de los últimos {SALES_WINDOW_DAYS} días; si no vendió en {SALES_WINDOW_DAYS} días pero sí en {DORMANT_WINDOW_DAYS}, cuenta ese ritmo. Lo vendido dentro de kits suma a cada componente. Sugerido = {TARGET_WEEKS} semanas de venta menos el stock y lo que viene en camino. Un producto con ventas en {SALES_WINDOW_DAYS} días y {threshold} {threshold === 1 ? "unidad" : "unidades"} o menos ({thresholdFromSettings ? "umbral de Ajustes" : "umbral por defecto"}) también entra.
         </p>
       )}
 

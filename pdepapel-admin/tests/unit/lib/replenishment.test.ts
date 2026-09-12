@@ -39,8 +39,10 @@ describe("computeReplenishment", () => {
     expect(describeCover(seasonal)).toMatchObject({ label: "10 días · ritmo de 90 días", tone: "cream" });
     // Con menos de una semana de cobertura al ritmo de 90 días también «se acaba esta semana».
     expect(computeReplenishment({ stock: 1, sold30: 0, sold90: 18 }).runsOutThisWeek).toBe(true);
-    // El umbral aplica igual: vende (en 90 días) y está en el umbral.
-    expect(computeReplenishment({ stock: 3, sold30: 0, sold90: 2, threshold: 5 }).needsReplenishment).toBe(true);
+    // El umbral de unidades solo respalda lo que vendió en 30 días: vender 2 en el
+    // trimestre con 3 en stock (135 días de cobertura) no es una compra de esta semana.
+    expect(computeReplenishment({ stock: 3, sold30: 0, sold90: 2, threshold: 5 })).toMatchObject({ coverDays: 135, needsReplenishment: false });
+    expect(computeReplenishment({ stock: 3, sold30: 2, sold90: 2, threshold: 5 }).needsReplenishment).toBe(true);
   });
 
   it("keeps «runs out this week» for products that still have stock; sold-out ones are «out of stock selling»", () => {
