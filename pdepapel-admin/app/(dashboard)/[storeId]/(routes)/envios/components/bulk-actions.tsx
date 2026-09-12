@@ -28,7 +28,7 @@ import {
 import { Models } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import { getShipmentStatusBadge } from "@/lib/shipment-views";
+import { getShipmentStatusBadge, pickingTargets } from "@/lib/shipment-views";
 
 import type { DispatchShipment } from "../server/get-shipments";
 import type { ShipmentColumn } from "./columns";
@@ -61,7 +61,7 @@ export function BulkActions({ table, dispatch }: BulkActionsProps) {
 
   const selectedIds = selectedRows.map((row) => row.original.id);
   const guides = selectedRows.map((row) => row.original.guideUrl).filter((url): url is string => Boolean(url));
-  const inDispatch = dispatch.filter((shipment) => selectedIds.includes(shipment.id));
+  const inDispatch = pickingTargets(dispatch, selectedIds);
 
   const openGuides = () => {
     let blocked = 0;

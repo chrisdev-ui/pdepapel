@@ -1,92 +1,77 @@
-import { Prisma } from "@prisma/client";
-import { format } from "date-fns";
+import type { ShippingProvider, ShippingStatus } from "@prisma/client";
+import { formatInTimeZone } from "date-fns-tz";
 import { es } from "date-fns/locale";
-import { currencyFormatter } from "./utils";
 
-type ShipmentWithOrder = Prisma.ShippingGetPayload<{
-  include: {
-    order: {
-      select: {
-        orderNumber: true;
-        fullName: true;
-        phone: true;
-        address: true;
-      };
-    };
-  };
-}>;
+import { formatValue } from "react-currency-input-field";
 
-export function exportShipmentsToCSV(shipments: ShipmentWithOrder[]): string {
-  // CSV Headers
-  const headers = [
-    "Código de Rastreo",
-    "Transportadora",
-    "Proveedor",
-    "Estado",
-    "Costo",
-    "Número de Orden",
-    "Cliente",
-    "Teléfono",
-    "Dirección",
-    "Fecha Estimada",
-    "Fecha de Creación",
-  ];
+import { round2 } from "./order-totals";
+import { getShipmentProviderLabel, getShipmentStatusBadge } from "./shipment-views";
 
-  // Convert data to rows
-  const rows = shipments.map((shipment) => {
-    const carrierName = shipment.carrierName || shipment.courier || "N/A";
-    const costFormatted = shipment.cost
-      ? `${currencyFormatter(shipment.cost)}`
-      : "N/A";
-    const estimatedDate = shipment.estimatedDeliveryDate
-      ? format(new Date(shipment.estimatedDeliveryDate), "dd/MM/yyyy", {
-          locale: es,
-        })
-      : "N/A";
-    const createdDate = format(
-      new Date(shipment.createdAt),
-      "dd/MM/yyyy HH:mm",
-      { locale: es },
-    );
+const TIME_ZONE = "America/Bogota";
 
-    return [
-      shipment.trackingCode || "N/A",
-      carrierName,
-      shipment.provider,
-      shipment.status,
-      costFormatted,
-      shipment.order?.orderNumber || "N/A",
-      shipment.order?.fullName || "N/A",
-      shipment.order?.phone || "N/A",
-      shipment.order?.address || "N/A",
-      estimatedDate,
-      createdDate,
-    ];
-  });
+/** Marca de orden de bytes UTF-8: sin ella Excel abre el CSV en Latin-1 y rompe las tildes. */
+export const CSV_UTF8_BOM = "\ufeff";
 
-  // Combine headers and rows
-  const csvContent = [
-    headers.join(","),
-    ...rows.map((row) =>
-      row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","),
-    ),
-  ].join("\n");
-
-  return csvContent;
+export function withUtf8Bom(content: string): string {
+  return content.startsWith(CSV_UTF8_BOM) ? content : CSV_UTF8_BOM + content;
 }
 
-export function downloadCSV(content: string, filename: string) {
-  const blob = new Blob(["\ufeff" + content], {
-    type: "text/csv;charset=utf-8;",
-  });
-  const link = document.createElement("a");
-  const url = URL.createObjectURL(blob);
+/** Campos que usa la exportación; el `findMany` de la ruta los cubre con `include: { order }`. */
+export interface ExportableShipment {
+  trackingCode: string | null;
+  carrierName: string | null;
+  courier: string | null;
+  provider: ShippingProvider;
+  status: ShippingStatus;
+  cost: number | null;
+  estimatedDeliveryDate: Date | string | null;
+  createdAt: Date | string;
+  order: {
+    orderNumber: string;
+    fullName: string;
+    phone: string | null;
+    address: string | null;
+  } | null;
+}
 
-  link.setAttribute("href", url);
-  link.setAttribute("download", filename);
-  link.style.visibility = "hidden";
+export const SHIPMENT_CSV_HEADERS = [
+  "Código de rastreo",
+  "Transportadora",
+  "Origen de la guía",
+  "Estado",
+  "Costo",
+  "Número de pedido",
+  "Cliente",
+  "Teléfono",
+  "Dirección",
+  "Fecha estimada",
+  "Fecha de creación",
+] as const;
 
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+const formatDate = (value: Date | string, pattern: string) => formatInTimeZone(new Date(value), TIME_ZONE, pattern, { locale: es });
+
+/** Mismo formato que `currencyFormatter` de `lib/utils`, sin arrastrar la validación de entorno a la exportación. */
+const formatCost = (value: number) => formatValue({ value: round2(value).toString(), decimalScale: 0, intlConfig: { locale: "es-CO", currency: "COP" } });
+
+/** Cada celda va entre comillas con las comillas internas dobladas; comas y saltos de línea quedan dentro. */
+export function escapeCsvCell(value: string | number | null | undefined): string {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
+export function exportShipmentsToCSV(shipments: ExportableShipment[]): string {
+  const rows = shipments.map((shipment) => [
+    shipment.trackingCode || "N/A",
+    shipment.carrierName || shipment.courier || "N/A",
+    getShipmentProviderLabel(shipment.provider),
+    getShipmentStatusBadge(shipment.status).label,
+    shipment.cost ? formatCost(shipment.cost) : "N/A",
+    shipment.order?.orderNumber || "N/A",
+    shipment.order?.fullName || "N/A",
+    shipment.order?.phone || "N/A",
+    shipment.order?.address || "N/A",
+    shipment.estimatedDeliveryDate ? formatDate(shipment.estimatedDeliveryDate, "dd/MM/yyyy") : "N/A",
+    formatDate(shipment.createdAt, "dd/MM/yyyy HH:mm"),
+  ]);
+
+  return [SHIPMENT_CSV_HEADERS.join(","), ...rows.map((row) => row.map(escapeCsvCell).join(","))].join("\n");
 }

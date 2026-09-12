@@ -1,8 +1,23 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/prismadb", () => ({ default: {} }));
+const db = vi.hoisted(() => {
+  const resolved = <T,>(value: T) => vi.fn().mockResolvedValue(value);
+  return {
+    order: { findMany: resolved([]), count: resolved(0) },
+    marketplaceOrder: { findMany: resolved([]) },
+    marketplaceQuestion: { findMany: resolved([]) },
+    orderItem: { findMany: resolved([]) },
+    orderInventoryIssue: { count: resolved(0) },
+    product: { findMany: resolved([]), count: resolved(0) },
+    store: { findUnique: resolved(null as { lowStockThreshold: number | null } | null) },
+  };
+});
 
-import { buildTodaySummary, channelForOrderType, getColombiaDayBounds, paidWithin, type TodayRawInput } from "@/lib/dashboard-today";
+vi.mock("@/lib/prismadb", () => ({ default: db }));
+
+import { CAPSULAS_SORPRESA_ID } from "@/constants";
+import { buildTodaySummary, channelForOrderType, getColombiaDayBounds, getTodaySummary, paidWithin, type TodayRawInput } from "@/lib/dashboard-today";
+import { DEFAULT_LOW_STOCK_THRESHOLD } from "@/lib/product-readiness";
 import { OrderType, PaymentMethod, ShippingStatus } from "@prisma/client";
 
 const now = new Date("2026-09-07T21:52:00.000Z"); // 16:52 en Colombia
@@ -72,7 +87,7 @@ describe("dashboard today", () => {
     expect(summary.today).toEqual({ net: 170200, orders: 1, marketplaceNet: 131200 });
     expect(summary.pendingPayments).toEqual({ count: 2, amount: 77000 });
     expect(summary.toDispatch).toBe(3);
-    expect(summary.lowStock).toEqual({ count: 12, outOfStock: 4 });
+    expect(summary.lowStock).toEqual({ count: 12, outOfStock: 4, threshold: DEFAULT_LOW_STOCK_THRESHOLD, thresholdFromSettings: false });
   });
 
   it("orders pending actions by urgency with links to the record", () => {
@@ -135,5 +150,41 @@ describe("dashboard today", () => {
     const kinds = summary.pending.map((entry) => entry.kind);
     expect(kinds.indexOf("shipping-issue")).toBeGreaterThan(kinds.indexOf("verify-payment"));
     expect(kinds.indexOf("shipping-issue")).toBeLessThan(kinds.indexOf("create-guide"));
+  });
+
+  describe("low-stock loader", () => {
+    beforeEach(() => {
+      db.product.findMany.mockReset().mockResolvedValue([]);
+      db.product.count.mockReset().mockResolvedValue(0);
+      db.store.findUnique.mockResolvedValue(null);
+    });
+
+    it("counts critical stock with the store threshold, excluding kits by flag and cápsulas by category", async () => {
+      db.store.findUnique.mockResolvedValue({ lowStockThreshold: 8 });
+      db.product.findMany.mockResolvedValue([{ id: "p1", name: "Regla", stock: 2 }]);
+      // Otros conteos de producto (imágenes rotas) corren en el mismo lote: se responde según el `where`.
+      db.product.count.mockImplementation(async ({ where }: { where: { stock?: { gt?: number; lte?: number } } }) =>
+        where.stock?.gt === 0 ? 9 : where.stock?.lte === 0 ? 3 : 0,
+      );
+
+      const summary = await getTodaySummary("s1", now);
+
+      expect(db.store.findUnique).toHaveBeenCalledWith({ where: { id: "s1" }, select: { lowStockThreshold: true } });
+      const expectedBase = { storeId: "s1", isArchived: false, isKit: false, categoryId: { not: CAPSULAS_SORPRESA_ID } };
+      expect(db.product.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { ...expectedBase, stock: { gt: 0, lte: 8 } }, take: 3 }));
+      expect(db.product.count).toHaveBeenCalledWith({ where: { ...expectedBase, stock: { gt: 0, lte: 8 } } });
+      expect(db.product.count).toHaveBeenCalledWith({ where: { ...expectedBase, stock: { lte: 0 } } });
+      // Nunca por id de categoría de kits: un kit se reconoce por `isKit`.
+      const wheres = [...db.product.findMany.mock.calls, ...db.product.count.mock.calls].map((call) => JSON.stringify(call[0]));
+      expect(wheres.every((where) => !where.includes("notIn"))).toBe(true);
+      expect(summary.lowStock).toEqual({ count: 9, outOfStock: 3, threshold: 8, thresholdFromSettings: true });
+      expect(summary.pending.find((item) => item.kind === "restock")).toMatchObject({ title: "Reponer · Regla", meta: "2 unidades" });
+    });
+
+    it("falls back to the default threshold when the store has none", async () => {
+      const summary = await getTodaySummary("s1", now);
+      expect(db.product.count).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ stock: { gt: 0, lte: DEFAULT_LOW_STOCK_THRESHOLD } }) }));
+      expect(summary.lowStock).toMatchObject({ threshold: DEFAULT_LOW_STOCK_THRESHOLD, thresholdFromSettings: false });
+    });
   });
 });

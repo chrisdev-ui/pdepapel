@@ -1,7 +1,8 @@
-import { OrderStatus, OrderType, ShippingStatus } from "@prisma/client";
+import { ShippingStatus } from "@prisma/client";
 
 import { DISPATCH_WINDOW_DAYS } from "@/lib/dashboard-today";
 import prismadb from "@/lib/prismadb";
+import { isReadyToDispatch } from "@/lib/shipment-views";
 
 /** Lista completa de envíos de la tienda; las vistas se resuelven en el cliente. */
 export async function getShipments(storeId: string) {
@@ -65,23 +66,28 @@ export async function getShipments(storeId: string) {
 
 export type ShipmentRow = Awaited<ReturnType<typeof getShipments>>[number];
 
-/** Envíos en preparación de pedidos pagados o contra entrega, con sus productos, para la lista de recogida. */
+/**
+ * Cola de despacho para la lista de recogida: los envíos en preparación de la
+ * ventana, filtrados con la misma regla que la pestaña «Por despachar»
+ * (`isReadyToDispatch`), con los productos de cada pedido (snapshot de la
+ * línea, producto y componentes del kit).
+ */
 export async function getDispatchQueue(storeId: string) {
-  return prismadb.shipping.findMany({
+  const now = new Date();
+  const shipments = await prismadb.shipping.findMany({
     where: {
       storeId,
       status: ShippingStatus.Preparing,
-      createdAt: { gte: new Date(Date.now() - DISPATCH_WINDOW_DAYS * 24 * 60 * 60 * 1000) },
-      order: {
-        type: { in: [OrderType.STANDARD, OrderType.CUSTOM, OrderType.QUOTATION] },
-        status: { in: [OrderStatus.PAID, OrderStatus.PENDING, OrderStatus.CREATED] },
-      },
+      createdAt: { gte: new Date(now.getTime() - DISPATCH_WINDOW_DAYS * 24 * 60 * 60 * 1000) },
     },
     select: {
       id: true,
       trackingCode: true,
       carrierName: true,
       courier: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
       order: {
         select: {
           orderNumber: true,
@@ -93,13 +99,35 @@ export async function getDispatchQueue(storeId: string) {
           orderItems: {
             select: {
               quantity: true,
-              product: { select: { name: true, sku: true } },
+              name: true,
+              sku: true,
+              productId: true,
+              product: {
+                select: {
+                  name: true,
+                  sku: true,
+                  isKit: true,
+                  kitComponents: {
+                    select: {
+                      quantity: true,
+                      component: { select: { id: true, name: true, sku: true } },
+                    },
+                  },
+                },
+              },
             },
           },
         },
       },
     },
     orderBy: { createdAt: "asc" },
+  });
+
+  return shipments.flatMap(({ order, ...shipment }) => {
+    if (!order) return [];
+    const { payment, ...rest } = order;
+    const candidate = { ...shipment, order: { ...rest, paymentMethod: payment?.method ?? null } };
+    return isReadyToDispatch(candidate, now) ? [candidate] : [];
   });
 }
 

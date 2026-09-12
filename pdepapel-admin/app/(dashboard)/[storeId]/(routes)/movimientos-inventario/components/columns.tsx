@@ -7,12 +7,10 @@ import { DataTableCellImage } from "@/components/ui/data-table-cell-image";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { ColumnDef } from "@tanstack/react-table";
 import { Bot, Crown, User } from "lucide-react";
-import { getInventoryMovements } from "../server/get-movements";
+import type { InventoryMovementRow } from "../server/get-movements";
 import { CellAction } from "./cell-action";
 
-export type InventoryMovementColumn = Awaited<
-  ReturnType<typeof getInventoryMovements>
->[number];
+export type InventoryMovementColumn = InventoryMovementRow;
 
 // Simple translation map for display
 export const typeLabels: Record<string, string> = {

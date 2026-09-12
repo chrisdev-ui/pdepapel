@@ -56,3 +56,26 @@ describe("product readiness", () => {
     expect(productMatchesView({ ...noGtin, isArchived: true }, "sin-identificador")).toBe(false);
   });
 });
+
+describe("single low-stock rule", () => {
+  it("resolves the threshold from the store row, a bare number, or nothing", async () => {
+    const { DEFAULT_LOW_STOCK_THRESHOLD, hasStoreLowStockThreshold, isLowStock, isOutOfStock, resolveLowStockThreshold } = await import("@/lib/product-readiness");
+    expect(resolveLowStockThreshold({ lowStockThreshold: 12 })).toBe(12);
+    expect(resolveLowStockThreshold({ lowStockThreshold: null })).toBe(DEFAULT_LOW_STOCK_THRESHOLD);
+    expect(resolveLowStockThreshold(null)).toBe(DEFAULT_LOW_STOCK_THRESHOLD);
+    expect(resolveLowStockThreshold(undefined)).toBe(DEFAULT_LOW_STOCK_THRESHOLD);
+    expect(resolveLowStockThreshold(7)).toBe(7);
+    expect(resolveLowStockThreshold(0)).toBe(DEFAULT_LOW_STOCK_THRESHOLD);
+    expect(hasStoreLowStockThreshold({ lowStockThreshold: 12 })).toBe(true);
+    expect(hasStoreLowStockThreshold({ lowStockThreshold: null })).toBe(false);
+    expect(hasStoreLowStockThreshold(null)).toBe(false);
+    // Crítico = hay unidades pero no más que el umbral; agotado = sin unidades.
+    expect(isLowStock(1, 5)).toBe(true);
+    expect(isLowStock(5, 5)).toBe(true);
+    expect(isLowStock(6, 5)).toBe(false);
+    expect(isLowStock(0, 5)).toBe(false);
+    expect(isOutOfStock(0)).toBe(true);
+    expect(isOutOfStock(-2)).toBe(true);
+    expect(isOutOfStock(1)).toBe(false);
+  });
+});

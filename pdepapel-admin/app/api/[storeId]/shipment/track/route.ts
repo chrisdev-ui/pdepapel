@@ -2,9 +2,9 @@ import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createCorsHeaders } from "@/lib/cors";
 import { envioClickClient } from "@/lib/envioclick";
 import prismadb from "@/lib/prismadb";
+import { applyShipmentStatus, mapEnvioClickStatus } from "@/lib/shipment-status";
 import { CACHE_HEADERS, checkIfStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs/server";
-import { ShippingStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 const getCorsHeaders = (request: Request) =>
@@ -68,43 +68,11 @@ export async function POST(
     let newStatus = shipping.status;
 
     if (trackingData.data && Array.isArray(trackingData.data)) {
-      // Sort by date desc to get latest
+      // El evento más reciente decide el estado; un texto desconocido lo deja como está.
       const sortedEvents = [...trackingData.data].sort(
         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
       );
-
-      const latestEvent = sortedEvents[0];
-
-      if (latestEvent) {
-        // Map EnvioClick status to Prisma ShippingStatus
-        // EnvioClick statuses: GENERATED, PICKED_UP, ON_TRANSIT, DELIVERED, CANCELED, RETURNED
-        switch (latestEvent.status.toUpperCase()) {
-          case "GENERATED":
-            newStatus = ShippingStatus.Shipped;
-            break;
-          case "PICKED_UP":
-            newStatus = ShippingStatus.PickedUp;
-            break;
-          case "ON_TRANSIT":
-            newStatus = ShippingStatus.InTransit;
-            break;
-          case "WITH_DELIVERY_COURIER":
-            newStatus = ShippingStatus.OutForDelivery;
-            break;
-          case "DELIVERED":
-            newStatus = ShippingStatus.Delivered;
-            break;
-          case "CANCELED":
-            newStatus = ShippingStatus.Cancelled;
-            break;
-          case "RETURNED":
-            newStatus = ShippingStatus.Returned;
-            break;
-          case "EXCEPTION":
-            newStatus = ShippingStatus.Exception;
-            break;
-        }
-      }
+      newStatus = mapEnvioClickStatus(sortedEvents[0]?.status, shipping.status);
 
       for (const event of trackingData.data) {
         const existingEvent = await prismadb.shippingTrackingEvent.findFirst({
@@ -129,11 +97,13 @@ export async function POST(
       }
     }
 
-    const updatedShipping = await prismadb.shipping.update({
-      where: { id: shipping.id },
-      data: {
-        status: newStatus,
-      },
+    // Solo se escribe cuando el estado cambia: cada visita del cliente a su
+    // página de rastreo no debe reiniciar la señal «sin novedades».
+    await prismadb.$transaction((tx) =>
+      applyShipmentStatus(tx, { shippingId: shipping.id, storeId: params.storeId, status: newStatus }),
+    );
+    const updatedShipping = await prismadb.shipping.findFirst({
+      where: { id: shipping.id, storeId: params.storeId },
     });
 
     const events = await prismadb.shippingTrackingEvent.findMany({

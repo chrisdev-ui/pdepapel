@@ -43,7 +43,7 @@ const shippingRow = {
   pickupDate: null,
   estimatedDeliveryDate: null,
   actualDeliveryDate: null,
-  order: { id: "order-id", storeId: "store-id" },
+  order: { id: "order-id", storeId: "store-id", status: "PAID", type: "STANDARD", payment: { method: "BankTransfer" } },
 };
 
 function txClient(shipping: any = shippingRow) {
@@ -153,6 +153,19 @@ describe("POST /api/webhook/envioclick", () => {
       where: { id: "order-id", storeId: "store-id" },
       data: { status: "SENT" },
     });
+  });
+
+  it("never revives a cancelled order from a late carrier event", async () => {
+    const tx = txClient({ ...shippingRow, order: { ...shippingRow.order, status: "CANCELLED" } });
+    mocks.transaction.mockImplementation(async (cb: any) => cb(tx));
+
+    await post({
+      idOrder: 132456,
+      events: [{ statusStep: "Entregado", timestamp: "2026-09-10T10:00:00Z" }],
+    });
+
+    expect(tx.shipping.update).toHaveBeenCalled();
+    expect(tx.order.updateMany).not.toHaveBeenCalled();
   });
 
   it("acknowledges an unknown shipment with 200 so the provider stops retrying, but keeps the payload", async () => {

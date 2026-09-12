@@ -5,7 +5,7 @@ import { useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { buildPickingList, type PickingSourceShipment } from "@/lib/shipment-views";
+import { buildPickingList, pickingTargets, type PickingItem, type PickingSourceShipment } from "@/lib/shipment-views";
 
 const PRINT_STYLES = `
   body { font-family: Inter, system-ui, sans-serif; color: #111; margin: 24px; font-size: 12px; }
@@ -20,6 +20,7 @@ const PRINT_STYLES = `
   .order { margin-bottom: 14px; page-break-inside: avoid; }
   .order header { display: flex; justify-content: space-between; font-weight: 600; margin-bottom: 4px; }
   .muted { color: #666; font-weight: 400; }
+  td.components { padding-left: 22px; color: #555; font-size: 11px; }
   @media print { body { margin: 12mm; } }
 `;
 
@@ -27,6 +28,16 @@ const escape = (value: string | null | undefined) =>
   String(value ?? "").replace(/[&<>"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[char] ?? char);
 
 const DATE = new Intl.DateTimeFormat("es-CO", { dateStyle: "full", timeZone: "America/Bogota" });
+
+const describeComponents = (components: PickingItem["components"]) =>
+  (components ?? []).map((component) => `${component.quantity} × ${escape(component.name)}${component.sku ? ` (${escape(component.sku)})` : ""}`).join(" · ");
+
+/** Fila de una línea del pedido; un kit añade debajo, indentado, lo que incluye. */
+const renderOrderItem = (item: PickingItem) => {
+  const row = `<tr><td class="check">☐</td><td>${escape(item.name)}</td><td class="muted">${escape(item.sku)}</td><td class="num">${item.quantity}</td></tr>`;
+  if (!item.components || item.components.length === 0) return row;
+  return `${row}<tr><td></td><td class="components" colspan="3">incluye: ${describeComponents(item.components)}</td></tr>`;
+};
 
 export function printPickingList(shipments: PickingSourceShipment[]): boolean {
   const list = buildPickingList(shipments);
@@ -44,7 +55,7 @@ export function printPickingList(shipments: PickingSourceShipment[]): boolean {
       (order) => `<section class="order">
         <header><span>${escape(order.orderNumber)} <span class="muted">· ${escape(order.fullName)}${order.city ? ` · ${escape(order.city)}` : ""}</span></span><span class="muted">${escape(order.carrier ?? "Sin transportadora")}${order.trackingCode ? ` · ${escape(order.trackingCode)}` : ""}</span></header>
         <table><thead><tr><th class="check"></th><th>Producto</th><th>SKU</th><th class="num">Cant.</th></tr></thead><tbody>
-        ${order.items.map((item) => `<tr><td class="check">☐</td><td>${escape(item.name)}</td><td class="muted">${escape(item.sku)}</td><td class="num">${item.quantity}</td></tr>`).join("")}
+        ${order.items.map(renderOrderItem).join("")}
         </tbody></table>
       </section>`,
     )
@@ -72,19 +83,19 @@ export function printPickingList(shipments: PickingSourceShipment[]): boolean {
 }
 
 interface PickingListButtonProps {
+  /** Cola de despacho (`getDispatchQueue`): solo lo que la pestaña «Por despachar» muestra. */
   shipments: PickingSourceShipment[];
-  /** Cuando se pasa, imprime solo estos envíos (selección de la tabla). */
+  /** Cuando se pasa, imprime y cuenta solo los envíos de la cola que estén en esta lista (vista activa o selección). */
   selectedIds?: string[];
+  /** Texto del botón; el conteo entre paréntesis se añade solo. */
+  label?: string;
   variant?: "default" | "outline" | "soft" | "ghost";
   size?: "default" | "sm";
 }
 
-export function PickingListButton({ shipments, selectedIds, variant = "default", size = "default" }: PickingListButtonProps) {
+export function PickingListButton({ shipments, selectedIds, label = "Lista de recogida", variant = "default", size = "default" }: PickingListButtonProps) {
   const { toast } = useToast();
-  const target = useMemo(
-    () => (selectedIds ? shipments.filter((shipment) => selectedIds.includes(shipment.id)) : shipments),
-    [shipments, selectedIds],
-  );
+  const target = useMemo(() => pickingTargets(shipments, selectedIds), [shipments, selectedIds]);
   return (
     <Button
       type="button"
@@ -102,7 +113,8 @@ export function PickingListButton({ shipments, selectedIds, variant = "default",
       }}
     >
       <ClipboardList className="mr-2 h-4 w-4" aria-hidden="true" />
-      Lista de recogida{target.length > 0 ? ` (${target.length})` : ""}
+      {label}
+      {target.length > 0 ? ` (${target.length})` : ""}
     </Button>
   );
 }

@@ -1,58 +1,72 @@
-import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import prismadb from "@/lib/prismadb";
-import { ShippingStatus, ShippingProvider } from "@prisma/client";
+import { ShippingProvider, ShippingStatus } from "@prisma/client";
+import { NextResponse } from "next/server";
+import { z } from "zod";
 
-export async function POST(
-  req: Request,
-  { params }: { params: { storeId: string } },
-) {
+import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import prismadb from "@/lib/prismadb";
+import { applyShipmentStatus, CLOSED_SHIPMENT_STATUSES, isShipmentTransitionAllowed } from "@/lib/shipment-status";
+import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+
+const bodySchema = z.object({
+  fromStatus: z.nativeEnum(ShippingStatus, { errorMap: () => ({ message: "Elige el estado actual de los envíos a corregir." }) }),
+  toStatus: z.nativeEnum(ShippingStatus, { errorMap: () => ({ message: "Elige el estado nuevo." }) }),
+  /** Incluir entregados y cancelados (por defecto quedan fuera). */
+  includeClosed: z.boolean().default(false),
+  /** Es una corrección: se permite un salto que la tabla de transiciones no contempla. */
+  correction: z.boolean().default(false),
+  /** Solo contar: el diálogo lo usa para mostrar cuántos envíos cambiarían. */
+  dryRun: z.boolean().default(false),
+});
+
+/**
+ * Corrección de envíos manuales (domiciliario, mensajería sin rastreo): mueve
+ * de un estado concreto a otro, nunca «todos los manuales» a ciegas. El
+ * diálogo pide primero un conteo (`dryRun`) y muestra el número antes de
+ * confirmar; el pedido de cada envío sigue al envío.
+ */
+export async function POST(req: Request, { params }: { params: { storeId: string } }) {
   try {
     const { userId } = await auth();
-    const { status } = await req.json();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    await verifyStoreOwner(userId, params.storeId);
 
-    if (!userId) {
-      return new NextResponse("Unauthorized", { status: 401 });
+    const parsed = bodySchema.safeParse(await req.json().catch(() => ({})));
+    if (!parsed.success) throw ErrorFactory.InvalidRequest(parsed.error.issues[0]?.message ?? "Datos no válidos.");
+    const { fromStatus, toStatus, includeClosed, correction, dryRun } = parsed.data;
+
+    if (fromStatus === toStatus) throw ErrorFactory.InvalidRequest("El estado nuevo debe ser distinto del actual.");
+    if (!includeClosed && CLOSED_SHIPMENT_STATUSES.includes(fromStatus)) {
+      throw ErrorFactory.InvalidRequest("Los envíos entregados o cancelados solo se corrigen marcando «incluir entregados y cancelados».");
+    }
+    if (!correction && !isShipmentTransitionAllowed(fromStatus, toStatus)) {
+      throw ErrorFactory.InvalidRequest(
+        `Un envío en ese estado no pasa a «${toStatus}» en el flujo normal. Márcalo como corrección si de verdad hace falta.`,
+      );
     }
 
-    if (!params.storeId) {
-      return new NextResponse("Store ID is required", { status: 400 });
-    }
-
-    if (!status) {
-      return new NextResponse("Status is required", { status: 400 });
-    }
-
-    // Verify store ownership
-    const store = await prismadb.store.findFirst({
-      where: {
-        id: params.storeId,
-        userId,
-      },
+    const targets = await prismadb.shipping.findMany({
+      where: { storeId: params.storeId, provider: ShippingProvider.MANUAL, status: fromStatus },
+      select: { id: true },
     });
 
-    if (!store) {
-      return new NextResponse("Unauthorized", { status: 403 });
+    if (dryRun) {
+      return NextResponse.json({ count: targets.length, updated: 0, ordersUpdated: 0 }, { headers: CACHE_HEADERS.NO_CACHE });
     }
 
-    // Update all MANUAL shipments for this store that are not in the target status
-    // We intentionally don't filter by 'not delivered' to allow corrections if needed
-    const result = await prismadb.shipping.updateMany({
-      where: {
-        storeId: params.storeId,
-        provider: ShippingProvider.MANUAL,
-      },
-      data: {
-        status: status as ShippingStatus,
-      },
+    let updated = 0;
+    let ordersUpdated = 0;
+    await prismadb.$transaction(async (tx) => {
+      for (const target of targets) {
+        const result = await applyShipmentStatus(tx, { shippingId: target.id, storeId: params.storeId, status: toStatus });
+        if (result?.shipmentChanged) updated += 1;
+        if (result?.orderChanged) ordersUpdated += 1;
+      }
     });
 
-    return NextResponse.json({
-      message: "Manual shipments updated",
-      count: result.count,
-    });
+    return NextResponse.json({ count: targets.length, updated, ordersUpdated }, { headers: CACHE_HEADERS.NO_CACHE });
   } catch (error) {
-    console.error("[SHIPMENT_BULK_MANUAL_UPDATE]", error);
-    return new NextResponse("Internal error", { status: 500 });
+    return handleErrorResponse(error, "SHIPMENT_BULK_MANUAL_UPDATE");
   }
 }

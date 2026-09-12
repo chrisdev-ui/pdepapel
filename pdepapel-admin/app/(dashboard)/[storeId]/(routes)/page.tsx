@@ -1,7 +1,6 @@
 import { getGraphRevenue } from "@/actions/get-graph-revenue";
 import { getSalesCount } from "@/actions/get-sales-count";
 import { Analytics } from "@/components/analytics";
-import { Inventory } from "@/components/inventory";
 import { Overview } from "@/components/overview";
 import { BrandedLoader } from "@/components/ui/branded-loader";
 import { Button } from "@/components/ui/button";
@@ -17,6 +16,7 @@ import { ScanLine } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
+import { InventorySummaryTab } from "./components/inventory-summary-tab";
 import { PendingActions } from "./components/pending-actions";
 import { SystemsStatus } from "./components/systems-status";
 import { TodayKpis } from "./components/today-kpis";
@@ -110,7 +110,7 @@ export default async function DashboardPage({
           </TabsContent>
           <TabsContent value="inventory">
             <Suspense fallback={<BrandedLoader />}>
-              <Inventory params={params} />
+              <InventorySummaryTab storeId={params.storeId} />
             </Suspense>
           </TabsContent>
           <TabsContent value="analytics">

@@ -1,7 +1,8 @@
-import { CAPSULAS_SORPRESA_ID, KITS_ID, TRESHOLD_LOW_STOCK } from "@/constants";
+import { CAPSULAS_SORPRESA_ID } from "@/constants";
 import { createSettledMarketplaceSalesWhere } from "@/lib/mercadolibre/reporting";
 import { AWAITING_PAYMENT_STALE_HOURS, AWAITING_PAYMENT_WINDOW_DAYS, STALE_IN_TRANSIT_DAYS } from "@/lib/order-queues";
 import prismadb from "@/lib/prismadb";
+import { hasStoreLowStockThreshold, resolveLowStockThreshold } from "@/lib/product-readiness";
 import { OrderStatus, OrderType, PaymentMethod, ShippingStatus } from "@prisma/client";
 import { addDays, startOfDay, subDays, subHours } from "date-fns";
 import { utcToZonedTime, zonedTimeToUtc } from "date-fns-tz";
@@ -44,7 +45,14 @@ export interface TodaySummary {
   today: { net: number; orders: number; marketplaceNet: number };
   toDispatch: number;
   pendingPayments: { count: number; amount: number };
-  lowStock: { count: number; outOfStock: number };
+  lowStock: {
+    count: number;
+    outOfStock: number;
+    /** Umbral con el que se contó (`resolveLowStockThreshold`). */
+    threshold: number;
+    /** Si el umbral viene de Ajustes de la tienda. */
+    thresholdFromSettings: boolean;
+  };
   pending: TodayPendingAction[];
   week: {
     net: number;
@@ -91,6 +99,9 @@ export interface TodayRawInput {
   lowStockProducts: { id: string; name: string; stock: number }[];
   lowStockCount: number;
   outOfStockCount: number;
+  /** Umbral aplicado a los conteos; si falta se asume el valor por defecto. */
+  lowStockThreshold?: number;
+  lowStockThresholdFromSettings?: boolean;
   /** Productos activos con alguna imagen que ya no existe en Cloudinary. */
   brokenImageProducts?: number;
   /** Líneas de inventario que fallaron al mover y siguen abiertas; `orphans` son las de pedidos ya borrados. */
@@ -278,7 +289,12 @@ export function buildTodaySummary(input: TodayRawInput, storeId: string): TodayS
     today: { net: todayNet, orders: input.todayOrders.length, marketplaceNet: input.todayMarketplaceNet },
     toDispatch: input.toDispatchCount,
     pendingPayments: { count: input.pendingTransfers.length, amount: input.pendingTransfers.reduce((sum, o) => sum + Number(o.total), 0) },
-    lowStock: { count: input.lowStockCount, outOfStock: input.outOfStockCount },
+    lowStock: {
+      count: input.lowStockCount,
+      outOfStock: input.outOfStockCount,
+      threshold: input.lowStockThreshold ?? resolveLowStockThreshold(null),
+      thresholdFromSettings: input.lowStockThresholdFromSettings ?? false,
+    },
     pending,
     week: {
       net: weekNet,
@@ -328,6 +344,26 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
     type: { in: SHIPPABLE_TYPES },
     AND: [paidWithin(dispatchSince, now), { OR: [{ shipping: null }, { shipping: { trackingCode: null } }] }],
   };
+  // Stock crítico con la misma regla que Inventario y Productos: umbral de la
+  // tienda (o el por defecto), sin kits (su stock sale de los componentes) ni
+  // cápsulas sorpresa (se venden en feria, no se reponen).
+  const stockWhere = { storeId, isArchived: false, isKit: false, categoryId: { not: CAPSULAS_SORPRESA_ID } };
+  const lowStockBatch = prismadb.store
+    .findUnique({ where: { id: storeId }, select: { lowStockThreshold: true } })
+    .then(async (store) => {
+      const threshold = resolveLowStockThreshold(store);
+      const [products, count, outOfStock] = await Promise.all([
+        prismadb.product.findMany({
+          where: { ...stockWhere, stock: { gt: 0, lte: threshold } },
+          orderBy: { stock: "asc" },
+          take: 3,
+          select: { id: true, name: true, stock: true },
+        }),
+        prismadb.product.count({ where: { ...stockWhere, stock: { gt: 0, lte: threshold } } }),
+        prismadb.product.count({ where: { ...stockWhere, stock: { lte: 0 } } }),
+      ]);
+      return { threshold, fromSettings: hasStoreLowStockThreshold(store), products, count, outOfStock };
+    });
 
   const [
     todayOrders,
@@ -336,9 +372,7 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
     awaitingPayments,
     toDispatch,
     toDispatchCount,
-    lowStockProducts,
-    lowStockCount,
-    outOfStockCount,
+    lowStock,
     unansweredQuestions,
     expiringQuotes,
     weekOrders,
@@ -373,14 +407,7 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
       select: { id: true, orderNumber: true, fullName: true, city: true, paidAt: true, shipping: { select: { courier: true } } },
     }),
     prismadb.order.count({ where: dispatchWhere }),
-    prismadb.product.findMany({
-      where: { storeId, isArchived: false, stock: { gt: 0, lte: TRESHOLD_LOW_STOCK }, categoryId: { notIn: [CAPSULAS_SORPRESA_ID, KITS_ID] } },
-      orderBy: { stock: "asc" },
-      take: 3,
-      select: { id: true, name: true, stock: true },
-    }),
-    prismadb.product.count({ where: { storeId, isArchived: false, stock: { gt: 0, lte: TRESHOLD_LOW_STOCK }, categoryId: { notIn: [CAPSULAS_SORPRESA_ID, KITS_ID] } } }),
-    prismadb.product.count({ where: { storeId, isArchived: false, stock: { lte: 0 }, categoryId: { notIn: [CAPSULAS_SORPRESA_ID, KITS_ID] } } }),
+    lowStockBatch,
     prismadb.marketplaceQuestion
       .findMany({
         where: { connection: { storeId }, status: "UNANSWERED" },
@@ -424,9 +451,11 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
       awaitingPayments: awaitingPayments.map((o) => ({ ...o, method: o.payment?.method ?? null })),
       toDispatch: toDispatch.map((o) => ({ ...o, courier: o.shipping?.courier ?? null })),
       toDispatchCount,
-      lowStockProducts,
-      lowStockCount,
-      outOfStockCount,
+      lowStockProducts: lowStock.products,
+      lowStockCount: lowStock.count,
+      outOfStockCount: lowStock.outOfStock,
+      lowStockThreshold: lowStock.threshold,
+      lowStockThresholdFromSettings: lowStock.fromSettings,
       unansweredQuestions: unansweredQuestions.map((q) => ({ id: q.id, question: q.question, askedAt: q.askedAt, productName: q.product?.name ?? null })),
       unansweredCount: unansweredQuestions.length,
       expiringQuotes,

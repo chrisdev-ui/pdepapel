@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import prismadb from "@/lib/prismadb";
-import { exportShipmentsToCSV } from "@/lib/shipment-export";
+import { exportShipmentsToCSV, withUtf8Bom } from "@/lib/shipment-export";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { verifyStoreOwner } from "@/lib/utils";
 
@@ -36,10 +36,9 @@ export async function GET(
       },
     });
 
-    // Generate CSV
-    const csvContent = exportShipmentsToCSV(shipments);
+    // CSV con BOM UTF-8 para que Excel respete las tildes.
+    const csvContent = withUtf8Bom(exportShipmentsToCSV(shipments));
 
-    // Return as downloadable file
     return new NextResponse(csvContent, {
       headers: {
         "Content-Type": "text/csv;charset=utf-8;",

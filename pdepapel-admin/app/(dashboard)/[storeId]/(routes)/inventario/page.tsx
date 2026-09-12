@@ -1,3 +1,5 @@
+import { hasStoreLowStockThreshold, resolveLowStockThreshold } from "@/lib/product-readiness";
+import prismadb from "@/lib/prismadb";
 import type { Metadata } from "next";
 import { InventoryClient } from "./components/inventory-client";
 import { getInventory } from "./server/get-inventory";
@@ -11,10 +13,13 @@ export const metadata: Metadata = {
 };
 
 export default async function InventoryPage({ params }: { params: { storeId: string } }) {
-  const rows = await getInventory(params.storeId);
+  const [rows, store] = await Promise.all([
+    getInventory(params.storeId),
+    prismadb.store.findUnique({ where: { id: params.storeId }, select: { lowStockThreshold: true } }),
+  ]);
   return (
     <div className="p-4 sm:p-8 sm:pt-6">
-      <InventoryClient data={rows} />
+      <InventoryClient data={rows} threshold={resolveLowStockThreshold(store)} thresholdFromSettings={hasStoreLowStockThreshold(store)} />
     </div>
   );
 }

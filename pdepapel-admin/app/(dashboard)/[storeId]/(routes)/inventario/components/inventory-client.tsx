@@ -5,8 +5,9 @@ import { DataTable } from "@/components/ui/data-table";
 import { DataTableCellCurrency } from "@/components/ui/data-table-cell-currency";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Models, TRESHOLD_LOW_STOCK } from "@/constants";
-import { INVENTORY_VIEWS, inventoryMatchesView, inventoryRowValue, isInventoryView, summarizeInventory, type InventoryView } from "@/lib/inventory-views";
+import { Models } from "@/constants";
+import { describeLowStockThreshold, INVENTORY_VIEWS, inventoryMatchesView, inventoryRowValue, isInventoryView, summarizeInventory, type InventoryView } from "@/lib/inventory-views";
+import { isLowStock, isOutOfStock } from "@/lib/product-readiness";
 import { cn, currencyFormatter } from "@/lib/utils";
 import type { ColumnDef } from "@tanstack/react-table";
 import { formatDistanceToNowStrict } from "date-fns";
@@ -25,9 +26,20 @@ const MOVEMENT_LABEL: Record<string, string> = {
   ORDER_PLACED: "venta", ORDER_CANCELLED: "cancelación", MANUAL_ADJUSTMENT: "ajuste", INITIAL_MIGRATION: "migración", RETURN: "devolución", DAMAGE: "daño", LOST: "pérdida", PROMOTION: "promoción", PURCHASE: "compra", INITIAL_INTAKE: "ingreso inicial", RESTOCK_RECEIVED: "reposición", STORE_USE: "uso interno", FESTIVAL_ALLOCATION: "reserva de feria", FESTIVAL_RETURN: "retorno de feria", IN_PERSON_SALE: "venta presencial",
 };
 
-function StockCell({ row }: { row: InventoryRow }) {
-  if (row.stock <= 0) return <span className="inline-flex rounded-full bg-tint-pink px-2 py-0.5 text-xs font-semibold text-primary">Agotado</span>;
-  if (row.stock <= TRESHOLD_LOW_STOCK) return <span className="inline-flex rounded-full bg-tint-cream px-2 py-0.5 text-xs font-semibold text-primary">{row.stock} und</span>;
+/**
+ * Borrador de reposición con proveedor y producto en la URL. El formulario de
+ * aprovisionamiento todavía no lee estos parámetros; se pasan para cuando lo haga.
+ */
+function restockHref(storeId: string, row: Pick<InventoryRow, "id" | "supplier">): string {
+  const query = new URLSearchParams();
+  if (row.supplier?.id) query.set("proveedor", row.supplier.id);
+  query.set("producto", row.id);
+  return `/${storeId}/aprovisionamiento/nuevo?${query.toString()}`;
+}
+
+function StockCell({ row, threshold }: { row: InventoryRow; threshold: number }) {
+  if (isOutOfStock(row.stock)) return <span className="inline-flex rounded-full bg-tint-pink px-2 py-0.5 text-xs font-semibold text-primary">Agotado</span>;
+  if (isLowStock(row.stock, threshold)) return <span className="inline-flex rounded-full bg-tint-cream px-2 py-0.5 text-xs font-semibold text-primary">{row.stock} und</span>;
   return <span className="text-sm font-semibold tabular-nums text-primary">{row.stock}</span>;
 }
 
@@ -41,7 +53,15 @@ function Metric({ label, value, note, icon, tint }: { label: string; value: stri
   );
 }
 
-export function InventoryClient({ data }: { data: InventoryRow[] }) {
+interface InventoryClientProps {
+  data: InventoryRow[];
+  /** Umbral de stock crítico ya resuelto (`resolveLowStockThreshold`). */
+  threshold: number;
+  /** Si el umbral viene de Ajustes de la tienda o es el valor por defecto. */
+  thresholdFromSettings?: boolean;
+}
+
+export function InventoryClient({ data, threshold, thresholdFromSettings = false }: InventoryClientProps) {
   const router = useRouter();
   const pathname = usePathname() ?? "";
   const searchParams = useSearchParams();
@@ -50,10 +70,17 @@ export function InventoryClient({ data }: { data: InventoryRow[] }) {
   const requested = searchParams.get(VIEW_PARAM);
   const [view, setViewState] = useState<InventoryView>(isInventoryView(requested) ? requested : DEFAULT_VIEW);
   const [adjustOpen, setAdjustOpen] = useState(false);
+  /** Producto preseleccionado en «Ajustar inventario» (desde una fila); null desde el encabezado. */
+  const [adjustProductId, setAdjustProductId] = useState<string | null>(null);
 
-  const totals = useMemo(() => summarizeInventory(data), [data]);
-  const counts = useMemo(() => Object.fromEntries(INVENTORY_VIEWS.map((v) => [v.id, data.filter((row) => inventoryMatchesView(row, v.id)).length])) as Record<InventoryView, number>, [data]);
-  const rows = useMemo(() => data.filter((row) => inventoryMatchesView(row, view)), [data, view]);
+  const totals = useMemo(() => summarizeInventory(data, threshold), [data, threshold]);
+  const counts = useMemo(() => Object.fromEntries(INVENTORY_VIEWS.map((v) => [v.id, data.filter((row) => inventoryMatchesView(row, v.id, threshold)).length])) as Record<InventoryView, number>, [data, threshold]);
+  const rows = useMemo(() => data.filter((row) => inventoryMatchesView(row, view, threshold)), [data, view, threshold]);
+
+  const openAdjust = (productId: string | null) => {
+    setAdjustProductId(productId);
+    setAdjustOpen(true);
+  };
 
   const setView = (next: InventoryView) => {
     setViewState(next);
@@ -79,7 +106,7 @@ export function InventoryClient({ data }: { data: InventoryRow[] }) {
         </div>
       ),
     },
-    { accessorKey: "stock", header: ({ column }) => <DataTableColumnHeader column={column} title="Stock" />, cell: ({ row }) => <StockCell row={row.original} />, enableGlobalFilter: false },
+    { accessorKey: "stock", header: ({ column }) => <DataTableColumnHeader column={column} title="Stock" />, cell: ({ row }) => <StockCell row={row.original} threshold={threshold} />, enableGlobalFilter: false },
     { accessorKey: "acqPrice", header: ({ column }) => <DataTableColumnHeader column={column} title="Costo unit." />, cell: ({ row }) => (row.original.isKit ? <span className="text-xs text-muted-foreground">componentes</span> : Number(row.original.acqPrice) > 0 ? <DataTableCellCurrency value={Number(row.original.acqPrice)} /> : <span className="inline-flex rounded-full bg-tint-cream px-2 py-0.5 text-xs font-semibold text-primary">Sin costo</span>), enableGlobalFilter: false },
     { id: "value", accessorFn: (row) => inventoryRowValue(row).cost, header: ({ column }) => <DataTableColumnHeader column={column} title="Valor a costo" />, cell: ({ row }) => <DataTableCellCurrency value={inventoryRowValue(row.original).cost} />, enableGlobalFilter: false },
     { accessorKey: "price", header: ({ column }) => <DataTableColumnHeader column={column} title="Precio" />, cell: ({ row }) => <DataTableCellCurrency value={row.original.price} />, enableGlobalFilter: false },
@@ -102,9 +129,9 @@ export function InventoryClient({ data }: { data: InventoryRow[] }) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" aria-label="Acciones"><MoreHorizontal className="h-4 w-4" aria-hidden="true" /></Button></DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setAdjustOpen(true)}>Ajustar inventario</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => router.push(`/${storeId}/aprovisionamiento/nuevo`)}>Reponer con el proveedor{row.original.supplier ? ` (${row.original.supplier.name})` : ""}</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => router.push(`/${storeId}/movimientos-inventario`)}>Ver movimientos</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => openAdjust(row.original.isKit ? null : row.original.id)}>Ajustar inventario</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push(restockHref(storeId, row.original))}>Reponer con el proveedor{row.original.supplier ? ` (${row.original.supplier.name})` : ""}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push(`/${storeId}/movimientos-inventario?producto=${encodeURIComponent(row.original.id)}`)}>Ver movimientos</DropdownMenuItem>
               <DropdownMenuItem onClick={() => router.push(`/${storeId}/productos/${row.original.id}`)}>Abrir producto</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -114,7 +141,7 @@ export function InventoryClient({ data }: { data: InventoryRow[] }) {
       enableHiding: false,
       enableGlobalFilter: false,
     },
-  ], [router, storeId]);
+  ], [router, storeId, threshold]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -124,7 +151,7 @@ export function InventoryClient({ data }: { data: InventoryRow[] }) {
           <p className="text-sm text-muted-foreground">Todo el stock activo en una lista, valorado al costo de compra registrado. Los kits se calculan desde sus componentes.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => setAdjustOpen(true)}><History className="h-4 w-4" aria-hidden="true" />Ajustar inventario</Button>
+          <Button variant="outline" onClick={() => openAdjust(null)}><History className="h-4 w-4" aria-hidden="true" />Ajustar inventario</Button>
           <Button asChild><Link href={`/${storeId}/aprovisionamiento/nuevo`}><Package className="h-4 w-4" aria-hidden="true" />Nueva orden de aprovisionamiento</Link></Button>
         </div>
       </div>
@@ -132,7 +159,7 @@ export function InventoryClient({ data }: { data: InventoryRow[] }) {
       <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
         <Metric label="Valor a costo" value={currencyFormatter(totals.costValue)} note={`${totals.units.toLocaleString("es-CO")} unidades · a venta ${currencyFormatter(totals.retailValue)}`} icon={<Wallet className="h-4 w-4" aria-hidden="true" />} tint="bg-tint-mint" />
         <Metric label="Productos activos" value={totals.products.toLocaleString("es-CO")} note="Sin archivados ni cápsulas" icon={<Boxes className="h-4 w-4" aria-hidden="true" />} tint="bg-tint-sky" />
-        <Metric label="Stock crítico" value={totals.lowStock.toLocaleString("es-CO")} note={`${TRESHOLD_LOW_STOCK} unidades o menos · ${totals.outOfStock} agotados`} icon={<AlertTriangle className="h-4 w-4" aria-hidden="true" />} tint="bg-tint-pink" />
+        <Metric label="Stock crítico" value={totals.lowStock.toLocaleString("es-CO")} note={`${describeLowStockThreshold(threshold, thresholdFromSettings)} · ${totals.outOfStock} agotados`} icon={<AlertTriangle className="h-4 w-4" aria-hidden="true" />} tint="bg-tint-pink" />
         <Metric label="Sin costo registrado" value={totals.withoutCost.toLocaleString("es-CO")} note="No entran en la valorización ni en el margen" icon={<Package className="h-4 w-4" aria-hidden="true" />} tint="bg-tint-cream" />
       </div>
 
@@ -155,7 +182,7 @@ export function InventoryClient({ data }: { data: InventoryRow[] }) {
         data={rows}
         getRowId={(row) => row.id}
         onRowClick={(row) => router.push(`/${storeId}/productos/${row.id}`)}
-        emptyState={view === "todo" ? { title: "Aún no hay productos con stock" } : { title: "Nada en esta vista", description: view === "stock-critico" ? "Ningún producto está por debajo del umbral." : view === "agotados" ? "No hay productos agotados." : view === "sin-costo" ? "Todos los productos tienen costo de compra." : "No hay kits." }}
+        emptyState={view === "todo" ? { title: "Aún no hay productos con stock" } : { title: "Nada en esta vista", description: view === "stock-critico" ? `Ningún producto tiene entre 1 y ${threshold} ${threshold === 1 ? "unidad" : "unidades"}.` : view === "agotados" ? "No hay productos agotados." : view === "sin-costo" ? "Todos los productos tienen costo de compra." : "No hay kits." }}
       />
 
       <AdjustInventoryModal
@@ -163,6 +190,7 @@ export function InventoryClient({ data }: { data: InventoryRow[] }) {
         onClose={() => setAdjustOpen(false)}
         onConfirm={() => { setAdjustOpen(false); router.refresh(); }}
         products={data.filter((row) => !row.isKit).map((row) => ({ id: row.id, name: row.name, stock: row.stock }))}
+        defaultProductId={adjustProductId}
       />
     </div>
   );

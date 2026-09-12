@@ -1,6 +1,12 @@
-import { TRESHOLD_LOW_STOCK } from "@/constants";
+import { DEFAULT_LOW_STOCK_THRESHOLD, isLowStock, isOutOfStock } from "@/lib/product-readiness";
 
-/** Vistas de la lista de Inventario y valorización por fila. Puro y testeable. */
+/**
+ * Vistas de la lista de Inventario y valorización por fila. Puro y testeable.
+ *
+ * El umbral de "stock crítico" llega resuelto desde `resolveLowStockThreshold`
+ * (tienda o valor por defecto); el valor por defecto aquí solo cubre a quien
+ * no lo pase.
+ */
 
 export type InventoryView = "todo" | "stock-critico" | "agotados" | "sin-costo" | "kits";
 
@@ -21,14 +27,14 @@ export interface InventoryRowInput {
   isKit?: boolean | null;
 }
 
-export function inventoryMatchesView(row: InventoryRowInput, view: InventoryView, threshold = TRESHOLD_LOW_STOCK): boolean {
+export function inventoryMatchesView(row: InventoryRowInput, view: InventoryView, threshold = DEFAULT_LOW_STOCK_THRESHOLD): boolean {
   switch (view) {
     case "todo":
       return true;
     case "stock-critico":
-      return row.stock > 0 && row.stock <= threshold;
+      return isLowStock(row.stock, threshold);
     case "agotados":
-      return row.stock <= 0;
+      return isOutOfStock(row.stock);
     case "sin-costo":
       return !row.isKit && !(Number(row.acqPrice) > 0);
     case "kits":
@@ -53,7 +59,7 @@ export interface InventoryTotals {
   withoutCost: number;
 }
 
-export function summarizeInventory(rows: InventoryRowInput[], threshold = TRESHOLD_LOW_STOCK): InventoryTotals {
+export function summarizeInventory(rows: InventoryRowInput[], threshold = DEFAULT_LOW_STOCK_THRESHOLD): InventoryTotals {
   return rows.reduce<InventoryTotals>(
     (acc, row) => {
       const value = inventoryRowValue(row);
@@ -68,4 +74,9 @@ export function summarizeInventory(rows: InventoryRowInput[], threshold = TRESHO
     },
     { products: 0, units: 0, costValue: 0, retailValue: 0, lowStock: 0, outOfStock: 0, withoutCost: 0 },
   );
+}
+
+/** Nota corta para las tarjetas: de dónde sale el umbral. */
+export function describeLowStockThreshold(threshold: number, fromSettings: boolean): string {
+  return `${threshold} ${threshold === 1 ? "unidad" : "unidades"} o menos · ${fromSettings ? "según Ajustes" : "valor por defecto"}`;
 }

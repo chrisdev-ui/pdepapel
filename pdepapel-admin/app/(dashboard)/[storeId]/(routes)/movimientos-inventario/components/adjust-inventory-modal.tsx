@@ -43,11 +43,22 @@ const formSchema = z.object({
   description: z.string().optional(),
 });
 
+const EMPTY_VALUES: z.infer<typeof formSchema> = {
+  productId: "",
+  type: "MANUAL_ADJUSTMENT",
+  action: "add",
+  quantity: 1,
+  reason: "",
+  description: "",
+};
+
 interface AdjustInventoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void;
   products: { id: string; name: string; stock: number }[];
+  /** Producto ya elegido al abrir (por ejemplo, desde una fila de Inventario). */
+  defaultProductId?: string | null;
 }
 
 export const AdjustInventoryModal: React.FC<AdjustInventoryModalProps> = ({
@@ -55,6 +66,7 @@ export const AdjustInventoryModal: React.FC<AdjustInventoryModalProps> = ({
   onClose,
   onConfirm,
   products,
+  defaultProductId = null,
 }) => {
   const [loading, setLoading] = useState(false);
   const params = useParams();
@@ -63,23 +75,16 @@ export const AdjustInventoryModal: React.FC<AdjustInventoryModalProps> = ({
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      productId: "",
-      type: "MANUAL_ADJUSTMENT",
-      action: "add",
-      quantity: 1,
-      reason: "",
-      description: "",
-    },
+    defaultValues: { ...EMPTY_VALUES, productId: defaultProductId ?? "" },
   });
 
   useFormValidationToast({ form });
 
   useEffect(() => {
     if (isOpen) {
-      form.reset();
+      form.reset({ ...EMPTY_VALUES, productId: defaultProductId ?? "" });
     }
-  }, [isOpen, form]);
+  }, [isOpen, defaultProductId, form]);
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {

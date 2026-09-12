@@ -2,6 +2,7 @@ import { handleErrorResponse } from "@/lib/api-errors";
 import { sendShippingEmail } from "@/lib/email";
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
+import { applyShipmentStatus, mapEnvioClickStatus } from "@/lib/shipment-status";
 import {
   InvalidWebhookPayloadError,
   parseProviderDate,
@@ -9,7 +10,6 @@ import {
   readWebhookToken,
   safeSecretEquals,
 } from "@/lib/webhook-auth";
-import { ShippingStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 /**
@@ -27,33 +27,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, X-Webhook-Token",
 };
 
-// Map EnvioClick status strings to our ShippingStatus enum
-const STATUS_MAP: Record<string, ShippingStatus> = {
-  // EnvioClick text-based statuses
-  Entregado: ShippingStatus.Delivered,
-  Entregada: ShippingStatus.Delivered,
-  "En tránsito": ShippingStatus.InTransit,
-  "Pendiente de Recolección": ShippingStatus.Preparing,
-  "Envío Recolectado": ShippingStatus.PickedUp,
-  Devuelto: ShippingStatus.Returned,
-  Devuelta: ShippingStatus.Returned,
-  Cancelado: ShippingStatus.Cancelled,
-  Cancelada: ShippingStatus.Cancelled,
-  Excepción: ShippingStatus.Exception,
-  "En reparto": ShippingStatus.OutForDelivery,
-  "Intento de entrega fallido": ShippingStatus.FailedDelivery,
-
-  // Legacy numeric codes (if still used)
-  "01": ShippingStatus.Shipped,
-  "02": ShippingStatus.PickedUp,
-  "03": ShippingStatus.InTransit,
-  "04": ShippingStatus.OutForDelivery,
-  "05": ShippingStatus.Delivered,
-  "06": ShippingStatus.FailedDelivery,
-  "07": ShippingStatus.Returned,
-  "08": ShippingStatus.Cancelled,
-  "09": ShippingStatus.Exception,
-};
 
 // Handle OPTIONS request for CORS preflight
 export async function OPTIONS() {
@@ -160,7 +133,7 @@ export async function POST(req: Request) {
       // Get the latest status from events (most recent first)
       const latestEvent = events.length > 0 ? events[0] : null;
       const newStatus = latestEvent
-        ? STATUS_MAP[latestEvent.statusStep] || shipping.status
+        ? mapEnvioClickStatus(latestEvent.statusStep ?? latestEvent.status, shipping.status)
         : shipping.status;
 
       console.log("[ENVIOCLICK_WEBHOOK] Processing update:", {
@@ -175,37 +148,20 @@ export async function POST(req: Request) {
       // `notes` son del equipo: quien recibió el paquete queda en el evento de
       // seguimiento, que es donde el cliente lo lee. Antes cada webhook de
       // entrega borraba lo que hubiera escrito la administradora.
-      await tx.shipping.update({
-        where: { id: shipping.id },
-        data: {
-          status: newStatus,
-          trackingCode: trackingCode
-            ? String(trackingCode)
-            : shipping.trackingCode,
+      // El pedido sigue al envío (a «Enviado» cuando arranca) solo si la
+      // transición está permitida: un evento tardío no revive un cancelado.
+      await applyShipmentStatus(tx, {
+        shippingId: shipping.id,
+        storeId: shipping.storeId,
+        status: newStatus,
+        touch: true,
+        extra: {
+          trackingCode: trackingCode ? String(trackingCode) : shipping.trackingCode,
           pickupDate: pickupDate ?? shipping.pickupDate,
-          estimatedDeliveryDate:
-            estimatedDeliveryDate ?? shipping.estimatedDeliveryDate,
+          estimatedDeliveryDate: estimatedDeliveryDate ?? shipping.estimatedDeliveryDate,
           actualDeliveryDate: actualDeliveryDate ?? shipping.actualDeliveryDate,
         },
       });
-
-      // SYNC: Update Parent Order Status based on Shipping Movement
-      // If shipping moves to InTransit/PickedUp/OutForDelivery/Delivered, mark Order as SENT
-      if (
-        (
-          [
-            ShippingStatus.PickedUp,
-            ShippingStatus.InTransit,
-            ShippingStatus.OutForDelivery,
-            ShippingStatus.Delivered,
-          ] as ShippingStatus[]
-        ).includes(newStatus)
-      ) {
-        await tx.order.updateMany({
-          where: { id: shipping.orderId, storeId: shipping.storeId },
-          data: { status: "SENT" },
-        });
-      }
 
       // Store tracking events
       if (events.length > 0) {

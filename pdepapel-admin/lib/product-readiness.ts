@@ -12,13 +12,42 @@ import { isComingSoon } from "@/lib/product-availability";
  */
 export const DEFAULT_LOW_STOCK_THRESHOLD = TRESHOLD_LOW_STOCK;
 
-/** El umbral de la tienda, o el de la aplicación si no hay uno configurado. */
-export function resolveLowStockThreshold(
-  storeThreshold?: number | null,
-): number {
+/** Lo que hace falta de la tienda para resolver el umbral. */
+export type LowStockThresholdSource =
+  | { lowStockThreshold?: number | null }
+  | number
+  | null
+  | undefined;
+
+/**
+ * La única regla de "stock crítico" de la administración: el umbral de la
+ * tienda (`Store.lowStockThreshold`) o el de la aplicación si no fijó uno.
+ * Acepta la tienda (o su `select`) o el número ya cargado.
+ *
+ * Con el umbral N: crítico = `stock > 0 && stock <= N`; agotado = `stock <= 0`.
+ * Inventario, Inicio, Productos y el resumen del día lo comparten.
+ */
+export function resolveLowStockThreshold(store: LowStockThresholdSource): number {
+  const storeThreshold = typeof store === "number" ? store : store?.lowStockThreshold;
   return storeThreshold && storeThreshold > 0
     ? storeThreshold
     : DEFAULT_LOW_STOCK_THRESHOLD;
+}
+
+/** Si la tienda fijó su propio umbral (para decir "según Ajustes" en la interfaz). */
+export function hasStoreLowStockThreshold(store: LowStockThresholdSource): boolean {
+  const storeThreshold = typeof store === "number" ? store : store?.lowStockThreshold;
+  return Boolean(storeThreshold && storeThreshold > 0);
+}
+
+/** Crítico: hay unidades, pero no más que el umbral. */
+export function isLowStock(stock: number, threshold: number): boolean {
+  return stock > 0 && stock <= threshold;
+}
+
+/** Agotado: sin unidades (o negativo por una incidencia). */
+export function isOutOfStock(stock: number): boolean {
+  return stock <= 0;
 }
 
 export interface ReadinessInput {
@@ -143,8 +172,8 @@ export function productMatchesView(
     case "proximamente":
       return !product.isArchived && isComingSoon(product);
     case "stock-critico":
-      return !product.isArchived && product.stock > 0 && product.stock <= lowStockThreshold;
+      return !product.isArchived && isLowStock(product.stock, lowStockThreshold);
     case "agotados":
-      return !product.isArchived && product.stock <= 0;
+      return !product.isArchived && isOutOfStock(product.stock);
   }
 }

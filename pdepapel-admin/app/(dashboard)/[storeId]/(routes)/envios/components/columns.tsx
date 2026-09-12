@@ -8,8 +8,7 @@ import Link from "next/link";
 import { DataTableCellCurrency } from "@/components/ui/data-table-cell-currency";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { getCarrierInfo } from "@/constants/shipping";
-import { getShipmentStatusBadge, getStaleInTransitBadge } from "@/lib/shipment-views";
-import { ShippingProvider } from "@prisma/client";
+import { formatShortDate, getShipmentStatusBadge, getStaleInTransitBadge, PROVIDER_LABELS } from "@/lib/shipment-views";
 
 import { TintBadge } from "../../pedidos/components/order-badges";
 import { relativeDate } from "../../pedidos/components/columns";
@@ -18,13 +17,8 @@ import { CellAction } from "./cell-action";
 
 export type ShipmentColumn = ShipmentRow;
 
-const SHORT_DATE = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short", timeZone: "America/Bogota" });
-
-export const PROVIDER_LABELS: Record<ShippingProvider, string> = {
-  [ShippingProvider.ENVIOCLICK]: "EnvioClick",
-  [ShippingProvider.MANUAL]: "Manual",
-  [ShippingProvider.NONE]: "Sin definir",
-};
+/** Etiquetas del origen de la guía; viven en `lib/shipment-views` para compartirlas con la exportación. */
+export { PROVIDER_LABELS };
 
 export function carrierLabel(shipment: Pick<ShipmentColumn, "carrierName" | "courier">) {
   const raw = shipment.carrierName || shipment.courier;
@@ -149,12 +143,10 @@ export function buildColumns(storeId: string): ColumnDef<ShipmentColumn>[] {
     {
       accessorKey: "estimatedDeliveryDate",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Llega" />,
-      cell: ({ row }) =>
-        row.original.estimatedDeliveryDate ? (
-          <span className="whitespace-nowrap text-sm">{SHORT_DATE.format(new Date(row.original.estimatedDeliveryDate))}</span>
-        ) : (
-          <span className="text-xs text-muted-foreground">—</span>
-        ),
+      cell: ({ row }) => {
+        const arrival = formatShortDate(row.original.estimatedDeliveryDate);
+        return arrival ? <span className="whitespace-nowrap text-sm">{arrival}</span> : <span className="text-xs text-muted-foreground">—</span>;
+      },
     },
     {
       accessorKey: "cost",

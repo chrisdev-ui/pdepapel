@@ -44,13 +44,20 @@ const formSchema = z.object({
 
 type DraftValues = z.infer<typeof formSchema>;
 
+export interface RestockDraftPrefill {
+  supplierId: string | null;
+  product: { id: string; acqPrice: number } | null;
+}
+
 interface RestockOrderDraftFormProps {
   initialData: RestockOrderWithRelations | null;
   suppliers: { id: string; name: string; leadTimeDays: number | null }[];
+  /** Proveedor y producto sugeridos al crear (enlace «Reponer con el proveedor» de Inventario). */
+  prefill?: RestockDraftPrefill | null;
 }
 
 /** Borrador de un pedido a proveedor: aquí sí se editan líneas, proveedor y envío. */
-export function RestockOrderDraftForm({ initialData, suppliers }: RestockOrderDraftFormProps) {
+export function RestockOrderDraftForm({ initialData, suppliers, prefill = null }: RestockOrderDraftFormProps) {
   const params = useParams();
   const router = useRouter();
   const storeId = String(params.storeId);
@@ -67,8 +74,13 @@ export function RestockOrderDraftForm({ initialData, suppliers }: RestockOrderDr
             shippingCost: initialData.shippingCost,
             items: initialData.items.map((item) => ({ productId: item.productId, quantity: item.quantity, cost: item.cost })),
           }
-        : { supplierId: "", notes: "", shippingCost: 0, items: [] },
-    [initialData],
+        : {
+            supplierId: prefill?.supplierId ?? "",
+            notes: "",
+            shippingCost: 0,
+            items: prefill?.product ? [{ productId: prefill.product.id, quantity: 1, cost: prefill.product.acqPrice }] : [],
+          },
+    [initialData, prefill],
   );
 
   const form = useForm<DraftValues>({ resolver: zodResolver(formSchema), defaultValues });

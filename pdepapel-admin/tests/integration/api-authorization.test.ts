@@ -40,11 +40,11 @@ const PROTECTED_ROUTES: ProtectedRoute[] = [
   { path: "quotations", methods: ["GET", "POST"] },
   { path: "quotations/[quotationId]", methods: ["GET", "PATCH", "DELETE"], params: { quotationId: "x" } },
   { path: "quotations/[quotationId]/use", methods: ["POST"], params: { quotationId: "x" } },
-  { path: "shipment/[shippingId]", methods: ["GET", "PATCH", "DELETE"], params: { shippingId: "x" } },
   { path: "shipment/cache", methods: ["GET", "DELETE"] },
   { path: "shipment/cancel", methods: ["POST"] },
-  { path: "shipments", methods: ["GET"] },
   { path: "shipments/bulk-update", methods: ["PATCH"] },
+  { path: "shipments/bulk-manual-update", methods: ["POST"] },
+  { path: "shipments/[shippingId]/update-tracking", methods: ["POST"], params: { shippingId: "x" } },
   { path: "shipments/export", methods: ["GET"] },
   { path: "whatsapp/messages", methods: ["GET", "POST"] },
   { path: "whatsapp/templates", methods: ["GET", "POST"] },
@@ -97,10 +97,11 @@ const PROTECTED_ROUTES: ProtectedRoute[] = [
   { path: "marketplaces/mercadolibre/listings/[listingId]/quality/video-reminder", methods: ["POST", "DELETE"], params: { listingId: "x" } },
   { path: "marketplaces/mercadolibre/listings/[listingId]/sale-conditions", methods: ["GET", "PATCH"], params: { listingId: "x" } },
 ];
-// Bulk handlers (products PATCH, orders PATCH/DELETE, coupons PATCH/DELETE,
-// shipments/bulk-manual-update) validate the id list before authorizing, so an
-// empty body answers 400 first; they keep their owner check but are not in
-// this table. POST /orders is the public checkout and stays open on purpose.
+// Bulk handlers (products PATCH, orders PATCH/DELETE, coupons PATCH/DELETE)
+// validate the id list before authorizing, so an empty body answers 400
+// first; they keep their owner check but are not in this table. POST /orders
+// is the public checkout and stays open on purpose. `shipment/quote` and
+// `shipment/track` are storefront routes (CORS + guest id) by design.
 
 const modules = import.meta.glob("../../app/api/[[]storeId[]]/**/route.ts");
 
@@ -162,7 +163,7 @@ describe("store-owner authorization on dashboard API handlers", () => {
   it("lets the owner through the read-only handlers", async () => {
     session.userId = ownerId;
     for (const [path, method] of [
-      ["shipments", "GET"],
+      ["shipments/export", "GET"],
       ["quotations", "GET"],
       ["whatsapp/templates", "GET"],
       ["customers/search", "GET"],

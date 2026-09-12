@@ -1,4 +1,4 @@
-import { OrderStatus, OrderType, PaymentMethod, ShippingStatus } from "@prisma/client";
+import { OrderStatus, OrderType, PaymentMethod, ShippingProvider, ShippingStatus } from "@prisma/client";
 
 import { DISPATCH_WINDOW_DAYS, getColombiaDayBounds } from "@/lib/dashboard-today";
 
@@ -179,7 +179,47 @@ export function getShipmentStatusBadge(status: ShippingStatus): ShipmentStatusBa
   }
 }
 
+/** Origen de la guía, en el mismo español del formulario de pedido («Recoge en tienda» = sin transportadora). */
+export const PROVIDER_LABELS: Record<ShippingProvider, string> = {
+  [ShippingProvider.ENVIOCLICK]: "EnvioClick",
+  [ShippingProvider.MANUAL]: "Manual",
+  [ShippingProvider.NONE]: "Recoge en tienda",
+};
+
+export function getShipmentProviderLabel(provider: ShippingProvider): string {
+  return PROVIDER_LABELS[provider] ?? String(provider);
+}
+
+const SHORT_DATE = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short", timeZone: "America/Bogota" });
+
+/** «12 sept», en hora de Bogotá; null sin fecha. Para la columna y la tarjeta «Llega». */
+export function formatShortDate(date: Date | string | null | undefined): string | null {
+  if (!date) return null;
+  const value = new Date(date);
+  if (Number.isNaN(value.getTime())) return null;
+  return SHORT_DATE.format(value);
+}
+
 /* ---------- Lista de recogida (despacho del día) ---------- */
+
+export interface PickingSourceComponent {
+  quantity: number;
+  component: { id?: string | null; name: string; sku: string | null };
+}
+
+export interface PickingSourceItem {
+  quantity: number;
+  /** Snapshot del pedido (`OrderItem.name`/`sku`): sobrevive al producto y es lo único que tiene un ítem manual. */
+  name?: string | null;
+  sku?: string | null;
+  productId?: string | null;
+  product?: {
+    name: string;
+    sku: string | null;
+    isKit?: boolean;
+    kitComponents?: PickingSourceComponent[];
+  } | null;
+}
 
 export interface PickingSourceShipment {
   id: string;
@@ -190,8 +230,23 @@ export interface PickingSourceShipment {
     orderNumber: string;
     fullName: string;
     city?: string | null;
-    orderItems: { quantity: number; product: { name: string; sku: string | null } | null }[];
+    orderItems: PickingSourceItem[];
   };
+}
+
+export interface PickingComponent {
+  name: string;
+  sku: string | null;
+  /** Cantidad total a recoger: la del componente en el kit × la de la línea. */
+  quantity: number;
+}
+
+export interface PickingItem {
+  name: string;
+  sku: string | null;
+  quantity: number;
+  /** Solo en kits: lo que trae cada línea, ya multiplicado. */
+  components?: PickingComponent[];
 }
 
 export interface PickingOrder {
@@ -202,13 +257,14 @@ export interface PickingOrder {
   carrier: string | null;
   trackingCode: string | null;
   units: number;
-  items: { name: string; sku: string | null; quantity: number }[];
+  items: PickingItem[];
 }
 
 export interface PickingTotal {
   name: string;
   sku: string | null;
   quantity: number;
+  /** Pedidos distintos que llevan el producto. */
   orders: number;
 }
 
@@ -218,15 +274,71 @@ export interface PickingList {
   units: number;
 }
 
-/** Agrupa lo que hay que empacar: por pedido y el total por producto para recoger del estante. */
+const MANUAL_ITEM_LABEL = "Ítem manual";
+const DELETED_PRODUCT_LABEL = "Producto eliminado";
+
+const clean = (value: string | null | undefined): string | null => {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+};
+
+/** Nombre y SKU de una línea: primero el snapshot del pedido, luego el producto, y al final un rótulo honesto. */
+export function resolvePickingItemIdentity(item: PickingSourceItem): { name: string; sku: string | null } {
+  const name = clean(item.name) ?? clean(item.product?.name) ?? (item.productId ? DELETED_PRODUCT_LABEL : MANUAL_ITEM_LABEL);
+  const sku = clean(item.sku) ?? clean(item.product?.sku);
+  return { name, sku };
+}
+
+function explodeKit(item: PickingSourceItem): PickingComponent[] | undefined {
+  const components = item.product?.isKit ? item.product.kitComponents : undefined;
+  if (!components || components.length === 0) return undefined;
+  return components.map((entry) => ({
+    name: clean(entry.component.name) ?? DELETED_PRODUCT_LABEL,
+    sku: clean(entry.component.sku),
+    quantity: entry.quantity * item.quantity,
+  }));
+}
+
+/**
+ * Envíos que entran en la lista de recogida. Sin selección imprime toda la
+ * cola; con selección, solo los seleccionados que además estén en la cola,
+ * así el botón de la cabecera y el de la selección cuentan lo mismo.
+ */
+export function pickingTargets<T extends { id: string }>(dispatch: T[], selectedIds?: string[] | null): T[] {
+  if (!selectedIds) return dispatch;
+  const wanted = new Set(selectedIds);
+  return dispatch.filter((shipment) => wanted.has(shipment.id));
+}
+
+/**
+ * Agrupa lo que hay que empacar: por pedido (la línea del kit con sus
+ * componentes debajo) y el total por producto para recoger del estante, donde
+ * los kits ya vienen explotados en sus componentes.
+ */
 export function buildPickingList(shipments: PickingSourceShipment[]): PickingList {
+  const totalsMap = new Map<string, PickingTotal & { orderIds: Set<string> }>();
+  const addTotal = (key: string, name: string, sku: string | null, quantity: number, shipmentId: string) => {
+    const current = totalsMap.get(key) ?? { name, sku, quantity: 0, orders: 0, orderIds: new Set<string>() };
+    current.quantity += quantity;
+    current.orderIds.add(shipmentId);
+    totalsMap.set(key, current);
+  };
+
   const orders: PickingOrder[] = shipments
     .map((shipment) => {
-      const items = shipment.order.orderItems.map((item) => ({
-        name: item.product?.name ?? "Producto eliminado",
-        sku: item.product?.sku ?? null,
-        quantity: item.quantity,
-      }));
+      const items: PickingItem[] = shipment.order.orderItems.map((item) => {
+        const { name, sku } = resolvePickingItemIdentity(item);
+        const components = explodeKit(item);
+        if (components) {
+          components.forEach((component, index) => {
+            const source = item.product?.kitComponents?.[index]?.component;
+            addTotal(source?.id ?? component.sku ?? component.name, component.name, component.sku, component.quantity, shipment.id);
+          });
+          return { name, sku, quantity: item.quantity, components };
+        }
+        addTotal(item.productId ?? sku ?? name, name, sku, item.quantity, shipment.id);
+        return { name, sku, quantity: item.quantity };
+      });
       return {
         shipmentId: shipment.id,
         orderNumber: shipment.order.orderNumber,
@@ -240,17 +352,9 @@ export function buildPickingList(shipments: PickingSourceShipment[]): PickingLis
     })
     .sort((a, b) => a.orderNumber.localeCompare(b.orderNumber));
 
-  const totalsMap = new Map<string, PickingTotal>();
-  for (const order of orders) {
-    for (const item of order.items) {
-      const key = item.sku ?? item.name;
-      const current = totalsMap.get(key) ?? { name: item.name, sku: item.sku, quantity: 0, orders: 0 };
-      current.quantity += item.quantity;
-      current.orders += 1;
-      totalsMap.set(key, current);
-    }
-  }
-  const totals = Array.from(totalsMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+  const totals: PickingTotal[] = Array.from(totalsMap.values())
+    .map(({ orderIds, ...total }) => ({ ...total, orders: orderIds.size }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   return {
     orders,

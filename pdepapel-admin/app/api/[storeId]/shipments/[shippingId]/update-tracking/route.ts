@@ -1,178 +1,73 @@
 import { auth } from "@clerk/nextjs/server";
+import { ShippingProvider } from "@prisma/client";
 import { NextResponse } from "next/server";
-import { ShippingProvider, ShippingStatus } from "@prisma/client";
-import prismadb from "@/lib/prismadb";
-import { envioClickClient } from "@/lib/envioclick";
+
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { checkIfStoreOwner } from "@/lib/utils";
+import { envioClickClient } from "@/lib/envioclick";
+import prismadb from "@/lib/prismadb";
+import { applyShipmentStatus, mapEnvioClickStatus } from "@/lib/shipment-status";
+import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
-// Map EnvioClick status to our ShippingStatus
-function mapEnvioClickStatus(status: string): ShippingStatus {
-  // EnvioClick can return either English codes or Spanish text
-  const normalizedStatus = status.toUpperCase();
-
-  const statusMap: Record<string, ShippingStatus> = {
-    // English status codes
-    GENERATED: ShippingStatus.Shipped,
-    PICKED_UP: ShippingStatus.PickedUp,
-    ON_TRANSIT: ShippingStatus.InTransit,
-    WITH_DELIVERY_COURIER: ShippingStatus.OutForDelivery,
-    DELIVERED: ShippingStatus.Delivered,
-    CANCELED: ShippingStatus.Cancelled,
-    CANCELLED: ShippingStatus.Cancelled,
-    RETURNED: ShippingStatus.Returned,
-    EXCEPTION: ShippingStatus.Exception,
-    FAILED_DELIVERY: ShippingStatus.FailedDelivery,
-    // Spanish status text (from tracking API)
-    "PENDIENTE DE RECOLECCIÓN": ShippingStatus.Preparing,
-    "PENDIENTE DE RECOLECCION": ShippingStatus.Preparing,
-    "EN PREPARACIÓN": ShippingStatus.Preparing,
-    "EN PREPARACION": ShippingStatus.Preparing,
-    DESPACHADO: ShippingStatus.Shipped,
-    RECOGIDO: ShippingStatus.PickedUp,
-    "EN TRÁNSITO": ShippingStatus.InTransit,
-    "EN TRANSITO": ShippingStatus.InTransit,
-    "EN REPARTO": ShippingStatus.OutForDelivery,
-    ENTREGADO: ShippingStatus.Delivered,
-    "ENTREGA FALLIDA": ShippingStatus.FailedDelivery,
-    DEVUELTO: ShippingStatus.Returned,
-    CANCELADO: ShippingStatus.Cancelled,
-  };
-
-  return statusMap[normalizedStatus] || ShippingStatus.Exception;
-}
-
-export async function POST(
-  req: Request,
-  { params }: { params: { storeId: string; shippingId: string } },
-) {
+/**
+ * «Actualizar rastreo» de un envío de EnvioClick desde el panel. Escribe solo
+ * cuando el estado cambia, así `updatedAt` sigue midiendo el silencio real de
+ * la transportadora; el pedido sigue al envío.
+ */
+export async function POST(req: Request, { params }: { params: { storeId: string; shippingId: string } }) {
   try {
     const { userId } = await auth();
-
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
-    if (!params.shippingId)
-      throw ErrorFactory.InvalidRequest("Se requiere ID de envío");
+    await verifyStoreOwner(userId, params.storeId);
+    if (!params.shippingId) throw ErrorFactory.InvalidRequest("Se requiere ID de envío");
 
-    // Verify user is store owner
-    const isStoreOwner = await checkIfStoreOwner(userId, params.storeId);
-    if (!isStoreOwner) throw ErrorFactory.Unauthorized();
-
-    // Fetch shipping record
-    const shipping = await prismadb.shipping.findUnique({
-      where: {
-        id: params.shippingId,
-        storeId: params.storeId,
-      },
+    const shipping = await prismadb.shipping.findFirst({
+      where: { id: params.shippingId, storeId: params.storeId },
+      select: { id: true, status: true, provider: true, envioClickIdOrder: true, estimatedDeliveryDate: true },
     });
-
     if (!shipping) throw ErrorFactory.NotFound("Envío no encontrado");
-
-    // Only update EnvioClick shipments
     if (shipping.provider !== ShippingProvider.ENVIOCLICK) {
-      throw ErrorFactory.InvalidRequest(
-        "Solo se pueden actualizar envíos de EnvioClick",
-      );
+      throw ErrorFactory.InvalidRequest("Solo se pueden actualizar envíos de EnvioClick");
     }
-
     if (!shipping.envioClickIdOrder) {
-      throw ErrorFactory.InvalidRequest(
-        "El envío no tiene un ID de orden de EnvioClick",
-      );
+      throw ErrorFactory.InvalidRequest("El envío no tiene un ID de orden de EnvioClick");
     }
 
-    // Fetch tracking info from EnvioClick
-    const trackingResponse = await envioClickClient.trackByOrderId(
-      shipping.envioClickIdOrder,
-    );
-
-    if (trackingResponse.status !== "OK") {
-      throw new Error("No se pudo obtener información de rastreo");
-    }
-
+    const trackingResponse = await envioClickClient.trackByOrderId(shipping.envioClickIdOrder);
+    if (trackingResponse.status !== "OK") throw new Error("No se pudo obtener información de rastreo");
     const trackingData = trackingResponse.data;
+    if (typeof trackingData === "string") throw new Error(trackingData);
 
-    if (typeof trackingData === "string") {
-      throw new Error(trackingData); // Error message from API
-    }
-
-    console.log(
-      "[UPDATE_TRACKING] EnvioClick response data:",
-      JSON.stringify(trackingData, null, 2),
-    );
-
-    // Determine the latest status from events if available
     let newStatus = shipping.status;
-
+    let realDeliveryDate: string | null | undefined;
     if (Array.isArray(trackingData) && trackingData.length > 0) {
-      // Sort by date desc to get latest event
-      const sortedEvents = [...trackingData].sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-      );
-      const latestEvent = sortedEvents[0];
-      console.log("[UPDATE_TRACKING] Latest event:", latestEvent);
-      if (latestEvent?.status) {
-        newStatus = mapEnvioClickStatus(latestEvent.status);
-        console.log(
-          "[UPDATE_TRACKING] Mapped status from event:",
-          latestEvent.status,
-          "->",
-          newStatus,
-        );
-      }
-    } else if (trackingData?.status) {
-      // If data is an object with status field
-      console.log(
-        "[UPDATE_TRACKING] Direct status from data:",
-        trackingData.status,
-      );
-      newStatus = mapEnvioClickStatus(trackingData.status);
-      console.log("[UPDATE_TRACKING] Mapped status:", newStatus);
+      const latest = [...trackingData].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+      newStatus = mapEnvioClickStatus(latest?.status, shipping.status);
+    } else if (trackingData && typeof trackingData === "object" && "status" in trackingData) {
+      newStatus = mapEnvioClickStatus((trackingData as { status?: string }).status, shipping.status);
+      realDeliveryDate = (trackingData as { realDeliveryDate?: string | null }).realDeliveryDate ?? undefined;
     }
 
-    console.log(
-      "[UPDATE_TRACKING] Final status to save:",
-      newStatus,
-      "Type:",
-      typeof newStatus,
+    const deliveryDate = realDeliveryDate ? new Date(realDeliveryDate) : undefined;
+    const deliveryChanged =
+      deliveryDate !== undefined && deliveryDate.getTime() !== (shipping.estimatedDeliveryDate?.getTime() ?? Number.NaN);
+
+    const result = await prismadb.$transaction((tx) =>
+      applyShipmentStatus(tx, {
+        shippingId: shipping.id,
+        storeId: params.storeId,
+        status: newStatus,
+        extra: deliveryChanged ? { estimatedDeliveryDate: deliveryDate } : undefined,
+      }),
     );
 
-    // Update shipping record
-    const updatedShipping = await prismadb.shipping.update({
-      where: { id: params.shippingId },
-      data: {
-        status: newStatus,
-        // Additional fields from tracking
-        ...(trackingData.realDeliveryDate && {
-          estimatedDeliveryDate: new Date(trackingData.realDeliveryDate),
-        }),
-        updatedAt: new Date(),
-      },
-    });
+    const updatedShipping = await prismadb.shipping.findFirst({ where: { id: shipping.id, storeId: params.storeId } });
 
-    // SYNC: Update Parent Order Status based on Shipping Movement
-    if (
-      (
-        [
-          ShippingStatus.PickedUp,
-          ShippingStatus.InTransit,
-          ShippingStatus.OutForDelivery,
-          ShippingStatus.Delivered,
-        ] as ShippingStatus[]
-      ).includes(newStatus)
-    ) {
-      await prismadb.order.update({
-        where: { id: shipping.orderId },
-        data: { status: "SENT" },
-      });
-    }
-
-    return NextResponse.json({
-      success: true,
-      shipping: updatedShipping,
-      trackingInfo: trackingData,
-    });
-  } catch (error: any) {
+    return NextResponse.json(
+      { success: true, shipping: updatedShipping, trackingInfo: trackingData, changed: Boolean(result?.shipmentChanged), orderStatus: result?.orderStatus ?? null },
+      { headers: CACHE_HEADERS.NO_CACHE },
+    );
+  } catch (error) {
     return handleErrorResponse(error, "UPDATE_TRACKING");
   }
 }

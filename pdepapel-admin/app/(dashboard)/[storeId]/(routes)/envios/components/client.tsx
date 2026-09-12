@@ -155,7 +155,7 @@ export default function ShipmentsClient({ data, dispatch }: ShipmentsClientProps
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setOpenManualModal(true)}>
                 <Edit className="mr-2 h-4 w-4" aria-hidden="true" />
-                Actualizar envíos manuales
+                Corregir envíos manuales…
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleExport} disabled={exporting || data.length === 0}>
                 <Download className="mr-2 h-4 w-4" aria-hidden="true" />
@@ -163,7 +163,7 @@ export default function ShipmentsClient({ data, dispatch }: ShipmentsClientProps
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <PickingListButton shipments={dispatch} />
+          <PickingListButton shipments={dispatch} selectedIds={rows.map((row) => row.id)} />
         </div>
       </div>
 

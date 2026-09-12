@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { useSensitiveDataStore } from "@/hooks/use-sensitive-data-store";
 import type { TodaySummary } from "@/lib/dashboard-today";
+import { describeLowStockThreshold } from "@/lib/inventory-views";
 import { cn, currencyFormatter } from "@/lib/utils";
 import { AlertTriangle, Banknote, ChevronRight, CreditCard, Eye, EyeOff, PackageCheck } from "lucide-react";
 import Link from "next/link";
@@ -107,8 +108,8 @@ export function TodayKpis({ storeId, summary }: TodayKpisProps) {
       <Kpi
         title="Stock crítico"
         value={numberFormatter.format(summary.lowStock.count)}
-        note={`5 unidades o menos · ${summary.lowStock.outOfStock} agotados`}
-        href={`${base}/stock-bajo`}
+        note={`${describeLowStockThreshold(summary.lowStock.threshold, summary.lowStock.thresholdFromSettings)} · ${summary.lowStock.outOfStock} agotados`}
+        href={`${base}/inventario?vista=stock-critico`}
         linkLabel="Reponer"
         icon={<AlertTriangle className="h-4 w-4" aria-hidden="true" />}
         tint="bg-tint-pink"
