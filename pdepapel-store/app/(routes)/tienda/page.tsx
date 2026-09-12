@@ -40,11 +40,11 @@ export async function generateMetadata({ searchParams }: ShopPageProps): Promise
   } else if (categoryId) {
     const categories = await getCategories();
     const category = categories.find((c) => c.id === categoryId || c.slug === categoryId);
-    if (category) title = category.name;
+    if (category) title = stripTaxonomyIcon(category.name);
   } else if (typeId) {
     const types = await getTypes();
     const type = types.find((t) => t.id === typeId || t.slug === typeId);
-    if (type) title = type.name;
+    if (type) title = stripTaxonomyIcon(type.name);
   }
 
   if (minPrice || maxPrice) {

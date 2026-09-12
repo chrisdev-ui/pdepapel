@@ -1,5 +1,6 @@
 "use client";
 
+import { stripTaxonomyIcon } from "@/lib/catalog-labels";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getProduct } from "@/actions/get-product";
@@ -75,7 +76,7 @@ export const SingleProductPage: React.FC<SingleProductPageProps> = ({ product, s
 
   const breadcrumbItems: BreadcrumbItem[] = [{ label: "Tienda", href: STOREFRONT_ROUTES.shop }];
   if (selectedProduct.category) {
-    breadcrumbItems.push({ label: selectedProduct.category.name, href: categoryPath(selectedProduct.category.slug || selectedProduct.category.id) });
+    breadcrumbItems.push({ label: stripTaxonomyIcon(selectedProduct.category.name), href: categoryPath(selectedProduct.category.slug || selectedProduct.category.id) });
   }
   breadcrumbItems.push({ label: selectedProduct.name, isCurrent: true });
 

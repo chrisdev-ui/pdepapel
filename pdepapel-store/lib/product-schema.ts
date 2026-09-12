@@ -1,3 +1,4 @@
+import { stripTaxonomyIcon } from "@/lib/catalog-labels";
 import { BASE_URL } from "@/constants";
 import { getAverageRating, isComingSoon } from "@/lib/product-card";
 import { getStructuredProductSize } from "@/lib/product-options";
@@ -103,7 +104,7 @@ export function buildProductBreadcrumbJsonLd(product: Product) {
       { "@type": "ListItem", position: 1, name: "Inicio", item: BASE_URL },
       { "@type": "ListItem", position: 2, name: "Tienda", item: `${BASE_URL}/tienda` },
       ...(product.category
-        ? [{ "@type": "ListItem", position: 3, name: product.category.name, item: `${BASE_URL}${categoryPath(product.category.slug || product.category.id)}` }]
+        ? [{ "@type": "ListItem", position: 3, name: stripTaxonomyIcon(product.category.name), item: `${BASE_URL}${categoryPath(product.category.slug || product.category.id)}` }]
         : []),
       { "@type": "ListItem", position: product.category ? 4 : 3, name: product.name, item: `${BASE_URL}${canonicalPath}` },
     ],
