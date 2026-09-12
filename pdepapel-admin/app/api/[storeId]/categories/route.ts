@@ -1,11 +1,19 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { splitTaxonomyIcon } from "@/lib/catalog-options";
-import { ensureCategoryAssets, isCategoryCoverConfigured } from "@/lib/category-covers";
-import { getCategoryRevalidationPaths, getUniqueCategorySlug } from "@/lib/category-slugs";
 import { ACTIVE_ATTRIBUTE_WHERE } from "@/lib/attribute-archive";
+import { invalidateStoreProductsCache } from "@/lib/cache";
+import { splitTaxonomyIcon } from "@/lib/catalog-options";
+import { getCategoryRevalidationPaths, getUniqueCategorySlug } from "@/lib/category-slugs";
 import prismadb from "@/lib/prismadb";
 import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 import { slugify } from "@/lib/slugify";
+import {
+  cleanTaxonomyName,
+  duplicateTaxonomyError,
+  findDuplicateTaxonomyName,
+  mapTaxonomyUniqueError,
+  missingTaxonomyMessage,
+  requiredTaxonomyFieldMessage,
+} from "@/lib/taxonomy";
 import {
   CACHE_HEADERS,
   parseErrorDetails,
@@ -14,6 +22,25 @@ import {
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
+const PUBLIC_CATEGORY_SELECT = {
+  id: true,
+  name: true,
+  slug: true,
+  typeId: true,
+  seoEnabled: true,
+  seoFeatured: true,
+  seoTitle: true,
+  seoDescription: true,
+  seoIntro: true,
+  imageUrl: true,
+  icon: true,
+} as const;
+
+/**
+ * Crea una subcategoría. Responde en cuanto existe la fila: la portada y la
+ * intro con IA se piden aparte desde `[categoryId]/cover` (auditoría Grupo B:
+ * antes el POST esperaba a OpenAI y bloqueaba el formulario).
+ */
 export async function POST(
   req: Request,
   { params }: { params: { storeId: string } },
@@ -38,97 +65,77 @@ export async function POST(
       icon,
     } = body;
 
-    if (!name)
-      throw ErrorFactory.InvalidRequest(
-        "Se requiere un nombre de sub-categoría",
-      );
+    if (!name || typeof name !== "string" || !cleanTaxonomyName(name))
+      throw ErrorFactory.InvalidRequest(requiredTaxonomyFieldMessage("category", "nombre"));
 
     if (!typeId)
       throw ErrorFactory.InvalidRequest(
-        "Se requiere un tipo para la sub-categoría",
+        "Se requiere una categoría para la subcategoría.",
       );
 
     const type = await prismadb.type.findFirst({
       where: { id: typeId, storeId: params.storeId },
       select: { id: true },
     });
-    if (!type) {
-      throw ErrorFactory.NotFound("El tipo no existe en esta tienda");
-    }
+    if (!type) throw ErrorFactory.NotFound(missingTaxonomyMessage("type"));
 
     const canonical = splitTaxonomyIcon(name);
-    const existingCategory = await prismadb.category.findFirst({
-      where: {
-        storeId: params.storeId,
-        name: canonical.name,
-      },
-      select: { id: true },
+    const canonicalName = cleanTaxonomyName(canonical.name);
+    if (!canonicalName) throw ErrorFactory.InvalidRequest(requiredTaxonomyFieldMessage("category", "nombre"));
+
+    // Nombre único dentro de la misma categoría, sin distinguir mayúsculas ni tildes.
+    const siblings = await prismadb.category.findMany({
+      where: { storeId: params.storeId, typeId },
+      select: { id: true, name: true },
     });
-    if (existingCategory) {
-      throw ErrorFactory.Conflict(
-        `Ya existe una subcategoría llamada "${canonical.name}" en esta tienda`,
-      );
+    if (findDuplicateTaxonomyName(siblings, canonicalName)) {
+      throw duplicateTaxonomyError("category", canonicalName, "type");
     }
 
     const slug = await getUniqueCategorySlug(prismadb, {
       storeId: params.storeId,
-      baseSlug: slugify(canonical.name),
+      baseSlug: slugify(canonicalName),
     });
 
-    const category = await prismadb.category.create({
-      data: {
-        name: canonical.name,
-        icon: icon?.trim() || canonical.icon,
-        slug,
-        typeId,
-        storeId: params.storeId,
-        seoEnabled: Boolean(seoEnabled),
-        seoFeatured: Boolean(seoEnabled && seoFeatured),
-        seoTitle: seoTitle?.trim() || null,
-        seoDescription: seoDescription?.trim() || null,
-        seoIntro: seoIntro?.trim() || null,
-        imageUrl: imageUrl?.trim() || null,
-      },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        seoEnabled: true,
-        seoFeatured: true,
-        seoTitle: true,
-        seoDescription: true,
-        seoIntro: true,
-        imageUrl: true,
-        icon: true,
-      },
+    const category = await prismadb.category
+      .create({
+        data: {
+          name: canonicalName,
+          icon: icon?.trim() || canonical.icon,
+          slug,
+          typeId,
+          storeId: params.storeId,
+          seoEnabled: Boolean(seoEnabled),
+          seoFeatured: Boolean(seoEnabled && seoFeatured),
+          seoTitle: seoTitle?.trim() || null,
+          seoDescription: seoDescription?.trim() || null,
+          seoIntro: seoIntro?.trim() || null,
+          imageUrl: imageUrl?.trim() || null,
+        },
+        select: PUBLIC_CATEGORY_SELECT,
+      })
+      .catch((error) => {
+        throw mapTaxonomyUniqueError(error, "category", canonicalName, "type");
+      });
+
+    await Promise.all([
+      triggerStorefrontRevalidation({
+        paths: getCategoryRevalidationPaths(category.slug),
+        tags: ["categories", "products"],
+      }),
+      invalidateStoreProductsCache(params.storeId),
+    ]);
+
+    return NextResponse.json(category, {
+      status: 201,
+      headers: CACHE_HEADERS.NO_CACHE,
     });
-
-    await triggerStorefrontRevalidation({
-      paths: getCategoryRevalidationPaths(category.slug),
-      tags: ["categories", "products"],
-    });
-
-    let assetsWarning: string | null = null;
-    if (isCategoryCoverConfigured() && (!category.imageUrl || !category.seoIntro)) {
-      try {
-        const assets = await ensureCategoryAssets(params.storeId, category.id);
-        category.imageUrl = assets.imageUrl;
-        category.seoIntro = assets.seoIntro;
-      } catch (error) {
-        console.error("[CATEGORIES_POST] cover generation failed", error);
-        assetsWarning = "La categoría se creó, pero no se pudo generar la portada. Puedes intentarlo desde el formulario.";
-      }
-    }
-
-    return NextResponse.json(
-      { ...category, assetsWarning },
-      { headers: CACHE_HEADERS.NO_CACHE },
-    );
   } catch (error) {
-    return handleErrorResponse(error, "CATEGORIES_POST");
+    return handleErrorResponse(error, "CATEGORIES_POST", { headers: CACHE_HEADERS.NO_CACHE });
   }
 }
 
+/** Lista pública (tienda en línea): solo subcategorías activas y solo campos del catálogo. */
 export async function GET(
   _req: Request,
   { params }: { params: { storeId: string } },
@@ -138,24 +145,12 @@ export async function GET(
 
     const categories = await prismadb.category.findMany({
       where: { storeId: params.storeId, ...ACTIVE_ATTRIBUTE_WHERE },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        typeId: true,
-        seoEnabled: true,
-        seoFeatured: true,
-        seoTitle: true,
-        seoDescription: true,
-        seoIntro: true,
-        imageUrl: true,
-        icon: true,
-      },
+      select: PUBLIC_CATEGORY_SELECT,
     });
 
     return NextResponse.json(categories, { headers: CACHE_HEADERS.DYNAMIC });
   } catch (error) {
-    return handleErrorResponse(error, "CATEGORIES_GET");
+    return handleErrorResponse(error, "CATEGORIES_GET", { headers: CACHE_HEADERS.NO_CACHE });
   }
 }
 
@@ -174,10 +169,10 @@ export async function DELETE(
 
     if (!ids || !Array.isArray(ids) || ids.length === 0)
       throw ErrorFactory.InvalidRequest(
-        "Se requieren IDs de sub-categorías en formato de arreglo",
+        "Se requieren IDs de subcategorías en formato de arreglo",
       );
 
-    await prismadb.$transaction(async (tx) => {
+    const slugs = await prismadb.$transaction(async (tx) => {
       const categories = await tx.category.findMany({
         where: {
           storeId: params.storeId,
@@ -185,11 +180,12 @@ export async function DELETE(
             in: ids,
           },
         },
+        select: { id: true, slug: true },
       });
 
       if (categories.length !== ids.length)
         throw ErrorFactory.NotFound(
-          "Algunas sub-categorías no se han encontrado en esta tienda",
+          "Algunas subcategorías no existen en esta tienda",
         );
 
       const categoriesWithProducts = await tx.category.findMany({
@@ -210,7 +206,7 @@ export async function DELETE(
 
       if (categoriesWithProducts.length > 0) {
         throw ErrorFactory.Conflict(
-          "No se pueden eliminar sub-categorías con productos asociados. Elimina o reasigna los productos asociados primero",
+          "No se pueden eliminar subcategorías con productos asociados. Elimina o reasigna los productos asociados primero",
           {
             ...parseErrorDetails(
               "categoriesWithProducts",
@@ -235,12 +231,22 @@ export async function DELETE(
           },
         },
       });
+
+      return categories.map((category) => category.slug);
     });
 
-    return NextResponse.json("Sub-categorías eliminadas correctamente", {
+    await Promise.all([
+      triggerStorefrontRevalidation({
+        paths: getCategoryRevalidationPaths(...slugs),
+        tags: ["categories", "products"],
+      }),
+      invalidateStoreProductsCache(params.storeId),
+    ]);
+
+    return NextResponse.json("Subcategorías eliminadas correctamente", {
       headers: CACHE_HEADERS.NO_CACHE,
     });
   } catch (error) {
-    return handleErrorResponse(error, "CATEGORIES_DELETE");
+    return handleErrorResponse(error, "CATEGORIES_DELETE", { headers: CACHE_HEADERS.NO_CACHE });
   }
 }

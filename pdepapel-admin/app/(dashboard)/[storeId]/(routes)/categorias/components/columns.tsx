@@ -31,7 +31,7 @@ export const columns: ColumnDef<CategoryColumn>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader
         column={column}
-        title="Productos en esta categoría"
+        title="Productos en esta subcategoría"
       />
     ),
     cell: ({ row }) => row.original._count.products,

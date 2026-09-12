@@ -1,11 +1,19 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { invalidateStoreProductsCache } from "@/lib/cache";
 import prismadb from "@/lib/prismadb";
+import {
+  cleanTaxonomyName,
+  duplicateTaxonomyError,
+  findDuplicateTaxonomyName,
+  mapTaxonomyUniqueError,
+  missingTaxonomyMessage,
+  requiredTaxonomyFieldMessage,
+} from "@/lib/taxonomy";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-// Enable Edge Runtime for faster response times
-
+/** Lectura pública de un tamaño de la tienda; otra tienda o un id ajeno → 404. */
 export async function GET(
   _req: Request,
   { params }: { params: { storeId: string; sizeId: string } },
@@ -13,19 +21,21 @@ export async function GET(
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.sizeId) {
-      throw ErrorFactory.InvalidRequest("El ID del tamaño es requerido");
+      throw ErrorFactory.InvalidRequest(requiredTaxonomyFieldMessage("size", "ID"));
     }
 
-    const size = await prismadb.size.findUnique({
+    const size = await prismadb.size.findFirst({
       where: { id: params.sizeId, storeId: params.storeId },
     });
+
+    if (!size) throw ErrorFactory.NotFound(missingTaxonomyMessage("size"));
 
     return NextResponse.json(size, {
       headers: CACHE_HEADERS.STATIC,
     });
   } catch (error) {
     return handleErrorResponse(error, "SIZE_GET", {
-      headers: CACHE_HEADERS.STATIC,
+      headers: CACHE_HEADERS.NO_CACHE,
     });
   }
 }
@@ -39,58 +49,46 @@ export async function PATCH(
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.sizeId) {
-      throw ErrorFactory.InvalidRequest("El ID del tamaño es requerido");
+      throw ErrorFactory.InvalidRequest(requiredTaxonomyFieldMessage("size", "ID"));
     }
-
-    const body = await req.json();
-    const { name, value } = body;
 
     await verifyStoreOwner(userId, params.storeId);
 
-    if (!name) {
-      throw ErrorFactory.InvalidRequest("El nombre del tamaño es requerido");
-    }
-    if (!value) {
-      throw ErrorFactory.InvalidRequest("El valor del tamaño es requerido");
-    }
+    const body = await req.json();
+    const name = cleanTaxonomyName(body?.name);
+    const value = typeof body?.value === "string" ? body.value.trim() : "";
 
-    const existingSize = await prismadb.size.findUnique({
-      where: {
-        id: params.sizeId,
-        storeId: params.storeId,
-      },
-    });
+    if (!name) throw ErrorFactory.InvalidRequest(requiredTaxonomyFieldMessage("size", "nombre"));
+    if (!value) throw ErrorFactory.InvalidRequest(requiredTaxonomyFieldMessage("size", "valor"));
 
-    if (!existingSize) {
-      throw ErrorFactory.NotFound(
-        `El tamaño ${params.sizeId} no existe en esta tienda`,
-      );
-    }
+    const updatedSize = await prismadb
+      .$transaction(async (tx) => {
+        const sizes = await tx.size.findMany({
+          where: { storeId: params.storeId },
+          select: { id: true, name: true, value: true },
+        });
+        if (!sizes.some((size) => size.id === params.sizeId)) {
+          throw ErrorFactory.NotFound(missingTaxonomyMessage("size"));
+        }
+        if (sizes.some((size) => size.id !== params.sizeId && size.value === value)) {
+          throw ErrorFactory.Conflict(
+            `Ya existe otro tamaño con el valor «${value}» en esta tienda.`,
+          );
+        }
+        if (findDuplicateTaxonomyName(sizes, name, params.sizeId)) {
+          throw duplicateTaxonomyError("size", name);
+        }
 
-    // Check if another size with same value already exists in this store
-    const duplicateSize = await prismadb.size.findFirst({
-      where: {
-        storeId: params.storeId,
-        value: value.trim(),
-        id: { not: params.sizeId }, // Exclude current size
-      },
-    });
+        return tx.size.update({
+          where: { id: params.sizeId, storeId: params.storeId },
+          data: { name, value },
+        });
+      })
+      .catch((error) => {
+        throw mapTaxonomyUniqueError(error, "size", name);
+      });
 
-    if (duplicateSize) {
-      throw ErrorFactory.Conflict(
-        `Ya existe otro tamaño con el valor "${value.trim()}" en esta tienda`,
-      );
-    }
-
-    const updatedSize = await prismadb.size.update({
-      where: {
-        id: params.sizeId,
-      },
-      data: {
-        name: name.trim(),
-        value: value.trim(),
-      },
-    });
+    await invalidateStoreProductsCache(params.storeId);
 
     return NextResponse.json(updatedSize, {
       headers: CACHE_HEADERS.NO_CACHE,
@@ -111,13 +109,13 @@ export async function DELETE(
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.sizeId) {
-      throw ErrorFactory.InvalidRequest("El ID del tamaño es requerido");
+      throw ErrorFactory.InvalidRequest(requiredTaxonomyFieldMessage("size", "ID"));
     }
 
     await verifyStoreOwner(userId, params.storeId);
 
     await prismadb.$transaction(async (tx) => {
-      const size = await tx.size.findUnique({
+      const size = await tx.size.findFirst({
         where: {
           id: params.sizeId,
           storeId: params.storeId,
@@ -131,9 +129,7 @@ export async function DELETE(
         },
       });
 
-      if (!size) {
-        throw ErrorFactory.NotFound("Tamaño no encontrado");
-      }
+      if (!size) throw ErrorFactory.NotFound(missingTaxonomyMessage("size"));
 
       if (size.products.length > 0) {
         throw ErrorFactory.Conflict(
@@ -146,11 +142,11 @@ export async function DELETE(
       }
 
       await tx.size.delete({
-        where: {
-          id: params.sizeId,
-        },
+        where: { id: params.sizeId, storeId: params.storeId },
       });
     });
+
+    await invalidateStoreProductsCache(params.storeId);
 
     return NextResponse.json("Tamaño eliminado correctamente", {
       headers: CACHE_HEADERS.NO_CACHE,

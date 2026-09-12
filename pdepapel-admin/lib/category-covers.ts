@@ -5,9 +5,11 @@ import { getCategoryRevalidationPaths } from "@/lib/category-slugs";
 import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 
 /**
- * Portada e intro de una categoría, generadas con el mismo estilo pastel de
- * las portadas curadas. Se usan al crear una categoría sin foto, desde el
- * botón del formulario y desde el script por lotes.
+ * Portada e intro de una subcategoría (modelo `Category`), generadas con el
+ * mismo estilo pastel de las portadas curadas. Se generan solo a pedido: desde
+ * los botones «Generar con IA» del formulario (endpoint
+ * `POST /api/[storeId]/categories/[categoryId]/cover`) y desde el script por
+ * lotes. Crear una subcategoría nunca espera a OpenAI (auditoría Grupo B).
  */
 
 export const IMAGE_MODEL = "gpt-image-1";
@@ -68,7 +70,7 @@ export async function generateCategoryIntro(categoryName: string, typeName: stri
         },
         {
           role: "user",
-          content: `Escribe la intro de la categoría «${stripTaxonomyIcon(categoryName)}» (tipo: ${stripTaxonomyIcon(typeName)}): entre 110 y 160 caracteres, una o dos frases, sobre para qué sirven los productos o a quién le gustan. Devuelve solo el texto.`,
+          content: `Escribe la intro de la subcategoría «${stripTaxonomyIcon(categoryName)}» (categoría: ${stripTaxonomyIcon(typeName)}): entre 110 y 160 caracteres, una o dos frases, sobre para qué sirven los productos o a quién le gustan. Devuelve solo el texto.`,
         },
       ],
     },
@@ -93,32 +95,52 @@ export interface CategoryAssetsResult {
   generated: ("imageUrl" | "seoIntro")[];
 }
 
+/** Qué generar: la portada, la intro o las dos (valor por defecto). */
+export type CategoryAssetPart = "cover" | "intro" | "both";
+
+export const CATEGORY_ASSET_PARTS: readonly CategoryAssetPart[] = ["cover", "intro", "both"];
+
+export const isCategoryAssetPart = (value: unknown): value is CategoryAssetPart =>
+  typeof value === "string" && (CATEGORY_ASSET_PARTS as readonly string[]).includes(value);
+
+export interface EnsureCategoryAssetsOptions {
+  /** Regenera aunque ya exista. */
+  force?: boolean;
+  /** Parte a completar; por defecto las dos. */
+  part?: CategoryAssetPart;
+  fetchImpl?: FetchLike;
+}
+
 /**
- * Completa lo que falte (foto o intro) en una categoría y lo guarda. Con
- * `force` regenera las dos aunque existan. Nunca toca lo que ya está si no
- * se pide.
+ * Completa lo que falte (foto, intro o ambas según `part`) en una subcategoría
+ * y lo guarda. Con `force` regenera aunque exista. Nunca toca lo que ya está
+ * si no se pide. Es una llamada lenta (OpenAI + Cloudinary): solo debe
+ * ejecutarse desde el endpoint de portada, nunca en el `POST` de creación.
  */
 export async function ensureCategoryAssets(
   storeId: string,
   categoryId: string,
-  options: { force?: boolean; fetchImpl?: FetchLike } = {},
+  options: EnsureCategoryAssetsOptions = {},
 ): Promise<CategoryAssetsResult> {
   const category = await prismadb.category.findFirst({
     where: { id: categoryId, storeId },
     select: { id: true, name: true, slug: true, imageUrl: true, seoIntro: true, type: { select: { name: true } } },
   });
-  if (!category) throw new Error("La categoría no existe en esta tienda");
+  if (!category) throw new Error("La subcategoría no existe en esta tienda.");
 
+  const part = options.part ?? "both";
+  const wantsCover = part === "cover" || part === "both";
+  const wantsIntro = part === "intro" || part === "both";
   const generated: CategoryAssetsResult["generated"] = [];
   const data: { imageUrl?: string; seoIntro?: string } = {};
   const typeName = category.type?.name ?? "Papelería";
 
-  if (options.force || !category.imageUrl) {
+  if (wantsCover && (options.force || !category.imageUrl)) {
     const image = await generateCategoryCover(category.name, typeName, options.fetchImpl);
     data.imageUrl = await uploadCategoryCover(image, category.slug || category.id);
     generated.push("imageUrl");
   }
-  if (options.force || !category.seoIntro) {
+  if (wantsIntro && (options.force || !category.seoIntro)) {
     data.seoIntro = await generateCategoryIntro(category.name, typeName, options.fetchImpl);
     generated.push("seoIntro");
   }

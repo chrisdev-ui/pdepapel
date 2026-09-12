@@ -239,7 +239,7 @@ export function CatalogAttributesEditor({
       {unusedRecommendedOptions.length > 0 && value.length < maxAttributes && (
         <div className="space-y-2 rounded-md bg-muted/40 p-3">
           <p className="text-xs font-medium text-muted-foreground">
-            Sugeridas para esta sub-categoría
+            Sugeridas para esta subcategoría
           </p>
           <div className="flex flex-wrap gap-2">
             {unusedRecommendedOptions.map((option) => (
@@ -289,7 +289,7 @@ export function CatalogAttributesEditor({
               description: alreadyUsed
                 ? "Ya agregada a este producto"
                 : categoryMatch
-                  ? `Usada en esta sub-categoría · ${option.usageCount} producto${option.usageCount === 1 ? "" : "s"}`
+                  ? `Usada en esta subcategoría · ${option.usageCount} producto${option.usageCount === 1 ? "" : "s"}`
                   : `${option.usageCount} producto${option.usageCount === 1 ? "" : "s"}`,
               disabled: alreadyUsed,
             };

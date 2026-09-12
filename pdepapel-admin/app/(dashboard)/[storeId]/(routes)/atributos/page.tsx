@@ -33,7 +33,8 @@ export default async function AttributesPage({ params }: { params: { storeId: st
           name: true,
           isActive: true,
           values: { select: { id: true, name: true, value: true }, orderBy: { displayOrder: "asc" } },
-          _count: { select: { productValues: true, categories: true } },
+          // Solo subcategorías activas: una archivada no debe seguir sumando.
+          _count: { select: { productValues: true, categories: { where: { category: { isArchived: false } } } } },
         },
       })
       .catch(() => []),

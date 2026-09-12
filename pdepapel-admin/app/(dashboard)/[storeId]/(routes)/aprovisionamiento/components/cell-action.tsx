@@ -1,12 +1,5 @@
 "use client";
 
-import { useToast } from "@/hooks/use-toast";
-import { RestockOrderStatus } from "@prisma/client";
-import { Copy, Edit, MoreHorizontal, Trash } from "lucide-react";
-import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
-
-import { AlertModal } from "@/components/modals/alert-modal";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -15,98 +8,109 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-import { useClipboard } from "@/hooks/use-clipboard";
+import { useActionConfirmation } from "@/hooks/use-action-confirmation";
+import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/api-errors";
+import { canTransitionRestockOrder } from "@/lib/restock-orders";
+import { RestockOrderStatus } from "@prisma/client";
 import axios from "axios";
-import { RestockOrderColumn } from "./columns";
+import { Ban, Eye, MoreHorizontal, PackageCheck, Pencil, Trash } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
+
+import type { RestockOrderRow } from "../server/get-restock-orders";
 
 interface CellActionProps {
-  data: RestockOrderColumn;
+  data: RestockOrderRow;
 }
 
 export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const router = useRouter();
   const params = useParams();
-  const { onCopy } = useClipboard();
+  const storeId = String(params.storeId);
   const { toast } = useToast();
+  const { requestConfirmation, confirmationDialog } = useActionConfirmation();
   const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
 
-  const onDelete = async () => {
+  const isDraft = data.status === RestockOrderStatus.DRAFT;
+  const isCancelled = data.status === RestockOrderStatus.CANCELLED;
+  const receivable = data.status === RestockOrderStatus.ORDERED || data.status === RestockOrderStatus.PARTIALLY_RECEIVED;
+  const context = { receivedUnits: data.progress.receivedUnits };
+  const canCancel = canTransitionRestockOrder(data.status, RestockOrderStatus.CANCELLED, context) && !isCancelled;
+  const canDelete = (isDraft || isCancelled) && data.progress.receivedUnits === 0;
+
+  const run = async (work: () => Promise<void>, success: string) => {
     try {
       setLoading(true);
-      await axios.delete(`/api/${params.storeId}/restock-orders/${data.id}`);
+      await work();
       router.refresh();
-      toast({ title: "Pedido eliminado.", variant: "success" });
+      toast({ title: success, variant: "success" });
     } catch (error) {
-      toast({ title: "Algo salió mal.", variant: "destructive" });
+      toast({ title: getErrorMessage(error), variant: "destructive" });
     } finally {
       setLoading(false);
-      setOpen(false);
     }
   };
 
   const onCancel = async () => {
-    try {
-      setLoading(true);
-      await axios.patch(`/api/${params.storeId}/restock-orders/${data.id}`, {
-        status: RestockOrderStatus.CANCELLED,
-      });
-      router.refresh();
-      toast({ title: "Pedido cancelado.", variant: "success" });
-    } catch (error) {
-      toast({ title: "Error al cancelar.", variant: "destructive" });
-    } finally {
-      setLoading(false);
-      setOpen(false);
-    }
+    const confirmed = await requestConfirmation({
+      title: `Cancelar el pedido ${data.orderNumber}`,
+      description: "No se ha recibido nada, así que el inventario no cambia. El pedido queda como cancelado y podrás volverlo a borrador si hace falta.",
+      confirmLabel: "Cancelar pedido",
+      cancelLabel: "Volver",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    await run(
+      () => axios.patch(`/api/${storeId}/restock-orders/${data.id}`, { status: RestockOrderStatus.CANCELLED }).then(() => undefined),
+      "Pedido cancelado.",
+    );
   };
 
-  const isDraft = data.status === RestockOrderStatus.DRAFT;
-  const isCancelled = data.status === RestockOrderStatus.CANCELLED;
-  const isActive =
-    data.status === RestockOrderStatus.ORDERED ||
-    data.status === RestockOrderStatus.PARTIALLY_RECEIVED;
-  const canDelete = isDraft || isCancelled;
+  const onDelete = async () => {
+    const confirmed = await requestConfirmation({
+      title: `Eliminar el pedido ${data.orderNumber}`,
+      description: isDraft
+        ? "Es un borrador: no afectó inventario ni proveedores. Se borra definitivamente."
+        : "Está cancelado y no recibió mercancía. Se borra definitivamente; su número no se reutiliza.",
+      confirmLabel: "Eliminar",
+      cancelLabel: "Volver",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    await run(() => axios.delete(`/api/${storeId}/restock-orders/${data.id}`).then(() => undefined), "Pedido eliminado.");
+  };
 
   return (
     <>
-      <AlertModal
-        isOpen={open}
-        onClose={() => setOpen(false)}
-        onConfirm={onDelete}
-        loading={loading}
-      />
+      {confirmationDialog}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="h-8 w-8 p-0">
-            <span className="sr-only">Abrir menú</span>
-            <MoreHorizontal className="h-4 w-4" />
+          <Button variant="ghost" className="h-8 w-8 p-0" disabled={loading} aria-label={`Acciones del pedido ${data.orderNumber}`}>
+            <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-          <DropdownMenuItem onClick={() => onCopy(data.id, "ID de Pedido")}>
-            <Copy className="mr-2 h-4 w-4" />
-            Copiar ID
+          <DropdownMenuLabel>Pedido {data.orderNumber}</DropdownMenuLabel>
+          <DropdownMenuItem onClick={() => router.push(`/${storeId}/aprovisionamiento/${data.id}`)}>
+            {isDraft ? <Pencil className="mr-2 h-4 w-4" aria-hidden="true" /> : <Eye className="mr-2 h-4 w-4" aria-hidden="true" />}
+            {isDraft ? "Editar borrador" : "Ver pedido"}
           </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() =>
-              router.push(`/${params.storeId}/aprovisionamiento/${data.id}`)
-            }
-          >
-            <Edit className="mr-2 h-4 w-4" />
-            {isDraft ? "Editar" : "Ver detalles"}
-          </DropdownMenuItem>
-          {isActive && (
+          {receivable && (
+            <DropdownMenuItem onClick={() => router.push(`/${storeId}/aprovisionamiento/${data.id}?recibir=1`)}>
+              <PackageCheck className="mr-2 h-4 w-4" aria-hidden="true" />
+              Recibir mercancía
+            </DropdownMenuItem>
+          )}
+          {canCancel && (
             <DropdownMenuItem onClick={onCancel}>
-              <Trash className="mr-2 h-4 w-4" />
-              Cancelar Pedido
+              <Ban className="mr-2 h-4 w-4" aria-hidden="true" />
+              Cancelar pedido
             </DropdownMenuItem>
           )}
           {canDelete && (
-            <DropdownMenuItem onClick={() => setOpen(true)}>
-              <Trash className="mr-2 h-4 w-4" />
+            <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
+              <Trash className="mr-2 h-4 w-4" aria-hidden="true" />
               Eliminar
             </DropdownMenuItem>
           )}

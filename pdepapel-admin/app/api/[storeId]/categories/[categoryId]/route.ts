@@ -1,32 +1,54 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { ACTIVE_ATTRIBUTE_WHERE } from "@/lib/attribute-archive";
+import { invalidateStoreProductsCache } from "@/lib/cache";
 import { splitTaxonomyIcon } from "@/lib/catalog-options";
 import {
+  getCategoryRevalidationPaths,
   getUniqueCategorySlug,
   preserveCategorySlugAlias,
 } from "@/lib/category-slugs";
-import { ACTIVE_ATTRIBUTE_WHERE } from "@/lib/attribute-archive";
 import prismadb from "@/lib/prismadb";
 import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 import { slugify } from "@/lib/slugify";
+import {
+  cleanTaxonomyName,
+  duplicateTaxonomyError,
+  findDuplicateTaxonomyName,
+  mapTaxonomyUniqueError,
+  missingTaxonomyMessage,
+  requiredTaxonomyFieldMessage,
+} from "@/lib/taxonomy";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-const getCategoryRevalidationPaths = (...slugs: string[]) => [
-  "/",
-  "/tienda",
-  "/sitemap.xml",
-  ...slugs.filter(Boolean).map((slug) => `/categoria/${slug}`),
-];
+const PUBLIC_CATEGORY_SELECT = {
+  id: true,
+  name: true,
+  slug: true,
+  typeId: true,
+  seoEnabled: true,
+  seoFeatured: true,
+  seoTitle: true,
+  seoDescription: true,
+  seoIntro: true,
+  imageUrl: true,
+  icon: true,
+} as const;
 
+const MISSING_ID = "Se requiere el ID de la subcategoría.";
+
+/**
+ * Lectura pública por id, slug o alias de slug; solo subcategorías activas de
+ * la tienda indicada.
+ */
 export async function GET(
   _req: Request,
   { params }: { params: { storeId: string; categoryId: string } },
 ) {
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
-    if (!params.categoryId)
-      throw ErrorFactory.InvalidRequest("Se requiere un ID de sub-categoría");
+    if (!params.categoryId) throw ErrorFactory.InvalidRequest(MISSING_ID);
 
     let category = await prismadb.category.findFirst({
       where: {
@@ -34,19 +56,7 @@ export async function GET(
         ...ACTIVE_ATTRIBUTE_WHERE,
         OR: [{ id: params.categoryId }, { slug: params.categoryId }],
       },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        typeId: true,
-        seoEnabled: true,
-        seoFeatured: true,
-        seoTitle: true,
-        seoDescription: true,
-        seoIntro: true,
-        imageUrl: true,
-        icon: true,
-      },
+      select: PUBLIC_CATEGORY_SELECT,
     });
 
     if (!category) {
@@ -63,32 +73,18 @@ export async function GET(
       if (alias) {
         category = await prismadb.category.findFirst({
           where: { id: alias.categoryId, storeId: params.storeId, ...ACTIVE_ATTRIBUTE_WHERE },
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            typeId: true,
-            seoEnabled: true,
-            seoFeatured: true,
-            seoTitle: true,
-            seoDescription: true,
-            seoIntro: true,
-            imageUrl: true,
-            icon: true,
-          },
+          select: PUBLIC_CATEGORY_SELECT,
         });
       }
     }
 
-    if (!category) {
-      throw ErrorFactory.NotFound("Sub-categoría no encontrada");
-    }
+    if (!category) throw ErrorFactory.NotFound(missingTaxonomyMessage("category"));
 
     return NextResponse.json(category, {
       headers: CACHE_HEADERS.DYNAMIC,
     });
   } catch (error) {
-    return handleErrorResponse(error, "CATEGORY_GET");
+    return handleErrorResponse(error, "CATEGORY_GET", { headers: CACHE_HEADERS.NO_CACHE });
   }
 }
 
@@ -100,8 +96,7 @@ export async function PATCH(
     const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
-    if (!params.categoryId)
-      throw ErrorFactory.InvalidRequest("Se requiere un ID de sub-categoría");
+    if (!params.categoryId) throw ErrorFactory.InvalidRequest(MISSING_ID);
 
     await verifyStoreOwner(userId, params.storeId);
 
@@ -118,92 +113,92 @@ export async function PATCH(
       icon,
     } = body;
 
-    if (!name)
-      throw ErrorFactory.InvalidRequest(
-        "Se requiere un nombre de sub-categoría",
-      );
+    if (!name || typeof name !== "string" || !cleanTaxonomyName(name))
+      throw ErrorFactory.InvalidRequest(requiredTaxonomyFieldMessage("category", "nombre"));
 
     if (!typeId)
       throw ErrorFactory.InvalidRequest(
-        "Se requiere un tipo para la sub-categoría",
+        "Se requiere una categoría para la subcategoría.",
       );
 
+    const canonical = splitTaxonomyIcon(name);
+    const canonicalName = cleanTaxonomyName(canonical.name);
+    if (!canonicalName) throw ErrorFactory.InvalidRequest(requiredTaxonomyFieldMessage("category", "nombre"));
+
     let previousSlug = "";
-    const updatedCategory = await prismadb.$transaction(async (tx) => {
-      const category = await tx.category.findUnique({
-        where: { id: params.categoryId, storeId: params.storeId },
-      });
-
-      if (!category)
-        throw ErrorFactory.NotFound(
-          `La sub-categoría ${params.categoryId} no existe en esta tienda`,
-        );
-
-      const type = await tx.type.findFirst({
-        where: { id: typeId, storeId: params.storeId },
-      });
-
-      if (!type)
-        throw ErrorFactory.NotFound(
-          `El tipo ${typeId} no existe en esta tienda`,
-        );
-
-      const canonical = splitTaxonomyIcon(name);
-      const slug = await getUniqueCategorySlug(tx, {
-        storeId: params.storeId,
-        baseSlug: slugify(canonical.name),
-        excludeCategoryId: category.id,
-      });
-
-      previousSlug = category.slug;
-      if (category.slug !== slug) {
-        await preserveCategorySlugAlias(tx, {
-          storeId: params.storeId,
-          categoryId: category.id,
-          slug: category.slug,
+    const updatedCategory = await prismadb
+      .$transaction(async (tx) => {
+        const category = await tx.category.findFirst({
+          where: { id: params.categoryId, storeId: params.storeId },
         });
-      }
 
-      return tx.category.update({
-        where: { id: params.categoryId, storeId: params.storeId },
-        data: {
-          name: canonical.name,
-          icon: icon?.trim() || canonical.icon || category.icon,
-          slug,
-          typeId,
-          seoEnabled: Boolean(seoEnabled),
-          seoFeatured: Boolean(seoEnabled && seoFeatured),
-          seoTitle: seoTitle?.trim() || null,
-          seoDescription: seoDescription?.trim() || null,
-          seoIntro: seoIntro?.trim() || null,
-          imageUrl: imageUrl?.trim() || null,
-        },
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          typeId: true,
-          seoEnabled: true,
-          seoFeatured: true,
-          seoTitle: true,
-          seoDescription: true,
-          seoIntro: true,
-          imageUrl: true,
-          icon: true,
-        },
+        if (!category) throw ErrorFactory.NotFound(missingTaxonomyMessage("category"));
+
+        const type = await tx.type.findFirst({
+          where: { id: typeId, storeId: params.storeId },
+          select: { id: true },
+        });
+
+        if (!type) throw ErrorFactory.NotFound(missingTaxonomyMessage("type"));
+
+        // Nombre único dentro de la categoría destino, sin distinguir mayúsculas ni tildes.
+        const siblings = await tx.category.findMany({
+          where: { storeId: params.storeId, typeId },
+          select: { id: true, name: true },
+        });
+        if (findDuplicateTaxonomyName(siblings, canonicalName, category.id)) {
+          throw duplicateTaxonomyError("category", canonicalName, "type");
+        }
+
+        const slug = await getUniqueCategorySlug(tx, {
+          storeId: params.storeId,
+          baseSlug: slugify(canonicalName),
+          excludeCategoryId: category.id,
+        });
+
+        previousSlug = category.slug;
+        if (category.slug !== slug) {
+          await preserveCategorySlugAlias(tx, {
+            storeId: params.storeId,
+            categoryId: category.id,
+            slug: category.slug,
+          });
+        }
+
+        return tx.category.update({
+          where: { id: params.categoryId, storeId: params.storeId },
+          data: {
+            name: canonicalName,
+            icon: icon?.trim() || canonical.icon || category.icon,
+            slug,
+            typeId,
+            seoEnabled: Boolean(seoEnabled),
+            seoFeatured: Boolean(seoEnabled && seoFeatured),
+            seoTitle: seoTitle?.trim() || null,
+            seoDescription: seoDescription?.trim() || null,
+            seoIntro: seoIntro?.trim() || null,
+            imageUrl: imageUrl?.trim() || null,
+          },
+          select: PUBLIC_CATEGORY_SELECT,
+        });
+      })
+      .catch((error) => {
+        throw mapTaxonomyUniqueError(error, "category", canonicalName, "type");
       });
-    });
 
-    await triggerStorefrontRevalidation({
-      paths: getCategoryRevalidationPaths(updatedCategory.slug, previousSlug),
-      tags: ["categories", "products"],
-    });
+    await Promise.all([
+      triggerStorefrontRevalidation({
+        paths: getCategoryRevalidationPaths(updatedCategory.slug, previousSlug),
+        tags: ["categories", "products"],
+      }),
+      invalidateStoreProductsCache(params.storeId),
+    ]);
 
     return NextResponse.json(updatedCategory, {
       headers: CACHE_HEADERS.NO_CACHE,
     });
   } catch (error) {
-    return handleErrorResponse(error, "CATEGORY_PATCH");
+    return handleErrorResponse(error, "CATEGORY_PATCH", { headers: CACHE_HEADERS.NO_CACHE });
   }
 }
 
@@ -215,20 +210,16 @@ export async function DELETE(
     const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
-    if (!params.categoryId)
-      throw ErrorFactory.InvalidRequest("Se requiere un ID de sub-categoría");
+    if (!params.categoryId) throw ErrorFactory.InvalidRequest(MISSING_ID);
 
     await verifyStoreOwner(userId, params.storeId);
 
     const deletedCategory = await prismadb.$transaction(async (tx) => {
-      const category = await tx.category.findUnique({
+      const category = await tx.category.findFirst({
         where: { id: params.categoryId, storeId: params.storeId },
       });
 
-      if (!category)
-        throw ErrorFactory.NotFound(
-          `La sub-categoría ${params.categoryId} no existe en esta tienda`,
-        );
+      if (!category) throw ErrorFactory.NotFound(missingTaxonomyMessage("category"));
 
       const products = await tx.product.count({
         where: {
@@ -239,7 +230,7 @@ export async function DELETE(
 
       if (products > 0)
         throw ErrorFactory.Conflict(
-          `No se puede eliminar la sub-categoría ${category.name} porque tiene ${products} productos asociados. Elimina o reasigna los productos asociados primero`,
+          `No se puede eliminar la subcategoría ${category.name} porque tiene ${products} productos asociados. Elimina o reasigna los productos asociados primero`,
           {
             category: category.name,
             products,
@@ -260,15 +251,18 @@ export async function DELETE(
       return category;
     });
 
-    await triggerStorefrontRevalidation({
-      paths: getCategoryRevalidationPaths(deletedCategory.slug),
-      tags: ["categories", "products"],
-    });
+    await Promise.all([
+      triggerStorefrontRevalidation({
+        paths: getCategoryRevalidationPaths(deletedCategory.slug),
+        tags: ["categories", "products"],
+      }),
+      invalidateStoreProductsCache(params.storeId),
+    ]);
 
-    return NextResponse.json("Sub-categoría eliminada correctamente", {
+    return NextResponse.json("Subcategoría eliminada correctamente", {
       headers: CACHE_HEADERS.NO_CACHE,
     });
   } catch (error) {
-    return handleErrorResponse(error, "CATEGORY_DELETE");
+    return handleErrorResponse(error, "CATEGORY_DELETE", { headers: CACHE_HEADERS.NO_CACHE });
   }
 }

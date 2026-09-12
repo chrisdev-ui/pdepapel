@@ -1,9 +1,12 @@
-import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
 
-import prismadb from "@/lib/prismadb";
-import { verifyStoreOwner } from "@/lib/utils";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import prismadb from "@/lib/prismadb";
+import { assertRestockReferences, RESTOCK_ORDER_INCLUDE } from "@/lib/restock-orders-db";
+import { allocateRestockOrderNumber, withOrderNumberRetry } from "@/lib/restock-order-numbers";
+import { lineSubtotal, restockOrderInputSchema, summarizeLines } from "@/lib/restock-orders";
+import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,107 +18,69 @@ export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
 }
 
-export async function POST(
-  req: Request,
-  { params }: { params: { storeId: string } },
-) {
+export async function POST(req: Request, { params }: { params: { storeId: string } }) {
   try {
     const { userId } = await auth();
-    const body = await req.json();
-
-    const { supplierId, items, notes } = body; // items: { productId, quantity, cost }[]
-
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     await verifyStoreOwner(userId, params.storeId);
 
-    if (!supplierId) throw ErrorFactory.InvalidRequest("Supplier is required");
-    if (!items || items.length === 0)
-      throw ErrorFactory.InvalidRequest("Items are required");
+    const parsed = restockOrderInputSchema.safeParse(await req.json());
+    if (!parsed.success) throw ErrorFactory.InvalidRequest(parsed.error.issues[0]?.message ?? "Datos del pedido no válidos.");
+    const input = parsed.data;
 
-    const round2 = (n: number) => Math.round(n * 100) / 100;
+    await assertRestockReferences(params.storeId, input.supplierId, input.items.map((item) => item.productId));
+    const totals = summarizeLines(input.items);
 
-    // Calculate total
-    const totalAmount = round2(
-      items.reduce(
-        (sum: number, item: any) => sum + item.quantity * item.cost,
-        0,
-      ),
+    const restockOrder = await withOrderNumberRetry(() =>
+      prismadb.$transaction(async (tx) => {
+        const orderNumber = await allocateRestockOrderNumber(tx, params.storeId);
+        return tx.restockOrder.create({
+          data: {
+            storeId: params.storeId,
+            supplierId: input.supplierId,
+            orderNumber,
+            status: input.status,
+            totalAmount: totals.totalAmount,
+            shippingCost: input.shippingCost,
+            notes: input.notes || null,
+            items: {
+              create: input.items.map((item, index) => ({
+                productId: item.productId,
+                quantity: item.quantity,
+                cost: item.cost,
+                subtotal: lineSubtotal(item.quantity, item.cost),
+                index,
+              })),
+            },
+          },
+          include: RESTOCK_ORDER_INCLUDE,
+        });
+      }),
     );
 
-    // Generate Order Number (Simple auto-increment logic or random)
-    // For simplicity, let's use a timestamp based one for now or count
-    const count = await prismadb.restockOrder.count({
-      where: { storeId: params.storeId },
-    });
-    const orderNumber = `PO-${(count + 1).toString().padStart(4, "0")}`;
-
-    const restockOrder = await prismadb.restockOrder.create({
-      data: {
-        storeId: params.storeId,
-        supplierId,
-        orderNumber,
-        status: body.status || "DRAFT",
-        totalAmount,
-        shippingCost: body.shippingCost || 0,
-        notes,
-        items: {
-          create: items.map((item: any, idx: number) => ({
-            productId: item.productId,
-            quantity: item.quantity,
-            cost: item.cost,
-            subtotal: round2(item.quantity * item.cost),
-            index: idx,
-          })),
-        },
-      },
-    });
-
-    return NextResponse.json(restockOrder, { headers: corsHeaders });
+    return NextResponse.json(restockOrder, { headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE } });
   } catch (error) {
-    console.log("[RESTOCK_ODERS_POST]", error);
-    return handleErrorResponse(error, "RESTOCK_ODERS_POST", {
-      headers: corsHeaders,
-    });
+    return handleErrorResponse(error, "RESTOCK_ORDERS_POST", { headers: corsHeaders });
   }
 }
 
-export async function GET(
-  req: Request,
-  { params }: { params: { storeId: string } },
-) {
+export async function GET(req: Request, { params }: { params: { storeId: string } }) {
   try {
     const { userId } = await auth();
-
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     await verifyStoreOwner(userId, params.storeId);
 
+    const supplierId = new URL(req.url).searchParams.get("supplierId")?.trim() || undefined;
     const restockOrders = await prismadb.restockOrder.findMany({
-      where: {
-        storeId: params.storeId,
-      },
-      include: {
-        supplier: true,
-        items: {
-          include: {
-            product: true,
-          },
-          orderBy: {
-            index: "asc",
-          },
-        },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
+      where: { storeId: params.storeId, ...(supplierId ? { supplierId } : {}) },
+      include: RESTOCK_ORDER_INCLUDE,
+      orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json(restockOrders, { headers: corsHeaders });
+    return NextResponse.json(restockOrders, { headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE } });
   } catch (error) {
-    console.log("[RESTOCK_ODERS_GET]", error);
-    return handleErrorResponse(error, "RESTOCK_ODERS_GET", {
-      headers: corsHeaders,
-    });
+    return handleErrorResponse(error, "RESTOCK_ORDERS_GET", { headers: corsHeaders });
   }
 }

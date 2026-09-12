@@ -21,12 +21,18 @@ export default async function InventoryMovementsPage({
   // Enlaces desde una feria: `referencia` filtra el kardex por sus
   // movimientos (reserva y devolución) y `feria` abre «Conciliar feria
   // anterior» con la feria como contexto.
-  const [allMovements, referencedFair, contextFair] = await Promise.all([
+  const [allMovements, referencedFair, referencedRestockOrder, contextFair] = await Promise.all([
     getInventoryMovements(params.storeId),
     referenceId
       ? prismadb.fairEvent.findFirst({
           where: { id: referenceId, storeId: params.storeId },
           select: { id: true, name: true },
+        })
+      : null,
+    referenceId
+      ? prismadb.restockOrder.findFirst({
+          where: { id: referenceId, storeId: params.storeId },
+          select: { id: true, orderNumber: true },
         })
       : null,
     fairId
@@ -67,7 +73,12 @@ export default async function InventoryMovementsPage({
           products={products}
           reference={
             referenceId
-              ? { id: referenceId, label: referencedFair?.name ?? null }
+              ? {
+                  id: referenceId,
+                  label:
+                    referencedFair?.name ??
+                    (referencedRestockOrder ? `Pedido ${referencedRestockOrder.orderNumber}` : null),
+                }
               : null
           }
           fairContext={contextFair}

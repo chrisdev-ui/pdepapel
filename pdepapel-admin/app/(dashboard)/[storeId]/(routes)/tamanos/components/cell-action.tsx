@@ -33,7 +33,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const onCopy = (id: string) => {
     navigator.clipboard.writeText(id);
     toast({
-      description: "ID de la tamaño copiado al portapapeles",
+      description: "ID del tamaño copiado al portapapeles",
       variant: "success",
     });
   };

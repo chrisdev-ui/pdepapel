@@ -1,9 +1,20 @@
-import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { RestockOrderStatus } from "@prisma/client";
+import { NextResponse } from "next/server";
 
-import prismadb from "@/lib/prismadb";
-import { verifyStoreOwner } from "@/lib/utils";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import prismadb from "@/lib/prismadb";
+import { assertRestockReferences, RESTOCK_ORDER_INCLUDE } from "@/lib/restock-orders-db";
+import {
+  areRestockLinesLocked,
+  canTransitionRestockOrder,
+  describeForbiddenRestockTransition,
+  getRestockProgress,
+  lineSubtotal,
+  restockOrderPatchSchema,
+  summarizeLines,
+} from "@/lib/restock-orders";
+import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,180 +26,128 @@ export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
 }
 
-export async function GET(
-  req: Request,
-  { params }: { params: { storeId: string; orderId: string } },
-) {
+export async function GET(req: Request, { params }: { params: { storeId: string; orderId: string } }) {
   try {
     const { userId } = await auth();
-
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     await verifyStoreOwner(userId, params.storeId);
 
-    const restockOrder = await prismadb.restockOrder.findUnique({
-      where: {
-        id: params.orderId,
-        storeId: params.storeId, // Ensure it belongs to store
-      },
-      include: {
-        supplier: true,
-        items: {
-          include: {
-            product: true,
-          },
-          orderBy: {
-            index: "asc",
-          },
-        },
-      },
+    const restockOrder = await prismadb.restockOrder.findFirst({
+      where: { id: params.orderId, storeId: params.storeId },
+      include: RESTOCK_ORDER_INCLUDE,
     });
+    if (!restockOrder) throw ErrorFactory.NotFound("El pedido de aprovisionamiento no existe.");
 
-    if (!restockOrder) {
-      throw ErrorFactory.NotFound("Restock Order not found");
-    }
-
-    return NextResponse.json(restockOrder, { headers: corsHeaders });
+    return NextResponse.json(restockOrder, { headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE } });
   } catch (error) {
-    console.log("[RESTOCK_ORDER_GET]", error);
-    return handleErrorResponse(error, "RESTOCK_ORDER_GET", {
-      headers: corsHeaders,
-    });
+    return handleErrorResponse(error, "RESTOCK_ORDER_GET", { headers: corsHeaders });
   }
 }
 
-export async function PATCH(
-  req: Request,
-  { params }: { params: { storeId: string; orderId: string } },
-) {
+export async function PATCH(req: Request, { params }: { params: { storeId: string; orderId: string } }) {
   try {
     const { userId } = await auth();
-    const body = await req.json();
-    const { status, notes, items, supplierId } = body;
-
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     await verifyStoreOwner(userId, params.storeId);
 
-    const order = await prismadb.restockOrder.findUnique({
+    const parsed = restockOrderPatchSchema.safeParse(await req.json());
+    if (!parsed.success) throw ErrorFactory.InvalidRequest(parsed.error.issues[0]?.message ?? "Datos del pedido no válidos.");
+    const patch = parsed.data;
+
+    const order = await prismadb.restockOrder.findFirst({
       where: { id: params.orderId, storeId: params.storeId },
       include: { items: true },
     });
+    if (!order) throw ErrorFactory.NotFound("El pedido de aprovisionamiento no existe.");
 
-    if (!order) throw ErrorFactory.NotFound("Restock Order not found");
+    const progress = getRestockProgress(order.items);
+    const context = { receivedUnits: progress.receivedUnits };
 
-    // Rules:
-    // 1. If status is already COMPLETED or CANCELLED, restrict edits?
-    if (order.status === "COMPLETED" || order.status === "CANCELLED") {
-      // Allow adding notes optionally, but not changing core data
-      if (items || supplierId) {
-        throw ErrorFactory.InvalidRequest(
-          "Cannot edit completed or cancelled orders",
-        );
-      }
+    const nextStatus = patch.status && patch.status !== order.status ? patch.status : undefined;
+    if (nextStatus && !canTransitionRestockOrder(order.status, nextStatus, context)) {
+      throw ErrorFactory.InvalidRequest(describeForbiddenRestockTransition(order.status, nextStatus, context));
     }
 
-    // 2. Logic for status transitions handled here strictly?
-    // "Receiving" starts via the /receive endpoint, which updates status automatically.
-    // Manual status override should be carefully controlled.
-
-    // Calculate new total if items changed
-    let totalAmount = order.totalAmount;
-    let itemsUpdateOp = {};
-
-    if (items && items.length > 0) {
-      // Recalculate total from ALL items (existing + new/updated)
-      // This logic is complex for partial updates.
-      // Simplified: If items are passed, we might be replacing them or updating quantity.
-      // For Drafts, we can replace. For ORDERED, we should probably restrictions.
-
-      if (order.status !== "DRAFT") {
-        throw ErrorFactory.InvalidRequest(
-          "Cannot modify items after order is placed",
-        );
-      }
-
-      // Full Replacement Strategy for Drafts (simplest for UI)
-      // Delete existing and create new
-      await prismadb.restockOrderItem.deleteMany({
-        where: { restockOrderId: params.orderId },
-      });
-
-      itemsUpdateOp = {
-        deleteMany: {},
-        create: items.map((item: any, idx: number) => ({
-          productId: item.productId,
-          quantity: item.quantity,
-          cost: item.cost,
-          subtotal: Math.round(item.quantity * item.cost * 100) / 100,
-          index: idx,
-        })),
-      };
-
-      totalAmount =
-        Math.round(
-          items.reduce(
-            (sum: number, item: any) => sum + item.quantity * item.cost,
-            0,
-          ) * 100,
-        ) / 100;
-    }
-
-    const updatedOrder = await prismadb.restockOrder.update({
-      where: { id: params.orderId },
-      data: {
-        status, // Allow status updates (e.g. DRAFT -> ORDERED, or to CANCELLED)
-        notes,
-        supplierId,
-        totalAmount: items ? totalAmount : undefined,
-        shippingCost:
-          body.shippingCost !== undefined ? body.shippingCost : undefined,
-        items: items ? itemsUpdateOp : undefined,
-      },
-      include: { items: true },
-    });
-
-    return NextResponse.json(updatedOrder, { headers: corsHeaders });
-  } catch (error) {
-    console.log("[RESTOCK_ORDER_PATCH]", error);
-    return handleErrorResponse(error, "RESTOCK_ORDER_PATCH", {
-      headers: corsHeaders,
-    });
-  }
-}
-
-export async function DELETE(
-  req: Request,
-  { params }: { params: { storeId: string; orderId: string } },
-) {
-  try {
-    const { userId } = await auth();
-
-    if (!userId) throw ErrorFactory.Unauthenticated();
-    if (!params.storeId) throw ErrorFactory.MissingStoreId();
-    await verifyStoreOwner(userId, params.storeId);
-
-    const order = await prismadb.restockOrder.findUnique({
-      where: { id: params.orderId, storeId: params.storeId },
-    });
-
-    if (!order) throw ErrorFactory.NotFound("Restock Order not found");
-
-    if (order.status !== "DRAFT" && order.status !== "CANCELLED") {
+    const touchesLines = patch.items !== undefined || patch.supplierId !== undefined || patch.shippingCost !== undefined;
+    if (touchesLines && areRestockLinesLocked(order.status)) {
       throw ErrorFactory.InvalidRequest(
-        "Only Draft or Cancelled orders can be deleted",
+        "Las líneas, el proveedor y el envío quedan fijos al pedir al proveedor; después solo cambian las notas.",
       );
     }
+    if (order.status === RestockOrderStatus.CANCELLED && patch.notes !== undefined && !nextStatus) {
+      throw ErrorFactory.InvalidRequest("Un pedido cancelado no se edita. Vuélvelo a borrador para retomarlo.");
+    }
+    if (nextStatus === RestockOrderStatus.ORDERED) {
+      const lines = patch.items ?? order.items;
+      if (lines.length === 0) throw ErrorFactory.InvalidRequest("Agrega al menos un producto antes de pedir al proveedor.");
+    }
 
-    await prismadb.restockOrder.delete({
-      where: { id: params.orderId },
+    if (touchesLines) {
+      const supplierId = patch.supplierId ?? order.supplierId;
+      const productIds = (patch.items ?? order.items).map((item) => item.productId);
+      await assertRestockReferences(params.storeId, supplierId, productIds);
+    }
+
+    const updated = await prismadb.$transaction(async (tx) => {
+      if (patch.items) {
+        await tx.restockOrderItem.deleteMany({ where: { restockOrderId: order.id } });
+        await tx.restockOrderItem.createMany({
+          data: patch.items.map((item, index) => ({
+            restockOrderId: order.id,
+            productId: item.productId,
+            quantity: item.quantity,
+            cost: item.cost,
+            subtotal: lineSubtotal(item.quantity, item.cost),
+            index,
+          })),
+        });
+      }
+      return tx.restockOrder.update({
+        where: { id: order.id },
+        data: {
+          ...(patch.notes !== undefined ? { notes: patch.notes || null } : {}),
+          ...(nextStatus ? { status: nextStatus } : {}),
+          ...(patch.supplierId !== undefined ? { supplierId: patch.supplierId } : {}),
+          ...(patch.shippingCost !== undefined ? { shippingCost: patch.shippingCost } : {}),
+          ...(patch.items ? { totalAmount: summarizeLines(patch.items).totalAmount } : {}),
+        },
+        include: RESTOCK_ORDER_INCLUDE,
+      });
     });
 
-    return NextResponse.json({ success: true }, { headers: corsHeaders });
+    return NextResponse.json(updated, { headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE } });
   } catch (error) {
-    console.log("[RESTOCK_ORDER_DELETE]", error);
-    return handleErrorResponse(error, "RESTOCK_ORDER_DELETE", {
-      headers: corsHeaders,
+    return handleErrorResponse(error, "RESTOCK_ORDER_PATCH", { headers: corsHeaders });
+  }
+}
+
+export async function DELETE(req: Request, { params }: { params: { storeId: string; orderId: string } }) {
+  try {
+    const { userId } = await auth();
+    if (!userId) throw ErrorFactory.Unauthenticated();
+    if (!params.storeId) throw ErrorFactory.MissingStoreId();
+    await verifyStoreOwner(userId, params.storeId);
+
+    const order = await prismadb.restockOrder.findFirst({
+      where: { id: params.orderId, storeId: params.storeId },
+      include: { items: { select: { quantityReceived: true } } },
     });
+    if (!order) throw ErrorFactory.NotFound("El pedido de aprovisionamiento no existe.");
+
+    const deletable = order.status === RestockOrderStatus.DRAFT || order.status === RestockOrderStatus.CANCELLED;
+    if (!deletable) {
+      throw ErrorFactory.InvalidRequest("Solo se eliminan borradores o pedidos cancelados; los demás son historial de compras.");
+    }
+    if (order.items.some((item) => item.quantityReceived > 0)) {
+      throw ErrorFactory.Conflict("Este pedido tiene mercancía recibida en inventario y no se puede eliminar.");
+    }
+
+    await prismadb.restockOrder.delete({ where: { id: order.id } });
+
+    return NextResponse.json({ success: true }, { headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE } });
+  } catch (error) {
+    return handleErrorResponse(error, "RESTOCK_ORDER_DELETE", { headers: corsHeaders });
   }
 }

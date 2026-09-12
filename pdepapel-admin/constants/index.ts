@@ -187,7 +187,7 @@ export enum Models {
 
 export const ModelLabels: Record<Models, string> = {
   [Models.HomeContent]: "Contenido de portada",
-  [Models.Categories]: "Sub-Categorías",
+  [Models.Categories]: "Subcategorías",
   [Models.Colors]: "Colores",
   [Models.Designs]: "Diseños",
   [Models.Orders]: "Órdenes",
@@ -204,7 +204,7 @@ export const ModelLabels: Record<Models, string> = {
   [Models.Types]: "Categorías",
   [Models.LowStock]: "Productos por agotarse",
   [Models.OutOfStock]: "Productos completamente agotados",
-  [Models.SalesByCategory]: "Ventas por sub-categoría",
+  [Models.SalesByCategory]: "Ventas por subcategoría",
   [Models.Coupons]: "Cupones",
   [Models.Customers]: "Clientes",
   [Models.Shipments]: "Envíos",
@@ -227,18 +227,22 @@ export const ModelsColumns: Record<Models, { [key: string]: string }> = {
   [Models.Categories]: {
     name: "Nombre",
     type: "Categoría",
-    products: "Productos en esta categoría",
+    products: "Productos en esta subcategoría",
+    seoEnabled: "SEO",
+    isArchived: "Estado",
     createdAt: "Fecha de creación",
   },
   [Models.Colors]: {
     name: "Nombre",
     value: "Valor",
     products: "Productos con este color",
+    isArchived: "Estado",
     createdAt: "Fecha de creación",
   },
   [Models.Designs]: {
     name: "Nombre",
     products: "Productos con este diseño",
+    isArchived: "Estado",
     createdAt: "Fecha de creación",
   },
   [Models.MarketplaceSales]: {
@@ -283,7 +287,7 @@ export const ModelsColumns: Record<Models, { [key: string]: string }> = {
     image: "Imagen",
     name: "Nombre",
     price: "Precio",
-    category: "Sub-Categoría",
+    category: "Subcategoría",
     size: "Tamaño",
     color: "Color",
     stock: "Stock",
@@ -310,6 +314,7 @@ export const ModelsColumns: Record<Models, { [key: string]: string }> = {
     name: "Nombre",
     value: "Valor",
     products: "Productos con este tamaño",
+    isArchived: "Estado",
     createdAt: "Fecha de creación",
   },
   [Models.Suppliers]: {
@@ -319,13 +324,14 @@ export const ModelsColumns: Record<Models, { [key: string]: string }> = {
   },
   [Models.Types]: {
     name: "Nombre",
-    categories: "Sub-Categorías con esta categoría",
+    categories: "Subcategorías con esta categoría",
+    isArchived: "Estado",
     createdAt: "Fecha de creación",
   },
   [Models.LowStock]: {
     image: "Imagen",
     name: "Nombre",
-    category: "Sub-Categoría",
+    category: "Subcategoría",
     stock: "Stock",
     isFeatured: "Destacado",
     isArchived: "Archivado",
@@ -334,18 +340,18 @@ export const ModelsColumns: Record<Models, { [key: string]: string }> = {
   [Models.OutOfStock]: {
     image: "Imagen",
     name: "Nombre",
-    category: "Sub-Categoría",
+    category: "Subcategoría",
     isArchived: "Archivado",
     updatedAt: "Última actualización",
   },
   [Models.Inventory]: {
     name: "Nombre",
-    category: "Sub-Categoría",
+    category: "Subcategoría",
     stock: "Stock",
     price: "Precio",
   },
   [Models.SalesByCategory]: {
-    category: "Sub-Categoría",
+    category: "Subcategoría",
     sales: "Ventas",
     orders: "Órdenes",
   },

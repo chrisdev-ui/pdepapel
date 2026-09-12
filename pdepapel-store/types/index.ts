@@ -17,7 +17,10 @@ export interface Type {
   categories: Category[];
   name: string;
   slug?: string;
+  /** Nombre de icono de Lucide (kebab-case) elegido en el panel. */
   icon?: string | null;
+  /** Icono propio generado con IA: trazos SVG ya saneados por el panel. */
+  iconSvg?: string | null;
 }
 
 export interface KitComponent {

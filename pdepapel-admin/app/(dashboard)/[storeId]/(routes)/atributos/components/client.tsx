@@ -59,15 +59,28 @@ interface AttributesClientProps {
 const TAB_PARAM = "tab";
 const DEFAULT_TAB: AttributeTab = "categorias";
 
+/** Pestaña y vista que pide la URL (`?tab=colores&vista=archivados`). */
+export function readAttributeQuery(searchParams: { get(name: string): string | null }): { tab: AttributeTab; view: AttributeView } {
+  const tab = searchParams.get(TAB_PARAM);
+  const view = searchParams.get(VIEW_PARAM);
+  return { tab: isAttributeTab(tab) ? tab : DEFAULT_TAB, view: isAttributeView(view) ? view : DEFAULT_VIEW };
+}
+
 const AttributesClient: React.FC<AttributesClientProps> = ({ types, categories, sizes, colors, designs, options }) => {
   const params = useParams();
   const pathname = usePathname() ?? "";
   const searchParams = useSearchParams();
   const storeId = String(params.storeId);
-  const requested = searchParams.get(TAB_PARAM);
-  const [tab, setTabState] = useState<AttributeTab>(isAttributeTab(requested) ? requested : DEFAULT_TAB);
-  const requestedView = searchParams.get(VIEW_PARAM);
-  const [view, setViewState] = useState<AttributeView>(isAttributeView(requestedView) ? requestedView : DEFAULT_VIEW);
+
+  // La URL manda: un clic en el menú lateral (`/atributos?tab=colores`) cambia
+  // la pestaña aunque la página ya esté abierta. Un clic en una pestaña
+  // responde de inmediato y escribe la URL con replaceState, que Next 14.2
+  // refleja en useSearchParams; si aún no lo hizo, el estado local cubre el hueco.
+  const requested = readAttributeQuery(searchParams);
+  const [selected, setSelected] = useState<{ base: string; tab: AttributeTab; view: AttributeView } | null>(null);
+  const requestedKey = `${requested.tab}|${requested.view}`;
+  const tab = selected?.base === requestedKey ? selected.tab : requested.tab;
+  const view = selected?.base === requestedKey ? selected.view : requested.view;
 
   const replaceQuery = (nextTab: AttributeTab, nextView: AttributeView) => {
     const query = new URLSearchParams(searchParams.toString());
@@ -80,12 +93,12 @@ const AttributesClient: React.FC<AttributesClientProps> = ({ types, categories, 
   };
 
   const setTab = (next: AttributeTab) => {
-    setTabState(next);
+    setSelected({ base: requestedKey, tab: next, view });
     replaceQuery(next, view);
   };
 
   const setView = (next: AttributeView) => {
-    setViewState(next);
+    setSelected({ base: requestedKey, tab, view: next });
     replaceQuery(tab, next);
   };
 
@@ -116,41 +129,57 @@ const AttributesClient: React.FC<AttributesClientProps> = ({ types, categories, 
   };
   const emptyArchived = { title: "Nada archivado aquí", description: "Archiva un atributo desde su menú de fila o en lote; seguirá en los productos que ya lo usan." };
 
+  /** Estado vacío de la vista activa: siempre ofrece crear el primero. */
+  const emptyActive = (title: string, create: string, createFirstLabel: string) =>
+    view === "archivados"
+      ? emptyArchived
+      : {
+          title,
+          action: (
+            <Button asChild>
+              <Link href={create}>
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                {createFirstLabel}
+              </Link>
+            </Button>
+          ),
+        };
+
   const sections: Record<Exclude<AttributeTab, "opciones">, { create: string; createLabel: string; description: string; empty: string; table: React.ReactNode }> = {
     categorias: {
       create: `/${storeId}/tipos/new`,
       createLabel: "Nueva categoría",
       description: "Las categorías principales del menú de la tienda. El icono se guarda aparte del nombre; nunca uses emojis en el nombre.",
       empty: "Aún no hay categorías",
-      table: <DataTable tableKey={Models.Types} searchPlaceholder="Buscar categoría…" columns={typeColumns} data={visible.types} getRowId={(row) => row.id} bulkActions={(table) => <AttributeBulkActions kind="types" table={table} />} emptyState={view === "archivados" ? emptyArchived : { title: "Aún no hay categorías", action: <Button asChild><Link href={`/${storeId}/tipos/new`}>Nueva categoría</Link></Button> }} />,
+      table: <DataTable tableKey={Models.Types} searchPlaceholder="Buscar categoría…" columns={typeColumns} data={visible.types} getRowId={(row) => row.id} bulkActions={(table) => <AttributeBulkActions kind="types" table={table} />} emptyState={emptyActive("Aún no hay categorías", `/${storeId}/tipos/new`, "Crear la primera categoría")} />,
     },
     subcategorias: {
       create: `/${storeId}/categorias/new`,
       createLabel: "Nueva subcategoría",
       description: "Cada subcategoría pertenece a una categoría y tiene su propia URL y página SEO. Cambiar la URL conserva la anterior como alias.",
       empty: "Aún no hay subcategorías",
-      table: <DataTable tableKey={Models.Categories} searchPlaceholder="Buscar subcategoría…" columns={categoryColumns} data={visible.categories} getRowId={(row) => row.id} bulkActions={(table) => <AttributeBulkActions kind="categories" table={table} />} emptyState={view === "archivados" ? emptyArchived : { title: "Aún no hay subcategorías", action: <Button asChild><Link href={`/${storeId}/categorias/new`}>Nueva subcategoría</Link></Button> }} />,
+      table: <DataTable tableKey={Models.Categories} searchPlaceholder="Buscar subcategoría…" columns={categoryColumns} data={visible.categories} getRowId={(row) => row.id} bulkActions={(table) => <AttributeBulkActions kind="categories" table={table} />} emptyState={emptyActive("Aún no hay subcategorías", `/${storeId}/categorias/new`, "Crear la primera subcategoría")} />,
     },
     tamanos: {
       create: `/${storeId}/tamanos/new`,
       createLabel: "Nuevo tamaño",
       description: "Tamaños de uso interno (envío y SKU). Lo que el cliente ve como formato o medida vive en Opciones para clientes.",
       empty: "Aún no hay tamaños",
-      table: <DataTable tableKey={Models.Sizes} searchPlaceholder="Buscar tamaño…" columns={sizeColumns} data={visible.sizes} getRowId={(row) => row.id} bulkActions={(table) => <AttributeBulkActions kind="sizes" table={table} />} emptyState={view === "archivados" ? emptyArchived : { title: "Aún no hay tamaños" }} />,
+      table: <DataTable tableKey={Models.Sizes} searchPlaceholder="Buscar tamaño…" columns={sizeColumns} data={visible.sizes} getRowId={(row) => row.id} bulkActions={(table) => <AttributeBulkActions kind="sizes" table={table} />} emptyState={emptyActive("Aún no hay tamaños", `/${storeId}/tamanos/new`, "Crear el primer tamaño")} />,
     },
     colores: {
       create: `/${storeId}/colores/new`,
       createLabel: "Nuevo color",
       description: "Colores con su muestra. Se usan en variantes y en los filtros de la tienda.",
       empty: "Aún no hay colores",
-      table: <DataTable tableKey={Models.Colors} searchPlaceholder="Buscar color…" columns={colorColumns} data={visible.colors} getRowId={(row) => row.id} bulkActions={(table) => <AttributeBulkActions kind="colors" table={table} />} emptyState={view === "archivados" ? emptyArchived : { title: "Aún no hay colores" }} />,
+      table: <DataTable tableKey={Models.Colors} searchPlaceholder="Buscar color…" columns={colorColumns} data={visible.colors} getRowId={(row) => row.id} bulkActions={(table) => <AttributeBulkActions kind="colors" table={table} />} emptyState={emptyActive("Aún no hay colores", `/${storeId}/colores/new`, "Crear el primer color")} />,
     },
     disenos: {
       create: `/${storeId}/disenos/new`,
       createLabel: "Nuevo diseño",
       description: "Diseños o personajes (Snoopy, Sanrio…) para variantes y filtros.",
       empty: "Aún no hay diseños",
-      table: <DataTable tableKey={Models.Designs} searchPlaceholder="Buscar diseño…" columns={designColumns} data={visible.designs} getRowId={(row) => row.id} bulkActions={(table) => <AttributeBulkActions kind="designs" table={table} />} emptyState={view === "archivados" ? emptyArchived : { title: "Aún no hay diseños" }} />,
+      table: <DataTable tableKey={Models.Designs} searchPlaceholder="Buscar diseño…" columns={designColumns} data={visible.designs} getRowId={(row) => row.id} bulkActions={(table) => <AttributeBulkActions kind="designs" table={table} />} emptyState={emptyActive("Aún no hay diseños", `/${storeId}/disenos/new`, "Crear el primer diseño")} />,
     },
   };
 
@@ -176,7 +205,7 @@ const AttributesClient: React.FC<AttributesClientProps> = ({ types, categories, 
         )}
       </div>
 
-      <div role="tablist" aria-label="Tipos de atributo" className="flex max-w-full gap-1 overflow-x-auto rounded-full border bg-white p-1">
+      <div role="tablist" aria-label="Clases de atributo" className="flex max-w-full gap-1 overflow-x-auto rounded-full border bg-white p-1">
         {ATTRIBUTE_TABS.map((item) => {
           const active = item.id === tab;
           return (

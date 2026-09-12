@@ -1,33 +1,18 @@
-import dynamic from "next/dynamic";
-import { getDesigns } from "./server/get-designs";
+import { redirect } from "next/navigation";
 
-const DesignsClient = dynamic(() => import("./components/client"), {
-  ssr: false,
-});
-
-export const revalidate = 0;
-
-import type { Metadata } from "next";
-
-export const metadata: Metadata = {
-  title: "Diseños | PdePapel Admin",
-  description: "Gestión de diseños",
-};
-
-export default async function DesignsPage({
+/**
+ * La lista vive en el hub de Atributos; esta ruta solo conserva los enlaces
+ * antiguos y la vista (`?vista=archivados`) al redirigir.
+ */
+export default function DesignsPage({
   params,
+  searchParams,
 }: {
-  params: {
-    storeId: string;
-  };
+  params: { storeId: string };
+  searchParams?: { vista?: string | string[] };
 }) {
-  const designs = await getDesigns(params.storeId);
-
-  return (
-    <div className="flex-col">
-      <div className="flex-1 space-y-4 p-8 pt-6">
-        <DesignsClient data={designs} />
-      </div>
-    </div>
-  );
+  const query = new URLSearchParams({ tab: "disenos" });
+  const vista = Array.isArray(searchParams?.vista) ? searchParams?.vista[0] : searchParams?.vista;
+  if (vista === "archivados") query.set("vista", vista);
+  redirect(`/${params.storeId}/atributos?${query.toString()}`);
 }

@@ -1,9 +1,11 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { splitTaxonomyIcon } from "@/lib/catalog-options";
 import { ACTIVE_ATTRIBUTE_WHERE } from "@/lib/attribute-archive";
+import { stripTaxonomyIcon } from "@/lib/category-covers";
 import prismadb from "@/lib/prismadb";
 import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 import { slugify } from "@/lib/slugify";
+import { sanitizeIconSvg } from "@/lib/svg-icon";
+import { parseTaxonomyIconBody } from "@/lib/taxonomy-icons";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
@@ -20,21 +22,25 @@ export async function POST(
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
     const body = await req.json();
-    const { name, icon } = body;
+    const { name } = body;
 
     await verifyStoreOwner(userId, params.storeId);
 
-    if (!name?.trim()) {
+    // El nombre nunca lleva emoji: el icono vive en `icon` (Lucide) o `iconSvg` (propio).
+    const cleanName = typeof name === "string" ? stripTaxonomyIcon(name) : "";
+    if (!cleanName) {
       throw ErrorFactory.InvalidRequest(
         "El nombre de la categoría es requerido",
       );
     }
 
-    const canonical = splitTaxonomyIcon(name.trim());
+    const iconInput = parseTaxonomyIconBody(body, sanitizeIconSvg);
+    if (!iconInput.ok) throw ErrorFactory.InvalidRequest(iconInput.message);
+
     const existingType = await prismadb.type.findFirst({
       where: {
         storeId: params.storeId,
-        name: canonical.name,
+        name: cleanName,
       },
     });
 
@@ -44,9 +50,10 @@ export async function POST(
 
     const type = await prismadb.type.create({
       data: {
-        name: canonical.name,
-        slug: slugify(canonical.name),
-        icon: icon?.trim() || canonical.icon,
+        name: cleanName,
+        slug: slugify(cleanName),
+        icon: iconInput.icon ?? null,
+        iconSvg: iconInput.iconSvg ?? null,
         storeId: params.storeId,
       },
     });
@@ -73,10 +80,22 @@ export async function GET(
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
+    // Lectura pública (la tienda la consume): expone el icono de Lucide y el icono propio saneado.
     const types = await prismadb.type.findMany({
       where: {
         storeId: params.storeId,
         ...ACTIVE_ATTRIBUTE_WHERE,
+      },
+      select: {
+        id: true,
+        storeId: true,
+        name: true,
+        slug: true,
+        icon: true,
+        iconSvg: true,
+        isArchived: true,
+        createdAt: true,
+        updatedAt: true,
       },
       orderBy: {
         createdAt: "desc",
@@ -146,7 +165,7 @@ export async function DELETE(
 
       if (typesWithProducts.length > 0) {
         throw ErrorFactory.Conflict(
-          "No se pueden eliminar categorías que tienen sub-categorías con productos asociados",
+          "No se pueden eliminar categorías que tienen subcategorías con productos asociados",
           {
             types: typesWithProducts.map((type) => ({
               id: type.id,

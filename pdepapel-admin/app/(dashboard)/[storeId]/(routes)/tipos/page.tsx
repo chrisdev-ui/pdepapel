@@ -1,33 +1,16 @@
-import dynamic from "next/dynamic";
-import { getTypes } from "./server/get-types";
+import { redirect } from "next/navigation";
 
-const TypeClient = dynamic(() => import("./components/client"), {
-  ssr: false,
-});
-
-export const revalidate = 0;
-
-import type { Metadata } from "next";
-
-export const metadata: Metadata = {
-  title: "Categorías | PdePapel Admin",
-  description: "Gestión de categorías principales",
-};
-
-export default async function TypesPage({
+/**
+ * La lista de categorías vive en el centro de Atributos; esta ruta solo
+ * conserva los enlaces antiguos (`/[storeId]/tipos`), incluida la vista de archivados.
+ */
+export default function TypesPage({
   params,
+  searchParams,
 }: {
-  params: {
-    storeId: string;
-  };
+  params: { storeId: string };
+  searchParams?: { vista?: string };
 }) {
-  const types = await getTypes(params.storeId);
-
-  return (
-    <div className="flex-col">
-      <div className="flex-1 space-y-4 p-8 pt-6">
-        <TypeClient data={types} />
-      </div>
-    </div>
-  );
+  const archived = searchParams?.vista === "archivados" ? "&vista=archivados" : "";
+  redirect(`/${params.storeId}/atributos?tab=categorias${archived}`);
 }

@@ -1,9 +1,11 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
-import { splitTaxonomyIcon } from "@/lib/catalog-options";
 import { ACTIVE_ATTRIBUTE_WHERE } from "@/lib/attribute-archive";
+import { stripTaxonomyIcon } from "@/lib/category-covers";
 import prismadb from "@/lib/prismadb";
 import { triggerStorefrontRevalidation } from "@/lib/revalidate-store";
 import { slugify } from "@/lib/slugify";
+import { sanitizeIconSvg } from "@/lib/svg-icon";
+import { parseTaxonomyIconBody } from "@/lib/taxonomy-icons";
 import {
   CACHE_HEADERS,
   parseErrorDetails,
@@ -75,15 +77,20 @@ export async function PATCH(
     }
 
     const body = await req.json();
-    const { name, icon } = body;
+    const { name } = body;
 
     await verifyStoreOwner(userId, params.storeId);
 
-    if (!name?.trim()) {
+    // El nombre nunca lleva emoji: el icono vive en `icon` (Lucide) o `iconSvg` (propio).
+    const cleanName = typeof name === "string" ? stripTaxonomyIcon(name) : "";
+    if (!cleanName) {
       throw ErrorFactory.InvalidRequest(
         "El nombre de la categoría es requerido",
       );
     }
+
+    const iconInput = parseTaxonomyIconBody(body, sanitizeIconSvg);
+    if (!iconInput.ok) throw ErrorFactory.InvalidRequest(iconInput.message);
 
     const existingType = await prismadb.type.findUnique({
       where: {
@@ -98,11 +105,10 @@ export async function PATCH(
       );
     }
 
-    const canonical = splitTaxonomyIcon(name.trim());
     const duplicateType = await prismadb.type.findFirst({
       where: {
         storeId: params.storeId,
-        name: canonical.name,
+        name: cleanName,
         NOT: {
           id: params.typeId,
         },
@@ -114,7 +120,7 @@ export async function PATCH(
     }
 
     const updatedType = await prismadb.$transaction(async (tx) => {
-      const slug = slugify(canonical.name);
+      const slug = slugify(cleanName);
       if (existingType.slug && existingType.slug !== slug) {
         const existingAlias = await tx.typeSlugAlias.findUnique({
           where: {
@@ -138,9 +144,11 @@ export async function PATCH(
       return tx.type.update({
         where: { id: params.typeId },
         data: {
-          name: canonical.name,
+          name: cleanName,
           slug,
-          icon: icon?.trim() || canonical.icon || existingType.icon,
+          // Sin la clave en el cuerpo se conserva lo guardado; con `null` se quita.
+          icon: iconInput.icon === undefined ? existingType.icon : iconInput.icon,
+          iconSvg: iconInput.iconSvg === undefined ? existingType.iconSvg : iconInput.iconSvg,
         },
       });
     });
@@ -206,7 +214,7 @@ export async function DELETE(
 
       if (categoriesWithProducts.length > 0) {
         throw ErrorFactory.Conflict(
-          "No se puede eliminar una categoría que tiene sub-categorías con productos asociados",
+          "No se puede eliminar una categoría que tiene subcategorías con productos asociados",
           {
             ...parseErrorDetails(
               "categoriesWithProducts",

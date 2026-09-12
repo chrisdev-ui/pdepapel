@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import dynamic from "next/dynamic";
 import { getSuppliers } from "./server/get-suppliers";
 
@@ -6,8 +7,6 @@ const SupplierClient = dynamic(() => import("./components/client"), {
 });
 
 export const revalidate = 0;
-
-import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Proveedores | PdePapel Admin",
@@ -25,7 +24,7 @@ export default async function SuppliersPage({
 
   return (
     <div className="flex-col">
-      <div className="flex-1 space-y-4 p-8 pt-6">
+      <div className="flex-1 space-y-4 p-4 sm:p-8 sm:pt-6">
         <SupplierClient data={suppliers} />
       </div>
     </div>

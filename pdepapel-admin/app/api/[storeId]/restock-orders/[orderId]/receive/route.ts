@@ -1,13 +1,22 @@
-import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { Prisma } from "@prisma/client";
+import { NextResponse } from "next/server";
 
-import prismadb from "@/lib/prismadb";
-import { verifyStoreOwner } from "@/lib/utils";
-import {
-  createInventoryMovementBatch,
-  CreateInventoryMovementParams,
-} from "@/lib/inventory";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { invalidateStoreProductsCache } from "@/lib/cache";
+import { createInventoryMovementBatch, type CreateInventoryMovementParams } from "@/lib/inventory";
+import prismadb from "@/lib/prismadb";
+import {
+  deriveRestockStatus,
+  describeReceiptPlanError,
+  getRestockProgress,
+  planReceipt,
+  RECEIVABLE_STATUSES,
+  receiptInputSchema,
+  RESTOCK_STATUS_LABELS,
+  transportationShare,
+} from "@/lib/restock-orders";
+import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -19,154 +28,119 @@ export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
 }
 
-export async function POST(
-  req: Request,
-  { params }: { params: { storeId: string; orderId: string } },
-) {
+const isDuplicateReceipt = (error: unknown) =>
+  error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+
+/**
+ * Recepción de mercancía: cada línea suma a lo recibido y crea un movimiento
+ * de inventario con el costo puesto en bodega. La clave de idempotencia la
+ * genera el diálogo al abrirse: un reintento con la misma clave no vuelve a
+ * sumar stock (índice único por pedido + clave).
+ */
+export async function POST(req: Request, { params }: { params: { storeId: string; orderId: string } }) {
   try {
     const { userId } = await auth();
-    const body = await req.json();
-
-    // Payload: { receivedItems: { restockOrderItemId, quantityReceived, cost? }[] }
-    const { receivedItems } = body;
-
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     await verifyStoreOwner(userId, params.storeId);
 
-    if (
-      !receivedItems ||
-      !Array.isArray(receivedItems) ||
-      receivedItems.length === 0
-    ) {
-      throw ErrorFactory.InvalidRequest("No items to receive");
-    }
+    const parsed = receiptInputSchema.safeParse(await req.json());
+    if (!parsed.success) throw ErrorFactory.InvalidRequest(parsed.error.issues[0]?.message ?? "Recepción no válida.");
+    const input = parsed.data;
 
-    const order = await prismadb.restockOrder.findUnique({
-      where: { id: params.orderId, storeId: params.storeId },
-      include: { items: true },
-    });
-
-    if (!order) throw ErrorFactory.NotFound("Restock Order not found");
-    if (order.status === "DRAFT" || order.status === "CANCELLED") {
-      throw ErrorFactory.InvalidRequest(
-        "Order must be placed before receiving",
-      );
-    }
-
-    // Prepare batch processing
-    const inventoryMovements: CreateInventoryMovementParams[] = [];
-    const itemUpdates: any[] = []; // Promises to update RestockOrderItems
-
-    // Create a map for quick lookup of existing order items
-    // Keyed by ITEM ID, not Product ID, to handle duplicates correctly.
-    const orderItemsMap = new Map(order.items.map((i) => [i.id, i]));
-
-    for (const receivedItem of receivedItems) {
-      const { restockOrderItemId, quantityReceived, cost } = receivedItem;
-
-      const orderItem = orderItemsMap.get(restockOrderItemId);
-      if (!orderItem) {
-        continue;
+    const result = await prismadb.$transaction(async (tx) => {
+      // Estado y líneas frescos dentro de la transacción: dos recepciones a la
+      // vez no pueden leer el mismo «faltan».
+      const order = await tx.restockOrder.findFirst({
+        where: { id: params.orderId, storeId: params.storeId },
+        include: { items: true },
+      });
+      if (!order) throw ErrorFactory.NotFound("El pedido de aprovisionamiento no existe.");
+      if (!RECEIVABLE_STATUSES.includes(order.status)) {
+        throw ErrorFactory.Conflict(
+          `Solo se recibe mercancía de un pedido «Pedido al proveedor» o «Recibido en parte»; este está «${RESTOCK_STATUS_LABELS[order.status]}».`,
+        );
       }
 
-      if (quantityReceived <= 0) continue;
+      const planned = planReceipt(order, input);
+      if (!planned.ok) throw ErrorFactory.InvalidRequest(describeReceiptPlanError(planned.error));
+      const { plan } = planned;
 
-      // Calculate Landed Cost Factor based on Total Order Value
-      const totalOrderValue = order.totalAmount || 1; // Prevent div/0
-      const shippingCost = order.shippingCost || 0;
-      const landedFactor = 1 + shippingCost / totalOrderValue;
-
-      const baseUnitCost = cost || orderItem.cost;
-      const landedUnitCost = baseUnitCost * landedFactor;
-
-      // 1. Prepare Inventory Movement
-      inventoryMovements.push({
-        storeId: params.storeId,
-        productId: orderItem.productId, // Use product ID from the item record
-        type: "RESTOCK_RECEIVED",
-        quantity: quantityReceived,
-        reason: `Recepcion Orden de Compra #${order.orderNumber}`,
-        referenceId: order.id,
-        cost: landedUnitCost,
-        createdBy: `USER_${userId}`,
+      // La recepción se registra primero: si la clave ya existe, P2002 aborta
+      // la transacción antes de tocar inventario.
+      const receipt = await tx.restockOrderReceipt.create({
+        data: {
+          storeId: params.storeId,
+          restockOrderId: order.id,
+          idempotencyKey: input.idempotencyKey,
+          receivedUnits: plan.receivedUnits,
+          lineCount: plan.lines.length,
+          excessUnits: plan.excessUnits,
+          updatedCosts: input.updateCosts,
+          lines: plan.lines as unknown as Prisma.InputJsonArray,
+          createdBy: `USER_${userId}`,
+        },
       });
-    }
 
-    if (inventoryMovements.length === 0) {
-      throw ErrorFactory.InvalidRequest("No valid items to receive");
-    }
+      for (const line of plan.lines) {
+        await tx.restockOrderItem.update({
+          where: { id: line.restockOrderItemId },
+          data: { quantityReceived: { increment: line.quantity } },
+        });
+      }
 
-    // Execute Transaction for Atomicity
-    await prismadb.$transaction(async (tx) => {
-      // Step 1: Update all RestockOrderItems
-      for (const receivedItem of receivedItems) {
-        const { restockOrderItemId, quantityReceived } = receivedItem;
-        const orderItem = orderItemsMap.get(restockOrderItemId);
+      const movements: CreateInventoryMovementParams[] = plan.lines.map((line) => ({
+        storeId: params.storeId,
+        productId: line.productId,
+        type: "RESTOCK_RECEIVED",
+        quantity: line.quantity,
+        reason: `Recepción del pedido ${order.orderNumber}`,
+        description: line.excess > 0 ? `Recepción ${receipt.id} · ${line.excess} de más sobre lo pedido` : `Recepción ${receipt.id}`,
+        referenceId: order.id,
+        cost: line.landedUnitCost,
+        createdBy: `USER_${userId}`,
+      }));
+      await createInventoryMovementBatch(tx, movements);
 
-        if (orderItem && quantityReceived > 0) {
-          await tx.restockOrderItem.update({
-            where: { id: restockOrderItemId },
+      if (input.updateCosts) {
+        for (const line of plan.lines) {
+          await tx.product.update({
+            where: { id: line.productId },
             data: {
-              quantityReceived: { increment: quantityReceived },
+              acqPrice: line.unitCost,
+              transportationCost: transportationShare(line.unitCost, order.totalAmount, order.shippingCost),
             },
           });
         }
       }
-
-      // Step 2: Inventory Movements
-      // Use the batch helper with the transaction client
-      // This will create movements AND update Product stock
-      await createInventoryMovementBatch(tx, inventoryMovements);
-
-      // Step 3: Determine New Status
-      // Fetch fresh state of items INSIDE the transaction to verify totals
-      const freshOrder = await tx.restockOrder.findUnique({
-        where: { id: params.orderId },
-        include: { items: true },
-      });
-
-      if (freshOrder) {
-        const allReceived = freshOrder.items.every(
-          (i) => i.quantityReceived >= i.quantity,
-        );
-        const someReceived = freshOrder.items.some(
-          (i) => i.quantityReceived > 0,
-        );
-
-        let newStatus = freshOrder.status; // Use current status from DB
-
-        // Logic:
-        // If everything is met -> COMPLETED
-        // If some met -> PARTIALLY_RECEIVED (unless already completed? No, if we receive more, it remains completed)
-        // Actually, if we over-receive, it is still completed.
-
-        if (allReceived) {
-          newStatus = "COMPLETED"; // Matches schema Enum
-        } else if (someReceived) {
-          newStatus = "PARTIALLY_RECEIVED";
-        }
-
-        if (newStatus !== freshOrder.status) {
-          await tx.restockOrder.update({
-            where: { id: params.orderId },
-            data: { status: newStatus },
-          });
-        }
+      if (input.assignSupplier) {
+        await tx.product.updateMany({
+          where: { id: { in: plan.lines.map((line) => line.productId) }, storeId: params.storeId, supplierId: null },
+          data: { supplierId: order.supplierId },
+        });
       }
+
+      const fresh = await tx.restockOrderItem.findMany({ where: { restockOrderId: order.id } });
+      const status = deriveRestockStatus(fresh, order.status);
+      if (status !== order.status) {
+        await tx.restockOrder.update({ where: { id: order.id }, data: { status } });
+      }
+
+      return { receipt, status, progress: getRestockProgress(fresh) };
     });
 
-    return NextResponse.json(
-      {
-        success: true,
-        message: "Items received and inventory updated",
-      },
-      { headers: corsHeaders },
-    );
+    // El stock cambió: la tienda y Redis deben verlo.
+    await invalidateStoreProductsCache(params.storeId);
+
+    return NextResponse.json(result, { headers: { ...corsHeaders, ...CACHE_HEADERS.NO_CACHE } });
   } catch (error) {
-    console.log("[RESTOCK_ORDER_RECEIVE]", error);
-    return handleErrorResponse(error, "RESTOCK_ORDER_RECEIVE", {
-      headers: corsHeaders,
-    });
+    if (isDuplicateReceipt(error)) {
+      return handleErrorResponse(
+        ErrorFactory.Conflict("Esta recepción ya se registró. Recarga la página para ver el estado actual."),
+        "RESTOCK_ORDER_RECEIVE",
+        { headers: corsHeaders },
+      );
+    }
+    return handleErrorResponse(error, "RESTOCK_ORDER_RECEIVE", { headers: corsHeaders });
   }
 }

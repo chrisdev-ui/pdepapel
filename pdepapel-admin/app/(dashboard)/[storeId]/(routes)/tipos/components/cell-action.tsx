@@ -65,6 +65,8 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
         onClose={() => setOpen(false)}
         onConfirm={onDelete}
         loading={loading}
+        title={`¿Eliminar la categoría «${data.name}»?`}
+        description="No tiene subcategorías, así que se elimina de inmediato. Esta acción no se puede deshacer."
       />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -80,12 +82,10 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
             Copiar ID
           </DropdownMenuItem>
           <DropdownMenuItem
-            onClick={() =>
-              router.push(`/${params.storeId}/${Models.Types}/${data.id}`)
-            }
+            onClick={() => router.push(`/${params.storeId}/tipos/${data.id}`)}
           >
             <Edit className="mr-2 h-4 w-4" />
-            Actualizar
+            Editar
           </DropdownMenuItem>
           <ArchiveMenuItem kind="types" row={data} />
           <DropdownMenuItem

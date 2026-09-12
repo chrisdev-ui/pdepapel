@@ -1,6 +1,14 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { ACTIVE_ATTRIBUTE_WHERE } from "@/lib/attribute-archive";
+import { invalidateStoreProductsCache } from "@/lib/cache";
 import prismadb from "@/lib/prismadb";
+import {
+  cleanTaxonomyName,
+  duplicateTaxonomyError,
+  findDuplicateTaxonomyName,
+  mapTaxonomyUniqueError,
+  requiredTaxonomyFieldMessage,
+} from "@/lib/taxonomy";
 import {
   CACHE_HEADERS,
   parseErrorDetails,
@@ -8,8 +16,6 @@ import {
 } from "@/lib/utils";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-
-// Enable Edge Runtime for faster response times
 
 export async function POST(
   req: Request,
@@ -20,39 +26,41 @@ export async function POST(
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
-    const body = await req.json();
-    const { name, value } = body;
-
     await verifyStoreOwner(userId, params.storeId);
 
-    if (!name) {
-      throw ErrorFactory.InvalidRequest("El nombre del tamaño es requerido");
-    }
-    if (!value) {
-      throw ErrorFactory.InvalidRequest("El valor del tamaño es requerido");
-    }
+    const body = await req.json();
+    const name = cleanTaxonomyName(body?.name);
+    const value = typeof body?.value === "string" ? body.value.trim() : "";
 
-    // Check if size with same value already exists in this store
-    const existingSize = await prismadb.size.findFirst({
-      where: {
-        storeId: params.storeId,
-        value: value.trim(),
-      },
+    if (!name) throw ErrorFactory.InvalidRequest(requiredTaxonomyFieldMessage("size", "nombre"));
+    if (!value) throw ErrorFactory.InvalidRequest(requiredTaxonomyFieldMessage("size", "valor"));
+
+    // El valor es único por índice (`Size_storeId_value_key`); el nombre se
+    // compara sin distinguir mayúsculas ni tildes.
+    const sizes = await prismadb.size.findMany({
+      where: { storeId: params.storeId },
+      select: { id: true, name: true, value: true },
     });
-
-    if (existingSize) {
+    if (sizes.some((size) => size.value === value)) {
       throw ErrorFactory.Conflict(
-        `Ya existe un tamaño con el valor "${value.trim()}" en esta tienda`,
+        `Ya existe un tamaño con el valor «${value}» en esta tienda.`,
       );
     }
+    if (findDuplicateTaxonomyName(sizes, name)) throw duplicateTaxonomyError("size", name);
 
-    const size = await prismadb.size.create({
-      data: {
-        name: name.trim(),
-        value: value.trim(),
-        storeId: params.storeId,
-      },
-    });
+    const size = await prismadb.size
+      .create({
+        data: {
+          name,
+          value,
+          storeId: params.storeId,
+        },
+      })
+      .catch((error) => {
+        throw mapTaxonomyUniqueError(error, "size", name);
+      });
+
+    await invalidateStoreProductsCache(params.storeId);
 
     return NextResponse.json(size, {
       headers: CACHE_HEADERS.NO_CACHE,
@@ -64,8 +72,9 @@ export async function POST(
   }
 }
 
+/** Lista pública (tienda en línea): solo tamaños activos. */
 export async function GET(
-  req: Request,
+  _req: Request,
   { params }: { params: { storeId: string } },
 ) {
   try {
@@ -83,7 +92,7 @@ export async function GET(
     });
   } catch (error) {
     return handleErrorResponse(error, "SIZES_GET", {
-      headers: CACHE_HEADERS.STATIC,
+      headers: CACHE_HEADERS.NO_CACHE,
     });
   }
 }
@@ -97,15 +106,15 @@ export async function DELETE(
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
+    await verifyStoreOwner(userId, params.storeId);
+
     const { ids }: { ids: string[] } = await req.json();
 
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       throw ErrorFactory.InvalidRequest(
-        "Los IDs de los tamaños son requeridos y deben estar en formato de arreglo",
+        "Se requieren IDs de tamaños en formato de arreglo",
       );
     }
-
-    await verifyStoreOwner(userId, params.storeId);
 
     await prismadb.$transaction(async (tx) => {
       const sizes = await tx.size.findMany({
@@ -126,8 +135,8 @@ export async function DELETE(
       });
 
       if (sizes.length !== ids.length) {
-        throw ErrorFactory.InvalidRequest(
-          "Algunos tamaños no existen o no pertenecen a esta tienda",
+        throw ErrorFactory.NotFound(
+          "Algunos tamaños no existen en esta tienda",
         );
       }
 
@@ -159,6 +168,8 @@ export async function DELETE(
         },
       });
     });
+
+    await invalidateStoreProductsCache(params.storeId);
 
     return NextResponse.json("Los tamaños han sido eliminados", {
       headers: CACHE_HEADERS.NO_CACHE,

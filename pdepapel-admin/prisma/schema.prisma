@@ -68,6 +68,7 @@ model Store {
   productGroups                  ProductGroup[]                  @relation("StoreToProductGroup")
   inventoryMovements             InventoryMovement[]             @relation("StoreToInventoryMovement")
   restockOrders                  RestockOrder[]                  @relation("StoreToRestockOrder")
+  restockOrderReceipts           RestockOrderReceipt[]           @relation("StoreToRestockOrderReceipt")
   customOrders                   CustomOrder[]                   @relation("StoreToCustomOrder")
   quotations                     Quotation[]                     @relation("StoreToQuotation")
   whatsappMessages               WhatsAppMessage[]               @relation("StoreToWhatsAppMessage")
@@ -167,7 +168,10 @@ model Type {
   storeId     String
   name        String
   slug        String          @default("")
+  /// Nombre de icono de Lucide (kebab-case) que pinta la tienda; el nombre nunca lleva emoji.
   icon        String?         @db.VarChar(32)
+  /// Icono propio generado con IA en el estilo de Lucide: solo el contenido del <svg> (trazos), saneado al guardar.
+  iconSvg     String?         @db.Text
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
   isArchived  Boolean         @default(false)
@@ -328,6 +332,7 @@ model Color {
   store      Store     @relation("StoreToColor", fields: [storeId], references: [id])
   products   Product[]
 
+  @@unique([storeId, name])
   @@index([storeId])
   @@index([storeId, isArchived])
 }
@@ -343,6 +348,7 @@ model Design {
   store      Store     @relation("StoreToDesign", fields: [storeId], references: [id])
   products   Product[]
 
+  @@unique([storeId, name])
   @@index([storeId])
   @@index([storeId, isArchived])
 }
@@ -587,12 +593,21 @@ model Supplier {
   id            String         @id @default(uuid())
   storeId       String
   name          String
+  /// NIT o cédula, para cruzar con las facturas de proveedores (compras de impuestos).
+  nit           String?        @db.VarChar(32)
+  contactName   String?        @db.VarChar(120)
+  phone         String?        @db.VarChar(32)
+  email         String?        @db.VarChar(160)
+  /// Días habituales entre pedir y recibir; avisa cuando un pedido se pasa de fecha.
+  leadTimeDays  Int?
+  notes         String?        @db.Text
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   store         Store          @relation("StoreToSupplier", fields: [storeId], references: [id])
   products      Product[]
   restockOrders RestockOrder[]
 
+  @@unique([storeId, name])
   @@index([storeId])
 }
 
@@ -1407,9 +1422,10 @@ model RestockOrder {
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
 
-  store    Store              @relation("StoreToRestockOrder", fields: [storeId], references: [id])
-  supplier Supplier           @relation(fields: [supplierId], references: [id])
+  store    Store                 @relation("StoreToRestockOrder", fields: [storeId], references: [id])
+  supplier Supplier              @relation(fields: [supplierId], references: [id])
   items    RestockOrderItem[]
+  receipts RestockOrderReceipt[]
 
   @@unique([storeId, orderNumber])
   @@index([storeId])
@@ -1432,6 +1448,31 @@ model RestockOrderItem {
 
   @@index([restockOrderId])
   @@index([productId])
+}
+
+/// Una recepción de mercancía: qué llegó, cuándo y con qué costo puesto en
+/// bodega. La clave de idempotencia la genera el diálogo al abrirse, así un
+/// reintento tras una respuesta lenta no vuelve a sumar stock.
+model RestockOrderReceipt {
+  id              String   @id @default(uuid())
+  storeId         String
+  restockOrderId  String
+  idempotencyKey  String   @db.VarChar(64)
+  receivedUnits   Int
+  lineCount       Int
+  excessUnits     Int      @default(0)
+  updatedCosts    Boolean  @default(false)
+  /// [{ restockOrderItemId, productId, quantity, excess, unitCost, landedUnitCost }]
+  lines           Json
+  createdBy       String?
+  createdAt       DateTime @default(now())
+
+  restockOrder RestockOrder @relation(fields: [restockOrderId], references: [id], onDelete: Cascade)
+  store        Store        @relation("StoreToRestockOrderReceipt", fields: [storeId], references: [id])
+
+  @@unique([restockOrderId, idempotencyKey])
+  @@index([storeId])
+  @@index([restockOrderId])
 }
 
 enum RestockOrderStatus {

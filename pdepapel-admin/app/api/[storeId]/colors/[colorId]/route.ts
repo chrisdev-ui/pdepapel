@@ -1,11 +1,21 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { invalidateStoreProductsCache } from "@/lib/cache";
 import prismadb from "@/lib/prismadb";
+import {
+  cleanTaxonomyName,
+  duplicateTaxonomyError,
+  findDuplicateTaxonomyName,
+  mapTaxonomyUniqueError,
+  missingTaxonomyMessage,
+  requiredTaxonomyFieldMessage,
+} from "@/lib/taxonomy";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-// Enable Edge Runtime for faster response times
+const PUBLIC_COLOR_SELECT = { id: true, name: true, value: true } as const;
 
+/** Lectura pública de un color de la tienda; otra tienda o un id ajeno → 404. */
 export async function GET(
   _req: Request,
   { params }: { params: { storeId: string; colorId: string } },
@@ -13,22 +23,20 @@ export async function GET(
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.colorId)
-      throw ErrorFactory.InvalidRequest("El ID del color es obligatorio");
+      throw ErrorFactory.InvalidRequest(requiredTaxonomyFieldMessage("color", "ID"));
 
-    const color = await prismadb.color.findUnique({
-      where: { id: params.colorId },
-      select: {
-        id: true,
-        name: true,
-        value: true,
-      },
+    const color = await prismadb.color.findFirst({
+      where: { id: params.colorId, storeId: params.storeId },
+      select: PUBLIC_COLOR_SELECT,
     });
+
+    if (!color) throw ErrorFactory.NotFound(missingTaxonomyMessage("color"));
 
     return NextResponse.json(color, {
       headers: CACHE_HEADERS.STATIC,
     });
   } catch (error) {
-    return handleErrorResponse(error, "COLOR_GET");
+    return handleErrorResponse(error, "COLOR_GET", { headers: CACHE_HEADERS.NO_CACHE });
   }
 }
 
@@ -41,47 +49,47 @@ export async function PATCH(
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.colorId)
-      throw ErrorFactory.InvalidRequest("El ID del color es obligatorio");
+      throw ErrorFactory.InvalidRequest(requiredTaxonomyFieldMessage("color", "ID"));
 
     await verifyStoreOwner(userId, params.storeId);
 
     const body = await req.json();
-    const { name, value } = body;
+    const name = cleanTaxonomyName(body?.name);
+    const value = typeof body?.value === "string" ? body.value.trim() : "";
 
-    if (!name)
-      throw ErrorFactory.InvalidRequest("El nombre del color es obligatorio");
-    if (!value)
-      throw ErrorFactory.InvalidRequest("El valor del color es obligatorio");
+    if (!name) throw ErrorFactory.InvalidRequest(requiredTaxonomyFieldMessage("color", "nombre"));
+    if (!value) throw ErrorFactory.InvalidRequest(requiredTaxonomyFieldMessage("color", "valor"));
 
-    const updatedColor = await prismadb.$transaction(async (tx) => {
-      const color = await tx.color.findUnique({
-        where: { id: params.colorId, storeId: params.storeId },
+    const updatedColor = await prismadb
+      .$transaction(async (tx) => {
+        const colors = await tx.color.findMany({
+          where: { storeId: params.storeId },
+          select: { id: true, name: true },
+        });
+        if (!colors.some((color) => color.id === params.colorId)) {
+          throw ErrorFactory.NotFound(missingTaxonomyMessage("color"));
+        }
+        if (findDuplicateTaxonomyName(colors, name, params.colorId)) {
+          throw duplicateTaxonomyError("color", name);
+        }
+
+        return tx.color.update({
+          where: { id: params.colorId, storeId: params.storeId },
+          data: { name, value },
+          select: PUBLIC_COLOR_SELECT,
+        });
+      })
+      .catch((error) => {
+        throw mapTaxonomyUniqueError(error, "color", name);
       });
 
-      if (!color)
-        throw ErrorFactory.InvalidRequest(
-          `El color ${params.colorId} no existe en la tienda`,
-        );
-
-      return tx.color.update({
-        where: { id: params.colorId, storeId: params.storeId },
-        data: {
-          name,
-          value,
-        },
-        select: {
-          id: true,
-          name: true,
-          value: true,
-        },
-      });
-    });
+    await invalidateStoreProductsCache(params.storeId);
 
     return NextResponse.json(updatedColor, {
-      headers: CACHE_HEADERS.STATIC,
+      headers: CACHE_HEADERS.NO_CACHE,
     });
   } catch (error) {
-    return handleErrorResponse(error, "COLOR_PATCH");
+    return handleErrorResponse(error, "COLOR_PATCH", { headers: CACHE_HEADERS.NO_CACHE });
   }
 }
 
@@ -94,22 +102,19 @@ export async function DELETE(
     if (!userId) throw ErrorFactory.Unauthenticated();
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
     if (!params.colorId)
-      throw ErrorFactory.InvalidRequest("El ID del color es obligatorio");
+      throw ErrorFactory.InvalidRequest(requiredTaxonomyFieldMessage("color", "ID"));
 
     await verifyStoreOwner(userId, params.storeId);
 
     await prismadb.$transaction(async (tx) => {
-      const color = await tx.color.findUnique({
+      const color = await tx.color.findFirst({
         where: {
           id: params.colorId,
           storeId: params.storeId,
         },
       });
 
-      if (!color)
-        throw ErrorFactory.NotFound(
-          `El color ${params.colorId} no se encuentra en la tienda`,
-        );
+      if (!color) throw ErrorFactory.NotFound(missingTaxonomyMessage("color"));
 
       const products = await tx.product.count({
         where: {
@@ -135,10 +140,12 @@ export async function DELETE(
       });
     });
 
+    await invalidateStoreProductsCache(params.storeId);
+
     return NextResponse.json("El color ha sido eliminado", {
-      headers: CACHE_HEADERS.STATIC,
+      headers: CACHE_HEADERS.NO_CACHE,
     });
   } catch (error) {
-    return handleErrorResponse(error, "COLOR_DELETE");
+    return handleErrorResponse(error, "COLOR_DELETE", { headers: CACHE_HEADERS.NO_CACHE });
   }
 }

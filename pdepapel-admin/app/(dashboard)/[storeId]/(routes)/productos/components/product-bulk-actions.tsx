@@ -167,9 +167,9 @@ const ACTIONS: Array<
   {
     field: "categoryId",
     value: "",
-    label: "Cambiar sub-categoría",
+    label: "Cambiar subcategoría",
     description:
-      "Reemplaza la sub-categoría actual. No afecta precio, stock ni visibilidad.",
+      "Reemplaza la subcategoría actual. No afecta precio, stock ni visibilidad.",
     icon: Tag,
     picker: "categories",
     show: () => true,

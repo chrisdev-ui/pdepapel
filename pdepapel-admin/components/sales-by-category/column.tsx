@@ -12,7 +12,7 @@ export const columns: ColumnDef<SalesByCategoryColumn>[] = [
   {
     accessorKey: "category",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Sub-Categoría" />
+      <DataTableColumnHeader column={column} title="Subcategoría" />
     ),
   },
   {

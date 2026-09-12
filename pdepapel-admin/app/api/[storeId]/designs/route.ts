@@ -1,6 +1,14 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { ACTIVE_ATTRIBUTE_WHERE } from "@/lib/attribute-archive";
+import { invalidateStoreProductsCache } from "@/lib/cache";
 import prismadb from "@/lib/prismadb";
+import {
+  cleanTaxonomyName,
+  duplicateTaxonomyError,
+  findDuplicateTaxonomyName,
+  mapTaxonomyUniqueError,
+  requiredTaxonomyFieldMessage,
+} from "@/lib/taxonomy";
 import {
   CACHE_HEADERS,
   parseErrorDetails,
@@ -9,7 +17,7 @@ import {
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-// Enable Edge Runtime for faster response times
+const PUBLIC_DESIGN_SELECT = { id: true, name: true } as const;
 
 export async function POST(
   req: Request,
@@ -23,27 +31,38 @@ export async function POST(
     await verifyStoreOwner(userId, params.storeId);
 
     const body = await req.json();
-    const { name } = body;
+    const name = cleanTaxonomyName(body?.name);
 
-    if (!name)
-      throw ErrorFactory.InvalidRequest("El nombre del diseño es obligatorio");
+    if (!name) throw ErrorFactory.InvalidRequest(requiredTaxonomyFieldMessage("design", "nombre"));
 
-    const design = await prismadb.design.create({
-      data: { name, storeId: params.storeId },
-      select: {
-        id: true,
-        name: true,
-      },
+    // Nombre único por tienda sin distinguir mayúsculas ni tildes; el índice
+    // `Design_storeId_name_key` es la última barrera (P2002 → mismo 409).
+    const existing = await prismadb.design.findMany({
+      where: { storeId: params.storeId },
+      select: { id: true, name: true },
     });
+    if (findDuplicateTaxonomyName(existing, name)) throw duplicateTaxonomyError("design", name);
+
+    const design = await prismadb.design
+      .create({
+        data: { name, storeId: params.storeId },
+        select: PUBLIC_DESIGN_SELECT,
+      })
+      .catch((error) => {
+        throw mapTaxonomyUniqueError(error, "design", name);
+      });
+
+    await invalidateStoreProductsCache(params.storeId);
 
     return NextResponse.json(design, {
       headers: CACHE_HEADERS.NO_CACHE,
     });
   } catch (error) {
-    return handleErrorResponse(error, "DESIGNS_POST");
+    return handleErrorResponse(error, "DESIGNS_POST", { headers: CACHE_HEADERS.NO_CACHE });
   }
 }
 
+/** Lista pública (tienda en línea): solo diseños activos y solo campos del catálogo. */
 export async function GET(
   _req: Request,
   { params }: { params: { storeId: string } },
@@ -53,17 +72,14 @@ export async function GET(
 
     const designs = await prismadb.design.findMany({
       where: { storeId: params.storeId, ...ACTIVE_ATTRIBUTE_WHERE },
-      select: {
-        id: true,
-        name: true,
-      },
+      select: PUBLIC_DESIGN_SELECT,
     });
 
     return NextResponse.json(designs, {
       headers: CACHE_HEADERS.SEMI_STATIC,
     });
   } catch (error) {
-    return handleErrorResponse(error, "DESIGNS_GET");
+    return handleErrorResponse(error, "DESIGNS_GET", { headers: CACHE_HEADERS.NO_CACHE });
   }
 }
 
@@ -91,8 +107,8 @@ export async function DELETE(
       });
 
       if (designs.length !== ids.length)
-        throw ErrorFactory.InvalidRequest(
-          "Algunos IDs de diseños no se encuentran en la tienda",
+        throw ErrorFactory.NotFound(
+          "Algunos diseños no existen en esta tienda",
         );
 
       const designsInUse = await tx.design.findMany({
@@ -120,10 +136,12 @@ export async function DELETE(
       });
     });
 
+    await invalidateStoreProductsCache(params.storeId);
+
     return NextResponse.json("Los diseños han sido eliminados", {
       headers: CACHE_HEADERS.NO_CACHE,
     });
   } catch (error) {
-    return handleErrorResponse(error, "DESIGNS_DELETE");
+    return handleErrorResponse(error, "DESIGNS_DELETE", { headers: CACHE_HEADERS.NO_CACHE });
   }
 }

@@ -1,90 +1,70 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
 import { DataTableCellCurrency } from "@/components/ui/data-table-cell-currency";
 import { DataTableCellDate } from "@/components/ui/data-table-cell-date";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
-import { RestockOrderStatus } from "@prisma/client";
-import { ColumnDef } from "@tanstack/react-table";
-import { getRestockOrders } from "../server/get-restock-orders";
+import { TintBadge } from "@/components/ui/tint-badge";
+import { RESTOCK_STATUS_LABELS, RESTOCK_STATUS_TONES } from "@/lib/restock-orders";
+import { cn } from "@/lib/utils";
+import type { ColumnDef } from "@tanstack/react-table";
+
+import type { RestockOrderRow } from "../server/get-restock-orders";
 import { CellAction } from "./cell-action";
 
-export type RestockOrderColumn = Awaited<
-  ReturnType<typeof getRestockOrders>
->[number];
+export type RestockOrderColumn = RestockOrderRow;
+
+/** Barra de unidades recibidas sobre pedidas; compartida por la tabla y la tarjeta móvil. */
+export function RestockProgressCell({ progress, className }: { progress: RestockOrderRow["progress"]; className?: string }) {
+  const percent = progress.orderedUnits > 0 ? Math.min(100, Math.round((progress.receivedUnits / progress.orderedUnits) * 100)) : 0;
+  return (
+    <div className={cn("flex min-w-[120px] flex-col gap-1", className)}>
+      <span className="text-xs text-muted-foreground">
+        {progress.receivedUnits} de {progress.orderedUnits} unidades · {progress.lineCount} {progress.lineCount === 1 ? "línea" : "líneas"}
+      </span>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden="true">
+        <div className={cn("h-full rounded-full", percent >= 100 ? "bg-tint-mint" : "bg-primary/60")} style={{ width: `${percent}%` }} />
+      </div>
+    </div>
+  );
+}
 
 export const columns: ColumnDef<RestockOrderColumn>[] = [
   {
     accessorKey: "orderNumber",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Pedido #" />
-    ),
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Pedido" />,
+    cell: ({ row }) => <span className="font-mono text-sm font-semibold text-primary">{row.original.orderNumber}</span>,
   },
   {
-    accessorKey: "supplier.name",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Proveedor" />
-    ),
+    id: "supplier",
+    accessorFn: (row) => row.supplier.name,
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Proveedor" />,
+    cell: ({ row }) => <span className="text-sm">{row.original.supplier.name}</span>,
   },
   {
     accessorKey: "status",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Estado" />
-    ),
-    cell: ({ row }) => {
-      const status = row.original.status;
-      const variants: Record<
-        RestockOrderStatus,
-        {
-          variant: "outline" | "secondary" | "success" | "destructive";
-          text: string;
-        }
-      > = {
-        [RestockOrderStatus.DRAFT]: { variant: "outline", text: "📝 Borrador" },
-        [RestockOrderStatus.ORDERED]: {
-          variant: "secondary",
-          text: "⏳ Pedido",
-        },
-        [RestockOrderStatus.PARTIALLY_RECEIVED]: {
-          variant: "secondary",
-          text: "📦 Parc. Recibido",
-        },
-        [RestockOrderStatus.COMPLETED]: {
-          variant: "success",
-          text: "✅ Completado",
-        },
-        [RestockOrderStatus.CANCELLED]: {
-          variant: "destructive",
-          text: "🚫 Cancelado",
-        },
-      };
-      // Fallback for unexpected status
-      const config = variants[status] || { variant: "outline", text: status };
-
-      return (
-        <Badge
-          variant={config.variant}
-          className="flex items-center justify-center"
-        >
-          {config.text}
-        </Badge>
-      );
-    },
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+    cell: ({ row }) => <TintBadge label={RESTOCK_STATUS_LABELS[row.original.status]} tone={RESTOCK_STATUS_TONES[row.original.status]} />,
+    filterFn: (row, id, value: string[]) => value.includes(row.getValue(id)),
   },
   {
-    accessorKey: "totalAmount",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Total Esperado" />
-    ),
+    id: "progress",
+    accessorFn: (row) => row.progress.receivedUnits,
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Recibido" />,
+    cell: ({ row }) => <RestockProgressCell progress={row.original.progress} />,
+  },
+  {
+    accessorKey: "total",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Total" />,
     cell: ({ row }) => (
-      <DataTableCellCurrency value={row.original.totalAmount} />
+      <div className="flex flex-col items-end">
+        <DataTableCellCurrency value={row.original.total} />
+        {row.original.shippingCost > 0 && <span className="text-[11px] text-muted-foreground">incluye envío</span>}
+      </div>
     ),
   },
   {
     accessorKey: "createdAt",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Fecha" />
-    ),
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha" />,
     cell: ({ row }) => <DataTableCellDate date={row.original.createdAt} />,
   },
   {

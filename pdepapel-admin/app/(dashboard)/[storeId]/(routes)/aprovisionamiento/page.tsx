@@ -1,32 +1,37 @@
 import type { Metadata } from "next";
 import dynamicImport from "next/dynamic";
-import { v4 as uuidv4 } from "uuid";
+
+import prismadb from "@/lib/prismadb";
 import { getRestockOrders } from "./server/get-restock-orders";
 
-const RestockOrderClient = dynamicImport(() => import("./components/client"), {
-  ssr: false,
-});
+const RestockOrderClient = dynamicImport(() => import("./components/client"), { ssr: false });
 
 export const revalidate = 0;
 
 export const metadata: Metadata = {
   title: "Aprovisionamiento | PdePapel Admin",
-  description: "Gestión de pedidos de aprovisionamiento",
+  description: "Pedidos a proveedores y recepción de mercancía",
 };
 
 export default async function RestockOrdersPage({
   params,
+  searchParams,
 }: {
-  params: {
-    storeId: string;
-  };
+  params: { storeId: string };
+  searchParams?: { proveedor?: string };
 }) {
-  const restockOrders = await getRestockOrders(params.storeId);
+  const supplierId = searchParams?.proveedor?.trim() || null;
+  const [restockOrders, supplier] = await Promise.all([
+    getRestockOrders(params.storeId, supplierId),
+    supplierId
+      ? prismadb.supplier.findFirst({ where: { id: supplierId, storeId: params.storeId }, select: { id: true, name: true } })
+      : null,
+  ]);
 
   return (
     <div className="flex-col">
-      <div className="flex-1 space-y-4 p-8 pt-6">
-        <RestockOrderClient data={restockOrders} key={uuidv4()} />
+      <div className="flex-1 space-y-4 p-4 pt-6 sm:p-8">
+        <RestockOrderClient data={restockOrders} supplierFilter={supplier} />
       </div>
     </div>
   );

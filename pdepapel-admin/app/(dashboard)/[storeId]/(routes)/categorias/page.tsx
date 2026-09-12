@@ -1,33 +1,18 @@
-import dynamic from "next/dynamic";
-import { getCategories } from "./server/get-categories";
+import { redirect } from "next/navigation";
 
-const CategoryClient = dynamic(() => import("./components/client"), {
-  ssr: false,
-});
-
-export const revalidate = 0;
-
-import type { Metadata } from "next";
-
-export const metadata: Metadata = {
-  title: "Sub-Categorías | PdePapel Admin",
-  description: "Gestión de sub-categorías",
-};
-
-export default async function CategoriesPage({
+/**
+ * La lista vive en el hub de Atributos; esta ruta solo conserva los enlaces
+ * antiguos y la vista (`?vista=archivados`) al redirigir.
+ */
+export default function CategoriesPage({
   params,
+  searchParams,
 }: {
-  params: {
-    storeId: string;
-  };
+  params: { storeId: string };
+  searchParams?: { vista?: string | string[] };
 }) {
-  const categories = await getCategories(params.storeId);
-
-  return (
-    <div className="flex-col">
-      <div className="flex-1 space-y-4 p-8 pt-6">
-        <CategoryClient data={categories} />
-      </div>
-    </div>
-  );
+  const query = new URLSearchParams({ tab: "subcategorias" });
+  const vista = Array.isArray(searchParams?.vista) ? searchParams?.vista[0] : searchParams?.vista;
+  if (vista === "archivados") query.set("vista", vista);
+  redirect(`/${params.storeId}/atributos?${query.toString()}`);
 }

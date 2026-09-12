@@ -1,5 +1,6 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
+import { allocateRestockOrderNumber } from "@/lib/restock-order-numbers";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
 import { generateSemanticSKU } from "@/lib/variant-generator";
 import { auth } from "@clerk/nextjs/server";
@@ -62,21 +63,8 @@ export async function POST(
 
         // Create Restock Order if supplier is provided
         if (supplierId) {
-          // Generate order number
-          const lastOrder = await tx.restockOrder.findFirst({
-            where: { storeId: params.storeId },
-            orderBy: { createdAt: "desc" },
-            select: { orderNumber: true },
-          });
-
-          let nextNumber = 1001;
-          if (lastOrder?.orderNumber) {
-            const match = lastOrder.orderNumber.match(/PO-(\d+)/);
-            if (match) {
-              nextNumber = parseInt(match[1], 10) + 1;
-            }
-          }
-          restockOrderNumber = `PO-${nextNumber}`;
+          // Mismo generador que la API de aprovisionamiento: mayor número + 1.
+          restockOrderNumber = await allocateRestockOrderNumber(tx, params.storeId);
 
           const restockOrder = await tx.restockOrder.create({
             data: {

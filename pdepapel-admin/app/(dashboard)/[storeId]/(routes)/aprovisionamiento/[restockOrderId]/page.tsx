@@ -1,55 +1,51 @@
+import { redirect } from "next/navigation";
+
 import prismadb from "@/lib/prismadb";
-import { RestockOrderForm } from "./components/restock-order-form";
+import { RESTOCK_ORDER_INCLUDE } from "@/lib/restock-orders-db";
+import { RestockOrderStatus } from "@prisma/client";
+
+import { RestockOrderDraftForm } from "./components/restock-order-draft-form";
+import { RestockOrderWorkspace } from "./components/restock-order-workspace";
+
+const NEW_SEGMENTS = new Set(["nuevo", "new"]);
 
 export default async function RestockOrderPage({
   params,
+  searchParams,
 }: {
   params: { restockOrderId: string; storeId: string };
+  searchParams?: { recibir?: string };
 }) {
-  const restockOrder =
-    params.restockOrderId === "nuevo"
+  // La ruta canónica es /nuevo; /new sigue llegando desde enlaces viejos.
+  if (params.restockOrderId === "new") redirect(`/${params.storeId}/aprovisionamiento/nuevo`);
+
+  const isNew = NEW_SEGMENTS.has(params.restockOrderId);
+  const [restockOrder, suppliers] = await Promise.all([
+    isNew
       ? null
-      : await prismadb.restockOrder.findUnique({
-          where: {
-            id: params.restockOrderId,
-          },
-          include: {
-            items: {
-              include: {
-                product: true,
-              },
-            },
-          },
-        });
+      : prismadb.restockOrder.findFirst({
+          where: { id: params.restockOrderId, storeId: params.storeId },
+          include: RESTOCK_ORDER_INCLUDE,
+        }),
+    prismadb.supplier.findMany({
+      where: { storeId: params.storeId },
+      select: { id: true, name: true, leadTimeDays: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
 
-  const suppliers = await prismadb.supplier.findMany({
-    where: {
-      storeId: params.storeId,
-    },
-  });
+  if (!isNew && !restockOrder) redirect(`/${params.storeId}/aprovisionamiento`);
 
-  const products = await prismadb.product.findMany({
-    where: {
-      storeId: params.storeId,
-      isArchived: false,
-    },
-    select: {
-      id: true,
-      name: true,
-      sku: true,
-      acqPrice: true,
-      stock: true,
-    },
-  });
+  const draft = !restockOrder || restockOrder.status === RestockOrderStatus.DRAFT;
 
   return (
     <div className="flex-col">
-      <div className="flex-1 space-y-4 p-8 pt-6">
-        <RestockOrderForm
-          initialData={restockOrder}
-          suppliers={suppliers}
-          products={products}
-        />
+      <div className="flex-1 space-y-4 p-4 pt-6 sm:p-8">
+        {draft ? (
+          <RestockOrderDraftForm initialData={restockOrder} suppliers={suppliers} />
+        ) : (
+          <RestockOrderWorkspace order={restockOrder!} openReceive={searchParams?.recibir === "1"} />
+        )}
       </div>
     </div>
   );

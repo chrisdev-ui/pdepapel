@@ -2,10 +2,9 @@
 
 import prismadb from "@/lib/prismadb";
 
-export async function getSize(id: string) {
-  return await prismadb.size.findUnique({
-    where: {
-      id,
-    },
+/** Tamaño para el formulario de edición; `null` si no existe o es de otra tienda. */
+export async function getSize(storeId: string, sizeId: string) {
+  return await prismadb.size.findFirst({
+    where: { id: sizeId, storeId },
   });
 }

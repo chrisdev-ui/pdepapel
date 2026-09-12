@@ -112,7 +112,7 @@ const formSchema = z
       .number()
       .min(0, "El costo de misceláneo no puede ser negativo"),
     price: z.coerce.number().min(1, "El precio de venta debe ser mayor a 0"),
-    categoryId: z.string().min(1, "Elige una sub-categoría"),
+    categoryId: z.string().min(1, "Elige una subcategoría"),
     colorId: z.string().min(1, "Elige un color"),
     sizeId: z.string().min(1, "Elige un tamaño"),
     designId: z.string().min(1, "Elige un diseño"),
@@ -528,8 +528,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
         if (groupCategory && groupCategory !== currentCategory) {
           form.setValue("categoryId", groupCategory);
           toast({
-            title: "Sub-Categoría Actualizada",
-            description: `La sub-categoría se ha ajustado a "${categories.find((c) => c.id === groupCategory)?.name}" para coincidir con el grupo.`,
+            title: "Subcategoría Actualizada",
+            description: `La subcategoría se ha ajustado a "${categories.find((c) => c.id === groupCategory)?.name}" para coincidir con el grupo.`,
           });
         }
       }
@@ -1869,7 +1869,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                         />
                       </FormControl>
                       <FormDescription>
-                        Al asignarlo a un grupo, la sub-categoría, el tamaño, el
+                        Al asignarlo a un grupo, la subcategoría, el tamaño, el
                         color y el diseño pasan a gestionarse desde el grupo.
                       </FormDescription>
                       <FormMessage />
@@ -1881,14 +1881,14 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   name="categoryId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel isRequired>Sub-Categoría</FormLabel>
+                      <FormLabel isRequired>Subcategoría</FormLabel>
                       <FormControl>
                         <Combobox
                           id="categoryId"
                           options={selectOptions.categories ?? []}
                           value={field.value || null}
                           onChange={(value) => field.onChange(value ?? "")}
-                          placeholder="Selecciona una sub-categoría"
+                          placeholder="Selecciona una subcategoría"
                           searchPlaceholder="Escribe para buscar…"
                           emptyText="No hay resultados"
                           disabled={

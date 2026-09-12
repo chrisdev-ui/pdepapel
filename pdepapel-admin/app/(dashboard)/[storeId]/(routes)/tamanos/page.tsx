@@ -1,32 +1,18 @@
-import dynamic from "next/dynamic";
-import { getSizes } from "./server/get-sizes";
+import { redirect } from "next/navigation";
 
-const SizesClient = dynamic(() => import("./components/client"), {
-  ssr: false,
-});
-
-export const revalidate = 0;
-
-import type { Metadata } from "next";
-
-export const metadata: Metadata = {
-  title: "Tamaños | PdePapel Admin",
-  description: "Gestión de tamaños",
-};
-
-export default async function SizesPage({
+/**
+ * La lista vive en el hub de Atributos; esta ruta solo conserva los enlaces
+ * antiguos y la vista (`?vista=archivados`) al redirigir.
+ */
+export default function SizesPage({
   params,
+  searchParams,
 }: {
-  params: {
-    storeId: string;
-  };
+  params: { storeId: string };
+  searchParams?: { vista?: string | string[] };
 }) {
-  const sizes = await getSizes(params.storeId);
-  return (
-    <div className="flex-col">
-      <div className="flex-1 space-y-4 p-8 pt-6">
-        <SizesClient data={sizes} />
-      </div>
-    </div>
-  );
+  const query = new URLSearchParams({ tab: "tamanos" });
+  const vista = Array.isArray(searchParams?.vista) ? searchParams?.vista[0] : searchParams?.vista;
+  if (vista === "archivados") query.set("vista", vista);
+  redirect(`/${params.storeId}/atributos?${query.toString()}`);
 }

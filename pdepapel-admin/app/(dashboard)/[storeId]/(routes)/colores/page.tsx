@@ -1,33 +1,18 @@
-import dynamic from "next/dynamic";
-import { getColors } from "./server/get-colors";
+import { redirect } from "next/navigation";
 
-const ColorsClient = dynamic(() => import("./components/client"), {
-  ssr: false,
-});
-
-export const revalidate = 0;
-
-import type { Metadata } from "next";
-
-export const metadata: Metadata = {
-  title: "Colores | PdePapel Admin",
-  description: "Gestión de colores",
-};
-
-export default async function ColorsPage({
+/**
+ * La lista vive en el hub de Atributos; esta ruta solo conserva los enlaces
+ * antiguos y la vista (`?vista=archivados`) al redirigir.
+ */
+export default function ColorsPage({
   params,
+  searchParams,
 }: {
-  params: {
-    storeId: string;
-  };
+  params: { storeId: string };
+  searchParams?: { vista?: string | string[] };
 }) {
-  const colors = await getColors(params.storeId);
-
-  return (
-    <div className="flex-col">
-      <div className="flex-1 space-y-4 p-8 pt-6">
-        <ColorsClient data={colors} />
-      </div>
-    </div>
-  );
+  const query = new URLSearchParams({ tab: "colores" });
+  const vista = Array.isArray(searchParams?.vista) ? searchParams?.vista[0] : searchParams?.vista;
+  if (vista === "archivados") query.set("vista", vista);
+  redirect(`/${params.storeId}/atributos?${query.toString()}`);
 }

@@ -2,10 +2,9 @@
 
 import prismadb from "@/lib/prismadb";
 
-export async function getDesign(designId: string) {
-  return await prismadb.design.findUnique({
-    where: {
-      id: designId,
-    },
+/** Diseño para el formulario de edición; `null` si no existe o es de otra tienda. */
+export async function getDesign(storeId: string, designId: string) {
+  return await prismadb.design.findFirst({
+    where: { id: designId, storeId },
   });
 }

@@ -1,6 +1,13 @@
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
 import {
+  duplicateSupplierMessage,
+  findDuplicateSupplierName,
+  isUniqueConstraintError,
+  parseSupplierInput,
+  supplierDeleteBlockedMessage,
+} from "@/lib/suppliers";
+import {
   CACHE_HEADERS,
   parseErrorDetails,
   verifyStoreOwner,
@@ -8,7 +15,10 @@ import {
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-// Enable Edge Runtime for faster response times
+/**
+ * Proveedores de la tienda. Solo la dueña: nombres, NIT, contactos y
+ * conteos de compras son información del negocio, así que nada se cachea.
+ */
 
 export async function POST(
   req: Request,
@@ -20,33 +30,31 @@ export async function POST(
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
 
     const body = await req.json();
-    const { name } = body;
-
     await verifyStoreOwner(userId, params.storeId);
 
-    if (!name?.trim()) {
-      throw ErrorFactory.InvalidRequest("El nombre del proveedor es requerido");
+    const input = parseSupplierInput(body);
+
+    // MySQL con Prisma no acepta `mode: "insensitive"`: se filtra grueso por
+    // tienda y se compara en minúsculas en código antes de tocar el índice.
+    const candidates = await prismadb.supplier.findMany({
+      where: { storeId: params.storeId },
+      select: { id: true, name: true },
+    });
+    if (findDuplicateSupplierName(candidates, input.name)) {
+      throw ErrorFactory.Conflict(duplicateSupplierMessage(input.name));
     }
 
-    const existingSupplier = await prismadb.supplier.findFirst({
-      where: {
-        storeId: params.storeId,
-        name: {
-          equals: name.trim(),
-        },
-      },
-    });
-
-    if (existingSupplier) {
-      throw ErrorFactory.Conflict("Ya existe un proveedor con este nombre");
+    let supplier;
+    try {
+      supplier = await prismadb.supplier.create({
+        data: { ...input, storeId: params.storeId },
+      });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        throw ErrorFactory.Conflict(duplicateSupplierMessage(input.name));
+      }
+      throw error;
     }
-
-    const supplier = await prismadb.supplier.create({
-      data: {
-        name: name.trim(),
-        storeId: params.storeId,
-      },
-    });
 
     return NextResponse.json(supplier, {
       headers: CACHE_HEADERS.NO_CACHE,
@@ -54,34 +62,35 @@ export async function POST(
   } catch (error) {
     return handleErrorResponse(error, "SUPPLIERS_POST", {
       headers: CACHE_HEADERS.NO_CACHE,
+      expectedStatusCodes: [400, 409],
     });
   }
 }
 
 export async function GET(
-  req: Request,
+  _req: Request,
   { params }: { params: { storeId: string } },
 ) {
   try {
     if (!params.storeId) throw ErrorFactory.MissingStoreId();
-    // La lista de proveedores es información del negocio: solo la dueña.
     const { userId } = await auth();
     if (!userId) throw ErrorFactory.Unauthenticated();
     await verifyStoreOwner(userId, params.storeId);
 
     const suppliers = await prismadb.supplier.findMany({
       where: { storeId: params.storeId },
-      orderBy: {
-        createdAt: "desc",
+      include: {
+        _count: { select: { products: true, restockOrders: true } },
       },
+      orderBy: { name: "asc" },
     });
 
     return NextResponse.json(suppliers, {
-      headers: CACHE_HEADERS.STATIC,
+      headers: CACHE_HEADERS.NO_CACHE,
     });
   } catch (error) {
     return handleErrorResponse(error, "SUPPLIERS_GET", {
-      headers: CACHE_HEADERS.STATIC,
+      headers: CACHE_HEADERS.NO_CACHE,
     });
   }
 }
@@ -107,19 +116,11 @@ export async function DELETE(
 
     await prismadb.$transaction(async (tx) => {
       const suppliers = await tx.supplier.findMany({
-        where: {
-          storeId: params.storeId,
-          id: {
-            in: ids,
-          },
-        },
-        include: {
-          products: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
+        where: { storeId: params.storeId, id: { in: ids } },
+        select: {
+          id: true,
+          name: true,
+          _count: { select: { products: true, restockOrders: true } },
         },
       });
 
@@ -129,33 +130,33 @@ export async function DELETE(
         );
       }
 
-      const suppliersWithProducts = suppliers.filter(
-        (supplier) => supplier.products.length > 0,
+      const referenced = suppliers.filter(
+        (supplier) =>
+          supplier._count.products > 0 || supplier._count.restockOrders > 0,
       );
 
-      if (suppliersWithProducts.length > 0) {
+      if (referenced.length > 0) {
+        const first = referenced[0];
+        const prefix =
+          referenced.length === 1
+            ? `«${first.name}»: `
+            : `${referenced.length} proveedores tienen productos o pedidos de aprovisionamiento. Por ejemplo «${first.name}»: `;
         throw ErrorFactory.Conflict(
-          "No se pueden eliminar proveedores con productos asociados. Elimina o reasigna los productos asociados primero",
-          {
-            ...parseErrorDetails(
-              "suppliersWithProducts",
-              suppliersWithProducts.map((supplier) => ({
-                id: supplier.id,
-                name: supplier.name,
-                products: supplier.products.length,
-              })),
-            ),
-          },
+          `${prefix}${supplierDeleteBlockedMessage(first._count)}`,
+          parseErrorDetails(
+            "suppliersWithReferences",
+            referenced.map((supplier) => ({
+              id: supplier.id,
+              name: supplier.name,
+              products: supplier._count.products,
+              restockOrders: supplier._count.restockOrders,
+            })),
+          ),
         );
       }
 
       await tx.supplier.deleteMany({
-        where: {
-          storeId: params.storeId,
-          id: {
-            in: ids,
-          },
-        },
+        where: { storeId: params.storeId, id: { in: ids } },
       });
     });
 
@@ -165,6 +166,7 @@ export async function DELETE(
   } catch (error) {
     return handleErrorResponse(error, "SUPPLIERS_DELETE", {
       headers: CACHE_HEADERS.NO_CACHE,
+      expectedStatusCodes: [400, 409],
     });
   }
 }

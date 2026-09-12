@@ -131,8 +131,8 @@ export const ProductImportModal: React.FC<ProductImportModalProps> = ({
         if (firstProduct && firstProduct.category.id !== product.category.id) {
           toast({
             variant: "warning",
-            title: "Sub-Categoría incompatible",
-            description: `Solo puedes agrupar productos de la misma sub-categoría. El grupo actual pertenece a la sub-categoría "${firstProduct.category.name}".`,
+            title: "Subcategoría incompatible",
+            description: `Solo puedes agrupar productos de la misma subcategoría. El grupo actual pertenece a la subcategoría "${firstProduct.category.name}".`,
           });
           return;
         }
@@ -186,7 +186,7 @@ export const ProductImportModal: React.FC<ProductImportModalProps> = ({
             Selecciona productos individuales para agruparlos.
             {currentCategoryId && (
               <span className="mt-1 block font-semibold text-primary">
-                Filtrando por sub-categoría actual:{" "}
+                Filtrando por subcategoría actual:{" "}
                 {categories.find((c) => c.id === currentCategoryId)?.name}
               </span>
             )}
@@ -210,7 +210,7 @@ export const ProductImportModal: React.FC<ProductImportModalProps> = ({
             disabled={!!currentCategoryId} // Disable if parent form already has a category set
           >
             <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Sub-Categoría" />
+              <SelectValue placeholder="Subcategoría" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas</SelectItem>

@@ -1,97 +1,110 @@
 "use client";
 
-import { AlertModal } from "@/components/modals/alert-modal";
+import axios from "axios";
+import { Edit, MoreHorizontal, PackageSearch, Trash } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
+
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Models } from "@/constants";
+import { useActionConfirmation } from "@/hooks/use-action-confirmation";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import axios from "axios";
-import { Copy, Edit, MoreHorizontal, Trash } from "lucide-react";
-import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
-import { SupplierColumn } from "./columns";
+import {
+  describeSupplierReferences,
+  supplierHasReferences,
+  type SupplierRow,
+} from "@/lib/suppliers";
 
 interface CellActionProps {
-  data: SupplierColumn;
+  data: SupplierRow;
 }
 
 export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const { toast } = useToast();
   const router = useRouter();
   const params = useParams();
+  const { requestConfirmation, confirmationDialog } = useActionConfirmation();
   const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
-
-  const onCopy = (id: string) => {
-    navigator.clipboard.writeText(id);
-    toast({
-      description: "ID del proveedor copiado al portapapeles",
-      variant: "success",
-    });
-  };
+  const storeId = String(params.storeId);
+  const blocked = supplierHasReferences(data.usage);
 
   const onDelete = async () => {
+    const confirmed = await requestConfirmation({
+      title: `¿Eliminar el proveedor «${data.name}»?`,
+      description:
+        "Ningún producto ni pedido de aprovisionamiento lo referencia, así que se elimina de inmediato. Esta acción no se puede deshacer.",
+      confirmLabel: "Eliminar",
+      destructive: true,
+    });
+    if (!confirmed) return;
     try {
       setLoading(true);
-      await axios.delete(
-        `/api/${params.storeId}/${Models.Suppliers}/${data.id}`,
-      );
+      await axios.delete(`/api/${storeId}/${Models.Suppliers}/${data.id}`);
       router.refresh();
-      toast({
-        description: "Proveedor eliminado",
-        variant: "success",
-      });
+      toast({ description: "Proveedor eliminado.", variant: "success" });
     } catch (error) {
-      toast({
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
+      toast({ description: getErrorMessage(error), variant: "destructive" });
     } finally {
       setLoading(false);
-      setOpen(false);
     }
   };
 
   return (
     <>
-      <AlertModal
-        isOpen={open}
-        onClose={() => setOpen(false)}
-        onConfirm={onDelete}
-        loading={loading}
-      />
+      {confirmationDialog}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="h-8 w-8 p-0">
-            <span className="sr-only">Abrir Menú</span>
-            <MoreHorizontal className="h-4 w-4" />
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Acciones del proveedor ${data.name}`}
+          >
+            <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="end" className="max-w-xs">
           <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-          <DropdownMenuItem onClick={() => onCopy(data.id)}>
-            <Copy className="mr-2 h-4 w-4" />
-            Copiar ID
-          </DropdownMenuItem>
           <DropdownMenuItem
+            className="cursor-pointer"
             onClick={() =>
-              router.push(`/${params.storeId}/${Models.Suppliers}/${data.id}`)
+              router.push(`/${storeId}/${Models.Suppliers}/${data.id}`)
             }
           >
-            <Edit className="mr-2 h-4 w-4" />
-            Actualizar
+            <Edit className="mr-2 h-4 w-4" aria-hidden="true" />
+            Editar
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setOpen(true)}>
-            <Trash className="mr-2 h-4 w-4" />
+          <DropdownMenuItem
+            className="cursor-pointer"
+            onClick={() =>
+              router.push(`/${storeId}/aprovisionamiento?proveedor=${data.id}`)
+            }
+          >
+            <PackageSearch className="mr-2 h-4 w-4" aria-hidden="true" />
+            Ver pedidos
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            className="cursor-pointer"
+            disabled={loading || blocked}
+            onClick={() => void onDelete()}
+          >
+            <Trash className="mr-2 h-4 w-4" aria-hidden="true" />
             Eliminar
           </DropdownMenuItem>
+          {blocked && (
+            <p className="px-2 pb-1.5 text-xs text-muted-foreground">
+              No se puede eliminar: {describeSupplierReferences(data.usage)}.
+            </p>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </>
