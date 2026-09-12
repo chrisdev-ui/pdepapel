@@ -433,7 +433,7 @@ export function CustomerCard({
                   />
                 </FormControl>
                 <FormDescription>
-                  Pasada esta fecha el enlace deja de aceptar.
+                  Pasada esta fecha la cotización se considera vencida.
                 </FormDescription>
                 <FormMessage />
               </FormItem>
