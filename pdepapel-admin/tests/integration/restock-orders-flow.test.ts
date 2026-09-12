@@ -70,6 +70,18 @@ describe("pedidos de aprovisionamiento", () => {
 
   const componentStock = async (f: InventoryFixture) => (await testPrisma.product.findUniqueOrThrow({ where: { id: f.component.id } })).stock;
 
+  it("rechaza un kit como línea: se piden sus componentes", async () => {
+    const f = await setup();
+    const { POST } = await collectionRoute();
+    const response = await POST(
+      json("POST", { supplierId, shippingCost: 0, items: [{ productId: f.kit.id, quantity: 1, cost: 1000 }] }),
+      { params: { storeId: f.store.id } },
+    );
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(await response.json())).toContain("es un kit");
+    expect(await testPrisma.restockOrder.count({ where: { storeId: f.store.id } })).toBe(0);
+  });
+
   it("numera desde el mayor existente y nunca reutiliza un número borrado", async () => {
     const f = await setup();
     const first = await createOrder(f);

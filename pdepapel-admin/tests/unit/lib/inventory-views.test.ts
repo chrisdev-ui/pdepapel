@@ -27,7 +27,8 @@ describe("inventory views", () => {
   });
 
   it("prefers the replenishment signal over the threshold when a row carries one", () => {
-    const selling = { stock: 8, price: 1, signal: computeReplenishment({ stock: 8, sold30: 20, sold90: 40 }) };
+    // 20 al mes con 2 en stock: 3 días de cobertura, se acaba esta semana.
+    const selling = { stock: 2, price: 1, signal: computeReplenishment({ stock: 2, sold30: 20, sold90: 40 }) };
     const dormant = { stock: 1, price: 1, signal: computeReplenishment({ stock: 1, sold30: 0, sold90: 0 }) };
     expect(inventoryMatchesView(selling, "por-reponer", 5)).toBe(true);
     expect(inventoryMatchesView(dormant, "por-reponer", 5)).toBe(false);

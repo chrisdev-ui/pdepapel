@@ -127,6 +127,9 @@ export const InventoryMovementClient: React.FC<InventoryMovementClientProps> = (
           <span>
             Solo el producto <span className="font-semibold">{product.name ?? product.id}</span>.
           </span>
+          <Link href={`${base}/producto/${encodeURIComponent(product.id)}`} className="inline-flex items-center gap-1 font-semibold underline underline-offset-2">
+            Ver kardex con saldo
+          </Link>
           <Link href={scope?.showAll ? `${base}?todo=1` : base} className="inline-flex items-center gap-1 font-semibold underline underline-offset-2">
             <X className="h-3.5 w-3.5" aria-hidden="true" />
             Ver todos los productos

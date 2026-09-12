@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import axios from "axios";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -14,8 +14,8 @@ import type { InventoryRow } from "@/app/(dashboard)/[storeId]/(routes)/inventar
 import { computeReplenishment } from "@/lib/replenishment";
 
 const row = (id: string, name: string, stock: number, sold30: number, supplier: { id: string; name: string } | null, extra: Partial<InventoryRow> = {}): InventoryRow => ({
-  id, name, sku: id.toUpperCase(), stock, price: 10000, acqPrice: 4000, isKit: false, updatedAt: new Date(), categoryName: "Cuadernos", supplier, image: "https://res.cloudinary.com/demo/image/upload/sample.jpg", lastMovement: null,
-  lastCost: 4000, limitingComponent: null, sold30, sold90: sold30, onOrder: 0,
+  id, name, sku: id.toUpperCase(), stock, price: 10000, acqPrice: 4000, isKit: false, updatedAt: new Date(), categoryName: "Cuadernos", supplier, image: "https://res.cloudinary.com/demo/image/upload/sample.jpg",
+  lastCost: 4000, lastCostSource: "purchase", lastCostAt: new Date("2026-08-05T15:00:00.000Z"), limitingComponent: null, sold30, sold90: sold30, soldViaKits30: 0, onOrder: 0,
   signal: computeReplenishment({ stock, sold30, sold90: sold30, onOrder: extra.onOrder ?? 0 }),
   ...extra,
 });
@@ -55,9 +55,33 @@ describe("ReplenishmentBySupplier", () => {
     await waitFor(() => expect(push).toHaveBeenCalledWith("/store-1/aprovisionamiento/po-9"));
   });
 
-  it("has no draft button for products without a supplier", () => {
+  it("lets a product without supplier start its own draft instead of a group draft", () => {
     render(<ReplenishmentBySupplier rows={rows} storeId="store-1" />);
     expect(screen.getAllByRole("button", { name: /Crear borrador/ })).toHaveLength(1);
-    expect(screen.getByText(/recibir un pedido de aprovisionamiento lo asigna solo/)).toBeInTheDocument();
+    expect(screen.getByText(/al recibir el pedido, el producto queda con ese proveedor/)).toBeInTheDocument();
+    const stickers = screen.getByText("Stickers").closest("tr") as HTMLElement;
+    // Agotado con 3 vendidos en 30 días: 3/30 × 28 = 2,8 → 3 sugeridos.
+    expect(within(stickers).getByRole("link", { name: "Reponer" })).toHaveAttribute("href", "/store-1/aprovisionamiento/nuevo?producto=p3&cantidad=3");
+    expect(within(stickers).getByRole("link", { name: "Abrir producto" })).toHaveAttribute("href", "/store-1/productos/p3");
+    expect(within(stickers).queryByRole("checkbox")).toBeNull();
+  });
+
+  it("shows where each cost comes from and keeps kits out of the draft", () => {
+    const kit = row("k1", "Kit resaltadores", 2, 6, henko, { isKit: true, lastCost: null, lastCostSource: null, lastCostAt: null, limitingComponent: "Marcador lila" });
+    const guessed = row("p4", "Marcador lila", 3, 9, henko, { lastCost: 1500, lastCostSource: "product", lastCostAt: null, soldViaKits30: 6 });
+    const unknown = row("p5", "Borrador", 1, 5, henko, { lastCost: null, lastCostSource: null, lastCostAt: null });
+    render(<ReplenishmentBySupplier rows={[rows[0], kit, guessed, unknown]} storeId="store-1" />);
+
+    expect(screen.getByText("recibido el 5 ago")).toBeInTheDocument();
+    expect(screen.getByText("costo del producto, sin compra recibida")).toBeInTheDocument();
+    expect(screen.getByText("sin costo")).toBeInTheDocument();
+    expect(screen.getByText(/6 vendidos dentro de kits en 30 días/)).toBeInTheDocument();
+
+    const kitRow = screen.getByText("Kit resaltadores").closest("tr") as HTMLElement;
+    expect(within(kitRow).queryByRole("checkbox")).toBeNull();
+    expect(within(kitRow).getByText(/Se pide por componentes/)).toBeInTheDocument();
+    // Tres líneas marcadas (el kit no cuenta), y el pie lo dice.
+    expect(screen.getByRole("button", { name: /Crear borrador con 3 líneas/ })).toBeInTheDocument();
+    expect(screen.getByText(/3 de 3 marcados/)).toBeInTheDocument();
   });
 });

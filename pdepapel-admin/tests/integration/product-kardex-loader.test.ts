@@ -5,13 +5,18 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 
 import { createInventoryFixture, deleteInventoryFixture, testPrisma, type InventoryFixture } from "./helpers/database";
 
+const clerk = vi.hoisted(() => ({ down: false }));
+
 vi.mock("@clerk/nextjs/server", () => ({
   auth: () => ({ userId: null }),
-  clerkClient: async () => ({
-    users: {
-      getUser: vi.fn(async (id: string) => (id === "user_camila" ? { firstName: "Camila", lastName: "Torres", username: "camila" } : null)),
-    },
-  }),
+  clerkClient: async () => {
+    if (clerk.down) throw new Error("Clerk no responde");
+    return {
+      users: {
+        getUser: vi.fn(async (id: string) => (id === "user_camila" ? { firstName: "Camila", lastName: "Torres", username: "camila" } : null)),
+      },
+    };
+  },
 }));
 
 import {
@@ -68,6 +73,23 @@ describe("product kardex loader with MySQL", () => {
   afterAll(async () => {
     await testPrisma.$disconnect();
   });
+
+  /** Pedido pagado de un producto: la fuente de las ventas del kardex. */
+  const paidOrder = async (productId: string, quantity: number, paidAt: Date) =>
+    testPrisma.order.create({
+      data: {
+        storeId: fixture!.store.id,
+        orderNumber: `ORD-K-${randomUUID()}`,
+        status: OrderStatus.PAID,
+        type: OrderType.STANDARD,
+        paidAt,
+        fullName: "Cliente",
+        subtotal: quantity * 10000,
+        total: quantity * 10000,
+        orderItems: { create: [{ productId, quantity, name: "Producto", price: 10000 }] },
+        payment: { create: { method: PaymentMethod.CASH, storeId: fixture!.store.id } },
+      },
+    });
 
   const seed = async (rows: SeedRow[], productId?: string) => {
     const current = fixture!;
@@ -136,6 +158,8 @@ describe("product kardex loader with MySQL", () => {
       { createdAt: daysAgo(now, 1), type: InventoryMovementType.RESTOCK_RECEIVED, quantity: 2, previousStock: 4, newStock: 6 },
     ]);
 
+    await paidOrder(fixture.component.id, 2, daysAgo(now, 2));
+
     const onlySales = await getProductKardex(fixture.store.id, fixture.component.id, { now, type: InventoryMovementType.ORDER_PLACED });
     expect(onlySales!.rows).toHaveLength(1);
     expect(onlySales!.rows[0].type).toBe("ORDER_PLACED");
@@ -160,20 +184,54 @@ describe("product kardex loader with MySQL", () => {
     expect(drifted!.metrics.latestBalance).toBe(6);
   });
 
-  it("derives sales, weekly rate and cover days from the last 30 days", async () => {
+  it("derives sales, weekly rate and cover days from paid orders, kits included, like Inventario", async () => {
     fixture = await createInventoryFixture();
+    // El libro dice otra cosa a propósito: las ventas salen de los pedidos pagados.
     await seed([
-      { createdAt: daysAgo(now, 45), type: InventoryMovementType.ORDER_PLACED, quantity: -10, previousStock: 20, newStock: 10 },
-      { createdAt: daysAgo(now, 5), type: InventoryMovementType.IN_PERSON_SALE, quantity: -3, previousStock: 10, newStock: 7 },
-      { createdAt: daysAgo(now, 4), type: InventoryMovementType.ORDER_PLACED, quantity: -3, previousStock: 7, newStock: 4 },
-      { createdAt: daysAgo(now, 3), type: InventoryMovementType.ORDER_CANCELLED, quantity: 3, previousStock: 4, newStock: 7 },
-      { createdAt: daysAgo(now, 2), type: InventoryMovementType.MANUAL_ADJUSTMENT, quantity: -1, previousStock: 7, newStock: 6 },
+      { createdAt: daysAgo(now, 5), type: InventoryMovementType.ORDER_PLACED, quantity: -9, previousStock: 15, newStock: 6 },
     ]);
+    await paidOrder(fixture.component.id, 10, daysAgo(now, 45));
+    await paidOrder(fixture.component.id, 1, daysAgo(now, 5));
+    // Un kit vendido consume 2 componentes.
+    await paidOrder(fixture.kit.id, 1, daysAgo(now, 4));
     const result = await getProductKardex(fixture.store.id, fixture.component.id, { now });
     expect(result!.metrics.sold30).toBe(3);
+    expect(result!.metrics.viaKits30).toBe(2);
+    expect(result!.metrics.sold90).toBe(13);
+    expect(result!.metrics.rateWindowDays).toBe(30);
     expect(result!.metrics.weeklyRate).toBe(0.7);
     // stock 6 / (3 ventas / 30 días) = 60 días.
     expect(result!.metrics.coverDays).toBe(60);
+  });
+
+  it("keeps rendering without names when Clerk is down", async () => {
+    fixture = await createInventoryFixture();
+    await seed([{ createdAt: daysAgo(now, 1), previousStock: 5, newStock: 6, createdBy: "USER_user_camila" }]);
+    clerk.down = true;
+    try {
+      const result = await getProductKardex(fixture.store.id, fixture.component.id, { now });
+      expect(result!.rows).toHaveLength(1);
+      expect(result!.rows[0].who).toBe("Usuario");
+    } finally {
+      clerk.down = false;
+    }
+  });
+
+  it("stops at the window cap, says so, and still reports what lies beyond", async () => {
+    fixture = await createInventoryFixture();
+    const rows = Array.from({ length: KARDEX_WINDOW_TAKE + 2 }, (_, index) => ({
+      createdAt: new Date(daysAgo(now, 30).getTime() + index * 60_000),
+      previousStock: index,
+      newStock: index + 1,
+    }));
+    await seed(rows);
+    const result = await getProductKardex(fixture.store.id, fixture.component.id, { now });
+    expect(result!.hasMore).toBe(true);
+    expect(result!.rows).toHaveLength(KARDEX_WINDOW_TAKE);
+    expect(result!.totalCount).toBe(KARDEX_WINDOW_TAKE + 2);
+    // Las dos filas más viejas quedan por fuera del tope, pero cuentan como anteriores y fijan el saldo inicial.
+    expect(result!.olderCount).toBe(2);
+    expect(result!.openingBalance).toBe(2);
   });
 
   it("resolves order, restock and fair references scoped to the store and names Clerk users", async () => {

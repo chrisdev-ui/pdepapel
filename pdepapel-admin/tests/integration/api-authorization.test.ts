@@ -40,7 +40,6 @@ const PROTECTED_ROUTES: ProtectedRoute[] = [
   { path: "shipments/bulk-manual-update", methods: ["POST"] },
   { path: "shipments/[shippingId]/update-tracking", methods: ["POST"], params: { shippingId: "x" } },
   { path: "shipments/export", methods: ["GET"] },
-  { path: "whatsapp/messages", methods: ["GET", "POST"] },
   { path: "whatsapp/templates", methods: ["GET", "POST"] },
   { path: "whatsapp/templates/[templateId]", methods: ["PATCH", "DELETE"], params: { templateId: "x" } },
   // Handlers that already had an inline owner lookup: kept under test so they cannot regress.

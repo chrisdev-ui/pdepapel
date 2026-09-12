@@ -177,8 +177,10 @@ describe("dashboard today", () => {
           : [],
       );
       // Ventana de 30 días y de 90 días: la misma consulta responde según la fecha.
-      db.orderItem.groupBy.mockImplementation(async ({ where }: { where: { order: { paidAt: { gte: Date } } } }) => {
-        const days = Math.round((now.getTime() - where.order.paidAt.gte.getTime()) / 86400000);
+      // El filtro acepta `paidAt` o, si falta, la fecha de creación: la ventana está en la primera rama.
+      db.orderItem.groupBy.mockImplementation(async ({ where }: { where: { order: { OR: [{ paidAt: { gte: Date } }, { paidAt: null; createdAt: { gte: Date } }] } } }) => {
+        expect(where.order.OR[1]).toEqual({ paidAt: null, createdAt: { gte: where.order.OR[0].paidAt.gte } });
+        const days = Math.round((now.getTime() - where.order.OR[0].paidAt.gte.getTime()) / 86400000);
         return days <= 30
           ? [{ productId: "p1", _sum: { quantity: 1 } }, { productId: "p2", _sum: { quantity: 20 } }]
           : [{ productId: "p1", _sum: { quantity: 2 } }, { productId: "p2", _sum: { quantity: 40 } }, { productId: "p4", _sum: { quantity: 5 } }];

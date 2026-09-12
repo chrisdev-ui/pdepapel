@@ -5,6 +5,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { DataTableCellCurrency } from "@/components/ui/data-table-cell-currency";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { MetricCard } from "@/components/ui/metric-card";
 import { TintBadge } from "@/components/ui/tint-badge";
 import { Models } from "@/constants";
 import { INVENTORY_VIEWS, inventoryMatchesView, inventoryRowValue, normalizeInventoryView, summarizeInventory, type InventoryView } from "@/lib/inventory-views";
@@ -19,19 +20,11 @@ import { useParams, usePathname, useRouter, useSearchParams } from "next/navigat
 import { useMemo, useState } from "react";
 import { AdjustInventoryModal } from "../../movimientos-inventario/components/adjust-inventory-modal";
 import type { InventoryRow } from "../server/get-inventory";
-import { ReplenishmentBySupplier } from "./replenishment-by-supplier";
+import { ReplenishmentBySupplier, restockHref } from "./replenishment-by-supplier";
 
 const VIEW_PARAM = "vista";
 const GROUP_PARAM = "agrupar";
 const DEFAULT_VIEW: InventoryView = "por-reponer";
-
-/** Borrador de reposición con proveedor y producto ya diligenciados. */
-function restockHref(storeId: string, row: Pick<InventoryRow, "id" | "supplier">): string {
-  const query = new URLSearchParams();
-  if (row.supplier?.id) query.set("proveedor", row.supplier.id);
-  query.set("producto", row.id);
-  return `/${storeId}/aprovisionamiento/nuevo?${query.toString()}`;
-}
 
 const TONE_BAR: Record<string, string> = { pink: "bg-[#E11D48]", cream: "bg-[#D97706]", mint: "bg-tint-mint", slate: "bg-border" };
 
@@ -51,16 +44,6 @@ function StockCell({ row }: { row: InventoryRow }) {
   if (isOutOfStock(row.stock)) return <TintBadge label="Agotado" tone="pink" />;
   if (row.signal.needsReplenishment) return <TintBadge label={`${row.stock} und`} tone={row.signal.runsOutThisWeek ? "pink" : "cream"} />;
   return <span className="text-sm font-semibold tabular-nums text-primary">{row.stock}</span>;
-}
-
-function Metric({ label, value, note, icon, tint }: { label: string; value: string; note?: string; icon: React.ReactNode; tint: string }) {
-  return (
-    <div className="flex min-w-0 flex-1 flex-col gap-2 rounded-xl border bg-white p-4 shadow-sm">
-      <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-muted-foreground">{label}</span><span className={cn("flex h-8 w-8 items-center justify-center rounded-lg text-primary", tint)}>{icon}</span></div>
-      <span className="text-[24px] font-bold leading-none tracking-tight text-primary">{value}</span>
-      {note && <span className="truncate text-xs text-muted-foreground">{note}</span>}
-    </div>
-  );
 }
 
 interface InventoryClientProps {
@@ -133,7 +116,7 @@ export function InventoryClient({ data, threshold, thresholdFromSettings = false
     { id: "cover", accessorFn: (row) => row.signal.coverDays ?? Number.MAX_SAFE_INTEGER, header: ({ column }) => <DataTableColumnHeader column={column} title="Cobertura" />, cell: ({ row }) => <CoverCell row={row.original} />, enableGlobalFilter: false },
     { id: "supplier", accessorFn: (row) => row.supplier?.name ?? "", header: ({ column }) => <DataTableColumnHeader column={column} title="Proveedor" />, cell: ({ row }) => row.original.supplier ? <span className="text-sm">{row.original.supplier.name}</span> : <span className="text-xs text-muted-foreground">Sin proveedor</span> },
     { accessorKey: "acqPrice", header: ({ column }) => <DataTableColumnHeader column={column} title="Costo unit." />, cell: ({ row }) => (row.original.isKit ? <span className="text-xs text-muted-foreground">componentes</span> : Number(row.original.acqPrice) > 0 ? <DataTableCellCurrency value={Number(row.original.acqPrice)} /> : <TintBadge label="Sin costo" tone="cream" />), enableGlobalFilter: false },
-    { id: "value", accessorFn: (row) => inventoryRowValue(row).cost, header: ({ column }) => <DataTableColumnHeader column={column} title="Valor a costo" />, cell: ({ row }) => <DataTableCellCurrency value={inventoryRowValue(row.original).cost} />, enableGlobalFilter: false },
+    { id: "value", accessorFn: (row) => inventoryRowValue(row).cost, header: ({ column }) => <DataTableColumnHeader column={column} title="Valor a costo" />, cell: ({ row }) => (row.original.isKit ? <span className="text-xs text-muted-foreground">—</span> : <DataTableCellCurrency value={inventoryRowValue(row.original).cost} />), enableGlobalFilter: false },
     {
       id: "suggested",
       accessorFn: (row) => row.signal.suggested,
@@ -148,6 +131,8 @@ export function InventoryClient({ data, threshold, thresholdFromSettings = false
         <div className="flex justify-end gap-1" data-no-row-click>
           {row.original.signal.dormant ? (
             <Button asChild variant="ghost" size="sm"><Link href={`/${storeId}/ofertas/nuevo`}>Poner en oferta</Link></Button>
+          ) : row.original.isKit ? (
+            <Button asChild variant="ghost" size="sm" title="Un kit no se compra: se reponen sus componentes"><Link href={`/${storeId}/productos/${row.original.id}`}>Ver componentes</Link></Button>
           ) : (
             <Button asChild variant="outline" size="sm"><Link href={restockHref(storeId, row.original)}>Reponer</Link></Button>
           )}
@@ -155,7 +140,9 @@ export function InventoryClient({ data, threshold, thresholdFromSettings = false
             <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" aria-label="Acciones"><MoreHorizontal className="h-4 w-4" aria-hidden="true" /></Button></DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => openAdjust(row.original.isKit ? null : row.original.id)}>Ajustar inventario</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => router.push(restockHref(storeId, row.original))}>Reponer con el proveedor{row.original.supplier ? ` (${row.original.supplier.name})` : ""}</DropdownMenuItem>
+              {!row.original.isKit && (
+                <DropdownMenuItem onClick={() => router.push(restockHref(storeId, row.original))}>Reponer con el proveedor{row.original.supplier ? ` (${row.original.supplier.name})` : ""}</DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={() => router.push(`/${storeId}/movimientos-inventario/producto/${row.original.id}`)}>Ver kardex</DropdownMenuItem>
               <DropdownMenuItem onClick={() => router.push(`/${storeId}/productos/${row.original.id}`)}>Abrir producto</DropdownMenuItem>
             </DropdownMenuContent>
@@ -184,10 +171,10 @@ export function InventoryClient({ data, threshold, thresholdFromSettings = false
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
-        <Metric label="Se acaban esta semana" value={totals.runsOutThisWeek.toLocaleString("es-CO")} note={`Con ventas en ${SALES_WINDOW_DAYS} días y menos de 7 días de cobertura`} icon={<AlertTriangle className="h-4 w-4" aria-hidden="true" />} tint="bg-tint-pink" />
-        <Metric label="Agotados que se vendían" value={totals.outOfStockSelling.toLocaleString("es-CO")} note={`De ${totals.outOfStock.toLocaleString("es-CO")} agotados; el resto no vendió en ${DORMANT_WINDOW_DAYS} días`} icon={<Truck className="h-4 w-4" aria-hidden="true" />} tint="bg-tint-cream" />
-        <Metric label="Valor a costo" value={currencyFormatter(totals.costValue)} note={`${totals.units.toLocaleString("es-CO")} unidades · a venta ${currencyFormatter(totals.retailValue)}`} icon={<Wallet className="h-4 w-4" aria-hidden="true" />} tint="bg-tint-mint" />
-        <Metric label={`Sin movimiento en ${DORMANT_WINDOW_DAYS} días`} value={totals.dormant.toLocaleString("es-CO")} note="Candidatos a oferta antes que a reposición" icon={<Boxes className="h-4 w-4" aria-hidden="true" />} tint="bg-tint-sky" />
+        <MetricCard label="Se acaban esta semana" value={totals.runsOutThisWeek.toLocaleString("es-CO")} note={`Con stock, ventas en ${DORMANT_WINDOW_DAYS} días y menos de 7 días de cobertura`} icon={<AlertTriangle className="h-4 w-4" aria-hidden="true" />} tint="bg-tint-pink" />
+        <MetricCard label="Agotados que se vendían" value={totals.outOfStockSelling.toLocaleString("es-CO")} note={`De ${totals.outOfStock.toLocaleString("es-CO")} agotados; el resto no vendió en ${DORMANT_WINDOW_DAYS} días`} icon={<Truck className="h-4 w-4" aria-hidden="true" />} tint="bg-tint-cream" />
+        <MetricCard label="Valor a costo" value={currencyFormatter(totals.costValue)} note={`${totals.units.toLocaleString("es-CO")} unidades · a venta ${currencyFormatter(totals.retailValue)}`} icon={<Wallet className="h-4 w-4" aria-hidden="true" />} tint="bg-tint-mint" />
+        <MetricCard label={`Sin movimiento en ${DORMANT_WINDOW_DAYS} días`} value={totals.dormant.toLocaleString("es-CO")} note="Candidatos a oferta antes que a reposición" icon={<Boxes className="h-4 w-4" aria-hidden="true" />} tint="bg-tint-sky" />
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -212,7 +199,7 @@ export function InventoryClient({ data, threshold, thresholdFromSettings = false
 
       {view === "por-reponer" && (
         <p className="text-xs text-muted-foreground">
-          Cobertura = stock ÷ ventas por día de los últimos {SALES_WINDOW_DAYS} días. Sugerido = {TARGET_WEEKS} semanas de venta menos el stock y lo que viene en camino. Sin ventas recientes, cuenta el umbral de Ajustes ({threshold} {threshold === 1 ? "unidad" : "unidades"}{thresholdFromSettings ? "" : ", valor por defecto"}).
+          Cobertura = stock ÷ ventas por día de los últimos {SALES_WINDOW_DAYS} días; si no vendió en {SALES_WINDOW_DAYS} días pero sí en {DORMANT_WINDOW_DAYS}, cuenta ese ritmo. Lo vendido dentro de kits suma a cada componente. Sugerido = {TARGET_WEEKS} semanas de venta menos el stock y lo que viene en camino. Un producto que se vende y está en {threshold} {threshold === 1 ? "unidad" : "unidades"} o menos ({thresholdFromSettings ? "umbral de Ajustes" : "umbral por defecto"}) también entra.
         </p>
       )}
 

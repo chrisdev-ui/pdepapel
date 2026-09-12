@@ -76,6 +76,22 @@ describe("summarizeKardex", () => {
     expect(metrics.latestBalance).toBe(28);
   });
 
+  it("takes sales, rate and cover from paid orders when given, like Inventario, and keeps the ledger for receipts", () => {
+    const metrics = summarizeKardex(
+      [
+        { type: "ORDER_PLACED", quantity: -4, createdAt: daysAgo(1) },
+        { type: "RESTOCK_RECEIVED", quantity: 20, createdAt: daysAgo(3) },
+      ],
+      { stock: 2, latest: { newStock: 2 }, now, sales: { sold30: 0, sold90: 18, viaKits30: 0, onOrder: 0, threshold: 3 } },
+    );
+    expect(metrics.sold30).toBe(0);
+    expect(metrics.sold90).toBe(18);
+    expect(metrics.rateWindowDays).toBe(90);
+    expect(metrics.weeklyRate).toBe(1.4);
+    expect(metrics.coverDays).toBe(10);
+    expect(metrics.received90).toBe(20);
+  });
+
   it("ignores movements dated in the future", () => {
     const metrics = summarizeKardex([{ type: "ORDER_PLACED", quantity: -2, createdAt: new Date(now.getTime() + 60_000) }], { stock: 9, latest: null, now });
     expect(metrics.sold30).toBe(0);

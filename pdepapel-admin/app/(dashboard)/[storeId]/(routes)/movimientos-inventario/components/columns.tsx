@@ -5,31 +5,41 @@ import { DataTableCellCurrency } from "@/components/ui/data-table-cell-currency"
 import { DataTableCellDate } from "@/components/ui/data-table-cell-date";
 import { DataTableCellImage } from "@/components/ui/data-table-cell-image";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
+import { MOVEMENT_LABELS } from "@/lib/kardex";
 import { ColumnDef } from "@tanstack/react-table";
 import { Bot, Crown, User } from "lucide-react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
 import type { InventoryMovementRow } from "../server/get-movements";
 import { CellAction } from "./cell-action";
 
 export type InventoryMovementColumn = InventoryMovementRow;
 
-// Simple translation map for display
-export const typeLabels: Record<string, string> = {
-  ORDER_PLACED: "Venta",
-  ORDER_CANCELLED: "Cancelación",
-  MANUAL_ADJUSTMENT: "Ajuste Manual",
-  INITIAL_INTAKE: "Inventario Inicial",
-  PURCHASE: "Compra",
-  RETURN: "Devolución",
-  DAMAGE: "Daño",
-  LOST: "Pérdida",
-  RESTOCK_RECEIVED: "Reabastecimiento",
-  INITIAL_MIGRATION: "Migración",
-  PROMOTION: "Promoción",
-  STORE_USE: "Uso Interno",
-  FESTIVAL_ALLOCATION: "Asignación a feria",
-  FESTIVAL_RETURN: "Devolución de feria",
-  IN_PERSON_SALE: "Venta presencial",
-};
+/** Mismos nombres que el kardex del producto: una sola forma de llamar cada movimiento. */
+export const typeLabels: Record<string, string> = MOVEMENT_LABELS;
+
+/** El nombre del producto lleva a su kardex (historial con saldo). */
+function ProductCell({ row }: { row: InventoryMovementColumn }) {
+  const params = useParams();
+  const storeId = String(params.storeId);
+  if (!row.productId) {
+    return (
+      <div className="max-w-[280px] truncate" title={row.productName}>
+        {row.productName}
+      </div>
+    );
+  }
+  return (
+    <Link
+      href={`/${storeId}/movimientos-inventario/producto/${row.productId}`}
+      className="block max-w-[280px] truncate font-semibold text-primary hover:underline"
+      title={`Ver kardex de ${row.productName}`}
+      data-no-row-click
+    >
+      {row.productName}
+    </Link>
+  );
+}
 
 export const columns: ColumnDef<InventoryMovementColumn>[] = [
   {
@@ -104,11 +114,7 @@ export const columns: ColumnDef<InventoryMovementColumn>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Producto" />
     ),
-    cell: ({ row }) => (
-      <div className="max-w-[280px] truncate" title={row.original.productName}>
-        {row.original.productName}
-      </div>
-    ),
+    cell: ({ row }) => <ProductCell row={row.original} />,
   },
   {
     accessorKey: "quantity",

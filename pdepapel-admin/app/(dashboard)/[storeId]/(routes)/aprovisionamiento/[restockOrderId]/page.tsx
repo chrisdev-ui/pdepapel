@@ -14,7 +14,7 @@ export default async function RestockOrderPage({
   searchParams,
 }: {
   params: { restockOrderId: string; storeId: string };
-  searchParams?: { recibir?: string; proveedor?: string; producto?: string };
+  searchParams?: { recibir?: string; proveedor?: string; producto?: string; cantidad?: string };
 }) {
   // La ruta canónica es /nuevo; /new sigue llegando desde enlaces viejos.
   if (params.restockOrderId === "new") redirect(`/${params.storeId}/aprovisionamiento/nuevo`);
@@ -54,7 +54,10 @@ export default async function RestockOrderPage({
   const prefill = isNew
     ? {
         supplierId: prefillSupplier?.id ?? prefillProduct?.supplierId ?? null,
-        product: prefillProduct ? { id: prefillProduct.id, acqPrice: prefillProduct.acqPrice ?? 0 } : null,
+        // `cantidad` llega desde Inventario con el sugerido; sin él, una unidad.
+        product: prefillProduct
+          ? { id: prefillProduct.id, acqPrice: prefillProduct.acqPrice ?? 0, quantity: Math.max(1, Math.floor(Number(searchParams?.cantidad) || 1)) }
+          : null,
       }
     : null;
 

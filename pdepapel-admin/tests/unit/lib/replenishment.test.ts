@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { compareUrgency, computeReplenishment, describeCover, limitingKitComponent } from "@/lib/replenishment";
+import { addKitDemand, compareUrgency, computeReplenishment, describeCover, describeRate, limitingKitComponent } from "@/lib/replenishment";
 
 describe("computeReplenishment", () => {
   it("derives weekly rate, cover and a four-week suggestion", () => {
@@ -31,6 +31,45 @@ describe("computeReplenishment", () => {
     // Vende poco y tiene cobertura larga: no entra aunque el stock sea bajo si supera el umbral.
     expect(computeReplenishment({ stock: 6, sold30: 1, sold90: 2, threshold: 5 }).needsReplenishment).toBe(false);
   });
+
+  it("treats a product that sold in 90 days but not in 30 as selling, at the 90-day rate", () => {
+    // Estacional: 18 en el trimestre, ninguno en el último mes, quedan 2 → 10 días de cobertura.
+    const seasonal = computeReplenishment({ stock: 2, sold30: 0, sold90: 18 });
+    expect(seasonal).toMatchObject({ rateWindowDays: 90, weeklyRate: 1.4, coverDays: 10, suggested: 4, needsReplenishment: true, runsOutThisWeek: false, dormant: false });
+    expect(describeCover(seasonal)).toMatchObject({ label: "10 días · ritmo de 90 días", tone: "cream" });
+    // Con menos de una semana de cobertura al ritmo de 90 días también «se acaba esta semana».
+    expect(computeReplenishment({ stock: 1, sold30: 0, sold90: 18 }).runsOutThisWeek).toBe(true);
+    // El umbral aplica igual: vende (en 90 días) y está en el umbral.
+    expect(computeReplenishment({ stock: 3, sold30: 0, sold90: 2, threshold: 5 }).needsReplenishment).toBe(true);
+  });
+
+  it("keeps «runs out this week» for products that still have stock; sold-out ones are «out of stock selling»", () => {
+    expect(computeReplenishment({ stock: 0, sold30: 8, sold90: 16 })).toMatchObject({ outOfStockSelling: true, runsOutThisWeek: false, needsReplenishment: true });
+    // 8 al mes con 1 en stock: 3 días de cobertura.
+    expect(computeReplenishment({ stock: 1, sold30: 8, sold90: 16 })).toMatchObject({ outOfStockSelling: false, runsOutThisWeek: true, coverDays: 3 });
+  });
+});
+
+describe("addKitDemand", () => {
+  it("adds each kit's sales times the component quantity to the component, without touching the input", () => {
+    const sold = new Map([["kit", 3], ["lila", 4], ["rosa", 0]]);
+    const { total, viaKits } = addKitDemand(sold, [{ id: "kit", components: [{ componentId: "lila", quantity: 2 }, { componentId: "rosa", quantity: 1 }] }, { id: "other", components: [{ componentId: "lila", quantity: 5 }] }]);
+    expect(total.get("lila")).toBe(10);
+    expect(total.get("rosa")).toBe(3);
+    expect(total.get("kit")).toBe(3);
+    expect(viaKits.get("lila")).toBe(6);
+    expect(viaKits.get("rosa")).toBe(3);
+    expect(viaKits.has("kit")).toBe(false);
+    expect(sold.get("lila")).toBe(4);
+  });
+});
+
+describe("describeRate", () => {
+  it("writes the same rate sentence for Inventario and the kardex", () => {
+    expect(describeRate(computeReplenishment({ stock: 12, sold30: 6, sold90: 10 }))).toBe("1,4 por semana · 60 días de cobertura");
+    expect(describeRate(computeReplenishment({ stock: 2, sold30: 0, sold90: 18 }))).toBe("1,4 por semana (ritmo de 90 días) · 10 días de cobertura");
+    expect(describeRate(computeReplenishment({ stock: 2, sold30: 0, sold90: 0 }))).toBe("Sin ventas en 90 días");
+  });
 });
 
 describe("compareUrgency", () => {
@@ -52,8 +91,8 @@ describe("describeCover", () => {
     expect(describeCover(computeReplenishment({ stock: 3, sold30: 8, sold90: 10 }), { limitingComponent: "el marcador lila" })).toMatchObject({ label: "11 días · limita el marcador lila", tone: "cream" });
     expect(describeCover(computeReplenishment({ stock: 4, sold30: 4, sold90: 9 }))).toMatchObject({ label: "30 días", tone: "mint" });
     expect(describeCover(computeReplenishment({ stock: 2, sold30: 0, sold90: 0 }))).toMatchObject({ label: "Sin ventas en 90 días", tone: "slate" });
-    // Con stock y solo ventas en 90 días: cobertura larga medida con ese ritmo.
-    expect(describeCover(computeReplenishment({ stock: 3, sold30: 0, sold90: 3 }))).toMatchObject({ label: "90 días", tone: "mint" });
+    // Con stock y solo ventas en 90 días: cobertura larga medida con ese ritmo, y se dice.
+    expect(describeCover(computeReplenishment({ stock: 3, sold30: 0, sold90: 3 }))).toMatchObject({ label: "90 días · ritmo de 90 días", tone: "mint" });
   });
 });
 

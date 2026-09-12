@@ -59,6 +59,8 @@ interface AdjustInventoryModalProps {
   products: { id: string; name: string; stock: number }[];
   /** Producto ya elegido al abrir (por ejemplo, desde una fila de Inventario). */
   defaultProductId?: string | null;
+  /** Ajuste ya calculado al abrir (por ejemplo, la diferencia de un cuadre del kardex). */
+  defaults?: { action?: "add" | "subtract"; quantity?: number; reason?: string } | null;
 }
 
 export const AdjustInventoryModal: React.FC<AdjustInventoryModalProps> = ({
@@ -67,24 +69,35 @@ export const AdjustInventoryModal: React.FC<AdjustInventoryModalProps> = ({
   onConfirm,
   products,
   defaultProductId = null,
+  defaults = null,
 }) => {
   const [loading, setLoading] = useState(false);
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
 
+  const initialValues = (): z.infer<typeof formSchema> => ({
+    ...EMPTY_VALUES,
+    productId: defaultProductId ?? "",
+    action: defaults?.action ?? EMPTY_VALUES.action,
+    quantity: defaults?.quantity && defaults.quantity > 0 ? Math.floor(defaults.quantity) : EMPTY_VALUES.quantity,
+    reason: defaults?.reason ?? EMPTY_VALUES.reason,
+  });
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: { ...EMPTY_VALUES, productId: defaultProductId ?? "" },
+    defaultValues: initialValues(),
   });
 
   useFormValidationToast({ form });
 
   useEffect(() => {
     if (isOpen) {
-      form.reset({ ...EMPTY_VALUES, productId: defaultProductId ?? "" });
+      form.reset(initialValues());
     }
-  }, [isOpen, defaultProductId, form]);
+    // `initialValues` lee props que ya están en las dependencias.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, defaultProductId, defaults?.action, defaults?.quantity, defaults?.reason, form]);
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {

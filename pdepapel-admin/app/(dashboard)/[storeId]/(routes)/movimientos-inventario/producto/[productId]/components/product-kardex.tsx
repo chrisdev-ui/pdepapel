@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { MetricCard } from "@/components/ui/metric-card";
 import { SectionCard } from "@/components/ui/section-card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -19,6 +20,7 @@ import {
   MOVEMENT_LABELS,
   MOVEMENT_TONES,
 } from "@/lib/kardex";
+import { describeRate } from "@/lib/replenishment";
 import { cn, currencyFormatter } from "@/lib/utils";
 
 import { AdjustInventoryModal } from "../../../components/adjust-inventory-modal";
@@ -51,19 +53,6 @@ function stockTone(stock: number, threshold: number): string {
   return "mint";
 }
 
-function Metric({ label, value, note, icon, tint, tone = "default" }: { label: string; value: string; note?: string; icon: React.ReactNode; tint: string; tone?: "default" | "care" }) {
-  return (
-    <div className={cn("flex min-w-0 flex-1 flex-col gap-2 rounded-xl border bg-white p-4 shadow-sm", tone === "care" && "border-tint-pink")}>
-      <div className="flex items-center justify-between">
-        <span className="text-[13px] font-semibold text-muted-foreground">{label}</span>
-        <span className={cn("flex h-8 w-8 items-center justify-center rounded-lg text-primary", tint)}>{icon}</span>
-      </div>
-      <span className="text-[24px] font-bold leading-none tracking-tight text-primary">{value}</span>
-      {note && <span className="text-xs text-muted-foreground">{note}</span>}
-    </div>
-  );
-}
-
 function ReferenceCell({ reference }: { reference: KardexRow["reference"] }) {
   if (!reference) return <span className="text-muted-foreground">—</span>;
   const label = reference.href ? (
@@ -93,6 +82,7 @@ interface ProductKardexProps {
 export function ProductKardexView({ storeId, kardex, showAll, typeFilter }: ProductKardexProps) {
   const router = useRouter();
   const [adjustOpen, setAdjustOpen] = useState(false);
+  const [adjustDefaults, setAdjustDefaults] = useState<{ action: "add" | "subtract"; quantity: number; reason: string } | null>(null);
   const { product, threshold, metrics, rows } = kardex;
 
   const buildHref = (next: { all?: boolean; type?: InventoryMovementType | null }) => {
@@ -112,6 +102,13 @@ export function ProductKardexView({ storeId, kardex, showAll, typeFilter }: Prod
     return `/${storeId}/aprovisionamiento/nuevo?${query.toString()}`;
   }, [product.id, product.supplier?.id, storeId]);
 
+  const movementsHref = `/${storeId}/movimientos-inventario?producto=${encodeURIComponent(product.id)}`;
+
+  const openAdjust = (defaults: { action: "add" | "subtract"; quantity: number; reason: string } | null) => {
+    setAdjustDefaults(defaults);
+    setAdjustOpen(true);
+  };
+
   const stockLabel = `${product.stock.toLocaleString("es-CO")} en stock`;
   const subtitle = [
     product.sku,
@@ -122,11 +119,16 @@ export function ProductKardexView({ storeId, kardex, showAll, typeFilter }: Prod
       : "sin movimientos registrados",
   ].join(" · ");
 
-  const coverNote =
-    metrics.coverDays === null
-      ? "Sin ventas en 30 días"
-      : `${metrics.weeklyRate.toLocaleString("es-CO")} por semana · ${metrics.coverDays.toLocaleString("es-CO")} ${metrics.coverDays === 1 ? "día" : "días"} de cobertura`;
+  const coverNote = [
+    describeRate(metrics),
+    metrics.viaKits30 > 0 ? `${metrics.viaKits30.toLocaleString("es-CO")} dentro de kits` : null,
+    "la misma cifra que Inventario",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
+  // Diferencia entre el stock y el último saldo: lo que un ajuste debe corregir.
+  const drift = metrics.latestBalance === null ? 0 : product.stock - metrics.latestBalance;
   const periodLabel = kardex.windowDays === null ? "todo el historial" : `últimos ${kardex.windowDays} días`;
 
   return (
@@ -134,7 +136,7 @@ export function ProductKardexView({ storeId, kardex, showAll, typeFilter }: Prod
       <nav aria-label="Ruta" className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
         <Link href={`/${storeId}/inventario`} className="hover:text-primary">Inventario</Link>
         <ChevronRight className="h-3 w-3" aria-hidden="true" />
-        <Link href={`/${storeId}/movimientos-inventario`} className="hover:text-primary">Movimientos</Link>
+        <Link href={movementsHref} className="hover:text-primary">Movimientos de este producto</Link>
         <ChevronRight className="h-3 w-3" aria-hidden="true" />
         <span className="truncate font-semibold text-primary">{product.name}</span>
       </nav>
@@ -154,32 +156,38 @@ export function ProductKardexView({ storeId, kardex, showAll, typeFilter }: Prod
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => setAdjustOpen(true)} disabled={product.isKit} title={product.isKit ? "El stock de un kit se calcula desde sus componentes" : undefined}>
+          <Button variant="outline" onClick={() => openAdjust(null)} disabled={product.isKit} title={product.isKit ? "El stock de un kit se calcula desde sus componentes" : undefined}>
             <History className="h-4 w-4" aria-hidden="true" />Ajustar inventario
           </Button>
-          <Button asChild>
-            <Link href={restockHref}><Package className="h-4 w-4" aria-hidden="true" />Reponer</Link>
-          </Button>
+          {product.isKit ? (
+            <Button asChild variant="outline" title="Un kit no se compra: se reponen sus componentes">
+              <Link href={`/${storeId}/productos/${product.id}`}><Package className="h-4 w-4" aria-hidden="true" />Ver componentes</Link>
+            </Button>
+          ) : (
+            <Button asChild>
+              <Link href={restockHref}><Package className="h-4 w-4" aria-hidden="true" />Reponer</Link>
+            </Button>
+          )}
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
-        <Metric label="Vendidas · 30 días" value={metrics.sold30.toLocaleString("es-CO")} note={coverNote} icon={<TrendingDown className="h-4 w-4" aria-hidden="true" />} tint="bg-tint-sky" />
-        <Metric
+        <MetricCard label="Vendidas · 30 días" value={metrics.sold30.toLocaleString("es-CO")} note={coverNote} icon={<TrendingDown className="h-4 w-4" aria-hidden="true" />} tint="bg-tint-sky" />
+        <MetricCard
           label="Recibidas · 90 días"
           value={metrics.received90.toLocaleString("es-CO")}
           note={`${metrics.receipts90.toLocaleString("es-CO")} ${metrics.receipts90 === 1 ? "recepción" : "recepciones"}`}
           icon={<PackageCheck className="h-4 w-4" aria-hidden="true" />}
           tint="bg-tint-mint"
         />
-        <Metric
+        <MetricCard
           label="Ajustes y pérdidas"
           value={formatSignedQuantity(metrics.adjustments90.total)}
           note={describeAdjustmentCounts(metrics.adjustments90.byType)}
           icon={<SlidersHorizontal className="h-4 w-4" aria-hidden="true" />}
           tint="bg-tint-cream"
         />
-        <Metric
+        <MetricCard
           label="Cuadre"
           value={metrics.balanced ? "Cuadra" : "No cuadra"}
           note={
@@ -187,11 +195,32 @@ export function ProductKardexView({ storeId, kardex, showAll, typeFilter }: Prod
               ? "Sin movimientos para comparar con el stock"
               : metrics.balanced
                 ? "El saldo de los movimientos coincide con el stock"
-                : `El stock (${product.stock.toLocaleString("es-CO")}) no coincide con el último saldo (${metrics.latestBalance.toLocaleString("es-CO")}): revisa los últimos movimientos`
+                : `El stock (${product.stock.toLocaleString("es-CO")}) no coincide con el último saldo (${metrics.latestBalance.toLocaleString("es-CO")}). Alguien tocó el stock sin pasar por el kardex.`
           }
           icon={metrics.balanced ? <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> : <AlertTriangle className="h-4 w-4" aria-hidden="true" />}
           tint={metrics.balanced ? "bg-tint-mint" : "bg-tint-pink"}
           tone={metrics.balanced ? "default" : "care"}
+          action={
+            !metrics.balanced && drift !== 0 && !product.isKit ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  openAdjust({
+                    // El libro va por detrás del stock: el ajuste lleva el saldo hasta el stock real.
+                    action: drift > 0 ? "add" : "subtract",
+                    quantity: Math.abs(drift),
+                    reason: "Cuadre de kardex",
+                  })
+                }
+              >
+                Registrar ajuste de {formatSignedQuantity(drift)}
+              </Button>
+            ) : !metrics.balanced && product.isKit ? (
+              <span className="text-xs text-muted-foreground">El stock de un kit se recalcula al guardar el producto.</span>
+            ) : undefined
+          }
         />
       </div>
 
@@ -256,9 +285,14 @@ export function ProductKardexView({ storeId, kardex, showAll, typeFilter }: Prod
             Saldo inicial del periodo: <span className="font-semibold text-primary">{kardex.openingBalance.toLocaleString("es-CO")}</span> ·{" "}
             {kardex.olderCount.toLocaleString("es-CO")} {kardex.olderCount === 1 ? "movimiento anterior" : "movimientos anteriores"}
           </p>
-          <Button asChild variant="soft" size="sm">
-            <Link href={buildHref({ all: !showAll })}>{showAll ? "Ver solo los últimos 90 días" : "Ver todo el historial"}</Link>
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild variant="ghost" size="sm">
+              <Link href={movementsHref}>Ver en la lista general</Link>
+            </Button>
+            <Button asChild variant="soft" size="sm">
+              <Link href={buildHref({ all: !showAll })}>{showAll ? "Ver solo los últimos 90 días" : "Ver todo el historial"}</Link>
+            </Button>
+          </div>
         </div>
       </SectionCard>
 
@@ -271,6 +305,7 @@ export function ProductKardexView({ storeId, kardex, showAll, typeFilter }: Prod
         }}
         products={[{ id: product.id, name: product.name, stock: product.stock }]}
         defaultProductId={product.id}
+        defaults={adjustDefaults}
       />
     </div>
   );

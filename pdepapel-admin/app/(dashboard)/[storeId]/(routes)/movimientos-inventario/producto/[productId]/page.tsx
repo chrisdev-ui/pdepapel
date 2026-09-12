@@ -2,6 +2,8 @@ import { InventoryMovementType } from "@prisma/client";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import prismadb from "@/lib/prismadb";
+
 import { ProductKardexView } from "./components/product-kardex";
 import { getProductKardex } from "./server/get-product-kardex";
 
@@ -26,9 +28,10 @@ function parseType(value: string | undefined): InventoryMovementType | null {
 }
 
 export async function generateMetadata({ params }: ProductKardexPageProps): Promise<Metadata> {
-  const kardex = await getProductKardex(params.storeId, params.productId);
+  // Solo el nombre: el kardex completo se carga una vez, en la página.
+  const product = await prismadb.product.findFirst({ where: { id: params.productId, storeId: params.storeId }, select: { name: true } });
   return {
-    title: kardex ? `Kardex · ${kardex.product.name} | PdePapel Admin` : "Kardex | PdePapel Admin",
+    title: product ? `Kardex · ${product.name} | PdePapel Admin` : "Kardex | PdePapel Admin",
     description: "Historial de movimientos con saldo de un producto.",
   };
 }

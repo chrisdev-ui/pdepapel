@@ -41,7 +41,10 @@ const kardex = (overrides: Partial<ProductKardex> = {}, product: Partial<Product
   threshold: 5,
   metrics: {
     sold30: 6,
+    sold90: 15,
+    viaKits30: 0,
     weeklyRate: 1.4,
+    rateWindowDays: 30,
     coverDays: 40,
     received90: 20,
     receipts90: 1,
@@ -91,17 +94,28 @@ describe("ProductKardexView", () => {
 
   it("shows the metrics with their notes", () => {
     render(<ProductKardexView storeId="store-1" kardex={kardex()} showAll={false} typeFilter={null} />);
-    expect(screen.getByText("1,4 por semana · 40 días de cobertura")).toBeInTheDocument();
+    expect(screen.getByText("1,4 por semana · 40 días de cobertura · la misma cifra que Inventario")).toBeInTheDocument();
     expect(screen.getByText("1 recepción")).toBeInTheDocument();
     expect(screen.getByText("1 daño")).toBeInTheDocument();
     expect(screen.getByText("El saldo de los movimientos coincide con el stock")).toBeInTheDocument();
   });
 
-  it("warns when the stock does not match the latest balance", () => {
+  it("warns when the stock does not match the latest balance and offers the adjustment that closes the gap", async () => {
     render(<ProductKardexView storeId="store-1" kardex={kardex({}, { stock: 8 }, { balanced: false, latestBalance: 11 })} showAll={false} typeFilter={null} />);
     expect(screen.getByText("No cuadra")).toBeInTheDocument();
-    expect(screen.getByText("El stock (8) no coincide con el último saldo (11): revisa los últimos movimientos")).toBeInTheDocument();
+    expect(screen.getByText(/El stock \(8\) no coincide con el último saldo \(11\)/)).toBeInTheDocument();
     expect(screen.getByText("No cuadra").closest("div.rounded-xl")).toHaveClass("border-tint-pink");
+    // El libro dice 11 y hay 8: un ajuste de −3 deja el saldo en el stock real.
+    await userEvent.click(screen.getByRole("button", { name: "Registrar ajuste de −3" }));
+    expect(modalProps.last).toMatchObject({ isOpen: true, defaultProductId: "p1", defaults: { action: "subtract", quantity: 3, reason: "Cuadre de kardex" } });
+  });
+
+  it("explains a kit mismatch instead of offering an adjustment, and mentions kit sales in the note", () => {
+    render(<ProductKardexView storeId="store-1" kardex={kardex({}, { stock: 2, isKit: true }, { balanced: false, latestBalance: 4, viaKits30: 4 })} showAll={false} typeFilter={null} />);
+    expect(screen.queryByRole("button", { name: /Registrar ajuste/ })).toBeNull();
+    expect(screen.getByText("El stock de un kit se recalcula al guardar el producto.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Ver componentes" })).toHaveAttribute("href", "/store-1/productos/p1");
+    expect(screen.getByText(/4 dentro de kits/)).toBeInTheDocument();
   });
 
   it("links references to the order, restock order and fair, and quotes plain reasons", () => {
@@ -142,9 +156,11 @@ describe("ProductKardexView", () => {
     render(<ProductKardexView storeId="store-1" kardex={kardex()} showAll={false} typeFilter={null} />);
     expect(screen.getByRole("link", { name: "Reponer" })).toHaveAttribute("href", "/store-1/aprovisionamiento/nuevo?proveedor=sup-1&producto=p1");
     expect(screen.getByRole("link", { name: "Volver a inventario" })).toHaveAttribute("href", "/store-1/inventario");
+    expect(screen.getByRole("link", { name: "Movimientos de este producto" })).toHaveAttribute("href", "/store-1/movimientos-inventario?producto=p1");
+    expect(screen.getByRole("link", { name: "Ver en la lista general" })).toHaveAttribute("href", "/store-1/movimientos-inventario?producto=p1");
     await userEvent.click(screen.getByRole("button", { name: "Ajustar inventario" }));
     expect(screen.getByTestId("adjust-modal")).toHaveTextContent("modal:p1");
-    expect(modalProps.last?.defaultProductId).toBe("p1");
+    expect(modalProps.last).toMatchObject({ defaultProductId: "p1", defaults: null });
   });
 
   it("shows an empty state when the window has no rows", () => {

@@ -1,6 +1,7 @@
 import type { InventoryMovementType } from "@prisma/client";
 
 import type { TintTone } from "@/components/ui/tint-badge";
+import { computeReplenishment } from "@/lib/replenishment";
 
 /**
  * Kardex de un producto: matemática pura y etiquetas. Sin Prisma ni React para
@@ -80,11 +81,27 @@ export interface KardexMovementInput {
   createdAt: Date | string;
 }
 
-export interface KardexMetrics {
-  /** Unidades vendidas netas (ventas menos cancelaciones) en los últimos 30 días. */
+/** Ventas del producto según pedidos pagados (la misma cifra que Inventario). */
+export interface KardexSales {
   sold30: number;
-  /** Ritmo semanal derivado de `sold30`. */
+  sold90: number;
+  /** Parte de `sold30` vendida dentro de kits. */
+  viaKits30?: number;
+  onOrder?: number;
+  threshold?: number;
+}
+
+export interface KardexMetrics {
+  /** Unidades vendidas en los últimos 30 días (pedidos pagados; sin `sales`, el neto del libro). */
+  sold30: number;
+  /** Unidades vendidas en los últimos 90 días; 0 cuando el cálculo sale del libro. */
+  sold90: number;
+  /** Parte de `sold30` vendida dentro de kits. */
+  viaKits30: number;
+  /** Ritmo semanal (ventana de 30 días, o 90 si no vendió en 30). */
   weeklyRate: number;
+  /** Ventana del ritmo; `null` sin ventas. */
+  rateWindowDays: 30 | 90 | null;
   /** Días que aguanta el stock actual a ese ritmo; `null` sin ventas. */
   coverDays: number | null;
   /** Unidades recibidas de proveedor en 90 días. */
@@ -117,10 +134,12 @@ export function computeRunningBalanceCheck(latest: { newStock: number } | null |
 /**
  * Métricas del kardex a partir de los movimientos de los últimos 90 días
  * (cualquier tipo). `movements` puede traer filas más viejas: se filtran aquí.
+ * Con `sales` (pedidos pagados), las ventas, el ritmo y la cobertura salen de
+ * la misma regla que Inventario; sin él, del neto de ventas del libro.
  */
 export function summarizeKardex(
   movements: KardexMovementInput[],
-  options: { stock: number; latest: { newStock: number } | null | undefined; now?: Date },
+  options: { stock: number; latest: { newStock: number } | null | undefined; now?: Date; sales?: KardexSales },
 ): KardexMetrics {
   const now = options.now ?? new Date();
   const since30 = now.getTime() - KARDEX_SALES_DAYS * DAY_MS;
@@ -151,15 +170,17 @@ export function summarizeKardex(
     }
   }
 
-  const sold30 = Math.max(0, sold - cancelled);
-  const dailyRate = sold30 / KARDEX_SALES_DAYS;
-  const weeklyRate = Math.round(dailyRate * 7 * 10) / 10;
-  const coverDays = sold30 === 0 ? null : Math.floor(Math.max(0, options.stock) / dailyRate);
+  const ledgerSold30 = Math.max(0, sold - cancelled);
+  const sales = options.sales ?? { sold30: ledgerSold30, sold90: 0 };
+  const signal = computeReplenishment({ stock: options.stock, sold30: sales.sold30, sold90: sales.sold90, onOrder: sales.onOrder, threshold: sales.threshold });
 
   return {
-    sold30,
-    weeklyRate,
-    coverDays,
+    sold30: sales.sold30,
+    sold90: sales.sold90,
+    viaKits30: sales.viaKits30 ?? 0,
+    weeklyRate: signal.weeklyRate,
+    rateWindowDays: signal.rateWindowDays,
+    coverDays: signal.coverDays,
     received90,
     receipts90,
     adjustments90: { total: adjustmentsTotal, byType },
@@ -191,6 +212,15 @@ export function formatKardexDate(value: Date | string): string {
   const day = parts.find((part) => part.type === "day")?.value ?? "";
   const month = (parts.find((part) => part.type === "month")?.value ?? "").replace(/\.$/, "");
   return `${day} ${month} · ${timeFormatter.format(date)}`;
+}
+
+/** «5 ago» en hora de Bogotá (sin hora). */
+export function formatKardexDay(value: Date | string): string {
+  const date = value instanceof Date ? value : new Date(value);
+  const parts = dayFormatter.formatToParts(date);
+  const day = parts.find((part) => part.type === "day")?.value ?? "";
+  const month = (parts.find((part) => part.type === "month")?.value ?? "").replace(/\.$/, "");
+  return `${day} ${month}`;
 }
 
 /** «septiembre de 2025» en hora de Bogotá. */

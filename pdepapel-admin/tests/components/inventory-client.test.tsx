@@ -47,13 +47,15 @@ const row = (overrides: Partial<InventoryRow> & { sold30?: number; sold90?: numb
     categoryName: "Cuadernos",
     supplier: { id: "sup-1", name: "Papelería Bogotá" },
     image: "https://res.cloudinary.com/demo/image/upload/sample.jpg",
-    lastMovement: null,
     lastCost: 18500,
+    lastCostSource: "product",
+    lastCostAt: null,
     limitingComponent: null,
     ...overrides,
     stock,
     sold30,
     sold90,
+    soldViaKits30: overrides.soldViaKits30 ?? 0,
     onOrder,
     signal: computeReplenishment({ stock, sold30, sold90, onOrder, threshold: 5 }),
   };
@@ -81,7 +83,7 @@ describe("InventoryClient", () => {
     expect(screen.getByText("Se acaban esta semana").parentElement?.parentElement).toHaveTextContent("1");
     expect(screen.getByText("Agotados que se vendían").parentElement?.parentElement).toHaveTextContent("1");
     expect(screen.getByText(/Sin movimiento en 90 días/).parentElement?.parentElement).toHaveTextContent("1");
-    expect(screen.getByText(/umbral de Ajustes \(5 unidades\)/)).toBeInTheDocument();
+    expect(screen.getByText(/5 unidades o menos \(umbral de Ajustes\)/)).toBeInTheDocument();
     // La durmiente no aparece en la vista por defecto; la agotada que vendía va primero.
     const rows = screen.getAllByRole("row").slice(1);
     expect(rows[0]).toHaveTextContent("Sticker pack");
@@ -97,7 +99,8 @@ describe("InventoryClient", () => {
     const rowEl = screen.getByText("Regla Kawaii").closest("tr") as HTMLElement;
     expect(within(rowEl).getByRole("link", { name: "Poner en oferta" })).toHaveAttribute("href", "/store-1/ofertas/nuevo");
     const selling = screen.getByText("Cuaderno Snoopy").closest("tr") as HTMLElement;
-    expect(within(selling).getByRole("link", { name: "Reponer" })).toHaveAttribute("href", "/store-1/aprovisionamiento/nuevo?proveedor=sup-1&producto=p1");
+    // 14 en 30 días con 3 en stock: 4 semanas ≈ 13,1 unidades − 3 = 11 sugeridas.
+    expect(within(selling).getByRole("link", { name: "Reponer" })).toHaveAttribute("href", "/store-1/aprovisionamiento/nuevo?proveedor=sup-1&producto=p1&cantidad=11");
     await user.click(within(selling).getByRole("button", { name: "Acciones" }));
     await user.click(await screen.findByRole("menuitem", { name: "Ver kardex" }));
     expect(push).toHaveBeenCalledWith("/store-1/movimientos-inventario/producto/p1");
@@ -112,6 +115,16 @@ describe("InventoryClient", () => {
     expect(modalProps.last).toMatchObject({ isOpen: true, defaultProductId: "p2" });
     await user.click(screen.getByRole("button", { name: /Ajustar inventario/ }));
     expect(modalProps.last).toMatchObject({ isOpen: true, defaultProductId: null });
+  });
+
+  it("never offers a restock for a kit: it points to its components and shows no cost value", () => {
+    const kit = row({ id: "k1", name: "Kit resaltadores", sku: "KIT-1", stock: 2, sold30: 8, sold90: 20, isKit: true, lastCost: null, lastCostSource: null, limitingComponent: "Marcador lila" });
+    render(<InventoryClient data={[...data, kit]} threshold={5} initialView="todo" />);
+    const rowEl = screen.getByText("Kit resaltadores").closest("tr") as HTMLElement;
+    expect(within(rowEl).queryByRole("link", { name: "Reponer" })).toBeNull();
+    expect(within(rowEl).getByRole("link", { name: "Ver componentes" })).toHaveAttribute("href", "/store-1/productos/k1");
+    expect(within(rowEl).getByText(/limita Marcador lila/)).toBeInTheDocument();
+    expect(within(rowEl).getAllByText("—").length).toBeGreaterThan(0);
   });
 
   it("groups by supplier with a draft button per supplier and a separate group for products without one", async () => {

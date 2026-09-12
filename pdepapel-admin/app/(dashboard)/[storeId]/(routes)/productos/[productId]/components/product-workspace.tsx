@@ -128,8 +128,8 @@ export function ProductWorkspaceAside({ product, storeId }: { product: Workspace
         </section>
       )}
       {product && (
-        <Link href={`/${storeId}/movimientos-inventario`} className="text-[13px] font-semibold text-primary hover:underline">
-          Ver movimientos de inventario
+        <Link href={`/${storeId}/movimientos-inventario/producto/${product.id}`} className="text-[13px] font-semibold text-primary hover:underline">
+          Ver kardex del producto
         </Link>
       )}
     </aside>

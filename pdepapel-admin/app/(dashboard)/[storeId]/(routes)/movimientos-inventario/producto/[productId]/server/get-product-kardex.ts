@@ -12,6 +12,7 @@ import {
 } from "@/lib/kardex";
 import prismadb from "@/lib/prismadb";
 import { resolveLowStockThreshold } from "@/lib/product-readiness";
+import { getUnitsOnOrderByProduct, getUnitsSoldForProduct } from "@/lib/replenishment-db";
 
 /** Ventana por defecto del kardex de producto. */
 export const KARDEX_WINDOW_DAYS = 90;
@@ -129,7 +130,7 @@ export async function getProductKardex(storeId: string, productId: string, optio
 
   const baseWhere = { storeId, productId: product.id };
 
-  const [movements, metricSource, latest, totalCount, first] = await Promise.all([
+  const [movements, metricSource, latest, totalCount, first, sold30, sold90, onOrder] = await Promise.all([
     prismadb.inventoryMovement.findMany({
       where: {
         ...baseWhere,
@@ -165,7 +166,13 @@ export async function getProductKardex(storeId: string, productId: string, optio
     }),
     prismadb.inventoryMovement.count({ where: baseWhere }),
     prismadb.inventoryMovement.findFirst({ where: baseWhere, orderBy: { createdAt: "asc" }, select: { createdAt: true } }),
+    // Ventas según pedidos pagados (directas y dentro de kits): la misma
+    // cifra que Inventario, no el neto del libro.
+    getUnitsSoldForProduct(storeId, product.id, 30, now),
+    getUnitsSoldForProduct(storeId, product.id, 90, now),
+    getUnitsOnOrderByProduct(storeId),
   ]);
+  const threshold = resolveLowStockThreshold(store);
 
   const hasMore = movements.length > take;
   const visible = hasMore ? movements.slice(0, take) : movements;
@@ -286,8 +293,19 @@ export async function getProductKardex(storeId: string, productId: string, optio
       isKit: product.isKit,
       supplier: product.supplier ? { id: product.supplier.id, name: product.supplier.name } : null,
     },
-    threshold: resolveLowStockThreshold(store),
-    metrics: summarizeKardex(metricSource, { stock: product.stock, latest, now }),
+    threshold,
+    metrics: summarizeKardex(metricSource, {
+      stock: product.stock,
+      latest,
+      now,
+      sales: {
+        sold30: sold30.direct + sold30.viaKits,
+        sold90: sold90.direct + sold90.viaKits,
+        viaKits30: sold30.viaKits,
+        onOrder: onOrder.get(product.id) ?? 0,
+        threshold,
+      },
+    }),
     rows,
     openingBalance: opening?.newStock ?? 0,
     olderCount,

@@ -46,7 +46,7 @@ type DraftValues = z.infer<typeof formSchema>;
 
 export interface RestockDraftPrefill {
   supplierId: string | null;
-  product: { id: string; acqPrice: number } | null;
+  product: { id: string; acqPrice: number; quantity?: number } | null;
 }
 
 interface RestockOrderDraftFormProps {
@@ -78,7 +78,7 @@ export function RestockOrderDraftForm({ initialData, suppliers, prefill = null }
             supplierId: prefill?.supplierId ?? "",
             notes: "",
             shippingCost: 0,
-            items: prefill?.product ? [{ productId: prefill.product.id, quantity: 1, cost: prefill.product.acqPrice }] : [],
+            items: prefill?.product ? [{ productId: prefill.product.id, quantity: prefill.product.quantity ?? 1, cost: prefill.product.acqPrice }] : [],
           },
     [initialData, prefill],
   );
