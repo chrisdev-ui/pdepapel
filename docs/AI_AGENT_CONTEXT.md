@@ -885,6 +885,11 @@ Full configuration runbook: `pdepapel-admin/docs/mercadolibre.md`.
 - Clerk authenticated E2E must use development/staging test keys (`sk_test_`), never live credentials.
 - Production environment changes require a new Vercel deployment to take effect.
 
+### Database connection pool (2026-09-11)
+
+- Each Vercel function instance opens its own Prisma pool. With Prisma's default pool size (CPU × 2 + 1) the admin exceeded Railway's MySQL ceiling (151) during a burst on 2026-09-11 (`Max_used_connections` 152, `P2024` pool timeouts on the products API). `lib/prismadb.ts` now appends `connection_limit=3&pool_timeout=20` to `DATABASE_URL` in code (`withConnectionPoolParams`, existing values in the URL win), so no Vercel variable changes; and Railway's MySQL start command carries `--max-connections=300` (set on 2026-09-11 next to the existing `--innodb-use-native-aio=0 --disable-log-bin --performance_schema=0`; verify with `SHOW GLOBAL VARIABLES LIKE 'max_connections'`).
+- `handleErrorResponse` maps `P2024` (pool exhausted) and `PrismaClientInitializationError` (database unreachable, e.g. during a Railway redeploy) to **503** with `Retry-After`, so the dashboard shows "La base de datos está ocupada…" instead of "Error interno del servidor" and clients can retry. Do not raise `connection_limit` without recomputing instances × limit against `max_connections`.
+
 ## 14. Testing and validation
 
 ### Test layers
@@ -996,6 +1001,7 @@ When user approval is granted:
 | Fair created online stock mismatch       | Stock was not reserved/reconciled                                     | Use fair reservation before event or approved reconciliation template afterward.                                                |
 | A restock receipt was counted twice / stock jumped after a slow «Recibir» | Receipt replayed without its idempotency key (client not using `ReceiveDialog`, or key regenerated) | Check `RestockOrderReceipt` for the order; the route refuses a repeated key with 409. Fix the stock with a manual adjustment that references the order and keep the key stable per dialog opening. |
 | Tax purchases empty                      | Supplier invoices were never recorded                                 | Add actual invoice records in tax reports; restock orders are not fiscal invoices.                                              |
+| Admin answers 503 «La base de datos está ocupada» / `P2024` in logs | Every Vercel instance holds up to 3 connections and the total hit MySQL `max_connections` | Check `Max_used_connections` on Railway; raise `--max-connections` in the MySQL start command before touching `connection_limit` in `lib/prismadb.ts`. |
 | Production build fails after env change  | Admin strict env schema/config mismatch                               | Update `lib/env.mjs` only when the variable must be mandatory; verify all Vercel environments.                                  |
 
 ## 18. Agent checklist by change type

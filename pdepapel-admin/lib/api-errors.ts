@@ -137,6 +137,15 @@ export const handleErrorResponse = (
           );
         case "P2016":
           return new AppError("Error en la consulta", 400);
+        case "P2024":
+          // El pool de la instancia no consiguió conexión a tiempo: la base
+          // de datos está saturada, no rota. 503 con Retry-After para que el
+          // cliente reintente en vez de leerlo como un fallo del servidor.
+          return new AppError(
+            "La base de datos está ocupada en este momento. Intenta de nuevo en unos segundos.",
+            503,
+            { code: error.code, retryAfterSeconds: 2 },
+          );
         default:
           return new AppError("Error en la base de datos", 500, {
             code: error.code,
@@ -146,7 +155,21 @@ export const handleErrorResponse = (
 
     return NextResponse.json(
       { error: prismaError.message, details: prismaError.details },
-      { status: prismaError.statusCode, headers: options.headers },
+      {
+        status: prismaError.statusCode,
+        headers:
+          prismaError.statusCode === 503
+            ? { ...options.headers, "Retry-After": "2" }
+            : options.headers,
+      },
+    );
+  }
+
+  // La base de datos no responde (reinicio, red): tampoco es un 500 del código.
+  if (error instanceof Prisma.PrismaClientInitializationError) {
+    return NextResponse.json(
+      { error: "No se pudo conectar con la base de datos. Intenta de nuevo en unos segundos." },
+      { status: 503, headers: { ...options.headers, "Retry-After": "5" } },
     );
   }
 

@@ -72,6 +72,29 @@ describe("API error helpers", () => {
     });
   });
 
+  it("answers a pool timeout with 503 and Retry-After instead of a generic 500", async () => {
+    const { Prisma } = await import("@prisma/client");
+    const timeout = new Prisma.PrismaClientKnownRequestError("Timed out fetching a new connection from the connection pool", {
+      code: "P2024",
+      clientVersion: "6.19.1",
+    });
+    const response = handleErrorResponse(timeout, "PRODUCTS_GET", { headers: { "x-request-id": "r1" } });
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Retry-After")).toBe("2");
+    expect(response.headers.get("x-request-id")).toBe("r1");
+    await expect(response.json()).resolves.toMatchObject({ error: expect.stringContaining("ocupada") });
+  });
+
+  it("answers an unreachable database with 503", async () => {
+    const { Prisma } = await import("@prisma/client");
+    const down = new Prisma.PrismaClientInitializationError("Can't reach database server", "6.19.1");
+    const response = handleErrorResponse(down, "PRODUCTS_GET");
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Retry-After")).toBe("5");
+  });
+
   it("logs explicitly expected application responses without an error stack", async () => {
     const response = handleErrorResponse(
       ErrorFactory.NotFound("Producto no encontrado"),
