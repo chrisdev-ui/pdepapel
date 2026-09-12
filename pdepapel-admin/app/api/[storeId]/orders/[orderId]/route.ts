@@ -113,8 +113,17 @@ export async function GET(
       where,
       select: CUSTOMER_ORDER_SELECT,
     });
-    // Un pedido con cuenta no se abre con el enlace: el 404 no confirma que exista.
-    if (!order || (order.userId && order.userId !== userId))
+    if (!order)
+      throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
+    // Un pedido de una clienta con cuenta no se abre con el enlace: el 404
+    // no confirma que exista. Los pedidos que la dueña registra desde el
+    // panel para clientas de WhatsApp llevan su propio `userId` (y
+    // `createdBy`), y esos sí viajan por enlace, como los de invitada.
+    const belongsToAccountCustomer =
+      Boolean(order.userId) &&
+      !order.createdBy &&
+      !(await checkIfStoreOwner(order.userId, params.storeId));
+    if (belongsToAccountCustomer && order.userId !== userId)
       throw ErrorFactory.NotFound(`La orden ${params.orderId} no existe`);
     return NextResponse.json(toCustomerOrderResponse(order), {
       headers: { ...corsHeaders, ...CACHE_HEADERS.DYNAMIC },

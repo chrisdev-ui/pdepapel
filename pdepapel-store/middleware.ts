@@ -39,6 +39,11 @@ const requiresServerAuth = createRouteMatcher([
   `${STOREFRONT_ROUTES.myOrders}(.*)`,
   `${STOREFRONT_ROUTES.savedSearches}(.*)`,
   `${STOREFRONT_ROUTES.account}(.*)`,
+  // La página del pedido pide el token de sesión en el servidor para que la
+  // API sepa si el pedido con cuenta es de quien lo abre. Es dinámica
+  // (`revalidate = 0`), así que no pierde nada por pasar por Clerk.
+  "/pedido(.*)",
+  "/order(.*)",
 ]);
 
 const withClerk = clerkMiddleware(

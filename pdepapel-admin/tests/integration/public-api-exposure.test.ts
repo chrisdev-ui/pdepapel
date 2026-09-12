@@ -211,13 +211,30 @@ describe("public API exposure with MySQL", () => {
         orderItems: { create: [{ productId: fixture.component.id, quantity: 1, name: "Componente", price: 5000 }] },
       },
     });
+    // Pedido registrado por la dueña desde el panel para una clienta de WhatsApp:
+    // lleva el userId de la dueña (y a veces ningún createdBy) y viaja por enlace.
+    const panelOrder = await testPrisma.order.create({
+      data: {
+        storeId: fixture.store.id,
+        orderNumber: `ORD-${randomUUID().slice(0, 8)}`,
+        userId: fixture.store.userId,
+        createdBy: null,
+        fullName: "Clienta por WhatsApp",
+        phone: "3000000004",
+        subtotal: 5000,
+        total: 5000,
+        orderItems: { create: [{ productId: fixture.component.id, quantity: 1, name: "Componente", price: 5000 }] },
+      },
+    });
     const { GET } = await import("@/app/api/[storeId]/orders/[orderId]/route");
     const accountParams = { storeId: fixture.store.id, orderId: accountOrder.id };
     const guestParams = { storeId: fixture.store.id, orderId: guestOrder.id };
+    const panelParams = { storeId: fixture.store.id, orderId: panelOrder.id };
 
-    // Sin sesión: el pedido con cuenta no existe para el visitante; el de invitada sí.
+    // Sin sesión: el pedido con cuenta no existe para el visitante; el de invitada y el del panel sí.
     expect((await GET(get("http://admin.test/api/x/orders/o"), { params: accountParams })).status).toBe(404);
     expect((await GET(get("http://admin.test/api/x/orders/o"), { params: guestParams })).status).toBe(200);
+    expect((await GET(get("http://admin.test/api/x/orders/o"), { params: panelParams })).status).toBe(200);
 
     // Otra clienta con sesión: tampoco.
     session.userId = "user_someone_else";

@@ -13,8 +13,11 @@ export const revalidate = 0;
 // once, with the viewer's session so the API can answer 404 for someone
 // else's account order.
 const getOrderOnce = cache(async (orderId: string) => {
-  const { getToken } = await auth();
-  const sessionToken = await getToken().catch(() => null);
+  // Sin sesión (o si Clerk no corre en esta ruta) el pedido se pide como
+  // visitante: la API decide qué puede verse con el enlace.
+  const sessionToken = await auth()
+    .then(({ getToken }) => getToken())
+    .catch(() => null);
   return getOrder(orderId, sessionToken);
 });
 

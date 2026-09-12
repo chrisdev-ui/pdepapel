@@ -92,11 +92,17 @@ describe("storefront middleware", () => {
   });
 
   it("bypasses Clerk on public catalog routes so 404s stay 404s", async () => {
-    for (const path of ["/", "/tienda", "/producto/algo", "/politicas/envios", "/pedido/abc"]) {
+    for (const path of ["/", "/tienda", "/producto/algo", "/politicas/envios"]) {
       const response = await run(path);
       expect(response?.status, path).toBe(200);
     }
     expect(clerk.handlerCalls).toBe(0);
+  });
+
+  it("runs Clerk on the order page so the server can send the session token, without protecting it", async () => {
+    const response = await run("/pedido/abc");
+    expect(response?.status).toBe(200);
+    expect(clerk.handlerCalls).toBe(1);
   });
 
   it("still serves the legacy product redirects first", async () => {
