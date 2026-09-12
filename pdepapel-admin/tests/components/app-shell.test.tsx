@@ -46,8 +46,8 @@ describe("AppShell", () => {
     expect(pedidos).toHaveAttribute("aria-current", "page");
     expect(within(pedidos).getByText("5")).toBeInTheDocument();
     expect(within(sidebar).getByRole("link", { name: /^Inventario/ })).toHaveTextContent("12");
-    // Sibling routes stay reachable under their destination while they are separate pages.
-    expect(within(sidebar).getByRole("link", { name: "Plantillas de cotización" })).toHaveAttribute("href", "/store-1/cotizaciones");
+    // Quotation templates were retired (2026-09): the Pedidos group no longer links to them.
+    expect(within(sidebar).queryByRole("link", { name: "Plantillas de cotización" })).not.toBeInTheDocument();
 
     expect(screen.getByRole("link", { name: /Ver tienda/ })).toHaveAttribute("href", "https://papeleriapdepapel.com");
     expect(screen.getByRole("link", { name: /Nuevo pedido/ })).toHaveAttribute("href", "/store-1/pedidos/nuevo");

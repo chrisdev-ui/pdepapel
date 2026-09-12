@@ -29,17 +29,11 @@ interface ProtectedRoute {
 
 const PROTECTED_ROUTES: ProtectedRoute[] = [
   { path: "cleanup-images", methods: ["GET", "DELETE"] },
-  { path: "custom-orders", methods: ["GET", "POST"] },
-  { path: "custom-orders/[customOrderId]", methods: ["GET", "PATCH", "DELETE"], params: { customOrderId: "x" } },
-  { path: "custom-orders/[customOrderId]/convert", methods: ["POST"], params: { customOrderId: "x" } },
   { path: "customers/search", methods: ["GET"] },
   { path: "dane/cache", methods: ["GET", "POST", "DELETE"] },
   { path: "invoices", methods: ["GET", "POST"] },
   { path: "orders/[orderId]/shipping", methods: ["POST"], params: { orderId: "x" } },
   { path: "products/selectable", methods: ["GET"] },
-  { path: "quotations", methods: ["GET", "POST"] },
-  { path: "quotations/[quotationId]", methods: ["GET", "PATCH", "DELETE"], params: { quotationId: "x" } },
-  { path: "quotations/[quotationId]/use", methods: ["POST"], params: { quotationId: "x" } },
   { path: "shipment/cache", methods: ["GET", "DELETE"] },
   { path: "shipment/cancel", methods: ["POST"] },
   { path: "shipments/bulk-update", methods: ["PATCH"] },
@@ -164,7 +158,6 @@ describe("store-owner authorization on dashboard API handlers", () => {
     session.userId = ownerId;
     for (const [path, method] of [
       ["shipments/export", "GET"],
-      ["quotations", "GET"],
       ["whatsapp/templates", "GET"],
       ["customers/search", "GET"],
       ["products/selectable", "GET"],

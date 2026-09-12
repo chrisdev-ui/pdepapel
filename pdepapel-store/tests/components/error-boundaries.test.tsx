@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import NotFound from "@/app/not-found";
 import RouteError from "@/app/(routes)/error";
 import OrderNotFound from "@/app/(routes)/pedido/[orderId]/not-found";
+import RetiredQuotePage from "@/app/(public)/cotizacion/[token]/page";
 import { UpstreamUnavailable } from "@/components/upstream-unavailable";
 
 const router = vi.hoisted(() => ({ refresh: vi.fn() }));
@@ -37,6 +38,21 @@ describe("error and not-found boundaries", () => {
 
     expect(screen.getByRole("heading", { level: 1, name: "No encontramos este pedido" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Ir a Mis pedidos" })).toHaveAttribute("href", "/mis-pedidos");
+  });
+
+  it("retired quote links explain the change and offer the shop and WhatsApp", () => {
+    render(<RetiredQuotePage />);
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Esta cotización ya no está disponible" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Ir a la tienda" })).toHaveAttribute("href", "/tienda");
+    expect(screen.getByRole("link", { name: /Escribir por WhatsApp/ })).toHaveAttribute(
+      "href",
+      expect.stringContaining(WHATSAPP),
+    );
+    expect(screen.getByRole("link", { name: "Volver al inicio" })).toHaveAttribute("href", "/");
+    expect(screen.queryByRole("button", { name: /Aceptar/ })).not.toBeInTheDocument();
   });
 
   it("route error retries through reset() and shows the digest for support", async () => {

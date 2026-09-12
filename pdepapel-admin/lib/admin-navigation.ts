@@ -75,10 +75,7 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: ShoppingBag,
         segment: "pedidos",
         badge: "pendingOrders",
-        children: [
-          { label: "Todos los pedidos", segment: "pedidos" },
-          { label: "Plantillas de cotización", segment: "cotizaciones" },
-        ],
+        children: [{ label: "Todos los pedidos", segment: "pedidos" }],
       },
       {
         id: "pos",
@@ -288,7 +285,7 @@ export interface QuickAction {
 
 /** Acciones de la barra de comando: lo que la administradora quiere hacer. */
 export const QUICK_ACTIONS: QuickAction[] = [
-  { id: "nuevo-pedido", label: "Nuevo pedido", hint: "Crear un pedido manual o una cotización", icon: Plus, segment: "pedidos/nuevo", keywords: ["crear pedido", "orden", "cotización", "cotizacion"] },
+  { id: "nuevo-pedido", label: "Nuevo pedido", hint: "Crear un pedido de tienda o uno personalizado", icon: Plus, segment: "pedidos/nuevo", keywords: ["crear pedido", "orden", "personalizado"] },
   { id: "vender", label: "Registrar venta presencial", hint: "Punto de venta con lector", icon: ScanLine, segment: "ventas-rapidas", keywords: ["vender", "mostrador", "datáfono", "datafono", "punto de venta", "efectivo"] },
   { id: "verificar-pago", label: "Verificar pagos por transferencia", hint: "Pedidos pendientes de pago", icon: ShoppingBag, segment: "pedidos?vista=por-verificar", keywords: ["verificar", "transferencia", "pago", "nequi", "bancolombia", "comprobante"] },
   { id: "crear-guia", label: "Crear guías de envío", hint: "Pedidos pagados sin guía", icon: Truck, segment: "pedidos?vista=por-despachar", keywords: ["guía", "guia", "envío", "envio", "etiqueta", "coordinadora"] },
@@ -302,7 +299,6 @@ export const QUICK_ACTIONS: QuickAction[] = [
 const SEGMENT_LABELS: Record<string, string> = {
   manual: "Manual del panel",
   pedidos: "Pedidos",
-  cotizaciones: "Plantillas de cotización",
   "ventas-rapidas": "Punto de venta",
   ferias: "Ferias",
   mercadolibre: "Mercado Libre",

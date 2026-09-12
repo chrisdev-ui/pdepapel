@@ -94,7 +94,9 @@ costo) › guardar. La guía queda en el pedido y se imprime desde Envíos.
 
 **Nuevo pedido**: botón «Nuevo pedido» en cualquier pantalla; cinco pasos
 (Productos, Cliente, Descuentos, Pago, Envío). Nada se descuenta hasta marcar
-pagado. Las plantillas de cotización viven en el submenú de Pedidos.
+pagado. Las cotizaciones por enlace y sus plantillas se retiraron en
+septiembre de 2026: los pedidos de tipo cotización que ya existían se siguen
+viendo en la pestaña «Cotizaciones», pero no se crean nuevos.
 
 Menú de fila: copiar ID o número, link de pago (si no está pagado), datáfono
 (pedidos completados), ver detalle; eliminar solo si nunca se pagó.

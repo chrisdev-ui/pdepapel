@@ -51,7 +51,6 @@ import {
   OrderType,
 } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-import crypto from "crypto";
 import {
   recordInventoryIssues,
   recordInventoryIssuesForBatch,
@@ -177,6 +176,14 @@ async function createOrder(
     if (type === OrderType.POINT_OF_SALE) {
       throw ErrorFactory.InvalidRequest(
         "Las ventas presenciales deben registrarse desde Punto de venta para proteger el inventario.",
+      );
+    }
+
+    // Las cotizaciones por enlace se retiraron (2026-09): las existentes se
+    // siguen mostrando, pero no se crean nuevas.
+    if (type === OrderType.QUOTATION) {
+      throw ErrorFactory.InvalidRequest(
+        "Las cotizaciones ya no se crean. Registra un pedido de tienda o uno personalizado.",
       );
     }
 
@@ -487,19 +494,12 @@ async function createOrder(
         await validateStockAvailability(tx, stockValidationUpdates);
       }
 
-      // Generate Token & Expiration for Custom/Quote orders
-      let token: string | null = null;
+      // Un pedido personalizado puede llevar fecha límite; ya no se emite
+      // token público (el enlace de cotización se retiró).
       let expiresAt: Date | null = null;
-
-      if (type === OrderType.QUOTATION || type === OrderType.CUSTOM) {
-        token = crypto.randomBytes(32).toString("hex");
-        if (daysValid) {
-          expiresAt = new Date();
-          expiresAt.setDate(expiresAt.getDate() + daysValid);
-        } else if (type === OrderType.QUOTATION) {
-          expiresAt = new Date();
-          expiresAt.setDate(expiresAt.getDate() + 7);
-        }
+      if (type === OrderType.CUSTOM && daysValid) {
+        expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + daysValid);
       }
 
       const orderData: OrderData = {
@@ -509,11 +509,7 @@ async function createOrder(
         orderNumber,
         fullName,
         phone: normalizedPhone,
-        status:
-          status ||
-          (type === OrderType.QUOTATION
-            ? OrderStatus.DRAFT
-            : OrderStatus.PENDING),
+        status: status || OrderStatus.PENDING,
         address,
         email,
         documentId,
@@ -533,7 +529,7 @@ async function createOrder(
         total: totals.total,
         // Unified Logic
         type: type || OrderType.STANDARD,
-        token,
+        token: null,
         expiresAt,
         adminNotes,
         internalNotes,

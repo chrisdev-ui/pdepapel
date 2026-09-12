@@ -53,7 +53,6 @@ import {
   OrderType,
 } from "@prisma/client";
 import { NextResponse } from "next/server";
-import crypto from "crypto";
 import { recordInventoryIssues } from "@/lib/order-inventory-issues";
 import { OrderInventoryIssueKind } from "@prisma/client";
 
@@ -383,23 +382,6 @@ export async function PATCH(
       });
     }
 
-    // Generate Token & Expiration for Custom/Quote orders if missing
-    let tokenUpdate = {};
-    if (
-      (type === OrderType.QUOTATION ||
-        (!type && order.type === OrderType.QUOTATION)) &&
-      !order.token
-    ) {
-      const token = crypto.randomBytes(32).toString("hex");
-      const expires = new Date();
-      expires.setDate(expires.getDate() + 7); // Default 7 days
-
-      tokenUpdate = {
-        token,
-        expiresAt: order.expiresAt || expires,
-      };
-    }
-
     // Store original status before update
     const originalStatus = order.status;
     const originalShippingStatus = order.shipping?.status;
@@ -724,7 +706,6 @@ export async function PATCH(
           adminNotes,
           internalNotes,
           expiresAt,
-          ...tokenUpdate,
           payment: payment && {
             upsert: {
               create: {

@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { RadioCards } from "@/components/ui/radio-cards";
 import { OrderType } from "@prisma/client";
-import { FileText, ShoppingBag, Sparkles, Store, Tent } from "lucide-react";
+import { ShoppingBag, Sparkles, Store, Tent } from "lucide-react";
 import Link from "next/link";
 
 import { ORDER_TYPE_PRESETS, type CreatableOrderType } from "./schema";
@@ -16,19 +16,19 @@ interface OrderTypePickerProps {
 const ICONS: Record<CreatableOrderType, React.ReactNode> = {
   [OrderType.STANDARD]: <ShoppingBag className="h-5 w-5" aria-hidden="true" />,
   [OrderType.CUSTOM]: <Sparkles className="h-5 w-5" aria-hidden="true" />,
-  [OrderType.QUOTATION]: <FileText className="h-5 w-5" aria-hidden="true" />,
 };
 
 const TINTS: Record<CreatableOrderType, string> = {
   [OrderType.STANDARD]: "bg-tint-sky",
   [OrderType.CUSTOM]: "bg-tint-cream",
-  [OrderType.QUOTATION]: "bg-tint-lavender",
 };
 
 /**
  * Primer paso de un pedido nuevo: elegir qué es. Cada tipo fija el estado
  * inicial, el método de pago y qué secciones aparecen; feria y punto de venta
- * se registran en su propio módulo porque manejan inventario distinto.
+ * se registran en su propio módulo porque manejan inventario distinto. Las
+ * cotizaciones por enlace se retiraron en 2026-09: las existentes se siguen
+ * mostrando, pero no se crean nuevas.
  */
 export function OrderTypePicker({ storeId, onPick }: OrderTypePickerProps) {
   return (

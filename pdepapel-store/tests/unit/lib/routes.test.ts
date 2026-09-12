@@ -6,7 +6,6 @@ import {
   categoryPath,
   orderPath,
   productPath,
-  quotePath,
 } from "@/lib/routes";
 import { describe, expect, it } from "vitest";
 
@@ -23,13 +22,12 @@ describe("customer-facing routes", () => {
     });
   });
 
-  it("builds canonical product, category, order and quote paths", () => {
+  it("builds canonical product, category and order paths", () => {
     expect(productPath("agenda-floral")).toBe("/producto/agenda-floral");
     expect(categoryPath("boligrafos-lapiceros")).toBe(
       "/categoria/boligrafos-lapiceros",
     );
     expect(orderPath("order-123")).toBe("/pedido/order-123");
-    expect(quotePath("quote-token")).toBe("/cotizacion/quote-token");
   });
 
   it("normalizes legacy shop calls to action without changing external links", () => {

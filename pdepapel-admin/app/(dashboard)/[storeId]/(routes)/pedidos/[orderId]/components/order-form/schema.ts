@@ -184,7 +184,8 @@ export const getOriginalDiscountAmount = (order: NonNullable<GetOrderResult["ord
 };
 
 /** Tipos que se crean desde esta pantalla; feria y punto de venta tienen su propio módulo. */
-export type CreatableOrderType = typeof OrderType.STANDARD | typeof OrderType.CUSTOM | typeof OrderType.QUOTATION;
+/** Tipos que se crean desde el formulario. `QUOTATION` se retiró en 2026-09: se muestra, no se crea. */
+export type CreatableOrderType = typeof OrderType.STANDARD | typeof OrderType.CUSTOM;
 
 export interface OrderTypePreset {
   type: CreatableOrderType;
@@ -223,21 +224,10 @@ export const ORDER_TYPE_PRESETS: Record<CreatableOrderType, OrderTypePreset> = {
     notesLabel: "Descripción del trabajo",
     notesHint: "Qué se va a hacer y con qué acuerdos; el cliente la ve.",
   },
-  [OrderType.QUOTATION]: {
-    type: OrderType.QUOTATION,
-    label: "Cotización",
-    description: "Una propuesta con enlace para que el cliente la revise y acepte. Vence a los 7 días.",
-    status: OrderStatus.DRAFT,
-    validDays: 7,
-    allowManualItems: true,
-    showPayment: false,
-    notesLabel: "Notas de la cotización",
-    notesHint: "Condiciones y detalles que el cliente verá en el enlace.",
-  },
 };
 
 export function isCreatableOrderType(value: unknown): value is CreatableOrderType {
-  return value === OrderType.STANDARD || value === OrderType.CUSTOM || value === OrderType.QUOTATION;
+  return value === OrderType.STANDARD || value === OrderType.CUSTOM;
 }
 
 const EMPTY_SHIPPING: OrderFormValues["shipping"] = {

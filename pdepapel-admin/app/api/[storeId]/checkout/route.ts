@@ -140,7 +140,6 @@ async function createCheckout(
       shipping,
       envioClickIdRate, // ⭐ ID de tarifa de EnvioClick (top level)
       documentId, // ⭐ Cédula/NIT (opcional)
-      customOrderToken, // ⭐ Token para convertir cotización
       analyticsClientId,
       saveAddress,
       savedAddressId,
@@ -239,17 +238,12 @@ async function createCheckout(
 
     if (
       shouldSaveCustomerAddress &&
-      (customOrderToken ||
-        (savedAddressId !== undefined &&
-          (typeof savedAddressId !== "string" ||
-            savedAddressId.length > 191)) ||
+      ((savedAddressId !== undefined &&
+        (typeof savedAddressId !== "string" ||
+          savedAddressId.length > 191)) ||
         (normalizedAddressLabel !== null && normalizedAddressLabel.length > 60))
     ) {
-      throw ErrorFactory.InvalidRequest(
-        customOrderToken
-          ? "Las cotizaciones no permiten guardar direcciones desde este enlace"
-          : "La dirección guardada no es válida",
-      );
+      throw ErrorFactory.InvalidRequest("La dirección guardada no es válida");
     }
 
     const lastOrderTimestamp = await getLastOrderTimestamp(
@@ -262,40 +256,6 @@ async function createCheckout(
       throw ErrorFactory.OrderLimit();
 
     // ⭐ Unified System: Fetch Existing Quote Early (if applicable)
-    // We need to fetch this BEFORE price calculation to ensure we use valid quoted prices
-    let existingQuote: any = null;
-    let quotedPriceMap = new Map<string, number>();
-
-    if (customOrderToken) {
-      existingQuote = await prismadb.order.findUnique({
-        where: { token: customOrderToken, storeId: params.storeId },
-        include: { orderItems: true },
-      });
-
-      if (!existingQuote) {
-        throw ErrorFactory.NotFound("La cotización no existe o ha expirado");
-      }
-
-      if (
-        existingQuote.status !== OrderStatus.QUOTATION &&
-        existingQuote.status !== OrderStatus.DRAFT &&
-        existingQuote.status !== OrderStatus.PENDING
-      ) {
-        throw ErrorFactory.Conflict(
-          "Esta cotización ya ha sido pagada o cancelada",
-        );
-      }
-
-      // Build map of frozen prices from the quotation
-      // Key: productId || productName (fallback), Value: Unit Price
-      // We rely on productId match primarily.
-      existingQuote.orderItems.forEach((item: any) => {
-        if (item.productId) {
-          quotedPriceMap.set(item.productId, Number(item.price));
-        }
-      });
-    }
-
     // Try to validate against cache (security check)
     const shippingCaches = await prismadb.shippingQuote.findMany({
       where: {
@@ -381,37 +341,15 @@ async function createCheckout(
     // ------------------------------------------------------------------
     // 2. Validate Products & Stock (Standard Flow)
     // ------------------------------------------------------------------
-    let products: Prisma.ProductGetPayload<{
-      include: { images: true; category: true; productGroup: true };
-    }>[] = [];
-    if (existingQuote) {
-      // If quoting, we skip standard validation/stock check because quote *reserves* or fixed price?
-      // Actually, quotes usually don't reserve stock until Checkout.
-      // So we MUST re-validate stock here for the quote items.
-      const productIds = existingQuote.orderItems.map((i: any) => i.productId);
-      const uniqueProductIds = Array.from(new Set(productIds)); // invalid argument? No, Set takes iterable.
-
-      // Fetch products to check current stock
-      products = await prismadb.product.findMany({
-        where: { id: { in: productIds as string[] } },
-        include: {
-          images: true, // Required for UI
-          category: true, // Required for discounts
-          productGroup: true, // Required for discounts
-        },
-      });
-    } else {
-      // Fetch products from request items
-      const productIds = typedOrderItems.map((item) => item.productId);
-      products = await prismadb.product.findMany({
-        where: { id: { in: productIds } },
-        include: {
-          images: true,
-          category: true,
-          productGroup: true,
-        },
-      });
-    }
+    const productIds = typedOrderItems.map((item) => item.productId);
+    const products = await prismadb.product.findMany({
+      where: { id: { in: productIds } },
+      include: {
+        images: true,
+        category: true,
+        productGroup: true,
+      },
+    });
 
     // AGGREGATE QUANTITIES FOR VALIDATION
     // We must sum up quantities for duplicate product IDs to assert total required stock
@@ -502,12 +440,9 @@ async function createCheckout(
       //   continue;
       // }
 
-      const quotedPrice = quotedPriceMap.get(productId);
-      // Priority: Quoted Price > Discounted Price > Base Price
+      // Priority: Discounted Price > Base Price
       const finalPrice =
-        quotedPrice !== undefined
-          ? quotedPrice
-          : discountedPricesMap.get(productId)?.price || product.price;
+        discountedPricesMap.get(productId)?.price || product.price;
 
       orderItemsData.push({
         product: { connect: { id: productId } },
@@ -555,12 +490,6 @@ async function createCheckout(
         checkoutEmail: email,
         database: prismadb,
       });
-
-      if (coupon.isWelcomeBenefit && customOrderToken) {
-        throw ErrorFactory.Conflict(
-          "El beneficio de bienvenida solo aplica a una compra nueva desde tu cuenta",
-        );
-      }
     }
 
     // Create items with prices using product map and discounted prices
@@ -578,15 +507,9 @@ async function createCheckout(
         }
 
         const pricing = discountedPricesMap.get(productId);
-        const quotedPrice = quotedPriceMap.get(productId);
 
-        // Priority: Quoted Price > Discounted Price > Base Price
-        const finalPrice =
-          quotedPrice !== undefined
-            ? quotedPrice
-            : pricing
-              ? pricing.price
-              : product.price;
+        // Priority: Discounted Price > Base Price
+        const finalPrice = pricing ? pricing.price : product.price;
 
         return {
           product: { price: finalPrice },
@@ -662,17 +585,16 @@ async function createCheckout(
 
     let order: CheckoutOrder;
 
-    if (customOrderToken) {
-      // 🔄 Unified System: CONVERT Quotation to Order
-      // existingQuote is already fetched and validated above
-
-      // Update the existing order (Quotation)
-      order = (await prismadb.order.update({
-        where: { id: existingQuote.id },
+    const createNewOrder = (
+      database: Pick<Prisma.TransactionClient, "order" | "customerAddress">,
+    ) =>
+      database.order.create({
         data: {
-          status: OrderStatus.PENDING, // Ready for payment
-          updatedAt: new Date(), // Mark as active
-          // Update Customer Info (User might have changed it in Checkout)
+          storeId: params.storeId,
+          userId: authenticatedUserId,
+          guestId: !authenticatedUserId ? guestId : null,
+          orderNumber: orderNumber,
+          status: OrderStatus.PENDING,
           fullName,
           phone: normalizedPhone,
           email,
@@ -685,7 +607,6 @@ async function createCheckout(
           daneCode,
           neighborhood: neighborhood || null,
           company: company || null,
-          // Update Financials
           subtotal: totals.subtotal,
           total: totals.total,
           couponDiscount: totals.couponDiscount,
@@ -693,17 +614,9 @@ async function createCheckout(
           ...(normalizedAnalyticsClientId
             ? { analyticsClientId: normalizedAnalyticsClientId }
             : {}),
-          // Sync Items: Re-create to ensure fidelity with checkout request
-          orderItems: {
-            deleteMany: {}, // Clear old quote items (safe refresh)
-            create: orderItemsData,
-          },
-          // Update Shipping
+          orderItems: { create: orderItemsData },
           shipping: {
-            upsert: {
-              create: buildShippingPayload(params.storeId, selectedQuote),
-              update: buildShippingPayload(params.storeId, selectedQuote),
-            },
+            create: buildShippingPayload(params.storeId, selectedQuote),
           },
           payment: {
             create: {
@@ -720,115 +633,59 @@ async function createCheckout(
           },
           coupon: true,
         },
-      })) as unknown as CheckoutOrder;
+      });
 
-      console.log(
-        `♻️ Converted Quotation ${existingQuote.orderNumber} to Pending Order ${order.orderNumber}`,
-      );
-    } else {
-      // 🆕 Create NEW Order (Standard Flow)
-      const createNewOrder = (
-        database: Pick<Prisma.TransactionClient, "order" | "customerAddress">,
-      ) =>
-        database.order.create({
-          data: {
-            storeId: params.storeId,
-            userId: authenticatedUserId,
-            guestId: !authenticatedUserId ? guestId : null,
-            orderNumber: orderNumber,
-            status: OrderStatus.PENDING,
-            fullName,
-            phone: normalizedPhone,
-            email,
-            documentId: documentId || null,
-            address,
-            address2: address2 || null,
-            addressReference: addressReference || null,
-            city,
-            department,
-            daneCode,
-            neighborhood: neighborhood || null,
-            company: company || null,
-            subtotal: totals.subtotal,
-            total: totals.total,
-            couponDiscount: totals.couponDiscount,
-            couponId: coupon?.id,
-            ...(normalizedAnalyticsClientId
-              ? { analyticsClientId: normalizedAnalyticsClientId }
-              : {}),
-            orderItems: { create: orderItemsData },
-            shipping: {
-              create: buildShippingPayload(params.storeId, selectedQuote),
-            },
-            payment: {
-              create: {
-                storeId: params.storeId,
-                method: payment.method,
-              },
-            },
-          },
-          include: {
-            orderItems: {
-              include: {
-                product: true,
-              },
-            },
-            coupon: true,
-          },
+    const createStandardOrder = async (
+      database: Pick<Prisma.TransactionClient, "order" | "customerAddress">,
+    ) => {
+      const createdOrder = await createNewOrder(database);
+
+      if (shouldSaveCustomerAddress && customerAddressUserId) {
+        await saveCustomerAddressFromCheckout(database, {
+          storeId: params.storeId,
+          userId: customerAddressUserId,
+          savedAddressId: normalizedSavedAddressId,
+          label: normalizedAddressLabel,
+          fullName,
+          phone: normalizedPhone,
+          documentId,
+          address,
+          address2,
+          city,
+          department,
+          daneCode,
+          neighborhood,
+          addressReference,
+          company,
+        });
+      }
+
+      return createdOrder;
+    };
+
+    if (coupon?.isWelcomeBenefit) {
+      if (!authenticatedUserId) {
+        throw ErrorFactory.Unauthenticated();
+      }
+
+      order = (await prismadb.$transaction(async (tx) => {
+        const createdOrder = await createStandardOrder(tx);
+
+        await reserveWelcomeBenefit(tx, {
+          couponId: coupon.id,
+          storeId: params.storeId,
+          userId: authenticatedUserId,
+          orderId: createdOrder.id,
         });
 
-      const createStandardOrder = async (
-        database: Pick<Prisma.TransactionClient, "order" | "customerAddress">,
-      ) => {
-        const createdOrder = await createNewOrder(database);
-
-        if (shouldSaveCustomerAddress && customerAddressUserId) {
-          await saveCustomerAddressFromCheckout(database, {
-            storeId: params.storeId,
-            userId: customerAddressUserId,
-            savedAddressId: normalizedSavedAddressId,
-            label: normalizedAddressLabel,
-            fullName,
-            phone: normalizedPhone,
-            documentId,
-            address,
-            address2,
-            city,
-            department,
-            daneCode,
-            neighborhood,
-            addressReference,
-            company,
-          });
-        }
-
         return createdOrder;
-      };
-
-      if (coupon?.isWelcomeBenefit) {
-        if (!authenticatedUserId) {
-          throw ErrorFactory.Unauthenticated();
-        }
-
-        order = (await prismadb.$transaction(async (tx) => {
-          const createdOrder = await createStandardOrder(tx);
-
-          await reserveWelcomeBenefit(tx, {
-            couponId: coupon.id,
-            storeId: params.storeId,
-            userId: authenticatedUserId,
-            orderId: createdOrder.id,
-          });
-
-          return createdOrder;
-        })) as unknown as CheckoutOrder;
-      } else if (shouldSaveCustomerAddress) {
-        order = (await prismadb.$transaction((tx) =>
-          createStandardOrder(tx),
-        )) as unknown as CheckoutOrder;
-      } else {
-        order = (await createNewOrder(prismadb)) as unknown as CheckoutOrder;
-      }
+      })) as unknown as CheckoutOrder;
+    } else if (shouldSaveCustomerAddress) {
+      order = (await prismadb.$transaction((tx) =>
+        createStandardOrder(tx),
+      )) as unknown as CheckoutOrder;
+    } else {
+      order = (await createNewOrder(prismadb)) as unknown as CheckoutOrder;
     }
 
     // Send email asynchronously

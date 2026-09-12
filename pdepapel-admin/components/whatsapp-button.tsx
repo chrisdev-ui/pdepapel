@@ -18,7 +18,6 @@ interface OrderData {
   phone: string;
   totalPrice?: number | string;
   products?: Array<{ name: string; quantity: number; sku?: string }>;
-  token?: string | null;
   trackingCode?: string | null;
 }
 
@@ -49,7 +48,6 @@ interface WhatsappButtonProps {
   compact?: boolean;
   order?: OrderData;
   customer?: CustomerData;
-  storeUrl?: string;
 }
 
 export const WhatsappButton: React.FC<WhatsappButtonProps> = ({
@@ -60,9 +58,6 @@ export const WhatsappButton: React.FC<WhatsappButtonProps> = ({
   compact = false,
   order,
   customer,
-  storeUrl = process.env.NEXT_PUBLIC_FRONTEND_STORE_URL ||
-    process.env.FRONTEND_STORE_URL ||
-    "http://localhost:3001",
 }) => {
   const data = order || customer;
 
@@ -125,16 +120,6 @@ export const WhatsappButton: React.FC<WhatsappButtonProps> = ({
 
       let message: string;
       switch (order.status) {
-        case "QUOTATION": // Handle as string literal if OrderStatus.QUOTATION not strictly available in enum during dev, or import it. It is imported.
-          const quoteUrl = `${storeUrl}/cotizacion/${order.token}`;
-          message =
-            `${baseMessage}Aquí tienes la cotización que solicitaste en P de Papel 👇\n\n` +
-            `📄 *Ver Cotización:* ${quoteUrl}\n\n` +
-            `Tu pedido incluye:\n${productsList}\n\n` +
-            `Total: ${orderPrice}\n\n` +
-            `Si tienes alguna duda o quieres confirmar, ¡avísame por aquí! ${SMILE}`;
-          break;
-
         case OrderStatus.PENDING:
           message =
             `${baseMessage}Te escribo respecto a tu orden #${order.orderNumber} en P de Papel.\n\n` +
@@ -190,7 +175,7 @@ export const WhatsappButton: React.FC<WhatsappButtonProps> = ({
     return encodeURIComponent(
       `${baseMessage}¿En qué te puedo ayudar? ${SMILE}`,
     );
-  }, [data, order, customer, firstName, orderPrice, storeUrl]);
+  }, [data, order, customer, firstName, orderPrice]);
 
   const whatsappUrl = useMemo(
     () => `whatsapp://send?phone=${data?.phone}&text=${getMessage}`,

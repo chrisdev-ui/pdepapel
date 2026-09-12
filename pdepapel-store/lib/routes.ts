@@ -89,8 +89,6 @@ export const offersPath = `${STOREFRONT_ROUTES.shop}?isOnSale=true`;
 
 export const orderPath = (orderId: string) => `/pedido/${orderId}`;
 
-export const quotePath = (token: string) => `/cotizacion/${token}`;
-
 export function canonicalStorefrontHref(
   href: string | null | undefined,
   fallback = STOREFRONT_ROUTES.home,

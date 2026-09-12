@@ -385,23 +385,6 @@ export function PaymentCard({
             <Copy className="h-4 w-4" aria-hidden="true" />
             Copiar enlace del pedido
           </Button>
-          {initialData?.token && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="justify-start"
-              onClick={() =>
-                copy(
-                  `${STORE_URL}/cotizacion/${initialData.token}`,
-                  "Enlace de la cotización copiado",
-                )
-              }
-            >
-              <Copy className="h-4 w-4" aria-hidden="true" />
-              Copiar enlace de la cotización
-            </Button>
-          )}
         </div>
       )}
     </SectionCard>

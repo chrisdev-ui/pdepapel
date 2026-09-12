@@ -116,7 +116,6 @@ interface OrderFormProps {
 const TYPE_PARAM: Record<string, CreatableOrderType> = {
   tienda: OrderType.STANDARD,
   personalizado: OrderType.CUSTOM,
-  cotizacion: OrderType.QUOTATION,
 };
 
 /** Primer mensaje de error del formulario, buscando en profundidad (líneas de productos incluidas). */

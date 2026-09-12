@@ -58,7 +58,6 @@ import {
   getCartSignature,
 } from "@/lib/checkout-idempotency";
 import { Coupon, Product } from "@/types";
-import { UnifiedOrder } from "@/types/unified-order";
 import { useAuth } from "@clerk/nextjs";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -209,7 +208,6 @@ async function subscribeFromCheckout(email: string) {
 
 interface CheckoutFormProps {
   currentUser?: CheckoutFormUser | null;
-  customOrder?: UnifiedOrder | null;
   /** Store free-shipping threshold (COP) on the product subtotal; null = off. */
   freeShippingThreshold?: number | null;
 }
@@ -227,7 +225,6 @@ const FORM_STEPS = [
 
 export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   currentUser,
-  customOrder,
   freeShippingThreshold = null,
 }) => {
   const { userId, getToken } = useAuth();
@@ -293,7 +290,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   // Real-time live stock verification on checkout mount to prevent overselling
   useEffect(() => {
     setIsMounted(true);
-    if (hasVerifiedStockRef.current || customOrder) return;
+    if (hasVerifiedStockRef.current) return;
     hasVerifiedStockRef.current = true;
 
     const cartState = useCart.getState();
@@ -329,46 +326,13 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         });
       }
     });
-  }, [customOrder, toast]);
+  }, [toast]);
 
   const form = useForm<CheckoutFormValue>({
     mode: "onTouched",
     resolver: zodResolver(formSchema),
     defaultValues: async () => {
       const storedFormData = useCheckoutStore.getState().formData;
-      if (customOrder) {
-        return {
-          fullName: customOrder.customerName ?? "",
-          telephone: normalizePhoneForInput(customOrder.customerPhone),
-          email: customOrder.email ?? "",
-          documentId: "",
-          address1: customOrder.address ?? "",
-          address2: customOrder.address2 ?? "",
-          neighborhood: customOrder.neighborhood ?? "",
-          addressReference: customOrder.addressReference ?? "",
-          company: customOrder.company ?? "",
-          city: customOrder.city ?? "",
-          department: customOrder.department ?? "",
-          daneCode: customOrder.daneCode ?? "",
-          saveAddress: false,
-          savedAddressId: "",
-          addressLabel: "",
-          couponCode: "",
-          newsletterOptIn: false,
-          paymentMethod: PaymentMethod.Bold,
-          shippingProvider: "ENVIOCLICK",
-          shippingOptionType: "ENVIOCLICK",
-          envioClickIdRate: customOrder.shipping?.envioClickIdRate ?? 0,
-          shipping: customOrder.shipping
-            ? {
-                carrierName: customOrder.shipping.carrierName,
-                cost: customOrder.shipping.cost,
-                status: customOrder.shipping.status,
-              }
-            : {},
-        };
-      }
-
       return {
         fullName:
           storedFormData.fullName ??
@@ -427,33 +391,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     return () => subscription.unsubscribe();
   }, [form]);
 
-  // If customOrder is present, we override the items list
-  const activeItems = useMemo(() => {
-    if (customOrder) {
-      return customOrder.items.map(
-        (item) =>
-          ({
-            id: item.productId || item.id, // Use productId if available or fallback to item id
-            name: item.name,
-            price: item.unitPrice.toString(),
-            originalPrice: 0,
-            images: [{ url: item.imageUrl || "", isMain: true }],
-            quantity: item.quantity,
-            // Mock required Product fields
-            category: { name: "", id: "", typeId: "" },
-            description: item.description || "",
-            stock: 999,
-            isFeatured: false,
-            size: { name: "", value: "", id: "" },
-            color: { name: "", value: "", id: "" },
-            design: { name: "", id: "" },
-            reviews: [],
-            sku: "CUSTOM",
-          }) as unknown as Product,
-      );
-    }
-    return cart.items;
-  }, [customOrder, cart.items]);
+  const activeItems = cart.items;
 
   useEffect(() => {
     if (completedOrderPath) return;
@@ -913,30 +851,28 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     try {
       // Stock is re-checked right before creating the order so the customer
       // fixes quantities here instead of getting a server rejection.
-      if (!customOrder) {
-        const stockMap = await checkLiveStock(activeItems.map((i) => i.id));
-        const conflicts: StockConflictItem[] = activeItems.flatMap((item) => {
-          const live = stockMap?.[item.id];
-          const requested = item.quantity ?? 1;
-          if (!live || live.stock >= requested) return [];
-          return [
-            {
-              productId: item.id,
-              name: live.name || item.name,
-              requested,
-              available: Math.max(0, live.stock),
-            },
-          ];
+      const stockMap = await checkLiveStock(activeItems.map((i) => i.id));
+      const conflicts: StockConflictItem[] = activeItems.flatMap((item) => {
+        const live = stockMap?.[item.id];
+        const requested = item.quantity ?? 1;
+        if (!live || live.stock >= requested) return [];
+        return [
+          {
+            productId: item.id,
+            name: live.name || item.name,
+            requested,
+            available: Math.max(0, live.stock),
+          },
+        ];
+      });
+      if (conflicts.length > 0) {
+        setStockConflicts(conflicts);
+        trackCustomerEvent("checkout_stock_unavailable", {
+          affected_items: conflicts.length,
+          checkout_step: currentStep,
         });
-        if (conflicts.length > 0) {
-          setStockConflicts(conflicts);
-          trackCustomerEvent("checkout_stock_unavailable", {
-            affected_items: conflicts.length,
-            checkout_step: currentStep,
-          });
-          scrollToTop();
-          return;
-        }
+        scrollToTop();
+        return;
       }
 
       const orderItems = activeItems.map((item) => ({
@@ -1008,9 +944,8 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         earlyAccessToken: readEarlyAccessCookie(),
         subtotal,
         total,
-        customOrderToken: customOrder?.token, // Include token for conversion
         analyticsClientId,
-        saveAddress: Boolean(saveAddress && isUserLoggedIn && !customOrder),
+        saveAddress: Boolean(saveAddress && isUserLoggedIn),
         savedAddressId: saveAddress ? savedAddressId || null : null,
         addressLabel: saveAddress ? addressLabel || null : null,
       };
@@ -1128,14 +1063,12 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
             ({totalQuantity})
           </span>
         </h2>
-        {!customOrder && (
-          <Link
-            href={STOREFRONT_ROUTES.cart}
-            className="text-sm font-semibold underline underline-offset-4"
-          >
-            Editar carrito
-          </Link>
-        )}
+        <Link
+          href={STOREFRONT_ROUTES.cart}
+          className="text-sm font-semibold underline underline-offset-4"
+        >
+          Editar carrito
+        </Link>
       </div>
       <ul className="flex w-full flex-col gap-3">
         {activeItems.map((item) => {
@@ -1215,13 +1148,11 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
           );
         })}
       </ul>
-      {!customOrder && (
-        <FreeShippingProgress
-          subtotal={subtotal}
-          threshold={freeShippingThreshold}
-          className="border-y py-3"
-        />
-      )}
+      <FreeShippingProgress
+        subtotal={subtotal}
+        threshold={freeShippingThreshold}
+        className="border-y py-3"
+      />
       <dl className="flex w-full flex-col gap-2.5 text-sm">
         <div className="flex items-center justify-between">
           <dt>Subtotal</dt>
@@ -1289,7 +1220,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   );
 
   const showPendingOrder =
-    !customOrder && isPendingOrderUsable(pendingOrder) && !completedOrderPath;
+    isPendingOrderUsable(pendingOrder) && !completedOrderPath;
 
   return (
     <>
@@ -1386,7 +1317,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                         <ShippingInfoStep
                           form={form}
                           isLoading={isPendingSubmit}
-                          allowSavedAddresses={!customOrder}
+                          allowSavedAddresses
                           cartItems={activeItems.map((item) => ({
                             id: item.id,
                             quantity: item.quantity || 1,

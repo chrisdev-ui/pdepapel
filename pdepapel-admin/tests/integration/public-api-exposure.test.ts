@@ -185,44 +185,6 @@ describe("public API exposure with MySQL", () => {
     expect(ownerOrder.netProfit).toBe(1234);
   });
 
-  it("serves a quotation by token with the description but no internal fields", async () => {
-    fixture = await createInventoryFixture();
-    const token = `quote-${randomUUID()}`;
-    await testPrisma.order.create({
-      data: {
-        storeId: fixture.store.id,
-        orderNumber: `COT-${randomUUID().slice(0, 8)}`,
-        fullName: "Clienta Cotización",
-        phone: "3000000001",
-        token,
-        adminNotes: "Descripción visible de la cotización",
-        internalNotes: "solo panel",
-        netProfit: 999,
-        createdBy: "user_admin",
-        subtotal: 10000,
-        total: 10000,
-        orderItems: {
-          create: [{ productId: fixture.component.id, quantity: 1, name: "Componente", price: 10000 }],
-        },
-      },
-    });
-    const { GET } = await import("@/app/api/[storeId]/public/custom-orders/[token]/route");
-
-    const response = await GET(get("http://admin.test/api/x/public/custom-orders/t"), {
-      params: { storeId: fixture.store.id, token },
-    });
-    expect(response.status).toBe(200);
-    const quotation = await response.json();
-    expect(quotation.description).toBe("Descripción visible de la cotización");
-    expect(quotation.orderItems[0].product).toMatchObject({ id: fixture.component.id });
-    expectNoInternalFields(quotation, INTERNAL_ORDER_FIELDS);
-
-    const wrongStore = await GET(get("http://admin.test/api/x/public/custom-orders/t"), {
-      params: { storeId: "another-store", token },
-    });
-    expect(wrongStore.status).toBe(404);
-  });
-
   it("publishes reviews without the reviewer id and lets the author find her own", async () => {
     fixture = await createInventoryFixture();
     const review = await testPrisma.review.create({

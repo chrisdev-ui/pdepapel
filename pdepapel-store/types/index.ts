@@ -414,7 +414,6 @@ export interface CheckoutOrder {
   shippingProvider?: string;
   shippingOptionType?: string;
   envioClickIdRate?: number;
-  customOrderToken?: string;
   analyticsClientId?: string | null;
   saveAddress?: boolean;
   savedAddressId?: string | null;

@@ -180,8 +180,6 @@ export enum Models {
   InventoryMovements = "inventory-movements",
   MarketplaceSales = "marketplace-sales",
   MarketplaceListings = "marketplace-listings",
-  Quotations = "quotations",
-  CustomOrders = "custom-orders",
   NewsletterSubscribers = "newsletter-subscribers",
 }
 
@@ -210,8 +208,6 @@ export const ModelLabels: Record<Models, string> = {
   [Models.Shipments]: "Envíos",
   [Models.Offers]: "Ofertas",
   [Models.Boxes]: "Cajas",
-  [Models.Quotations]: "Cotizaciones",
-  [Models.CustomOrders]: "Personalizadas",
   [Models.NewsletterSubscribers]: "Suscriptores del boletín",
 };
 
@@ -401,22 +397,6 @@ export const ModelsColumns: Record<Models, { [key: string]: string }> = {
     type: "Tipo",
     quantity: "Cantidad",
     reason: "Razón",
-    createdAt: "Fecha",
-  },
-  [Models.Quotations]: {
-    name: "Nombre",
-    type: "Tipo",
-    isTemplate: "Es Plantilla",
-    isActive: "Activa",
-    itemCount: "Ítems",
-    createdAt: "Fecha",
-  },
-  [Models.CustomOrders]: {
-    orderNumber: "# Orden",
-    customerName: "Cliente",
-    customerPhone: "Teléfono",
-    status: "Estado",
-    totalPrice: "Total",
     createdAt: "Fecha",
   },
   [Models.NewsletterSubscribers]: {

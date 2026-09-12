@@ -40,12 +40,6 @@ export default function useCheckout({
       );
     }
 
-    // A quotation conversion always goes through /checkout, which updates the
-    // existing order instead of creating a duplicate via /orders.
-    if (data.customOrderToken) {
-      return await checkoutOrder(data, sessionToken, idempotencyKey);
-    }
-
     switch (data.payment.method) {
       case PaymentMethod.BankTransfer:
       case PaymentMethod.COD:
