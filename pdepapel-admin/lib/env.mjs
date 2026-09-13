@@ -34,6 +34,14 @@ export const env = createEnv({
     // EnvioClick no firma sus webhooks: este secreto viaja en la URL que se
     // configura en su panel (`?token=`) o en la cabecera `x-webhook-token`.
     ENVIOCLICK_WEBHOOK_SECRET: z.string().min(24),
+    // WhatsApp Cloud API (vía Dualhook): el token del apretón de manos de Meta
+    // (`hub.verify_token`) y el secreto compartido que viaja en la URL del
+    // webhook (`?token=`) o en `x-webhook-token`, como con EnvioClick.
+    WHATSAPP_WEBHOOK_VERIFY_TOKEN: z.string().min(24),
+    // Secreto de la app de Meta: si está, también se acepta la firma
+    // `X-Hub-Signature-256` sobre el cuerpo crudo. Opcional mientras no se
+    // sepa si Dualhook reenvía la firma original.
+    WHATSAPP_APP_SECRET: z.string().min(1).optional(),
     ENVIOCLICK_API_URL: z
       .string()
       .url()

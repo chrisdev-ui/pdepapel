@@ -2076,6 +2076,7 @@ enum NewsletterSubscriberStatus {
 
 enum MarketplaceProvider {
   MERCADOLIBRE
+  WHATSAPP
 }
 
 enum MarketplaceConnectionStatus {

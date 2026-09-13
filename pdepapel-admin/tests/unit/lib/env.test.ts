@@ -21,6 +21,7 @@ const baseline: Record<string, string> = {
   INTERNAL_API_SECRET: "internal",
   ENVIOCLICK_API_KEY: "envioclick",
   ENVIOCLICK_WEBHOOK_SECRET: "envioclick-webhook-secret-de-pruebas",
+  WHATSAPP_WEBHOOK_VERIFY_TOKEN: "whatsapp-verify-token-de-pruebas-0123",
   BOLD_SECRET_KEY: "bold-secret",
   MIPAQUETE_API_KEY: "mipaquete",
   KV_REST_API_URL: "https://kv.example",
@@ -89,6 +90,10 @@ describe("admin env contract", () => {
     await expect(loadEnv({ BOLD_SECRET_KEY: "" })).rejects.toThrow();
     // Un secreto demasiado corto tampoco sirve como credencial.
     await expect(loadEnv({ ENVIOCLICK_WEBHOOK_SECRET: "corto" })).rejects.toThrow();
+    await expect(loadEnv({ WHATSAPP_WEBHOOK_VERIFY_TOKEN: "" })).rejects.toThrow();
+    await expect(loadEnv({ WHATSAPP_WEBHOOK_VERIFY_TOKEN: "corto" })).rejects.toThrow();
+    // El secreto de la app de Meta es opcional hasta saber si Dualhook reenvía la firma.
+    await expect(loadEnv({ WHATSAPP_APP_SECRET: undefined })).resolves.toBeDefined();
   });
 
   it("still rejects a malformed measurement ID everywhere", async () => {
