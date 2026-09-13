@@ -11,6 +11,7 @@ vi.mock("@upstash/redis", () => ({
 
 import { createGoogleMerchantFeedToken } from "@/lib/google-merchant-feed";
 import {
+  META_CATALOG_DEFAULT_BRAND,
   META_CATALOG_FEED_HEADERS,
   META_CATALOG_TITLE_MAX_LENGTH,
   buildMetaCatalogFeed,
@@ -91,18 +92,50 @@ describe("buildMetaCatalogFeed", () => {
     expect(cents.price).toBe("1250.50 COP");
   });
 
-  it("marks identifier_exists as no without a GTIN or a brand and MPN pair", () => {
+  it("marks identifier_exists as no without a GTIN or a real brand and MPN pair", () => {
     const rows = rowsOf(
       buildMetaCatalogFeed([
         product({ id: "1" }),
         product({ id: "2", gtin: "7701234567890" }),
-        product({ id: "3", brand: "P de Papel", mpn: "PDP-9" }),
+        product({ id: "3", brand: "Swag", mpn: "SW-9" }),
         product({ id: "4", mpn: "PDP-9", brand: "" }),
         product({ id: "5", gtin: "7701234567890", hasNoProductIdentifier: true }),
       ]).tsv,
     );
 
     expect(rows.map((row) => row.identifier_exists)).toEqual(["no", "", "", "no", "no"]);
+  });
+
+  it("fills the brand Meta requires without inventing a product identifier", () => {
+    const rows = rowsOf(
+      buildMetaCatalogFeed([
+        product({ id: "1", brand: "" }),
+        product({ id: "2", brand: "Swag" }),
+        product({ id: "3", brand: "", productGroup: { brand: "Shein" } as never }),
+        // Con MPN pero sin marca real: la marca de respaldo llena la columna,
+        // pero el par «marca + MPN» NO cuenta como identificador.
+        product({ id: "4", brand: "", mpn: "PDP-9" }),
+      ]).tsv,
+    );
+
+    expect(rows.map((row) => row.brand)).toEqual([
+      META_CATALOG_DEFAULT_BRAND,
+      "Swag",
+      "Shein",
+      META_CATALOG_DEFAULT_BRAND,
+    ]);
+    expect(rows[3].identifier_exists).toBe("no");
+    expect(rows.every((row) => row.brand !== "")).toBe(true);
+  });
+
+  it("lets the caller override the fallback brand", () => {
+    const [row] = rowsOf(
+      buildMetaCatalogFeed([product({ id: "1", brand: "" })], {
+        defaultBrand: "Otra Tienda",
+      }).tsv,
+    );
+
+    expect(row.brand).toBe("Otra Tienda");
   });
 
   it("writes the agreed columns in order and keeps the row TSV-safe", () => {

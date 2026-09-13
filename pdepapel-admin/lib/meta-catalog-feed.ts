@@ -88,6 +88,14 @@ export const META_CATALOG_FEED_SCHEDULE_LABEL =
 /** Meta corta el título en 200 caracteres y rechaza el producto si se pasa. */
 export const META_CATALOG_TITLE_MAX_LENGTH = 200;
 
+/**
+ * Meta exige `brand` en todos los catálogos, a diferencia de Google, que la
+ * perdona cuando `identifier_exists` es «no». La papelería que se vende sin
+ * marca de fabricante sale con el nombre de la tienda, que es la práctica
+ * habitual del comercio que vende producto propio.
+ */
+export const META_CATALOG_DEFAULT_BRAND = "P de Papel";
+
 /** La elegibilidad es deliberadamente la misma que la del feed de Google. */
 export type MetaCatalogFeedProduct = GoogleMerchantFeedProduct;
 export const getMetaCatalogFeedProductArgs = getGoogleMerchantFeedProductArgs;
@@ -118,9 +126,15 @@ function truncate(value: string, maxLength: number) {
  */
 export function buildMetaCatalogFeed(
   products: MetaCatalogFeedProduct[],
-  options: { links?: Map<string, string>; generatedAt?: Date } = {},
+  options: {
+    links?: Map<string, string>;
+    generatedAt?: Date;
+    /** Marca con la que salen los productos sin marca propia. */
+    defaultBrand?: string;
+  } = {},
 ): MetaCatalogFeed {
   const generatedAt = options.generatedAt ?? new Date();
+  const defaultBrand = options.defaultBrand ?? META_CATALOG_DEFAULT_BRAND;
   const groupsWithDuplicateVariants = findGroupsWithDuplicateVariants(products);
   const exported = options.links
     ? products.filter((product) => options.links!.has(product.id))
@@ -148,12 +162,18 @@ export function buildMetaCatalogFeed(
       });
     }
 
-    const brand = product.brand || product.productGroup?.brand || "";
+    // `brand` es obligatorio en Meta y casi todo el catálogo es papelería sin
+    // marca de fabricante, así que el vacío se llena con el nombre de la
+    // tienda. `identifierExists` sigue mirando la marca REAL: un respaldo no
+    // convierte a «marca + MPN» en un identificador de producto legítimo.
+    const realBrand = product.brand || product.productGroup?.brand || "";
+    const brand = realBrand || defaultBrand;
     const productType = [product.category?.type?.name, product.category?.name]
       .filter(Boolean)
       .join(" > ");
     const identifierExists =
-      product.hasNoProductIdentifier || (!product.gtin && !(brand && product.mpn))
+      product.hasNoProductIdentifier ||
+      (!product.gtin && !(realBrand && product.mpn))
         ? "no"
         : "";
     if (identifierExists === "no") withoutIdentifier += 1;
