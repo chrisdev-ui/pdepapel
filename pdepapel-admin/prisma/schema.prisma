@@ -74,6 +74,7 @@ model Store {
   taxPurchases                   TaxPurchase[]                   @relation("StoreToTaxPurchase")
   customerReactivations          CustomerReactivation[]          @relation("StoreToCustomerReactivation")
   newsletterSubscribers          NewsletterSubscriber[]          @relation("StoreToNewsletterSubscriber")
+  conversations                  Conversation[]                  @relation("StoreToConversation")
   fairEvents                     FairEvent[]
   marketplaceConnections         MarketplaceConnection[]
   marketplaceOAuthStates         MarketplaceOAuthState[]
@@ -686,8 +687,11 @@ model Order {
 
   // Sender Info
   createdBy String? // Admin User ID
+  /** Canal que originó el pedido; `null` en los pedidos anteriores a 2026-09-13. */
+  source    OrderSource?
 
   quoteRequests   QuoteRequest[]
+  conversations   Conversation[]
   invoices        Invoice[]
   fairEvent       FairEvent?            @relation(fields: [fairEventId], references: [id])
   inventoryIssues OrderInventoryIssue[]
@@ -2077,6 +2081,91 @@ enum NewsletterSubscriberStatus {
 enum MarketplaceProvider {
   MERCADOLIBRE
   WHATSAPP
+}
+
+// ---------------------------------------------------------------------------
+// Conversaciones (WhatsApp, 2026-09-13): historial estructurado de lo que
+// llega por el webhook. Nada se envía desde aquí todavía.
+// ---------------------------------------------------------------------------
+
+enum ConversationChannel {
+  WHATSAPP
+}
+
+enum ConversationStatus {
+  OPEN
+  NEEDS_OWNER
+  RESOLVED
+}
+
+enum ConversationMessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum ConversationMessageSentBy {
+  CUSTOMER
+  OWNER
+  BOT
+}
+
+enum ConversationMessageStatus {
+  RECEIVED
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum OrderSource {
+  PANEL
+  STORE
+  WHATSAPP
+}
+
+/// Un hilo con una clienta en un canal: una fila por (tienda, canal, teléfono normalizado).
+model Conversation {
+  id             String              @id @default(uuid())
+  storeId        String
+  channel        ConversationChannel @default(WHATSAPP)
+  /// Solo dígitos con indicativo (`normalizePhone`), la misma llave que agrupa Clientes.
+  phone          String
+  contactName    String?
+  status         ConversationStatus  @default(OPEN)
+  lastInboundAt  DateTime?
+  lastOutboundAt DateTime?
+  orderId        String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  store    Store                 @relation("StoreToConversation", fields: [storeId], references: [id])
+  order    Order?                @relation(fields: [orderId], references: [id])
+  messages ConversationMessage[]
+
+  @@unique([storeId, channel, phone])
+  @@index([storeId, status, lastInboundAt])
+  @@index([orderId])
+}
+
+model ConversationMessage {
+  id             String                       @id @default(uuid())
+  conversationId String
+  direction      ConversationMessageDirection
+  /// `wamid` de Meta; único cuando existe, así un evento reintentado no duplica.
+  externalId     String?                      @unique
+  body           String?                      @db.Text
+  mediaType      String?
+  mediaUrl       String?
+  sentBy         ConversationMessageSentBy
+  status         ConversationMessageStatus    @default(RECEIVED)
+  /// `MarketplaceWebhookEvent.id` del que salió; sin relación, solo trazabilidad.
+  rawEventId     String?
+  createdAt      DateTime                     @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
 }
 
 enum MarketplaceConnectionStatus {

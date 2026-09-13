@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   classifyWhatsAppWebhookEvent,
+  getWhatsAppWebhookPhone,
   hashWhatsAppWebhookPayload,
   parseWhatsAppWebhookPayload,
   verifyWhatsAppWebhookSignature,
@@ -72,6 +73,20 @@ describe("classifyWhatsAppWebhookEvent", () => {
     expect(first.eventKey).toBe(classifyWhatsAppWebhookEvent({ data: { text: "hola" }, event: "message.received" }).eventKey);
     expect(classifyWhatsAppWebhookEvent({ _rawUnparsable: "x" }).topic).toBe("unknown");
     expect(classifyWhatsAppWebhookEvent({ entry: "nope" }).topic).toBe("unknown");
+  });
+});
+
+describe("getWhatsAppWebhookPhone", () => {
+  it("takes the sender of the first message, or the recipient of the first status, digits only", () => {
+    expect(getWhatsAppWebhookPhone(metaMessage())).toBe("573000000000");
+    expect(getWhatsAppWebhookPhone(metaMessage({ messages: [{ from: "+57 300-000-0000", id: "wamid.1" }] }))).toBe("573000000000");
+    expect(getWhatsAppWebhookPhone(metaMessage({ messages: undefined, statuses: [{ id: "wamid.out", status: "sent", recipient_id: "573000000001" }] }))).toBe("573000000001");
+  });
+
+  it("returns null for bodies without a phone instead of throwing", () => {
+    expect(getWhatsAppWebhookPhone({ _rawUnparsable: "x" })).toBeNull();
+    expect(getWhatsAppWebhookPhone(metaMessage({ messages: [{ id: "wamid.1" }], statuses: "nope" }))).toBeNull();
+    expect(getWhatsAppWebhookPhone({ entry: [{ changes: [{ value: { messages: [{ from: "abc" }] } }] }] })).toBeNull();
   });
 });
 

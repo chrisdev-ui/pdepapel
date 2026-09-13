@@ -7,10 +7,12 @@ const APP_SECRET = "meta-app-secret";
 const mocks = vi.hoisted(() => ({
   findFirst: vi.fn(),
   upsert: vi.fn(),
+  enqueue: vi.fn(),
   env: { WHATSAPP_WEBHOOK_VERIFY_TOKEN: "test-whatsapp-verify-token-0123456789", WHATSAPP_APP_SECRET: undefined as string | undefined },
 }));
 
 vi.mock("@/lib/env.mjs", () => ({ env: mocks.env }));
+vi.mock("@/lib/whatsapp/queue", () => ({ enqueueWhatsAppWebhookEvent: mocks.enqueue }));
 vi.mock("@/lib/prismadb", () => ({
   default: {
     marketplaceConnection: { findFirst: mocks.findFirst },
@@ -32,7 +34,7 @@ const metaBody = JSON.stringify({
           field: "messages",
           value: {
             metadata: { phone_number_id: "PHONE-9" },
-            messages: [{ id: "wamid.ABC", type: "text", text: { body: "Hola" } }],
+            messages: [{ from: "573001234567", id: "wamid.ABC", type: "text", text: { body: "Hola" } }],
           },
         },
       ],
@@ -64,6 +66,7 @@ describe("POST /api/webhook/whatsapp", () => {
     mocks.env.WHATSAPP_APP_SECRET = undefined;
     mocks.findFirst.mockResolvedValue(null);
     mocks.upsert.mockResolvedValue({ id: "event-id", connectionId: null });
+    mocks.enqueue.mockResolvedValue(true);
   });
 
   it("rejects a request without the shared secret before touching the database", async () => {
@@ -81,7 +84,7 @@ describe("POST /api/webhook/whatsapp", () => {
   it("stores a Meta-shaped event keyed by the message id when the token is in the URL", async () => {
     const response = await post(metaBody, { url: `${BASE}?token=${VERIFY_TOKEN}` });
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ received: true, stored: true, eventId: "event-id", topic: "messages", connectedAccount: false });
+    await expect(response.json()).resolves.toEqual({ received: true, stored: true, eventId: "event-id", topic: "messages", connectedAccount: false, queued: true });
     expect(mocks.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { provider: "WHATSAPP", sellerId: "WABA-123" } }));
     expect(mocks.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -89,6 +92,21 @@ describe("POST /api/webhook/whatsapp", () => {
         create: expect.objectContaining({ provider: "WHATSAPP", topic: "messages", resource: "PHONE-9", sellerId: "WABA-123", connectionId: null }),
       }),
     );
+  });
+
+  it("enqueues the stored event behind the customer's phone lane", async () => {
+    await post(metaBody, { url: `${BASE}?token=${VERIFY_TOKEN}` });
+    expect(mocks.enqueue).toHaveBeenCalledWith("event-id", "573001234567");
+  });
+
+  it("still answers 200 with stored: true when the queue is unavailable", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.enqueue.mockRejectedValue(new Error("qstash down"));
+    const response = await post(metaBody, { url: `${BASE}?token=${VERIFY_TOKEN}` });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ stored: true, queued: false });
+    expect(error).toHaveBeenCalledWith("[WHATSAPP_WEBHOOK] No se pudo encolar el evento", expect.objectContaining({ eventId: "event-id" }));
+    error.mockRestore();
   });
 
   it("accepts the token in the header and links the connection when the WABA is known", async () => {
@@ -115,6 +133,7 @@ describe("POST /api/webhook/whatsapp", () => {
     expect(create).toMatchObject({ topic: "unknown", resource: "unknown", sellerId: null, payload: { _rawUnparsable: "not json at all" } });
     expect(create.eventKey).toHaveLength(64);
     expect(mocks.findFirst).not.toHaveBeenCalled();
+    expect(mocks.enqueue).toHaveBeenCalledWith("event-id", null);
   });
 
   it("still answers 200 when the database write fails, so the provider keeps the subscription", async () => {
@@ -124,6 +143,7 @@ describe("POST /api/webhook/whatsapp", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ received: true, stored: false, topic: "messages" });
     expect(error).toHaveBeenCalled();
+    expect(mocks.enqueue).not.toHaveBeenCalled();
     error.mockRestore();
   });
 });

@@ -474,8 +474,10 @@ export async function enqueuePendingMarketplaceOutboxEvents(
 export async function enqueuePendingMarketplaceOutboxEventsForStore(
   storeId: string,
 ) {
+  // Solo Mercado Libre: la conexión de WhatsApp comparte la tabla pero no
+  // tiene publicaciones ni bandeja de salida.
   const connections = await prismadb.marketplaceConnection.findMany({
-    where: { storeId, status: "CONNECTED" },
+    where: { storeId, provider: "MERCADOLIBRE", status: "CONNECTED" },
     select: { id: true },
   });
 

@@ -121,6 +121,29 @@ export function classifyWhatsAppWebhookEvent(
 }
 
 /**
+ * Teléfono de la clienta a la que pertenece el evento (para ordenar la cola
+ * por conversación): el `from` del primer mensaje o el `recipient_id` del
+ * primer estado, solo dígitos. `null` cuando el cuerpo no trae ninguno.
+ */
+export function getWhatsAppWebhookPhone(payload: WhatsAppWebhookPayload): string | null {
+  const entries = Array.isArray(payload.entry) ? payload.entry : [];
+  for (const entry of entries) {
+    if (!isRecord(entry) || !Array.isArray(entry.changes)) continue;
+    for (const change of entry.changes) {
+      if (!isRecord(change) || !isRecord(change.value)) continue;
+      const { messages, statuses } = change.value;
+      const first = (Array.isArray(messages) ? messages : []).find(isRecord);
+      const fromMessage = first ? asTrimmedString(first.from) : null;
+      if (fromMessage) return fromMessage.replace(/\D/g, "") || null;
+      const firstStatus = (Array.isArray(statuses) ? statuses : []).find(isRecord);
+      const recipient = firstStatus ? asTrimmedString(firstStatus.recipient_id) : null;
+      if (recipient) return recipient.replace(/\D/g, "") || null;
+    }
+  }
+  return null;
+}
+
+/**
  * Firma de Meta: `X-Hub-Signature-256: sha256=<hex>` = HMAC-SHA256 del cuerpo
  * crudo con el secreto de la app. Sin secreto configurado nunca valida.
  */

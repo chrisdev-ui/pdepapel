@@ -4,8 +4,10 @@ import { NextResponse } from "next/server";
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
 import { readWebhookToken, safeSecretEquals } from "@/lib/webhook-auth";
+import { enqueueWhatsAppWebhookEvent } from "@/lib/whatsapp/queue";
 import {
   classifyWhatsAppWebhookEvent,
+  getWhatsAppWebhookPhone,
   parseWhatsAppWebhookPayload,
   verifyWhatsAppWebhookSignature,
 } from "@/lib/whatsapp/webhook";
@@ -14,10 +16,11 @@ import {
  * Webhook de WhatsApp Cloud API (a través de Dualhook, que hace de BSP para
  * la coexistencia con la app de WhatsApp Business).
  *
- * Hoy solo autentica, deduplica y guarda cada evento en
- * `MarketplaceWebhookEvent` con `provider = WHATSAPP`. Nadie los consume
- * todavía: las conversaciones y el bot son trabajo posterior, así que no se
- * encola nada en QStash.
+ * Autentica, deduplica y guarda cada evento en `MarketplaceWebhookEvent` con
+ * `provider = WHATSAPP`, y lo encola en QStash para que el procesador firmado
+ * lo archive como conversación (`lib/whatsapp/conversation-sync.ts`). Si la
+ * cola falla, el evento queda guardado igual: la respuesta al proveedor nunca
+ * depende de ella.
  *
  * Una vez autenticado, responde 200 pase lo que pase: si Meta o Dualhook
  * acumulan 4xx/5xx desactivan la suscripción, y el cuerpo siempre queda
@@ -107,6 +110,18 @@ export async function POST(request: Request) {
       select: { id: true, connectionId: true },
     });
 
+    // Encolar es lo mejor que se puede: si QStash no está configurado o falla,
+    // el evento ya está guardado y la recuperación lo tomará después.
+    let queued = false;
+    try {
+      queued = await enqueueWhatsAppWebhookEvent(event.id, getWhatsAppWebhookPhone(payload));
+    } catch (error) {
+      console.error("[WHATSAPP_WEBHOOK] No se pudo encolar el evento", {
+        eventId: event.id,
+        message: error instanceof Error ? error.message : "unknown",
+      });
+    }
+
     return NextResponse.json(
       {
         received: true,
@@ -114,6 +129,7 @@ export async function POST(request: Request) {
         eventId: event.id,
         topic,
         connectedAccount: Boolean(event.connectionId),
+        queued,
       },
       { status: 200 },
     );
