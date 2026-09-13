@@ -42,6 +42,11 @@ export const env = createEnv({
     // `X-Hub-Signature-256` sobre el cuerpo crudo. Opcional mientras no se
     // sepa si Dualhook reenvía la firma original.
     WHATSAPP_APP_SECRET: z.string().min(1).optional(),
+    // Credenciales para ENVIAR por WhatsApp a través de Dualhook. Opcionales a
+    // propósito: sin ellas el bot no manda nada y lo deja anotado, pero el
+    // webhook sigue archivando conversaciones con normalidad.
+    DUALHOOK_API_KEY: z.string().min(1).optional(),
+    WHATSAPP_PHONE_NUMBER_ID: z.string().min(1).optional(),
     ENVIOCLICK_API_URL: z
       .string()
       .url()

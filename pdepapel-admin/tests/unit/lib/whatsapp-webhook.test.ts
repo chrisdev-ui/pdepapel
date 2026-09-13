@@ -83,6 +83,21 @@ describe("getWhatsAppWebhookPhone", () => {
     expect(getWhatsAppWebhookPhone(metaMessage({ messages: undefined, statuses: [{ id: "wamid.out", status: "sent", recipient_id: "573000000001" }] }))).toBe("573000000001");
   });
 
+  it("reads the customer phone from an owner echo, which carries it in `to`", () => {
+    const echoPayload = {
+      entry: [{
+        id: "WABA-123",
+        changes: [{
+          field: "smb_message_echoes",
+          value: {
+            message_echoes: [{ from: "573132582293", to: "+57 300 000 0000", id: "wamid.echo", type: "text" }],
+          },
+        }],
+      }],
+    };
+    expect(getWhatsAppWebhookPhone(echoPayload)).toBe("573000000000");
+  });
+
   it("returns null for bodies without a phone instead of throwing", () => {
     expect(getWhatsAppWebhookPhone({ _rawUnparsable: "x" })).toBeNull();
     expect(getWhatsAppWebhookPhone(metaMessage({ messages: [{ id: "wamid.1" }], statuses: "nope" }))).toBeNull();

@@ -122,22 +122,32 @@ export function classifyWhatsAppWebhookEvent(
 
 /**
  * Teléfono de la clienta a la que pertenece el evento (para ordenar la cola
- * por conversación): el `from` del primer mensaje o el `recipient_id` del
- * primer estado, solo dígitos. `null` cuando el cuerpo no trae ninguno.
+ * por conversación): el `from` del primer mensaje, el `to` del primer eco de
+ * `smb_message_echoes` (en un eco los papeles se invierten: `from` es el
+ * número de la tienda) o el `recipient_id` del primer estado, solo dígitos.
+ * `null` cuando el cuerpo no trae ninguno.
  */
 export function getWhatsAppWebhookPhone(payload: WhatsAppWebhookPayload): string | null {
+  const digits = (value: string | null) => (value ? value.replace(/\D/g, "") || null : null);
   const entries = Array.isArray(payload.entry) ? payload.entry : [];
+
   for (const entry of entries) {
     if (!isRecord(entry) || !Array.isArray(entry.changes)) continue;
     for (const change of entry.changes) {
       if (!isRecord(change) || !isRecord(change.value)) continue;
-      const { messages, statuses } = change.value;
+      const { messages, statuses, message_echoes: echoes } = change.value;
+
       const first = (Array.isArray(messages) ? messages : []).find(isRecord);
-      const fromMessage = first ? asTrimmedString(first.from) : null;
-      if (fromMessage) return fromMessage.replace(/\D/g, "") || null;
+      const fromMessage = digits(first ? asTrimmedString(first.from) : null);
+      if (fromMessage) return fromMessage;
+
+      const firstEcho = (Array.isArray(echoes) ? echoes : []).find(isRecord);
+      const echoRecipient = digits(firstEcho ? asTrimmedString(firstEcho.to) : null);
+      if (echoRecipient) return echoRecipient;
+
       const firstStatus = (Array.isArray(statuses) ? statuses : []).find(isRecord);
-      const recipient = firstStatus ? asTrimmedString(firstStatus.recipient_id) : null;
-      if (recipient) return recipient.replace(/\D/g, "") || null;
+      const recipient = digits(firstStatus ? asTrimmedString(firstStatus.recipient_id) : null);
+      if (recipient) return recipient;
     }
   }
   return null;

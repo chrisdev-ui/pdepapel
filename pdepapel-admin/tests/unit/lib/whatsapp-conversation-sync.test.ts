@@ -10,8 +10,12 @@ const mocks = vi.hoisted(() => ({
   conversationUpdateMany: vi.fn(),
   messageUpsert: vi.fn(),
   messageCreate: vi.fn(),
+  messageFindUnique: vi.fn(),
   messageUpdateMany: vi.fn(),
+  runBot: vi.fn(),
 }));
+
+vi.mock("@/lib/whatsapp/bot", () => ({ runWhatsAppBot: mocks.runBot }));
 
 vi.mock("@/lib/prismadb", () => ({
   default: {
@@ -25,6 +29,7 @@ vi.mock("@/lib/prismadb", () => ({
     conversationMessage: {
       upsert: mocks.messageUpsert,
       create: mocks.messageCreate,
+      findUnique: mocks.messageFindUnique,
       updateMany: mocks.messageUpdateMany,
     },
   },
@@ -92,10 +97,70 @@ describe("extractWhatsAppEvents", () => {
     expect(extracted.skipped).toEqual(["message:not-an-object", "message:wamid.nophone:no-phone"]);
   });
 
+  it("reads an owner echo, taking the customer phone from `to` and not `from`", () => {
+    const extracted = extractWhatsAppEvents({
+      entry: [{
+        id: WABA,
+        changes: [{
+          field: "smb_message_echoes",
+          value: {
+            message_echoes: [{
+              from: "573132582293",
+              to: "573001234567",
+              id: "wamid.echo1",
+              timestamp: "1789300100",
+              type: "text",
+              text: { body: "Claro, te confirmo" },
+            }],
+          },
+        }],
+      }],
+    });
+
+    expect(extracted.ownerEchoes).toEqual([
+      {
+        externalId: "wamid.echo1",
+        // El teléfono de la clienta, no el de la tienda.
+        phone: "573001234567",
+        body: "Claro, te confirmo",
+        mediaType: null,
+        sentAt: new Date(1789300100 * 1000),
+      },
+    ]);
+    expect(extracted.messages).toEqual([]);
+  });
+
+  it("rescues what it can from non-text echoes and never throws", () => {
+    const extracted = extractWhatsAppEvents({
+      entry: [{
+        changes: [{
+          field: "smb_message_echoes",
+          value: {
+            message_echoes: [
+              { to: "573001234567", id: "e1", type: "image", image: { caption: "Mira esta" } },
+              { to: "573001234567", id: "e2", type: "revoke", revoke: { original_message_id: "wamid.x" } },
+              { to: "573001234567", id: "e3", type: "edit", edit: { original_message_id: "wamid.y", message: { type: "text", text: { body: "Corregido" } } } },
+              { from: "573132582293", id: "e4", type: "text", text: { body: "sin destinatario" } },
+              "garbage",
+            ],
+          },
+        }],
+      }],
+    });
+
+    expect(extracted.ownerEchoes.map((echo) => [echo.externalId, echo.body, echo.mediaType])).toEqual([
+      ["e1", "Mira esta", "image"],
+      ["e2", null, "revoke"],
+      ["e3", "Corregido", "edit"],
+    ]);
+    expect(extracted.skipped).toEqual(["echo:e4:no-phone", "echo:not-an-object"]);
+  });
+
   it("returns an empty result for bodies that are not Meta-shaped", () => {
-    expect(extractWhatsAppEvents({ _rawUnparsable: "x" })).toEqual({ messages: [], statuses: [], skipped: [] });
-    expect(extractWhatsAppEvents(null)).toEqual({ messages: [], statuses: [], skipped: [] });
-    expect(extractWhatsAppEvents("string")).toEqual({ messages: [], statuses: [], skipped: [] });
+    const empty = { messages: [], ownerEchoes: [], statuses: [], skipped: [] };
+    expect(extractWhatsAppEvents({ _rawUnparsable: "x" })).toEqual(empty);
+    expect(extractWhatsAppEvents(null)).toEqual(empty);
+    expect(extractWhatsAppEvents("string")).toEqual(empty);
   });
 
   it("leaves unknown delivery states unmapped instead of guessing", () => {
@@ -117,7 +182,9 @@ describe("processWhatsAppWebhookEvent", () => {
     mocks.conversationUpdateMany.mockResolvedValue({ count: 0 });
     mocks.messageUpsert.mockResolvedValue({});
     mocks.messageCreate.mockResolvedValue({});
+    mocks.messageFindUnique.mockResolvedValue(null);
     mocks.messageUpdateMany.mockResolvedValue({ count: 0 });
+    mocks.runBot.mockResolvedValue({ outcome: "escalated_no_match" });
   });
 
   it("files a batched payload as one conversation with its messages in order", async () => {
@@ -127,8 +194,11 @@ describe("processWhatsAppWebhookEvent", () => {
       processed: true,
       reason: "processed",
       messages: 3,
+      ownerEchoes: 0,
       statuses: 0,
       skipped: 0,
+      // Solo los dos mensajes con texto pasan por el bot: la imagen no tiene cuerpo.
+      botOutcomes: ["escalated_no_match", "escalated_no_match"],
     });
 
     expect(mocks.claim).toHaveBeenCalledWith({
@@ -161,12 +231,17 @@ describe("processWhatsAppWebhookEvent", () => {
     });
     expect(mocks.storeFindFirst).not.toHaveBeenCalled();
 
-    // Messages are upserted by wamid so a redelivered event never duplicates them.
-    expect(mocks.messageUpsert).toHaveBeenCalledTimes(3);
-    const created = mocks.messageUpsert.mock.calls.map((call) => call[0]);
-    expect(created.map((c) => c.where)).toEqual([{ externalId: "wamid.1" }, { externalId: "wamid.2" }, { externalId: "wamid.3" }]);
-    expect(created.map((c) => c.update)).toEqual([{}, {}, {}]);
-    expect(created[0].create).toEqual({
+    // Se consulta por wamid antes de crear, para que un evento reenviado no
+    // duplique la fila ni vuelva a disparar al bot.
+    expect(mocks.messageFindUnique).toHaveBeenCalledTimes(3);
+    expect(mocks.messageFindUnique.mock.calls.map((call) => call[0].where)).toEqual([
+      { externalId: "wamid.1" },
+      { externalId: "wamid.2" },
+      { externalId: "wamid.3" },
+    ]);
+    expect(mocks.messageCreate).toHaveBeenCalledTimes(3);
+    const created = mocks.messageCreate.mock.calls.map((call) => call[0]);
+    expect(created[0].data).toEqual({
       conversationId: "conversation-1",
       direction: "INBOUND",
       sentBy: "CUSTOMER",
@@ -177,9 +252,9 @@ describe("processWhatsAppWebhookEvent", () => {
       createdAt: new Date(1789300000 * 1000),
       externalId: "wamid.1",
     });
-    expect(created[1].create).toMatchObject({ body: null, mediaType: "image", createdAt: new Date(1789300005 * 1000) });
-    expect(created[2].create).toMatchObject({ body: "Sí, quiero", mediaType: "interactive" });
-    expect(mocks.messageCreate).not.toHaveBeenCalled();
+    expect(created[1].data).toMatchObject({ body: null, mediaType: "image", createdAt: new Date(1789300005 * 1000) });
+    expect(created[2].data).toMatchObject({ body: "Sí, quiero", mediaType: "interactive" });
+    expect(mocks.messageUpsert).not.toHaveBeenCalled();
 
     expect(mocks.updateEvent).toHaveBeenCalledWith({
       where: { id: "event-1" },
@@ -206,8 +281,10 @@ describe("processWhatsAppWebhookEvent", () => {
       processed: true,
       reason: "processed",
       messages: 0,
+      ownerEchoes: 0,
       statuses: 0,
       skipped: 0,
+      botOutcomes: [],
     });
     expect(mocks.messageUpsert).not.toHaveBeenCalled();
     expect(mocks.messageCreate).not.toHaveBeenCalled();
@@ -248,6 +325,121 @@ describe("processWhatsAppWebhookEvent", () => {
 
     expect(mocks.claim).not.toHaveBeenCalled();
     expect(mocks.conversationUpsert).not.toHaveBeenCalled();
+  });
+
+  it("files an owner echo as OUTBOUND and clears NEEDS_OWNER", async () => {
+    mocks.findEvent.mockResolvedValue(
+      event({
+        payload: {
+          entry: [{
+            id: WABA,
+            changes: [{
+              field: "smb_message_echoes",
+              value: {
+                message_echoes: [{
+                  from: "573132582293",
+                  to: "573001234567",
+                  id: "wamid.echo1",
+                  timestamp: "1789300100",
+                  type: "text",
+                  text: { body: "Claro, te confirmo" },
+                }],
+              },
+            }],
+          }],
+        },
+      }),
+    );
+
+    await expect(processWhatsAppWebhookEvent("event-1")).resolves.toMatchObject({
+      processed: true,
+      ownerEchoes: 1,
+      messages: 0,
+      botOutcomes: [],
+    });
+
+    expect(mocks.conversationUpsert).toHaveBeenCalledWith({
+      where: { storeId_channel_phone: { storeId: "store-1", channel: "WHATSAPP", phone: "573001234567" } },
+      create: {
+        storeId: "store-1",
+        channel: "WHATSAPP",
+        phone: "573001234567",
+        status: "OPEN",
+        lastOutboundAt: new Date(1789300100 * 1000),
+      },
+      update: { lastOutboundAt: new Date(1789300100 * 1000) },
+      select: { id: true },
+    });
+    // Paula contestó desde el celular: la conversación deja de esperarla.
+    expect(mocks.conversationUpdateMany).toHaveBeenCalledWith({
+      where: { id: "conversation-1", status: "NEEDS_OWNER" },
+      data: { status: "OPEN" },
+    });
+    expect(mocks.messageCreate).toHaveBeenCalledWith({
+      data: {
+        conversationId: "conversation-1",
+        direction: "OUTBOUND",
+        sentBy: "OWNER",
+        externalId: "wamid.echo1",
+        body: "Claro, te confirmo",
+        mediaType: null,
+        status: "SENT",
+        rawEventId: "event-1",
+        createdAt: new Date(1789300100 * 1000),
+      },
+    });
+    expect(mocks.runBot).not.toHaveBeenCalled();
+  });
+
+  it("does not re-file or re-answer a redelivered webhook", async () => {
+    mocks.findEvent.mockResolvedValue(event());
+    // Los tres wamid ya estaban archivados.
+    mocks.messageFindUnique.mockResolvedValue({ id: "existing" });
+
+    await expect(processWhatsAppWebhookEvent("event-1")).resolves.toMatchObject({
+      processed: true,
+      messages: 3,
+      botOutcomes: [],
+    });
+
+    expect(mocks.messageCreate).not.toHaveBeenCalled();
+    // Lo importante: nada de contestar otra vez a la misma clienta.
+    expect(mocks.runBot).not.toHaveBeenCalled();
+  });
+
+  it("never answers a message it cannot deduplicate", async () => {
+    mocks.findEvent.mockResolvedValue(
+      event({ payload: metaPayload({ messages: [{ from: "573001234567", type: "text", text: { body: "hola" } }] }) }),
+    );
+
+    await expect(processWhatsAppWebhookEvent("event-1")).resolves.toMatchObject({ botOutcomes: [] });
+    expect(mocks.messageCreate).toHaveBeenCalledTimes(1);
+    expect(mocks.messageFindUnique).not.toHaveBeenCalled();
+    expect(mocks.runBot).not.toHaveBeenCalled();
+  });
+
+  it("runs the bot once per new inbound message that carries text", async () => {
+    mocks.findEvent.mockResolvedValue(event());
+    mocks.runBot.mockResolvedValue({ outcome: "replied" });
+
+    await expect(processWhatsAppWebhookEvent("event-1")).resolves.toMatchObject({
+      botOutcomes: ["replied", "replied"],
+    });
+    expect(mocks.runBot).toHaveBeenCalledWith({
+      conversationId: "conversation-1",
+      phone: "573001234567",
+      body: "Hola, ¿tienen stickers?",
+    });
+  });
+
+  it("still marks the event PROCESSED when the bot throws", async () => {
+    mocks.findEvent.mockResolvedValue(event());
+    mocks.runBot.mockRejectedValue(new Error("bot roto"));
+
+    await expect(processWhatsAppWebhookEvent("event-1")).resolves.toMatchObject({ processed: true });
+    expect(mocks.updateEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "PROCESSED" }) }),
+    );
   });
 
   it("gives up when another worker claimed the event first", async () => {
