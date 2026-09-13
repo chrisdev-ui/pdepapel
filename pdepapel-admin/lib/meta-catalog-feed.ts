@@ -82,6 +82,9 @@ export const META_CATALOG_FEED_CONTENT_TYPE =
  */
 export const META_CATALOG_FEED_CACHE_TTL_SECONDS = 60 * 60 * 12;
 
+export const META_CATALOG_FEED_SCHEDULE_LABEL =
+  "Se reconstruye solo, en la primera descarga de Meta después de 12 horas";
+
 /** Meta corta el título en 200 caracteres y rechaza el producto si se pasa. */
 export const META_CATALOG_TITLE_MAX_LENGTH = 200;
 

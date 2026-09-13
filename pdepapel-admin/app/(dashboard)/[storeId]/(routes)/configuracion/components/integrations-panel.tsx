@@ -6,6 +6,7 @@ import { getMercadoLibreQueueConfigurationStatus } from "@/lib/mercadolibre/queu
 import prismadb from "@/lib/prismadb";
 
 import { GoogleMerchantFeedCard } from "./google-merchant-feed-card";
+import { MetaCatalogFeedCard } from "./meta-catalog-feed-card";
 import { CONFIGURED, MISSING, OPTIONAL_OFF, StatusCard, type StatusTone } from "./status-cards";
 
 const CONNECTION: Record<string, { label: string; tone: StatusTone }> = {
@@ -96,6 +97,7 @@ export async function IntegrationsPanel({ storeId }: { storeId: string }) {
         />
       </div>
       <GoogleMerchantFeedCard storeId={storeId} />
+      <MetaCatalogFeedCard storeId={storeId} />
     </div>
   );
 }

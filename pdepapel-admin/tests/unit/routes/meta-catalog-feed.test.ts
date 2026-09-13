@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   findProducts: vi.fn(),
   redisGet: vi.fn(),
   redisSet: vi.fn(),
+  auth: vi.fn(),
+  verifyStoreOwner: vi.fn(),
 }));
 
 vi.mock("@/lib/env.mjs", () => ({ env: mocks.env }));
@@ -18,15 +20,21 @@ vi.mock("@/lib/prismadb", () => ({
 vi.mock("@upstash/redis", () => ({
   Redis: { fromEnv: () => ({ get: mocks.redisGet, set: mocks.redisSet }) },
 }));
+vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/utils", () => ({
   CACHE_HEADERS: {
     NO_CACHE: {
       "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
     },
   },
+  verifyStoreOwner: mocks.verifyStoreOwner,
 }));
 
 import { GET as getFeed } from "@/app/api/[storeId]/meta-catalog/feed/route";
+import {
+  GET as getReport,
+  POST as refreshReport,
+} from "@/app/api/[storeId]/meta-catalog/report/route";
 import {
   META_CATALOG_FEED_CACHE_TTL_SECONDS,
   createMetaCatalogFeedToken,
@@ -163,5 +171,70 @@ describe("hosted Meta catalog feed", () => {
 
     expect(response.status).toBe(200);
     await expect(response.text()).resolves.toContain("in stock");
+  });
+});
+
+describe("Meta catalog feed report", () => {
+  const reportUrl = feedUrl.replace("/feed", "/report");
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    mocks.env.META_CATALOG_FEED_SECRET = secret;
+    mocks.redisGet.mockResolvedValue(null);
+    mocks.redisSet.mockResolvedValue("OK");
+    mocks.findProducts.mockResolvedValue([catalogProduct]);
+    mocks.verifyStoreOwner.mockResolvedValue(undefined);
+  });
+
+  it("requires a signed-in store owner", async () => {
+    mocks.auth.mockReturnValue({ userId: null });
+
+    const response = await getReport(new Request(reportUrl), params);
+
+    expect(response.status).toBe(401);
+    expect(mocks.verifyStoreOwner).not.toHaveBeenCalled();
+  });
+
+  it("exposes the feed URL and the last report to the owner only", async () => {
+    mocks.auth.mockReturnValue({ userId: "user-1" });
+    mocks.redisGet.mockImplementation(async (key: string) =>
+      key.endsWith(":report") ? JSON.stringify({ exportedProducts: 4 }) : "feed",
+    );
+
+    const response = await getReport(new Request(reportUrl), params);
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mocks.verifyStoreOwner).toHaveBeenCalledWith("user-1", storeId);
+    expect(json.configured).toBe(true);
+    expect(json.feedUrl).toBe(`${feedUrl}?token=${token}`);
+    expect(json.schedule).toContain("12 horas");
+    expect(json.report).toEqual({ exportedProducts: 4 });
+  });
+
+  it("says the catalog is off while the secret is missing, without leaking a URL", async () => {
+    mocks.auth.mockReturnValue({ userId: "user-1" });
+    mocks.env.META_CATALOG_FEED_SECRET = undefined;
+
+    const json = await (await getReport(new Request(reportUrl), params)).json();
+
+    expect(json).toMatchObject({ configured: false, feedUrl: null });
+  });
+
+  it("lets the owner rebuild the catalog on demand", async () => {
+    mocks.auth.mockReturnValue({ userId: "user-1" });
+
+    const response = await refreshReport(new Request(reportUrl, { method: "POST" }), params);
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mocks.findProducts).toHaveBeenCalledTimes(1);
+    expect(json.report).toMatchObject({ activeProducts: 1, exportedProducts: 1 });
+    expect(mocks.redisSet).toHaveBeenCalledWith(
+      `store:${storeId}:meta-catalog:feed`,
+      expect.stringContaining("in stock"),
+      { ex: META_CATALOG_FEED_CACHE_TTL_SECONDS },
+    );
   });
 });
