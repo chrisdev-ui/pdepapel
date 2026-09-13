@@ -1,9 +1,15 @@
 import { productAvailabilityWhere } from "@/lib/product-availability";
-import { createHmac, timingSafeEqual } from "node:crypto";
 
 import type { Prisma } from "@prisma/client";
-import { Redis } from "@upstash/redis";
 
+import {
+  cleanFeedText,
+  createCatalogFeedToken,
+  extractCatalogFeedToken,
+  findGroupsWithDuplicateVariants,
+  getFeedRedis,
+  isCatalogFeedTokenValid,
+} from "@/lib/catalog-feed";
 import {
   GOOGLE_MERCHANT_EXCLUDED_DESTINATIONS,
   getGoogleMerchantColor,
@@ -99,42 +105,6 @@ export type GoogleMerchantFeed = {
   report: GoogleMerchantFeedReport;
 };
 
-function cleanText(value: string | null | undefined) {
-  return (value || "")
-    .replace(/[\t\n\r]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function findGroupsWithDuplicateVariants(
-  products: Pick<
-    GoogleMerchantFeedProduct,
-    "productGroupId" | "sizeId" | "colorId" | "designId"
-  >[],
-) {
-  const combinationsByGroup = new Map<string, Set<string>>();
-  const duplicates = new Set<string>();
-
-  for (const product of products) {
-    if (!product.productGroupId) continue;
-
-    const combination = [product.sizeId, product.colorId, product.designId].join(
-      "|",
-    );
-    const combinations = combinationsByGroup.get(product.productGroupId);
-
-    if (combinations?.has(combination)) {
-      duplicates.add(product.productGroupId);
-    } else if (combinations) {
-      combinations.add(combination);
-    } else {
-      combinationsByGroup.set(product.productGroupId, new Set([combination]));
-    }
-  }
-
-  return duplicates;
-}
-
 /**
  * Builds the tab-separated feed plus a report of what was adjusted or left
  * out. When `links` is given, only products present in it are exported and
@@ -206,23 +176,23 @@ export function buildGoogleMerchantFeed(
 
     return [
       feedId,
-      cleanText(product.name),
-      cleanText(getGoogleMerchantDescription(product.description, product.name)),
+      cleanFeedText(product.name),
+      cleanFeedText(getGoogleMerchantDescription(product.description, product.name)),
       options.links?.get(product.id) ?? getGoogleMerchantProductLink(product),
       imageLink,
       additionalImages.join(","),
       `${product.price} COP`,
       "new",
       availability,
-      cleanText(brand),
+      cleanFeedText(brand),
       product.gtin || "",
       product.mpn || "",
       identifierExists,
-      cleanText(productType),
+      cleanFeedText(productType),
       itemGroupId,
-      cleanText(getGoogleMerchantColor(product.name, product.color)),
-      cleanText(getGoogleMerchantSize(product.category?.name, product.size)),
-      cleanText(getGoogleMerchantPattern(product.name, product.design)),
+      cleanFeedText(getGoogleMerchantColor(product.name, product.color)),
+      cleanFeedText(getGoogleMerchantSize(product.category?.name, product.size)),
+      cleanFeedText(getGoogleMerchantPattern(product.name, product.design)),
       GOOGLE_MERCHANT_EXCLUDED_DESTINATIONS.join(","),
     ].join("\t");
   });
@@ -251,10 +221,10 @@ export function buildGoogleMerchantFeed(
  * so the URL is store-bound, cannot be guessed, and rotates by changing
  * `GOOGLE_MERCHANT_FEED_SECRET`. Nothing about the catalog leaks from it.
  */
+export const GOOGLE_MERCHANT_FEED_NAME = "google-merchant-feed";
+
 export function createGoogleMerchantFeedToken(storeId: string, secret: string) {
-  return createHmac("sha256", secret)
-    .update(`google-merchant-feed:${storeId}`)
-    .digest("hex");
+  return createCatalogFeedToken(GOOGLE_MERCHANT_FEED_NAME, storeId, secret);
 }
 
 export function isGoogleMerchantFeedTokenValid(
@@ -262,39 +232,16 @@ export function isGoogleMerchantFeedTokenValid(
   token: string | null | undefined,
   secret: string | null | undefined,
 ) {
-  if (!token || !secret) return false;
-
-  const expected = Buffer.from(createGoogleMerchantFeedToken(storeId, secret));
-  const received = Buffer.from(token);
-
-  return (
-    expected.length === received.length && timingSafeEqual(expected, received)
+  return isCatalogFeedTokenValid(
+    GOOGLE_MERCHANT_FEED_NAME,
+    storeId,
+    token,
+    secret,
   );
 }
 
 /** Accepts `?token=`, `Authorization: Bearer <token>` or basic auth with the token as password. */
-export function extractGoogleMerchantFeedToken(request: Request) {
-  const fromQuery = new URL(request.url).searchParams.get("token");
-  if (fromQuery) return fromQuery.trim();
-
-  const authorization = request.headers.get("authorization") ?? "";
-  const [scheme, value = ""] = authorization.split(" ", 2);
-
-  if (scheme?.toLowerCase() === "bearer") return value.trim() || null;
-  if (scheme?.toLowerCase() === "basic") {
-    try {
-      const decoded = Buffer.from(value, "base64").toString("utf8");
-      const separator = decoded.indexOf(":");
-      const password =
-        separator === -1 ? decoded : decoded.slice(separator + 1);
-      return password.trim() || null;
-    } catch {
-      return null;
-    }
-  }
-
-  return null;
-}
+export const extractGoogleMerchantFeedToken = extractCatalogFeedToken;
 
 export function getGoogleMerchantFeedUrl(
   storeId: string,
@@ -318,18 +265,10 @@ export function getGoogleMerchantFeedCacheKeys(storeId: string) {
   };
 }
 
-function getRedis(): Redis | null {
-  try {
-    return Redis.fromEnv();
-  } catch {
-    return null;
-  }
-}
-
 export async function readCachedGoogleMerchantFeed(
   storeId: string,
 ): Promise<GoogleMerchantFeed | null> {
-  const redis = getRedis();
+  const redis = getFeedRedis();
   if (!redis) return null;
 
   try {
@@ -354,7 +293,7 @@ async function writeCachedGoogleMerchantFeed(
   storeId: string,
   feed: GoogleMerchantFeed,
 ) {
-  const redis = getRedis();
+  const redis = getFeedRedis();
   if (!redis) return false;
 
   try {

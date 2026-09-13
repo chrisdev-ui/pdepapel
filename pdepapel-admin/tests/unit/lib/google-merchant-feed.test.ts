@@ -180,6 +180,14 @@ describe("buildGoogleMerchantFeed", () => {
 describe("Google Merchant feed access token", () => {
   const secret = "0123456789abcdef0123456789abcdef";
 
+  it("keeps the exact token already configured in Merchant Center", () => {
+    // Valor congelado: la URL que Merchant Center descarga lleva este token.
+    // Si cambia, la descarga programada empieza a fallar con 403.
+    expect(createGoogleMerchantFeedToken("store-1", secret)).toBe(
+      "12ff73025d15a31c3d8623b60e3772a5780648efe248d21e6f1640ee15f14853",
+    );
+  });
+
   it("is store-bound, deterministic and rejects other stores or secrets", () => {
     const token = createGoogleMerchantFeedToken("store-1", secret);
 

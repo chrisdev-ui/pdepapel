@@ -67,6 +67,10 @@ export const env = createEnv({
     // Signs the store-bound token in the hosted Google Merchant feed URL.
     // Optional: without it the feed route answers 404 and nothing is exposed.
     GOOGLE_MERCHANT_FEED_SECRET: z.string().min(16).optional(),
+    // Signs the store-bound token in the hosted Meta catalog feed URL (the
+    // catalog behind WhatsApp, Instagram and Facebook). Optional: without it
+    // the feed route answers 404 and nothing is exposed.
+    META_CATALOG_FEED_SECRET: z.string().min(16).optional(),
     // Signs the early-access links sent to newsletter subscribers. Optional:
     // without it the early-access campaign cannot be sent.
     NEWSLETTER_EARLY_ACCESS_SECRET: z.string().min(16).optional(),
