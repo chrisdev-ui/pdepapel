@@ -20,7 +20,14 @@ export const WHATSAPP_TEXT_MAX_LENGTH = 4096;
 
 export type WhatsAppSendResult =
   | { ok: true; externalId: string }
-  | { ok: false; error: string };
+  | {
+      ok: false;
+      error: string;
+      /** `x-dualhook-request-id`: es lo que pide el soporte de Dualhook para rastrear un envío. */
+      requestId?: string | null;
+      /** `fbtrace_id` de Meta, cuando el rechazo viene de su lado. */
+      fbTraceId?: string | null;
+    };
 
 type SendEnvironment = {
   DUALHOOK_API_KEY?: string;
@@ -36,6 +43,15 @@ function readError(payload: unknown): string | null {
   const { message, code } = error as { message?: unknown; code?: unknown };
   const text = typeof message === "string" && message.trim() ? message.trim() : "Error desconocido";
   return code === undefined || code === null ? text : `${text} (${String(code)})`;
+}
+
+/** `fbtrace_id` solo aparece cuando el rechazo lo produce Meta, no Dualhook. */
+function readTraceId(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const error = (payload as { error?: unknown }).error;
+  if (!error || typeof error !== "object") return null;
+  const trace = (error as { fbtrace_id?: unknown }).fbtrace_id;
+  return typeof trace === "string" && trace.trim() ? trace.trim() : null;
 }
 
 function readExternalId(payload: unknown): string | null {
@@ -89,9 +105,18 @@ export async function sendWhatsAppTextMessage(
 
     if (response.ok && externalId) return { ok: true, externalId };
 
+    // Los identificadores de rastreo se registran siempre: sin ellos, revisar
+    // un envío fallido obliga a reproducirlo a mano contra Dualhook.
+    const requestId = response.headers?.get?.("x-dualhook-request-id") ?? null;
+    const fbTraceId = readTraceId(payload);
     const error = readError(payload) ?? `HTTP ${response.status}`;
-    console.error("[WHATSAPP_SEND] El envío fue rechazado", { status: response.status, error });
-    return { ok: false, error };
+    console.error("[WHATSAPP_SEND] El envío fue rechazado", {
+      status: response.status,
+      error,
+      dualhookRequestId: requestId,
+      fbTraceId,
+    });
+    return { ok: false, error, requestId, fbTraceId };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Error desconocido";
     console.error("[WHATSAPP_SEND] No se pudo contactar a Dualhook", { message });

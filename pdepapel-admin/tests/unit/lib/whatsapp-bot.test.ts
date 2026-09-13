@@ -22,6 +22,7 @@ vi.mock("@/lib/prismadb", () => ({
 }));
 vi.mock("@/lib/whatsapp/send", () => ({ sendWhatsAppTextMessage: mocks.send }));
 
+import { WHATSAPP_BOT_KEYWORDS } from "@/lib/whatsapp/bot-keywords";
 import {
   WHATSAPP_BOT_MARKER,
   formatBotReply,
@@ -57,6 +58,12 @@ describe("keyword matching", () => {
     expect(matchWhatsAppKeyword("horario", both)?.keyword.answer).toBe("primera");
     expect(matchWhatsAppKeyword("quiero un cuaderno rosado", keywords)).toBeNull();
     expect(matchWhatsAppKeyword("   ", keywords)).toBeNull();
+  });
+
+  it("ships with no keywords, so nothing is answered until Paula defines them", () => {
+    // Una respuesta de ejemplo aquí le llegaría tal cual a una clienta.
+    expect(WHATSAPP_BOT_KEYWORDS).toEqual([]);
+    expect(matchWhatsAppKeyword("horario")).toBeNull();
   });
 
   it("marks every automated reply as automatic", () => {

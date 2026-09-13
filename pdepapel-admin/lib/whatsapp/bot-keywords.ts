@@ -23,10 +23,17 @@ export interface WhatsAppBotKeyword {
   answer: string;
 }
 
-// EJEMPLO — reemplazar con las respuestas reales que defina Paula.
-export const WHATSAPP_BOT_KEYWORDS: WhatsAppBotKeyword[] = [
-  {
-    triggers: ["horario", "horarios", "a que hora", "que horario"],
-    answer: "Placeholder — reemplazar con el horario real.",
-  },
-];
+/**
+ * Vacío a propósito. Mientras no haya entradas, el bot no contesta nada y deja
+ * cada conversación marcada para que la atienda una persona, que es justo lo
+ * que debe pasar hasta que Paula defina las respuestas reales. Una respuesta
+ * de ejemplo aquí le llegaría tal cual a una clienta.
+ *
+ * Para activarlo, agregar entradas con esta forma:
+ *
+ *   {
+ *     triggers: ["horario", "horarios", "a que hora"],
+ *     answer: "Atendemos de lunes a sábado, de 9 a. m. a 6 p. m.",
+ *   },
+ */
+export const WHATSAPP_BOT_KEYWORDS: WhatsAppBotKeyword[] = [];
