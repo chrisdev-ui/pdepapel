@@ -197,28 +197,29 @@
       <li><a href="#ml">7. Mercado Libre</a></li>
       <li><a href="#envios">8. Envíos</a></li>
       <li><a href="#clientes">9. Clientes y reseñas</a></li>
-      <li><a href="#conversaciones">10. Conversaciones de WhatsApp</a></li>
+      <li><a href="#preventas">10. Preventas</a></li>
+      <li><a href="#conversaciones">11. Conversaciones de WhatsApp</a></li>
     </ol>
     <div class="group">Catálogo</div>
     <ol>
-      <li><a href="#productos">11. Productos</a></li>
-      <li><a href="#atributos">12. Atributos</a></li>
-      <li><a href="#proveedores">13. Proveedores y aprovisionamiento</a></li>
-      <li><a href="#contenido">14. Contenido de la tienda</a></li>
+      <li><a href="#productos">12. Productos</a></li>
+      <li><a href="#atributos">13. Atributos</a></li>
+      <li><a href="#proveedores">14. Proveedores y aprovisionamiento</a></li>
+      <li><a href="#contenido">15. Contenido de la tienda</a></li>
     </ol>
     <div class="group">Inventario y marketing</div>
     <ol>
-      <li><a href="#inventario">15. Inventario y movimientos</a></li>
-      <li><a href="#promociones">16. Promociones</a></li>
-      <li><a href="#boletin">17. Boletín</a></li>
+      <li><a href="#inventario">16. Inventario y movimientos</a></li>
+      <li><a href="#promociones">17. Promociones</a></li>
+      <li><a href="#boletin">18. Boletín</a></li>
     </ol>
     <div class="group">Reportes y ajustes</div>
     <ol>
-      <li><a href="#reportes">18. Rendimiento y tributarios</a></li>
-      <li><a href="#ajustes">19. Ajustes</a></li>
-      <li><a href="#estados">20. Estados y vocabulario</a></li>
-      <li><a href="#problemas">21. Si algo no cuadra</a></li>
-      <li><a href="#primer-dia">22. Primer día en el equipo</a></li>
+      <li><a href="#reportes">19. Rendimiento y tributarios</a></li>
+      <li><a href="#ajustes">20. Ajustes</a></li>
+      <li><a href="#estados">21. Estados y vocabulario</a></li>
+      <li><a href="#problemas">22. Si algo no cuadra</a></li>
+      <li><a href="#primer-dia">23. Primer día en el equipo</a></li>
     </ol>
   </nav>
 
@@ -456,8 +457,65 @@
 
 
     <!-- 10 -->
+    <section class="chapter" id="preventas" style="--dot:#A4C3FE">
+      <div class="chapter-head"><span class="area">Ventas</span><h2>10. Preventas</h2></div>
+      <div class="route">Ruta: <code>/preventas</code> · se abre desde el producto, en la sección «Preventa»</div>
+      <p>Una preventa es <strong>vender hoy algo que todavía no tienes en bodega</strong>. La clienta paga completo, queda apartada su unidad, y el pedido sale el día que llegue la mercancía. Sirve para dos cosas: tener la plata antes de pagarle a tu proveedora, y saber cuántas unidades pedirle sin adivinar.</p>
+      <div class="note care"><strong>Úsala solo con un pedido real en camino</strong><p>La fecha que pongas es una promesa: la clienta ya pagó. Abre una preventa cuando de verdad tengas confirmado el envío de tu proveedora, no «a ver si sale». Si la fecha se cae tienes que avisarle a cada una, y algunas te van a pedir su dinero de vuelta.</p></div>
+
+      <h3>Abrir una preventa</h3>
+      <p>Se abre desde el producto: entra a <strong>Productos</strong>, ábrelo y baja hasta la sección <strong>Preventa</strong>, justo debajo de Visibilidad.</p>
+      <ol class="steps">
+        <li><strong>Cuándo llega</strong>: la fecha en que vas a poder despachar. Es la que ve la clienta y la que usa el panel para saber si la preventa se venció. Tiene que ser futura.</li>
+        <li><strong>Cuántas puedes prometer</strong> (el cupo): el tope de unidades que vas a vender por adelantado, normalmente lo que le pediste a tu proveedora. Cuando se llene, la tienda deja de aceptar reservas sola y el producto vuelve a decir «Llega el…».</li>
+        <li>Dale <strong>Abrir preventa</strong>. Desde ese momento el producto se puede reservar en la tienda.</li>
+      </ol>
+      <div class="note rule"><strong>Un kit no se puede vender en preventa</strong><p>El panel no te deja, y es a propósito: un kit no tiene existencias propias, su stock sale de los productos que lo componen. Al liberar la preventa no habría de dónde descontar. Si quieres vender un kit por adelantado, abre la preventa de cada componente por separado.</p></div>
+
+      <h3>Qué ve y qué paga la clienta</h3>
+      <p>En la tienda el producto cambia: en vez de «Avísame cuando llegue» aparece el botón <strong>Reservar ahora</strong>, con la fecha de llegada y cuántas reservas quedan. Debajo se le dice, con todas las letras, que paga hoy y que si la fecha cambia puede pedir su dinero de vuelta.</p>
+      <div class="note rule"><strong>Se cobra el total, no un abono</strong><p>La clienta paga el precio completo en el momento de reservar, con los mismos medios de pago de siempre. No hay abonos, cuotas ni pagos parciales, ni ahora ni después. Para ti el pedido entra como cualquier otro pedido pagado.</p></div>
+
+      <h3>El pedido espera completo</h3>
+      <p>Esto es lo que más preguntan, así que conviene tenerlo claro: <strong>si un pedido trae aunque sea un producto de preventa, no sale nada de ese pedido hasta que liberes</strong>, ni siquiera lo que ya está en tu bodega.</p>
+      <p>El carrito se lo advierte a la clienta antes de pagar, y le ofrece la única salida que hay: hacer <strong>dos pedidos</strong>, uno con lo disponible y otro con la preventa. Si alguien te reclama porque «lo otro ya lo tenían», esa es la razón: no partimos un pedido en dos envíos, porque serían dos fletes y dos guías.</p>
+      <p>Mientras espera, ese pedido no te aparece en «por despachar» ni en las alertas de envíos atrasados. No se te perdió: está esperando, y lo ves en esta pantalla.</p>
+
+      <h3>La pantalla de Preventas</h3>
+      <p>Está en el menú lateral, en <strong>Ventas → Preventas</strong>. Es la lista de lo que ya cobraste y todavía no has despachado.</p>
+      <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/preventas" alt="La pantalla de Preventas sin preventas abiertas: unidades por entregar, dinero ya recibido y próxima entrega prometida." loading="lazy" width="1440" height="900"></div><figcaption>La pantalla de Preventas recién estrenada: los tres totales arriba y, debajo, la lista de campañas.</figcaption></figure>
+      <p>Arriba van tres números: <strong>unidades por entregar</strong>, <strong>dinero ya recibido</strong> (plata que es tuya pero que todavía debes en mercancía) y la <strong>próxima entrega prometida</strong>. Abajo, una tarjeta por preventa con el producto, la fecha, cuántas reservas lleva de su cupo, cuántas clientas esperan y cuánto se recaudó.</p>
+      <div class="table-wrap"><table class="states">
+        <tr><th>Etiqueta</th><th>Qué significa</th></tr>
+        <tr><td><span class="pill sky">En preventa</span></td><td>Se está vendiendo. Es el único estado que aparta unidades.</td></tr>
+        <tr><td><span class="pill cream">Vencida</span></td><td>Pasó la fecha que prometiste y todavía no has liberado. Hay clientas esperando una respuesta.</td></tr>
+        <tr><td><span class="pill mint">Liberada</span></td><td>Llegó la mercancía y los pedidos ya salieron al despacho normal.</td></tr>
+      </table></div>
+      <p>Junto a <strong>Preventas</strong> en el menú aparece un número cuando alguna se venció. Es tu lista de pendientes: cada una es una clienta que pagó y no ha recibido.</p>
+
+      <h3>Notificar retraso</h3>
+      <p>Si la fecha se cayó, el botón <strong>Notificar retraso</strong> le escribe a las clientas de esa preventa para decirles que se movió, sin prometer una fecha nueva hasta que tú la tengas. Queda anotado quién avisó y qué día, por si alguna reclama después.</p>
+      <div class="note rule"><strong>Avisar no devuelve la plata</strong><p>«Notificar retraso» hace una sola cosa: manda el aviso y lo deja registrado. <strong>No cancela el pedido, no toca el pago y no devuelve ni un peso.</strong> Si una clienta ya no lo quiere y hay que devolverle, esa devolución la haces tú <strong>a mano en Bold o en Wompi</strong>, igual que cualquier otra devolución. El panel nunca mueve dinero solo.</p></div>
+
+      <h3>Liberar</h3>
+      <p>Cuando la mercancía llega a tu bodega y ya la ingresaste al inventario, el botón <strong>Liberar</strong> cierra el ciclo. Hace tres cosas de un golpe:</p>
+      <ol class="steps">
+        <li>Descuenta del inventario las unidades vendidas y les escribe su movimiento, como cualquier venta. Hasta ese momento el inventario no se había enterado, porque la mercancía no existía.</li>
+        <li>Marca como entregables las líneas de preventa de cada pedido.</li>
+        <li>Suelta esos pedidos al despacho normal: vuelven a aparecer en «por despachar», completos, con todo lo que llevaban.</li>
+      </ol>
+      <div class="note care"><strong>Necesita mercancía de verdad, y no se puede deshacer</strong><p>El botón no funciona si en bodega no hay suficientes unidades para cubrir lo vendido: primero ingresa la mercancía, después libera. Y liberar no tiene vuelta atrás — descuenta inventario real y suelta pedidos reales. Si te equivocas, toca arreglarlo a mano con un ajuste de inventario.</p></div>
+
+      <h3>Mercado Libre no ve las preventas</h3>
+      <div class="note rule"><strong>No es un error</strong><p>Mientras un producto esté en preventa <strong>no se publica en Mercado Libre</strong>, y si ya estaba publicado su cantidad allá se pone en cero. Es a propósito: esas unidades ya están vendidas y cobradas aquí. Si además se vendieran allá, estarías vendiendo dos veces lo mismo y quedándole mal a alguien — y Mercado Libre castiga duro despachar tarde. En cuanto liberes la preventa, el producto vuelve a Mercado Libre con normalidad.</p></div>
+
+      <h3>Lo que no cambia</h3>
+      <p>Inventario, «Por reponer» y el kardex siguen mostrando <strong>solo el stock real</strong>, el que puedes tocar. Las unidades apartadas por una preventa se ven únicamente en esta pantalla. Es para que «tengo 40» siga queriendo decir que tienes 40 en la bodega, no 40 prometidas.</p>
+    </section>
+
+    <!-- 11 -->
     <section class="chapter" id="conversaciones" style="--dot:#7ED9A6">
-      <div class="chapter-head"><span class="area">Ventas</span><h2>10. Conversaciones de WhatsApp</h2></div>
+      <div class="chapter-head"><span class="area">Ventas</span><h2>11. Conversaciones de WhatsApp</h2></div>
       <div class="route">Ruta: <code>/conversaciones</code> · respuestas del bot en <code>/conversaciones/respuestas</code></div>
       <p>Todo lo que entra y sale por el WhatsApp de la tienda queda guardado aquí solo. <strong>Tú sigues contestando desde tu celular como siempre</strong>: lo que escribes desde la app aparece en esta pantalla a los pocos segundos. El panel no es para chatear, es para no perder nada y para ver de un vistazo qué quedó sin responder.</p>
       <h3>La lista</h3>
@@ -509,7 +567,7 @@
 
     <!-- 11 -->
     <section class="chapter" id="productos" style="--dot:#B2A4FE">
-      <div class="chapter-head"><span class="area">Catálogo</span><h2>11. Productos</h2></div>
+      <div class="chapter-head"><span class="area">Catálogo</span><h2>12. Productos</h2></div>
       <div class="route">Ruta: <code>/productos</code> · cada producto en <code>/productos/&lt;id&gt;</code></div>
       <p>La lista de productos tiene vistas por lo que necesitan: <strong>Activos</strong>, <strong>Sin completar</strong> (les falta algo para venderse bien), <strong>Sin identificador</strong> (sin GTIN y sin la marca «No tiene identificador global»), <strong>Stock crítico</strong>, <strong>Agotados</strong>, <strong>Archivados</strong> y <strong>Todos</strong>. La columna <strong>Listo para vender</strong> resume qué falta en cada uno.</p>
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/productos" alt="La lista de productos con forma, subcategoría, precio, stock y la columna «Listo para vender»." loading="lazy" width="1440" height="900"></div><figcaption>La lista de productos con forma, subcategoría, precio, stock y la columna «Listo para vender».</figcaption></figure>
@@ -546,7 +604,7 @@
 
     <!-- 11 -->
     <section class="chapter" id="atributos" style="--dot:#5FC98D">
-      <div class="chapter-head"><span class="area">Catálogo</span><h2>12. Atributos</h2></div>
+      <div class="chapter-head"><span class="area">Catálogo</span><h2>13. Atributos</h2></div>
       <div class="route">Ruta: <code>/atributos</code> · pestañas Categorías, Subcategorías, Tamaños, Colores, Diseños, Opciones para clientes</div>
       <p>Los atributos son las listas con las que se clasifica el catálogo. Las <strong>categorías</strong> son el menú principal de la tienda; cada <strong>subcategoría</strong> pertenece a una categoría y tiene su propia página. Tamaños, colores y diseños se usan en variantes y filtros.</p>
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/atributos" alt="La pestaña Colores con su muestra, cuántos productos usan cada uno, el estado y el interruptor Activos / Archivados." loading="lazy" width="1440" height="900"></div><figcaption>La pestaña Colores con su muestra, cuántos productos usan cada uno, el estado y el interruptor Activos / Archivados.</figcaption></figure>
@@ -566,7 +624,7 @@
 
     <!-- 12 -->
     <section class="chapter" id="proveedores" style="--dot:#FFC105">
-      <div class="chapter-head"><span class="area">Catálogo</span><h2>13. Proveedores y aprovisionamiento</h2></div>
+      <div class="chapter-head"><span class="area">Catálogo</span><h2>14. Proveedores y aprovisionamiento</h2></div>
       <div class="route">Rutas: <code>/proveedores</code> y <code>/aprovisionamiento</code></div>
       <p><strong>Proveedores</strong> es la lista de a quién se le compra; cada producto puede tener el suyo. <strong>Aprovisionamiento</strong> registra los pedidos a proveedores: qué se encargó, cuánto se espera pagar y, al recibir, cuántas unidades entraron. Al recibir un pedido de aprovisionamiento, el inventario sube y queda un movimiento «Reposición recibida» con el costo.</p>
       <div class="screens">
@@ -578,7 +636,7 @@
 
     <!-- 13 -->
     <section class="chapter" id="contenido" style="--dot:#FEA4C3">
-      <div class="chapter-head"><span class="area">Catálogo</span><h2>14. Contenido de la tienda</h2></div>
+      <div class="chapter-head"><span class="area">Catálogo</span><h2>15. Contenido de la tienda</h2></div>
       <div class="route">Ruta: <code>/contenido</code> · pestañas Portada y Redes en la tienda</div>
       <p>Lo que la gente ve al entrar a la tienda. <strong>Portada</strong> tiene dos ubicaciones: el <strong>hero</strong> (el primer pantallazo: título, texto, botones e imagen) y el <strong>banner de campaña</strong>, un bloque promocional que solo aparece mientras está vigente. <strong>Redes en la tienda</strong> son las publicaciones de Instagram u otras redes que se muestran en la página.</p>
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/contenido" alt="La pestaña Portada con el hero y las campañas." loading="lazy" width="1440" height="900"></div><figcaption>La pestaña Portada con el hero y las campañas, cada una con su estado.</figcaption></figure>
@@ -597,7 +655,7 @@
 
     <!-- 14 -->
     <section class="chapter" id="inventario" style="--dot:#B2A4FE">
-      <div class="chapter-head"><span class="area">Inventario</span><h2>15. Inventario y movimientos</h2></div>
+      <div class="chapter-head"><span class="area">Inventario</span><h2>16. Inventario y movimientos</h2></div>
       <div class="route">Rutas: <code>/inventario</code> y <code>/movimientos-inventario</code></div>
       <p><strong>Inventario</strong> es una sola lista con todo el stock activo valorado al costo de compra. Las tarjetas resumen el valor a costo, los productos activos, el stock crítico y los productos sin costo registrado (que no entran en la valorización). Las vistas separan <strong>Stock crítico</strong>, <strong>Agotados</strong>, <strong>Sin costo</strong> y <strong>Kits</strong>.</p>
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/inventario" alt="La lista de inventario valorada al costo, con el último movimiento de cada producto." loading="lazy" width="1440" height="900"></div><figcaption>La lista de inventario valorada al costo, con el último movimiento de cada producto.</figcaption></figure>
@@ -615,7 +673,7 @@
 
     <!-- 15 -->
     <section class="chapter" id="promociones" style="--dot:#FFC105">
-      <div class="chapter-head"><span class="area">Marketing</span><h2>16. Promociones</h2></div>
+      <div class="chapter-head"><span class="area">Marketing</span><h2>17. Promociones</h2></div>
       <div class="route">Ruta: <code>/promociones</code> · pestañas Ofertas y Cupones</div>
       <p>Una <strong>oferta</strong> rebaja el precio de productos, subcategorías o grupos durante un periodo y se ve en la tienda como etiqueta («15 % OFF»). Un <strong>cupón</strong> es un código que la persona escribe al pagar. Las tarjetas cuentan cuántas están <strong>vigentes</strong>, <strong>programadas</strong>, <strong>vencidas</strong> y <strong>desactivadas</strong>; las vigencias se recalculan solas cada día.</p>
       <div class="screens">
@@ -631,7 +689,7 @@
 
     <!-- 16 -->
     <section class="chapter" id="boletin" style="--dot:#5FC98D">
-      <div class="chapter-head"><span class="area">Marketing</span><h2>17. Boletín</h2></div>
+      <div class="chapter-head"><span class="area">Marketing</span><h2>18. Boletín</h2></div>
       <div class="route">Ruta: <code>/boletin</code></div>
       <p>Las personas que pidieron novedades desde la tienda. Solo las <strong>confirmadas</strong> (abrieron el correo de confirmación) se pueden exportar para escribirles; el envío del boletín se hace fuera del panel. <strong>Exportar confirmados</strong> descarga la lista y <strong>Dar de baja</strong> retira a alguien que lo pida.</p>
       <p>Al confirmar, cada suscriptora recibe un <strong>cupón de bienvenida</strong> del 10 % (un solo uso, 30 días) en el correo de bienvenida. Las suscripciones llegan desde la portada, la ficha de un producto «Próximamente» (con el producto de interés), la casilla del pago y el banner de cargamento. Desde un banner de campaña de tipo <strong>Cargamento nuevo</strong> (Contenido de la tienda › Portada) se envían, una sola vez cada uno, el correo de <strong>acceso anticipado</strong> (un enlace firmado para comprar los productos «Próximamente» antes de su fecha) y el aviso de <strong>«Ya llegó»</strong>.</p>
@@ -640,7 +698,7 @@
 
     <!-- 17 -->
     <section class="chapter" id="reportes" style="--dot:#B2A4FE">
-      <div class="chapter-head"><span class="area">Reportes</span><h2>18. Rendimiento y tributarios</h2></div>
+      <div class="chapter-head"><span class="area">Reportes</span><h2>19. Rendimiento y tributarios</h2></div>
       <div class="route">Rutas: <code>/rendimiento</code> (pestañas Resumen y caja, Productos y riesgos, Envíos) y <code>/reportes-tributarios</code></div>
       <p><strong>Rendimiento</strong> responde cuánto vendes, cuánto te cuesta y cuánto te queda, por mes. La pestaña <strong>Resumen y caja</strong> sugiere reserva para impuestos, reinversión y retiro; <strong>Productos y riesgos</strong> muestra ingresos contra beneficio, inventario muerto, riesgo de agotarse, clientes inactivos y VIP; <strong>Envíos</strong> resume costos y entregas.</p>
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/rendimiento" alt="Rendimiento: ventas netas, utilidad estimada, gastos y retiro sugerido del mes." loading="lazy" width="1440" height="900"></div><figcaption>Rendimiento: ventas netas, utilidad estimada, gastos y retiro sugerido del mes.</figcaption></figure>
@@ -652,7 +710,7 @@
 
     <!-- 18 -->
     <section class="chapter" id="ajustes" style="--dot:#FEA4C3">
-      <div class="chapter-head"><span class="area">Ajustes</span><h2>19. Ajustes</h2></div>
+      <div class="chapter-head"><span class="area">Ajustes</span><h2>20. Ajustes</h2></div>
       <div class="route">Ruta: <code>/configuracion</code> · pestañas Tienda, Envíos y empaques, Pagos, Integraciones, Avanzado</div>
       <ul class="list">
         <li><strong>Tienda</strong>: logo, nombre, contacto, redes sociales y políticas.</li>
@@ -671,7 +729,7 @@
 
     <!-- 19 -->
     <section class="chapter" id="estados" style="--dot:#FFC105">
-      <div class="chapter-head"><span class="area">Referencia</span><h2>20. Estados y vocabulario</h2></div>
+      <div class="chapter-head"><span class="area">Referencia</span><h2>21. Estados y vocabulario</h2></div>
       <h3>Estados de pago de un pedido</h3>
       <div class="table-wrap"><table class="states">
         <tr><th>Insignia</th><th>Significa</th><th>Siguiente paso</th></tr>
@@ -692,7 +750,7 @@
 
     <!-- 20 -->
     <section class="chapter" id="problemas" style="--dot:#B2A4FE">
-      <div class="chapter-head"><span class="area">Referencia</span><h2>21. Si algo no cuadra</h2></div>
+      <div class="chapter-head"><span class="area">Referencia</span><h2>22. Si algo no cuadra</h2></div>
       <div class="table-wrap"><table class="states">
         <tr><th>Lo que ves</th><th>Qué revisar</th></tr>
         <tr><td>Cambié un producto y la tienda sigue mostrando lo anterior.</td><td>Espera unos segundos y recarga. Si persiste, Ajustes › Avanzado › limpiar caché de la tienda.</td></tr>
@@ -708,7 +766,7 @@
 
     <!-- 21 -->
     <section class="chapter" id="primer-dia" style="--dot:#5FC98D">
-      <div class="chapter-head"><span class="area">Referencia</span><h2>22. Primer día en el equipo</h2></div>
+      <div class="chapter-head"><span class="area">Referencia</span><h2>23. Primer día en el equipo</h2></div>
       <p>Una lista corta para quien empieza. Al terminarla ya puedes atender la tienda un día completo.</p>
       <ul class="checklist">
         <li>Entrar al panel con tu cuenta y confirmar que ves la tienda P de Papel.</li>
