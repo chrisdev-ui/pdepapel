@@ -5,6 +5,7 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  presaleCount: vi.fn().mockResolvedValue(0),
   findOutboxEvent: vi.fn(),
   claimOutboxEvent: vi.fn(),
   completeOutboxEvent: vi.fn(),
@@ -35,6 +36,8 @@ vi.mock("@/lib/prismadb", () => ({
     },
     marketplaceOrder: { findMany: mocks.findMarketplaceOrders },
     product: { findUnique: mocks.liveProduct },
+    // Sin preventa activa: estas pruebas cubren la carrera normal del stock.
+    productPresale: { count: mocks.presaleCount },
     $transaction: async (
       callback: (transaction: unknown) => Promise<unknown>,
     ) =>
@@ -110,8 +113,24 @@ describe("Mercado Libre stock sync race", () => {
     mocks.findOutboxEvent.mockResolvedValue(stockEvent(4));
   });
 
+  it("publica cero mientras el producto esté en preventa, aunque haya stock", async () => {
+    // La ventana peligrosa: al liberar una preventa llega la mercancía y el
+    // stock sube de golpe (aquí 40) antes de que los pedidos la consuman. Sin
+    // este candado, Mercado Libre vendería unidades ya cobradas en la tienda.
+    mocks.presaleCount.mockResolvedValue(1);
+    mocks.liveProduct.mockResolvedValue({ stock: 40 });
+    mocks.txProduct.mockResolvedValue({ stock: 40 });
+
+    await expect(processMarketplaceOutboxEvent("stock-event-id")).resolves.toEqual({
+      processed: true,
+      reason: "processed",
+    });
+    expect(sentQuantity()).toBe(0);
+  });
+
   it("pushes the live stock at processing time, not the quantity stored when the event was queued", async () => {
     // El evento se encoló con stock 5 (target 4); mientras esperaba, otra venta dejó 3.
+    mocks.presaleCount.mockResolvedValue(0);
     mocks.liveProduct.mockResolvedValue({ stock: 3 });
     mocks.txProduct.mockResolvedValue({ stock: 3 });
 

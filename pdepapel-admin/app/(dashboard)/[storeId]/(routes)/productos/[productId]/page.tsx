@@ -10,6 +10,7 @@ export default async function ProductPage({
 }) {
   const {
     product,
+    activePresale,
     categories,
     types,
     sizes,
@@ -46,6 +47,7 @@ export default async function ProductPage({
           catalogOptions={catalogOptions}
           productGroup={productGroup}
           productGroups={productGroups}
+          activePresale={activePresale}
         />
         </div>
         <ProductWorkspaceAside product={product} storeId={params.storeId} />

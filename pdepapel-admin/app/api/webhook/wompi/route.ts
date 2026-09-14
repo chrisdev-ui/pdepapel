@@ -267,7 +267,9 @@ async function updateOrderData(order: any, transaction: any) {
         const stockMovements = await explodeKitMovements(
           tx,
           order.orderItems
-            .filter((item: any) => item.product) // Filter out manual items
+            // Las líneas de preventa NO descuentan aquí: la mercancía todavía no
+          // existe. Su movimiento se escribe el día que Paula libera.
+          .filter((item: any) => item.product && !item.isPreorder) // Filter out manual items
             .map((orderItem: any) => ({
               productId: orderItem.productId,
               storeId: order.storeId,
@@ -376,7 +378,9 @@ async function updateOrderData(order: any, transaction: any) {
           const stockMovements = await explodeKitMovements(
             tx,
             order.orderItems
-              .filter((item: any) => item.product) // Filter out manual items
+              // Simétrico con la venta: una línea de preventa nunca descontó, así
+              // que devolverla crearía stock fantasma.
+              .filter((item: any) => item.product && !item.isPreorder) // Filter out manual items
               .map((orderItem: any) => ({
                 productId: orderItem.productId,
                 storeId: order.storeId,

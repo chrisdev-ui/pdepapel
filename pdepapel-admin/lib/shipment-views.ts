@@ -36,6 +36,12 @@ export interface ViewableShipment {
     status: OrderStatus;
     type: OrderType;
     paymentMethod?: PaymentMethod | null;
+    /**
+     * El pedido tiene una línea de preventa sin liberar. Frena el pedido
+     * COMPLETO, también lo que ya está en bodega: nunca se parte un envío.
+     * Lo calcula quien carga el envío, con `isOrderHeldByPresale`.
+     */
+    heldByPresale?: boolean;
   } | null;
 }
 
@@ -99,6 +105,8 @@ export function isReadyToDispatch(shipment: ViewableShipment, now = new Date()):
   if (!order) return false;
   if (order.type === OrderType.POINT_OF_SALE || order.type === OrderType.FESTIVAL) return false;
   if (CLOSED_ORDER.includes(order.status)) return false;
+  // Preventa sin liberar: el pedido entero espera, esté pagado o no.
+  if (order.heldByPresale) return false;
   if (order.status === OrderStatus.PAID) return true;
   return order.paymentMethod === PaymentMethod.COD;
 }

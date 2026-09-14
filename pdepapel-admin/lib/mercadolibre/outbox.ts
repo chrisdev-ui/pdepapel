@@ -7,6 +7,7 @@ import {
   Prisma,
 } from "@prisma/client";
 
+import { hasActivePresale } from "@/lib/presale";
 import prismadb from "@/lib/prismadb";
 
 import { getMercadoLibreAccessToken, mutateMercadoLibreJson } from "./client";
@@ -816,8 +817,16 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
         where: { id: event.listing!.product.id },
         select: { stock: true },
       });
-      const targetQuantity =
-        liveProduct === null
+      // Candado de preventa. Es el punto exacto donde esto importa: al liberar
+      // una preventa el stock sube de golpe con la mercancía recién llegada y
+      // vuelve a bajar mientras los pedidos consumen sus unidades. Un
+      // SYNC_STOCK que caiga en esa ventana le publicaría a Mercado Libre
+      // unidades que ya están vendidas y cobradas. Mientras la preventa esté
+      // activa, la cantidad allá es cero, pase lo que pase con el stock.
+      const inPresale = await hasActivePresale(event.listing!.product.id);
+      const targetQuantity = inPresale
+        ? 0
+        : liveProduct === null
           ? getTargetQuantity(event.payload)
           : Math.max(0, liveProduct.stock - event.listing!.stockSafetyBuffer);
       stockSnapshot = liveProduct?.stock ?? null;

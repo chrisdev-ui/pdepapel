@@ -33,6 +33,7 @@ const SECTIONS = [
   { id: "identificadores", label: "Identificadores" },
   { id: "clasificacion", label: "Clasificación y atributos" },
   { id: "visibilidad", label: "Visibilidad" },
+  { id: "preventa", label: "Preventa" },
   { id: "descripcion", label: "Descripción" },
   { id: "zona-de-cuidado", label: "Zona de cuidado" },
 ];

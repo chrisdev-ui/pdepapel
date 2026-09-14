@@ -84,6 +84,12 @@ export const PUBLIC_PRODUCT_SELECT = {
   isArchived: true,
   isKit: true,
   availableAt: true,
+  // Preventa activa: la tienda la necesita para saber si se puede reservar.
+  presales: {
+    where: { status: "ACTIVE" as const },
+    select: { id: true, expectedArrivalAt: true, unitLimit: true, committedUnits: true },
+    take: 1,
+  },
   createdAt: true,
   sku: true,
   brand: true,

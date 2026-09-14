@@ -16,6 +16,10 @@ import { normalizeGoogleAnalyticsClientId } from "@/lib/google-analytics";
 import { generateBoldCheckoutData } from "@/lib/bold";
 import { activeCouponWhere, assertCouponHasUses } from "@/lib/coupon-availability";
 import { getProductsPrices } from "@/lib/discount-engine";
+import {
+  getActivePresalesByProduct,
+  getPresaleCapacity,
+} from "@/lib/presale";
 import prismadb from "@/lib/prismadb";
 import { verifyEarlyAccessToken } from "@/lib/early-access";
 import { formatAvailableAt, isComingSoon } from "@/lib/product-availability";
@@ -359,6 +363,12 @@ async function createCheckout(
         (neededQuantities[item.productId] || 0) + item.quantity;
     });
 
+    // Preventas activas de los productos del carrito, de una sola consulta.
+    const activePresales = await getActivePresalesByProduct(
+      params.storeId,
+      products.map((product) => product.id),
+    );
+
     const outOfStockItems: {
       productId: string;
       productName: string;
@@ -379,10 +389,26 @@ async function createCheckout(
         );
       }
 
-      if (isComingSoon(product) && !hasEarlyAccess) {
+      if (isComingSoon(product) && !hasEarlyAccess && !activePresales.has(product.id)) {
         throw ErrorFactory.InvalidRequest(
           `"${product.name}" llega el ${formatAvailableAt(product.availableAt!)}; aún no se puede comprar`,
         );
+      }
+
+      // Preventa: se vende sin stock, contra el tope de la campaña. La reserva
+      // de verdad se hace más abajo, dentro de la transacción y con un candado
+      // atómico; esto solo decide si el carrito puede seguir.
+      const presale = activePresales.get(product.id);
+      if (presale) {
+        const remaining = getPresaleCapacity(presale).remaining;
+        if (remaining < requiredQuantity) {
+          throw ErrorFactory.InvalidRequest(
+            remaining === 0
+              ? `"${product.name}" ya no tiene reservas disponibles para la preventa.`
+              : `De "${product.name}" solo quedan ${remaining} reservas de preventa y pediste ${requiredQuantity}.`,
+          );
+        }
+        return;
       }
 
       if (product.stock < requiredQuantity) {
@@ -456,6 +482,11 @@ async function createCheckout(
           product.images[0]?.url ||
           "",
         isCustom: false,
+        // Marca de preventa: esta línea NO descuenta inventario hoy, y mientras
+        // no se libere frena el despacho del pedido COMPLETO.
+        ...(activePresales.has(productId)
+          ? { isPreorder: true, presaleId: activePresales.get(productId)!.id }
+          : {}),
       });
     }
 

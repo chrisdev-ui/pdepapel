@@ -1,5 +1,9 @@
 import { MarketplaceListingStatus, Prisma } from "@prisma/client";
 
+import {
+  PRESALE_BLOCKS_MARKETPLACE_MESSAGE,
+  hasActivePresale,
+} from "@/lib/presale";
 import { richTextToPlainText } from "@/lib/rich-text";
 
 import {
@@ -354,10 +358,25 @@ function getApiError(status: number, payload: unknown) {
   );
 }
 
+/**
+ * Candado de preventa. Un producto que se está vendiendo por adelantado no se
+ * publica en Mercado Libre, tenga el stock que tenga: ver el porqué largo en
+ * `lib/presale.ts`, resumido, que al liberar el stock sube de golpe y ML
+ * podría vender unidades ya cobradas a una clienta de la tienda.
+ */
+async function assertNotInPresale(productId: string) {
+  if (await hasActivePresale(productId)) {
+    throw new MercadoLibrePublicationError(PRESALE_BLOCKS_MARKETPLACE_MESSAGE, {
+      requiresDraftReview: true,
+    });
+  }
+}
+
 export async function validateMercadoLibreListingForPublication(
   listing: ListingForPublication,
   request: typeof fetch = fetch,
 ) {
+  await assertNotInPresale(listing.product.id);
   const payload = buildItemPayload(listing);
   let categoryInspection: Awaited<ReturnType<typeof inspectMercadoLibreCategory>>;
   try {
@@ -577,6 +596,7 @@ export async function createMercadoLibreItem(
 ): Promise<MercadoLibreCreatedItem> {
   await validateMercadoLibreListingForPublication(listing, request);
 
+  await assertNotInPresale(listing.product.id);
   const accessToken = await getMercadoLibreAccessToken(listing.connectionId);
   let response: Response;
   try {

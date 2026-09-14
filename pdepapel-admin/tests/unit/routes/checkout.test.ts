@@ -31,6 +31,8 @@ vi.mock("@/lib/prismadb", () => ({
       findUnique: mocks.findOrder,
     },
     product: { findMany: mocks.findProducts },
+    // Sin preventas activas: estas pruebas cubren la compra normal.
+    productPresale: { findMany: vi.fn().mockResolvedValue([]) },
     shippingQuote: { findMany: mocks.findShippingQuotes },
     store: {
       findUnique: vi.fn().mockResolvedValue({ freeShippingThreshold: null }),

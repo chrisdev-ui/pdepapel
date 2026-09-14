@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  presaleCount: vi.fn().mockResolvedValue(0),
   getMercadoLibreAccessToken: vi.fn().mockResolvedValue("access-token"),
   requestMercadoLibreJson: vi.fn(
     async (_connectionId: string, resource: string, request: typeof fetch) => {
@@ -22,6 +23,13 @@ const mocks = vi.hoisted(() => ({
   ),
 }));
 
+// El candado de preventa consulta la base: sin preventa activa, publicar se
+// comporta igual que siempre. La prueba de que SÍ bloquea está más abajo.
+vi.mock("@/lib/prismadb", () => ({
+  default: { productPresale: { count: mocks.presaleCount } },
+}));
+
+
 vi.mock("@/lib/mercadolibre/client", () => ({
   getMercadoLibreAccessToken: mocks.getMercadoLibreAccessToken,
   requestMercadoLibreJson: mocks.requestMercadoLibreJson,
@@ -30,6 +38,45 @@ vi.mock("@/lib/mercadolibre/client", () => ({
 import { publishMercadoLibreListing } from "@/lib/mercadolibre/listings";
 
 describe("Mercado Libre listing publication", () => {
+  it("se niega a publicar un producto que está en preventa", async () => {
+    // El caso costoso: al liberar una preventa el stock sube de golpe con la
+    // mercancía recién llegada. Sin este candado, Mercado Libre publicaría
+    // unidades ya vendidas y cobradas a una clienta de la tienda.
+    mocks.presaleCount.mockResolvedValueOnce(1);
+    const request = vi.fn();
+
+    await expect(
+      publishMercadoLibreListing(
+        {
+          id: "listing-id",
+          connectionId: "connection-id",
+          categoryId: "MCO1234",
+          listingType: "gold_special",
+          marketplacePrice: 19_900,
+          stockSafetyBuffer: 0,
+          metadata: { familyName: "Agenda kawaii", attributes: [] },
+          product: {
+            id: "product-id",
+            name: "Agenda kawaii",
+            description: "<p>Agenda</p>",
+            // Con stock de sobra: el candado no depende del stock.
+            stock: 40,
+            sku: "AGENDA-01",
+            brand: "P de Papel",
+            gtin: "7701234567890",
+            mpn: "AGENDA-01",
+            isArchived: false,
+            images: [{ url: "https://res.cloudinary.com/demo/image/upload/a.jpg", isMain: true }],
+          },
+        } as never,
+        request,
+      ),
+    ).rejects.toThrow(/preventa/i);
+
+    // Ni siquiera se contactó a Mercado Libre.
+    expect(request).not.toHaveBeenCalled();
+  });
+
   it("uses the marketplace price and safety stock instead of the storefront price", async () => {
     const request = vi
       .fn()

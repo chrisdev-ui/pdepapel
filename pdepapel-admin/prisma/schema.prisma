@@ -76,6 +76,7 @@ model Store {
   newsletterSubscribers          NewsletterSubscriber[]          @relation("StoreToNewsletterSubscriber")
   conversations                  Conversation[]                  @relation("StoreToConversation")
   whatsAppBotReplies             WhatsAppBotReply[]              @relation("StoreToWhatsAppBotReply")
+  productPresales                ProductPresale[]                @relation("StoreToProductPresale")
   fairEvents                     FairEvent[]
   marketplaceConnections         MarketplaceConnection[]
   marketplaceOAuthStates         MarketplaceOAuthState[]
@@ -429,6 +430,7 @@ model Product {
   catalogOptionValues         ProductCatalogOptionValue[]
   catalogMigrationSuggestions CatalogMigrationSuggestion[]
   homeContents                HomeContentProduct[]
+  presales                    ProductPresale[]
 
   // -- KIT / COMBO FIELDS --
   isKit         Boolean      @default(false)
@@ -827,6 +829,14 @@ model OrderItem {
   imageUrl String? @default("")
   isCustom Boolean @default(false)
 
+  /// Esta línea se vendió por adelantado: al pagarse NO descontó inventario.
+  isPreorder Boolean @default(false)
+  /// Cuándo se liberó (llegó la mercancía y se escribió su movimiento). Con
+  /// `isPreorder` en true y esto en null, el PEDIDO ENTERO está frenado.
+  preorderReleasedAt DateTime?
+  /// Campaña de la que salió; sin relación declarada para no cargar el modelo.
+  presaleId String?
+
   order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product     Product?     @relation(fields: [productId], references: [id], onDelete: Restrict) // Optional Link
   fairCapsule FairCapsule?
@@ -839,6 +849,9 @@ model OrderItem {
   @@index([productId, quantity])
   @@index([orderId, productId, quantity])
   @@index([productId, orderId, quantity])
+  /// Para preguntar rápido «¿este pedido tiene preventa sin liberar?».
+  @@index([orderId, isPreorder, preorderReleasedAt])
+  @@index([presaleId])
 }
 
 enum HomeContentPlacement {
@@ -2117,6 +2130,54 @@ enum ConversationMessageStatus {
   DELIVERED
   READ
   FAILED
+}
+
+/// Estado de una campaña de preventa de un producto.
+enum ProductPresaleStatus {
+  /// Se está vendiendo por adelantado. Es el único estado que reserva unidades.
+  ACTIVE
+  /// Llegó la mercancía y los pedidos ya salieron al despacho normal.
+  RELEASED
+  /// Se canceló sin llegar a liberarse.
+  CANCELLED
+}
+
+/// Campaña de preventa: vender un producto antes de tenerlo en bodega.
+///
+/// Vive aparte de `Product` para guardar historia: un producto puede hacer
+/// varias preventas a lo largo del tiempo y cada una tiene su fecha, su tope y
+/// su registro de quién liberó o avisó un retraso.
+///
+/// No toca `Product.stock` nunca. Las unidades prometidas se llevan en
+/// `committedUnits`, que solo se mira en la pantalla de Preventas: Inventario,
+/// «Por reponer» y el kardex siguen leyendo únicamente el stock real.
+model ProductPresale {
+  id        String               @id @default(uuid())
+  storeId   String
+  productId String
+  status    ProductPresaleStatus @default(ACTIVE)
+  /// Fecha que se le promete a la clienta. Pasada esta fecha sin liberar, la
+  /// preventa está vencida.
+  expectedArrivalAt DateTime
+  /// Cuántas unidades se pueden prometer como máximo.
+  unitLimit Int
+  /// Unidades ya reservadas. Se sube con el mismo candado atómico que el stock.
+  committedUnits Int @default(0)
+  releasedAt     DateTime?
+  releasedBy     String?
+  /// Aviso de retraso: queda anotado por si una clienta reclama después.
+  delayNotifiedAt DateTime?
+  delayNotifiedBy String?
+  createdBy       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  store   Store   @relation("StoreToProductPresale", fields: [storeId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([storeId, status, expectedArrivalAt])
+  @@index([productId, status])
+  @@index([storeId, productId])
 }
 
 enum OrderSource {

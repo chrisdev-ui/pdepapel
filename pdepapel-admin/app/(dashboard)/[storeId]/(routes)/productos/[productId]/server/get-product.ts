@@ -1,5 +1,6 @@
 "use server";
 
+import { ProductPresaleStatus } from "@prisma/client";
 import { ACTIVE_ATTRIBUTE_WHERE, activeOrCurrentWhere } from "@/lib/attribute-archive";
 import prismadb from "@/lib/prismadb";
 import { format } from "date-fns";
@@ -31,6 +32,21 @@ export async function getProduct(id: string, storeId: string) {
       },
     },
   });
+  // Preventa activa del producto, si la hay. Va como consulta aparte a
+  // propósito: meterla en el `include` de arriba cambiaría el tipo de
+  // `product` y eso se propaga por todo el formulario.
+  const activePresale = product
+    ? await prismadb.productPresale.findFirst({
+        where: { productId: product.id, storeId, status: ProductPresaleStatus.ACTIVE },
+        select: {
+          id: true,
+          expectedArrivalAt: true,
+          unitLimit: true,
+          committedUnits: true,
+        },
+      })
+    : null;
+
   // Los formularios solo ofrecen atributos activos, pero conservan el que el
   // producto ya tiene aunque esté archivado para no romper la edición.
   const categories = await prismadb.category.findMany({
@@ -150,6 +166,14 @@ export async function getProduct(id: string, storeId: string) {
 
   return {
     product,
+    activePresale: activePresale
+      ? {
+          id: activePresale.id,
+          expectedArrivalAt: activePresale.expectedArrivalAt.toISOString(),
+          unitLimit: activePresale.unitLimit,
+          committedUnits: activePresale.committedUnits,
+        }
+      : null,
     categories,
     types,
     sizes,

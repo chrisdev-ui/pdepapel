@@ -59,6 +59,10 @@ import { StockQuantityInput } from "@/components/ui/stock-quantity-input";
 import { SuggestionStrip } from "@/components/ui/suggestion-strip";
 import { BarcodeScanner } from "@/components/ui/barcode-scanner";
 import { focusFirstInvalidField } from "@/lib/focus-invalid-field";
+import {
+  PresaleSection,
+  type ProductPresaleSummary,
+} from "@/components/products/presale-section";
 import { availableAtToInput } from "@/lib/product-availability";
 import {
   Tooltip,
@@ -235,6 +239,8 @@ interface ProductFormProps {
   productGroup: ProductGroup;
   productGroups: ProductGroups;
   catalogOptions: CatalogOptionSuggestion[];
+  /** Preventa activa del producto, si tiene una abierta. */
+  activePresale?: ProductPresaleSummary | null;
 }
 
 /** Un atributo archivado sigue seleccionable solo si el producto ya lo tenía. */
@@ -253,6 +259,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   productGroup,
   productGroups,
   catalogOptions,
+  activePresale = null,
 }) => {
   const params = useParams();
   const router = useRouter();
@@ -2119,6 +2126,12 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 />
               </div>
             </SectionCard>
+            <PresaleSection
+              storeId={String(params.storeId)}
+              productId={initialData?.id ?? null}
+              presale={activePresale}
+              isKit={Boolean(initialData?.isKit)}
+            />
             <SectionCard
               id="descripcion"
               title="Descripción"

@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   MessagesSquare,
   BarChart3,
+  CalendarClock,
   BookOpen,
   ClipboardList,
   History,
@@ -39,7 +40,9 @@ export type NavBadgeKey =
   | "lowStock"
   | "marketplacePending"
   /** Conversaciones de WhatsApp esperando a que conteste una persona. */
-  | "conversationsNeedOwner";
+  | "conversationsNeedOwner"
+  /** Preventas cuya fecha prometida ya pasó sin liberar. */
+  | "presalesOverdue";
 
 export interface NavChild {
   label: string;
@@ -140,6 +143,13 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: "Clientes", segment: "clientes" },
           { label: "Reseñas", segment: "clientes?tab=resenas" },
         ],
+      },
+      {
+        id: "preventas",
+        label: "Preventas",
+        icon: CalendarClock,
+        segment: "preventas",
+        badge: "presalesOverdue",
       },
       {
         id: "conversaciones",
@@ -314,6 +324,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
 ];
 
 const SEGMENT_LABELS: Record<string, string> = {
+  preventas: "Preventas",
   conversaciones: "Conversaciones",
   respuestas: "Respuestas automáticas",
   manual: "Manual del panel",

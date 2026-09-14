@@ -3,6 +3,7 @@ import { compareUrgency, computeReplenishment, describeCover } from "@/lib/reple
 import { getUnitsOnOrderByProduct, getUnitsSoldByProduct } from "@/lib/replenishment-db";
 import { createSettledMarketplaceSalesWhere } from "@/lib/mercadolibre/reporting";
 import { AWAITING_PAYMENT_STALE_HOURS, AWAITING_PAYMENT_WINDOW_DAYS, STALE_IN_TRANSIT_DAYS } from "@/lib/order-queues";
+import { ORDER_READY_TO_DISPATCH } from "@/lib/presale";
 import prismadb from "@/lib/prismadb";
 import { hasStoreLowStockThreshold, resolveLowStockThreshold } from "@/lib/product-readiness";
 import { OrderStatus, OrderType, PaymentMethod, ShippingStatus } from "@prisma/client";
@@ -353,7 +354,14 @@ export async function getTodaySummary(storeId: string, now = new Date()): Promis
     storeId,
     status: OrderStatus.PAID,
     type: { in: SHIPPABLE_TYPES },
-    AND: [paidWithin(dispatchSince, now), { OR: [{ shipping: null }, { shipping: { trackingCode: null } }] }],
+    AND: [
+      paidWithin(dispatchSince, now),
+      { OR: [{ shipping: null }, { shipping: { trackingCode: null } }] },
+      // Un pedido con preventa sin liberar no está atrasado: está esperando
+      // mercancía, y espera COMPLETO. Se excluye a nivel de pedido, no de
+      // línea, porque no se parten envíos.
+      ORDER_READY_TO_DISPATCH,
+    ],
   };
   // «Por reponer» con la misma regla que Inventario: cobertura por ventas de
   // los últimos 30 días, umbral de la tienda como respaldo, sin kits (su stock

@@ -3,6 +3,8 @@ import { StoreInitializer } from "@/components/store-initializer";
 import { env } from "@/lib/env.mjs";
 import { ConversationStatus } from "@prisma/client";
 
+import { overduePresaleWhere } from "@/lib/presale";
+
 import prismadb from "@/lib/prismadb";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
@@ -28,7 +30,7 @@ export default async function DashboardLayout({
     redirect("/");
   }
 
-  const [stores, pendingOrders, lowStock, conversationsNeedOwner] =
+  const [stores, pendingOrders, lowStock, conversationsNeedOwner, presalesOverdue] =
     await Promise.all([
     prismadb.store.findMany({ where: { userId } }),
     prismadb.order
@@ -46,6 +48,11 @@ export default async function DashboardLayout({
         where: { storeId: params.storeId, status: ConversationStatus.NEEDS_OWNER },
       })
       .catch(() => 0),
+    // Preventas con la fecha prometida ya vencida: le debemos un aviso a una
+    // clienta que ya pagó, así que es lo más urgente de la barra.
+    prismadb.productPresale
+      .count({ where: { storeId: params.storeId, ...overduePresaleWhere() } })
+      .catch(() => 0),
   ]);
 
   return (
@@ -55,7 +62,7 @@ export default async function DashboardLayout({
         storeId={params.storeId}
         stores={stores}
         storeUrl={env.FRONTEND_STORE_URL}
-        counts={{ pendingOrders, lowStock, conversationsNeedOwner }}
+        counts={{ pendingOrders, lowStock, conversationsNeedOwner, presalesOverdue }}
       >
         {children}
       </AppShell>
