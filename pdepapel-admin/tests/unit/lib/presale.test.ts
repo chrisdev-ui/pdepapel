@@ -11,6 +11,7 @@ vi.mock("@/lib/prismadb", () => ({
   },
 }));
 
+import { handleErrorResponse } from "@/lib/api-errors";
 import {
   ORDER_READY_TO_DISPATCH,
   getPresaleCapacity,
@@ -139,36 +140,44 @@ describe("parsePresaleInput", () => {
     }
   });
 
-  it("habla en español cuando falta un campo, no «Required»", () => {
-    // zod responde "Required" en inglés si no se le da required_error, y esto
-    // es un panel en español.
+  it("habla en español cuando falta un campo, no «Required»", async () => {
+    // Se comprueba en la respuesta HTTP, que es donde lo lee una persona:
+    // `parsePresaleInput` deja escapar el ZodError y lo traduce
+    // `handleErrorResponse`. Antes esta prueba miraba error.message, que en un
+    // ZodError es un JSON con los mensajes dentro y pasaba por casualidad.
     for (const [malo, esperado] of [
       [{ expectedArrivalAt: "2099-01-01", unitLimit: 5 }, /producto/i],
       [{ productId: "p1", unitLimit: 5 }, /fecha/i],
       [{ productId: "p1", expectedArrivalAt: "2099-01-01" }, /unidades/i],
     ] as [Record<string, unknown>, RegExp][]) {
+      let capturado: unknown;
       try {
         parsePresaleInput(malo);
-        throw new Error("debió rechazar");
       } catch (error) {
-        expect((error as Error).message).not.toBe("Required");
-        expect((error as Error).message).toMatch(esperado);
+        capturado = error;
       }
+      const response = handleErrorResponse(capturado, "test");
+      expect(response.status).toBe(400);
+      const cuerpo = (await response.json()) as { error: string };
+      expect(cuerpo.error).not.toBe("Required");
+      expect(cuerpo.error).not.toBe("Error interno del servidor");
+      expect(cuerpo.error).toMatch(esperado);
     }
   });
 
-  it("convierte un fallo de esquema en 400 con el mensaje del campo", () => {
+  it("un valor inválido termina en 400, no en 500", async () => {
     for (const malo of [
       { ...valido, productId: "" },
       { ...valido, unitLimit: 0 },
       { ...valido, unitLimit: 1.5 },
     ]) {
+      let capturado: unknown;
       try {
         parsePresaleInput(malo);
-        throw new Error("debió rechazar");
       } catch (error) {
-        expect((error as { statusCode?: number }).statusCode).toBe(400);
+        capturado = error;
       }
+      expect(handleErrorResponse(capturado, "test").status).toBe(400);
     }
   });
 });

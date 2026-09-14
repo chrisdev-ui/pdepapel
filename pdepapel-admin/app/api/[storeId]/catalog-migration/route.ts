@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
 
-import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { AppError, ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import {
   applyCatalogMigrationSuggestions,
   catalogMigrationPayloadSchema,
@@ -94,7 +94,19 @@ export async function GET(
         },
         suggestions: suggestions.map((suggestion) => ({
           ...suggestion,
-          payload: catalogMigrationPayloadSchema.parse(suggestion.payload),
+          // Datos guardados: si no encajan es problema nuestro, no de quien
+          // pide la lista, así que no puede salir como un 400 de validación.
+          payload: (() => {
+            const parsed = catalogMigrationPayloadSchema.safeParse(suggestion.payload);
+            if (!parsed.success) {
+              throw new AppError(
+                "Una sugerencia guardada tiene un formato que ya no se entiende. Vuelve a generarlas.",
+                500,
+                { suggestionId: suggestion.id },
+              );
+            }
+            return parsed.data;
+          })(),
         })),
       },
       { headers: CACHE_HEADERS.NO_CACHE },

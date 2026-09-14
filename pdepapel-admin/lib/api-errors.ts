@@ -2,6 +2,7 @@ import { GENERIC_ERROR } from "@/constants";
 import { Prisma } from "@prisma/client";
 import axios from "axios";
 import { NextResponse } from "next/server";
+import { ZodError, type ZodIssue } from "zod";
 
 export class AppError extends Error {
   constructor(
@@ -91,6 +92,50 @@ export const ErrorFactory = {
     ),
 };
 
+
+/**
+ * Un fallo de validación de zod es culpa de quien llama, no del servidor.
+ *
+ * Sin esto, cualquier ruta que valide con `.parse()` terminaba en el 500
+ * genérico: quien usa el panel leía «Error interno del servidor» por haber
+ * escrito mal una fecha. Se descubrió con las preventas, pero afectaba a todas.
+ *
+ * La forma de la respuesta es la misma que ya usaban las rutas con
+ * `safeParse`: el mensaje del PRIMER problema —que es el que se muestra— y el
+ * resto por campo en `details.fieldErrors`, para quien quiera pintarlos junto
+ * a cada casilla.
+ */
+function zodIssueMessage(issue: ZodIssue | undefined): string {
+  if (!issue) return "Los datos enviados no son válidos";
+
+  const campo = issue.path
+    .filter((parte) => typeof parte === "string" || typeof parte === "number")
+    .join(".");
+
+  const mensaje = issue.message?.trim();
+
+  // Un campo ausente trae el «Required» en inglés de zod cuando el esquema no
+  // definió `required_error`. Solo se traduce en ese caso: si el esquema sí
+  // escribió su mensaje, manda el suyo — pisarlo cambiaría textos que ya
+  // están en producción y probados.
+  const esDefaultDeZod = !mensaje || mensaje === "Required";
+  if (issue.code === "invalid_type" && issue.received === "undefined" && esDefaultDeZod) {
+    return campo ? `Falta el campo «${campo}»` : "Faltan datos obligatorios";
+  }
+
+  if (!mensaje) {
+    return campo ? `El campo «${campo}» no es válido` : "Los datos enviados no son válidos";
+  }
+  return mensaje;
+}
+
+/** Convierte un ZodError en el 400 que ya devuelven las rutas con `safeParse`. */
+export function zodErrorToAppError(error: ZodError): AppError {
+  return new AppError(zodIssueMessage(error.issues[0]), 400, {
+    fieldErrors: error.flatten().fieldErrors,
+  });
+}
+
 export type ErrorHandlerOptions = {
   headers?: Record<string, string>;
   expectedStatusCodes?: readonly number[];
@@ -98,10 +143,14 @@ export type ErrorHandlerOptions = {
 };
 
 export const handleErrorResponse = (
-  error: unknown,
+  rawError: unknown,
   context?: string,
   options: ErrorHandlerOptions = {},
 ) => {
+  // Se normaliza primero: así el 400 de validación pasa por el mismo camino
+  // (y el mismo criterio de log) que cualquier otro error de negocio.
+  const error = rawError instanceof ZodError ? zodErrorToAppError(rawError) : rawError;
+
   const isExpectedAppError =
     error instanceof AppError &&
     options.expectedStatusCodes?.includes(error.statusCode);

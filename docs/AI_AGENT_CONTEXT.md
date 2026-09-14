@@ -216,6 +216,14 @@ Large forms require particularly careful, scoped changes: product forms, product
 - Fairs: `lib/fair-events.ts`, `lib/fair-reconciliation-import.ts`, `lib/fair-reconciliation-template-xlsx.ts`.
 - Communication: `lib/email.ts`, `lib/resend.ts`, `lib/message-templates.ts`, `lib/reactivation.ts`, `lib/newsletter.ts`.
 
+### API validation and error responses (2026-09-14)
+
+- Every route answers through `handleErrorResponse` (`lib/api-errors.ts`). It maps `AppError` to its own status, Prisma failures to 409/404/400/503, and **`ZodError` to 400** with the first issue's message plus `details.fieldErrors`.
+- **`.parse()` on user input is safe.** A schema failure on a request body reaches the caller as a readable 400 naming the bad field; there is no need to wrap it. Authored messages win — `handleErrorResponse` only translates zod's English `"Required"` when the schema did not set `required_error`, so a schema's own Spanish text is never overwritten.
+- **`.parse()` on stored data is not safe.** A schema failure on something read back from MySQL (a JSON column, a persisted payload) is corrupt data of ours, not a bad request, and the central branch cannot tell the two apart. Catch it and re-raise a 500 with a message that says so. Follow `parseStoredSuggestionPayload` in `lib/catalog-migration.ts`; the same shape guards `app/api/[storeId]/catalog-migration/route.ts`.
+- `safeParse` + `ErrorFactory.InvalidRequest(issues[0].message, { fieldErrors })` remains equally valid and is what most routes already do (`app/api/[storeId]/boxes/route.ts` is the model). Both paths produce the same response shape.
+- Why this exists: until 2026-09-14 there was no `ZodError` branch, so every route validating with `.parse()` answered `500 "Error interno del servidor"` on bad input. Found when a past presale arrival date crashed instead of explaining itself.
+
 ### Admin webhooks and scheduled work
 
 Current externally significant handlers include:
@@ -945,6 +953,7 @@ npx prisma generate
 - Do not run a real purchase flow against production. For safe purchase E2E use a non-production URL and set `E2E_PURCHASABLE_PRODUCT_SLUG`.
 - Admin Playwright creates its own app on port `3101`; authenticated tests require Clerk Agent Tasks plus an isolated test user and test database.
 - Each Prisma integration test must create and clean up its own data.
+- `zod.parse()` on a **request body** is fine (`handleErrorResponse` turns a `ZodError` into a 400). On data read back from the **database** it is a trap: the same branch would report corrupt stored data as a client error. Guard those with `safeParse` and raise a 500 — see `parseStoredSuggestionPayload` in `lib/catalog-migration.ts`.
 - For any bug fix, first add a regression test that would have failed before the fix whenever practical.
 - After testing with a local server, explicitly stop it. After Docker integration tests, run `npm run test:db:down` to free memory and remove test data.
 - `public-health.yml` runs the store E2E after a successful production deployment. Vercel names GitHub deployment environments `Production – <project>`, so the job condition must match that prefix (`startsWith(..., 'production')`) and skip `pdepapel-admin`; an exact `== 'Production'` comparison silently skips every run, which is how the 2026-09-01 analytics outage went unnoticed.

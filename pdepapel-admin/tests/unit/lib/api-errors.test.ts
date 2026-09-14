@@ -5,6 +5,7 @@ import {
   handleErrorResponse,
 } from "@/lib/api-errors";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 const consoleInfo = vi.spyOn(console, "info").mockImplementation(() => {});
@@ -61,6 +62,59 @@ describe("API error helpers", () => {
       error: "Stock insuficiente",
       details: { productId: "product-id" },
     });
+  });
+
+  it("turns a validation failure into 400 with the field's own message", async () => {
+    // Antes caía en el 500 genérico: quien usaba el panel leía «Error interno
+    // del servidor» por escribir mal una fecha. Se descubrió con las
+    // preventas, pero afectaba a toda ruta que validara con .parse().
+    const schema = z.object({
+      expectedArrivalAt: z.string({ required_error: "Ponle la fecha en que llega" }),
+      unitLimit: z.number().min(1, "Promete al menos una unidad"),
+    });
+
+    let capturado: unknown;
+    try {
+      schema.parse({ unitLimit: 0 });
+    } catch (error) {
+      capturado = error;
+    }
+
+    const response = handleErrorResponse(capturado, "crear preventa");
+
+    expect(response.status).toBe(400);
+    const cuerpo = (await response.json()) as { error: string; details?: { fieldErrors?: Record<string, string[]> } };
+    // El PRIMER problema es el que se muestra, como en las rutas con safeParse.
+    expect(cuerpo.error).toBe("Ponle la fecha en que llega");
+    // Y el resto queda por campo, para pintarlo junto a cada casilla.
+    expect(cuerpo.details?.fieldErrors).toMatchObject({
+      unitLimit: ["Promete al menos una unidad"],
+    });
+  });
+
+  it("translates zod's English «Required» but never overrides a written message", async () => {
+    const sinMensaje = z.object({ productId: z.string() });
+    const conMensaje = z.object({ productId: z.string({ required_error: "Elige el producto" }) });
+
+    const leer = async (schema: z.ZodTypeAny) => {
+      try {
+        schema.parse({});
+      } catch (error) {
+        const r = handleErrorResponse(error, "test");
+        return ((await r.json()) as { error: string }).error;
+      }
+      throw new Error("debió fallar");
+    };
+
+    expect(await leer(sinMensaje)).toBe("Falta el campo «productId»");
+    // Pisar el mensaje del esquema cambiaría textos ya probados en producción.
+    expect(await leer(conMensaje)).toBe("Elige el producto");
+  });
+
+  it("keeps an unexpected error generic even if it carries zod-looking data", async () => {
+    const response = handleErrorResponse(new Error("Required"), "test");
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({ error: "Error interno del servidor" });
   });
 
   it("returns a safe generic response for unexpected errors", async () => {

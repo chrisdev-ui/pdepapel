@@ -8,6 +8,7 @@ import {
   normalizeCatalogOptionKey,
   splitTaxonomyIcon,
 } from "@/lib/catalog-options";
+import { AppError } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
 
 export const catalogMigrationAttributeSchema = z.object({
@@ -79,6 +80,27 @@ export const visualCatalogAttributesSchema = z
 export type EditableCatalogAttribute = z.infer<
   typeof visualCatalogAttributesSchema
 >[number];
+
+/**
+ * Lee el payload guardado de una sugerencia.
+ *
+ * Va aparte porque aquí un fallo de esquema NO es culpa de quien llama: son
+ * datos nuestros que quedaron con una forma que ya no entendemos. Desde que
+ * `handleErrorResponse` traduce cualquier ZodError a un 400, dejarlo suelto
+ * haría pasar por «solicitud inválida» lo que en realidad es un problema de
+ * la base de datos.
+ */
+function parseStoredSuggestionPayload(payload: unknown, suggestionId: string) {
+  const parsed = catalogMigrationPayloadSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new AppError(
+      "La sugerencia guardada tiene un formato que ya no se entiende. Vuelve a generarla.",
+      500,
+      { suggestionId, issues: parsed.error.flatten().fieldErrors },
+    );
+  }
+  return parsed.data;
+}
 
 export async function syncProductCatalogAttributes(
   tx: Prisma.TransactionClient,
@@ -276,7 +298,7 @@ export async function mergeVisualCatalogAttributes(input: {
   });
   if (!suggestion) return null;
 
-  const payload = catalogMigrationPayloadSchema.parse(suggestion.payload);
+  const payload = parseStoredSuggestionPayload(suggestion.payload, suggestion.id);
   const attributesByKey = new Map(
     payload.attributes.map((attribute) => [attribute.key, attribute]),
   );
@@ -326,7 +348,7 @@ export async function updateCatalogMigrationAttributes(input: {
   });
   if (!suggestion) return null;
 
-  const payload = catalogMigrationPayloadSchema.parse(suggestion.payload);
+  const payload = parseStoredSuggestionPayload(suggestion.payload, suggestion.id);
   const attributes = z
     .array(catalogMigrationAttributeSchema)
     .max(8)
@@ -357,7 +379,7 @@ async function applySuggestion(
 ) {
   if (!suggestion.productId) return false;
 
-  const payload = catalogMigrationPayloadSchema.parse(suggestion.payload);
+  const payload = parseStoredSuggestionPayload(suggestion.payload, suggestion.id);
   const product = await tx.product.findFirst({
     where: { id: suggestion.productId, storeId: suggestion.storeId },
     select: { id: true, categoryId: true },
