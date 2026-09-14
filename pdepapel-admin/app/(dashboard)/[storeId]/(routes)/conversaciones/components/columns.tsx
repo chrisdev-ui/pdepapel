@@ -42,7 +42,9 @@ export const columns: ColumnDef<ConversationColumn>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Teléfono" />
     ),
-    cell: ({ row }) => <DataTableCellPhone phoneNumber={row.original.phone} />,
+    cell: ({ row }) => (
+      <DataTableCellPhone phoneNumber={row.original.phone} showCountry />
+    ),
   },
   {
     accessorKey: "status",
