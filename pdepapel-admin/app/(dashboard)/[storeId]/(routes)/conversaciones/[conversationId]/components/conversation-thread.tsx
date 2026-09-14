@@ -1,7 +1,7 @@
 "use client";
 
 import axios from "axios";
-import { AlertTriangle, ArrowLeft, CheckCircle2, RotateCcw, ShoppingBag } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, Receipt, RotateCcw, ShoppingBag } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -151,6 +151,34 @@ export function ConversationThread({
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const isResolved = conversation.status === ConversationStatus.RESOLVED;
+  // Solo se ofrece crear el pedido si de verdad llegó un carrito.
+  const hasCart = conversation.messages.some((message) => message.cart !== null);
+
+  const createOrder = async () => {
+    try {
+      setLoading(true);
+      const { data } = await axios.post<{ orderId: string; existing: boolean }>(
+        `/api/${storeId}/conversations/${conversation.id}/order`,
+      );
+      router.push(`/${storeId}/pedidos/${data.orderId}`);
+      router.refresh();
+      toast({
+        title: data.existing ? "Este chat ya tenía un pedido" : "Pedido creado en borrador",
+        description: data.existing
+          ? "Te llevo al pedido que ya existía."
+          : "Quedó con los productos del carrito. Faltan dirección, envío y pago.",
+        variant: "success",
+      });
+    } catch (error) {
+      toast({
+        title: "No se pudo crear el pedido",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const setStatus = async (status: ConversationStatus) => {
     try {
@@ -183,6 +211,19 @@ export function ConversationThread({
           <Badge variant={isResolved ? "secondary" : "default"}>
             {CONVERSATION_STATUS_LABELS[conversation.status]}
           </Badge>
+          {conversation.orderId ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push(`/${storeId}/pedidos/${conversation.orderId}`)}
+            >
+              <Receipt className="mr-2 h-4 w-4" /> Ver pedido
+            </Button>
+          ) : hasCart ? (
+            <Button variant="outline" size="sm" disabled={loading} onClick={createOrder}>
+              <Receipt className="mr-2 h-4 w-4" /> Crear pedido
+            </Button>
+          ) : null}
           <Button
             variant="outline"
             size="sm"
