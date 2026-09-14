@@ -1,5 +1,5 @@
 {
-  "ignoreCommand": "git diff HEAD^ HEAD --quiet -- .",
+  "ignoreCommand": "BASE=${VERCEL_GIT_PREVIOUS_SHA:-HEAD^}; git cat-file -e \"$BASE^{commit}\" 2>/dev/null || BASE=HEAD^; git diff --quiet \"$BASE\" HEAD -- .",
   "crons": [
     {
       "path": "/api/cron/update-coupons",
