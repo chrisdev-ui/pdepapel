@@ -7,6 +7,7 @@ const APP_SECRET = "meta-app-secret";
 const mocks = vi.hoisted(() => ({
   findFirst: vi.fn(),
   upsert: vi.fn(),
+  findUniqueOrThrow: vi.fn(),
   enqueue: vi.fn(),
   env: { WHATSAPP_WEBHOOK_VERIFY_TOKEN: "test-whatsapp-verify-token-0123456789", WHATSAPP_APP_SECRET: undefined as string | undefined },
 }));
@@ -16,7 +17,10 @@ vi.mock("@/lib/whatsapp/queue", () => ({ enqueueWhatsAppWebhookEvent: mocks.enqu
 vi.mock("@/lib/prismadb", () => ({
   default: {
     marketplaceConnection: { findFirst: mocks.findFirst },
-    marketplaceWebhookEvent: { upsert: mocks.upsert },
+    marketplaceWebhookEvent: {
+      upsert: mocks.upsert,
+      findUniqueOrThrow: mocks.findUniqueOrThrow,
+    },
   },
 }));
 
@@ -136,9 +140,41 @@ describe("POST /api/webhook/whatsapp", () => {
     expect(mocks.enqueue).toHaveBeenCalledWith("event-id", null);
   });
 
+  it("treats a concurrent duplicate delivery as saved instead of as a failure", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    // Dos entregas del mismo evento a la vez: esta pierde la carrera contra la
+    // restricción única, pero la fila ya existe gracias a su gemela.
+    const { Prisma } = await import("@prisma/client");
+    mocks.upsert.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+        code: "P2002",
+        clientVersion: "6.19.1",
+      }),
+    );
+    mocks.findUniqueOrThrow.mockResolvedValue({ id: "event-id", connectionId: "connection-id" });
+
+    const response = await post(metaBody, { url: `${BASE}?token=${VERIFY_TOKEN}` });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ stored: true, eventId: "event-id", connectedAccount: true });
+    expect(mocks.findUniqueOrThrow).toHaveBeenCalledWith({
+      where: { provider_eventKey: { provider: "WHATSAPP", eventKey: "wamid.ABC" } },
+      select: { id: true, connectionId: true },
+    });
+    // La fila recuperada se encola igual: el evento no se pierde.
+    expect(mocks.enqueue).toHaveBeenCalledWith("event-id", "573001234567");
+    // Y no se reporta como fallo de guardado.
+    expect(error).not.toHaveBeenCalledWith(
+      "[WHATSAPP_WEBHOOK] No se pudo guardar el evento",
+      expect.anything(),
+    );
+    error.mockRestore();
+  });
+
   it("still answers 200 when the database write fails, so the provider keeps the subscription", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     mocks.upsert.mockRejectedValue(new Error("db down"));
+    mocks.findUniqueOrThrow.mockRejectedValue(new Error("db down"));
     const response = await post(metaBody, { url: `${BASE}?token=${VERIFY_TOKEN}` });
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ received: true, stored: false, topic: "messages" });

@@ -93,22 +93,40 @@ export async function POST(request: Request) {
         })
       : null;
 
-    const event = await prismadb.marketplaceWebhookEvent.upsert({
-      where: {
-        provider_eventKey: { provider: MarketplaceProvider.WHATSAPP, eventKey },
-      },
-      update: {},
-      create: {
-        connectionId: connection?.id ?? null,
-        provider: MarketplaceProvider.WHATSAPP,
-        eventKey,
-        topic,
-        resource,
-        sellerId,
-        payload: payload as unknown as Prisma.InputJsonValue,
-      },
-      select: { id: true, connectionId: true },
-    });
+    let event: { id: string; connectionId: string | null };
+    try {
+      event = await prismadb.marketplaceWebhookEvent.upsert({
+        where: {
+          provider_eventKey: { provider: MarketplaceProvider.WHATSAPP, eventKey },
+        },
+        update: {},
+        create: {
+          connectionId: connection?.id ?? null,
+          provider: MarketplaceProvider.WHATSAPP,
+          eventKey,
+          topic,
+          resource,
+          sellerId,
+          payload: payload as unknown as Prisma.InputJsonValue,
+        },
+        select: { id: true, connectionId: true },
+      });
+    } catch (error) {
+      // Dos entregas casi simultáneas del mismo evento pueden chocar en la
+      // restricción única: ambas intentan crear la fila a la vez y una gana.
+      // La otra no falló de verdad — el evento ya quedó guardado por la
+      // primera, así que se reusa esa fila en vez de tratarlo como error.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        event = await prismadb.marketplaceWebhookEvent.findUniqueOrThrow({
+          where: {
+            provider_eventKey: { provider: MarketplaceProvider.WHATSAPP, eventKey },
+          },
+          select: { id: true, connectionId: true },
+        });
+      } else {
+        throw error;
+      }
+    }
 
     // Encolar es lo mejor que se puede: si QStash no está configurado o falla,
     // el evento ya está guardado y la recuperación lo tomará después.
