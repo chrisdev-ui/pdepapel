@@ -15,6 +15,71 @@ import { normalizeBotText, type WhatsAppBotKeyword } from "@/lib/whatsapp/bot-ma
 export const BOT_REPLY_MAX_TRIGGERS = 25;
 export const BOT_REPLY_ANSWER_MAX_LENGTH = 1000;
 
+/**
+ * Meta admite 3 botones como máximo. El último siempre es «Hablar con Paula»,
+ * así que a ella le quedan 2.
+ */
+export const BOT_REPLY_MAX_BUTTONS = 2;
+/** Tope de Meta para el texto de un botón. */
+export const BOT_REPLY_BUTTON_TITLE_MAX = 20;
+/** Id del botón de escape. No apunta a ninguna respuesta: llama a Paula. */
+export const TALK_TO_OWNER_BUTTON_ID = "owner";
+export const TALK_TO_OWNER_BUTTON_TITLE = "Hablar con Paula";
+/** Los botones que llevan a otra respuesta viajan como `r:<id>`. */
+export const BUTTON_TARGET_PREFIX = "r:";
+
+export interface BotReplyButton {
+  title: string;
+  /** Respuesta que se manda cuando lo tocan. */
+  targetReplyId: string;
+}
+
+export const botReplyButtonSchema = z.object({
+  title: z
+    .string()
+    .trim()
+    .min(1, "Ponle texto al botón")
+    .max(BOT_REPLY_BUTTON_TITLE_MAX, `Máximo ${BOT_REPLY_BUTTON_TITLE_MAX} caracteres`),
+  targetReplyId: z.string().trim().min(1, "Elige a qué respuesta lleva"),
+});
+
+/** Lee los botones guardados sin confiar en su forma. */
+export function parseStoredButtons(value: unknown): BotReplyButton[] {
+  if (!Array.isArray(value)) return [];
+  const buttons: BotReplyButton[] = [];
+  for (const item of value) {
+    const parsed = botReplyButtonSchema.safeParse(item);
+    if (parsed.success) buttons.push(parsed.data);
+  }
+  return buttons.slice(0, BOT_REPLY_MAX_BUTTONS);
+}
+
+/** `r:<id>` para los botones de menú; el de Paula viaja con su propio id. */
+export function buildButtonId(targetReplyId: string): string {
+  return `${BUTTON_TARGET_PREFIX}${targetReplyId}`;
+}
+
+/** Devuelve la respuesta a la que apunta un botón tocado, si apunta a alguna. */
+export function readButtonTarget(buttonId: string | null | undefined): string | null {
+  if (!buttonId || !buttonId.startsWith(BUTTON_TARGET_PREFIX)) return null;
+  const target = buttonId.slice(BUTTON_TARGET_PREFIX.length).trim();
+  return target || null;
+}
+
+/**
+ * Una respuesta CON botones es un menú, y un menú no sale hasta que Paula lo
+ * apruebe. Sin botones no hace falta: ese texto lo escribió ella.
+ */
+export function isBotReplySendable(reply: {
+  isActive: boolean;
+  buttons?: unknown;
+  approvedAt?: Date | null;
+}): boolean {
+  if (!reply.isActive) return false;
+  if (parseStoredButtons(reply.buttons).length === 0) return true;
+  return Boolean(reply.approvedAt);
+}
+
 /** Una frase por línea en el formulario; aquí se parte, limpia y deduplica. */
 export function parseTriggerLines(raw: string): string[] {
   const seen = new Set<string>();
@@ -50,6 +115,7 @@ export const botReplyInputSchema = z.object({
     .max(BOT_REPLY_ANSWER_MAX_LENGTH, "La respuesta es muy larga para un mensaje de WhatsApp"),
   isActive: z.boolean().default(true),
   sortOrder: z.number().int().min(0).max(9999).default(0),
+  buttons: z.array(botReplyButtonSchema).max(BOT_REPLY_MAX_BUTTONS).default([]),
 });
 
 export type BotReplyInput = z.infer<typeof botReplyInputSchema>;
@@ -79,6 +145,9 @@ export interface BotReplyRow {
   answer: string;
   isActive: boolean;
   sortOrder: number;
+  buttons: BotReplyButton[];
+  approvedAt: Date | null;
+  approvedBy: string | null;
   updatedAt: Date;
 }
 
@@ -92,14 +161,56 @@ export async function getActiveBotKeywords(storeId: string): Promise<WhatsAppBot
   const replies = await prismadb.whatsAppBotReply.findMany({
     where: { storeId, isActive: true },
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-    select: { label: true, triggers: true, answer: true },
+    select: {
+      id: true,
+      label: true,
+      triggers: true,
+      answer: true,
+      buttons: true,
+      approvedAt: true,
+      isActive: true,
+    },
   });
 
   return replies
+    .filter((reply) => isBotReplySendable(reply))
     .map((reply) => ({
+      id: reply.id,
       label: reply.label,
       triggers: parseStoredTriggers(reply.triggers),
       answer: reply.answer,
+      buttons: parseStoredButtons(reply.buttons),
     }))
     .filter((reply) => reply.triggers.length > 0);
+}
+
+/**
+ * Una respuesta concreta para mandarla tras tocar un botón. No pasa por los
+ * disparadores —el botón ya dijo cuál es— pero sí por la regla de aprobación.
+ */
+export async function getSendableBotReply(
+  storeId: string,
+  replyId: string,
+): Promise<WhatsAppBotKeyword | null> {
+  const reply = await prismadb.whatsAppBotReply.findFirst({
+    where: { id: replyId, storeId },
+    select: {
+      id: true,
+      label: true,
+      answer: true,
+      buttons: true,
+      approvedAt: true,
+      isActive: true,
+    },
+  });
+  if (!reply || !isBotReplySendable(reply)) return null;
+
+  return {
+    id: reply.id,
+    label: reply.label,
+    // Se llega por botón, no por frase.
+    triggers: [],
+    answer: reply.answer,
+    buttons: parseStoredButtons(reply.buttons),
+  };
 }

@@ -17,6 +17,21 @@ const CHAKRA_API_VERSION = "v24.0";
  */
 export const WHATSAPP_TEXT_MAX_LENGTH = 4096;
 
+/**
+ * El cuerpo de un mensaje interactivo es mucho más corto que el de uno de
+ * texto: 1024 caracteres, no 4096.
+ */
+export const WHATSAPP_INTERACTIVE_BODY_MAX_LENGTH = 1024;
+/** Meta admite 3 botones de respuesta como máximo, de 20 caracteres cada uno. */
+export const WHATSAPP_MAX_BUTTONS = 3;
+export const WHATSAPP_BUTTON_TITLE_MAX_LENGTH = 20;
+
+export interface WhatsAppReplyButton {
+  /** Vuelve tal cual en el webhook cuando la tocan. */
+  id: string;
+  title: string;
+}
+
 export type WhatsAppSendResult =
   | { ok: true; externalId: string }
   | {
@@ -134,14 +149,16 @@ function readExternalId(payload: unknown): string | null {
 }
 
 /**
- * Manda un mensaje de texto. Sin credenciales configuradas no hace la petición
- * y responde `not configured`, para que el archivo de la conversación nunca
- * dependa de que el envío esté listo.
+ * Envía un payload ya armado. Sin credenciales configuradas no hace la
+ * petición y responde `not configured`, para que el archivo de la conversación
+ * nunca dependa de que el envío esté listo.
  */
-export async function sendWhatsAppTextMessage(
+async function postToChakra(
   to: string,
-  body: string,
-  environment: SendEnvironment = env,
+  // `payload` a secas está tomado más abajo por el cuerpo de la RESPUESTA,
+  // que es lo que leen readError/readTraceId/readExternalId.
+  messagePayload: Record<string, unknown>,
+  environment: SendEnvironment,
 ): Promise<WhatsAppSendResult> {
   const apiKey = environment.CHAKRA_API_KEY?.trim();
   const pluginId = environment.CHAKRA_PLUGIN_ID?.trim();
@@ -152,9 +169,6 @@ export async function sendWhatsAppTextMessage(
       "[WHATSAPP_SEND] Falta CHAKRA_API_KEY, CHAKRA_PLUGIN_ID o WHATSAPP_PHONE_NUMBER_ID; no se envía nada",
     );
     return { ok: false, error: "not configured" };
-  }
-  if (!to.trim() || !body.trim()) {
-    return { ok: false, error: "destinatario o mensaje vacío" };
   }
 
   try {
@@ -168,9 +182,11 @@ export async function sendWhatsAppTextMessage(
         },
         body: JSON.stringify({
           messaging_product: "whatsapp",
+          // `recipient_type` se omite a propósito: es opcional y su valor por
+          // defecto ya es "individual". Así el mensaje de texto sale byte a
+          // byte como el que lleva meses funcionando en producción.
           to: to.trim(),
-          type: "text",
-          text: { body: body.slice(0, WHATSAPP_TEXT_MAX_LENGTH) },
+          ...messagePayload,
         }),
       },
     );
@@ -197,4 +213,68 @@ export async function sendWhatsAppTextMessage(
     console.error("[WHATSAPP_SEND] No se pudo contactar a Chakra", { message });
     return { ok: false, error: message.slice(0, 500) };
   }
+}
+
+/** Mensaje de texto normal. */
+export async function sendWhatsAppTextMessage(
+  to: string,
+  body: string,
+  environment: SendEnvironment = env,
+): Promise<WhatsAppSendResult> {
+  if (!to.trim() || !body.trim()) {
+    return { ok: false, error: "destinatario o mensaje vacío" };
+  }
+  return postToChakra(
+    to,
+    { type: "text", text: { body: body.slice(0, WHATSAPP_TEXT_MAX_LENGTH) } },
+    environment,
+  );
+}
+
+/**
+ * Mensaje con botones de respuesta.
+ *
+ * Confirmado contra la API el 2026-09-14: Chakra reenvía `type: "interactive"`
+ * a Meta sin tocarlo, y un payload inválido vuelve con el error real de Meta.
+ *
+ * Los topes de Meta se aplican aquí (3 botones, 20 caracteres por botón, 1024
+ * de cuerpo) porque pasarse significa un rechazo entero, no un recorte.
+ */
+export async function sendWhatsAppButtonMessage(
+  to: string,
+  body: string,
+  buttons: WhatsAppReplyButton[],
+  environment: SendEnvironment = env,
+): Promise<WhatsAppSendResult> {
+  if (!to.trim() || !body.trim()) {
+    return { ok: false, error: "destinatario o mensaje vacío" };
+  }
+
+  const usable = buttons
+    .filter((button) => button.id.trim() && button.title.trim())
+    .slice(0, WHATSAPP_MAX_BUTTONS);
+  if (usable.length === 0) {
+    return { ok: false, error: "sin botones que mandar" };
+  }
+
+  return postToChakra(
+    to,
+    {
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body: { text: body.slice(0, WHATSAPP_INTERACTIVE_BODY_MAX_LENGTH) },
+        action: {
+          buttons: usable.map((button) => ({
+            type: "reply",
+            reply: {
+              id: button.id.trim(),
+              title: button.title.trim().slice(0, WHATSAPP_BUTTON_TITLE_MAX_LENGTH),
+            },
+          })),
+        },
+      },
+    },
+    environment,
+  );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import axios from "axios";
-import { ArrowLeft, Pencil, Plus, Trash } from "lucide-react";
+import { ArrowLeft, ChevronRight, Pencil, Plus, ShieldAlert, Trash } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -13,7 +13,10 @@ import { Separator } from "@/components/ui/separator";
 import { useActionConfirmation } from "@/hooks/use-action-confirmation";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import type { BotReplyRow } from "@/lib/whatsapp/bot-replies";
+import {
+  TALK_TO_OWNER_BUTTON_TITLE,
+  type BotReplyRow,
+} from "@/lib/whatsapp/bot-replies";
 import { BotReplyAssistant } from "./assistant";
 import { BotReplyTester } from "./tester";
 
@@ -29,6 +32,11 @@ const BotRepliesClient: React.FC<BotRepliesClientProps> = ({ data }) => {
   const [loading, setLoading] = useState(false);
   const storeId = String(params.storeId);
   const active = data.filter((reply) => reply.isActive).length;
+  // Un menú sin aprobar no se manda: es lo primero que ella debe ver.
+  const pending = data.filter(
+    (reply) => reply.buttons.length > 0 && !reply.approvedAt,
+  ).length;
+  const labels = new Map(data.map((reply) => [reply.id, reply.label]));
 
   const onDelete = async (reply: BotReplyRow) => {
     const confirmed = await requestConfirmation({
@@ -81,6 +89,23 @@ const BotRepliesClient: React.FC<BotRepliesClientProps> = ({ data }) => {
       </div>
       <Separator />
 
+      {pending > 0 ? (
+        <Card className="border-amber-500/50">
+          <CardContent className="flex items-start gap-2 p-4 text-sm">
+            <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
+            <p>
+              <span className="font-medium">
+                {pending === 1
+                  ? "Hay un menú esperando tu aprobación."
+                  : `Hay ${pending} menús esperando tu aprobación.`}
+              </span>{" "}
+              Mientras tanto el bot no los manda. Ábrelos y dale «Aprobar menú»
+              cuando estés de acuerdo con lo que dicen.
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <BotReplyAssistant storeId={storeId} />
 
       <BotReplyTester replies={data} />
@@ -117,6 +142,11 @@ const BotRepliesClient: React.FC<BotRepliesClientProps> = ({ data }) => {
                       <Badge variant={reply.isActive ? "default" : "secondary"}>
                         {reply.isActive ? "Activa" : "Apagada"}
                       </Badge>
+                      {reply.buttons.length > 0 ? (
+                        <Badge variant={reply.approvedAt ? "success" : "warning"}>
+                          {reply.approvedAt ? "Menú aprobado" : "Sin aprobar"}
+                        </Badge>
+                      ) : null}
                     </p>
                     <p className="flex flex-wrap gap-1">
                       {reply.triggers.map((trigger) => (
@@ -127,6 +157,24 @@ const BotRepliesClient: React.FC<BotRepliesClientProps> = ({ data }) => {
                     </p>
                     <p className="max-w-prose whitespace-pre-wrap text-sm text-muted-foreground">
                       {reply.answer}
+                    </p>
+                    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                      {reply.buttons.map((button) => (
+                        <span key={button.targetReplyId} className="inline-flex items-center gap-1">
+                          <span className="rounded border px-1.5 py-0.5 font-medium text-foreground">
+                            {button.title}
+                          </span>
+                          <ChevronRight className="h-3 w-3" aria-hidden="true" />
+                          {labels.get(button.targetReplyId) ?? "respuesta borrada"}
+                        </span>
+                      ))}
+                      <span className="inline-flex items-center gap-1 opacity-70">
+                        <span className="rounded border px-1.5 py-0.5">
+                          {TALK_TO_OWNER_BUTTON_TITLE}
+                        </span>
+                        <ChevronRight className="h-3 w-3" aria-hidden="true" />
+                        siempre, lo pone el sistema
+                      </span>
                     </p>
                   </div>
                   <div className="flex shrink-0 gap-2">

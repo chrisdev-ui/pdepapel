@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { parseBotReplyDraft } from "@/lib/whatsapp/bot-reply-assistant";
-import { getBotReply } from "../server/get-bot-replies";
+import { getBotReplies, getBotReply } from "../server/get-bot-replies";
 import { BotReplyForm } from "./components/bot-reply-form";
 
 const NEW_SEGMENTS = new Set(["nueva", "nuevo", "new"]);
@@ -29,12 +29,20 @@ export default async function BotReplyPage({
   // El asistente manda su propuesta por la URL; al editar nunca se pisa lo guardado.
   const draft = isNew ? parseBotReplyDraft(searchParams) : null;
 
+  // Destinos posibles de un botón: cualquier otra respuesta de la tienda.
+  // Una respuesta no puede apuntarse a sí misma.
+  const all = await getBotReplies(params.storeId);
+  const targets = all
+    .filter((candidate) => candidate.id !== reply?.id)
+    .map((candidate) => ({ id: candidate.id, label: candidate.label }));
+
   return (
     <div className="flex-col">
       <div className="flex-1 space-y-4 p-4 sm:p-8 sm:pt-6">
         <BotReplyForm
           initialData={reply}
           draft={draft}
+          targets={targets}
           storeId={params.storeId}
         />
       </div>

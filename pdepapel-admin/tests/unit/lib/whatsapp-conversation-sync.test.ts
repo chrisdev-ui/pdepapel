@@ -91,10 +91,82 @@ describe("extractWhatsAppEvents", () => {
     };
     const extracted = extractWhatsAppEvents(payload);
     expect(extracted.messages).toEqual([
-      { externalId: "wamid.a", phone: "573001234567", contactName: null, body: "uno", mediaType: null, sentAt: null, metadata: null },
+      { externalId: "wamid.a", phone: "573001234567", contactName: null, body: "uno", mediaType: null, sentAt: null, interactiveReplyId: null, metadata: null },
     ]);
     expect(extracted.statuses).toEqual([{ externalId: "wamid.out", status: "READ", rawStatus: "read" }]);
     expect(extracted.skipped).toEqual(["message:not-an-object", "message:wamid.nophone:no-phone"]);
+  });
+
+  it("lee el id del botón que tocó la clienta, no solo su texto", () => {
+    // Payload real capturado el 2026-09-14 tocando una lista enviada de prueba.
+    // El id es la llave estable: Paula puede renombrar el botón sin romper el
+    // menú, cosa que el título no permite.
+    const extracted = extractWhatsAppEvents({
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    id: "wamid.tap",
+                    from: "573024686403",
+                    type: "interactive",
+                    timestamp: "1789377712",
+                    context: { id: "wamid.menu", from: "573132582293" },
+                    interactive: {
+                      type: "list_reply",
+                      list_reply: {
+                        id: "p_catalogo",
+                        title: "Ver catálogo",
+                        description: "Abrir la tienda en WhatsApp",
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(extracted.messages[0]).toMatchObject({
+      body: "Ver catálogo",
+      mediaType: "interactive",
+      interactiveReplyId: "p_catalogo",
+    });
+  });
+
+  it("lee también el id de un botón de respuesta rápida", () => {
+    const extracted = extractWhatsAppEvents({
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    id: "wamid.tap2",
+                    from: "573024686403",
+                    type: "interactive",
+                    interactive: {
+                      type: "button_reply",
+                      button_reply: { id: "r:abc-123", title: "Ver horarios" },
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(extracted.messages[0]).toMatchObject({
+      body: "Ver horarios",
+      interactiveReplyId: "r:abc-123",
+    });
   });
 
   it("reads an owner echo, taking the customer phone from `to` and not `from`", () => {
@@ -477,6 +549,8 @@ describe("processWhatsAppWebhookEvent", () => {
       conversationId: "conversation-1",
       phone: "573001234567",
       body: "Hola, ¿tienen stickers?",
+      // Escrito a mano: no viene de ningún botón.
+      interactiveReplyId: null,
     });
   });
 

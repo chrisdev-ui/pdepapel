@@ -2163,6 +2163,16 @@ model WhatsAppBotReply {
   isActive  Boolean  @default(true)
   /// Gana la primera que coincida, así que el orden importa.
   sortOrder Int      @default(0)
+  /// Botones que se mandan con la respuesta: `[{ title, targetReplyId }]`.
+  /// Máximo dos; el sistema siempre añade «Hablar con Paula» como último
+  /// botón, así que nunca se guarda aquí.
+  buttons   Json?
+  /// Cuándo aprobó Paula este menú. Una respuesta CON botones no se manda
+  /// hasta tenerlo, y editar el texto o los botones lo borra: así un cambio
+  /// no puede colarse con la aprobación de la versión anterior.
+  approvedAt DateTime?
+  /// Clerk id de quien aprobó, para saber de quién fue el visto bueno.
+  approvedBy String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

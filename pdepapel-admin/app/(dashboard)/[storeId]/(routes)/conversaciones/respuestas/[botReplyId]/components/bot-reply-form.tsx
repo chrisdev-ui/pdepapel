@@ -2,10 +2,10 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import axios from "axios";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Plus, Save, ShieldAlert, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useFieldArray, useForm } from "react-hook-form";
 import * as z from "zod";
 
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import {
 import { Heading } from "@/components/ui/heading";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { Combobox } from "@/components/ui/combobox";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -30,6 +31,9 @@ import { WHATSAPP_BOT_MARKER } from "@/lib/whatsapp/bot-matching";
 import type { BotReplyDraft } from "@/lib/whatsapp/bot-reply-assistant";
 import {
   BOT_REPLY_ANSWER_MAX_LENGTH,
+  BOT_REPLY_BUTTON_TITLE_MAX,
+  BOT_REPLY_MAX_BUTTONS,
+  TALK_TO_OWNER_BUTTON_TITLE,
   parseTriggerLines,
   triggersToLines,
   type BotReplyRow,
@@ -49,6 +53,18 @@ const formSchema = z.object({
     .max(BOT_REPLY_ANSWER_MAX_LENGTH, "Es muy largo para un mensaje de WhatsApp"),
   isActive: z.boolean(),
   sortOrder: z.coerce.number().int().min(0).max(9999),
+  buttons: z
+    .array(
+      z.object({
+        title: z
+          .string()
+          .trim()
+          .min(1, "Ponle texto al botón")
+          .max(BOT_REPLY_BUTTON_TITLE_MAX, `Máximo ${BOT_REPLY_BUTTON_TITLE_MAX} caracteres`),
+        targetReplyId: z.string().trim().min(1, "Elige a qué respuesta lleva"),
+      }),
+    )
+    .max(BOT_REPLY_MAX_BUTTONS),
 });
 
 type BotReplyFormValues = z.infer<typeof formSchema>;
@@ -56,17 +72,48 @@ type BotReplyFormValues = z.infer<typeof formSchema>;
 export function BotReplyForm({
   initialData,
   draft = null,
+  targets = [],
   storeId,
 }: {
   initialData: BotReplyRow | null;
   /** Propuesta del asistente para una respuesta nueva; se puede editar toda. */
   draft?: BotReplyDraft | null;
+  /** Otras respuestas de la tienda: son los destinos posibles de un botón. */
+  targets?: { id: string; label: string }[];
   storeId: string;
 }) {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [approvedAt, setApprovedAt] = useState<Date | null>(initialData?.approvedAt ?? null);
   const listHref = `/${storeId}/conversaciones/respuestas`;
+
+  const toggleApproval = async (approve: boolean) => {
+    if (!initialData) return;
+    try {
+      setLoading(true);
+      const url = `/api/${storeId}/bot-replies/${initialData.id}/approve`;
+      if (approve) await axios.post(url);
+      else await axios.delete(url);
+      setApprovedAt(approve ? new Date() : null);
+      router.refresh();
+      toast({
+        title: approve ? "Menú aprobado" : "Aprobación retirada",
+        description: approve
+          ? "El bot ya puede mandarlo."
+          : "El bot deja de mandarlo hasta que lo apruebes otra vez.",
+        variant: approve ? "success" : "warning",
+      });
+    } catch (error) {
+      toast({
+        title: "No se pudo cambiar la aprobación",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const defaultValues = useMemo<BotReplyFormValues>(
     () => ({
@@ -77,6 +124,7 @@ export function BotReplyForm({
       answer: initialData?.answer ?? draft?.answer ?? "",
       isActive: initialData?.isActive ?? true,
       sortOrder: initialData?.sortOrder ?? 0,
+      buttons: initialData?.buttons ?? [],
     }),
     [initialData, draft],
   );
@@ -86,6 +134,8 @@ export function BotReplyForm({
     defaultValues,
   });
 
+  const buttonFields = useFieldArray({ control: form.control, name: "buttons" });
+  const buttons = form.watch("buttons");
   const answer = form.watch("answer");
   const triggerLines = form.watch("triggerLines");
   // Lo que realmente se va a guardar, ya limpio: así ve el efecto de escribir
@@ -101,6 +151,7 @@ export function BotReplyForm({
         answer: values.answer,
         isActive: values.isActive,
         sortOrder: values.sortOrder,
+        buttons: values.buttons,
       };
       if (initialData) {
         await axios.patch(`/api/${storeId}/bot-replies/${initialData.id}`, payload);
@@ -114,9 +165,11 @@ export function BotReplyForm({
       router.refresh();
       toast({
         title: initialData ? "Respuesta guardada" : "Respuesta creada",
-        description: values.isActive
-          ? "El bot empieza a usarla de inmediato."
-          : "Queda guardada pero apagada.",
+        description: !values.isActive
+          ? "Queda guardada pero apagada."
+          : values.buttons.length > 0
+            ? "Tiene botones, así que Paula debe aprobarla antes de que salga."
+            : "El bot empieza a usarla de inmediato.",
         variant: "success",
       });
     } catch (error) {
@@ -212,15 +265,156 @@ export function BotReplyForm({
             )}
           />
 
+          <div className="space-y-3 rounded-lg border p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium">Botones (opcional)</p>
+                <p className="text-xs text-muted-foreground">
+                  Cada botón lleva a otra de tus respuestas. Puedes poner hasta{" "}
+                  {BOT_REPLY_MAX_BUTTONS}: el tercero siempre es «
+                  {TALK_TO_OWNER_BUTTON_TITLE}» y lo pone el sistema.
+                </p>
+              </div>
+              {buttonFields.fields.length < BOT_REPLY_MAX_BUTTONS ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={loading || targets.length === 0}
+                  onClick={() => buttonFields.append({ title: "", targetReplyId: "" })}
+                >
+                  <Plus className="mr-2 h-4 w-4" /> Agregar botón
+                </Button>
+              ) : null}
+            </div>
+
+            {targets.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Para poner botones necesitas al menos otra respuesta creada: un
+                botón siempre lleva a una de ellas.
+              </p>
+            ) : null}
+
+            {buttonFields.fields.map((field, index) => (
+              <div key={field.id} className="flex flex-wrap items-end gap-2">
+                <FormField
+                  control={form.control}
+                  name={`buttons.${index}.title`}
+                  render={({ field: titleField }) => (
+                    <FormItem className="min-w-[9rem] flex-1">
+                      <FormLabel className="text-xs">Texto del botón</FormLabel>
+                      <FormControl>
+                        <Input
+                          disabled={loading}
+                          maxLength={BOT_REPLY_BUTTON_TITLE_MAX}
+                          placeholder="Ver horarios"
+                          {...titleField}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name={`buttons.${index}.targetReplyId`}
+                  render={({ field: targetField }) => (
+                    <FormItem className="min-w-[12rem] flex-[2]">
+                      <FormLabel className="text-xs">Lleva a</FormLabel>
+                      <FormControl>
+                        <Combobox
+                          options={targets.map((target) => ({
+                            value: target.id,
+                            label: target.label,
+                          }))}
+                          value={targetField.value || null}
+                          onChange={(value) => targetField.onChange(value ?? "")}
+                          placeholder="Elige una respuesta"
+                          searchPlaceholder="Escribe para buscar…"
+                          emptyText="No hay más respuestas"
+                          disabled={loading}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  disabled={loading}
+                  onClick={() => buttonFields.remove(index)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span className="sr-only">Quitar este botón</span>
+                </Button>
+              </div>
+            ))}
+          </div>
+
+          {buttons.length > 0 ? (
+            <Card className={approvedAt ? "border-emerald-500/40" : "border-amber-500/50"}>
+              <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+                <div className="flex items-start gap-2">
+                  {approvedAt ? (
+                    <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />
+                  ) : (
+                    <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
+                  )}
+                  <div>
+                    <p className="text-sm font-medium">
+                      {approvedAt ? "Menú aprobado" : "Pendiente de aprobación"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {approvedAt
+                        ? "Si cambias el texto o los botones, la aprobación se retira sola."
+                        : !initialData
+                          ? "Guárdala primero y después apruébala."
+                          : "Un menú no se manda hasta que Paula lo apruebe."}
+                    </p>
+                  </div>
+                </div>
+                {initialData ? (
+                  <Button
+                    type="button"
+                    variant={approvedAt ? "outline" : "default"}
+                    size="sm"
+                    disabled={loading}
+                    onClick={() => toggleApproval(!approvedAt)}
+                  >
+                    {approvedAt ? "Retirar aprobación" : "Aprobar menú"}
+                  </Button>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : null}
+
           <Card className="bg-muted/30">
             <CardContent className="space-y-2 p-4">
               <p className="text-sm font-medium">Así lo recibe la clienta</p>
-              <div className="whitespace-pre-wrap rounded-md border bg-background p-3 text-sm">
-                {`${WHATSAPP_BOT_MARKER}\n\n${answer?.trim() || "…"}`}
+              <div className="space-y-2 rounded-md border bg-background p-3">
+                <p className="whitespace-pre-wrap text-sm">
+                  {`${WHATSAPP_BOT_MARKER}\n\n${answer?.trim() || "…"}`}
+                </p>
+                <div className="flex flex-col gap-1 border-t pt-2">
+                  {buttons.map((button, index) => (
+                    <span
+                      key={index}
+                      className="rounded border bg-muted/40 py-1 text-center text-xs font-medium"
+                    >
+                      {button.title.trim() || "…"}
+                    </span>
+                  ))}
+                  <span className="rounded border bg-muted/40 py-1 text-center text-xs font-medium">
+                    {TALK_TO_OWNER_BUTTON_TITLE}
+                  </span>
+                </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                La primera línea la pone el sistema para que se note que es
-                automática. No hace falta que la escribas.
+                La primera línea y el botón «{TALK_TO_OWNER_BUTTON_TITLE}» los
+                pone el sistema: la clienta siempre puede salirse a hablar
+                contigo. No hace falta que los escribas.
               </p>
             </CardContent>
           </Card>

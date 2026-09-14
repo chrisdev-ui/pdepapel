@@ -1,5 +1,9 @@
 import prismadb from "@/lib/prismadb";
-import { parseStoredTriggers, type BotReplyRow } from "@/lib/whatsapp/bot-replies";
+import {
+  parseStoredButtons,
+  parseStoredTriggers,
+  type BotReplyRow,
+} from "@/lib/whatsapp/bot-replies";
 
 /**
  * Respuestas automáticas de la tienda, en el orden en que el bot las prueba.
@@ -16,6 +20,9 @@ export async function getBotReplies(storeId: string): Promise<BotReplyRow[]> {
       answer: true,
       isActive: true,
       sortOrder: true,
+      buttons: true,
+      approvedAt: true,
+      approvedBy: true,
       updatedAt: true,
     },
   });
@@ -23,6 +30,7 @@ export async function getBotReplies(storeId: string): Promise<BotReplyRow[]> {
   return replies.map((reply) => ({
     ...reply,
     triggers: parseStoredTriggers(reply.triggers),
+    buttons: parseStoredButtons(reply.buttons),
   }));
 }
 
@@ -39,9 +47,16 @@ export async function getBotReply(
       answer: true,
       isActive: true,
       sortOrder: true,
+      buttons: true,
+      approvedAt: true,
+      approvedBy: true,
       updatedAt: true,
     },
   });
   if (!reply) return null;
-  return { ...reply, triggers: parseStoredTriggers(reply.triggers) };
+  return {
+    ...reply,
+    triggers: parseStoredTriggers(reply.triggers),
+    buttons: parseStoredButtons(reply.buttons),
+  };
 }

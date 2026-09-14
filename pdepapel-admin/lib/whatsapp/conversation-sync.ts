@@ -60,6 +60,12 @@ export interface WhatsAppInboundMessage {
   body: string | null;
   mediaType: string | null;
   sentAt: Date | null;
+  /**
+   * Id del botón que tocó la clienta, tal como se lo mandamos nosotros.
+   * Es más fiable que el texto: Paula puede renombrar un botón sin romper
+   * el menú. `null` en un mensaje escrito a mano.
+   */
+  interactiveReplyId: string | null;
   /** Extras estructurados; hoy solo el carrito de un mensaje `order`. */
   metadata: WhatsAppMessageMetadata | null;
 }
@@ -122,6 +128,18 @@ function getMessageBody(message: JsonRecord): string | null {
   const reply = interactive && isRecord(interactive.button_reply) ? interactive.button_reply : null;
   const listReply = interactive && isRecord(interactive.list_reply) ? interactive.list_reply : null;
   return (reply && asString(reply.title)) ?? (listReply && asString(listReply.title)) ?? null;
+}
+
+/**
+ * Id del botón tocado. Meta lo devuelve en `button_reply.id` o `list_reply.id`
+ * exactamente como lo enviamos, así que sirve de llave estable.
+ */
+function getInteractiveReplyId(message: JsonRecord): string | null {
+  const interactive = isRecord(message.interactive) ? message.interactive : null;
+  if (!interactive) return null;
+  const reply = isRecord(interactive.button_reply) ? interactive.button_reply : null;
+  const listReply = isRecord(interactive.list_reply) ? interactive.list_reply : null;
+  return (reply && asString(reply.id)) ?? (listReply && asString(listReply.id)) ?? null;
 }
 
 const MEDIA_WITH_CAPTION = ["image", "video", "document", "audio", "sticker"] as const;
@@ -231,6 +249,7 @@ export function extractWhatsAppEvents(payload: unknown): WhatsAppExtractedEvents
             body: getMessageBody(message) ?? metadata?.order?.note ?? null,
             mediaType: type && type !== "text" ? type : null,
             sentAt: parseMetaTimestamp(message.timestamp),
+            interactiveReplyId: getInteractiveReplyId(message),
             metadata,
           });
         }
@@ -496,7 +515,12 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
     let statusesApplied = 0;
     let echoesFiled = 0;
     const botResults: WhatsAppBotResult[] = [];
-    const botCandidates: Array<{ conversationId: string; phone: string; body: string }> = [];
+    const botCandidates: Array<{
+      conversationId: string;
+      phone: string;
+      body: string;
+      interactiveReplyId: string | null;
+    }> = [];
 
     for (const message of extracted.messages) {
       const filed = await fileInboundMessage(storeId, message, event.id);
@@ -505,6 +529,7 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
           conversationId: filed.conversationId,
           phone: message.phone,
           body: message.body,
+          interactiveReplyId: message.interactiveReplyId,
         });
       }
     }

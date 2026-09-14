@@ -15,6 +15,10 @@ export interface WhatsAppBotKeyword {
   answer: string;
   /** Nombre con el que la dueña la reconoce; opcional para el bot. */
   label?: string;
+  /** Id de la respuesta guardada; hace falta para armar los botones. */
+  id?: string;
+  /** Botones que acompañan la respuesta, sin contar el de «Hablar con Paula». */
+  buttons?: { title: string; targetReplyId: string }[];
 }
 
 /**
