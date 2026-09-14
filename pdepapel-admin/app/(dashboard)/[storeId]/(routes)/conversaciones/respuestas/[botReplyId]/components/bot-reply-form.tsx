@@ -101,8 +101,11 @@ export function BotReplyForm({
       } else {
         await axios.post(`/api/${storeId}/bot-replies`, payload);
       }
-      router.refresh();
+      // Navegar primero y refrescar después: al revés, el refresco se aplica a
+      // esta pantalla y la lista se sirve desde la caché del router, así que la
+      // respuesta recién guardada no aparece hasta recargar a mano.
       router.push(listHref);
+      router.refresh();
       toast({
         title: initialData ? "Respuesta guardada" : "Respuesta creada",
         description: values.isActive

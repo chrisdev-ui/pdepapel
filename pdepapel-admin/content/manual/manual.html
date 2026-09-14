@@ -197,27 +197,28 @@
       <li><a href="#ml">7. Mercado Libre</a></li>
       <li><a href="#envios">8. Envíos</a></li>
       <li><a href="#clientes">9. Clientes y reseñas</a></li>
+      <li><a href="#conversaciones">10. Conversaciones de WhatsApp</a></li>
     </ol>
     <div class="group">Catálogo</div>
     <ol>
-      <li><a href="#productos">10. Productos</a></li>
-      <li><a href="#atributos">11. Atributos</a></li>
-      <li><a href="#proveedores">12. Proveedores y aprovisionamiento</a></li>
-      <li><a href="#contenido">13. Contenido de la tienda</a></li>
+      <li><a href="#productos">11. Productos</a></li>
+      <li><a href="#atributos">12. Atributos</a></li>
+      <li><a href="#proveedores">13. Proveedores y aprovisionamiento</a></li>
+      <li><a href="#contenido">14. Contenido de la tienda</a></li>
     </ol>
     <div class="group">Inventario y marketing</div>
     <ol>
-      <li><a href="#inventario">14. Inventario y movimientos</a></li>
-      <li><a href="#promociones">15. Promociones</a></li>
-      <li><a href="#boletin">16. Boletín</a></li>
+      <li><a href="#inventario">15. Inventario y movimientos</a></li>
+      <li><a href="#promociones">16. Promociones</a></li>
+      <li><a href="#boletin">17. Boletín</a></li>
     </ol>
     <div class="group">Reportes y ajustes</div>
     <ol>
-      <li><a href="#reportes">17. Rendimiento y tributarios</a></li>
-      <li><a href="#ajustes">18. Ajustes</a></li>
-      <li><a href="#estados">19. Estados y vocabulario</a></li>
-      <li><a href="#problemas">20. Si algo no cuadra</a></li>
-      <li><a href="#primer-dia">21. Primer día en el equipo</a></li>
+      <li><a href="#reportes">18. Rendimiento y tributarios</a></li>
+      <li><a href="#ajustes">19. Ajustes</a></li>
+      <li><a href="#estados">20. Estados y vocabulario</a></li>
+      <li><a href="#problemas">21. Si algo no cuadra</a></li>
+      <li><a href="#primer-dia">22. Primer día en el equipo</a></li>
     </ol>
   </nav>
 
@@ -453,9 +454,42 @@
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/resenas-responder" alt="El diálogo para responder una reseña." loading="lazy" width="1440" height="900"></div><figcaption>El diálogo para responder una reseña.</figcaption></figure>
     </section>
 
+
     <!-- 10 -->
+    <section class="chapter" id="conversaciones" style="--dot:#7ED9A6">
+      <div class="chapter-head"><span class="area">Ventas</span><h2>10. Conversaciones de WhatsApp</h2></div>
+      <div class="route">Ruta: <code>/conversaciones</code> · respuestas del bot en <code>/conversaciones/respuestas</code></div>
+      <p>Todo lo que entra y sale por el WhatsApp de la tienda queda guardado aquí solo. <strong>Tú sigues contestando desde tu celular como siempre</strong>: lo que escribes desde la app aparece en esta pantalla a los pocos segundos. El panel no es para chatear, es para no perder nada y para ver de un vistazo qué quedó sin responder.</p>
+      <h3>La lista</h3>
+      <p>Arriba dice cuántas conversaciones esperan tu respuesta. Cada fila trae el nombre que la clienta tiene puesto en WhatsApp, su teléfono, el último mensaje y cuándo llegó. Si el mensaje era una foto, un audio o un sticker, verás el tipo entre paréntesis en vez del texto.</p>
+      <div class="table-wrap"><table class="states">
+        <tr><th>Estado</th><th>Qué significa</th></tr>
+        <tr><td><span class="pill mint">Abierta</span></td><td>Conversación normal, al día.</td></tr>
+        <tr><td><span class="pill cream">Necesita respuesta</span></td><td>Llegó algo que nadie contestó todavía. Es tu lista de pendientes.</td></tr>
+        <tr><td><span class="pill slate">Resuelta</span></td><td>La cerraste a mano. Si la clienta vuelve a escribir, se reabre sola.</td></tr>
+      </table></div>
+      <p>Con el menú de la fila, o con el botón dentro de la conversación, puedes <strong>Marcar como resuelta</strong> para sacarla de pendientes, y <strong>Reabrir</strong> si te equivocaste.</p>
+      <h3>Adentro de una conversación</h3>
+      <p>Se lee como el chat: los mensajes de la clienta a la izquierda, los tuyos a la derecha. Las respuestas automáticas del bot salen con borde punteado para que se distingan de lo que escribiste tú.</p>
+      <h3>Cuando te mandan un carrito</h3>
+      <p>Si la clienta arma un carrito desde el catálogo de WhatsApp, verás los productos con su cantidad y el total <strong>con los precios de hoy</strong>. Si algo cambió desde que ella lo armó, el panel te avisa debajo: precios que subieron o bajaron, productos sin existencias suficientes, o productos que ya no están en el catálogo. Revisa eso <em>antes</em> de confirmarle un total.</p>
+      <h3>Respuestas automáticas</h3>
+      <p>Desde el botón <strong>Respuestas automáticas</strong> defines qué contesta el bot solo. Funciona por palabra clave: si el mensaje de la clienta contiene alguna de las frases que escribiste, contesta lo que hayas puesto. Si no coincide ninguna, <strong>no contesta nada</strong> y te deja la conversación marcada.</p>
+      <ol class="steps">
+        <li><strong>Nombre</strong>: solo para que tú la reconozcas en la lista («Horarios», «Envíos»). La clienta nunca lo ve.</li>
+        <li><strong>Frases que la activan</strong>: una por línea. No te preocupes por tildes ni mayúsculas, se ignoran. Basta con que la frase aparezca dentro del mensaje: con «horario» también contesta a «hola, cuál es el horario?».</li>
+        <li><strong>Respuesta</strong>: lo que se manda. Debajo ves un recuadro con el mensaje exacto que le llega a la clienta.</li>
+        <li><strong>Activa</strong>: apágala para pausarla sin borrarla. Útil para dejarla escrita y encenderla cuando quieras.</li>
+        <li><strong>Orden</strong>: si un mensaje coincide con varias, gana la del número más bajo.</li>
+      </ol>
+      <p>Arriba de la lista hay una caja de prueba: escribe una frase como si fueras una clienta y te dice qué contestaría, o que no contestaría nada. Úsala antes de encender una respuesta nueva.</p>
+      <div class="note rule"><strong>Regla</strong><p>Tres cosas que el bot nunca rompe: toda respuesta automática sale marcada como automática, para que nadie crea que le escribiste tú; nunca manda dos automáticas seguidas sin que una persona haya escrito en medio; y en cuanto una conversación queda en «Necesita respuesta», se calla hasta que tú contestes desde el celular.</p></div>
+      <div class="note care"><strong>Empieza en silencio</strong><p>Mientras la lista de respuestas esté vacía, el bot no contesta nada: todo llega marcado para que respondas tú, igual que antes. En cuanto guardes la primera respuesta activa, empieza a contestar de inmediato, sin paso intermedio. Si quieres escribirla con calma, guárdala apagada y enciéndela cuando estés lista.</p></div>
+    </section>
+
+    <!-- 11 -->
     <section class="chapter" id="productos" style="--dot:#B2A4FE">
-      <div class="chapter-head"><span class="area">Catálogo</span><h2>10. Productos</h2></div>
+      <div class="chapter-head"><span class="area">Catálogo</span><h2>11. Productos</h2></div>
       <div class="route">Ruta: <code>/productos</code> · cada producto en <code>/productos/&lt;id&gt;</code></div>
       <p>La lista de productos tiene vistas por lo que necesitan: <strong>Activos</strong>, <strong>Sin completar</strong> (les falta algo para venderse bien), <strong>Sin identificador</strong> (sin GTIN y sin la marca «No tiene identificador global»), <strong>Stock crítico</strong>, <strong>Agotados</strong>, <strong>Archivados</strong> y <strong>Todos</strong>. La columna <strong>Listo para vender</strong> resume qué falta en cada uno.</p>
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/productos" alt="La lista de productos con forma, subcategoría, precio, stock y la columna «Listo para vender»." loading="lazy" width="1440" height="900"></div><figcaption>La lista de productos con forma, subcategoría, precio, stock y la columna «Listo para vender».</figcaption></figure>
@@ -492,7 +526,7 @@
 
     <!-- 11 -->
     <section class="chapter" id="atributos" style="--dot:#5FC98D">
-      <div class="chapter-head"><span class="area">Catálogo</span><h2>11. Atributos</h2></div>
+      <div class="chapter-head"><span class="area">Catálogo</span><h2>12. Atributos</h2></div>
       <div class="route">Ruta: <code>/atributos</code> · pestañas Categorías, Subcategorías, Tamaños, Colores, Diseños, Opciones para clientes</div>
       <p>Los atributos son las listas con las que se clasifica el catálogo. Las <strong>categorías</strong> son el menú principal de la tienda; cada <strong>subcategoría</strong> pertenece a una categoría y tiene su propia página. Tamaños, colores y diseños se usan en variantes y filtros.</p>
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/atributos" alt="La pestaña Colores con su muestra, cuántos productos usan cada uno, el estado y el interruptor Activos / Archivados." loading="lazy" width="1440" height="900"></div><figcaption>La pestaña Colores con su muestra, cuántos productos usan cada uno, el estado y el interruptor Activos / Archivados.</figcaption></figure>
@@ -512,7 +546,7 @@
 
     <!-- 12 -->
     <section class="chapter" id="proveedores" style="--dot:#FFC105">
-      <div class="chapter-head"><span class="area">Catálogo</span><h2>12. Proveedores y aprovisionamiento</h2></div>
+      <div class="chapter-head"><span class="area">Catálogo</span><h2>13. Proveedores y aprovisionamiento</h2></div>
       <div class="route">Rutas: <code>/proveedores</code> y <code>/aprovisionamiento</code></div>
       <p><strong>Proveedores</strong> es la lista de a quién se le compra; cada producto puede tener el suyo. <strong>Aprovisionamiento</strong> registra los pedidos a proveedores: qué se encargó, cuánto se espera pagar y, al recibir, cuántas unidades entraron. Al recibir un pedido de aprovisionamiento, el inventario sube y queda un movimiento «Reposición recibida» con el costo.</p>
       <div class="screens">
@@ -524,7 +558,7 @@
 
     <!-- 13 -->
     <section class="chapter" id="contenido" style="--dot:#FEA4C3">
-      <div class="chapter-head"><span class="area">Catálogo</span><h2>13. Contenido de la tienda</h2></div>
+      <div class="chapter-head"><span class="area">Catálogo</span><h2>14. Contenido de la tienda</h2></div>
       <div class="route">Ruta: <code>/contenido</code> · pestañas Portada y Redes en la tienda</div>
       <p>Lo que la gente ve al entrar a la tienda. <strong>Portada</strong> tiene dos ubicaciones: el <strong>hero</strong> (el primer pantallazo: título, texto, botones e imagen) y el <strong>banner de campaña</strong>, un bloque promocional que solo aparece mientras está vigente. <strong>Redes en la tienda</strong> son las publicaciones de Instagram u otras redes que se muestran en la página.</p>
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/contenido" alt="La pestaña Portada con el hero y las campañas." loading="lazy" width="1440" height="900"></div><figcaption>La pestaña Portada con el hero y las campañas, cada una con su estado.</figcaption></figure>
@@ -543,7 +577,7 @@
 
     <!-- 14 -->
     <section class="chapter" id="inventario" style="--dot:#B2A4FE">
-      <div class="chapter-head"><span class="area">Inventario</span><h2>14. Inventario y movimientos</h2></div>
+      <div class="chapter-head"><span class="area">Inventario</span><h2>15. Inventario y movimientos</h2></div>
       <div class="route">Rutas: <code>/inventario</code> y <code>/movimientos-inventario</code></div>
       <p><strong>Inventario</strong> es una sola lista con todo el stock activo valorado al costo de compra. Las tarjetas resumen el valor a costo, los productos activos, el stock crítico y los productos sin costo registrado (que no entran en la valorización). Las vistas separan <strong>Stock crítico</strong>, <strong>Agotados</strong>, <strong>Sin costo</strong> y <strong>Kits</strong>.</p>
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/inventario" alt="La lista de inventario valorada al costo, con el último movimiento de cada producto." loading="lazy" width="1440" height="900"></div><figcaption>La lista de inventario valorada al costo, con el último movimiento de cada producto.</figcaption></figure>
@@ -561,7 +595,7 @@
 
     <!-- 15 -->
     <section class="chapter" id="promociones" style="--dot:#FFC105">
-      <div class="chapter-head"><span class="area">Marketing</span><h2>15. Promociones</h2></div>
+      <div class="chapter-head"><span class="area">Marketing</span><h2>16. Promociones</h2></div>
       <div class="route">Ruta: <code>/promociones</code> · pestañas Ofertas y Cupones</div>
       <p>Una <strong>oferta</strong> rebaja el precio de productos, subcategorías o grupos durante un periodo y se ve en la tienda como etiqueta («15 % OFF»). Un <strong>cupón</strong> es un código que la persona escribe al pagar. Las tarjetas cuentan cuántas están <strong>vigentes</strong>, <strong>programadas</strong>, <strong>vencidas</strong> y <strong>desactivadas</strong>; las vigencias se recalculan solas cada día.</p>
       <div class="screens">
@@ -577,7 +611,7 @@
 
     <!-- 16 -->
     <section class="chapter" id="boletin" style="--dot:#5FC98D">
-      <div class="chapter-head"><span class="area">Marketing</span><h2>16. Boletín</h2></div>
+      <div class="chapter-head"><span class="area">Marketing</span><h2>17. Boletín</h2></div>
       <div class="route">Ruta: <code>/boletin</code></div>
       <p>Las personas que pidieron novedades desde la tienda. Solo las <strong>confirmadas</strong> (abrieron el correo de confirmación) se pueden exportar para escribirles; el envío del boletín se hace fuera del panel. <strong>Exportar confirmados</strong> descarga la lista y <strong>Dar de baja</strong> retira a alguien que lo pida.</p>
       <p>Al confirmar, cada suscriptora recibe un <strong>cupón de bienvenida</strong> del 10 % (un solo uso, 30 días) en el correo de bienvenida. Las suscripciones llegan desde la portada, la ficha de un producto «Próximamente» (con el producto de interés), la casilla del pago y el banner de cargamento. Desde un banner de campaña de tipo <strong>Cargamento nuevo</strong> (Contenido de la tienda › Portada) se envían, una sola vez cada uno, el correo de <strong>acceso anticipado</strong> (un enlace firmado para comprar los productos «Próximamente» antes de su fecha) y el aviso de <strong>«Ya llegó»</strong>.</p>
@@ -586,7 +620,7 @@
 
     <!-- 17 -->
     <section class="chapter" id="reportes" style="--dot:#B2A4FE">
-      <div class="chapter-head"><span class="area">Reportes</span><h2>17. Rendimiento y tributarios</h2></div>
+      <div class="chapter-head"><span class="area">Reportes</span><h2>18. Rendimiento y tributarios</h2></div>
       <div class="route">Rutas: <code>/rendimiento</code> (pestañas Resumen y caja, Productos y riesgos, Envíos) y <code>/reportes-tributarios</code></div>
       <p><strong>Rendimiento</strong> responde cuánto vendes, cuánto te cuesta y cuánto te queda, por mes. La pestaña <strong>Resumen y caja</strong> sugiere reserva para impuestos, reinversión y retiro; <strong>Productos y riesgos</strong> muestra ingresos contra beneficio, inventario muerto, riesgo de agotarse, clientes inactivos y VIP; <strong>Envíos</strong> resume costos y entregas.</p>
       <figure class="screen"><div class="frame"><div class="bar"><i></i><i></i><i></i></div><img src="/manual/img/rendimiento" alt="Rendimiento: ventas netas, utilidad estimada, gastos y retiro sugerido del mes." loading="lazy" width="1440" height="900"></div><figcaption>Rendimiento: ventas netas, utilidad estimada, gastos y retiro sugerido del mes.</figcaption></figure>
@@ -598,7 +632,7 @@
 
     <!-- 18 -->
     <section class="chapter" id="ajustes" style="--dot:#FEA4C3">
-      <div class="chapter-head"><span class="area">Ajustes</span><h2>18. Ajustes</h2></div>
+      <div class="chapter-head"><span class="area">Ajustes</span><h2>19. Ajustes</h2></div>
       <div class="route">Ruta: <code>/configuracion</code> · pestañas Tienda, Envíos y empaques, Pagos, Integraciones, Avanzado</div>
       <ul class="list">
         <li><strong>Tienda</strong>: logo, nombre, contacto, redes sociales y políticas.</li>
@@ -617,7 +651,7 @@
 
     <!-- 19 -->
     <section class="chapter" id="estados" style="--dot:#FFC105">
-      <div class="chapter-head"><span class="area">Referencia</span><h2>19. Estados y vocabulario</h2></div>
+      <div class="chapter-head"><span class="area">Referencia</span><h2>20. Estados y vocabulario</h2></div>
       <h3>Estados de pago de un pedido</h3>
       <div class="table-wrap"><table class="states">
         <tr><th>Insignia</th><th>Significa</th><th>Siguiente paso</th></tr>
@@ -638,7 +672,7 @@
 
     <!-- 20 -->
     <section class="chapter" id="problemas" style="--dot:#B2A4FE">
-      <div class="chapter-head"><span class="area">Referencia</span><h2>20. Si algo no cuadra</h2></div>
+      <div class="chapter-head"><span class="area">Referencia</span><h2>21. Si algo no cuadra</h2></div>
       <div class="table-wrap"><table class="states">
         <tr><th>Lo que ves</th><th>Qué revisar</th></tr>
         <tr><td>Cambié un producto y la tienda sigue mostrando lo anterior.</td><td>Espera unos segundos y recarga. Si persiste, Ajustes › Avanzado › limpiar caché de la tienda.</td></tr>
@@ -654,7 +688,7 @@
 
     <!-- 21 -->
     <section class="chapter" id="primer-dia" style="--dot:#5FC98D">
-      <div class="chapter-head"><span class="area">Referencia</span><h2>21. Primer día en el equipo</h2></div>
+      <div class="chapter-head"><span class="area">Referencia</span><h2>22. Primer día en el equipo</h2></div>
       <p>Una lista corta para quien empieza. Al terminarla ya puedes atender la tienda un día completo.</p>
       <ul class="checklist">
         <li>Entrar al panel con tu cuenta y confirmar que ves la tienda P de Papel.</li>

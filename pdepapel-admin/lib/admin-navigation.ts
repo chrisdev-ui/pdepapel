@@ -136,6 +136,16 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: "Reseñas", segment: "clientes?tab=resenas" },
         ],
       },
+      {
+        id: "conversaciones",
+        label: "Conversaciones",
+        icon: MessagesSquare,
+        segment: "conversaciones",
+        children: [
+          { label: "Conversaciones", segment: "conversaciones" },
+          { label: "Respuestas automáticas", segment: "conversaciones/respuestas" },
+        ],
+      },
     ],
   },
   {
@@ -169,7 +179,6 @@ export const NAV_GROUPS: NavGroup[] = [
         ],
       },
       { id: "proveedores", label: "Proveedores", icon: ClipboardList, segment: "proveedores" },
-      { id: "conversaciones", label: "Conversaciones", icon: MessagesSquare, segment: "conversaciones" },
       {
         id: "contenido",
         label: "Contenido de la tienda",
@@ -300,6 +309,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
 
 const SEGMENT_LABELS: Record<string, string> = {
   conversaciones: "Conversaciones",
+  respuestas: "Respuestas automáticas",
   manual: "Manual del panel",
   pedidos: "Pedidos",
   "ventas-rapidas": "Punto de venta",
