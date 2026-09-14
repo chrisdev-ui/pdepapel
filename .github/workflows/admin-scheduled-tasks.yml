@@ -59,3 +59,19 @@ jobs:
           curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
             --header "Authorization: Bearer $ADMIN_CRON_SECRET" \
             "$ADMIN_BASE_URL/api/cron/image-health"
+
+  whatsapp-webhook-retention:
+    name: WhatsApp webhook event retention
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ADMIN_BASE_URL: https://admin.papeleriapdepapel.com
+      ADMIN_CRON_SECRET: ${{ secrets.PDEPAPEL_ADMIN_CRON_SECRET }}
+    steps:
+      - name: Verify protected secret
+        run: test -n "$ADMIN_CRON_SECRET"
+      - name: Prune processed WhatsApp webhook events older than 30 days
+        run: |
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
+            --header "Authorization: Bearer $ADMIN_CRON_SECRET" \
+            "$ADMIN_BASE_URL/api/cron/whatsapp-webhook-retention"
