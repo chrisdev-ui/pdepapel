@@ -243,6 +243,7 @@ export function buildBotReplyAssistantPrompt(input: {
     "Reglas para las frases que activan (triggers):",
     "- En minúsculas y sin tildes.",
     "- Trozos cortos que aparezcan tal cual en un mensaje real: «horario», «a que hora», «hacen envios».",
+    "- Cada frase tiene que sostenerse sola como algo que alguien escribiría. NO copies pedazos sueltos de un mensaje: «salir te la» o «manana si» son recortes, no frases, y harían que el bot conteste cuando no debe.",
     `- Mínimo ${BOT_REPLY_MIN_TRIGGER_LENGTH} caracteres. Nunca palabras sueltas y genéricas como «si», «ok» o «que».`,
     "- Entre 3 y 8 frases por respuesta, cubriendo las formas distintas de preguntar lo mismo.",
     `- Estas frases YA están tomadas por otras respuestas, no las repitas ni propongas frases que las contengan: ${existing}`,

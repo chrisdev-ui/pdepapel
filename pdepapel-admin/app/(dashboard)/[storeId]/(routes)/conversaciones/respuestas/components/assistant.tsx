@@ -216,8 +216,9 @@ export function BotReplyAssistant({ storeId }: { storeId: string }) {
                       className="mt-0.5 h-3.5 w-3.5 shrink-0"
                       aria-hidden="true"
                     />
-                    Hay datos que yo no puedo saber y quedaron entre corchetes.
-                    Cámbialos por los tuyos antes de activarla.
+                    Esta respuesta menciona datos que yo no puedo saber
+                    (horarios, precios, plazos). Revísalos antes de activarla;
+                    si ves algo entre corchetes, cámbialo por lo tuyo.
                   </p>
                 ) : null}
 
