@@ -17,6 +17,8 @@ import { calculateTotals, cn, currencyFormatter } from "@/lib/utils";
 import { useStorefrontSettings } from "@/providers/storefront-settings-provider";
 import { Category, Product } from "@/types";
 
+import { PresaleCartNotice } from "@/components/presale-cart-notice";
+
 import { CartItem, PriceChange } from "./cart-item";
 import { SavedForLater } from "./saved-for-later";
 import { Summary } from "./summary";
@@ -114,6 +116,10 @@ const Cart: React.FC<CartProps> = ({ suggestions = [], categories = [] }) => {
       ) : (
         <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start lg:gap-12">
           <div className="flex flex-col gap-8">
+            {/* Antes de los productos: si hay una preventa, el pedido ENTERO
+                espera, también lo que ya está en bodega. Hay que decirlo antes
+                de que llegue a pagar, no en la letra pequeña. */}
+            <PresaleCartNotice items={cart.items} />
             <ul aria-label="Productos en el carrito" className="flex flex-col">
               {cart.items.map((item) => (
                 <CartItem key={item.id} item={item} priceChange={priceChanges[item.id]} onRemove={onRemove} />

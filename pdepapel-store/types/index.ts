@@ -56,6 +56,13 @@ export interface Product {
   hasNoProductIdentifier?: boolean;
   /** Fecha desde la que se puede comprar; en el futuro = «Próximamente». */
   availableAt?: string | null;
+  /** Preventa activa: se puede reservar hoy y llega en la fecha prometida. */
+  presales?: {
+    id: string;
+    expectedArrivalAt: string;
+    unitLimit: number;
+    committedUnits: number;
+  }[];
   createdAt?: string;
   quantity?: number;
   updatedAt?: string;

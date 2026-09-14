@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock, Check, CreditCard, Flame, PackageX, Truck, Undo2 } from "lucide-react";
+import { CalendarClock, Check, CreditCard, Flame, PackageX, ShieldCheck, Truck, Undo2 } from "lucide-react";
 import Link from "next/link";
 
 import { DELIVERY_WINDOW } from "@/constants";
@@ -30,6 +30,8 @@ const TONES = {
   amber: { bg: "bg-kawaii-yellow-light/70", text: "text-amber-800", Icon: Flame },
   gray: { bg: "bg-gray-100", text: "text-gray-700", Icon: PackageX },
   purple: { bg: "bg-kawaii-lavender-light/60", text: "text-purple-800", Icon: CalendarClock },
+  /** Preventa: se puede comprar, a diferencia de «llega pronto». */
+  blue: { bg: "bg-blue-baby/30", text: "text-blue-800", Icon: CalendarClock },
 } as const;
 
 /**
@@ -52,7 +54,30 @@ export function ProductSignals({ product, availability, quantity, className }: P
         <tone.Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
         <span>{availability.stockLabel}</span>
       </p>
-      {availability.canBuy && (
+      {availability.status === "presale" && availability.presale && (
+        <>
+          <p className="flex items-center gap-2">
+            <Truck aria-hidden="true" className="h-4 w-4 shrink-0" />
+            <span>
+              Pagas el total hoy y lo despachamos el{" "}
+              <strong>{availability.presale.arrivalLabel}</strong>.
+            </span>
+          </p>
+          <p className="flex items-center gap-2">
+            <Flame aria-hidden="true" className="h-4 w-4 shrink-0" />
+            <span>
+              Quedan <strong>{availability.presale.remaining}</strong> reservas.
+            </span>
+          </p>
+          <p className="flex items-center gap-2">
+            <ShieldCheck aria-hidden="true" className="h-4 w-4 shrink-0" />
+            <span>
+              Si la fecha cambia te avisamos y puedes pedir tu dinero de vuelta.
+            </span>
+          </p>
+        </>
+      )}
+      {availability.canBuy && availability.status !== "presale" && (
         <>
           <p className="flex items-center gap-2">
             <Truck aria-hidden="true" className="h-4 w-4 shrink-0" />
