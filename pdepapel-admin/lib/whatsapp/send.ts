@@ -154,11 +154,17 @@ function readExternalId(payload: unknown): string | null {
  * nunca dependa de que el envío esté listo.
  */
 async function postToChakra(
-  to: string,
+  to: string | null,
   // `payload` a secas está tomado más abajo por el cuerpo de la RESPUESTA,
   // que es lo que leen readError/readTraceId/readExternalId.
   messagePayload: Record<string, unknown>,
   environment: SendEnvironment,
+  /**
+   * Un mensaje devuelve wamid y sin él algo salió mal. El indicador de
+   * escritura no es un mensaje: responde 200 con `_data` vacío, así que
+   * exigirle un wamid lo daría por fallido.
+   */
+  expectMessageId = true,
 ): Promise<WhatsAppSendResult> {
   const apiKey = environment.CHAKRA_API_KEY?.trim();
   const pluginId = environment.CHAKRA_PLUGIN_ID?.trim();
@@ -185,7 +191,7 @@ async function postToChakra(
           // `recipient_type` se omite a propósito: es opcional y su valor por
           // defecto ya es "individual". Así el mensaje de texto sale byte a
           // byte como el que lleva meses funcionando en producción.
-          to: to.trim(),
+          ...(to ? { to: to.trim() } : {}),
           ...messagePayload,
         }),
       },
@@ -195,6 +201,7 @@ async function postToChakra(
     const externalId = readExternalId(payload);
 
     if (response.ok && externalId) return { ok: true, externalId };
+    if (response.ok && !expectMessageId) return { ok: true, externalId: "" };
 
     const requestId = readRequestId(response, payload);
     const fbTraceId = readTraceId(payload);
@@ -277,4 +284,35 @@ export async function sendWhatsAppButtonMessage(
     },
     environment,
   );
+}
+
+/**
+ * Muestra «escribiendo…» en el teléfono de la clienta y marca su mensaje como
+ * leído (doble check azul), en una sola llamada.
+ *
+ * Confirmado contra la API el 2026-09-14: Chakra lo reenvía a Meta y responde
+ * 200 con `_data` vacío, porque esto no es un mensaje y no genera wamid.
+ *
+ * Meta lo mantiene 25 segundos como máximo, o hasta que se mande la respuesta,
+ * lo que ocurra primero. Nunca lanza: si falla, la respuesta igual sale.
+ */
+export async function sendWhatsAppTypingIndicator(
+  inboundMessageId: string,
+  environment: SendEnvironment = env,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!inboundMessageId.trim()) return { ok: false, error: "sin mensaje al que responder" };
+
+  const result = await postToChakra(
+    // El destinatario va implícito en `message_id`; mandar `to` sobra.
+    null,
+    {
+      status: "read",
+      message_id: inboundMessageId.trim(),
+      typing_indicator: { type: "text" },
+    },
+    environment,
+    false,
+  );
+
+  return result.ok ? { ok: true } : { ok: false, error: result.error };
 }

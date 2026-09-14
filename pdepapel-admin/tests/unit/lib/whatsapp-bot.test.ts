@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   messageFindFirst: vi.fn(),
   messageCreate: vi.fn(),
   send: vi.fn(),
+  typing: vi.fn(),
   activeKeywords: vi.fn(),
   sendableReply: vi.fn(),
 }));
@@ -22,7 +23,10 @@ vi.mock("@/lib/prismadb", () => ({
     },
   },
 }));
-vi.mock("@/lib/whatsapp/send", () => ({ sendWhatsAppButtonMessage: mocks.send }));
+vi.mock("@/lib/whatsapp/send", () => ({
+  sendWhatsAppButtonMessage: mocks.send,
+  sendWhatsAppTypingIndicator: mocks.typing,
+}));
 // Los ayudantes puros (ids de botón, constantes) se dejan reales: son la
 // misma lógica que corre en producción y no tocan la base de datos.
 vi.mock("@/lib/whatsapp/bot-replies", async (importOriginal) => ({
@@ -32,10 +36,13 @@ vi.mock("@/lib/whatsapp/bot-replies", async (importOriginal) => ({
 }));
 
 import {
+  HUMAN_PAUSE_MAX_MS,
+  HUMAN_PAUSE_READ_MS,
   TALK_TO_OWNER_ACKNOWLEDGEMENT,
   WHATSAPP_BOT_MARKER,
   buildReplyButtons,
   formatBotReply,
+  getHumanPauseMs,
   matchWhatsAppKeyword,
   normalizeBotText,
   runWhatsAppBot,
@@ -58,6 +65,8 @@ const input = {
   phone: "573001234567",
   body: "¿Cuál es el horario?",
   keywords,
+  // Sin esto cada prueba esperaría la pausa humana de verdad.
+  skipHumanPause: true,
 };
 
 describe("keyword matching", () => {
@@ -95,6 +104,7 @@ describe("runWhatsAppBot", () => {
     mocks.messageCreate.mockResolvedValue({});
     mocks.sendableReply.mockResolvedValue(null);
     mocks.send.mockResolvedValue({ ok: true, externalId: "wamid.BOT1" });
+    mocks.typing.mockResolvedValue({ ok: true });
   });
 
   it("answers a keyword match with the automatic marker and files it as BOT", async () => {
@@ -214,6 +224,7 @@ describe("botón «Hablar con Paula»", () => {
     mocks.messageCreate.mockResolvedValue({});
     mocks.sendableReply.mockResolvedValue(null);
     mocks.send.mockResolvedValue({ ok: true, externalId: "wamid.BOT1" });
+    mocks.typing.mockResolvedValue({ ok: true });
   });
 
   it("va siempre de último, aunque la respuesta no tenga menú", () => {
@@ -265,6 +276,7 @@ describe("menús por botón", () => {
     mocks.messageCreate.mockResolvedValue({});
     mocks.sendableReply.mockResolvedValue(null);
     mocks.send.mockResolvedValue({ ok: true, externalId: "wamid.BOT1" });
+    mocks.typing.mockResolvedValue({ ok: true });
   });
 
   it("sirve la respuesta a la que apunta el botón, sin mirar el texto", async () => {
@@ -334,5 +346,51 @@ describe("menús por botón", () => {
       `${WHATSAPP_BOT_MARKER}\n\nEnviamos a todo el país.`,
       [{ id: "r:reply-catalogo", title: "Ver catálogo" }, ...ESCAPE],
     );
+  });
+});
+
+describe("ritmo humano", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    mocks.conversationFindUnique.mockResolvedValue({ id: "conversation-1", status: "OPEN", storeId: "store-1" });
+    mocks.conversationUpdate.mockResolvedValue({});
+    mocks.messageCreate.mockResolvedValue({});
+    mocks.send.mockResolvedValue({ ok: true, externalId: "wamid.BOT1" });
+    mocks.typing.mockResolvedValue({ ok: true });
+  });
+
+  it("espera más cuando la respuesta es más larga, pero nunca de más", () => {
+    const corta = getHumanPauseMs("Sí");
+    const larga = getHumanPauseMs("a".repeat(120));
+
+    expect(corta).toBeGreaterThanOrEqual(HUMAN_PAUSE_READ_MS);
+    expect(larga).toBeGreaterThan(corta);
+    // El indicador de Meta dura 25 s; la pausa debe quedar muy por debajo.
+    expect(getHumanPauseMs("a".repeat(10000))).toBe(HUMAN_PAUSE_MAX_MS);
+    expect(HUMAN_PAUSE_MAX_MS).toBeLessThan(25000);
+  });
+
+  it("muestra «escribiendo…» sobre el mensaje entrante antes de contestar", async () => {
+    await runWhatsAppBot({ ...input, inboundMessageId: "wamid.ENTRA" });
+
+    expect(mocks.typing).toHaveBeenCalledWith("wamid.ENTRA");
+    expect(mocks.send).toHaveBeenCalled();
+  });
+
+  it("contesta igual si el indicador falla: es adorno, no requisito", async () => {
+    mocks.typing.mockResolvedValue({ ok: false, error: "not configured" });
+
+    await expect(
+      runWhatsAppBot({ ...input, inboundMessageId: "wamid.ENTRA" }),
+    ).resolves.toMatchObject({ outcome: "replied" });
+    expect(mocks.send).toHaveBeenCalled();
+  });
+
+  it("no intenta el indicador cuando no hay mensaje al que engancharlo", async () => {
+    await runWhatsAppBot({ ...input, inboundMessageId: null });
+
+    expect(mocks.typing).not.toHaveBeenCalled();
+    expect(mocks.send).toHaveBeenCalled();
   });
 });

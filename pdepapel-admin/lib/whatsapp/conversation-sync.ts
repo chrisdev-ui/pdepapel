@@ -520,6 +520,7 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
       phone: string;
       body: string;
       interactiveReplyId: string | null;
+      inboundMessageId: string | null;
     }> = [];
 
     for (const message of extracted.messages) {
@@ -530,6 +531,8 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
           phone: message.phone,
           body: message.body,
           interactiveReplyId: message.interactiveReplyId,
+          // Hace falta para mostrar «escribiendo…» y marcar como leído.
+          inboundMessageId: message.externalId,
         });
       }
     }

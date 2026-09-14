@@ -23,6 +23,7 @@ import {
 } from "@/lib/whatsapp/bot-replies";
 import {
   sendWhatsAppButtonMessage,
+  sendWhatsAppTypingIndicator,
   type WhatsAppReplyButton,
 } from "@/lib/whatsapp/send";
 
@@ -75,6 +76,30 @@ export interface WhatsAppBotResult {
   error?: string;
 }
 
+/**
+ * Ritmo humano.
+ *
+ * Paula lo pidió así: que no parezca una máquina. Antes de contestar se manda
+ * el indicador de «escribiendo…» (que además marca el mensaje como leído) y se
+ * espera un momento, como si alguien leyera y escribiera.
+ *
+ * La espera crece con el largo de la respuesta, porque escribir tres frases
+ * toma más que escribir una. El tope está muy por debajo de los 25 segundos
+ * que Meta mantiene el indicador, para que nunca se apague antes de tiempo.
+ */
+export const HUMAN_PAUSE_READ_MS = 1000;
+export const HUMAN_PAUSE_PER_CHAR_MS = 25;
+export const HUMAN_PAUSE_MAX_MS = 7000;
+
+export function getHumanPauseMs(answer: string): number {
+  return Math.min(
+    HUMAN_PAUSE_READ_MS + answer.length * HUMAN_PAUSE_PER_CHAR_MS,
+    HUMAN_PAUSE_MAX_MS,
+  );
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 /** Lo que se contesta al tocar «Hablar con Paula». */
 export const TALK_TO_OWNER_ACKNOWLEDGEMENT =
   "Listo, le aviso a Paula. Ella te escribe apenas pueda 💛";
@@ -111,6 +136,14 @@ export async function runWhatsAppBot(input: {
   body: string;
   /** Id del botón tocado, si el mensaje fue un toque y no texto escrito. */
   interactiveReplyId?: string | null;
+  /** `wamid` del mensaje entrante: hace falta para «escribiendo…». */
+  inboundMessageId?: string | null;
+  /**
+   * Solo para pruebas: salta la ESPERA para no dormir el test. El indicador
+   * de «escribiendo…» se manda igual, porque es parte de lo que hay que
+   * comprobar y no cuesta tiempo.
+   */
+  skipHumanPause?: boolean;
   /** Solo para pruebas: si no se pasa, se leen las respuestas de la tienda. */
   keywords?: WhatsAppBotKeyword[];
 }): Promise<WhatsAppBotResult> {
@@ -125,7 +158,7 @@ export async function runWhatsAppBot(input: {
   // 1. Pidió a Paula: se le confirma y el bot se calla. Es la única salida que
   //    no se puede deshacer tocando otro botón.
   if (buttonId === TALK_TO_OWNER_BUTTON_ID) {
-    const sent = await deliver(conversation.id, input.phone, TALK_TO_OWNER_ACKNOWLEDGEMENT, []);
+    const sent = await deliver(conversation.id, input.phone, TALK_TO_OWNER_ACKNOWLEDGEMENT, [], pacing(input));
     await escalate(conversation.id);
     return sent.ok
       ? { outcome: "escalated_owner_requested" }
@@ -151,7 +184,7 @@ export async function runWhatsAppBot(input: {
       await escalate(conversation.id);
       return { outcome: "escalated_button_unavailable" };
     }
-    return respond(conversation.id, input.phone, target);
+    return respond(conversation.id, input.phone, target, undefined, pacing(input));
   }
 
   // 4. Solo palabra clave: sin coincidencia no se inventa una respuesta. Las
@@ -164,7 +197,22 @@ export async function runWhatsAppBot(input: {
     return { outcome: "escalated_no_match" };
   }
 
-  return respond(conversation.id, input.phone, match.keyword, match.trigger);
+  return respond(conversation.id, input.phone, match.keyword, match.trigger, pacing(input));
+}
+
+interface Pacing {
+  inboundMessageId: string | null;
+  skip: boolean;
+}
+
+function pacing(input: {
+  inboundMessageId?: string | null;
+  skipHumanPause?: boolean;
+}): Pacing {
+  return {
+    inboundMessageId: input.inboundMessageId?.trim() || null,
+    skip: Boolean(input.skipHumanPause),
+  };
 }
 
 /** Manda la respuesta y la deja archivada; escala si el envío falla. */
@@ -172,9 +220,10 @@ async function respond(
   conversationId: string,
   phone: string,
   keyword: WhatsAppBotKeyword,
-  trigger?: string,
+  trigger: string | undefined,
+  pace: Pacing,
 ): Promise<WhatsAppBotResult> {
-  const sent = await deliver(conversationId, phone, keyword.answer, keyword.buttons ?? []);
+  const sent = await deliver(conversationId, phone, keyword.answer, keyword.buttons ?? [], pace);
   if (!sent.ok) {
     await escalate(conversationId);
     return { outcome: "escalated_send_failed", trigger, error: sent.error };
@@ -191,8 +240,22 @@ async function deliver(
   phone: string,
   answer: string,
   buttons: { title: string; targetReplyId: string }[],
+  pace: Pacing,
 ): Promise<{ ok: boolean; error?: string }> {
   const reply = formatBotReply(answer);
+
+  // «Escribiendo…» primero y después la espera. Si el indicador falla no se
+  // interrumpe nada: es adorno, la respuesta es lo que importa.
+  if (pace.inboundMessageId) {
+    const typing = await sendWhatsAppTypingIndicator(pace.inboundMessageId);
+    if (!typing.ok) {
+      console.warn("[WHATSAPP_BOT] No se pudo mostrar «escribiendo…»", {
+        error: typing.error,
+      });
+    }
+  }
+  if (!pace.skip) await sleep(getHumanPauseMs(reply));
+
   const sent = await sendWhatsAppButtonMessage(phone, reply, buildReplyButtons(buttons));
 
   if (!sent.ok) {

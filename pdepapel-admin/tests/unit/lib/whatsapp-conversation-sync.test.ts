@@ -551,6 +551,7 @@ describe("processWhatsAppWebhookEvent", () => {
       body: "Hola, ¿tienen stickers?",
       // Escrito a mano: no viene de ningún botón.
       interactiveReplyId: null,
+      inboundMessageId: "wamid.1",
     });
   });
 
