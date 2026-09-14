@@ -1,5 +1,7 @@
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { randomUUID } from "node:crypto";
+
+import { MAX_WAIT_TIME, TIMEOUT_TIME } from "@/constants";
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 const databaseUrl = process.env.DATABASE_URL;
@@ -20,7 +22,18 @@ if (
   );
 }
 
-export const testPrisma = new PrismaClient();
+/**
+ * Mismo aislamiento que producción (`lib/prismadb.ts`): con el nivel por
+ * defecto, dos movimientos simultáneos del mismo producto se confirman los dos
+ * y el kardex guarda filas que se pisan.
+ */
+export const testPrisma = new PrismaClient({
+  transactionOptions: {
+    isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    maxWait: MAX_WAIT_TIME,
+    timeout: TIMEOUT_TIME,
+  },
+});
 
 export type InventoryFixture = Awaited<
   ReturnType<typeof createInventoryFixture>
@@ -215,6 +228,8 @@ export async function deleteInventoryFixture(fixture: InventoryFixture) {
   await testPrisma.size.deleteMany({ where: { storeId: fixture.store.id } });
   await testPrisma.color.deleteMany({ where: { storeId: fixture.store.id } });
   await testPrisma.design.deleteMany({ where: { storeId: fixture.store.id } });
-  await testPrisma.orderInventoryIssue.deleteMany({ where: { storeId: fixture.store.id } });
+  await testPrisma.orderInventoryIssue.deleteMany({
+    where: { storeId: fixture.store.id },
+  });
   await testPrisma.store.delete({ where: { id: fixture.store.id } });
 }

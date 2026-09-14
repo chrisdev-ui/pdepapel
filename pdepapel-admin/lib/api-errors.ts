@@ -92,7 +92,6 @@ export const ErrorFactory = {
     ),
 };
 
-
 /**
  * Un fallo de validación de zod es culpa de quien llama, no del servidor.
  *
@@ -119,12 +118,18 @@ function zodIssueMessage(issue: ZodIssue | undefined): string {
   // escribió su mensaje, manda el suyo — pisarlo cambiaría textos que ya
   // están en producción y probados.
   const esDefaultDeZod = !mensaje || mensaje === "Required";
-  if (issue.code === "invalid_type" && issue.received === "undefined" && esDefaultDeZod) {
+  if (
+    issue.code === "invalid_type" &&
+    issue.received === "undefined" &&
+    esDefaultDeZod
+  ) {
     return campo ? `Falta el campo «${campo}»` : "Faltan datos obligatorios";
   }
 
   if (!mensaje) {
-    return campo ? `El campo «${campo}» no es válido` : "Los datos enviados no son válidos";
+    return campo
+      ? `El campo «${campo}» no es válido`
+      : "Los datos enviados no son válidos";
   }
   return mensaje;
 }
@@ -149,7 +154,8 @@ export const handleErrorResponse = (
 ) => {
   // Se normaliza primero: así el 400 de validación pasa por el mismo camino
   // (y el mismo criterio de log) que cualquier otro error de negocio.
-  const error = rawError instanceof ZodError ? zodErrorToAppError(rawError) : rawError;
+  const error =
+    rawError instanceof ZodError ? zodErrorToAppError(rawError) : rawError;
 
   const isExpectedAppError =
     error instanceof AppError &&
@@ -195,6 +201,14 @@ export const handleErrorResponse = (
             503,
             { code: error.code, retryAfterSeconds: 2 },
           );
+        case "P2034":
+          // Con Serializable, dos escrituras a la vez sobre la misma fila
+          // abortan una: es reintentable, no un fallo del servidor.
+          return new AppError(
+            "Otra operación tocó los mismos datos al mismo tiempo. Intenta de nuevo.",
+            409,
+            { code: error.code, retryAfterSeconds: 1 },
+          );
         case "P1001":
         case "P1002":
         case "P1008":
@@ -213,19 +227,17 @@ export const handleErrorResponse = (
       }
     })();
 
+    const retryAfterSeconds =
+      (prismaError.details as { retryAfterSeconds?: number } | undefined)
+        ?.retryAfterSeconds ?? (prismaError.statusCode === 503 ? 2 : null);
+
     return NextResponse.json(
       { error: prismaError.message, details: prismaError.details },
       {
         status: prismaError.statusCode,
-        headers:
-          prismaError.statusCode === 503
-            ? {
-                ...options.headers,
-                "Retry-After": String(
-                  (prismaError.details as { retryAfterSeconds?: number } | undefined)?.retryAfterSeconds ?? 2,
-                ),
-              }
-            : options.headers,
+        headers: retryAfterSeconds
+          ? { ...options.headers, "Retry-After": String(retryAfterSeconds) }
+          : options.headers,
       },
     );
   }
@@ -233,7 +245,10 @@ export const handleErrorResponse = (
   // La base de datos no responde (reinicio, red): tampoco es un 500 del código.
   if (error instanceof Prisma.PrismaClientInitializationError) {
     return NextResponse.json(
-      { error: "No se pudo conectar con la base de datos. Intenta de nuevo en unos segundos." },
+      {
+        error:
+          "No se pudo conectar con la base de datos. Intenta de nuevo en unos segundos.",
+      },
       { status: 503, headers: { ...options.headers, "Retry-After": "5" } },
     );
   }

@@ -120,6 +120,14 @@ async function createCheckout(
       ? await checkIfStoreOwner(userLogged, params.storeId)
       : false;
 
+    // Un JSON roto respondía 500.
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      throw ErrorFactory.InvalidRequest(
+        "El cuerpo de la solicitud no es válido",
+      );
+    }
+
     const {
       fullName,
       phone,
@@ -148,7 +156,7 @@ async function createCheckout(
       saveAddress,
       savedAddressId,
       addressLabel,
-    } = await req.json();
+    } = body as Record<string, any>;
     const normalizedPhone = normalizePhone(phone);
     const normalizedAnalyticsClientId = isStoreOwner
       ? null
@@ -159,6 +167,31 @@ async function createCheckout(
       productId: string;
       quantity: number;
     }[];
+
+    // El log de abajo lee `payment.method`: sin esto, un cuerpo sin `payment`
+    // salía como 500.
+    if (!payment || typeof payment !== "object" || !payment.method) {
+      throw ErrorFactory.InvalidRequest("Falta el método de pago");
+    }
+    if (!Object.values(PaymentMethod).includes(payment.method)) {
+      throw ErrorFactory.InvalidRequest(
+        `El método de pago «${payment.method}» no existe`,
+      );
+    }
+
+    const invalidItem = typedOrderItems.find(
+      (item) =>
+        !item ||
+        typeof item.productId !== "string" ||
+        !item.productId ||
+        !Number.isInteger(item.quantity ?? 1) ||
+        (item.quantity ?? 1) < 1,
+    );
+    if (invalidItem) {
+      throw ErrorFactory.InvalidRequest(
+        "Cada producto del pedido necesita un identificador y una cantidad entera positiva",
+      );
+    }
 
     console.log(
       `📥 Checkout request received - Store: ${params.storeId}, Payment: ${payment.method}, Items: ${typedOrderItems.length}, Total: ${currencyFormatter(total)}`,

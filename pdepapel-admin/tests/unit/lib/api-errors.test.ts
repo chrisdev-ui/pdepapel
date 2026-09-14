@@ -69,7 +69,9 @@ describe("API error helpers", () => {
     // del servidor» por escribir mal una fecha. Se descubrió con las
     // preventas, pero afectaba a toda ruta que validara con .parse().
     const schema = z.object({
-      expectedArrivalAt: z.string({ required_error: "Ponle la fecha en que llega" }),
+      expectedArrivalAt: z.string({
+        required_error: "Ponle la fecha en que llega",
+      }),
       unitLimit: z.number().min(1, "Promete al menos una unidad"),
     });
 
@@ -83,7 +85,10 @@ describe("API error helpers", () => {
     const response = handleErrorResponse(capturado, "crear preventa");
 
     expect(response.status).toBe(400);
-    const cuerpo = (await response.json()) as { error: string; details?: { fieldErrors?: Record<string, string[]> } };
+    const cuerpo = (await response.json()) as {
+      error: string;
+      details?: { fieldErrors?: Record<string, string[]> };
+    };
     // El PRIMER problema es el que se muestra, como en las rutas con safeParse.
     expect(cuerpo.error).toBe("Ponle la fecha en que llega");
     // Y el resto queda por campo, para pintarlo junto a cada casilla.
@@ -94,7 +99,9 @@ describe("API error helpers", () => {
 
   it("translates zod's English «Required» but never overrides a written message", async () => {
     const sinMensaje = z.object({ productId: z.string() });
-    const conMensaje = z.object({ productId: z.string({ required_error: "Elige el producto" }) });
+    const conMensaje = z.object({
+      productId: z.string({ required_error: "Elige el producto" }),
+    });
 
     const leer = async (schema: z.ZodTypeAny) => {
       try {
@@ -114,7 +121,9 @@ describe("API error helpers", () => {
   it("keeps an unexpected error generic even if it carries zod-looking data", async () => {
     const response = handleErrorResponse(new Error("Required"), "test");
     expect(response.status).toBe(500);
-    await expect(response.json()).resolves.toEqual({ error: "Error interno del servidor" });
+    await expect(response.json()).resolves.toEqual({
+      error: "Error interno del servidor",
+    });
   });
 
   it("returns a safe generic response for unexpected errors", async () => {
@@ -128,31 +137,63 @@ describe("API error helpers", () => {
 
   it("answers a pool timeout with 503 and Retry-After instead of a generic 500", async () => {
     const { Prisma } = await import("@prisma/client");
-    const timeout = new Prisma.PrismaClientKnownRequestError("Timed out fetching a new connection from the connection pool", {
-      code: "P2024",
-      clientVersion: "6.19.1",
+    const timeout = new Prisma.PrismaClientKnownRequestError(
+      "Timed out fetching a new connection from the connection pool",
+      {
+        code: "P2024",
+        clientVersion: "6.19.1",
+      },
+    );
+    const response = handleErrorResponse(timeout, "PRODUCTS_GET", {
+      headers: { "x-request-id": "r1" },
     });
-    const response = handleErrorResponse(timeout, "PRODUCTS_GET", { headers: { "x-request-id": "r1" } });
 
     expect(response.status).toBe(503);
     expect(response.headers.get("Retry-After")).toBe("2");
     expect(response.headers.get("x-request-id")).toBe("r1");
-    await expect(response.json()).resolves.toMatchObject({ error: expect.stringContaining("ocupada") });
+    await expect(response.json()).resolves.toMatchObject({
+      error: expect.stringContaining("ocupada"),
+    });
+  });
+
+  it("answers a write conflict (P2034) with 409 so the caller retries", async () => {
+    // Con el nivel Serializable de este cliente, dos escrituras a la vez sobre
+    // la misma fila abortan una: es normal y se reintenta, no es un 500.
+    const { Prisma } = await import("@prisma/client");
+    const conflict = new Prisma.PrismaClientKnownRequestError(
+      "Transaction failed due to a write conflict or a deadlock. Please retry your transaction",
+      { code: "P2034", clientVersion: "6.19.1" },
+    );
+    const response = handleErrorResponse(conflict, "SHIPMENTS_UPDATE");
+
+    expect(response.status).toBe(409);
+    expect(response.headers.get("Retry-After")).toBe("1");
+    await expect(response.json()).resolves.toMatchObject({
+      error: expect.stringContaining("Intenta de nuevo"),
+    });
   });
 
   it("answers a connection closed by the server (P1017) with 503 and a longer Retry-After", async () => {
     const { Prisma } = await import("@prisma/client");
-    const closed = new Prisma.PrismaClientKnownRequestError("Server has closed the connection.", { code: "P1017", clientVersion: "6.19.1" });
+    const closed = new Prisma.PrismaClientKnownRequestError(
+      "Server has closed the connection.",
+      { code: "P1017", clientVersion: "6.19.1" },
+    );
     const response = handleErrorResponse(closed, "CATEGORIES_GET");
 
     expect(response.status).toBe(503);
     expect(response.headers.get("Retry-After")).toBe("5");
-    await expect(response.json()).resolves.toMatchObject({ error: expect.stringContaining("conectar") });
+    await expect(response.json()).resolves.toMatchObject({
+      error: expect.stringContaining("conectar"),
+    });
   });
 
   it("answers an unreachable database with 503", async () => {
     const { Prisma } = await import("@prisma/client");
-    const down = new Prisma.PrismaClientInitializationError("Can't reach database server", "6.19.1");
+    const down = new Prisma.PrismaClientInitializationError(
+      "Can't reach database server",
+      "6.19.1",
+    );
     const response = handleErrorResponse(down, "PRODUCTS_GET");
 
     expect(response.status).toBe(503);
@@ -234,9 +275,7 @@ describe("API error helpers", () => {
       "Error de conexión con el servidor. Por favor verifica tu conexión a internet.",
     );
 
-    expect(
-      getErrorMessage(new Error("timeout of 60000ms exceeded")),
-    ).toBe(
+    expect(getErrorMessage(new Error("timeout of 60000ms exceeded"))).toBe(
       "La solicitud tardó más de lo esperado en responder. Es posible que la operación se haya completado en el servidor; por favor recarga la página para verificar.",
     );
   });
