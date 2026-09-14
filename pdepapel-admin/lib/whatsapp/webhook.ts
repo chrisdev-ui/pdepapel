@@ -1,11 +1,11 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 /**
- * Webhook de WhatsApp (Cloud API, vía Dualhook). Todavía no se sabe con
- * certeza si Dualhook reenvía el cuerpo nativo de Meta o uno propio, así que
- * aquí nada se rechaza: lo que llega se guarda tal cual y se clasifica lo
- * mejor posible. La forma nativa de Meta es
- * `{ object, entry: [{ id: WABA_ID, changes: [{ field, value }] }] }`.
+ * Webhook de WhatsApp (Cloud API, vía Chakra). El webhook de Chakra es de
+ * paso: reenvía el cuerpo nativo de Meta sin modificarlo, que tiene la forma
+ * `{ object, entry: [{ id: WABA_ID, changes: [{ field, value }] }] }`. Aun
+ * así, aquí nada se rechaza: lo que llega se guarda tal cual y se clasifica
+ * lo mejor posible, para que un cambio de forma no pierda eventos.
  */
 
 export type WhatsAppWebhookPayload = Record<string, unknown>;

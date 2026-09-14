@@ -5,9 +5,13 @@ vi.mock("@/lib/env.mjs", () => ({ env: {} }));
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send";
 
 const configured = {
-  DUALHOOK_API_KEY: "dualhook-key",
+  CHAKRA_API_KEY: "chakra-key",
+  CHAKRA_PLUGIN_ID: "plugin-123",
   WHATSAPP_PHONE_NUMBER_ID: "621067881095773",
 };
+
+const SEND_URL =
+  "https://api.chakrahq.com/v1/ext/plugin/whatsapp/plugin-123/api/v24.0/621067881095773/messages";
 
 function response(body: unknown, status = 200, headers: Record<string, string> = {}) {
   return {
@@ -32,10 +36,8 @@ describe("sendWhatsAppTextMessage", () => {
     vi.unstubAllGlobals();
   });
 
-  it("posts to Dualhook with bearer auth and returns the wamid", async () => {
-    fetchMock.mockResolvedValue(
-      response({ messaging_product: "whatsapp", messages: [{ id: "wamid.OUT1" }] }),
-    );
+  it("posts to Chakra with bearer auth and returns the wamid", async () => {
+    fetchMock.mockResolvedValue(response({ _data: { whatsappMessageId: "wamid.OUT1" } }));
 
     await expect(
       sendWhatsAppTextMessage("573001234567", "Hola", configured),
@@ -43,9 +45,9 @@ describe("sendWhatsAppTextMessage", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe("https://api.dualhook.com/v25.0/621067881095773/messages");
+    expect(url).toBe(SEND_URL);
     expect(init.method).toBe("POST");
-    expect(init.headers.authorization).toBe("Bearer dualhook-key");
+    expect(init.headers.authorization).toBe("Bearer chakra-key");
     expect(JSON.parse(init.body)).toEqual({
       messaging_product: "whatsapp",
       to: "573001234567",
@@ -57,9 +59,10 @@ describe("sendWhatsAppTextMessage", () => {
   it("short-circuits without an HTTP call when the credentials are missing", async () => {
     for (const environment of [
       {},
-      { DUALHOOK_API_KEY: "k" },
+      { CHAKRA_API_KEY: "k" },
+      { CHAKRA_PLUGIN_ID: "p" },
       { WHATSAPP_PHONE_NUMBER_ID: "id" },
-      { DUALHOOK_API_KEY: "  ", WHATSAPP_PHONE_NUMBER_ID: "id" },
+      { CHAKRA_API_KEY: "  ", CHAKRA_PLUGIN_ID: "p", WHATSAPP_PHONE_NUMBER_ID: "id" },
     ]) {
       await expect(sendWhatsAppTextMessage("573001234567", "Hola", environment)).resolves.toEqual({
         ok: false,
@@ -69,12 +72,11 @@ describe("sendWhatsAppTextMessage", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("handles a Dualhook refusal and keeps its request id for support", async () => {
+  it("handles a Chakra refusal without throwing", async () => {
     fetchMock.mockResolvedValue(
       response(
-        { error: { message: "Connection not routable", code: "connection_not_routable" } },
+        { _errors: [{ message: "Connection not routable", code: "connection_not_routable" }] },
         409,
-        { "x-dualhook-request-id": "7a4bf03b-8f95-4973-b012-e7c59fb3609b" },
       ),
     );
 
@@ -83,25 +85,26 @@ describe("sendWhatsAppTextMessage", () => {
     ).resolves.toEqual({
       ok: false,
       error: "Connection not routable (connection_not_routable)",
-      requestId: "7a4bf03b-8f95-4973-b012-e7c59fb3609b",
+      requestId: null,
       fbTraceId: null,
     });
-    // Los ids quedan en el log: es lo que pide el soporte de Dualhook.
     expect(console.error).toHaveBeenCalledWith(
       "[WHATSAPP_SEND] El envío fue rechazado",
-      expect.objectContaining({ dualhookRequestId: "7a4bf03b-8f95-4973-b012-e7c59fb3609b" }),
+      expect.objectContaining({ error: "Connection not routable (connection_not_routable)" }),
     );
   });
 
-  it("handles a Meta rejection forwarded by Dualhook without throwing", async () => {
+  it("handles a Meta rejection forwarded by Chakra without throwing", async () => {
     fetchMock.mockResolvedValue(
       response(
         {
-          error: {
-            message: "Message failed to send because more than 24 hours have passed",
-            type: "OAuthException",
-            code: 131047,
-            fbtrace_id: "Az8-abc",
+          _data: {
+            error: {
+              message: "Message failed to send because more than 24 hours have passed",
+              type: "OAuthException",
+              code: 131047,
+              fbtrace_id: "Az8-abc",
+            },
           },
         },
         400,
@@ -123,7 +126,7 @@ describe("sendWhatsAppTextMessage", () => {
   });
 
   it("treats a 200 without a wamid as a failure", async () => {
-    fetchMock.mockResolvedValue(response({ messaging_product: "whatsapp", messages: [] }));
+    fetchMock.mockResolvedValue(response({ _data: {} }));
 
     await expect(
       sendWhatsAppTextMessage("573001234567", "Hola", configured),
@@ -155,8 +158,8 @@ describe("sendWhatsAppTextMessage", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("caps a very long body instead of letting Dualhook reject it", async () => {
-    fetchMock.mockResolvedValue(response({ messages: [{ id: "wamid.OUT2" }] }));
+  it("caps a very long body instead of letting Chakra reject it", async () => {
+    fetchMock.mockResolvedValue(response({ _data: { whatsappMessageId: "wamid.OUT2" } }));
 
     await sendWhatsAppTextMessage("573001234567", "a".repeat(9000), configured);
 

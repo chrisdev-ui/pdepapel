@@ -34,18 +34,19 @@ export const env = createEnv({
     // EnvioClick no firma sus webhooks: este secreto viaja en la URL que se
     // configura en su panel (`?token=`) o en la cabecera `x-webhook-token`.
     ENVIOCLICK_WEBHOOK_SECRET: z.string().min(24),
-    // WhatsApp Cloud API (vía Dualhook): el token del apretón de manos de Meta
-    // (`hub.verify_token`) y el secreto compartido que viaja en la URL del
-    // webhook (`?token=`) o en `x-webhook-token`, como con EnvioClick.
+    // WhatsApp Cloud API (vía Chakra, BSP): el token del apretón de manos de
+    // Meta (`hub.verify_token`) y el secreto compartido que viaja en la URL
+    // del webhook (`?token=`) o en `x-webhook-token`, como con EnvioClick.
     WHATSAPP_WEBHOOK_VERIFY_TOKEN: z.string().min(24),
     // Secreto de la app de Meta: si está, también se acepta la firma
-    // `X-Hub-Signature-256` sobre el cuerpo crudo. Opcional mientras no se
-    // sepa si Dualhook reenvía la firma original.
+    // `X-Hub-Signature-256` sobre el cuerpo crudo. No aplica al webhook de
+    // Chakra (usa el token propio de arriba); queda opcional por si hiciera falta.
     WHATSAPP_APP_SECRET: z.string().min(1).optional(),
-    // Credenciales para ENVIAR por WhatsApp a través de Dualhook. Opcionales a
+    // Credenciales para ENVIAR por WhatsApp a través de Chakra. Opcionales a
     // propósito: sin ellas el bot no manda nada y lo deja anotado, pero el
     // webhook sigue archivando conversaciones con normalidad.
-    DUALHOOK_API_KEY: z.string().min(1).optional(),
+    CHAKRA_API_KEY: z.string().min(1).optional(),
+    CHAKRA_PLUGIN_ID: z.string().min(1).optional(),
     WHATSAPP_PHONE_NUMBER_ID: z.string().min(1).optional(),
     ENVIOCLICK_API_URL: z
       .string()

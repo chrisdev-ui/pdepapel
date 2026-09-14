@@ -13,7 +13,7 @@ import {
 } from "@/lib/whatsapp/webhook";
 
 /**
- * Webhook de WhatsApp Cloud API (a través de Dualhook, que hace de BSP para
+ * Webhook de WhatsApp Cloud API (a través de Chakra, que hace de BSP para
  * la coexistencia con la app de WhatsApp Business).
  *
  * Autentica, deduplica y guarda cada evento en `MarketplaceWebhookEvent` con
@@ -22,7 +22,7 @@ import {
  * cola falla, el evento queda guardado igual: la respuesta al proveedor nunca
  * depende de ella.
  *
- * Una vez autenticado, responde 200 pase lo que pase: si Meta o Dualhook
+ * Una vez autenticado, responde 200 pase lo que pase: si Meta o Chakra
  * acumulan 4xx/5xx desactivan la suscripción, y el cuerpo siempre queda
  * guardado tal cual para ajustar el clasificador después.
  */
