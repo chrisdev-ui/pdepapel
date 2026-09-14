@@ -18,6 +18,10 @@ vi.mock("@/lib/utils", () => ({
   CACHE_HEADERS: { NO_CACHE: { "Cache-Control": "no-store" } },
   verifyStoreOwner: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("@/lib/newsletter", () => ({
+  resendNewsletterConfirmation: vi.fn().mockResolvedValue(undefined),
+  unsubscribeNewsletterSubscriber: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@/lib/prismadb", () => ({
   default: {
     whatsAppBotReply: { create: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
@@ -62,6 +66,43 @@ describe("bot-replies: una respuesta mal formada da 400, no 500", () => {
     expect(Object.keys(cuerpo.details?.fieldErrors ?? {})).toEqual(
       expect.arrayContaining(["triggers", "answer"]),
     );
+  });
+});
+
+describe("newsletter/subscribers: un 400 legible, y un 500 cuando toca", () => {
+  it("dice qué acción se esperaba en vez de devolver el JSON crudo de zod", async () => {
+    const { PATCH } = await import(
+      "@/app/api/[storeId]/newsletter/subscribers/[subscriberId]/route"
+    );
+
+    const response = await PATCH(pedir({ action: "inventada" }), {
+      params: { storeId: "store-1", subscriberId: "sub-1" },
+    });
+
+    expect(response.status).toBe(400);
+    const cuerpo = (await response.json()) as { error?: string; message?: string };
+    // La forma común de la API es `error`, no `message`.
+    expect(cuerpo.error).toBeTruthy();
+    // Y un texto, no el volcado del ZodError.
+    expect(cuerpo.error).not.toMatch(/^\[\s*\{/);
+    expect(cuerpo.error).toMatch(/resend_confirmation|unsubscribe|acci/i);
+  });
+
+  it("ya no reporta un fallo del servidor como «solicitud inválida»", async () => {
+    // Antes el catch devolvía 400 para todo, incluida una caída de la base.
+    const { PATCH } = await import(
+      "@/app/api/[storeId]/newsletter/subscribers/[subscriberId]/route"
+    );
+    const { resendNewsletterConfirmation } = await import("@/lib/newsletter");
+    vi.mocked(resendNewsletterConfirmation).mockRejectedValueOnce(
+      new Error("connection refused"),
+    );
+
+    const response = await PATCH(pedir({ action: "resend_confirmation" }), {
+      params: { storeId: "store-1", subscriberId: "sub-1" },
+    });
+
+    expect(response.status).toBe(500);
   });
 });
 
