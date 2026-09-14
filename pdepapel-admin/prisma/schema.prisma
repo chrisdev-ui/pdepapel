@@ -75,6 +75,7 @@ model Store {
   customerReactivations          CustomerReactivation[]          @relation("StoreToCustomerReactivation")
   newsletterSubscribers          NewsletterSubscriber[]          @relation("StoreToNewsletterSubscriber")
   conversations                  Conversation[]                  @relation("StoreToConversation")
+  whatsAppBotReplies             WhatsAppBotReply[]              @relation("StoreToWhatsAppBotReply")
   fairEvents                     FairEvent[]
   marketplaceConnections         MarketplaceConnection[]
   marketplaceOAuthStates         MarketplaceOAuthState[]
@@ -2146,6 +2147,28 @@ model Conversation {
   @@unique([storeId, channel, phone])
   @@index([storeId, status, lastInboundAt])
   @@index([orderId])
+}
+
+/// Respuestas automáticas de WhatsApp, editables desde el panel: la dueña
+/// define aquí qué contesta el bot, sin tocar código.
+model WhatsAppBotReply {
+  id        String   @id @default(uuid())
+  storeId   String
+  /// Nombre corto con el que ella la reconoce («Horarios», «Envíos»).
+  label     String
+  /// Frases que disparan la respuesta, ya normalizadas (minúsculas, sin tildes).
+  triggers  Json
+  answer    String   @db.Text
+  /// Apagarla la deja guardada sin que el bot la use.
+  isActive  Boolean  @default(true)
+  /// Gana la primera que coincida, así que el orden importa.
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store Store @relation("StoreToWhatsAppBotReply", fields: [storeId], references: [id])
+
+  @@index([storeId, isActive, sortOrder])
 }
 
 model ConversationMessage {

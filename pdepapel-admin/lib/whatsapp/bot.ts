@@ -7,10 +7,16 @@ import {
 
 import prismadb from "@/lib/prismadb";
 import {
-  WHATSAPP_BOT_KEYWORDS,
+  WHATSAPP_BOT_MARKER,
+  formatBotReply,
+  matchWhatsAppKeyword,
+  normalizeBotText,
   type WhatsAppBotKeyword,
-} from "@/lib/whatsapp/bot-keywords";
+} from "@/lib/whatsapp/bot-matching";
+import { getActiveBotKeywords } from "@/lib/whatsapp/bot-replies";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send";
+
+export { WHATSAPP_BOT_MARKER, formatBotReply, matchWhatsAppKeyword, normalizeBotText };
 
 /**
  * Bot de WhatsApp por palabra clave.
@@ -26,9 +32,6 @@ import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send";
  * (`lib/whatsapp/conversation-sync.ts`), porque ella contesta desde su celular
  * y no desde el panel.
  */
-
-/** Marca visible que encabeza toda respuesta automática. */
-export const WHATSAPP_BOT_MARKER = "🤖 Respuesta automática";
 
 export type WhatsAppBotOutcome =
   /** La conversación ya esperaba a una persona: el bot no hace nada. */
@@ -49,41 +52,6 @@ export interface WhatsAppBotResult {
   error?: string;
 }
 
-/**
- * Minúsculas y sin tildes, con el mismo patrón que usa `lib/slugify.ts`, para
- * que «¿A QUÉ HORA?» y «a que hora» comparen igual.
- */
-export function normalizeBotText(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-/** Primera entrada cuyo trigger aparezca en el mensaje; `null` si ninguna. */
-export function matchWhatsAppKeyword(
-  body: string,
-  keywords: WhatsAppBotKeyword[] = WHATSAPP_BOT_KEYWORDS,
-): { keyword: WhatsAppBotKeyword; trigger: string } | null {
-  const normalized = normalizeBotText(body);
-  if (!normalized) return null;
-
-  for (const keyword of keywords) {
-    for (const trigger of keyword.triggers) {
-      const needle = normalizeBotText(trigger);
-      if (needle && normalized.includes(needle)) return { keyword, trigger: needle };
-    }
-  }
-  return null;
-}
-
-/** Encabeza la respuesta con la marca, para que nunca se lea como una persona. */
-export function formatBotReply(answer: string): string {
-  return `${WHATSAPP_BOT_MARKER}\n\n${answer}`;
-}
-
 async function escalate(conversationId: string) {
   await prismadb.conversation.update({
     where: { id: conversationId },
@@ -100,11 +68,12 @@ export async function runWhatsAppBot(input: {
   conversationId: string;
   phone: string;
   body: string;
+  /** Solo para pruebas: si no se pasa, se leen las respuestas de la tienda. */
   keywords?: WhatsAppBotKeyword[];
 }): Promise<WhatsAppBotResult> {
   const conversation = await prismadb.conversation.findUnique({
     where: { id: input.conversationId },
-    select: { id: true, status: true },
+    select: { id: true, status: true, storeId: true },
   });
   if (!conversation) return { outcome: "skipped_needs_owner" };
 
@@ -128,8 +97,11 @@ export async function runWhatsAppBot(input: {
     return { outcome: "escalated_bot_already_replied" };
   }
 
-  // 3. Solo palabra clave: sin coincidencia no se inventa una respuesta.
-  const match = matchWhatsAppKeyword(input.body, input.keywords);
+  // 3. Solo palabra clave: sin coincidencia no se inventa una respuesta. Las
+  //    respuestas las escribe la dueña desde el panel; si no ha creado
+  //    ninguna, el bot calla y la conversación queda para ella.
+  const keywords = input.keywords ?? (await getActiveBotKeywords(conversation.storeId));
+  const match = matchWhatsAppKeyword(input.body, keywords);
   if (!match) {
     await escalate(conversation.id);
     return { outcome: "escalated_no_match" };

@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   messageFindFirst: vi.fn(),
   messageCreate: vi.fn(),
   send: vi.fn(),
+  activeKeywords: vi.fn(),
 }));
 
 vi.mock("@/lib/prismadb", () => ({
@@ -21,8 +22,8 @@ vi.mock("@/lib/prismadb", () => ({
   },
 }));
 vi.mock("@/lib/whatsapp/send", () => ({ sendWhatsAppTextMessage: mocks.send }));
+vi.mock("@/lib/whatsapp/bot-replies", () => ({ getActiveBotKeywords: mocks.activeKeywords }));
 
-import { WHATSAPP_BOT_KEYWORDS } from "@/lib/whatsapp/bot-keywords";
 import {
   WHATSAPP_BOT_MARKER,
   formatBotReply,
@@ -60,13 +61,6 @@ describe("keyword matching", () => {
     expect(matchWhatsAppKeyword("   ", keywords)).toBeNull();
   });
 
-  it("ships with no keywords, so nothing is answered until Paula defines them", () => {
-    // Una respuesta de ejemplo aquí le llegaría tal cual a una clienta.
-    expect(WHATSAPP_BOT_KEYWORDS).toEqual([]);
-    expect(matchWhatsAppKeyword("horario")).toBeNull();
-    expect(matchWhatsAppKeyword("prueba-webhook")).toBeNull();
-  });
-
   it("marks every automated reply as automatic", () => {
     expect(formatBotReply("Abrimos de 9 a 6.")).toBe(`${WHATSAPP_BOT_MARKER}\n\nAbrimos de 9 a 6.`);
     expect(WHATSAPP_BOT_MARKER).toContain("automática");
@@ -78,7 +72,8 @@ describe("runWhatsAppBot", () => {
     vi.clearAllMocks();
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
     vi.spyOn(console, "error").mockImplementation(() => undefined);
-    mocks.conversationFindUnique.mockResolvedValue({ id: "conversation-1", status: "OPEN" });
+    mocks.conversationFindUnique.mockResolvedValue({ id: "conversation-1", status: "OPEN", storeId: "store-1" });
+    mocks.activeKeywords.mockResolvedValue(keywords);
     mocks.conversationUpdate.mockResolvedValue({});
     mocks.messageFindFirst.mockResolvedValue(null);
     mocks.messageCreate.mockResolvedValue({});
@@ -171,6 +166,25 @@ describe("runWhatsAppBot", () => {
         status: "FAILED",
       },
     });
+    expect(mocks.conversationUpdate).toHaveBeenCalledWith({
+      where: { id: "conversation-1" },
+      data: { status: "NEEDS_OWNER" },
+    });
+  });
+
+  it("reads the store's replies when the caller does not pass any", async () => {
+    const { keywords: _ignored, ...withoutKeywords } = input;
+    await expect(runWhatsAppBot(withoutKeywords)).resolves.toMatchObject({ outcome: "replied" });
+    expect(mocks.activeKeywords).toHaveBeenCalledWith("store-1");
+  });
+
+  it("stays silent and escalates while the store has no replies defined", async () => {
+    // Es el estado en el que nace la tabla: sin respuestas, el bot calla.
+    mocks.activeKeywords.mockResolvedValue([]);
+    const { keywords: _ignored, ...withoutKeywords } = input;
+
+    await expect(runWhatsAppBot(withoutKeywords)).resolves.toEqual({ outcome: "escalated_no_match" });
+    expect(mocks.send).not.toHaveBeenCalled();
     expect(mocks.conversationUpdate).toHaveBeenCalledWith({
       where: { id: "conversation-1" },
       data: { status: "NEEDS_OWNER" },
