@@ -1,6 +1,8 @@
 import { AppShell } from "@/components/shell/app-shell";
 import { StoreInitializer } from "@/components/store-initializer";
 import { env } from "@/lib/env.mjs";
+import { ConversationStatus } from "@prisma/client";
+
 import prismadb from "@/lib/prismadb";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
@@ -26,7 +28,8 @@ export default async function DashboardLayout({
     redirect("/");
   }
 
-  const [stores, pendingOrders, lowStock] = await Promise.all([
+  const [stores, pendingOrders, lowStock, conversationsNeedOwner] =
+    await Promise.all([
     prismadb.store.findMany({ where: { userId } }),
     prismadb.order
       .count({ where: { storeId: params.storeId, status: "PENDING" } })
@@ -34,6 +37,13 @@ export default async function DashboardLayout({
     prismadb.product
       .count({
         where: { storeId: params.storeId, isArchived: false, stock: { lte: 2 } },
+      })
+      .catch(() => 0),
+    // Conversaciones que el bot dejó para una persona. Usa el índice
+    // [storeId, status, lastInboundAt], así que es una cuenta barata.
+    prismadb.conversation
+      .count({
+        where: { storeId: params.storeId, status: ConversationStatus.NEEDS_OWNER },
       })
       .catch(() => 0),
   ]);
@@ -45,7 +55,7 @@ export default async function DashboardLayout({
         storeId={params.storeId}
         stores={stores}
         storeUrl={env.FRONTEND_STORE_URL}
-        counts={{ pendingOrders, lowStock }}
+        counts={{ pendingOrders, lowStock, conversationsNeedOwner }}
       >
         {children}
       </AppShell>

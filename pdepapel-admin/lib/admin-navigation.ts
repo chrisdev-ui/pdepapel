@@ -34,7 +34,12 @@ import {
  * pestañas, basta con retirar los `children` sin tocar la barra.
  */
 
-export type NavBadgeKey = "pendingOrders" | "lowStock" | "marketplacePending";
+export type NavBadgeKey =
+  | "pendingOrders"
+  | "lowStock"
+  | "marketplacePending"
+  /** Conversaciones de WhatsApp esperando a que conteste una persona. */
+  | "conversationsNeedOwner";
 
 export interface NavChild {
   label: string;
@@ -141,6 +146,7 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Conversaciones",
         icon: MessagesSquare,
         segment: "conversaciones",
+        badge: "conversationsNeedOwner",
         children: [
           { label: "Conversaciones", segment: "conversaciones" },
           { label: "Respuestas automáticas", segment: "conversaciones/respuestas" },
