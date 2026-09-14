@@ -36,11 +36,4 @@ export interface WhatsAppBotKeyword {
  *     answer: "Atendemos de lunes a sábado, de 9 a. m. a 6 p. m.",
  *   },
  */
-export const WHATSAPP_BOT_KEYWORDS: WhatsAppBotKeyword[] = [
-  {
-    // TEMPORAL: solo para probar el envío saliente por Chakra de punta a punta.
-    // Quitar esta entrada (volver el arreglo a `[]`) en cuanto se confirme el envío.
-    triggers: ["prueba-webhook"],
-    answer: "Recibido. Esta es una respuesta de prueba del bot (canal WhatsApp vía Chakra).",
-  },
-];
+export const WHATSAPP_BOT_KEYWORDS: WhatsAppBotKeyword[] = [];
