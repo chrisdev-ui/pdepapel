@@ -358,3 +358,102 @@ export async function createGuideForOrder(
 
   return result;
 }
+
+export interface RequotedRate {
+  idRate: number;
+  idCarrier: number | null;
+  idProduct: number | null;
+  carrier: string;
+  product: string;
+  flete: number;
+  minimumInsurance: number;
+  totalCost: number;
+  deliveryDays: number;
+  isCOD: boolean;
+}
+
+/**
+ * Cotiza el carrito contra la transportadora, en el momento.
+ *
+ * La usa el checkout cuando la tarifa que manda el cliente no está en la caché
+ * de cotizaciones: sin esto, el servidor se creía el costo de envío que venía
+ * en la petición y cualquiera podía pedir envío gratis.
+ */
+export async function requoteCartShipping(input: {
+  storeId: string;
+  items: { productId: string; quantity: number }[];
+  destination: { daneCode: string; address: string };
+  contentValue: number;
+}): Promise<RequotedRate[]> {
+  const productIds = Array.from(
+    new Set(input.items.map((item) => item.productId)),
+  );
+  const [products, dbBoxes] = await Promise.all([
+    prismadb.product.findMany({
+      where: { id: { in: productIds }, storeId: input.storeId },
+      include: { size: true },
+    }),
+    prismadb.box.findMany({
+      where: { storeId: input.storeId },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+
+  const boxConfigurations: Record<string, BoxConfiguration> = {};
+  for (const type of ["XS", "S", "M", "L", "XL"]) {
+    const box =
+      dbBoxes.find(
+        (candidate) => candidate.type === type && candidate.isDefault,
+      ) ?? dbBoxes.find((candidate) => candidate.type === type);
+    if (!box) continue;
+    boxConfigurations[type] = {
+      width: box.width,
+      height: box.height,
+      length: box.length,
+      type: "box",
+      size: box.type as "XS" | "S" | "M" | "L" | "XL",
+      id: box.id,
+      name: box.name,
+    };
+  }
+
+  const dimensions = calculatePackageDimensions(
+    input.items as never,
+    products as never,
+    boxConfigurations,
+  );
+
+  const quotation = await envioClickClient.quoteShipment({
+    packages: [
+      {
+        weight: dimensions.weight,
+        height: dimensions.height,
+        width: dimensions.width,
+        length: dimensions.length,
+      },
+    ],
+    description: ENVIOCLICK_DEFAULTS.defaultDescription,
+    contentValue: input.contentValue,
+    origin: {
+      daneCode: STORE_SHIPPING_INFO.daneCode,
+      address: STORE_SHIPPING_INFO.address,
+    },
+    destination: {
+      daneCode: input.destination.daneCode,
+      address: truncateField(input.destination.address, "address"),
+    },
+  });
+
+  return (quotation.data.rates ?? []).map((rate) => ({
+    idRate: rate.idRate,
+    idCarrier: rate.idCarrier ?? null,
+    idProduct: rate.idProduct ?? null,
+    carrier: rate.carrier,
+    product: rate.product,
+    flete: rate.flete,
+    minimumInsurance: rate.minimumInsurance,
+    totalCost: rate.flete + rate.minimumInsurance,
+    deliveryDays: rate.deliveryDays,
+    isCOD: rate.cod,
+  }));
+}

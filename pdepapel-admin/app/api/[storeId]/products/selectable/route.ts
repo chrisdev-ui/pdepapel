@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 import prismadb from "@/lib/prismadb";
+import { handleErrorResponse } from "@/lib/api-errors";
 import { checkIfStoreOwner } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -84,7 +85,6 @@ export async function GET(
       totalPages,
     });
   } catch (error) {
-    console.error("[PRODUCTS_SELECTABLE_GET]", error);
-    return new NextResponse("Internal error", { status: 500 });
+    return handleErrorResponse(error, "PRODUCTS_SELECTABLE_GET");
   }
 }

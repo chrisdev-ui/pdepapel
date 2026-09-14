@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { Redis } from "@upstash/redis";
 
 import prismadb from "@/lib/prismadb";
+import { handleErrorResponse } from "@/lib/api-errors";
 import { verifyStoreOwner } from "@/lib/utils";
 
 // Cache Headers
@@ -130,7 +131,6 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.log("[PRODUCTS_SEARCH_GET]", error);
-    return new NextResponse("Internal Error", { status: 500 });
+    return handleErrorResponse(error, "PRODUCTS_SEARCH_GET");
   }
 }

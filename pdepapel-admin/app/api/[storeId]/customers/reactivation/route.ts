@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import prismadb from "@/lib/prismadb";
+import { handleErrorResponse } from "@/lib/api-errors";
 import { processAutomaticReactivations } from "@/lib/reactivation";
 
 export async function POST(
@@ -32,8 +33,7 @@ export async function POST(
     const result = await processAutomaticReactivations(params.storeId);
     return NextResponse.json(result);
   } catch (error) {
-    console.error(`[CUSTOMER_REACTIVATION_POST]`, error);
-    return new NextResponse("Internal error", { status: 500 });
+    return handleErrorResponse(error, "CUSTOMER_REACTIVATION_POST");
   }
 }
 
@@ -76,7 +76,6 @@ export async function GET(
 
     return NextResponse.json(reactivations);
   } catch (error) {
-    console.error(`[CUSTOMER_REACTIVATIONS_GET]`, error);
-    return new NextResponse("Internal error", { status: 500 });
+    return handleErrorResponse(error, "CUSTOMER_REACTIVATIONS_GET");
   }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import prismadb from "@/lib/prismadb";
+import { handleErrorResponse } from "@/lib/api-errors";
 import { AvailableCustomer } from "@/app/(dashboard)/[storeId]/(routes)/pedidos/[orderId]/server/get-available-customers";
 import parsePhoneNumber from "libphonenumber-js";
 import { checkIfStoreOwner, normalizePhone } from "@/lib/utils";
@@ -72,7 +73,9 @@ export async function GET(
       // 1. Clerk Search - ENABLED
       let registered: AvailableCustomer[] = [];
       try {
-        const { data: clerkUsers } = await (await clerkClient()).users.getUserList({
+        const { data: clerkUsers } = await (
+          await clerkClient()
+        ).users.getUserList({
           query,
           limit: 10,
         });
@@ -180,7 +183,6 @@ export async function GET(
 
     return NextResponse.json(results);
   } catch (error) {
-    console.log("[CUSTOMERS_SEARCH]", error);
-    return new NextResponse("Internal Error", { status: 500 });
+    return handleErrorResponse(error, "CUSTOMERS_SEARCH");
   }
 }

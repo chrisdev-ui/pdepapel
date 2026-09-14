@@ -7,7 +7,6 @@ import {
   PaymentDetails,
   PaymentMethod,
   Prisma,
-  PrismaClient,
   Product,
   ShippingStatus,
 } from "@prisma/client";
@@ -17,7 +16,6 @@ import { twMerge } from "tailwind-merge";
 import { v4 as uuidv4 } from "uuid";
 import { ErrorFactory } from "./api-errors";
 import { env } from "./env.mjs";
-import { DefaultArgs } from "@prisma/client/runtime/library";
 import { formatValue } from "react-currency-input-field";
 import { round2 } from "@/lib/order-totals";
 
@@ -152,15 +150,31 @@ export function parseAndSplitAddress(address: string): {
   };
 }
 
+/**
+ * Último pedido de QUIEN está comprando, para el freno de «una orden cada
+ * pocos minutos».
+ *
+ * El `OR` se arma solo con los identificadores que existen: `{ userId: null }`
+ * casa con TODOS los pedidos de invitadas, así que una compra bloqueaba a
+ * todas las demás invitadas de la tienda. Sin identificador no hay a quién
+ * frenar y se devuelve null.
+ */
 export async function getLastOrderTimestamp(
   userId: string | null | undefined,
   guestId: string | null | undefined,
   storeId: string,
 ) {
-  if (!userId && !guestId && !storeId) return null;
+  if (!storeId) return null;
+
+  const actor: Prisma.OrderWhereInput[] = [];
+  if (userId) actor.push({ userId });
+  if (guestId) actor.push({ guestId });
+  if (actor.length === 0) return null;
+
   const lastOrder = await prismadb.order.findFirst({
-    where: { OR: [{ userId }, { guestId }], storeId },
+    where: { OR: actor, storeId },
     orderBy: { createdAt: "desc" },
+    select: { createdAt: true },
   });
 
   return lastOrder?.createdAt;
@@ -195,7 +209,6 @@ export const parseErrorDetails = (
 ): Record<string, unknown> => ({
   [key]: JSON.stringify(list),
 });
-
 
 export function checkRequiredFields(
   fields: Record<string, any>,
@@ -344,215 +357,4 @@ export async function processOrderItemsInBatches(
   }
 
   return allProducts;
-}
-
-export async function batchUpdateProductStock(
-  tx: Omit<
-    PrismaClient<Prisma.PrismaClientOptions, never, DefaultArgs>,
-    "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
-  >,
-  stockUpdates: { productId: string; quantity: number }[],
-  validateStock: boolean = true,
-) {
-  if (stockUpdates.length === 0) return;
-
-  // Group updates by product to handle multiple items of same product
-  const groupedUpdates = stockUpdates.reduce(
-    (acc, update) => {
-      if (acc[update.productId]) {
-        acc[update.productId] += update.quantity;
-      } else {
-        acc[update.productId] = update.quantity;
-      }
-      return acc;
-    },
-    {} as Record<string, number>,
-  );
-
-  // If validation is enabled and we have decrements, check stock availability first
-  if (validateStock) {
-    const productIds = Object.keys(groupedUpdates).filter(
-      (productId) => groupedUpdates[productId] > 0,
-    );
-
-    if (productIds.length > 0) {
-      const products = await tx.product.findMany({
-        where: {
-          id: {
-            in: productIds,
-          },
-        },
-        select: {
-          id: true,
-          name: true,
-          stock: true,
-        },
-      });
-
-      // Check for insufficient stock
-      for (const product of products) {
-        const decrementAmount = groupedUpdates[product.id];
-        if (decrementAmount > 0 && product.stock < decrementAmount) {
-          throw new Error(
-            `Insufficient stock for product "${product.name}". Available: ${product.stock}, Required: ${decrementAmount}`,
-          );
-        }
-      }
-    }
-  }
-
-  // Execute all stock updates in parallel
-  const updatePromises = Object.entries(groupedUpdates)
-    .map(([productId, quantity]) => {
-      if (quantity > 0) {
-        // Positive quantity means decrement
-        return tx.product.update({
-          where: { id: productId },
-          data: {
-            stock: {
-              decrement: quantity,
-            },
-          },
-        });
-      } else if (quantity < 0) {
-        // Negative quantity means increment
-        return tx.product.update({
-          where: { id: productId },
-          data: {
-            stock: {
-              increment: Math.abs(quantity),
-            },
-          },
-        });
-      }
-      // If quantity is 0, no update needed
-      return Promise.resolve();
-    })
-    .filter(Boolean);
-
-  await Promise.all(updatePromises);
-}
-
-export async function batchUpdateProductStockResilient(
-  tx: Omit<
-    PrismaClient<Prisma.PrismaClientOptions, never, DefaultArgs>,
-    "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
-  >,
-  stockUpdates: { productId: string; quantity: number }[],
-  allowPartialFailures: boolean = true,
-) {
-  if (stockUpdates.length === 0) return { success: [], failed: [] };
-
-  // Group updates by product to handle multiple items of same product
-  const groupedUpdates = stockUpdates.reduce(
-    (acc, update) => {
-      if (acc[update.productId]) {
-        acc[update.productId] += update.quantity;
-      } else {
-        acc[update.productId] = update.quantity;
-      }
-      return acc;
-    },
-    {} as Record<string, number>,
-  );
-
-  // Get current stock levels for all products
-  const productIds = Object.keys(groupedUpdates);
-  const products = await tx.product.findMany({
-    where: {
-      id: {
-        in: productIds,
-      },
-    },
-    select: {
-      id: true,
-      name: true,
-      stock: true,
-    },
-  });
-
-  const productMap = new Map(products.map((p) => [p.id, p]));
-  const successfulUpdates: Array<{
-    productId: string;
-    quantity: number;
-    productName: string;
-  }> = [];
-  const failedUpdates: Array<{
-    productId: string;
-    quantity: number;
-    productName: string;
-    reason: string;
-  }> = [];
-
-  // Process each update individually to handle partial failures
-  for (const [productId, quantity] of Object.entries(groupedUpdates)) {
-    const product = productMap.get(productId);
-
-    if (!product) {
-      failedUpdates.push({
-        productId,
-        quantity,
-        productName: "Producto desconocido",
-        reason: "Producto no encontrado",
-      });
-      continue;
-    }
-
-    try {
-      if (quantity > 0) {
-        // Decrement stock - STRICT CHECK: Never do partial updates for decrements
-        if (product.stock < quantity) {
-          // NEVER decrement if insufficient stock - fail completely
-          failedUpdates.push({
-            productId,
-            quantity,
-            productName: product.name,
-            reason: `Stock insuficiente. Stock actual: ${product.stock}, Requerido: ${quantity}`,
-          });
-        } else {
-          // Only decrement if we have sufficient stock
-          await tx.product.update({
-            where: { id: productId },
-            data: {
-              stock: {
-                decrement: quantity,
-              },
-            },
-          });
-          successfulUpdates.push({
-            productId,
-            quantity,
-            productName: product.name,
-          });
-        }
-      } else if (quantity < 0) {
-        // Increment stock - this should never fail
-        await tx.product.update({
-          where: { id: productId },
-          data: {
-            stock: {
-              increment: Math.abs(quantity),
-            },
-          },
-        });
-        successfulUpdates.push({
-          productId,
-          quantity: Math.abs(quantity),
-          productName: product.name,
-        });
-      }
-    } catch (error) {
-      failedUpdates.push({
-        productId,
-        quantity,
-        productName: product.name,
-        reason: error instanceof Error ? error.message : "Error desconocido",
-      });
-    }
-  }
-
-  return {
-    success: successfulUpdates,
-    failed: failedUpdates,
-  };
 }

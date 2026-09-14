@@ -21,6 +21,7 @@ import {
 import { getProductsPrices } from "@/lib/discount-engine";
 import { getActivePresalesByProduct, getPresaleCapacity } from "@/lib/presale";
 import prismadb from "@/lib/prismadb";
+import { requoteCartShipping } from "@/lib/shipping-helpers";
 import { verifyEarlyAccessToken } from "@/lib/early-access";
 import { formatAvailableAt, isComingSoon } from "@/lib/product-availability";
 import {
@@ -335,11 +336,37 @@ async function createCheckout(
         }
       }
 
-      // If rate not found in cache but we have shipping data, log warning and continue
+      // La tarifa no está en la caché (cotización vencida, o alguien mandando
+      // un número inventado). Se cotiza contra la transportadora en vez de
+      // creerle al cliente: el costo de envío no lo pone quien compra.
       if (selectedQuote === fallbackQuote) {
         console.warn(
-          `⚠️ Rate ID ${rateId} not found in active caches for store ${params.storeId}. ` +
-            `Using provided shipping data. This may indicate an expired quote.`,
+          `⚠️ Rate ID ${rateId} not found in active caches for store ${params.storeId}. Re-cotizando.`,
+        );
+        let freshRates: Awaited<ReturnType<typeof requoteCartShipping>>;
+        try {
+          freshRates = await requoteCartShipping({
+            storeId: params.storeId,
+            items: typedOrderItems,
+            destination: { daneCode, address },
+            contentValue: Number(subtotal) || 0,
+          });
+        } catch (quoteError) {
+          console.error("[ORDER_CHECKOUT] Re-cotización fallida:", quoteError);
+          throw ErrorFactory.InvalidRequest(
+            "No pudimos confirmar el costo de envío en este momento. Solicita una nueva cotización e inténtalo de nuevo.",
+          );
+        }
+
+        const fresh = freshRates.find((rate) => rate.idRate === rateId);
+        if (!fresh) {
+          throw ErrorFactory.InvalidRequest(
+            "La tarifa de envío ya no está disponible. Solicita una nueva cotización.",
+          );
+        }
+        selectedQuote = fresh;
+        console.log(
+          `✅ Re-cotizado ${rateId}: ${fresh.carrier}, ${currencyFormatter(fresh.totalCost)}`,
         );
       } else {
         console.log(
@@ -347,11 +374,32 @@ async function createCheckout(
         );
       }
     } else if (!isCustomShipping) {
-      // No active caches, use provided shipping data
+      // Sin ninguna caché para ese destino: mismo criterio, se cotiza.
       console.warn(
-        `⚠️ No active shipping caches found for daneCode ${daneCode}, store ${params.storeId}. ` +
-          `Using provided shipping data.`,
+        `⚠️ No active shipping caches for daneCode ${daneCode}, store ${params.storeId}. Re-cotizando.`,
       );
+      let freshRates: Awaited<ReturnType<typeof requoteCartShipping>>;
+      try {
+        freshRates = await requoteCartShipping({
+          storeId: params.storeId,
+          items: typedOrderItems,
+          destination: { daneCode, address },
+          contentValue: Number(subtotal) || 0,
+        });
+      } catch (quoteError) {
+        console.error("[ORDER_CHECKOUT] Re-cotización fallida:", quoteError);
+        throw ErrorFactory.InvalidRequest(
+          "No pudimos confirmar el costo de envío en este momento. Solicita una nueva cotización e inténtalo de nuevo.",
+        );
+      }
+
+      const fresh = freshRates.find((rate) => rate.idRate === rateId);
+      if (!fresh) {
+        throw ErrorFactory.InvalidRequest(
+          "La tarifa de envío ya no está disponible. Solicita una nueva cotización.",
+        );
+      }
+      selectedQuote = fresh;
     }
 
     // Ensure selectedQuote has required fields

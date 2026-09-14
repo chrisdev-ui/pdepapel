@@ -206,6 +206,9 @@ const ERROR_MAPPINGS: Record<string, string> = {
     "No se pudo cancelar el envío. Verifica el estado o intenta más tarde.",
 };
 
+/** Tope para la cotización: el checkout la espera en línea. */
+const QUOTE_TIMEOUT_MS = 8000;
+
 export class EnvioClickClient {
   private apiKey: string;
   private baseUrl: string;
@@ -285,10 +288,14 @@ export class EnvioClickClient {
    */
   async quoteShipment(params: QuoteShipmentParams): Promise<QuoteResponse> {
     try {
+      // Sin tope, una cotización colgada se lleva por delante los 60 s de la
+      // función: el checkout la llama en línea cuando la caché no tiene la
+      // tarifa.
       const response = await fetch(`${this.baseUrl}/api/v2/quotation`, {
         method: "POST",
         headers: this.getHeaders(),
         body: JSON.stringify(params),
+        signal: AbortSignal.timeout(QUOTE_TIMEOUT_MS),
       });
 
       const data = await response.json();
@@ -299,7 +306,9 @@ export class EnvioClickClient {
           ? statusMessages
               .map((msg: any) => {
                 const errorVal = msg?.error || msg;
-                return typeof errorVal === "object" ? JSON.stringify(errorVal) : String(errorVal);
+                return typeof errorVal === "object"
+                  ? JSON.stringify(errorVal)
+                  : String(errorVal);
               })
               .join(", ")
           : String(statusMessages);
@@ -458,7 +467,9 @@ export class EnvioClickClient {
           ? statusMessages
               .map((msg: any) => {
                 const errorVal = msg?.error || msg;
-                return typeof errorVal === "object" ? JSON.stringify(errorVal) : String(errorVal);
+                return typeof errorVal === "object"
+                  ? JSON.stringify(errorVal)
+                  : String(errorVal);
               })
               .join(", ")
           : String(statusMessages);

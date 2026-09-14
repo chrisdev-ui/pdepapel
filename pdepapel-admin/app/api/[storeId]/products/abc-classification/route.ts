@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import prismadb from "@/lib/prismadb";
+import { handleErrorResponse } from "@/lib/api-errors";
 import { getProductProfitRanking } from "@/actions/get-product-profitability";
 
 export async function POST(
@@ -118,7 +119,6 @@ export async function POST(
       },
     });
   } catch (error) {
-    console.error("[ABC_CLASSIFICATION_POST]", error);
-    return new NextResponse("Internal server error", { status: 500 });
+    return handleErrorResponse(error, "ABC_CLASSIFICATION_POST");
   }
 }
