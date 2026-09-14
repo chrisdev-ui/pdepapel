@@ -462,6 +462,8 @@
       <p>Todo lo que entra y sale por el WhatsApp de la tienda queda guardado aquí solo. <strong>Tú sigues contestando desde tu celular como siempre</strong>: lo que escribes desde la app aparece en esta pantalla a los pocos segundos. El panel no es para chatear, es para no perder nada y para ver de un vistazo qué quedó sin responder.</p>
       <h3>La lista</h3>
       <p>Arriba dice cuántas conversaciones esperan tu respuesta. Cada fila trae el nombre que la clienta tiene puesto en WhatsApp, su teléfono, el último mensaje y cuándo llegó. Si el mensaje era una foto, un audio o un sticker, verás el tipo entre paréntesis en vez del texto.</p>
+      <p>Debajo del teléfono dice de qué país es. Los de Colombia salen cortos («302 4686403»); los de otro país salen completos con su indicativo y el nombre resaltado, por ejemplo <strong>+86 188 5886 9228 · China</strong>. Sirve para no confundir un número de afuera con un celular local antes de contestar o de cotizar un envío.</p>
+      <p>En el menú lateral, junto a <strong>Conversaciones</strong>, aparece un número cuando hay chats esperándote. Es la misma cuenta de «Necesita respuesta»: si dice 3, hay tres conversaciones que el bot no supo contestar. Desaparece solo cuando las respondes desde tu celular.</p>
       <div class="table-wrap"><table class="states">
         <tr><th>Estado</th><th>Qué significa</th></tr>
         <tr><td><span class="pill mint">Abierta</span></td><td>Conversación normal, al día.</td></tr>
@@ -483,8 +485,25 @@
         <li><strong>Orden</strong>: si un mensaje coincide con varias, gana la del número más bajo.</li>
       </ol>
       <p>Arriba de la lista hay una caja de prueba: escribe una frase como si fueras una clienta y te dice qué contestaría, o que no contestaría nada. Úsala antes de encender una respuesta nueva.</p>
-      <div class="note rule"><strong>Regla</strong><p>Tres cosas que el bot nunca rompe: toda respuesta automática sale marcada como automática, para que nadie crea que le escribiste tú; nunca manda dos automáticas seguidas sin que una persona haya escrito en medio; y en cuanto una conversación queda en «Necesita respuesta», se calla hasta que tú contestes desde el celular.</p></div>
-      <div class="note care"><strong>Empieza en silencio</strong><p>Mientras la lista de respuestas esté vacía, el bot no contesta nada: todo llega marcado para que respondas tú, igual que antes. En cuanto guardes la primera respuesta activa, empieza a contestar de inmediato, sin paso intermedio. Si quieres escribirla con calma, guárdala apagada y enciéndela cuando estés lista.</p></div>
+      <h3>Botones: armar un menú</h3>
+      <p>Una respuesta puede llevar <strong>botones</strong>, y así la clienta elige en vez de escribir. Cada botón lleva a otra de tus respuestas: lo eliges de una lista, no hay que escribir nada raro. Puedes poner hasta dos; el tercero siempre es «Hablar con Paula» y lo pone el sistema, no tienes que acordarte.</p>
+      <p>Con eso se arma un menú: una respuesta de bienvenida con dos botones, y cada botón lleva a la respuesta que ya escribiste. La clienta puede ir tocando botones todo lo que quiera sin que tú intervengas, y en cualquier momento puede tocar «Hablar con Paula» para que la conversación te quede a ti.</p>
+      <div class="note tip"><strong>El texto del botón es corto</strong><p>WhatsApp solo deja 20 caracteres por botón. «Ver horarios» cabe; «Conocer nuestros horarios de atención» no. El panel te corta en el límite, pero es mejor que lo escribas corto desde el principio.</p></div>
+      <h3>Aprobar un menú</h3>
+      <p>Una respuesta <strong>con botones no sale hasta que tú la apruebes</strong>. Mientras esté sin aprobar, el bot se comporta como si no existiera: la guarda, pero no la manda. Es a propósito, porque un menú es lo que más se parece a que la tienda hable sola.</p>
+      <ol class="steps">
+        <li>Guarda la respuesta con sus botones. Queda marcada <span class="pill cream">Sin aprobar</span>.</li>
+        <li>Ábrela, lee el recuadro «Así lo recibe la clienta» y mira que los botones lleven a donde tú quieres.</li>
+        <li>Dale <strong>Aprobar menú</strong>. Pasa a <span class="pill mint">Menú aprobado</span> y el bot empieza a mandarlo.</li>
+      </ol>
+      <div class="note care"><strong>Si lo cambias, hay que volver a aprobarlo</strong><p>Cada vez que edites el texto o los botones de un menú aprobado, la aprobación se retira sola y vuelve a quedar <span class="pill cream">Sin aprobar</span>. No es un error: evita que un cambio salga al aire con el visto bueno de la versión anterior. Cambiarle el nombre o el orden no lo desaprueba, porque eso la clienta no lo ve.</p></div>
+      <p>Arriba de la lista aparece un aviso mientras haya menús esperando tu aprobación, para que no se te queden guardados sin salir.</p>
+      <h3>¿No sabes qué respuestas crear?</h3>
+      <p>En la parte de arriba hay un ayudante. <strong>Mirar lo que me preguntan</strong> revisa los mensajes que te escribieron y que el bot no supo contestar, agrupa los que preguntan lo mismo y te propone respuestas ya redactadas, con sus frases y su texto. Si prefieres, escribe de qué quieres la respuesta («cómo pagar por transferencia») y te la redacta.</p>
+      <p>No guarda nada solo. Cada propuesta tiene <strong>Revisar y crear</strong>, que abre el formulario de siempre con los campos llenos para que tú decidas.</p>
+      <div class="note care"><strong>Léelo antes de guardarlo</strong><p>El ayudante no sabe tus horarios, tus precios ni cuánto demora un envío. Cuando una propuesta toca uno de esos datos te lo avisa en amarillo: revísalo y cámbialo por lo tuyo. Y mira las frases que propone: si alguna es muy general, quítala, porque haría que el bot conteste cuando no debe. Antes de analizarlos, a los mensajes se les quitan los teléfonos y los correos.</p></div>
+      <div class="note rule"><strong>Regla</strong><p>Tres cosas que el bot nunca rompe: toda respuesta automática sale marcada como automática, para que nadie crea que le escribiste tú; <strong>todo mensaje del bot lleva el botón «Hablar con Paula»</strong>, así la clienta siempre puede salirse a hablar contigo; y si una conversación quedó en «Necesita respuesta», un mensaje escrito no lo despierta. Solo lo despierta que la clienta toque uno de los botones, porque ahí está eligiendo seguir con el bot a propósito.</p></div>
+      <div class="note care"><strong>Empieza en silencio</strong><p>Mientras la lista de respuestas esté vacía, el bot no contesta nada: todo llega marcado para que respondas tú, igual que antes. En cuanto guardes la primera respuesta activa empieza a contestar de inmediato, salvo que tenga botones: esas esperan tu aprobación. Si quieres escribirla con calma, guárdala apagada y enciéndela cuando estés lista.</p></div>
     </section>
 
     <!-- 11 -->
