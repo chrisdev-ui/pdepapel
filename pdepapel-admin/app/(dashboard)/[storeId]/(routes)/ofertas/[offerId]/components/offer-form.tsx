@@ -214,8 +214,8 @@ export const OfferForm: React.FC<OfferFormProps> = ({ initialData, picker }) => 
         await axios.post(`/api/${storeId}/offers`, payload);
       }
       clearStorage();
-      router.refresh();
       router.push(listHref);
+      router.refresh();
       toast({ description: initialData ? "Oferta actualizada" : "Oferta creada", variant: "success" });
     } catch (error) {
       toast({ description: getErrorMessage(error), variant: "destructive" });
@@ -229,8 +229,8 @@ export const OfferForm: React.FC<OfferFormProps> = ({ initialData, picker }) => 
     try {
       setLoading(true);
       await axios.delete(`/api/${storeId}/offers/${initialData.id}`);
-      router.refresh();
       router.push(listHref);
+      router.refresh();
       toast({ description: "Oferta eliminada", variant: "success" });
     } catch (error) {
       toast({ description: getErrorMessage(error), variant: "destructive" });

@@ -146,8 +146,8 @@ export const BoxForm: React.FC<BoxFormProps> = ({
         await axios.post(`/api/${params.storeId}/boxes`, data);
       }
       clearStorage();
-      router.refresh();
       router.push(listUrl);
+      router.refresh();
       toast({ title: toastMessage, variant: "success" });
     } catch (error) {
       toast({
@@ -166,8 +166,8 @@ export const BoxForm: React.FC<BoxFormProps> = ({
     try {
       setLoading(true);
       await axios.delete(`/api/${params.storeId}/boxes/${params.boxId}`);
-      router.refresh();
       router.push(listUrl);
+      router.refresh();
       toast({ title: "Caja eliminada.", variant: "success" });
     } catch (error) {
       toast({

@@ -114,8 +114,8 @@ export const TypeForm: React.FC<TypeFormProps> = ({ initialData, aiIconConfigure
   const iconSvg = form.watch("iconSvg");
 
   const goToHub = () => {
-    router.refresh();
     router.push(hubHref);
+    router.refresh();
   };
 
   const onSubmit = async (data: TypeFormValues) => {

@@ -899,8 +899,8 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       }
 
       clearStorage(); // Clear storage on success
-      router.refresh();
       router.push(`/${params.storeId}/productos`);
+      router.refresh();
       toast({
         description: toastMessage,
         variant: "success",
@@ -922,8 +922,8 @@ export const ProductGroupForm: React.FC<ProductGroupFormProps> = ({
       await axios.delete(
         `/api/${params.storeId}/product-groups/${initialData.id}?deleteVariants=${strict}`,
       );
-      router.refresh();
       router.push(`/${params.storeId}/productos`);
+      router.refresh();
       toast({
         description: "Grupo eliminado correctamente",
         variant: "success",

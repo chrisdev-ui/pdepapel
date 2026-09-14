@@ -148,8 +148,8 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData }) => {
         await axios.post(`/api/${storeId}/coupons`, payload);
       }
       clearStorage();
-      router.refresh();
       router.push(listHref);
+      router.refresh();
       toast({ description: initialData ? "Cupón actualizado" : "Cupón creado", variant: "success" });
     } catch (error) {
       toast({ description: getErrorMessage(error), variant: "destructive" });
@@ -184,8 +184,8 @@ export const CouponForm: React.FC<CouponFormProps> = ({ initialData }) => {
     try {
       setLoading(true);
       await axios.delete(`/api/${storeId}/coupons/${initialData.id}`);
-      router.refresh();
       router.push(listHref);
+      router.refresh();
       toast({ description: "Cupón eliminado", variant: "success" });
     } catch (error) {
       toast({ description: getErrorMessage(error), variant: "destructive" });

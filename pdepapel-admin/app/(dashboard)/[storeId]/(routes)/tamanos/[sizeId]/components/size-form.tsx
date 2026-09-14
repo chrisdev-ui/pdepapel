@@ -91,8 +91,8 @@ export const SizeForm: React.FC<SizeFormProps> = ({ initialData, usage }) => {
   }, [dimension, weight, form]);
 
   const goToHub = () => {
-    router.refresh();
     router.push(hubHref);
+    router.refresh();
   };
 
   const onSubmit = async (data: SizeFormValues) => {

@@ -178,8 +178,8 @@ export const PostForm: React.FC<PostFormProps> = ({ initialData }) => {
         await axios.post(`/api/${params.storeId}/${Models.Posts}`, payload);
       }
       clearStorage();
-      router.refresh();
       router.push(`/${params.storeId}/contenido?tab=redes`);
+      router.refresh();
       toast({
         description: toastMessage,
         variant: "success",
@@ -201,8 +201,8 @@ export const PostForm: React.FC<PostFormProps> = ({ initialData }) => {
       await axios.delete(
         `/api/${params.storeId}/${Models.Posts}/${initialData.id}`,
       );
-      router.refresh();
       router.push(`/${params.storeId}/contenido?tab=redes`);
+      router.refresh();
       toast({
         description: "Publicación eliminada",
         variant: "success",

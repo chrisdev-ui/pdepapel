@@ -62,8 +62,8 @@ export const DesignForm: React.FC<DesignFormProps> = ({ initialData, usage }) =>
   const productsTotal = usage.activeProducts + usage.archivedProducts;
 
   const goToHub = () => {
-    router.refresh();
     router.push(hubHref);
+    router.refresh();
   };
 
   const onSubmit = async (data: DesignFormValues) => {

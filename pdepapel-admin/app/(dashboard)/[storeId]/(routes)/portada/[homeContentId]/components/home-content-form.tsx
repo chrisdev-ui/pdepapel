@@ -135,8 +135,8 @@ export function HomeContentForm({ initialData }: HomeContentFormProps) {
         await axios.post(`/api/${storeId}/${Models.HomeContent}`, payload);
       }
       clearStorage();
-      router.refresh();
       router.push(listHref);
+      router.refresh();
       toast({ description: initialData ? "Contenido actualizado" : "Contenido creado", variant: "success" });
     } catch (error) {
       toast({ description: getErrorMessage(error), variant: "destructive" });
@@ -150,8 +150,8 @@ export function HomeContentForm({ initialData }: HomeContentFormProps) {
     try {
       setLoading(true);
       await axios.delete(`/api/${storeId}/${Models.HomeContent}/${initialData.id}`);
-      router.refresh();
       router.push(listHref);
+      router.refresh();
       toast({ description: "Contenido eliminado", variant: "success" });
     } catch (error) {
       toast({ description: getErrorMessage(error), variant: "destructive" });

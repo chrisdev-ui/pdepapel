@@ -204,8 +204,8 @@ export const SettingsForm: React.FC<
     try {
       setLoading(true);
       await axios.delete(`/api/stores/${params.storeId}`);
-      router.refresh();
       router.push("/");
+      router.refresh();
       toast({
         description: "La tienda se ha eliminado correctamente.",
         variant: "success",

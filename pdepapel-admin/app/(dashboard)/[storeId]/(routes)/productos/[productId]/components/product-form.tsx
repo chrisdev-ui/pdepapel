@@ -601,8 +601,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
           await axios.post(`/api/${params.storeId}/${Models.Products}`, data);
         }
         clearStorage();
-        router.refresh();
         router.push(`/${params.storeId}/${Models.Products}`);
+        router.refresh();
         toast({
           description: toastMessage,
           variant: "success",
@@ -633,8 +633,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       await axios.delete(
         `/api/${params.storeId}/${Models.Products}/${params.productId}`,
       );
-      router.refresh();
       router.push(`/${params.storeId}/${Models.Products}`);
+      router.refresh();
       toast({
         description: "Producto eliminado",
         variant: "success",

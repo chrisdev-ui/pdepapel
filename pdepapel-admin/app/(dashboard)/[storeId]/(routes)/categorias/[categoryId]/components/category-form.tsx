@@ -152,8 +152,8 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({ initialData, types, 
   const productsTotal = usage.activeProducts + usage.archivedProducts;
 
   const goToHub = () => {
-    router.refresh();
     router.push(hubHref);
+    router.refresh();
   };
 
   const onSubmit = async (data: CategoryFormValues) => {
