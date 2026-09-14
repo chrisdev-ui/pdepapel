@@ -18,6 +18,7 @@ import {
   isOrderHeldByPresale,
   isPresaleOverdue,
   overduePresaleWhere,
+  parsePresaleInput,
 } from "@/lib/presale";
 
 const ago = (days: number) => new Date(Date.now() - days * 86400000);
@@ -113,5 +114,43 @@ describe("regla 3: Mercado Libre", () => {
     mocks.findMany.mockClear();
     await expect(getProductsWithActivePresale([])).resolves.toEqual(new Set());
     expect(mocks.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("parsePresaleInput", () => {
+  const valido = { productId: "p1", expectedArrivalAt: "2099-01-01", unitLimit: 40 };
+
+  it("acepta una preventa bien formada", () => {
+    const parsed = parsePresaleInput(valido);
+    expect(parsed.productId).toBe("p1");
+    expect(parsed.unitLimit).toBe(40);
+    expect(parsed.expectedArrivalAt).toBeInstanceOf(Date);
+  });
+
+  it("rechaza una fecha pasada con un mensaje legible, no con un 500", () => {
+    // En producción esto devolvía «Error interno del servidor»: handleErrorResponse
+    // no distingue un ZodError y lo trata como fallo del sistema.
+    try {
+      parsePresaleInput({ ...valido, expectedArrivalAt: "2020-01-01" });
+      throw new Error("debió rechazar");
+    } catch (error) {
+      expect((error as { statusCode?: number }).statusCode).toBe(400);
+      expect((error as Error).message).toMatch(/futura/i);
+    }
+  });
+
+  it("convierte un fallo de esquema en 400 con el mensaje del campo", () => {
+    for (const malo of [
+      { ...valido, productId: "" },
+      { ...valido, unitLimit: 0 },
+      { ...valido, unitLimit: 1.5 },
+    ]) {
+      try {
+        parsePresaleInput(malo);
+        throw new Error("debió rechazar");
+      } catch (error) {
+        expect((error as { statusCode?: number }).statusCode).toBe(400);
+      }
+    }
   });
 });

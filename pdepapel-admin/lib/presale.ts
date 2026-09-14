@@ -1,6 +1,7 @@
 import { ProductPresaleStatus, type Prisma } from "@prisma/client";
 import { z } from "zod";
 
+import { ErrorFactory } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
 import { parseAvailableAt } from "@/lib/product-availability";
 
@@ -266,21 +267,34 @@ export function parsePresaleInput(body: unknown, now: Date = new Date()): {
   expectedArrivalAt: Date;
   unitLimit: number;
 } {
-  const parsed = presaleInputSchema.parse(body);
+  // Los fallos de validación salen como AppError, no como ZodError.
+  // `handleErrorResponse` no distingue un ZodError de un fallo cualquiera y lo
+  // convierte en «Error interno del servidor» con 500, así que quien está
+  // usando el panel vería un error de sistema por escribir una fecha pasada.
+  let parsed: PresaleInput;
+  try {
+    parsed = presaleInputSchema.parse(body);
+  } catch (error) {
+    throw toInvalidRequest(error);
+  }
+
   const expectedArrivalAt = parseAvailableAt(parsed.expectedArrivalAt);
   if (!expectedArrivalAt) {
-    throw new z.ZodError([
-      { code: z.ZodIssueCode.custom, path: ["expectedArrivalAt"], message: "La fecha no es válida" },
-    ]);
+    throw ErrorFactory.InvalidRequest("La fecha de llegada no es válida");
   }
   if (expectedArrivalAt.getTime() <= now.getTime()) {
-    throw new z.ZodError([
-      {
-        code: z.ZodIssueCode.custom,
-        path: ["expectedArrivalAt"],
-        message: "La fecha de llegada tiene que ser futura",
-      },
-    ]);
+    throw ErrorFactory.InvalidRequest(
+      "La fecha de llegada tiene que ser futura: una preventa no puede prometer algo para ayer.",
+    );
   }
   return { productId: parsed.productId, expectedArrivalAt, unitLimit: parsed.unitLimit };
+}
+
+/** Primer mensaje del ZodError, que es el que le sirve a quien llenó el formulario. */
+function toInvalidRequest(error: unknown) {
+  if (error instanceof z.ZodError) {
+    const first = error.issues[0];
+    return ErrorFactory.InvalidRequest(first?.message ?? "Los datos de la preventa no son válidos");
+  }
+  return error;
 }
