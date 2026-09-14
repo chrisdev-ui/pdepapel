@@ -19,7 +19,10 @@ import { formatAvailableAt } from "@/lib/product-availability";
 import { currencyFormatter } from "@/lib/utils";
 import type { PresaleRow, PresalesSummary } from "../server/get-presales";
 
-const STATUS_VARIANT: Record<ProductPresaleStatus, "default" | "secondary" | "success"> = {
+const STATUS_VARIANT: Record<
+  ProductPresaleStatus,
+  "default" | "secondary" | "success"
+> = {
   [ProductPresaleStatus.ACTIVE]: "default",
   [ProductPresaleStatus.RELEASED]: "success",
   [ProductPresaleStatus.CANCELLED]: "secondary",
@@ -129,25 +132,36 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
           <CardContent className="space-y-1 p-4">
-            <p className="text-xs font-medium text-muted-foreground">Unidades por entregar</p>
-            <p className="text-2xl font-bold tracking-tight">{data.activeUnits}</p>
+            <p className="text-xs font-medium text-muted-foreground">
+              Unidades por entregar
+            </p>
+            <p className="text-2xl font-bold tracking-tight">
+              {data.activeUnits}
+            </p>
             <p className="text-xs text-muted-foreground">
-              {data.customerCount} clienta{data.customerCount === 1 ? "" : "s"} esperando
+              {data.customerCount} clienta{data.customerCount === 1 ? "" : "s"}{" "}
+              esperando
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="space-y-1 p-4">
-            <p className="text-xs font-medium text-muted-foreground">Dinero ya recibido</p>
+            <p className="text-xs font-medium text-muted-foreground">
+              Dinero ya recibido
+            </p>
             <p className="text-2xl font-bold tracking-tight">
               {currencyFormatter(data.collected)}
             </p>
-            <p className="text-xs text-muted-foreground">pendiente de entregar</p>
+            <p className="text-xs text-muted-foreground">
+              pendiente de entregar
+            </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="space-y-1 p-4">
-            <p className="text-xs font-medium text-muted-foreground">Próxima entrega prometida</p>
+            <p className="text-xs font-medium text-muted-foreground">
+              Próxima entrega prometida
+            </p>
             <p className="text-2xl font-bold tracking-tight">
               {data.nextArrivalAt ? formatAvailableAt(data.nextArrivalAt) : "—"}
             </p>
@@ -161,7 +175,9 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
       {data.rows.length === 0 ? (
         <Card>
           <CardContent className="space-y-2 p-6 text-sm text-muted-foreground">
-            <p className="font-medium text-foreground">Todavía no hay preventas.</p>
+            <p className="font-medium text-foreground">
+              Todavía no hay preventas.
+            </p>
             <p>
               Una preventa se abre desde el producto, en la sección «Preventa».
               Sirve para cobrar hoy algo que llega después, y para saber cuántas
@@ -173,7 +189,9 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
         <ul className="space-y-3">
           {data.rows.map((row) => (
             <li key={row.id}>
-              <Card className={row.isOverdue ? "border-destructive/50" : undefined}>
+              <Card
+                className={row.isOverdue ? "border-destructive/50" : undefined}
+              >
                 <CardContent className="flex flex-wrap items-start justify-between gap-4 p-4">
                   <div className="min-w-0 space-y-1.5">
                     <p className="flex flex-wrap items-center gap-2 font-medium">
@@ -183,7 +201,8 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
                       </Badge>
                       {row.isOverdue ? (
                         <Badge variant="destructive">
-                          Vencida · prometida el {formatAvailableAt(row.expectedArrivalAt)}
+                          Vencida · prometida el{" "}
+                          {formatAvailableAt(row.expectedArrivalAt)}
                         </Badge>
                       ) : null}
                     </p>
@@ -192,8 +211,9 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
                       {formatAvailableAt(row.expectedArrivalAt)}
                     </p>
                     <p className="text-sm">
-                      <strong>{row.committedUnits}</strong> de {row.unitLimit} reservadas ·{" "}
-                      {row.customerCount} clienta{row.customerCount === 1 ? "" : "s"} ·{" "}
+                      <strong>{row.committedUnits}</strong> de {row.unitLimit}{" "}
+                      reservadas · {row.customerCount} clienta
+                      {row.customerCount === 1 ? "" : "s"} ·{" "}
                       <strong>{currencyFormatter(row.collected)}</strong>
                     </p>
                     <p className="text-xs text-muted-foreground">
@@ -201,9 +221,33 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
                         ? `Faltan ${row.pendingUnits} unidades por entregar · hay ${row.productStock} en bodega`
                         : "Todo entregado"}
                     </p>
+                    {/* El contador se suma al confirmarse el pago y, si ese
+                        apunte falla, el pago sigue igual: la plata ya entró.
+                        Aquí se nota, contando los pedidos pagados uno por uno,
+                        para que el descuadre no viva solo en los registros. */}
+                    {row.heldUnits > 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        {row.heldUnits} apartada{row.heldUnits === 1 ? "" : "s"}{" "}
+                        en pedidos sin pagar todavía
+                      </p>
+                    ) : null}
+                    {row.overCapUnits > 0 ? (
+                      <p className="text-xs font-medium text-destructive">
+                        Se vendieron {row.overCapUnits} por encima del tope: hay{" "}
+                        {row.paidUnits} pagadas y el tope era {row.unitLimit}.
+                      </p>
+                    ) : null}
+                    {row.counterDrift !== 0 ? (
+                      <p className="text-xs font-medium text-destructive">
+                        Contador descuadrado: hay {row.paidUnits} unidades
+                        pagadas y el cupo dice {row.committedUnits}. Manda lo
+                        pagado.
+                      </p>
+                    ) : null}
                     {row.delayNotifiedAt ? (
                       <p className="text-xs text-muted-foreground">
-                        Retraso avisado el {formatAvailableAt(row.delayNotifiedAt)}
+                        Retraso avisado el{" "}
+                        {formatAvailableAt(row.delayNotifiedAt)}
                       </p>
                     ) : row.isOverdue ? (
                       <p className="text-xs font-medium text-destructive">
@@ -235,7 +279,10 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
                         }
                         onClick={() => onRelease(row)}
                       >
-                        <PackageCheck className="mr-2 h-4 w-4" aria-hidden="true" />
+                        <PackageCheck
+                          className="mr-2 h-4 w-4"
+                          aria-hidden="true"
+                        />
                         Liberar
                       </Button>
                     ) : null}
@@ -251,8 +298,9 @@ const PresalesClient: React.FC<{ data: PresalesSummary }> = ({ data }) => {
         <strong>Liberar</strong> descuenta el inventario de esas unidades con su
         movimiento y suelta los pedidos al despacho normal. Un pedido con
         preventa espera completo, también lo que ya estaba en bodega: nunca se
-        parte un envío. <strong>Las devoluciones de dinero se hacen a mano</strong>{" "}
-        en Bold o Wompi, como cualquier otra.
+        parte un envío.{" "}
+        <strong>Las devoluciones de dinero se hacen a mano</strong> en Bold o
+        Wompi, como cualquier otra.
       </p>
     </>
   );

@@ -87,8 +87,31 @@ describe("cart mutations", () => {
 describe("syncProduct", () => {
   it("refreshes price and stock from the catalog and clamps the quantity", async () => {
     const { useCart } = await import("@/hooks/use-cart");
-    useCart.setState({ items: [{ id: "p1", name: "A", price: "10000", stock: 5, quantity: 4, images: [], reviews: [] } as never] });
-    useCart.getState().syncProduct({ id: "p1", name: "A", price: "9000", stock: 2, originalPrice: 12000, hasDiscount: true, images: [], reviews: [] } as never);
+    useCart.setState({
+      items: [
+        {
+          id: "p1",
+          name: "A",
+          price: "10000",
+          stock: 5,
+          quantity: 4,
+          images: [],
+          reviews: [],
+        } as never,
+      ],
+    });
+    useCart
+      .getState()
+      .syncProduct({
+        id: "p1",
+        name: "A",
+        price: "9000",
+        stock: 2,
+        originalPrice: 12000,
+        hasDiscount: true,
+        images: [],
+        reviews: [],
+      } as never);
     const item = useCart.getState().items[0];
     expect(item.price).toBe("9000");
     expect(item.stock).toBe(2);
@@ -100,9 +123,97 @@ describe("syncProduct", () => {
 describe("persisted cart shape", () => {
   it("migrates an old stored cart to the slim shape", async () => {
     const { useCart } = await import("@/hooks/use-cart");
-    const options = (useCart as unknown as { persist: { getOptions: () => { migrate: (state: unknown, version: number) => { items: Record<string, unknown>[] } } } }).persist.getOptions();
-    const migrated = options.migrate({ items: [{ id: "p1", name: "A", price: "1", stock: 1, description: "x".repeat(500), reviews: [{}], images: [] }] }, 0);
+    const options = (
+      useCart as unknown as {
+        persist: {
+          getOptions: () => {
+            migrate: (
+              state: unknown,
+              version: number,
+            ) => { items: Record<string, unknown>[] };
+          };
+        };
+      }
+    ).persist.getOptions();
+    const migrated = options.migrate(
+      {
+        items: [
+          {
+            id: "p1",
+            name: "A",
+            price: "1",
+            stock: 1,
+            description: "x".repeat(500),
+            reviews: [{}],
+            images: [],
+          },
+        ],
+      },
+      0,
+    );
     expect(migrated.items[0].description).toBe("");
     expect(migrated.items[0].reviews).toEqual([]);
+  });
+});
+
+/**
+ * Preventa en el carrito.
+ *
+ * Es el caso que el carrito no contemplaba: un producto que se cobra HOY y
+ * llega después, así que en bodega hay 0. Mirando `stock` la ficha ofrecía
+ * «Reservar ahora» y el carrito lo rechazaba sin que nada lo dijera.
+ */
+describe("preventa en el carrito", () => {
+  const presaleProduct = (committedUnits = 0, unitLimit = 5) =>
+    buildProduct({
+      id: "presale-1",
+      stock: 0,
+      presales: [
+        {
+          id: "campaign-1",
+          expectedArrivalAt: "2026-12-01T00:00:00.000Z",
+          unitLimit,
+          committedUnits,
+        },
+      ],
+    });
+
+  beforeEach(() => {
+    storage.clear();
+    useCart.setState({ items: [] });
+  });
+
+  it("entra al carrito aunque no haya stock", () => {
+    const result = useCart.getState().addItem(presaleProduct(), 2);
+
+    expect(result.ok).toBe(true);
+    expect(useCart.getState().items[0].quantity).toBe(2);
+  });
+
+  it("no deja pedir más de lo que queda del cupo", () => {
+    const result = useCart.getState().addItem(presaleProduct(3), 3);
+
+    expect(result).toMatchObject({ ok: false, status: "stock_limit" });
+    expect(useCart.getState().items).toHaveLength(0);
+  });
+
+  it("con el cupo lleno se comporta como un agotado", () => {
+    const result = useCart.getState().addItem(presaleProduct(5), 1);
+
+    expect(result).toMatchObject({ ok: false, status: "unavailable" });
+  });
+
+  it("el catálogo ajusta la cantidad si el cupo se llenó mientras esperaba", () => {
+    useCart.getState().addItem(presaleProduct(), 4);
+    useCart.getState().syncProduct(presaleProduct(4));
+
+    expect(useCart.getState().items[0].quantity).toBe(1);
+  });
+
+  it("un stock que sigue en cero no borra la reserva", () => {
+    useCart.getState().addItem(presaleProduct(), 2);
+    useCart.getState().updateStock("presale-1", 0);
+
+    expect(useCart.getState().items[0].quantity).toBe(2);
   });
 });

@@ -1,12 +1,20 @@
 "use server";
 
 import { env } from "@/lib/env.mjs";
+import { getPurchasableUnits } from "@/lib/purchasable-units";
 
 const API_URL = `${env.NEXT_PUBLIC_API_URL}/products`;
 
 interface StockCheckResponse {
   [productId: string]: {
     stock: number;
+    /**
+     * Lo que de verdad se puede comprar hoy: el stock, o el cupo que le queda
+     * a la preventa. El checkout compara contra esto, no contra `stock`, que
+     * en una preventa es 0 por definición.
+     */
+    units: number;
+    isPresale: boolean;
     name?: string;
   };
 }
@@ -40,15 +48,16 @@ export async function checkLiveStock(
     if (!response.ok) return {};
 
     const data = await response.json();
-    const productsList = Array.isArray(data)
-      ? data
-      : data.products || [];
+    const productsList = Array.isArray(data) ? data : data.products || [];
 
     const result: StockCheckResponse = {};
     for (const item of productsList) {
       if (item && item.id) {
+        const stock = typeof item.stock === "number" ? item.stock : 0;
         result[item.id] = {
-          stock: typeof item.stock === "number" ? item.stock : 0,
+          stock,
+          units: getPurchasableUnits({ ...item, stock }),
+          isPresale: Boolean(item.presales?.[0]),
           name: item.name,
         };
       }

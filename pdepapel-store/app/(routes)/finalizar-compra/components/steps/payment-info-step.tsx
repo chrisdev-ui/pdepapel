@@ -8,8 +8,11 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { PaymentMethodSelector } from "@/components/ui/payment-method-selector";
+import { PresaleCartNotice } from "@/components/presale-cart-notice";
 import { WelcomeBenefitCard } from "@/components/welcome-benefit-card";
 import { PaymentMethod } from "@/constants";
+import { useCart } from "@/hooks/use-cart";
+import { isPresaleItem } from "@/lib/purchasable-units";
 import { AlertTriangle, MapPin, UserRound } from "lucide-react";
 import { useId } from "react";
 import { UseFormReturn } from "react-hook-form";
@@ -61,11 +64,17 @@ export const PaymentInfoStep = ({
   onAdjustStock,
   onDismissStockConflicts,
 }: PaymentInfoStepProps) => {
+  const cartItems = useCart((state) => state.items);
   const isCODShipment = form.watch("shipping.isCOD");
   const shippingOptionType = form.watch("shippingOptionType");
   const values = form.getValues();
   const paymentLabelId = useId();
-  const codAvailable = Boolean(isCODShipment);
+  // Regla 1 de la preventa: se paga al reservar. Contra entrega no cobraría
+  // hasta que el paquete llegue —semanas después—, así que el pedido quedaría
+  // sin pagar y sin cupo. La API lo rechaza también; aquí se evita que la
+  // clienta llegue hasta el botón para que se lo nieguen.
+  const hasPresale = cartItems.some((item) => isPresaleItem(item));
+  const codAvailable = Boolean(isCODShipment) && !hasPresale;
 
   const deliveryDays = formatDeliveryDays(values.shipping?.deliveryDays);
   const shippingLine =
@@ -121,7 +130,9 @@ export const PaymentInfoStep = ({
                     variant="outline"
                     size="sm"
                     className="h-9 rounded-full"
-                    onClick={() => onAdjustStock(item.productId, item.available)}
+                    onClick={() =>
+                      onAdjustStock(item.productId, item.available)
+                    }
                   >
                     Dejar {item.available}
                   </Button>
@@ -149,6 +160,11 @@ export const PaymentInfoStep = ({
         </div>
       )}
 
+      {/* Último momento antes de pagar: si el pedido trae una preventa, espera
+          COMPLETO. Se dice aquí y no solo en el carrito porque desde la ficha
+          se puede llegar directo a pagar. */}
+      <PresaleCartNotice items={cartItems} />
+
       <FormField
         control={form.control}
         name="paymentMethod"
@@ -167,8 +183,9 @@ export const PaymentInfoStep = ({
                 disabledMessages={
                   !codAvailable
                     ? {
-                        [PaymentMethod.COD]:
-                          shippingOptionType === "ENVIOCLICK"
+                        [PaymentMethod.COD]: hasPresale
+                          ? "Las preventas se pagan al reservar"
+                          : shippingOptionType === "ENVIOCLICK"
                             ? "No disponible con esta transportadora"
                             : "No disponible para este envío",
                       }

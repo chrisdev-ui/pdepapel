@@ -1,6 +1,11 @@
 import { ProductPresaleStatus } from "@prisma/client";
 
-import { getPresaleCapacity, isPresaleOverdue } from "@/lib/presale";
+import {
+  getHeldUnitsByPresale,
+  getPresaleCapacity,
+  isPresaleOverdue,
+  PAID_PRESALE_LINE,
+} from "@/lib/presale";
 import prismadb from "@/lib/prismadb";
 
 /** Una fila de la pantalla de Preventas. */
@@ -18,6 +23,20 @@ export interface PresaleRow {
   remainingUnits: number;
   /** Unidades vendidas que todavía no se han liberado. */
   pendingUnits: number;
+  /**
+   * Unidades realmente pagadas, contadas una por una desde los pedidos.
+   *
+   * `committedUnits` es un contador que se suma en el webhook del pago. Si ese
+   * apunte falla (la plata entra igual: nunca se tumba un pago por el
+   * contador), las dos cifras dejan de coincidir. Esta es la de verdad.
+   */
+  paidUnits: number;
+  /** `paidUnits - committedUnits`: distinto de cero = el contador se descuadró. */
+  counterDrift: number;
+  /** Apartadas por pedidos recientes sin pagar. */
+  heldUnits: number;
+  /** Pagadas por encima del tope: un pago nunca se rechaza, así que puede pasar. */
+  overCapUnits: number;
   /** Clientas distintas esperando. */
   customerCount: number;
   /** Dinero ya cobrado por esas líneas. */
@@ -45,16 +64,33 @@ export interface PresalesSummary {
  * líneas vendidas. El dinero y las clientas se cuentan aquí y no en la tabla,
  * porque `committedUnits` es un contador de reservas, no de pedidos.
  */
-export async function getPresales(storeId: string, now = new Date()): Promise<PresalesSummary> {
+export async function getPresales(
+  storeId: string,
+  now = new Date(),
+): Promise<PresalesSummary> {
   const presales = await prismadb.productPresale.findMany({
     where: { storeId },
     orderBy: [{ status: "asc" }, { expectedArrivalAt: "asc" }],
-    include: { product: { select: { id: true, name: true, sku: true, stock: true } } },
+    include: {
+      product: { select: { id: true, name: true, sku: true, stock: true } },
+    },
   });
+
+  const held = await getHeldUnitsByPresale(
+    presales
+      .filter((p) => p.status === ProductPresaleStatus.ACTIVE)
+      .map((p) => p.id),
+    { now },
+  );
 
   const lines = presales.length
     ? await prismadb.orderItem.findMany({
-        where: { presaleId: { in: presales.map((presale) => presale.id) }, isPreorder: true },
+        // Pagadas y nada más: «cobrado», clientas y pendientes por liberar
+        // cuentan ventas, no carritos.
+        where: {
+          ...PAID_PRESALE_LINE,
+          presaleId: { in: presales.map((presale) => presale.id) },
+        },
         select: {
           presaleId: true,
           orderId: true,
@@ -67,15 +103,19 @@ export async function getPresales(storeId: string, now = new Date()): Promise<Pr
 
   const byPresale = new Map<
     string,
-    { pending: number; collected: number; orders: Set<string> }
+    { pending: number; paid: number; collected: number; orders: Set<string> }
   >();
   for (const line of lines) {
     if (!line.presaleId) continue;
-    const bucket =
-      byPresale.get(line.presaleId) ??
-      { pending: 0, collected: 0, orders: new Set<string>() };
+    const bucket = byPresale.get(line.presaleId) ?? {
+      pending: 0,
+      paid: 0,
+      collected: 0,
+      orders: new Set<string>(),
+    };
     // Lo cobrado cuenta todo lo vendido; lo pendiente solo lo que falta salir.
     bucket.collected += line.price * line.quantity;
+    bucket.paid += line.quantity;
     bucket.orders.add(line.orderId);
     if (line.preorderReleasedAt === null) bucket.pending += line.quantity;
     byPresale.set(line.presaleId, bucket);
@@ -84,7 +124,9 @@ export async function getPresales(storeId: string, now = new Date()): Promise<Pr
   const rows: PresaleRow[] = presales.map((presale) => {
     const bucket = byPresale.get(presale.id);
     const pendingUnits = bucket?.pending ?? 0;
-    const capacity = getPresaleCapacity(presale);
+    const paidUnits = bucket?.paid ?? 0;
+    const heldUnits = held.get(presale.id) ?? 0;
+    const capacity = getPresaleCapacity({ ...presale, heldUnits });
 
     return {
       id: presale.id,
@@ -98,6 +140,10 @@ export async function getPresales(storeId: string, now = new Date()): Promise<Pr
       committedUnits: presale.committedUnits,
       remainingUnits: capacity.remaining,
       pendingUnits,
+      paidUnits,
+      counterDrift: paidUnits - presale.committedUnits,
+      heldUnits,
+      overCapUnits: capacity.overCap,
       customerCount: bucket?.orders.size ?? 0,
       collected: bucket?.collected ?? 0,
       productStock: presale.product.stock,
@@ -110,10 +156,14 @@ export async function getPresales(storeId: string, now = new Date()): Promise<Pr
     };
   });
 
-  const active = rows.filter((row) => row.status === ProductPresaleStatus.ACTIVE);
+  const active = rows.filter(
+    (row) => row.status === ProductPresaleStatus.ACTIVE,
+  );
   const upcoming = active
     .filter((row) => !row.isOverdue)
-    .sort((a, b) => a.expectedArrivalAt.getTime() - b.expectedArrivalAt.getTime());
+    .sort(
+      (a, b) => a.expectedArrivalAt.getTime() - b.expectedArrivalAt.getTime(),
+    );
 
   return {
     rows,

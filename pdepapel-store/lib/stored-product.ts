@@ -16,13 +16,23 @@ export function slimStoredProduct(product: Product): Product {
     description: "",
     price: product.price,
     stock: product.stock,
+    // La preventa viaja con el producto guardado: sin ella, al recargar la
+    // página el carrito vuelve a ver stock 0 y borra la reserva.
+    presales: product.presales,
     quantity: product.quantity,
     sku: product.sku,
     isFeatured: product.isFeatured,
     isArchived: product.isArchived,
     availableAt: product.availableAt,
     createdAt: product.createdAt,
-    category: product.category ? { id: product.category.id, typeId: product.category.typeId, name: product.category.name, slug: product.category.slug } : product.category,
+    category: product.category
+      ? {
+          id: product.category.id,
+          typeId: product.category.typeId,
+          name: product.category.name,
+          slug: product.category.slug,
+        }
+      : product.category,
     size: product.size,
     color: product.color,
     design: product.design,

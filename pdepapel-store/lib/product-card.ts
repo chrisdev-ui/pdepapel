@@ -7,7 +7,12 @@ import { Product } from "@/types";
 export const NEW_PRODUCT_DAYS = 30;
 export const LOW_STOCK_THRESHOLD = 3;
 
-export type CardBadgeTone = "soldOut" | "comingSoon" | "offer" | "options" | "new";
+export type CardBadgeTone =
+  | "soldOut"
+  | "comingSoon"
+  | "offer"
+  | "options"
+  | "new";
 
 export interface CardBadge {
   text: string;
@@ -23,56 +28,109 @@ export interface CardBadges {
   newInline: boolean;
 }
 
-export function isComingSoon(product: Pick<Product, "availableAt">, now: Date = new Date()): boolean {
+export function isComingSoon(
+  product: Pick<Product, "availableAt">,
+  now: Date = new Date(),
+): boolean {
   if (!product.availableAt) return false;
   return new Date(product.availableAt).getTime() > now.getTime();
 }
 
 export function formatArrivalDate(value: string | Date): string {
-  return new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short", timeZone: "America/Bogota" })
+  return new Intl.DateTimeFormat("es-CO", {
+    day: "numeric",
+    month: "short",
+    timeZone: "America/Bogota",
+  })
     .format(new Date(value))
     .replace(".", "");
 }
 
-export function isRecentlyCreated(product: Pick<Product, "createdAt">, now: Date = new Date()): boolean {
+export function isRecentlyCreated(
+  product: Pick<Product, "createdAt">,
+  now: Date = new Date(),
+): boolean {
   if (!product.createdAt) return false;
   const created = new Date(product.createdAt).getTime();
   return now.getTime() - created <= NEW_PRODUCT_DAYS * 24 * 60 * 60 * 1000;
 }
 
-export function getDiscountPercent(product: Pick<Product, "price" | "originalPrice" | "minPrice" | "isGroup">): number | null {
-  const current = product.isGroup && product.minPrice ? product.minPrice : Number(product.price);
+export function getDiscountPercent(
+  product: Pick<Product, "price" | "originalPrice" | "minPrice" | "isGroup">,
+): number | null {
+  const current =
+    product.isGroup && product.minPrice
+      ? product.minPrice
+      : Number(product.price);
   const original = Number(product.originalPrice ?? 0);
   if (!original || !current || current >= original) return null;
   return Math.round(((original - current) / original) * 100);
 }
 
 export function getProductCardBadges(
-  product: Pick<Product, "stock" | "isGroup" | "hasDiscount" | "offerLabel" | "variantCount" | "availableAt" | "price" | "originalPrice" | "minPrice">,
+  product: Pick<
+    Product,
+    | "stock"
+    | "isGroup"
+    | "hasDiscount"
+    | "offerLabel"
+    | "variantCount"
+    | "availableAt"
+    | "price"
+    | "originalPrice"
+    | "minPrice"
+    | "presales"
+  >,
   options: { isNew?: boolean; now?: Date } = {},
 ): CardBadges {
   const now = options.now ?? new Date();
   const percent = getDiscountPercent(product);
-  const onOffer = Boolean(product.offerLabel) || Boolean(product.hasDiscount) || percent !== null;
+  const onOffer =
+    Boolean(product.offerLabel) ||
+    Boolean(product.hasDiscount) ||
+    percent !== null;
+
+  // La preventa manda sobre «Llega pronto» y sobre «Agotado»: es justamente
+  // el producto sin bodega que SÍ se puede comprar hoy.
+  const presale = product.presales?.[0];
 
   let commercial: CardBadge | null = null;
-  if (isComingSoon(product, now)) {
-    commercial = { text: `Llega el ${formatArrivalDate(product.availableAt!)}`, tone: "comingSoon" };
+  if (presale && presale.unitLimit - presale.committedUnits > 0) {
+    commercial = {
+      text: `Preventa · llega el ${formatArrivalDate(presale.expectedArrivalAt)}`,
+      tone: "comingSoon",
+    };
+  } else if (presale) {
+    commercial = { text: "Reservas agotadas", tone: "soldOut" };
+  } else if (isComingSoon(product, now)) {
+    commercial = {
+      text: `Llega el ${formatArrivalDate(product.availableAt!)}`,
+      tone: "comingSoon",
+    };
   } else if (product.stock === 0) {
     commercial = { text: "Agotado", tone: "soldOut" };
   } else if (onOffer) {
-    const text = product.isGroup ? "Opciones en oferta" : percent ? `${percent} % OFF` : product.offerLabel || "Oferta";
+    const text = product.isGroup
+      ? "Opciones en oferta"
+      : percent
+        ? `${percent} % OFF`
+        : product.offerLabel || "Oferta";
     commercial = { text, tone: "offer" };
   }
 
-  const hasOptions = Boolean(product.isGroup) && (product.variantCount ?? 0) > 0;
+  const hasOptions =
+    Boolean(product.isGroup) && (product.variantCount ?? 0) > 0;
   const catalog: CardBadge | null = hasOptions
     ? { text: `${product.variantCount} opciones`, tone: "options" }
     : options.isNew
       ? { text: "¡Nuevo!", tone: "new" }
       : null;
 
-  return { commercial, catalog, newInline: Boolean(options.isNew) && hasOptions };
+  return {
+    commercial,
+    catalog,
+    newInline: Boolean(options.isNew) && hasOptions,
+  };
 }
 
 export interface CardPrice {
@@ -84,7 +142,15 @@ export interface CardPrice {
 }
 
 export function getProductCardPrice(
-  product: Pick<Product, "price" | "originalPrice" | "minPrice" | "maxPrice" | "isGroup" | "hasDiscount">,
+  product: Pick<
+    Product,
+    | "price"
+    | "originalPrice"
+    | "minPrice"
+    | "maxPrice"
+    | "isGroup"
+    | "hasDiscount"
+  >,
 ): CardPrice {
   const format = (value: number) => currencyFormatter.format(value);
   const percent = getDiscountPercent(product);
@@ -93,7 +159,10 @@ export function getProductCardPrice(
     const min = product.minPrice ?? Number(product.price);
     const max = product.maxPrice ?? min;
     const ranged = min !== max;
-    const original = !ranged && product.originalPrice && min < product.originalPrice ? product.originalPrice : null;
+    const original =
+      !ranged && product.originalPrice && min < product.originalPrice
+        ? product.originalPrice
+        : null;
     return {
       prefix: ranged || product.hasDiscount ? "Desde" : null,
       current: format(min),
@@ -104,7 +173,10 @@ export function getProductCardPrice(
   }
 
   const current = Number(product.price);
-  const original = product.originalPrice && product.originalPrice > current ? product.originalPrice : null;
+  const original =
+    product.originalPrice && product.originalPrice > current
+      ? product.originalPrice
+      : null;
   return {
     prefix: null,
     current: format(current),
@@ -114,12 +186,26 @@ export function getProductCardPrice(
   };
 }
 
-export function isLowStock(product: Pick<Product, "stock" | "isGroup">): boolean {
-  return !product.isGroup && product.stock > 0 && product.stock <= LOW_STOCK_THRESHOLD;
+export function isLowStock(
+  product: Pick<Product, "stock" | "isGroup">,
+): boolean {
+  return (
+    !product.isGroup &&
+    product.stock > 0 &&
+    product.stock <= LOW_STOCK_THRESHOLD
+  );
 }
 
-export function getAverageRating(reviews: { rating: number }[] | undefined): { average: number; count: number } | null {
+export function getAverageRating(
+  reviews: { rating: number }[] | undefined,
+): { average: number; count: number } | null {
   if (!reviews || reviews.length === 0) return null;
-  const total = reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0);
-  return { average: Math.round((total / reviews.length) * 10) / 10, count: reviews.length };
+  const total = reviews.reduce(
+    (sum, review) => sum + Number(review.rating || 0),
+    0,
+  );
+  return {
+    average: Math.round((total / reviews.length) * 10) / 10,
+    count: reviews.length,
+  };
 }

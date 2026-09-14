@@ -26,6 +26,7 @@ import {
   trackCustomerEvent,
 } from "@/lib/customer-analytics";
 import { getProductAvailability } from "@/lib/product-availability";
+import { getPurchasableUnits } from "@/lib/purchasable-units";
 import { getAverageRating, getProductCardPrice } from "@/lib/product-card";
 import { isCustomerFacingLegacySize } from "@/lib/product-options";
 import { getStableProductVariants } from "@/lib/product-variants";
@@ -500,7 +501,7 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
         {canBuy && (
           <QuantitySelector
             key={data.id}
-            max={data.stock}
+            max={getPurchasableUnits(data)}
             initialValue={quantity}
             size="medium"
             onValueChange={(value) => onQuantityChange?.(value)}

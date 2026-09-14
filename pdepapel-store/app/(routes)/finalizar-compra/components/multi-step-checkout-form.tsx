@@ -75,10 +75,7 @@ import { isValidPhoneNumber } from "react-phone-number-input";
 import { MultiStepForm } from "./multi-step-form";
 import { StepNavigation } from "./step-navigation";
 import { BasicInfoStep } from "./steps/basic-info-step";
-import {
-  PaymentInfoStep,
-  StockConflictItem,
-} from "./steps/payment-info-step";
+import { PaymentInfoStep, StockConflictItem } from "./steps/payment-info-step";
 import { ShippingInfoStep } from "./steps/shipping-info-step";
 
 type CheckoutFormUser = {
@@ -199,7 +196,12 @@ async function subscribeFromCheckout(email: string) {
     await fetch("/api/newsletter", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, consent: true, source: "pago", company: "" }),
+      body: JSON.stringify({
+        email,
+        consent: true,
+        source: "pago",
+        company: "",
+      }),
     });
   } catch {
     // La suscripción no bloquea el pedido.
@@ -235,9 +237,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   const { guestId, setGuestId, clearGuestId } = useGuestUser();
   const cart = useCart();
   const [isMounted, setIsMounted] = useState(false);
-  const [stockConflicts, setStockConflicts] = useState<StockConflictItem[]>(
-    [],
-  );
+  const [stockConflicts, setStockConflicts] = useState<StockConflictItem[]>([]);
   const { toast } = useToast();
   const { fireConfetti } = useConfetti();
   const setStoredStep = useCheckoutStore((state) => state.setCurrentStep);
@@ -309,8 +309,10 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
           const liveStock = liveInfo.stock;
           if (item.stock !== liveStock) {
             currentCart.updateStock(item.id, liveStock);
-            if (item.quantity && item.quantity > liveStock) {
-              currentCart.updateQuantity(item.id, Math.max(0, liveStock));
+            // El tope de una preventa es su cupo, no la bodega: ajustar por
+            // stock aquí vaciaba la reserva camino al pago.
+            if (item.quantity && item.quantity > liveInfo.units) {
+              currentCart.updateQuantity(item.id, Math.max(0, liveInfo.units));
               hasAdjusted = true;
             }
           }
@@ -402,7 +404,10 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   // A different cart is a different order: renew the idempotency key.
   useEffect(() => {
     const signature = getCartSignature(activeItems);
-    if (cartSignatureRef.current !== null && cartSignatureRef.current !== signature) {
+    if (
+      cartSignatureRef.current !== null &&
+      cartSignatureRef.current !== signature
+    ) {
       idempotencyKeyRef.current = createIdempotencyKey();
     }
     cartSignatureRef.current = signature;
@@ -422,28 +427,27 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
 
   const shippingCost = form.watch("shipping.cost");
 
-  const {
-    total,
-    subtotal,
-    couponDiscount,
-    productSavings,
-    freeShipping,
-  } = useMemo(
-    () =>
-      calculateTotals(
-        activeItems,
-        couponState.coupon,
-        shippingCost,
-        freeShippingThreshold,
-      ),
-    [activeItems, couponState.coupon, shippingCost, freeShippingThreshold],
-  );
+  const { total, subtotal, couponDiscount, productSavings, freeShipping } =
+    useMemo(
+      () =>
+        calculateTotals(
+          activeItems,
+          couponState.coupon,
+          shippingCost,
+          freeShippingThreshold,
+        ),
+      [activeItems, couponState.coupon, shippingCost, freeShippingThreshold],
+    );
 
   // Mismo cuidado que en el carrito: sin la compra mínima el cupón se quita
   // con aviso en vez de fallar al final con un 409.
   const dropCouponBelowMinimum = useCallback(
     (dropped: { code: string; minOrderValue: number | null }) => {
-      setCouponState((previous) => ({ ...previous, coupon: null, isValid: null }));
+      setCouponState((previous) => ({
+        ...previous,
+        coupon: null,
+        isValid: null,
+      }));
       form.setValue("couponCode", "");
       toast({
         title: "Cupón retirado",
@@ -498,9 +502,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   }, []);
 
   const validateStep = async (step: number) => {
-    const fieldsToValidate = getStepFields(
-      step,
-    ) as (keyof CheckoutFormValue)[];
+    const fieldsToValidate = getStepFields(step) as (keyof CheckoutFormValue)[];
     const result = await form.trigger(fieldsToValidate);
     if (!result) {
       const invalidFields = fieldsToValidate
@@ -523,9 +525,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     // Native inputs carry the field name; custom controls (location
     // combobox, radio cards, rate selector) only carry aria-invalid.
     const element = (document.querySelector(`[name="${firstErrorKey}"]`) ??
-      document.querySelector(
-        '[aria-invalid="true"]',
-      )) as HTMLElement | null;
+      document.querySelector('[aria-invalid="true"]')) as HTMLElement | null;
     if (element) {
       element.scrollIntoView({ behavior: "smooth", block: "center" });
       element.focus({ preventScroll: true });
@@ -710,9 +710,7 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       const serverError =
         err?.response?.data?.error ||
         err?.response?.data?.message ||
-        (err?.code === "ECONNABORTED"
-          ? "La conexión tardó demasiado."
-          : null);
+        (err?.code === "ECONNABORTED" ? "La conexión tardó demasiado." : null);
 
       trackCustomerEvent("checkout_submit_failed", {
         checkout_step: currentStep,
@@ -855,13 +853,13 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       const conflicts: StockConflictItem[] = activeItems.flatMap((item) => {
         const live = stockMap?.[item.id];
         const requested = item.quantity ?? 1;
-        if (!live || live.stock >= requested) return [];
+        if (!live || live.units >= requested) return [];
         return [
           {
             productId: item.id,
             name: live.name || item.name,
             requested,
-            available: Math.max(0, live.stock),
+            available: Math.max(0, live.units),
           },
         ];
       });
@@ -997,8 +995,8 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       </>
     ) : paymentMethod === PaymentMethod.BankTransfer ? (
       <>
-        Te mostraremos la cuenta y el valor exacto en la siguiente pantalla.
-        Al continuar aceptas las{" "}
+        Te mostraremos la cuenta y el valor exacto en la siguiente pantalla. Al
+        continuar aceptas las{" "}
         <Link
           href={STOREFRONT_ROUTES.shippingPolicy}
           className="underline underline-offset-4"
@@ -1080,7 +1078,9 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
               key={item.id}
               className={cn(
                 "grid grid-cols-[64px_1fr] gap-3 rounded-lg transition-colors",
-                conflict ? "border border-destructive bg-destructive/10 p-2" : "",
+                conflict
+                  ? "border border-destructive bg-destructive/10 p-2"
+                  : "",
               )}
             >
               <Link
@@ -1104,13 +1104,16 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                     <span className="sr-only">Sin imagen disponible</span>
                   </>
                 )}
-                <span className="absolute right-0 top-0 flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-yankees px-1 font-quicksand text-[11px] font-bold text-white">
+                <span className="min-w-5 absolute right-0 top-0 flex h-5 items-center justify-center rounded-full bg-blue-yankees px-1 font-quicksand text-[11px] font-bold text-white">
                   {item.quantity}
                 </span>
               </Link>
               <div className="flex min-w-0 flex-col justify-between gap-1">
                 <div className="flex min-w-0 flex-col text-left text-sm">
-                  <span className="line-clamp-2 font-semibold" title={item.name}>
+                  <span
+                    className="line-clamp-2 font-semibold"
+                    title={item.name}
+                  >
                     {item.name}
                   </span>
                   <span className="line-clamp-1 text-xs text-muted-foreground">
@@ -1133,7 +1136,10 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                   )}
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <Currency className="text-base font-bold" value={item.price} />
+                  <Currency
+                    className="text-base font-bold"
+                    value={item.price}
+                  />
                   {item.hasDiscount ||
                   (item.originalPrice &&
                     item.originalPrice > Number(item.price)) ? (
@@ -1195,7 +1201,10 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         <div className="flex items-center justify-between border-t border-dashed pt-3">
           <dt className="text-base font-bold">Total a pagar</dt>
           <dd>
-            <Currency className="font-quicksand text-2xl font-black text-pink-froly" value={total} />
+            <Currency
+              className="font-quicksand text-2xl font-black text-pink-froly"
+              value={total}
+            />
           </dd>
         </div>
       </dl>
@@ -1204,11 +1213,17 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       </p>
       <ul className="flex flex-col gap-2 border-t pt-3 text-xs text-foreground/80">
         <li className="flex items-center gap-2">
-          <Lock className="h-3.5 w-3.5 shrink-0 text-success" aria-hidden="true" />
+          <Lock
+            className="h-3.5 w-3.5 shrink-0 text-success"
+            aria-hidden="true"
+          />
           Pago seguro: tus datos viajan cifrados.
         </li>
         <li className="flex items-center gap-2">
-          <Undo2 className="h-3.5 w-3.5 shrink-0 text-blue-yankees" aria-hidden="true" />
+          <Undo2
+            className="h-3.5 w-3.5 shrink-0 text-blue-yankees"
+            aria-hidden="true"
+          />
           Cambios hasta 5 días después de recibir.
         </li>
         <li className="flex items-center gap-2">
@@ -1245,7 +1260,10 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                 role="status"
               >
                 <p className="flex items-start gap-2">
-                  <Clock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                  <Clock
+                    className="mt-0.5 h-4 w-4 shrink-0"
+                    aria-hidden="true"
+                  />
                   <span>
                     <strong>
                       Tienes un pedido pendiente de pago (#
@@ -1279,7 +1297,8 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
               <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold [&::-webkit-details-marker]:hidden">
                 <span className="flex items-center gap-2">
                   <ShoppingBag className="h-4 w-4" aria-hidden="true" />
-                  {totalQuantity} {totalQuantity === 1 ? "producto" : "productos"}
+                  {totalQuantity}{" "}
+                  {totalQuantity === 1 ? "producto" : "productos"}
                   <span className="font-normal text-muted-foreground underline underline-offset-4">
                     Ver resumen
                   </span>
@@ -1311,7 +1330,10 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                   >
                     <div className="relative min-h-[300px]">
                       {currentStep === 1 && (
-                        <BasicInfoStep form={form} isLoading={isPendingSubmit} />
+                        <BasicInfoStep
+                          form={form}
+                          isLoading={isPendingSubmit}
+                        />
                       )}
                       {currentStep === 2 && (
                         <ShippingInfoStep
@@ -1405,7 +1427,10 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
               }}
             >
               {isPendingSubmit ? (
-                <Loader2 aria-hidden="true" className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2
+                  aria-hidden="true"
+                  className="mr-2 h-4 w-4 animate-spin"
+                />
               ) : currentStep === FORM_STEPS.length ? (
                 <Lock aria-hidden="true" className="mr-2 h-4 w-4" />
               ) : null}

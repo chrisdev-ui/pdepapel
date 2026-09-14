@@ -14,12 +14,12 @@ import { createCorsHeaders } from "@/lib/cors";
 import { withIdempotency } from "@/lib/idempotency";
 import { normalizeGoogleAnalyticsClientId } from "@/lib/google-analytics";
 import { generateBoldCheckoutData } from "@/lib/bold";
-import { activeCouponWhere, assertCouponHasUses } from "@/lib/coupon-availability";
-import { getProductsPrices } from "@/lib/discount-engine";
 import {
-  getActivePresalesByProduct,
-  getPresaleCapacity,
-} from "@/lib/presale";
+  activeCouponWhere,
+  assertCouponHasUses,
+} from "@/lib/coupon-availability";
+import { getProductsPrices } from "@/lib/discount-engine";
+import { getActivePresalesByProduct, getPresaleCapacity } from "@/lib/presale";
 import prismadb from "@/lib/prismadb";
 import { verifyEarlyAccessToken } from "@/lib/early-access";
 import { formatAvailableAt, isComingSoon } from "@/lib/product-availability";
@@ -243,8 +243,7 @@ async function createCheckout(
     if (
       shouldSaveCustomerAddress &&
       ((savedAddressId !== undefined &&
-        (typeof savedAddressId !== "string" ||
-          savedAddressId.length > 191)) ||
+        (typeof savedAddressId !== "string" || savedAddressId.length > 191)) ||
         (normalizedAddressLabel !== null && normalizedAddressLabel.length > 60))
     ) {
       throw ErrorFactory.InvalidRequest("La dirección guardada no es válida");
@@ -363,11 +362,22 @@ async function createCheckout(
         (neededQuantities[item.productId] || 0) + item.quantity;
     });
 
-    // Preventas activas de los productos del carrito, de una sola consulta.
+    // Preventas activas del carrito, de una sola consulta. Los pedidos
+    // recientes sin pagar apartan cupo, menos los de esta misma clienta.
     const activePresales = await getActivePresalesByProduct(
       params.storeId,
       products.map((product) => product.id),
+      { excludeOrdersOf: { userId: authenticatedUserId, guestId } },
     );
+
+    // Regla 1: la preventa se paga al reservar. Contra entrega no cobra hasta
+    // que el paquete llega, y aquí el paquete llega en semanas: el pedido se
+    // quedaría sin pagar, sin ocupar cupo y sin poder liberarse nunca.
+    if (activePresales.size > 0 && payment.method === PaymentMethod.COD) {
+      throw ErrorFactory.InvalidRequest(
+        "Las preventas se pagan al reservar: elige pago en línea o transferencia bancaria.",
+      );
+    }
 
     const outOfStockItems: {
       productId: string;
@@ -377,7 +387,10 @@ async function createCheckout(
     }[] = [];
 
     const hasEarlyAccess = Boolean(
-      verifyEarlyAccessToken(params.storeId, typeof earlyAccessToken === "string" ? earlyAccessToken : null),
+      verifyEarlyAccessToken(
+        params.storeId,
+        typeof earlyAccessToken === "string" ? earlyAccessToken : null,
+      ),
     );
 
     products.forEach((product) => {
@@ -389,15 +402,21 @@ async function createCheckout(
         );
       }
 
-      if (isComingSoon(product) && !hasEarlyAccess && !activePresales.has(product.id)) {
+      if (
+        isComingSoon(product) &&
+        !hasEarlyAccess &&
+        !activePresales.has(product.id)
+      ) {
         throw ErrorFactory.InvalidRequest(
           `"${product.name}" llega el ${formatAvailableAt(product.availableAt!)}; aún no se puede comprar`,
         );
       }
 
-      // Preventa: se vende sin stock, contra el tope de la campaña. La reserva
-      // de verdad se hace más abajo, dentro de la transacción y con un candado
-      // atómico; esto solo decide si el carrito puede seguir.
+      // Preventa: se vende sin stock, contra el tope de la campaña. Aquí solo
+      // se decide si el carrito puede seguir; el cupo se apunta cuando entra
+      // la plata, en el webhook de pago, igual que el stock normal
+      // (`settlePresaleLinesOnPayment`); `remaining` descuenta además lo
+      // apartado por pedidos recientes sin pagar.
       const presale = activePresales.get(product.id);
       if (presale) {
         const remaining = getPresaleCapacity(presale).remaining;
@@ -559,7 +578,10 @@ async function createCheckout(
         select: { freeShippingThreshold: true },
       })
       .catch((error: unknown) => {
-        console.error("[ORDER_CHECKOUT] Could not read free-shipping threshold:", error);
+        console.error(
+          "[ORDER_CHECKOUT] Could not read free-shipping threshold:",
+          error,
+        );
         return null;
       });
     const productSubtotal = itemsWithPrices.reduce(

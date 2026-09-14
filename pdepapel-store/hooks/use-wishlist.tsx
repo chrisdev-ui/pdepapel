@@ -5,6 +5,7 @@ import { ToastIcon } from "@/components/ui/toast-icon";
 import { useCart } from "@/hooks/use-cart";
 import { toast } from "@/hooks/use-toast";
 import { slimStoredProduct } from "@/lib/stored-product";
+import { getPurchasableUnits, isPresaleItem } from "@/lib/purchasable-units";
 import { Product } from "@/types";
 
 export interface WishlistProduct extends Product {
@@ -58,11 +59,7 @@ export const useWishlist = create(
           addedOn: new Date(),
         };
         const items = [...currentItems, newItem];
-        set(
-          get().accountUserId
-            ? { items }
-            : { items, guestItems: items },
-        );
+        set(get().accountUserId ? { items } : { items, guestItems: items });
         toast({
           description: "Producto agregado a la lista de deseos.",
           variant: "success",
@@ -71,11 +68,7 @@ export const useWishlist = create(
       },
       removeItem: (id: string) => {
         const items = get().items.filter((item) => item.id !== id);
-        set(
-          get().accountUserId
-            ? { items }
-            : { items, guestItems: items },
-        );
+        set(get().accountUserId ? { items } : { items, guestItems: items });
         toast({
           description: "Producto eliminado de la lista de deseos.",
           variant: "info",
@@ -89,9 +82,11 @@ export const useWishlist = create(
         const item = items.find((i) => i.id === id);
 
         if (!item) return;
-        if (item.stock <= 0) {
+        if (getPurchasableUnits(item) <= 0) {
           return toast({
-            description: "Este producto está agotado por ahora; te avisamos cuando vuelva desde su página.",
+            description: isPresaleItem(item)
+              ? "Se acabaron las reservas de este producto."
+              : "Este producto está agotado por ahora; te avisamos cuando vuelva desde su página.",
             variant: "warning",
             icon: <ToastIcon icon="cart" variant="info" />,
           });
@@ -106,7 +101,10 @@ export const useWishlist = create(
         }
         const result = addToCart(item);
         if (!result.ok) {
-          return toast({ description: "Este producto no está disponible en este momento.", variant: "warning" });
+          return toast({
+            description: "Este producto no está disponible en este momento.",
+            variant: "warning",
+          });
         }
         removeFromWishlist(id);
         toast({
@@ -119,26 +117,44 @@ export const useWishlist = create(
         const { addItem: addToCart, items: cartItems } = useCart.getState();
         const item = get().items.find((i) => i.id === id);
         if (!item) return false;
-        if (item.stock <= 0) {
-          toast({ description: "Este producto está agotado por ahora.", variant: "warning" });
+        if (getPurchasableUnits(item) <= 0) {
+          toast({
+            description: isPresaleItem(item)
+              ? "Se acabaron las reservas de este producto."
+              : "Este producto está agotado por ahora.",
+            variant: "warning",
+          });
           return false;
         }
         if (cartItems.some((cartItem) => cartItem.id === id)) {
-          toast({ description: "Este producto ya está en tu carrito.", variant: "info", icon: <ToastIcon icon="cart" variant="info" /> });
+          toast({
+            description: "Este producto ya está en tu carrito.",
+            variant: "info",
+            icon: <ToastIcon icon="cart" variant="info" />,
+          });
           return false;
         }
         const result = addToCart(item);
         if (!result.ok) {
-          toast({ description: "Este producto no está disponible en este momento.", variant: "warning" });
+          toast({
+            description: "Este producto no está disponible en este momento.",
+            variant: "warning",
+          });
           return false;
         }
-        toast({ description: "Producto agregado al carrito.", variant: "success", icon: <ToastIcon icon="cart" variant="success" /> });
+        toast({
+          description: "Producto agregado al carrito.",
+          variant: "success",
+          icon: <ToastIcon icon="cart" variant="success" />,
+        });
         return true;
       },
       addMany: (products: Product[]) => {
         const current = get().items;
         const known = new Set(current.map((item) => item.id));
-        const fresh = products.filter((product) => !known.has(product.id)).map((product) => ({ ...product, addedOn: new Date() }));
+        const fresh = products
+          .filter((product) => !known.has(product.id))
+          .map((product) => ({ ...product, addedOn: new Date() }));
         if (fresh.length === 0) return 0;
         const items = [...current, ...fresh];
         set(get().accountUserId ? { items } : { items, guestItems: items });
@@ -148,7 +164,9 @@ export const useWishlist = create(
         const fresh = new Map(products.map((product) => [product.id, product]));
         const items = get().items.map((item) => {
           const product = fresh.get(item.id);
-          return product ? { ...item, ...product, addedOn: item.addedOn } : item;
+          return product
+            ? { ...item, ...product, addedOn: item.addedOn }
+            : item;
         });
         set(get().accountUserId ? { items } : { items, guestItems: items });
       },
@@ -158,9 +176,10 @@ export const useWishlist = create(
         });
       },
       clearWishlist: () =>
-        set(get().accountUserId ? { items: [] } : { items: [], guestItems: [] }),
-      setAccountItems: (items, userId) =>
-        set({ items, accountUserId: userId }),
+        set(
+          get().accountUserId ? { items: [] } : { items: [], guestItems: [] },
+        ),
+      setAccountItems: (items, userId) => set({ items, accountUserId: userId }),
       activateGuestWishlist: () =>
         set({ items: get().guestItems, accountUserId: null }),
       setHydrated: () =>
@@ -171,11 +190,22 @@ export const useWishlist = create(
       storage: createJSONStorage(() => localStorage),
       version: 1,
       partialize: (state) =>
-        ({ guestItems: state.guestItems.map((item) => ({ ...slimStoredProduct(item), addedOn: item.addedOn })) }) as unknown as WishlistStore,
+        ({
+          guestItems: state.guestItems.map((item) => ({
+            ...slimStoredProduct(item),
+            addedOn: item.addedOn,
+          })),
+        }) as unknown as WishlistStore,
       migrate: (persisted, version) => {
         const state = persisted as Partial<WishlistStore>;
         if (version < 1 && Array.isArray(state.guestItems)) {
-          return { ...state, guestItems: state.guestItems.map((item) => ({ ...slimStoredProduct(item), addedOn: item.addedOn })) } as WishlistStore;
+          return {
+            ...state,
+            guestItems: state.guestItems.map((item) => ({
+              ...slimStoredProduct(item),
+              addedOn: item.addedOn,
+            })),
+          } as WishlistStore;
         }
         return state as WishlistStore;
       },

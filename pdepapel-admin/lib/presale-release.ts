@@ -3,6 +3,7 @@ import { ProductPresaleStatus } from "@prisma/client";
 import { ErrorFactory } from "@/lib/api-errors";
 import { createInventoryMovementBatchResilient } from "@/lib/inventory";
 import { explodeKitMovements } from "@/lib/order-stock-movements";
+import { PAID_PRESALE_LINE } from "@/lib/presale";
 import prismadb from "@/lib/prismadb";
 
 /**
@@ -33,7 +34,10 @@ export interface PresaleReleaseResult {
 }
 
 /** Lo que hace falta saber antes de liberar, para decidir si se puede. */
-export async function getPresaleReleasePreview(storeId: string, presaleId: string) {
+export async function getPresaleReleasePreview(
+  storeId: string,
+  presaleId: string,
+) {
   const presale = await prismadb.productPresale.findFirst({
     where: { id: presaleId, storeId },
     select: {
@@ -43,19 +47,27 @@ export async function getPresaleReleasePreview(storeId: string, presaleId: strin
       expectedArrivalAt: true,
       unitLimit: true,
       committedUnits: true,
-      product: { select: { id: true, name: true, sku: true, stock: true, isKit: true } },
+      product: {
+        select: { id: true, name: true, sku: true, stock: true, isKit: true },
+      },
     },
   });
-  if (!presale) throw ErrorFactory.NotFound("La preventa no existe en esta tienda");
+  if (!presale)
+    throw ErrorFactory.NotFound("La preventa no existe en esta tienda");
 
+  // Solo pedidos PAGADOS. Un carrito abandonado que quedó en PENDING no es una
+  // venta: contarlo aquí haría que Paula liberara mercancía —y descontara
+  // inventario— por unidades que nadie compró.
   const lines = await prismadb.orderItem.findMany({
-    where: { presaleId, isPreorder: true, preorderReleasedAt: null },
+    where: { ...PAID_PRESALE_LINE, presaleId, preorderReleasedAt: null },
     select: {
       id: true,
       orderId: true,
       quantity: true,
       productId: true,
-      order: { select: { id: true, orderNumber: true, status: true, fullName: true } },
+      order: {
+        select: { id: true, orderNumber: true, status: true, fullName: true },
+      },
     },
   });
 
@@ -80,7 +92,10 @@ export async function releasePresale(input: {
   /** Clerk id de quien libera; queda en el movimiento y en la campaña. */
   releasedBy: string;
 }): Promise<PresaleReleaseResult> {
-  const preview = await getPresaleReleasePreview(input.storeId, input.presaleId);
+  const preview = await getPresaleReleasePreview(
+    input.storeId,
+    input.presaleId,
+  );
 
   if (preview.presale.status !== ProductPresaleStatus.ACTIVE) {
     throw ErrorFactory.InvalidRequest("Esta preventa ya no está activa");
@@ -121,7 +136,10 @@ export async function releasePresale(input: {
       })),
     );
 
-    const stockResult = await createInventoryMovementBatchResilient(tx, movements);
+    const stockResult = await createInventoryMovementBatchResilient(
+      tx,
+      movements,
+    );
     if (stockResult.failed.length > 0) {
       // Si una sola línea no pudo descontar, no se libera nada: un pedido
       // suelto sin inventario descontado es peor que esperar un día más.
@@ -131,8 +149,11 @@ export async function releasePresale(input: {
     }
 
     // 2. Cada línea queda liberada; eso es lo que suelta el pedido completo.
+    // Se marcan exactamente las que se acaban de descontar, por id: si entre la
+    // vista previa y la transacción entró otro pago, esa línea no tiene
+    // movimiento de inventario y no puede darse por liberada.
     await tx.orderItem.updateMany({
-      where: { presaleId: input.presaleId, isPreorder: true, preorderReleasedAt: null },
+      where: { id: { in: preview.lines.map((line) => line.id) } },
       data: { preorderReleasedAt: now },
     });
 
@@ -147,17 +168,27 @@ export async function releasePresale(input: {
     });
 
     // Qué pedidos quedaron realmente libres: uno puede traer otra preventa.
-    const orderIds = Array.from(new Set(preview.lines.map((line) => line.orderId)));
+    const orderIds = Array.from(
+      new Set(preview.lines.map((line) => line.orderId)),
+    );
     const stillHeld = await tx.orderItem.findMany({
-      where: { orderId: { in: orderIds }, isPreorder: true, preorderReleasedAt: null },
+      where: {
+        orderId: { in: orderIds },
+        isPreorder: true,
+        preorderReleasedAt: null,
+      },
       select: { orderId: true },
     });
-    const stillHeldOrderIds = Array.from(new Set(stillHeld.map((row) => row.orderId)));
+    const stillHeldOrderIds = Array.from(
+      new Set(stillHeld.map((row) => row.orderId)),
+    );
 
     return {
       presaleId: input.presaleId,
       releasedUnits: preview.pendingUnits,
-      releasedOrderIds: orderIds.filter((id) => !stillHeldOrderIds.includes(id)),
+      releasedOrderIds: orderIds.filter(
+        (id) => !stillHeldOrderIds.includes(id),
+      ),
       stillHeldOrderIds,
     };
   });
@@ -179,7 +210,8 @@ export async function recordPresaleDelayNotice(input: {
     where: { id: input.presaleId, storeId: input.storeId },
     select: { id: true, status: true },
   });
-  if (!presale) throw ErrorFactory.NotFound("La preventa no existe en esta tienda");
+  if (!presale)
+    throw ErrorFactory.NotFound("La preventa no existe en esta tienda");
   if (presale.status !== ProductPresaleStatus.ACTIVE) {
     throw ErrorFactory.InvalidRequest(
       "Solo se avisa de un retraso en una preventa que sigue activa",
@@ -193,10 +225,10 @@ export async function recordPresaleDelayNotice(input: {
   });
 }
 
-/** A quién hay que avisarle: una clienta por pedido, sin repetir. */
+/** A quién hay que avisarle: una clienta por pedido pagado, sin repetir. */
 export async function getPresaleCustomers(storeId: string, presaleId: string) {
   const lines = await prismadb.orderItem.findMany({
-    where: { presaleId, isPreorder: true, preorderReleasedAt: null },
+    where: { ...PAID_PRESALE_LINE, presaleId, preorderReleasedAt: null },
     select: {
       quantity: true,
       order: {
@@ -214,7 +246,14 @@ export async function getPresaleCustomers(storeId: string, presaleId: string) {
 
   const byOrder = new Map<
     string,
-    { orderId: string; orderNumber: string; fullName: string; phone: string | null; email: string | null; units: number }
+    {
+      orderId: string;
+      orderNumber: string;
+      fullName: string;
+      phone: string | null;
+      email: string | null;
+      units: number;
+    }
   >();
 
   for (const line of lines) {

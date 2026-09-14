@@ -1,5 +1,6 @@
 import { getLowStockLabel, isLowStock } from "@/components/ui/low-stock-notice";
 import { formatArrivalDate, isComingSoon } from "@/lib/product-card";
+import { getActivePresale, getPurchasableUnits } from "@/lib/purchasable-units";
 import { Product } from "@/types";
 
 export type ProductAvailabilityStatus =
@@ -31,20 +32,29 @@ const STOCK_COUNT_LIMIT = 30;
  * unidades → en stock.
  */
 export function getProductAvailability(
-  product: Pick<Product, "stock" | "isArchived" | "availableAt" | "isGroup" | "presales">,
+  product: Pick<
+    Product,
+    "stock" | "isArchived" | "availableAt" | "isGroup" | "presales"
+  >,
   options: { earlyAccess?: boolean; now?: Date } = {},
 ): ProductAvailability {
   const now = options.now ?? new Date();
 
   if (product.isArchived) {
-    return { status: "archived", canBuy: false, ctaLabel: "No disponible", stockLabel: "Este producto ya no está disponible para la venta", tone: "gray" };
+    return {
+      status: "archived",
+      canBuy: false,
+      ctaLabel: "No disponible",
+      stockLabel: "Este producto ya no está disponible para la venta",
+      tone: "gray",
+    };
   }
   // Preventa: se puede comprar hoy aunque no haya stock, contra el tope de la
   // campaña. Va ANTES de «llega pronto» porque la preventa es precisamente la
   // forma de comprarlo antes de que llegue.
-  const presale = product.presales?.[0];
+  const presale = getActivePresale(product);
   if (presale) {
-    const remaining = Math.max(0, presale.unitLimit - presale.committedUnits);
+    const remaining = getPurchasableUnits(product);
     const arrivalLabel = formatArrivalDate(presale.expectedArrivalAt);
     if (remaining > 0) {
       return {
@@ -72,20 +82,40 @@ export function getProductAvailability(
       status: "coming-soon",
       canBuy: false,
       ctaLabel: "Avísame cuando llegue",
-      stockLabel: product.availableAt ? `Llega el ${formatArrivalDate(product.availableAt)}` : "Llega pronto",
+      stockLabel: product.availableAt
+        ? `Llega el ${formatArrivalDate(product.availableAt)}`
+        : "Llega pronto",
       tone: "purple",
     };
   }
   if (product.stock <= 0) {
-    return { status: "sold-out", canBuy: false, ctaLabel: "Avísame cuando vuelva", stockLabel: "Agotado por ahora", tone: "gray" };
+    return {
+      status: "sold-out",
+      canBuy: false,
+      ctaLabel: "Avísame cuando vuelva",
+      stockLabel: "Agotado por ahora",
+      tone: "gray",
+    };
   }
   if (!product.isGroup && isLowStock(product.stock)) {
-    return { status: "low-stock", canBuy: true, ctaLabel: "Agregar al carrito", stockLabel: getLowStockLabel(product.stock, "detail"), tone: "amber" };
+    return {
+      status: "low-stock",
+      canBuy: true,
+      ctaLabel: "Agregar al carrito",
+      stockLabel: getLowStockLabel(product.stock, "detail"),
+      tone: "amber",
+    };
   }
   const stockLabel = product.isGroup
     ? "Disponible en varias opciones"
     : product.stock <= STOCK_COUNT_LIMIT
       ? `En stock · quedan ${product.stock} unidades`
       : "En stock";
-  return { status: "in-stock", canBuy: true, ctaLabel: "Agregar al carrito", stockLabel, tone: "green" };
+  return {
+    status: "in-stock",
+    canBuy: true,
+    ctaLabel: "Agregar al carrito",
+    stockLabel,
+    tone: "green",
+  };
 }

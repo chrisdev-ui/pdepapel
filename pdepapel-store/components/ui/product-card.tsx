@@ -1,6 +1,14 @@
 "use client";
 
-import { AlertCircle, Expand, Heart, ImageOff, Plus, ShoppingCart, Star } from "lucide-react";
+import {
+  AlertCircle,
+  Expand,
+  Heart,
+  ImageOff,
+  Plus,
+  ShoppingCart,
+  Star,
+} from "lucide-react";
 import Link from "next/link";
 import { MouseEventHandler, useCallback, useEffect, useState } from "react";
 
@@ -23,6 +31,7 @@ import {
   isLowStock,
   isRecentlyCreated,
 } from "@/lib/product-card";
+import { getActivePresale, getPurchasableUnits } from "@/lib/purchasable-units";
 import { productPath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import { useCartPreview } from "@/providers/cart-preview-provider";
@@ -50,7 +59,12 @@ const ICON_BUTTON =
 
 function Badge({ badge }: { badge: CardBadge }) {
   return (
-    <span className={cn("inline-flex h-6 items-center rounded-full px-2.5 font-sans text-xs font-bold", BADGE_TONES[badge.tone])}>
+    <span
+      className={cn(
+        "inline-flex h-6 items-center rounded-full px-2.5 font-sans text-xs font-bold",
+        BADGE_TONES[badge.tone],
+      )}
+    >
       {badge.text}
     </span>
   );
@@ -85,12 +99,18 @@ const ProductCard: React.FC<ProductCardProps> = ({
   const mainImage = images.find((image) => image.isMain) ?? images[0];
   const hoverImage = images.find((image) => image !== mainImage);
   const comingSoon = isComingSoon(product);
-  const soldOut = product.stock === 0;
-  const badges = getProductCardBadges(product, { isNew: isNew ?? isRecentlyCreated(product) });
+  // Una preventa se compra hoy aunque no haya bodega: lo que la agota es el
+  // cupo de la campaña.
+  const presale = getActivePresale(product);
+  const soldOut = getPurchasableUnits(product) === 0;
+  const badges = getProductCardBadges(product, {
+    isNew: isNew ?? isRecentlyCreated(product),
+  });
   const price = getProductCardPrice(product);
   const rating = getAverageRating(product.reviews);
   const lowStock = isLowStock(product);
-  const canBuy = !soldOut && !comingSoon && !product.isArchived;
+  const canBuy =
+    !soldOut && (Boolean(presale) || !comingSoon) && !product.isArchived;
   const href = productPath(product.slug || product.id);
 
   const stop = (event: React.SyntheticEvent) => {
@@ -150,10 +170,18 @@ const ProductCard: React.FC<ProductCardProps> = ({
       if (isWishlistProduct) removeFromWishlist(product.id);
       else addToWishlist(product);
     },
-    [addToWishlist, isWishlistProduct, openPreview, product, removeFromWishlist],
+    [
+      addToWishlist,
+      isWishlistProduct,
+      openPreview,
+      product,
+      removeFromWishlist,
+    ],
   );
 
-  const heartLabel = isWishlistProduct ? "Quitar de favoritos" : "Agregar a favoritos";
+  const heartLabel = isWishlistProduct
+    ? "Quitar de favoritos"
+    : "Agregar a favoritos";
   const heart = (
     <Heart
       aria-hidden="true"
@@ -188,10 +216,19 @@ const ProductCard: React.FC<ProductCardProps> = ({
             fill
             sizes={sizes}
             priority={priority}
-            className={cn("object-cover transition-opacity duration-300", (soldOut || comingSoon) && "opacity-60 saturate-50", hoverImage && "can-hover:group-hover:opacity-0")}
+            className={cn(
+              "object-cover transition-opacity duration-300",
+              (soldOut || comingSoon) && "opacity-60 saturate-50",
+              hoverImage && "can-hover:group-hover:opacity-0",
+            )}
           />
         ) : (
-          <div aria-hidden="true" className="flex h-full w-full items-center justify-center text-gray-400"><ImageOff className="h-8 w-8" /></div>
+          <div
+            aria-hidden="true"
+            className="flex h-full w-full items-center justify-center text-gray-400"
+          >
+            <ImageOff className="h-8 w-8" />
+          </div>
         )}
         {hoverImage?.url && (
           <CloudinaryImage
@@ -216,25 +253,49 @@ const ProductCard: React.FC<ProductCardProps> = ({
         aria-label={heartLabel}
         aria-pressed={isWishlistProduct}
         onClick={onToggleWishlist}
-        className={cn(ICON_BUTTON, "absolute right-4 top-4 h-9 w-9 can-hover:hidden sm:right-5 sm:top-5")}
+        className={cn(
+          ICON_BUTTON,
+          "absolute right-4 top-4 h-9 w-9 can-hover:hidden sm:right-5 sm:top-5",
+        )}
       >
         {heart}
       </button>
 
       <div className="pointer-events-none absolute inset-x-2 top-2 hidden aspect-square can-hover:block sm:inset-x-3 sm:top-3">
         <div className="pointer-events-auto absolute inset-x-0 bottom-3 flex justify-center gap-3 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
-          <button type="button" aria-label={heartLabel} aria-pressed={isWishlistProduct} onClick={onToggleWishlist} className={ICON_BUTTON}>
+          <button
+            type="button"
+            aria-label={heartLabel}
+            aria-pressed={isWishlistProduct}
+            onClick={onToggleWishlist}
+            className={ICON_BUTTON}
+          >
             {heart}
           </button>
-          <button type="button" aria-label="Vista rápida" onClick={onPreview} className={ICON_BUTTON}>
+          <button
+            type="button"
+            aria-label="Vista rápida"
+            onClick={onPreview}
+            className={ICON_BUTTON}
+          >
             <Expand aria-hidden="true" className="h-[18px] w-[18px]" />
           </button>
           <button
             type="button"
-            aria-label={product.isGroup ? "Elegir opción" : "Agregar al carrito"}
+            aria-label={
+              presale
+                ? "Reservar ahora"
+                : product.isGroup
+                  ? "Elegir opción"
+                  : "Agregar al carrito"
+            }
             onClick={onAddToCart}
             disabled={!canBuy}
-            className={cn(ICON_BUTTON, "bg-blue-yankees text-white", isCartProduct && "ring-2 ring-pink-froly")}
+            className={cn(
+              ICON_BUTTON,
+              "bg-blue-yankees text-white",
+              isCartProduct && "ring-2 ring-pink-froly",
+            )}
           >
             <ShoppingCart aria-hidden="true" className="h-[18px] w-[18px]" />
           </button>
@@ -242,24 +303,53 @@ const ProductCard: React.FC<ProductCardProps> = ({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Link href={href} className="line-clamp-2 min-h-[2.7em] font-sans text-[15px] font-semibold leading-[1.35] text-blue-yankees sm:text-[17px]" title={product.name}>
+        <Link
+          href={href}
+          className="line-clamp-2 min-h-[2.7em] font-sans text-[15px] font-semibold leading-[1.35] text-blue-yankees sm:text-[17px]"
+          title={product.name}
+        >
           {product.name}
         </Link>
         <p className="h-[18px] truncate text-xs leading-[18px] text-gray-500 sm:text-[13px]">
           {product.category?.name}
-          {badges.newInline && <span className="font-semibold text-rose-700"> · Nuevo</span>}
+          {badges.newInline && (
+            <span className="font-semibold text-rose-700"> · Nuevo</span>
+          )}
         </p>
         <div className="flex h-[22px] items-center justify-between gap-2">
           {rating ? (
-            <span role="img" className="inline-flex items-center gap-1 text-xs text-gray-500" aria-label={`Calificación ${rating.average} de 5 con ${rating.count} reseñas`}>
-              <span className="hidden items-center sm:inline-flex" aria-hidden="true">
+            <span
+              role="img"
+              className="inline-flex items-center gap-1 text-xs text-gray-500"
+              aria-label={`Calificación ${rating.average} de 5 con ${rating.count} reseñas`}
+            >
+              <span
+                className="hidden items-center sm:inline-flex"
+                aria-hidden="true"
+              >
                 {Array.from({ length: 5 }, (_, index) => (
-                  <Star key={index} className={cn("h-3.5 w-3.5", index < Math.round(rating.average) ? "fill-yellow-star text-yellow-star" : "text-gray-300")} />
+                  <Star
+                    key={index}
+                    className={cn(
+                      "h-3.5 w-3.5",
+                      index < Math.round(rating.average)
+                        ? "fill-yellow-star text-yellow-star"
+                        : "text-gray-300",
+                    )}
+                  />
                 ))}
               </span>
-              <span className="inline-flex items-center gap-1 sm:hidden" aria-hidden="true">
+              <span
+                className="inline-flex items-center gap-1 sm:hidden"
+                aria-hidden="true"
+              >
                 <Star className="h-3.5 w-3.5 fill-yellow-star text-yellow-star" />
-                <strong className="text-blue-yankees">{rating.average.toLocaleString("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</strong>
+                <strong className="text-blue-yankees">
+                  {rating.average.toLocaleString("es-CO", {
+                    minimumFractionDigits: 1,
+                    maximumFractionDigits: 1,
+                  })}
+                </strong>
               </span>
               <span>({rating.count})</span>
             </span>
@@ -277,17 +367,29 @@ const ProductCard: React.FC<ProductCardProps> = ({
           <div className="flex min-w-0 flex-col gap-0.5 font-quicksand">
             <span className="flex items-baseline gap-2 whitespace-nowrap">
               <span className="text-[17px] font-bold tracking-tight text-blue-yankees sm:text-[22px]">
-                {price.prefix && <span className="mr-1 text-xs font-medium text-gray-500 sm:text-[13px]">{price.prefix}</span>}
+                {price.prefix && (
+                  <span className="mr-1 text-xs font-medium text-gray-500 sm:text-[13px]">
+                    {price.prefix}
+                  </span>
+                )}
                 {price.current}
               </span>
-              {price.original && <s className="hidden text-[13px] text-gray-500 sm:inline">{price.original}</s>}
+              {price.original && (
+                <s className="hidden text-[13px] text-gray-500 sm:inline">
+                  {price.original}
+                </s>
+              )}
             </span>
             <span className="h-4 text-xs leading-4">
               {price.original ? (
                 <>
                   <span className="text-gray-500 sm:hidden">
                     <s>{price.original}</s>
-                    {price.percent !== null && <span className="ml-1.5 font-semibold text-green-700">−{price.percent} %</span>}
+                    {price.percent !== null && (
+                      <span className="ml-1.5 font-semibold text-green-700">
+                        −{price.percent} %
+                      </span>
+                    )}
                   </span>
                   <span className="hidden font-semibold text-green-700 sm:inline">
                     {price.savings}
@@ -299,11 +401,23 @@ const ProductCard: React.FC<ProductCardProps> = ({
           </div>
           <button
             type="button"
-            aria-label={comingSoon ? "Llega pronto" : soldOut ? "Agotado" : product.isGroup ? "Elegir opción" : "Agregar al carrito"}
+            aria-label={
+              presale
+                ? soldOut
+                  ? "Reservas agotadas"
+                  : "Reservar ahora"
+                : comingSoon
+                  ? "Llega pronto"
+                  : soldOut
+                    ? "Agotado"
+                    : product.isGroup
+                      ? "Elegir opción"
+                      : "Agregar al carrito"
+            }
             onClick={onAddToCart}
             disabled={!canBuy}
             className={cn(
-              "flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-yankees text-white transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-35 sm:h-10 sm:w-10",
+              "disabled:opacity-35 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-yankees text-white transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-yankees focus-visible:ring-offset-2 disabled:cursor-not-allowed sm:h-10 sm:w-10",
               isCartProduct && "ring-2 ring-pink-froly ring-offset-1",
             )}
           >

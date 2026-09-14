@@ -3,6 +3,10 @@ import prismadb from "@/lib/prismadb";
 import { createGuideForOrder } from "@/lib/shipping-helpers";
 import { createInventoryMovementBatchResilient } from "@/lib/inventory";
 import { explodeKitMovements } from "@/lib/order-stock-movements";
+import {
+  releasePresaleLinesOnCancellation,
+  settlePresaleLinesOnPayment,
+} from "@/lib/presale";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import {
   getBoldWebhookSecretKey,
@@ -248,14 +252,25 @@ async function processBoldPayment(
 
       if (claim.count === 0) return false;
 
+      // El cupo de preventa se apunta aquí, con el stock normal y por la misma
+      // razón: hasta que no entra la plata no hay nada reservado. Devuelve las
+      // líneas de preventa que sí descuentan hoy (pago tardío sobre una
+      // campaña ya liberada); el resto espera a que Paula libere.
+      const presaleDispatchNow = await settlePresaleLinesOnPayment(
+        tx,
+        order.id,
+      );
+
       // Los kits descuentan también sus componentes; el reingreso al anular
       // hace lo mismo, así que ambos lados quedan simétricos.
       const stockMovements = await explodeKitMovements(
         tx,
         order.orderItems
-          // Las líneas de preventa NO descuentan aquí: la mercancía todavía no
-          // existe. Su movimiento se escribe el día que Paula libera.
-          .filter((item: any) => item.product && !item.isPreorder)
+          .filter(
+            (item: any) =>
+              item.product &&
+              (!item.isPreorder || presaleDispatchNow.has(item.id)),
+          )
           .map((orderItem: any) => ({
             productId: orderItem.productId,
             storeId: order.storeId,
@@ -383,12 +398,23 @@ async function processBoldPayment(
       }
 
       if (reversedPaidOrder) {
+        // Espejo del pago: el cupo vuelve a la preventa y solo reingresan stock
+        // las líneas que alcanzaron a liberarse, porque son las únicas que lo
+        // descontaron. Reingresar una línea que nunca descontó crearía
+        // mercancía de la nada.
+        const presaleRestock = await releasePresaleLinesOnCancellation(
+          tx,
+          order.id,
+        );
+
         const restockMovements = await explodeKitMovements(
           tx,
           order.orderItems
-            // Simétrico con la venta: una línea de preventa nunca descontó, así
-              // que devolverla crearía stock fantasma.
-              .filter((item: any) => item.product && !item.isPreorder)
+            .filter(
+              (item: any) =>
+                item.product &&
+                (!item.isPreorder || presaleRestock.has(item.id)),
+            )
             .map((orderItem: any) => ({
               productId: orderItem.productId,
               storeId: order.storeId,

@@ -62,6 +62,8 @@ export interface Product {
     expectedArrivalAt: string;
     unitLimit: number;
     committedUnits: number;
+    /** Apartadas por pedidos recientes sin pagar; solo viene en consultas sin caché. */
+    heldUnits?: number;
   }[];
   createdAt?: string;
   quantity?: number;
