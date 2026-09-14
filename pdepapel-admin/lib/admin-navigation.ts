@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  MessagesSquare,
   BarChart3,
   BookOpen,
   ClipboardList,
@@ -168,6 +169,7 @@ export const NAV_GROUPS: NavGroup[] = [
         ],
       },
       { id: "proveedores", label: "Proveedores", icon: ClipboardList, segment: "proveedores" },
+      { id: "conversaciones", label: "Conversaciones", icon: MessagesSquare, segment: "conversaciones" },
       {
         id: "contenido",
         label: "Contenido de la tienda",
@@ -297,6 +299,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
 ];
 
 const SEGMENT_LABELS: Record<string, string> = {
+  conversaciones: "Conversaciones",
   manual: "Manual del panel",
   pedidos: "Pedidos",
   "ventas-rapidas": "Punto de venta",

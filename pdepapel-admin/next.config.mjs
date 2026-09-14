@@ -21,6 +21,7 @@ const dashboardRoutePairs = [
   ["shipments", "envios"],
   ["sizes", "tamanos"],
   ["suppliers", "proveedores"],
+  ["conversations", "conversaciones"],
   ["types", "tipos"],
   ["inventory", "inventario"],
   ["products", "productos"],
@@ -39,6 +40,7 @@ const newDashboardRoutePairs = [
   ["restock-orders", "aprovisionamiento"],
   ["sizes", "tamanos"],
   ["suppliers", "proveedores"],
+  ["conversations", "conversaciones"],
   ["types", "tipos"],
 ];
 

@@ -91,7 +91,7 @@ describe("extractWhatsAppEvents", () => {
     };
     const extracted = extractWhatsAppEvents(payload);
     expect(extracted.messages).toEqual([
-      { externalId: "wamid.a", phone: "573001234567", contactName: null, body: "uno", mediaType: null, sentAt: null },
+      { externalId: "wamid.a", phone: "573001234567", contactName: null, body: "uno", mediaType: null, sentAt: null, metadata: null },
     ]);
     expect(extracted.statuses).toEqual([{ externalId: "wamid.out", status: "READ", rawStatus: "read" }]);
     expect(extracted.skipped).toEqual(["message:not-an-object", "message:wamid.nophone:no-phone"]);
@@ -154,6 +154,54 @@ describe("extractWhatsAppEvents", () => {
       ["e3", "Corregido", "edit"],
     ]);
     expect(extracted.skipped).toEqual(["echo:e4:no-phone", "echo:not-an-object"]);
+  });
+
+  it("captures a catalog cart, keeping the SKU that the feed publishes as the product id", () => {
+    const extracted = extractWhatsAppEvents(
+      metaPayload({
+        contacts: [{ profile: { name: "Christian" }, wa_id: "573024686403" }],
+        messages: [{
+          from: "573024686403",
+          id: "wamid.CART",
+          timestamp: "1789300000",
+          type: "order",
+          order: {
+            text: "¿me lo puedes apartar?",
+            catalog_id: "1049887011264361",
+            product_items: [
+              { product_retailer_id: "AGE-CLS-AZU-XS-L-2868", quantity: 1, item_price: 13000, currency: "COP" },
+              { product_retailer_id: "STI-KAW-001", quantity: "3", item_price: 4500, currency: "COP" },
+            ],
+          },
+        }],
+      }),
+    );
+
+    expect(extracted.messages).toHaveLength(1);
+    const [cart] = extracted.messages;
+    expect(cart.mediaType).toBe("order");
+    // La nota del carrito se usa como cuerpo, que si no quedaría vacío.
+    expect(cart.body).toBe("¿me lo puedes apartar?");
+    expect(cart.metadata).toEqual({
+      order: {
+        catalogId: "1049887011264361",
+        note: "¿me lo puedes apartar?",
+        items: [
+          { sku: "AGE-CLS-AZU-XS-L-2868", quantity: 1, unitPrice: 13000, currency: "COP" },
+          // La cantidad llega como texto en algunos carritos.
+          { sku: "STI-KAW-001", quantity: 3, unitPrice: 4500, currency: "COP" },
+        ],
+      },
+    });
+  });
+
+  it("ignores a cart with no readable lines instead of storing an empty one", () => {
+    const noItems = extractWhatsAppEvents(metaPayload({ messages: [{ from: "573001234567", id: "w1", type: "order", order: { catalog_id: "c1", product_items: [] } }] }));
+    expect(noItems.messages[0].metadata).toBeNull();
+
+    const junk = extractWhatsAppEvents(metaPayload({ messages: [{ from: "573001234567", id: "w2", type: "order", order: { product_items: ["nope", { quantity: 2 }] } }] }));
+    expect(junk.messages[0].metadata).toBeNull();
+    expect(junk.messages[0].mediaType).toBe("order");
   });
 
   it("returns an empty result for bodies that are not Meta-shaped", () => {

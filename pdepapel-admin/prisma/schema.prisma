@@ -2161,6 +2161,12 @@ model ConversationMessage {
   status         ConversationMessageStatus    @default(RECEIVED)
   /// `MarketplaceWebhookEvent.id` del que salió; sin relación, solo trazabilidad.
   rawEventId     String?
+  /// Datos estructurados que no caben en `body`. Hoy solo el carrito que manda
+  /// una clienta desde el catálogo (`{ order: { catalogId, items: [...] } }`),
+  /// guardado tal cual llega: los SKU se resuelven contra el catálogo al
+  /// mostrarlo, para que precio y existencias sean los de ahora y no los del
+  /// día que escribió.
+  metadata       Json?
   createdAt      DateTime                     @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)

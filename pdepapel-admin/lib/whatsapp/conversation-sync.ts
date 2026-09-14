@@ -1,4 +1,5 @@
 import {
+  type Prisma,
   ConversationChannel,
   ConversationMessageDirection,
   ConversationMessageSentBy,
@@ -59,6 +60,26 @@ export interface WhatsAppInboundMessage {
   body: string | null;
   mediaType: string | null;
   sentAt: Date | null;
+  /** Extras estructurados; hoy solo el carrito de un mensaje `order`. */
+  metadata: WhatsAppMessageMetadata | null;
+}
+
+/** Un renglón del carrito tal como lo manda Meta, sin resolver todavía. */
+export interface WhatsAppCartItem {
+  /** `product_retailer_id`: es el SKU con el que se publicó el producto en el feed. */
+  sku: string;
+  quantity: number;
+  unitPrice: number | null;
+  currency: string | null;
+}
+
+export interface WhatsAppMessageMetadata {
+  order?: {
+    catalogId: string | null;
+    /** Nota que la clienta escribe junto al carrito, si la hay. */
+    note: string | null;
+    items: WhatsAppCartItem[];
+  };
 }
 
 /** Mensaje que Paula mandó desde su celular y volvió como eco. */
@@ -125,6 +146,41 @@ function getEchoBody(echo: JsonRecord): string | null {
   return edited ? getMessageBody(edited) : null;
 }
 
+const asNumber = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() && Number.isFinite(Number(value))) return Number(value);
+  return null;
+};
+
+/**
+ * Carrito de un mensaje `type: "order"`. Se guarda crudo: el SKU
+ * (`product_retailer_id`) se resuelve contra el catálogo al mostrarlo, no aquí,
+ * para que el precio y las existencias sean los de ese momento. Un carrito sin
+ * renglones legibles devuelve `null` en vez de una lista vacía.
+ */
+function getCartMetadata(message: JsonRecord): WhatsAppMessageMetadata | null {
+  const order = isRecord(message.order) ? message.order : null;
+  if (!order) return null;
+
+  const items: WhatsAppCartItem[] = [];
+  for (const raw of Array.isArray(order.product_items) ? order.product_items : []) {
+    if (!isRecord(raw)) continue;
+    const sku = asString(raw.product_retailer_id);
+    if (!sku) continue;
+    items.push({
+      sku,
+      quantity: Math.max(1, asNumber(raw.quantity) ?? 1),
+      unitPrice: asNumber(raw.item_price),
+      currency: asString(raw.currency),
+    });
+  }
+  if (items.length === 0) return null;
+
+  return {
+    order: { catalogId: asString(order.catalog_id), note: asString(order.text), items },
+  };
+}
+
 /**
  * Recorre TODO el cuerpo (varias `entry`, varios `changes`): un solo POST de
  * Meta puede traer varios mensajes, ecos y estados. Puro y sin excepciones.
@@ -166,13 +222,16 @@ export function extractWhatsAppEvents(payload: unknown): WhatsAppExtractedEvents
             continue;
           }
           const type = asString(message.type);
+          const metadata = getCartMetadata(message);
           result.messages.push({
             externalId: asString(message.id),
             phone,
             contactName: names.get(phone) ?? null,
-            body: getMessageBody(message),
+            // Un carrito trae su nota en `order.text`; si no hay, queda sin cuerpo.
+            body: getMessageBody(message) ?? metadata?.order?.note ?? null,
             mediaType: type && type !== "text" ? type : null,
             sentAt: parseMetaTimestamp(message.timestamp),
+            metadata,
           });
         }
       }
@@ -285,6 +344,7 @@ async function fileInboundMessage(
     mediaType: message.mediaType,
     status: ConversationMessageStatus.RECEIVED,
     rawEventId: eventId,
+    ...(message.metadata ? { metadata: message.metadata as Prisma.InputJsonValue } : {}),
     ...(message.sentAt ? { createdAt: message.sentAt } : {}),
   };
   if (!message.externalId) {

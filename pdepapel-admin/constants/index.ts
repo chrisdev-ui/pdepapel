@@ -181,9 +181,11 @@ export enum Models {
   MarketplaceSales = "marketplace-sales",
   MarketplaceListings = "marketplace-listings",
   NewsletterSubscribers = "newsletter-subscribers",
+  Conversations = "conversations",
 }
 
 export const ModelLabels: Record<Models, string> = {
+  [Models.Conversations]: "Conversaciones",
   [Models.HomeContent]: "Contenido de portada",
   [Models.Categories]: "Subcategorías",
   [Models.Colors]: "Colores",
@@ -212,6 +214,14 @@ export const ModelLabels: Record<Models, string> = {
 };
 
 export const ModelsColumns: Record<Models, { [key: string]: string }> = {
+  [Models.Conversations]: {
+    contactName: "Clienta",
+    phone: "Teléfono",
+    status: "Estado",
+    lastMessagePreview: "Último mensaje",
+    lastMessageAt: "Cuándo",
+    messageCount: "Mensajes",
+  },
   [Models.HomeContent]: {
     imageUrl: "Imagen",
     title: "Título",
