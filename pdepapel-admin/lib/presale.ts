@@ -245,12 +245,23 @@ export const PRESALE_BLOCKS_MARKETPLACE_MESSAGE =
 
 export const PRESALE_MAX_UNIT_LIMIT = 9999;
 
+// `required_error` va en todos: sin él, un campo que no llega produce el
+// "Required" en inglés de zod, y esto es un panel en español.
 export const presaleInputSchema = z.object({
-  productId: z.string().trim().min(1, "Elige el producto"),
+  productId: z
+    .string({ required_error: "Elige el producto" })
+    .trim()
+    .min(1, "Elige el producto"),
   /** `yyyy-MM-dd` o ISO. Se interpreta en hora de Bogotá. */
-  expectedArrivalAt: z.string().trim().min(1, "Ponle la fecha en que llega"),
+  expectedArrivalAt: z
+    .string({ required_error: "Ponle la fecha en que llega" })
+    .trim()
+    .min(1, "Ponle la fecha en que llega"),
   unitLimit: z
-    .number()
+    .number({
+      required_error: "Di cuántas unidades puedes prometer",
+      invalid_type_error: "Las unidades tienen que ser un número",
+    })
     .int("Tiene que ser un número entero")
     .min(1, "Promete al menos una unidad")
     .max(PRESALE_MAX_UNIT_LIMIT, "Son demasiadas unidades"),

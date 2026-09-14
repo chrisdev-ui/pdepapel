@@ -139,6 +139,24 @@ describe("parsePresaleInput", () => {
     }
   });
 
+  it("habla en español cuando falta un campo, no «Required»", () => {
+    // zod responde "Required" en inglés si no se le da required_error, y esto
+    // es un panel en español.
+    for (const [malo, esperado] of [
+      [{ expectedArrivalAt: "2099-01-01", unitLimit: 5 }, /producto/i],
+      [{ productId: "p1", unitLimit: 5 }, /fecha/i],
+      [{ productId: "p1", expectedArrivalAt: "2099-01-01" }, /unidades/i],
+    ] as [Record<string, unknown>, RegExp][]) {
+      try {
+        parsePresaleInput(malo);
+        throw new Error("debió rechazar");
+      } catch (error) {
+        expect((error as Error).message).not.toBe("Required");
+        expect((error as Error).message).toMatch(esperado);
+      }
+    }
+  });
+
   it("convierte un fallo de esquema en 400 con el mensaje del campo", () => {
     for (const malo of [
       { ...valido, productId: "" },
