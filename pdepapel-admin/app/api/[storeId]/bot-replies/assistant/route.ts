@@ -21,6 +21,7 @@ import {
   buildBotReplyAssistantPrompt,
   getBotReplyAssistantCacheKey,
   getBotReplyAssistantRateLimitKey,
+  sanitizeAssistantNote,
   sanitizeBotReplyProposals,
   selectUnansweredMessages,
 } from "@/lib/whatsapp/bot-reply-assistant";
@@ -38,6 +39,15 @@ const MAX_CONVERSATIONS = 500;
 
 function getModelError(error: unknown) {
   const message = error instanceof Error ? error.message : "";
+
+  // El modelo contestó algo que no encaja en el esquema. Es un fallo nuestro o
+  // suyo, no de quien está usando el panel: se dice en cristiano y con 422.
+  if (/No object generated|did not match schema|AI_NoObjectGenerated/i.test(message)) {
+    return new AppError(
+      "El asistente devolvió una respuesta que no se pudo leer. Vuelve a intentarlo.",
+      422,
+    );
+  }
 
   if (/quota|resource_exhausted|rate limit|\b429\b/i.test(message)) {
     return new AppError(
@@ -194,7 +204,7 @@ export async function POST(
       return NextResponse.json(
         {
           proposals: sanitizeBotReplyProposals(cached.data, activeReplies),
-          note: cached.data.note,
+          note: sanitizeAssistantNote(cached.data.note),
           remainingToday: await getRemainingDailyRuns(redis, params.storeId),
           reused: true,
           analyzedMessages: messages.length,
@@ -245,7 +255,7 @@ export async function POST(
     return NextResponse.json(
       {
         proposals: sanitizeBotReplyProposals(result.output, activeReplies),
-        note: result.output.note,
+        note: sanitizeAssistantNote(result.output.note),
         remainingToday,
         reused: false,
         analyzedMessages: messages.length,

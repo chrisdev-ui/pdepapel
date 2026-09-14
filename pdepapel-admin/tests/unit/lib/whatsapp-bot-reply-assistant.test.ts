@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  BOT_REPLY_ASSISTANT_NOTE_MAX_LENGTH,
   botReplyAssistantOutputSchema,
   botReplyAssistantRequestSchema,
+  sanitizeAssistantNote,
   redactCustomerText,
   sanitizeBotReplyProposals,
   selectUnansweredMessages,
@@ -161,5 +163,49 @@ describe("botReplyAssistantRequestSchema", () => {
     expect(botReplyAssistantRequestSchema.parse({ mode: "conversations" }).mode).toBe(
       "conversations",
     );
+  });
+});
+
+describe("largos: recortar en vez de tumbar la respuesta", () => {
+  // La nota exacta que rompió producción el 2026-09-14: 334 caracteres contra
+  // un tope de 300. El análisis era correcto y se perdió entero con un 500.
+  const NOTA_REAL =
+    "Los mensajes recibidos son en su gran mayoría fragmentos de una conversación informal previa, saludos en inglés o asiático, o expresiones aleatorias sin una intención clara de compra o consulta frecuente. No hay suficientes mensajes repetitivos sobre un mismo tema de atención al cliente como envíos, pagos o catálogos para justificar la creación de nuevas respuestas automáticas.";
+
+  it("acepta una nota más larga de lo esperado en vez de rechazarla", () => {
+    expect(NOTA_REAL.length).toBeGreaterThan(300);
+    expect(() =>
+      botReplyAssistantOutputSchema.parse({ note: NOTA_REAL, proposals: [] }),
+    ).not.toThrow();
+  });
+
+  it("acepta una propuesta con textos largos y los recorta al limpiarla", () => {
+    const parsed = botReplyAssistantOutputSchema.parse({
+      proposals: [
+        {
+          label: "L".repeat(200),
+          triggers: ["hacen envios"],
+          answer: "A".repeat(5000),
+          reason: "R".repeat(900),
+          examples: ["E".repeat(900)],
+        },
+      ],
+    });
+
+    const [proposal] = sanitizeBotReplyProposals(parsed, []);
+
+    expect(proposal.label).toHaveLength(80);
+    expect(proposal.answer.length).toBeLessThanOrEqual(1000);
+    expect(proposal.reason).toHaveLength(280);
+    expect(proposal.examples[0]).toHaveLength(200);
+  });
+
+  it("recorta la nota al mostrarla y trata el vacío como nada", () => {
+    expect(sanitizeAssistantNote(NOTA_REAL)).toBe(NOTA_REAL);
+    expect(sanitizeAssistantNote("N".repeat(900))).toHaveLength(
+      BOT_REPLY_ASSISTANT_NOTE_MAX_LENGTH,
+    );
+    expect(sanitizeAssistantNote("   ")).toBeNull();
+    expect(sanitizeAssistantNote(null)).toBeNull();
   });
 });

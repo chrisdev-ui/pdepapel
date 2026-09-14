@@ -53,25 +53,43 @@ export type BotReplyAssistantRequest = z.infer<
 
 // --- Salida del modelo -----------------------------------------------------
 
+/**
+ * El esquema describe la FORMA, no los largos.
+ *
+ * Aprendido en producción el 2026-09-14: el modelo escribió una nota de 334
+ * caracteres contra un tope de 300 y Zod tumbó la respuesta entera —una
+ * respuesta por lo demás correcta— con un 500. Un texto que solo se muestra
+ * nunca debe poder invalidar todo el análisis. Los recortes los hace
+ * `sanitizeBotReplyProposals`, que es donde de verdad importan.
+ */
 export const botReplyAssistantOutputSchema = z.object({
   proposals: z
     .array(
       z.object({
-        label: z.string().max(80),
-        triggers: z.array(z.string().max(80)).max(BOT_REPLY_MAX_TRIGGERS),
-        answer: z.string().max(BOT_REPLY_ANSWER_MAX_LENGTH * 2),
+        label: z.string(),
+        triggers: z.array(z.string()).max(BOT_REPLY_MAX_TRIGGERS),
+        answer: z.string(),
         /** Por qué vale la pena, en una línea que ella pueda juzgar. */
-        reason: z.string().max(240),
+        reason: z.string(),
         /** Mensajes reales que la motivaron, ya recortados. */
-        examples: z.array(z.string().max(200)).max(3).default([]),
+        examples: z.array(z.string()).max(3).default([]),
         /** El modelo marca lo que no puede saber (precios, horarios reales). */
         needsReview: z.boolean().default(false),
       }),
     )
     .max(BOT_REPLY_ASSISTANT_MAX_PROPOSALS)
     .default([]),
-  note: z.string().max(300).nullable().default(null),
+  note: z.string().nullable().default(null),
 });
+
+/** Tope de la nota al mostrarla; recortar es mejor que perderlo todo. */
+export const BOT_REPLY_ASSISTANT_NOTE_MAX_LENGTH = 600;
+
+export function sanitizeAssistantNote(note: string | null): string | null {
+  if (!note) return null;
+  const trimmed = note.trim();
+  return trimmed ? trimmed.slice(0, BOT_REPLY_ASSISTANT_NOTE_MAX_LENGTH) : null;
+}
 
 export type BotReplyAssistantOutput = z.infer<
   typeof botReplyAssistantOutputSchema
@@ -198,8 +216,10 @@ export function sanitizeBotReplyProposals(
       label,
       triggers,
       answer,
-      reason: proposal.reason.trim().slice(0, 240),
-      examples: proposal.examples.map((example) => example.trim()).filter(Boolean),
+      reason: proposal.reason.trim().slice(0, 280),
+      examples: proposal.examples
+        .map((example) => example.trim().slice(0, 200))
+        .filter(Boolean),
       needsReview: proposal.needsReview,
       droppedTriggers,
     });
