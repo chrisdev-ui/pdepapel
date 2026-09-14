@@ -9,7 +9,7 @@ import {
   sanitizeBotReplyProposals,
   selectUnansweredMessages,
 } from "@/lib/whatsapp/bot-reply-assistant";
-import { WHATSAPP_BOT_MARKER } from "@/lib/whatsapp/bot-matching";
+import { LEGACY_WHATSAPP_BOT_MARKER } from "@/lib/whatsapp/bot-matching";
 
 const EXISTING = [
   { label: "Horarios", triggers: ["horario"], answer: "De 9 a 6." },
@@ -70,13 +70,13 @@ describe("sanitizeBotReplyProposals", () => {
     ).toEqual([]);
   });
 
-  it("quita la marca del bot si el modelo la escribió", () => {
+  it("quita el encabezado viejo si el modelo lo copió de un ejemplo", () => {
     const [proposal] = sanitizeBotReplyProposals(
       output([
         {
           ...base,
           triggers: ["hacen envios"],
-          answer: `${WHATSAPP_BOT_MARKER}\n\nEnviamos a todo el país.`,
+          answer: `${LEGACY_WHATSAPP_BOT_MARKER}\n\nEnviamos a todo el país.`,
         },
       ]),
       [],

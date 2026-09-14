@@ -19,7 +19,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import { WHATSAPP_BOT_MARKER } from "@/lib/whatsapp/bot-matching";
 import type { SanitizedProposal } from "@/lib/whatsapp/bot-reply-assistant";
 
 interface AssistantResponse {
@@ -207,7 +206,7 @@ export function BotReplyAssistant({ storeId }: { storeId: string }) {
                 </p>
 
                 <div className="whitespace-pre-wrap rounded-md border bg-background p-3 text-sm">
-                  {`${WHATSAPP_BOT_MARKER}\n\n${proposal.answer}`}
+                  {proposal.answer}
                 </div>
 
                 {proposal.needsReview ? (

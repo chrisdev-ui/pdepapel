@@ -6,8 +6,19 @@
  * llamar a la API ni tocar la base de datos.
  */
 
-/** Marca visible que encabeza toda respuesta automática. */
-export const WHATSAPP_BOT_MARKER = "🤖 Respuesta automática";
+/**
+ * Texto que encabezaba toda respuesta automática («🤖 Respuesta automática»).
+ * Se quitó el 2026-09-14 por decisión de Paula: quiere que la conversación se
+ * sienta como hablar con ella, no con una máquina.
+ *
+ * Se conserva vacío a propósito, no se borra: `stripLegacyBotMarker` lo usa
+ * para limpiar un encabezado que el asistente haya copiado de un ejemplo viejo.
+ *
+ * Ojo, que no se pierda el hilo: en el PANEL las respuestas del bot se siguen
+ * distinguiendo. Van guardadas con `sentBy: BOT` y se pintan aparte en la
+ * conversación. Lo que cambia es lo que ve la clienta, no lo que ve Paula.
+ */
+export const LEGACY_WHATSAPP_BOT_MARKER = "🤖 Respuesta automática";
 
 export interface WhatsAppBotKeyword {
   /** Frases que llevan a la misma respuesta, en minúsculas y sin tildes. */
@@ -51,7 +62,16 @@ export function matchWhatsAppKeyword(
   return null;
 }
 
-/** Encabeza la respuesta con la marca, para que nunca se lea como una persona. */
+/**
+ * La respuesta sale tal como Paula la escribió, sin encabezado.
+ *
+ * Si el texto trae por error el encabezado viejo, se quita: una respuesta
+ * guardada antes del cambio no debe salir con él.
+ */
 export function formatBotReply(answer: string): string {
-  return `${WHATSAPP_BOT_MARKER}\n\n${answer}`;
+  return stripLegacyBotMarker(answer).trim();
+}
+
+export function stripLegacyBotMarker(value: string): string {
+  return value.split(LEGACY_WHATSAPP_BOT_MARKER).join("").trimStart();
 }

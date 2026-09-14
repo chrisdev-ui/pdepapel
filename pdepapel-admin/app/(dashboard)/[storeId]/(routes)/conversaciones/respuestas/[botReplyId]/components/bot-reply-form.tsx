@@ -27,7 +27,6 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
-import { WHATSAPP_BOT_MARKER } from "@/lib/whatsapp/bot-matching";
 import type { BotReplyDraft } from "@/lib/whatsapp/bot-reply-assistant";
 import {
   BOT_REPLY_ANSWER_MAX_LENGTH,
@@ -400,7 +399,7 @@ export function BotReplyForm({
               <p className="text-sm font-medium">Así lo recibe la clienta</p>
               <div className="space-y-2 rounded-md border bg-background p-3">
                 <p className="whitespace-pre-wrap text-sm">
-                  {`${WHATSAPP_BOT_MARKER}\n\n${answer?.trim() || "…"}`}
+                  {answer?.trim() || "…"}
                 </p>
                 <div className="flex flex-col gap-1 border-t pt-2">
                   {buttons.map((button, index) => (
@@ -417,9 +416,10 @@ export function BotReplyForm({
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                La primera línea y el botón «{TALK_TO_OWNER_BUTTON_TITLE}» los
-                pone el sistema: la clienta siempre puede salirse a hablar
-                contigo. No hace falta que los escribas.
+                Sale tal cual, sin encabezado: se lee como si lo hubieras
+                escrito tú. El botón «{TALK_TO_OWNER_BUTTON_TITLE}» lo pone el
+                sistema, para que la clienta siempre pueda salirse a hablar
+                contigo.
               </p>
             </CardContent>
           </Card>

@@ -6,10 +6,7 @@ import { useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  WHATSAPP_BOT_MARKER,
-  matchWhatsAppKeyword,
-} from "@/lib/whatsapp/bot-matching";
+import { matchWhatsAppKeyword } from "@/lib/whatsapp/bot-matching";
 import type { BotReplyRow } from "@/lib/whatsapp/bot-replies";
 
 /**
@@ -49,7 +46,7 @@ export function BotReplyTester({ replies }: { replies: BotReplyRow[] }) {
                 encontró «{result.trigger}».
               </p>
               <div className="whitespace-pre-wrap rounded-md border bg-background p-3 text-sm">
-                {`${WHATSAPP_BOT_MARKER}\n\n${result.keyword.answer}`}
+                {result.keyword.answer}
               </div>
             </div>
           ) : (

@@ -39,7 +39,6 @@ import {
   HUMAN_PAUSE_MAX_MS,
   HUMAN_PAUSE_READ_MS,
   TALK_TO_OWNER_ACKNOWLEDGEMENT,
-  WHATSAPP_BOT_MARKER,
   buildReplyButtons,
   formatBotReply,
   getHumanPauseMs,
@@ -86,9 +85,16 @@ describe("keyword matching", () => {
     expect(matchWhatsAppKeyword("   ", keywords)).toBeNull();
   });
 
-  it("marks every automated reply as automatic", () => {
-    expect(formatBotReply("Abrimos de 9 a 6.")).toBe(`${WHATSAPP_BOT_MARKER}\n\nAbrimos de 9 a 6.`);
-    expect(WHATSAPP_BOT_MARKER).toContain("automática");
+  it("manda la respuesta tal cual, sin encabezado de robot", () => {
+    // Paula lo pidió el 2026-09-14: que se lea como si escribiera ella.
+    expect(formatBotReply("Abrimos de 9 a 6.")).toBe("Abrimos de 9 a 6.");
+    expect(formatBotReply("Abrimos de 9 a 6.")).not.toContain("🤖");
+  });
+
+  it("limpia el encabezado viejo de una respuesta guardada antes del cambio", () => {
+    expect(formatBotReply("🤖 Respuesta automática\n\nAbrimos de 9 a 6.")).toBe(
+      "Abrimos de 9 a 6.",
+    );
   });
 });
 
@@ -112,7 +118,7 @@ describe("runWhatsAppBot", () => {
 
     expect(mocks.send).toHaveBeenCalledWith(
       "573001234567",
-      `${WHATSAPP_BOT_MARKER}\n\nAbrimos de 9 a 6.`,
+      "Abrimos de 9 a 6.",
       ESCAPE,
     );
     expect(mocks.messageCreate).toHaveBeenCalledWith({
@@ -178,7 +184,7 @@ describe("runWhatsAppBot", () => {
         conversationId: "conversation-1",
         direction: "OUTBOUND",
         sentBy: "BOT",
-        body: `${WHATSAPP_BOT_MARKER}\n\nAbrimos de 9 a 6.`,
+        body: "Abrimos de 9 a 6.",
         status: "FAILED",
       },
     });
@@ -242,7 +248,7 @@ describe("botón «Hablar con Paula»", () => {
 
     expect(mocks.send).toHaveBeenCalledWith(
       "573001234567",
-      `${WHATSAPP_BOT_MARKER}\n\n${TALK_TO_OWNER_ACKNOWLEDGEMENT}`,
+      TALK_TO_OWNER_ACKNOWLEDGEMENT,
       // El acuse no lleva menú, pero sí la salida: nunca se manda sin botones.
       ESCAPE,
     );
@@ -292,7 +298,7 @@ describe("menús por botón", () => {
 
     expect(mocks.send).toHaveBeenCalledWith(
       "573001234567",
-      `${WHATSAPP_BOT_MARKER}\n\nAbrimos de 9 a 6.`,
+      "Abrimos de 9 a 6.",
       ESCAPE,
     );
   });
@@ -343,7 +349,7 @@ describe("menús por botón", () => {
     expect(mocks.sendableReply).toHaveBeenCalledWith("store-1", "reply-envios");
     expect(mocks.send).toHaveBeenCalledWith(
       "573001234567",
-      `${WHATSAPP_BOT_MARKER}\n\nEnviamos a todo el país.`,
+      "Enviamos a todo el país.",
       [{ id: "r:reply-catalogo", title: "Ver catálogo" }, ...ESCAPE],
     );
   });

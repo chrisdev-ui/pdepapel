@@ -6,9 +6,9 @@ import {
   parseTriggerLines,
 } from "@/lib/whatsapp/bot-replies";
 import {
-  WHATSAPP_BOT_MARKER,
   matchWhatsAppKeyword,
   normalizeBotText,
+  stripLegacyBotMarker,
   type WhatsAppBotKeyword,
 } from "@/lib/whatsapp/bot-matching";
 
@@ -228,9 +228,9 @@ export function sanitizeBotReplyProposals(
   return accepted;
 }
 
-/** El sistema ya pone la marca; que el modelo la repita la duplicaría. */
+/** Por si el modelo copia el encabezado viejo de algún ejemplo. */
 function stripBotMarker(answer: string): string {
-  return answer.split(WHATSAPP_BOT_MARKER).join("").trimStart();
+  return stripLegacyBotMarker(answer);
 }
 
 // --- Prompt ----------------------------------------------------------------
@@ -271,7 +271,7 @@ export function buildBotReplyAssistantPrompt(input: {
     "Reglas para la respuesta:",
     "- Español de Colombia, tuteando, cálida y breve. Dos o tres frases.",
     "- Como la escribiría la dueña de una papelería pequeña, no un centro de llamadas.",
-    "- Sin emojis al principio (el sistema ya pone una marca de mensaje automático).",
+    "- Puede llevar un emoji si queda natural, como escribiría ella. No empieces con un encabezado tipo «Respuesta automática»: el mensaje sale tal cual, como si lo hubiera escrito una persona.",
     `- Máximo ${BOT_REPLY_ANSWER_MAX_LENGTH} caracteres.`,
     "- NO inventes datos que no sabes: horarios, precios, plazos de envío, direcciones o cuentas bancarias. Si hacen falta, escríbelos entre corchetes como [tu horario] y marca needsReview en true.",
     "",

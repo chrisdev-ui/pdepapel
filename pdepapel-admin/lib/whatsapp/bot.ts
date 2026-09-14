@@ -7,7 +7,6 @@ import {
 
 import prismadb from "@/lib/prismadb";
 import {
-  WHATSAPP_BOT_MARKER,
   formatBotReply,
   matchWhatsAppKeyword,
   normalizeBotText,
@@ -27,14 +26,15 @@ import {
   type WhatsAppReplyButton,
 } from "@/lib/whatsapp/send";
 
-export { WHATSAPP_BOT_MARKER, formatBotReply, matchWhatsAppKeyword, normalizeBotText };
+export { formatBotReply, matchWhatsAppKeyword, normalizeBotText };
 
 /**
  * Bot de WhatsApp por palabra clave.
  *
  * Las reglas son de Paula:
  * - solo palabra clave, nada de respuestas abiertas;
- * - toda respuesta automática se ve como automática;
+ * - la respuesta sale tal como ella la escribió, sin encabezado de robot
+ *   (decisión suya, 2026-09-14): en el panel sigue marcada como del bot;
  * - TODO mensaje del bot lleva el botón «Hablar con Paula», siempre, puesto
  *   por el sistema y no por quien escribe la respuesta;
  * - un menú (una respuesta con botones) no sale hasta que Paula lo apruebe;
