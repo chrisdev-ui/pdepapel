@@ -1,6 +1,8 @@
+import { auth } from "@clerk/nextjs/server";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import { canApproveBotReplies } from "@/lib/whatsapp/bot-approval";
 import { parseBotReplyDraft } from "@/lib/whatsapp/bot-reply-assistant";
 import { getBotReplies, getBotReply } from "../server/get-bot-replies";
 import { BotReplyForm } from "./components/bot-reply-form";
@@ -31,6 +33,9 @@ export default async function BotReplyPage({
 
   // Destinos posibles de un botón: cualquier otra respuesta de la tienda.
   // Una respuesta no puede apuntarse a sí misma.
+  const { userId } = await auth();
+  const canApprove = canApproveBotReplies(userId);
+
   const all = await getBotReplies(params.storeId);
   const targets = all
     .filter((candidate) => candidate.id !== reply?.id)
@@ -43,6 +48,7 @@ export default async function BotReplyPage({
           initialData={reply}
           draft={draft}
           targets={targets}
+          canApprove={canApprove}
           storeId={params.storeId}
         />
       </div>

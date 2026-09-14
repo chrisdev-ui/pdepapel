@@ -46,6 +46,10 @@ export const env = createEnv({
     // propósito: sin ellas el bot no manda nada y lo deja anotado, pero el
     // webhook sigue archivando conversaciones con normalidad.
     CHAKRA_API_KEY: z.string().min(1).optional(),
+    // Clerk id de quien puede aprobar los menús del bot de WhatsApp. Opcional:
+    // sin él aprueba cualquier dueño de la tienda, que es como funcionaba
+    // antes. Con él, solo esa persona.
+    WHATSAPP_BOT_APPROVER_USER_ID: z.string().min(1).optional(),
     CHAKRA_PLUGIN_ID: z.string().min(1).optional(),
     WHATSAPP_PHONE_NUMBER_ID: z.string().min(1).optional(),
     ENVIOCLICK_API_URL: z

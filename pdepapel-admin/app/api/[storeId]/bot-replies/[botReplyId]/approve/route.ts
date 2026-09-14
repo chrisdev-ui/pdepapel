@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS, verifyStoreOwner } from "@/lib/utils";
+import { canApproveBotReplies } from "@/lib/whatsapp/bot-approval";
 import { parseStoredButtons } from "@/lib/whatsapp/bot-replies";
 
 /**
@@ -19,6 +20,10 @@ async function authorize(storeId: string, botReplyId: string) {
   if (!storeId) throw ErrorFactory.MissingStoreId();
   if (!botReplyId) throw ErrorFactory.InvalidRequest("El ID de la respuesta es requerido");
   await verifyStoreOwner(userId, storeId);
+  // Ser dueña del panel no basta: aprobar un menú es de quien se designe.
+  if (!canApproveBotReplies(userId)) {
+    throw ErrorFactory.Unauthorized();
+  }
   return userId;
 }
 

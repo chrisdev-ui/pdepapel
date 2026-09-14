@@ -73,6 +73,7 @@ export function BotReplyForm({
   initialData,
   draft = null,
   targets = [],
+  canApprove = true,
   storeId,
 }: {
   initialData: BotReplyRow | null;
@@ -80,6 +81,8 @@ export function BotReplyForm({
   draft?: BotReplyDraft | null;
   /** Otras respuestas de la tienda: son los destinos posibles de un botón. */
   targets?: { id: string; label: string }[];
+  /** Si esta persona puede dar el visto bueno a un menú. */
+  canApprove?: boolean;
   storeId: string;
 }) {
   const router = useRouter();
@@ -371,11 +374,13 @@ export function BotReplyForm({
                         ? "Si cambias el texto o los botones, la aprobación se retira sola."
                         : !initialData
                           ? "Guárdala primero y después apruébala."
-                          : "Un menú no se manda hasta que Paula lo apruebe."}
+                          : canApprove
+                            ? "Un menú no se manda hasta que lo apruebes."
+                            : "Un menú no se manda hasta que Paula lo apruebe. Tu cuenta no puede aprobarlo."}
                     </p>
                   </div>
                 </div>
-                {initialData ? (
+                {initialData && canApprove ? (
                   <Button
                     type="button"
                     variant={approvedAt ? "outline" : "default"}
