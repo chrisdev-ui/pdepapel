@@ -27,6 +27,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import { WHATSAPP_BOT_MARKER } from "@/lib/whatsapp/bot-matching";
+import type { BotReplyDraft } from "@/lib/whatsapp/bot-reply-assistant";
 import {
   BOT_REPLY_ANSWER_MAX_LENGTH,
   parseTriggerLines,
@@ -54,9 +55,12 @@ type BotReplyFormValues = z.infer<typeof formSchema>;
 
 export function BotReplyForm({
   initialData,
+  draft = null,
   storeId,
 }: {
   initialData: BotReplyRow | null;
+  /** Propuesta del asistente para una respuesta nueva; se puede editar toda. */
+  draft?: BotReplyDraft | null;
   storeId: string;
 }) {
   const router = useRouter();
@@ -66,13 +70,15 @@ export function BotReplyForm({
 
   const defaultValues = useMemo<BotReplyFormValues>(
     () => ({
-      label: initialData?.label ?? "",
-      triggerLines: initialData ? triggersToLines(initialData.triggers) : "",
-      answer: initialData?.answer ?? "",
+      label: initialData?.label ?? draft?.label ?? "",
+      triggerLines: initialData
+        ? triggersToLines(initialData.triggers)
+        : (draft?.triggers ?? ""),
+      answer: initialData?.answer ?? draft?.answer ?? "",
       isActive: initialData?.isActive ?? true,
       sortOrder: initialData?.sortOrder ?? 0,
     }),
-    [initialData],
+    [initialData, draft],
   );
 
   const form = useForm<BotReplyFormValues>({

@@ -14,6 +14,7 @@ import { useActionConfirmation } from "@/hooks/use-action-confirmation";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-errors";
 import type { BotReplyRow } from "@/lib/whatsapp/bot-replies";
+import { BotReplyAssistant } from "./assistant";
 import { BotReplyTester } from "./tester";
 
 interface BotRepliesClientProps {
@@ -79,6 +80,8 @@ const BotRepliesClient: React.FC<BotRepliesClientProps> = ({ data }) => {
         </div>
       </div>
       <Separator />
+
+      <BotReplyAssistant storeId={storeId} />
 
       <BotReplyTester replies={data} />
 

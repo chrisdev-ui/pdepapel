@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import { parseBotReplyDraft } from "@/lib/whatsapp/bot-reply-assistant";
 import { getBotReply } from "../server/get-bot-replies";
 import { BotReplyForm } from "./components/bot-reply-form";
 
@@ -15,18 +16,27 @@ export const metadata: Metadata = {
 
 export default async function BotReplyPage({
   params,
+  searchParams,
 }: {
   params: { storeId: string; botReplyId: string };
+  searchParams: Record<string, string | string[] | undefined>;
 }) {
   const isNew = NEW_SEGMENTS.has(params.botReplyId);
   const reply = isNew ? null : await getBotReply(params.storeId, params.botReplyId);
   // Una respuesta de otra tienda o inexistente no debe abrir el formulario de «nueva».
   if (!isNew && !reply) notFound();
 
+  // El asistente manda su propuesta por la URL; al editar nunca se pisa lo guardado.
+  const draft = isNew ? parseBotReplyDraft(searchParams) : null;
+
   return (
     <div className="flex-col">
       <div className="flex-1 space-y-4 p-4 sm:p-8 sm:pt-6">
-        <BotReplyForm initialData={reply} storeId={params.storeId} />
+        <BotReplyForm
+          initialData={reply}
+          draft={draft}
+          storeId={params.storeId}
+        />
       </div>
     </div>
   );
