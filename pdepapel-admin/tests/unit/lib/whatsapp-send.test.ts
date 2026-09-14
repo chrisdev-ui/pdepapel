@@ -72,6 +72,35 @@ describe("sendWhatsAppTextMessage", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("reads the real shape Chakra returns: _errors as plain strings", async () => {
+    // Comprobado contra la API el 2026-09-14 mandando 4 botones (Meta permite
+    // 3): {"_data":[],"_errors":["(#131009) Parameter value is not valid"]}.
+    fetchMock.mockResolvedValue(
+      response({ _data: [], _errors: ["(#131009) Parameter value is not valid"] }, 400),
+    );
+
+    await expect(
+      sendWhatsAppTextMessage("573001234567", "Hola", configured),
+    ).resolves.toEqual({
+      ok: false,
+      error: "(#131009) Parameter value is not valid",
+      requestId: null,
+      fbTraceId: null,
+    });
+  });
+
+  it("no vuelca el payload crudo en los logs", async () => {
+    // Arrastraba el mensaje de la clienta a los logs de Vercel.
+    fetchMock.mockResolvedValue(response({ _data: [], _errors: ["(#131009) nope"] }, 400));
+
+    await sendWhatsAppTextMessage("573001234567", "Hola", configured);
+
+    expect(console.error).toHaveBeenCalledWith(
+      "[WHATSAPP_SEND] El envío fue rechazado",
+      expect.not.objectContaining({ rawPayload: expect.anything() }),
+    );
+  });
+
   it("handles a Chakra refusal without throwing", async () => {
     fetchMock.mockResolvedValue(
       response(

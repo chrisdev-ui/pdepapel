@@ -36,10 +36,11 @@ type SendEnvironment = {
 
 function readError(payload: unknown): string | null {
   if (!payload || typeof payload !== "object") return null;
-  // Chakra envuelve la respuesta en { _data, _meta, _errors }. La forma exacta
-  // de `_errors` en un rechazo real todavía no está confirmada (su docs no
-  // traen un ejemplo con error de WhatsApp), así que se prueban varias rutas
-  // plausibles antes de rendirse al status HTTP.
+  // Chakra envuelve la respuesta en { _data, _meta, _errors }. Forma confirmada
+  // contra la API real (rechazo de Meta el 2026-09-14):
+  //   { "_data": [], "_errors": ["(#131009) Parameter value is not valid"] }
+  // `_errors` es una lista de textos que ya traen el código de Meta dentro.
+  // Las demás rutas se conservan por si alguna vez reenvían el error nativo.
   const root = payload as Record<string, unknown>;
   const errors = root._errors;
   if (Array.isArray(errors) && errors.length > 0) {
@@ -182,14 +183,13 @@ export async function sendWhatsAppTextMessage(
     const requestId = readRequestId(response, payload);
     const fbTraceId = readTraceId(payload);
     const error = readError(payload) ?? `HTTP ${response.status}`;
+    // Sin el payload crudo: ya se confirmó la forma de `_errors` y volcarlo
+    // entero arrastraba el mensaje de la clienta a los logs de Vercel.
     console.error("[WHATSAPP_SEND] El envío fue rechazado", {
       status: response.status,
       error,
       requestId,
       fbTraceId,
-      // Payload crudo temporal: quitar este campo del log una vez que el
-      // primer rechazo real confirme la forma exacta de `_errors` de Chakra.
-      rawPayload: payload,
     });
     return { ok: false, error, requestId, fbTraceId };
   } catch (error) {
