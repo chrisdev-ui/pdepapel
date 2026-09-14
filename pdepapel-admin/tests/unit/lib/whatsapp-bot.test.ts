@@ -60,9 +60,15 @@ describe("keyword matching", () => {
     expect(matchWhatsAppKeyword("   ", keywords)).toBeNull();
   });
 
-  it("ships with no keywords, so nothing is answered until Paula defines them", () => {
-    // Una respuesta de ejemplo aquí le llegaría tal cual a una clienta.
-    expect(WHATSAPP_BOT_KEYWORDS).toEqual([]);
+  it("has only the temporary webhook-test keyword until Paula defines the real ones", () => {
+    // TEMPORAL: cuando se quite la entrada de prueba de bot-keywords.ts, esta
+    // aserción vuelve a `toEqual([])`.
+    expect(WHATSAPP_BOT_KEYWORDS).toEqual([
+      {
+        triggers: ["prueba-webhook"],
+        answer: "Recibido. Esta es una respuesta de prueba del bot (canal WhatsApp vía Chakra).",
+      },
+    ]);
     expect(matchWhatsAppKeyword("horario")).toBeNull();
   });
 
