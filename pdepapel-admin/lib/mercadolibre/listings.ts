@@ -19,7 +19,9 @@ import {
   type PublicationFailureKind,
   type PublicationWizardStep,
 } from "./publication-error";
-import { getMercadoLibreAccessToken } from "./client";
+import { getMercadoLibreAccessToken,
+  mercadoLibreFetch,
+} from "./client";
 import {
   getMercadoLibreAttributes,
   getMercadoLibreListingImageUrls,
@@ -374,7 +376,7 @@ async function assertNotInPresale(productId: string) {
 
 export async function validateMercadoLibreListingForPublication(
   listing: ListingForPublication,
-  request: typeof fetch = fetch,
+  request: typeof fetch = mercadoLibreFetch,
 ) {
   await assertNotInPresale(listing.product.id);
   const payload = buildItemPayload(listing);
@@ -534,7 +536,7 @@ function getRemoteAttributes(payload: unknown) {
 
 export async function syncMercadoLibreListingContent(
   listing: ListingForContentSync,
-  request: typeof fetch = fetch,
+  request: typeof fetch = mercadoLibreFetch,
 ) {
   if (listing.product.isArchived) {
     throw new MercadoLibrePublicationError(
@@ -592,7 +594,7 @@ export async function syncMercadoLibreListingContent(
  */
 export async function createMercadoLibreItem(
   listing: ListingForPublication,
-  request: typeof fetch = fetch,
+  request: typeof fetch = mercadoLibreFetch,
 ): Promise<MercadoLibreCreatedItem> {
   await validateMercadoLibreListingForPublication(listing, request);
 
@@ -650,7 +652,7 @@ export async function createMercadoLibreItemDescription(
   connectionId: string,
   itemId: string,
   description: string,
-  request: typeof fetch = fetch,
+  request: typeof fetch = mercadoLibreFetch,
 ): Promise<string | null> {
   try {
     const accessToken = await getMercadoLibreAccessToken(connectionId);
@@ -665,7 +667,7 @@ export async function createMercadoLibreItemDescription(
 /** @deprecated Usa createMercadoLibreItem + createMercadoLibreItemDescription y guarda el id entre ambos. */
 export async function publishMercadoLibreListing(
   listing: ListingForPublication,
-  request: typeof fetch = fetch,
+  request: typeof fetch = mercadoLibreFetch,
 ): Promise<MercadoLibrePublishedItem> {
   const item = await createMercadoLibreItem(listing, request);
   return {

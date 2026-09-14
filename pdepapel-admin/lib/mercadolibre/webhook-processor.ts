@@ -1,5 +1,6 @@
 import { MarketplaceWebhookEventStatus } from "@prisma/client";
 
+import { claimQueueRow } from "@/lib/atomic-claim";
 import { invalidateStoreProductsCache } from "@/lib/cache";
 import prismadb from "@/lib/prismadb";
 
@@ -89,25 +90,18 @@ export async function processMercadoLibreWebhookEvent(eventId: string) {
   if (event.nextRetryAt && event.nextRetryAt > now) {
     return { processed: false, reason: "not_due" as const };
   }
-  const claim = await prismadb.marketplaceWebhookEvent.updateMany({
-    where: {
-      id: event.id,
-      status: {
-        in: [
-          MarketplaceWebhookEventStatus.PENDING,
-          MarketplaceWebhookEventStatus.RETRY,
-        ],
-      },
-      ...dueFilter(now),
-    },
-    data: {
-      status: MarketplaceWebhookEventStatus.PROCESSING,
-      attempts: { increment: 1 },
-      nextRetryAt: null,
-      lastError: null,
-    },
+  const claimed = await claimQueueRow({
+    table: "MarketplaceWebhookEvent",
+    id: event.id,
+    from: [
+      MarketplaceWebhookEventStatus.PENDING,
+      MarketplaceWebhookEventStatus.RETRY,
+    ],
+    dueColumn: "nextRetryAt",
+    dueNullMeansReady: true,
+    now,
   });
-  if (claim.count === 0) {
+  if (!claimed) {
     return { processed: false, reason: "claimed_elsewhere" as const };
   }
   const attempts = event.attempts + 1;

@@ -240,6 +240,13 @@ Consequences worth keeping in mind:
 - **The counter can drift, and the Preventas screen says so.** An apunte that fails never rolls back a confirmed payment: the money is real and an order missing from the database is far worse than a short counter. When that happens the error is logged with the `[PRESALE]` tag and the Preventas row shows "Contador descuadrado", comparing `committedUnits` against `paidUnits`, which is counted line by line from paid orders and is the figure to trust.
 - **The storefront treats "units on sale" as stock *or* presale capacity** (`pdepapel-store/lib/purchasable-units.ts`). Everything that gates a purchase goes through `getPurchasableUnits`: the cart store, the cart page, the quantity selectors, the product cards, the wishlist and the checkout's live re-check (`actions/check-live-stock.ts` returns `units`, not just `stock`). Reading `product.stock` directly in a buy path is the bug that made "Reservar ahora" do nothing — a presale product has 0 in the warehouse by definition. The cart also persists `presales` (`lib/stored-product.ts`) and the admin's `?ids=` product branch returns it, or a page refresh silently emptied the reservation.
 
+### Nullable columns in filters
+
+Two shapes have produced real defects and both are invisible in review:
+
+- `{ field: null }` as an **actor filter** matches every row where the column is NULL, not "no rows". `getLastOrderTimestamp` built `OR: [{ userId }, { guestId }]` from whatever it was given, so for a guest `{ userId: null }` matched every guest order in the store and one purchase throttled every other guest for three minutes. Build the `OR` only from the identifiers that are present. Used as a **guard** next to a primary key it is correct and intended — `order.updateMany({ where: { id, OR: [{ userId: null }, { userId: "" }] } })` in the order-claim route means "only if still unclaimed".
+- `NOT: { OR: [{ field: value }] }` over a nullable column drops the NULL rows too, because `NOT (field = 'x')` is UNKNOWN when the column is NULL. `getHeldUnitsByPresale` excluded the buyer's own orders that way and silently excluded everyone else's as well. Resolve the ids first and exclude with `id: { notIn: [...] }`.
+
 ### Admin webhooks and scheduled work
 
 Current externally significant handlers include:
@@ -969,6 +976,7 @@ npx prisma generate
 - Do not run a real purchase flow against production. For safe purchase E2E use a non-production URL and set `E2E_PURCHASABLE_PRODUCT_SLUG`.
 - Admin Playwright creates its own app on port `3101`; authenticated tests require Clerk Agent Tasks plus an isolated test user and test database.
 - Each Prisma integration test must create and clean up its own data.
+- **`updateMany` with a status guard is only atomic inside an explicit `$transaction`.** Prisma compiles `updateMany({ where: { id, status: { in: [...] } }, data })` into two statements — `SELECT id … WHERE <full filter>` then `UPDATE … WHERE id IN (?) AND 1=1` — so the guard is evaluated by the read, not by the write, and `count` reports what the read matched. Inside `prismadb.$transaction` the client's Serializable isolation makes that read locking and the claim holds (this is why the Bold and Wompi payment claims are safe). In autocommit it does not: measured on 2026-09-14, four concurrent deliveries of the same Mercado Libre webhook all claimed it and three processed the same event. Queue claims that cannot sit inside a transaction use `claimQueueRow` (`lib/atomic-claim.ts`), one `UPDATE` carrying its own guard, which does not depend on the isolation level. The same applies to `stock: { gte: n }` guards: `createInventoryMovement` is safe because callers wrap it in a transaction.
 - `zod.parse()` on a **request body** is fine (`handleErrorResponse` turns a `ZodError` into a 400). On data read back from the **database** it is a trap: the same branch would report corrupt stored data as a client error. Guard those with `safeParse` and raise a 500 — see `parseStoredSuggestionPayload` in `lib/catalog-migration.ts`.
 - For any bug fix, first add a regression test that would have failed before the fix whenever practical.
 - After testing with a local server, explicitly stop it. After Docker integration tests, run `npm run test:db:down` to free memory and remove test data.
@@ -1141,3 +1149,14 @@ Do not call a task complete merely because code compiles locally. For a producti
 6. Local servers/test containers are stopped to release resources.
 7. The user has explicitly approved any production push.
 8. After deployment, any required webhook/OAuth/cache/production smoke verification is completed or clearly handed to the owner.
+
+## 22. Known gaps and tracked follow-ups
+
+Deliberately not fixed. Each one was found during an audit, judged not worth the
+change at the time, and left here so the next pass starts from what is already
+known instead of rediscovering it.
+
+| Gap | Where | Why it was left | Found |
+|---|---|---|---|
+| The outbox and WhatsApp queue claims have no concurrency test of their own. Both use the same `claimQueueRow` helper the Mercado Libre webhook processor uses, and that one is covered against a real database (`tests/integration/marketplace-webhook-claim.test.ts`), so the mechanism is tested — but neither caller proves its own wiring. | `lib/mercadolibre/outbox.ts`, `lib/whatsapp/conversation-sync.ts` | The shared helper carries the risk and is covered; per-caller tests are worth adding when either file is next touched. | 2026-09-14 |
+| `getPositiveNumber` accepts non-integer quantities from Mercado Libre, so a hypothetical `1.5` would reach the stock decrement. | `lib/mercadolibre/order-sync.ts` | Mercado Libre does not send fractional quantities, and tightening it changes marketplace parsing semantics. Same class as the checkout quantity gap fixed on 2026-09-14. | 2026-09-14 |

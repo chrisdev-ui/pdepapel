@@ -1,4 +1,5 @@
 import type { MercadoLibreConfig } from "./config";
+import { mercadoLibreFetch } from "./client";
 
 const AUTHORIZATION_ENDPOINT = "https://auth.mercadolibre.com/authorization";
 const TOKEN_ENDPOINT = "https://api.mercadolibre.com/oauth/token";
@@ -65,7 +66,7 @@ export function createMercadoLibreAuthorizationUrl(
 export async function exchangeMercadoLibreAuthorizationCode(
   config: MercadoLibreConfig,
   code: string,
-  request: typeof fetch = fetch,
+  request: typeof fetch = mercadoLibreFetch,
 ): Promise<MercadoLibreTokens> {
   const body = new URLSearchParams({
     grant_type: "authorization_code",
@@ -112,7 +113,7 @@ export async function exchangeMercadoLibreAuthorizationCode(
 export async function refreshMercadoLibreAccessToken(
   config: MercadoLibreConfig,
   refreshToken: string,
-  request: typeof fetch = fetch,
+  request: typeof fetch = mercadoLibreFetch,
 ): Promise<MercadoLibreTokens> {
   const body = new URLSearchParams({
     grant_type: "refresh_token",
@@ -161,7 +162,7 @@ export async function refreshMercadoLibreAccessToken(
 
 export async function getMercadoLibreProfile(
   accessToken: string,
-  request: typeof fetch = fetch,
+  request: typeof fetch = mercadoLibreFetch,
 ): Promise<MercadoLibreProfile> {
   const response = await request(`${API_BASE_URL}/users/me`, {
     headers: { Authorization: `Bearer ${accessToken}` },

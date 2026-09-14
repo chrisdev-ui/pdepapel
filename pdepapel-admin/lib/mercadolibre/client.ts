@@ -30,13 +30,17 @@ export class MercadoLibreRequestError extends AppError {
 
 function getUpstreamMessage(payload: unknown): string | null {
   if (!payload || typeof payload !== "object") {
-    return typeof payload === "string" && payload.trim() ? payload.trim().slice(0, 300) : null;
+    return typeof payload === "string" && payload.trim()
+      ? payload.trim().slice(0, 300)
+      : null;
   }
   const record = payload as Record<string, unknown>;
   const causes = Array.isArray(record.cause)
     ? record.cause
         .map((cause) =>
-          cause && typeof cause === "object" && typeof (cause as { message?: unknown }).message === "string"
+          cause &&
+          typeof cause === "object" &&
+          typeof (cause as { message?: unknown }).message === "string"
             ? ((cause as { message: string }).message as string)
             : null,
         )
@@ -180,10 +184,23 @@ export async function getMercadoLibreAccessToken(connectionId: string) {
   return getMercadoLibreAccessToken(connectionId);
 }
 
+/**
+ * Tope para cualquier llamada a Mercado Libre. Sin él, una respuesta que no
+ * llega se lleva los 60 s de la función: la cola reintenta y el panel se queda
+ * colgado. Quien pase su propia `signal` manda.
+ */
+const MERCADOLIBRE_TIMEOUT_MS = 15_000;
+
+export const mercadoLibreFetch: typeof fetch = (input, init) =>
+  fetch(input, {
+    ...init,
+    signal: init?.signal ?? AbortSignal.timeout(MERCADOLIBRE_TIMEOUT_MS),
+  });
+
 export async function requestMercadoLibreJson(
   connectionId: string,
   resource: string,
-  request: typeof fetch = fetch,
+  request: typeof fetch = mercadoLibreFetch,
   headers: Record<string, string> = {},
 ) {
   const accessToken = await getMercadoLibreAccessToken(connectionId);
@@ -219,7 +236,7 @@ export async function mutateMercadoLibreJson(
     body?: Record<string, unknown>;
     headers?: Record<string, string>;
   },
-  request: typeof fetch = fetch,
+  request: typeof fetch = mercadoLibreFetch,
 ) {
   const accessToken = await getMercadoLibreAccessToken(connectionId);
   const response = await request(normalizeMercadoLibreResource(resource), {
@@ -259,7 +276,7 @@ export async function mutateMercadoLibreJson(
 export async function requestMercadoLibreResource(
   connectionId: string,
   resource: string,
-  request: typeof fetch = fetch,
+  request: typeof fetch = mercadoLibreFetch,
 ) {
   const result = await requestMercadoLibreJson(connectionId, resource, request);
   const payload =
@@ -275,7 +292,7 @@ export async function requestMercadoLibreResource(
 export async function getMercadoLibreJson(
   connectionId: string,
   resource: string,
-  request: typeof fetch = fetch,
+  request: typeof fetch = mercadoLibreFetch,
   headers: Record<string, string> = {},
 ) {
   const result = await requestMercadoLibreJson(
@@ -304,7 +321,7 @@ export async function getMercadoLibreJson(
 export async function getMercadoLibreResource(
   connectionId: string,
   resource: string,
-  request: typeof fetch = fetch,
+  request: typeof fetch = mercadoLibreFetch,
 ) {
   const payload = await getMercadoLibreJson(connectionId, resource, request);
   const result =

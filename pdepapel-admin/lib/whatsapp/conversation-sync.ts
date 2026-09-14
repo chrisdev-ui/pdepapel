@@ -9,6 +9,7 @@ import {
   MarketplaceWebhookEventStatus,
 } from "@prisma/client";
 
+import { claimQueueRow } from "@/lib/atomic-claim";
 import { normalizePhone } from "@/lib/customer-views";
 import prismadb from "@/lib/prismadb";
 import { runWhatsAppBot, type WhatsAppBotResult } from "@/lib/whatsapp/bot";
@@ -122,12 +123,26 @@ const STATUS_BY_META: Record<string, ConversationMessageStatus> = {
 function getMessageBody(message: JsonRecord): string | null {
   const text = isRecord(message.text) ? asString(message.text.body) : null;
   if (text) return text;
-  const button = isRecord(message.button) ? asString(message.button.text) : null;
+  const button = isRecord(message.button)
+    ? asString(message.button.text)
+    : null;
   if (button) return button;
-  const interactive = isRecord(message.interactive) ? message.interactive : null;
-  const reply = interactive && isRecord(interactive.button_reply) ? interactive.button_reply : null;
-  const listReply = interactive && isRecord(interactive.list_reply) ? interactive.list_reply : null;
-  return (reply && asString(reply.title)) ?? (listReply && asString(listReply.title)) ?? null;
+  const interactive = isRecord(message.interactive)
+    ? message.interactive
+    : null;
+  const reply =
+    interactive && isRecord(interactive.button_reply)
+      ? interactive.button_reply
+      : null;
+  const listReply =
+    interactive && isRecord(interactive.list_reply)
+      ? interactive.list_reply
+      : null;
+  return (
+    (reply && asString(reply.title)) ??
+    (listReply && asString(listReply.title)) ??
+    null
+  );
 }
 
 /**
@@ -135,14 +150,30 @@ function getMessageBody(message: JsonRecord): string | null {
  * exactamente como lo enviamos, así que sirve de llave estable.
  */
 function getInteractiveReplyId(message: JsonRecord): string | null {
-  const interactive = isRecord(message.interactive) ? message.interactive : null;
+  const interactive = isRecord(message.interactive)
+    ? message.interactive
+    : null;
   if (!interactive) return null;
-  const reply = isRecord(interactive.button_reply) ? interactive.button_reply : null;
-  const listReply = isRecord(interactive.list_reply) ? interactive.list_reply : null;
-  return (reply && asString(reply.id)) ?? (listReply && asString(listReply.id)) ?? null;
+  const reply = isRecord(interactive.button_reply)
+    ? interactive.button_reply
+    : null;
+  const listReply = isRecord(interactive.list_reply)
+    ? interactive.list_reply
+    : null;
+  return (
+    (reply && asString(reply.id)) ??
+    (listReply && asString(listReply.id)) ??
+    null
+  );
 }
 
-const MEDIA_WITH_CAPTION = ["image", "video", "document", "audio", "sticker"] as const;
+const MEDIA_WITH_CAPTION = [
+  "image",
+  "video",
+  "document",
+  "audio",
+  "sticker",
+] as const;
 
 /**
  * Cuerpo de un eco. Además del texto, rescata el pie de una imagen y el texto
@@ -166,7 +197,12 @@ function getEchoBody(echo: JsonRecord): string | null {
 
 const asNumber = (value: unknown): number | null => {
   if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim() && Number.isFinite(Number(value))) return Number(value);
+  if (
+    typeof value === "string" &&
+    value.trim() &&
+    Number.isFinite(Number(value))
+  )
+    return Number(value);
   return null;
 };
 
@@ -181,7 +217,9 @@ function getCartMetadata(message: JsonRecord): WhatsAppMessageMetadata | null {
   if (!order) return null;
 
   const items: WhatsAppCartItem[] = [];
-  for (const raw of Array.isArray(order.product_items) ? order.product_items : []) {
+  for (const raw of Array.isArray(order.product_items)
+    ? order.product_items
+    : []) {
     if (!isRecord(raw)) continue;
     const sku = asString(raw.product_retailer_id);
     if (!sku) continue;
@@ -195,7 +233,11 @@ function getCartMetadata(message: JsonRecord): WhatsAppMessageMetadata | null {
   if (items.length === 0) return null;
 
   return {
-    order: { catalogId: asString(order.catalog_id), note: asString(order.text), items },
+    order: {
+      catalogId: asString(order.catalog_id),
+      note: asString(order.text),
+      items,
+    },
   };
 }
 
@@ -203,7 +245,9 @@ function getCartMetadata(message: JsonRecord): WhatsAppMessageMetadata | null {
  * Recorre TODO el cuerpo (varias `entry`, varios `changes`): un solo POST de
  * Meta puede traer varios mensajes, ecos y estados. Puro y sin excepciones.
  */
-export function extractWhatsAppEvents(payload: unknown): WhatsAppExtractedEvents {
+export function extractWhatsAppEvents(
+  payload: unknown,
+): WhatsAppExtractedEvents {
   const result: WhatsAppExtractedEvents = {
     messages: [],
     ownerEchoes: [],
@@ -215,7 +259,8 @@ export function extractWhatsAppEvents(payload: unknown): WhatsAppExtractedEvents
   for (const entry of payload.entry) {
     if (!isRecord(entry) || !Array.isArray(entry.changes)) continue;
     for (const change of entry.changes) {
-      const value = isRecord(change) && isRecord(change.value) ? change.value : null;
+      const value =
+        isRecord(change) && isRecord(change.value) ? change.value : null;
       if (!value) continue;
 
       const names = new Map<string, string>();
@@ -223,7 +268,9 @@ export function extractWhatsAppEvents(payload: unknown): WhatsAppExtractedEvents
         for (const contact of value.contacts) {
           if (!isRecord(contact)) continue;
           const waId = asString(contact.wa_id);
-          const name = isRecord(contact.profile) ? asString(contact.profile.name) : null;
+          const name = isRecord(contact.profile)
+            ? asString(contact.profile.name)
+            : null;
           if (waId && name) names.set(normalizePhone(waId), name);
         }
       }
@@ -236,7 +283,9 @@ export function extractWhatsAppEvents(payload: unknown): WhatsAppExtractedEvents
           }
           const phone = normalizePhone(asString(message.from));
           if (!phone) {
-            result.skipped.push(`message:${asString(message.id) ?? "?"}:no-phone`);
+            result.skipped.push(
+              `message:${asString(message.id) ?? "?"}:no-phone`,
+            );
             continue;
           }
           const type = asString(message.type);
@@ -288,7 +337,9 @@ export function extractWhatsAppEvents(payload: unknown): WhatsAppExtractedEvents
             result.skipped.push("status:no-id");
             continue;
           }
-          const rawStatus = isRecord(status) ? asString(status.status)?.toLowerCase() ?? null : null;
+          const rawStatus = isRecord(status)
+            ? (asString(status.status)?.toLowerCase() ?? null)
+            : null;
           result.statuses.push({
             externalId,
             rawStatus,
@@ -315,7 +366,8 @@ async function resolveStoreId(connectionStoreId: string | null | undefined) {
   if (connectionStoreId) return connectionStoreId;
   // Evento anterior a la conexión de WhatsApp: hay una sola tienda.
   const store = await prismadb.store.findFirst({ select: { id: true } });
-  if (!store) throw new Error("No hay una tienda a la que asignar la conversación");
+  if (!store)
+    throw new Error("No hay una tienda a la que asignar la conversación");
   return store.id;
 }
 
@@ -333,7 +385,13 @@ async function fileInboundMessage(
   eventId: string,
 ): Promise<{ conversationId: string; outcome: FiledInboundOutcome }> {
   const conversation = await prismadb.conversation.upsert({
-    where: { storeId_channel_phone: { storeId, channel: ConversationChannel.WHATSAPP, phone: message.phone } },
+    where: {
+      storeId_channel_phone: {
+        storeId,
+        channel: ConversationChannel.WHATSAPP,
+        phone: message.phone,
+      },
+    },
     create: {
       storeId,
       channel: ConversationChannel.WHATSAPP,
@@ -363,7 +421,9 @@ async function fileInboundMessage(
     mediaType: message.mediaType,
     status: ConversationMessageStatus.RECEIVED,
     rawEventId: eventId,
-    ...(message.metadata ? { metadata: message.metadata as Prisma.InputJsonValue } : {}),
+    ...(message.metadata
+      ? { metadata: message.metadata as Prisma.InputJsonValue }
+      : {}),
     ...(message.sentAt ? { createdAt: message.sentAt } : {}),
   };
   if (!message.externalId) {
@@ -381,7 +441,8 @@ async function fileInboundMessage(
     where: { externalId: message.externalId },
     select: { id: true },
   });
-  if (existing) return { conversationId: conversation.id, outcome: "duplicate" };
+  if (existing)
+    return { conversationId: conversation.id, outcome: "duplicate" };
 
   await prismadb.conversationMessage.create({
     data: { ...data, externalId: message.externalId },
@@ -491,19 +552,18 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
     return { processed: false, reason: "not_due" as const };
   }
 
-  const claim = await prismadb.marketplaceWebhookEvent.updateMany({
-    where: {
-      id: event.id,
-      status: { in: [MarketplaceWebhookEventStatus.PENDING, MarketplaceWebhookEventStatus.RETRY] },
-      ...dueFilter(now),
-    },
-    data: {
-      status: MarketplaceWebhookEventStatus.PROCESSING,
-      attempts: { increment: 1 },
-      nextRetryAt: null,
-    },
+  const claimed = await claimQueueRow({
+    table: "MarketplaceWebhookEvent",
+    id: event.id,
+    from: [
+      MarketplaceWebhookEventStatus.PENDING,
+      MarketplaceWebhookEventStatus.RETRY,
+    ],
+    dueColumn: "nextRetryAt",
+    dueNullMeansReady: true,
+    now,
   });
-  if (claim.count === 0) {
+  if (!claimed) {
     return { processed: false, reason: "claimed_elsewhere" as const };
   }
 
@@ -545,7 +605,9 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
 
     for (const status of extracted.statuses) {
       if (!status.status) {
-        extracted.skipped.push(`status:${status.externalId}:${status.rawStatus ?? "?"}`);
+        extracted.skipped.push(
+          `status:${status.externalId}:${status.rawStatus ?? "?"}`,
+        );
         continue;
       }
       // Un estado puede llegar antes de que exista el mensaje saliente al que
@@ -607,7 +669,10 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
           lastError: `Se agotaron los ${MAX_WHATSAPP_EVENT_ATTEMPTS} intentos. Último error: ${lastError}`,
         },
       });
-      console.error("[WHATSAPP_SYNC] Evento fallido de forma permanente", { eventId: event.id, lastError });
+      console.error("[WHATSAPP_SYNC] Evento fallido de forma permanente", {
+        eventId: event.id,
+        lastError,
+      });
       return { processed: false, reason: "failed" as const };
     }
     await prismadb.marketplaceWebhookEvent.update({
@@ -618,7 +683,11 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
         lastError,
       },
     });
-    console.warn("[WHATSAPP_SYNC] Evento programado para reintento", { eventId: event.id, attempts, lastError });
+    console.warn("[WHATSAPP_SYNC] Evento programado para reintento", {
+      eventId: event.id,
+      attempts,
+      lastError,
+    });
     return { processed: false, reason: "retry_scheduled" as const };
   }
 }

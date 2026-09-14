@@ -5,6 +5,7 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  claimRow: vi.fn(),
   findOutboxEvent: vi.fn(),
   claimOutboxEvent: vi.fn(),
   completeOutboxEvent: vi.fn(),
@@ -14,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   sendNotification: vi.fn(),
 }));
 
+vi.mock("@/lib/atomic-claim", () => ({ claimQueueRow: mocks.claimRow }));
 vi.mock("@/lib/prismadb", () => ({
   default: {
     marketplaceOutboxEvent: {
@@ -53,6 +55,7 @@ describe("Mercado Libre outbox sale notification", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.claimOutboxEvent.mockResolvedValue({ count: 1 });
+    mocks.claimRow.mockResolvedValue(true);
     mocks.completeOutboxEvent.mockResolvedValue({ count: 1 });
     mocks.sendNotification.mockResolvedValue(undefined);
     mocks.updateOutboxEvent.mockResolvedValue({});

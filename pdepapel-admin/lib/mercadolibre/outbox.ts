@@ -7,6 +7,7 @@ import {
   Prisma,
 } from "@prisma/client";
 
+import { claimQueueRow } from "@/lib/atomic-claim";
 import { hasActivePresale } from "@/lib/presale";
 import prismadb from "@/lib/prismadb";
 
@@ -494,7 +495,6 @@ export async function enqueuePendingMarketplaceOutboxEventsForStore(
   );
 }
 
-
 async function updateMercadoLibreStock(
   connectionId: string,
   externalItemId: string,
@@ -646,21 +646,15 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
   if (event.availableAt > now) {
     return { processed: false, reason: "not_due" as const };
   }
-  const claim = await prismadb.marketplaceOutboxEvent.updateMany({
-    where: {
-      id: event.id,
-      status: {
-        in: [MarketplaceOutboxStatus.PENDING, MarketplaceOutboxStatus.RETRY],
-      },
-      availableAt: { lte: now },
-    },
-    data: {
-      status: MarketplaceOutboxStatus.PROCESSING,
-      attempts: { increment: 1 },
-      lastError: null,
-    },
+  const claimed = await claimQueueRow({
+    table: "MarketplaceOutboxEvent",
+    id: event.id,
+    from: [MarketplaceOutboxStatus.PENDING, MarketplaceOutboxStatus.RETRY],
+    dueColumn: "availableAt",
+    dueNullMeansReady: false,
+    now,
   });
-  if (claim.count === 0) {
+  if (!claimed) {
     return { processed: false, reason: "claimed_elsewhere" as const };
   }
   const attempts = event.attempts + 1;
@@ -967,7 +961,10 @@ export async function processMarketplaceOutboxEvent(eventId: string) {
       if (completed.count === 0) {
         await transaction.marketplaceOutboxEvent.updateMany({
           where: { id: event.id, status: MarketplaceOutboxStatus.PROCESSING },
-          data: { status: MarketplaceOutboxStatus.PENDING, availableAt: new Date() },
+          data: {
+            status: MarketplaceOutboxStatus.PENDING,
+            availableAt: new Date(),
+          },
         });
       }
       if (
