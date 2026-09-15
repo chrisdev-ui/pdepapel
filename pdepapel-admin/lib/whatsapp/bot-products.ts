@@ -57,8 +57,18 @@ export const productClassificationSchema = z.object({
     "product.photo",
     "other",
   ]),
-  productType: z.string().trim().max(40).nullable(),
-  character: z.string().trim().max(40).nullable(),
+  // `nullish` y no `nullable`: si el modelo se deja una ranura sin poner, se
+  // trata como vacía en vez de tirar una clasificación que por lo demás era
+  // buena. Perder un matiz es mucho mejor que perder la respuesta entera.
+  productType: z.string().trim().max(40).nullish().transform((v) => v ?? null),
+  character: z.string().trim().max(40).nullish().transform((v) => v ?? null),
+  /**
+   * Lo que distingue a un producto de otro igual: color, tamaño, material,
+   * estampado. Sin esta ranura, «muéstrame el morado pastel» se quedaba sin
+   * NADA que buscar —ni tipo ni personaje— y la compra moría ahí, aunque
+   * «morado pastel» encuentre ese cuaderno y solo ese.
+   */
+  descriptor: z.string().trim().max(40).nullish().transform((v) => v ?? null),
 });
 
 export type ProductClassification = z.infer<typeof productClassificationSchema>;
@@ -78,6 +88,10 @@ intent:
 
 productType: el tipo de artículo en singular (cuaderno, agenda, llavero, sticker...), o null si no lo dice.
 character: el personaje, marca o franquicia (Stitch, Hello Kitty, Sanrio...), o null si no lo dice.
+descriptor: lo que distingue ese producto de otro igual —color, tamaño, material, estampado—
+  tal como lo dijo la clienta y con todas sus palabras ("morado pastel", "grande", "de tela",
+  "de rayas"). null si no lo dice. Importante: si menciona un color o un tamaño, va SIEMPRE aquí,
+  aunque no diga de qué artículo habla.
 
 Si dudas, responde "other".`;
 
@@ -184,7 +198,25 @@ export interface SearchResult<T> {
 
 /** Lo que se busca, armado con lo que dijo el modelo. */
 export function buildSearchQuery(c: ProductClassification): string {
-  return [c.productType, c.character].filter(Boolean).join(" ").trim();
+  return [c.productType, c.character, c.descriptor]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+}
+
+/**
+ * Cuando el modelo no supo separar nada, se busca el mensaje tal cual.
+ *
+ * Es la red por debajo de las tres ranuras: aunque no encajen —hoy el color
+ * encaja, mañana será otra cosa—, las palabras de la clienta siguen ahí. Se
+ * quitan las de cortesía y las de unión (`searchTokens`) y se busca con lo que
+ * queda: de «muéstrame el morado pastel» sobra «morado pastel», que encuentra
+ * ese cuaderno y solo ese.
+ *
+ * Devuelve cadena vacía cuando no queda nada útil, y entonces sí se escala.
+ */
+export function fallbackQueryFromMessage(body: string): string {
+  return searchTokens(body).join(" ");
 }
 
 /**
@@ -670,19 +702,35 @@ export async function answerProductQuestion(
 
   const c = classified.value;
   if (c.intent === "other") return null;
-  // Sin tipo ni personaje no hay nada que buscar.
-  if (!buildSearchQuery(c) || searchTokens(buildSearchQuery(c)).length === 0) {
-    return null;
+
+  // Si las tres ranuras vienen vacías, se busca el mensaje en crudo antes de
+  // darse por vencido: casi siempre queda ahí lo que hace falta.
+  let consulta = buildSearchQuery(c);
+  if (searchTokens(consulta).length === 0) {
+    consulta = fallbackQueryFromMessage(body);
+    if (consulta) {
+      console.info("[WHATSAPP_BOT] Sin ranuras; se busca el mensaje en crudo", {
+        storeId, consulta,
+      });
+    }
   }
+  if (searchTokens(consulta).length === 0) return null;
+  // A partir de aquí se busca `consulta`, no las ranuras sueltas.
+  const buscar: ProductClassification = {
+    ...c,
+    productType: consulta,
+    character: null,
+    descriptor: null,
+  };
 
   if (c.intent === "product.availability") {
-    const fact = await resolveAvailability(storeId, c);
+    const fact = await resolveAvailability(storeId, buscar);
     if (!fact.known) return null;
     return { intent: c.intent, text: renderAvailability(fact.value), photo: fact.value.photo };
   }
 
   if (c.intent === "product.price") {
-    const fact = await resolveProductPrice(storeId, c);
+    const fact = await resolveProductPrice(storeId, buscar);
     if (!fact.known) return null;
     return { intent: c.intent, text: renderProductPrice(fact.value), photo: fact.value.photo };
   }
@@ -690,13 +738,13 @@ export async function answerProductQuestion(
   if (c.intent === "product.features") {
     // El único caso que se escala por falta de datos: hay UN producto claro
     // pero su descripción no da para contar nada.
-    const fact = await resolveProductFeatures(storeId, c);
+    const fact = await resolveProductFeatures(storeId, buscar);
     if (!fact.known) return null;
     return { intent: c.intent, text: renderProductFeatures(fact.value), photo: fact.value.photo };
   }
 
   if (c.intent === "product.photo") {
-    const fact = await resolveProductSearch(storeId, c);
+    const fact = await resolveProductSearch(storeId, buscar);
     if (!fact.known) return null;
     return {
       intent: c.intent,
@@ -705,7 +753,7 @@ export async function answerProductQuestion(
     };
   }
 
-  const fact = await resolveProductSearch(storeId, c);
+  const fact = await resolveProductSearch(storeId, buscar);
   if (!fact.known) return null;
   return { intent: c.intent, text: renderProductSearch(fact.value), photo: fact.value.photo };
 }

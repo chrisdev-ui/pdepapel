@@ -88,8 +88,22 @@ export function productGroupNameSearchWhere(query: string): Prisma.ProductGroupW
 
 /** Palabras de unión: aparecen en casi todo y no dicen qué se busca. */
 const STOP_WORDS = new Set([
+  // Palabras de unión.
   "de", "del", "la", "el", "los", "las", "un", "una", "unos", "unas",
   "con", "para", "por", "y", "o", "que", "algo", "cosa", "cosas",
+  // Cómo se pide algo por WhatsApp. Hacen falta para poder buscar el mensaje
+  // en crudo cuando el modelo no supo separar qué se estaba pidiendo: sin
+  // esto, «muéstrame» y «tienes» se buscarían como si fueran productos.
+  "muestrame", "muestreme", "enseñame", "ensename", "mandame", "enviame",
+  "tienes", "tiene", "tienen", "manejan", "maneja", "hay", "queda", "quedan",
+  "quiero", "necesito", "busco", "dame", "vendes", "venden", "consigo",
+  "cuanto", "cuesta", "vale", "valen", "precio", "porfa", "favor", "hola",
+  "gracias", "disponible", "disponibles", "ver", "verlo", "verla", "mostrar",
+  // Señalar sin nombrar. No son palabras de producto y no hay forma de
+  // buscarlas: resolver «el primero» pide recordar la lista anterior, que es
+  // otra cosa. Aquí se descartan para no buscar basura.
+  "primero", "primera", "segundo", "segunda", "tercero", "tercera",
+  "ultimo", "ultima", "ese", "esa", "este", "esta", "eso", "esos", "esas",
 ]);
 
 /** Palabras de dos letras o menos aparecen dentro de demasiados nombres. */
@@ -98,8 +112,16 @@ const MIN_TOKEN_LENGTH = 3;
 export function searchTokens(query: string): string[] {
   return normalizeSearchTerm(query)
     .split(" ")
-    .map((word) => word.trim())
-    .filter((word) => word.length >= MIN_TOKEN_LENGTH && !STOP_WORDS.has(word));
+    // Los signos pegados a la palabra («¿tienes» o «azul?») impedirían
+    // reconocerla, tanto para descartarla como para buscarla.
+    .map((word) => word.replace(/[¿?¡!.,;:()"']/g, "").trim())
+    .filter(
+      (word) =>
+        word.length >= MIN_TOKEN_LENGTH &&
+        // Se compara sin tildes: la lista está sin ellas y la clienta escribe
+        // «muéstrame», no «muestrame».
+        !STOP_WORDS.has(stripAccents(word)),
+    );
 }
 
 /**

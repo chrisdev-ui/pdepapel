@@ -25,6 +25,8 @@ import {
   answerProductQuestion,
   areProductAnswersApproved,
   buildSearchQuery,
+  fallbackQueryFromMessage,
+  productClassificationSchema,
   classifyProductQuestion,
   looksLikeProductQuestion,
   previewProductTemplates,
@@ -47,6 +49,7 @@ const clasificacion = {
   intent: "product.search" as const,
   productType: "cuaderno",
   character: "Stitch",
+  descriptor: null,
 };
 
 describe("búsqueda palabra por palabra", () => {
@@ -140,6 +143,7 @@ describe("resolvedores", () => {
       intent: "product.search",
       productType: null,
       character: null,
+      descriptor: null,
     });
     expect(fact).toEqual({ known: false });
     expect(mocks.findMany).not.toHaveBeenCalled();
@@ -292,12 +296,12 @@ describe("clasificador: lo que pasa cuando falla", () => {
 
   it("acepta una respuesta que cuadra con el esquema", async () => {
     mocks.generateText.mockResolvedValue({
-      output: { intent: "product.search", productType: "cuaderno", character: "Stitch" },
+      output: { intent: "product.search", productType: "cuaderno", character: "Stitch", descriptor: null },
     });
     const r = await classifyProductQuestion("¿tienen cuadernos de Stitch?");
     expect(r).toEqual({
       ok: true,
-      value: { intent: "product.search", productType: "cuaderno", character: "Stitch" },
+      value: { intent: "product.search", productType: "cuaderno", character: "Stitch", descriptor: null },
     });
   });
 
@@ -361,7 +365,7 @@ describe("clasificador + resolvedor", () => {
 
   it("búsqueda: de la pregunta al texto con datos reales", async () => {
     mocks.generateText.mockResolvedValue({
-      output: { intent: "product.search", productType: "cuaderno", character: "Stitch" },
+      output: { intent: "product.search", productType: "cuaderno", character: "Stitch", descriptor: null },
     });
     mocks.findMany.mockResolvedValue([
       { id: "1", name: "Cuaderno Stitch", price: 18000, stock: 3 },
@@ -426,7 +430,7 @@ describe("visto bueno, aparte del de los datos del negocio", () => {
   it("la consulta se arma con las dos ranuras", () => {
     expect(buildSearchQuery(clasificacion)).toBe("cuaderno Stitch");
     expect(
-      buildSearchQuery({ intent: "product.search", productType: null, character: "Kuromi" }),
+      buildSearchQuery({ intent: "product.search", productType: null, character: "Kuromi", descriptor: null }),
     ).toBe("Kuromi");
   });
 });
@@ -835,6 +839,114 @@ describe("intención: pedir una foto", () => {
       "muéstrame el llavero",
     ]) {
       expect(looksLikeProductQuestion(q)).toBe(true);
+    }
+  });
+});
+
+// ============ La conversación real del 2026-09-15 (morado pastel) ============
+
+describe("lo que distingue un producto de otro: la ranura descriptor", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("el color entra en la consulta, que antes se quedaba vacía", () => {
+    // El fallo real: «Muéstrame el morado pastel» no traía ni tipo ni
+    // personaje, así que la consulta salía vacía y la clienta acababa en
+    // «Esa no me la sé», aunque «morado pastel» encuentre ese cuaderno y
+    // solo ese.
+    expect(
+      buildSearchQuery({
+        intent: "product.photo",
+        productType: null,
+        character: null,
+        descriptor: "morado pastel",
+      }),
+    ).toBe("morado pastel");
+  });
+
+  it("EL BUCLE: tipo + color van juntos, no solo el tipo", () => {
+    // Antes «Muéstrame el cuaderno morado pastel» sacaba solo «cuaderno»:
+    // 160 productos, la misma lista genérica otra vez, y vuelta a empezar.
+    const q = buildSearchQuery({
+      intent: "product.photo",
+      productType: "cuaderno",
+      character: null,
+      descriptor: "morado pastel",
+    });
+    expect(q).toBe("cuaderno morado pastel");
+    expect(searchTokens(q)).toEqual(["cuaderno", "morado", "pastel"]);
+  });
+
+  it("las tres ranuras caben juntas", () => {
+    expect(
+      buildSearchQuery({
+        intent: "product.search",
+        productType: "cuaderno",
+        character: "Stitch",
+        descriptor: "morado pastel",
+      }),
+    ).toBe("cuaderno Stitch morado pastel");
+  });
+
+  it("una ranura que el modelo no manda no tira la clasificación entera", () => {
+    // `nullish`: perder un matiz es mejor que perder la respuesta.
+    const parsed = productClassificationSchema.safeParse({
+      intent: "product.search",
+      productType: "cuaderno",
+      // sin `character` ni `descriptor`
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.descriptor).toBeNull();
+    expect(parsed.success && parsed.data.character).toBeNull();
+  });
+});
+
+describe("la red de seguridad: buscar el mensaje en crudo", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("quita la cortesía y deja lo que se busca", () => {
+    expect(fallbackQueryFromMessage("Muéstrame el morado pastel")).toBe("morado pastel");
+    expect(fallbackQueryFromMessage("¿Tienes el cuaderno azul?")).toBe("cuaderno azul");
+    expect(fallbackQueryFromMessage("hola, quiero un llavero porfa")).toBe("llavero");
+  });
+
+  it("si no queda nada útil, devuelve vacío y se escala", () => {
+    expect(fallbackQueryFromMessage("muéstrame el")).toBe("");
+    expect(fallbackQueryFromMessage("hola gracias")).toBe("");
+    expect(fallbackQueryFromMessage("")).toBe("");
+  });
+
+  it("se usa cuando las tres ranuras vienen vacías", async () => {
+    mocks.generateText.mockResolvedValue({
+      output: { intent: "product.photo", productType: null, character: null, descriptor: null },
+    });
+    mocks.findMany.mockResolvedValue([
+      { id: "1", name: "Cuadernos Stitch Morado pastel", price: 13000, stock: 4, images: [] },
+    ]);
+    mocks.count.mockResolvedValue(1);
+
+    const r = await answerProductQuestion("store-1", "Muéstrame el morado pastel");
+    expect(r).not.toBeNull();
+    expect(r?.text).toContain("Cuadernos Stitch Morado pastel");
+    // Buscó «morado pastel», no la frase entera ni una cadena vacía.
+    const where = mocks.findMany.mock.calls[0][0].where;
+    expect(where.AND).toHaveLength(2);
+  });
+
+  it("si ni la red encuentra palabras, no se contesta y sigue el camino", async () => {
+    mocks.generateText.mockResolvedValue({
+      output: { intent: "product.search", productType: null, character: null, descriptor: null },
+    });
+    expect(await answerProductQuestion("store-1", "muéstrame el")).toBeNull();
+    expect(mocks.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("lo que sigue SIN resolverse (hace falta memoria de conversación)", () => {
+  it("un ordinal no trae nada que buscar, y eso no cambia aquí", () => {
+    // «el primero» / «ese» no tienen palabras del producto: sin recordar la
+    // lista que se acaba de mandar, no hay forma. Queda fuera de este arreglo.
+    for (const frase of ["el primero", "ese", "el segundo", "quiero ese"]) {
+      expect(fallbackQueryFromMessage(frase)).toBe("");
     }
   });
 });
