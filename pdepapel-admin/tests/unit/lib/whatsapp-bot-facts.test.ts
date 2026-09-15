@@ -74,9 +74,17 @@ describe("reconocer la pregunta", () => {
     ["hasta que hora atienden hoy", "business.hours"],
     ["¿En qué ciudad están?", "business.city"],
     ["hola, tienen tienda fisica?", "business.physical_store"],
+    // De una conversación real del 2026-09-15: «punto físico» no estaba en la
+    // lista y la pregunta se quedó sin contestar.
+    ["Quiero saber si tiene punto físico en Medellín", "business.physical_store"],
+    ["tienen punto de venta?", "business.physical_store"],
+    ["¿puedo recoger allá?", "business.physical_store"],
     ["hay pedido minimo?", "business.min_order"],
     ["desde cuanto es gratis el envio", "shipping.free_threshold"],
     ["cuanto se demora en llegar?", "shipping.delivery_days"],
+    ["¿en cuántos días llega?", "shipping.delivery_days"],
+    ["hay mínimo para pedir?", "business.min_order"],
+    ["¿dónde están?", "business.city"],
   ])("«%s» → %s", (mensaje, esperado) => {
     expect(classifyBusinessFact(mensaje)).toBe(esperado);
   });

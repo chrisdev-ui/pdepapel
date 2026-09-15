@@ -56,15 +56,22 @@ const PATTERNS: Record<BusinessFactIntent, string[]> = {
   "business.city": [
     "en que ciudad", "de donde son", "donde quedan", "donde estan ubicados",
     "de que ciudad", "en que parte quedan", "son de medellin",
+    "donde estan", "de donde escriben",
   ],
   "business.physical_store": [
     "tienda fisica", "local fisico", "puedo ir a", "tienen local",
     "se puede recoger", "recoger en tienda", "tienen punto de venta",
     "cual es la direccion", "puedo pasar a",
+    // «punto físico» es como lo dijo una clienta de verdad el 2026-09-15, y no
+    // estaba: la pregunta acabó sin respuesta. «punto de venta» y «punto
+    // fisico» van sueltos —sin el «tienen» delante— porque se preguntan de
+    // muchas formas y el punto es lo que identifica la pregunta.
+    "punto fisico", "punto de venta", "puedo recoger", "atienden al publico",
+    "tienen direccion", "donde los encuentro",
   ],
   "business.min_order": [
     "pedido minimo", "compra minima", "monto minimo", "minimo de compra",
-    "hay un minimo", "cuanto es lo minimo",
+    "hay un minimo", "cuanto es lo minimo", "hay minimo", "minimo para pedir",
   ],
   "shipping.free_threshold": [
     "envio gratis", "envios gratis", "gratis el envio", "para que salga gratis",
@@ -73,7 +80,8 @@ const PATTERNS: Record<BusinessFactIntent, string[]> = {
   "shipping.delivery_days": [
     "cuanto se demora", "cuanto tarda", "cuantos dias", "en cuanto llega",
     "cuando llega", "cuanto demora el envio", "tiempo de entrega",
-    "cuanto se tarda en llegar",
+    "cuanto se tarda en llegar", "cuanto tardan", "en cuantos dias",
+    "cuanto se demoran",
   ],
   // Ojo con las frases sueltas: «pago» a secas también aparece en «cuándo
   // llega mi pago», así que se piden formas completas. «nequi» y «daviplata»
