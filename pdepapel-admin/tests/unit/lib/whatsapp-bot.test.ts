@@ -174,12 +174,110 @@ describe("runWhatsAppBot", () => {
   it("answers again even if the last message was also the bot", async () => {
     // La regla de «nunca dos automáticas seguidas» se quitó el 2026-09-14: la
     // clienta puede seguir con el bot porque siempre ve el botón de salida.
-    mocks.messageFindFirst.mockResolvedValue({ sentBy: "BOT" });
-
     await expect(runWhatsAppBot(input)).resolves.toMatchObject({
       outcome: "replied",
     });
     expect(mocks.send).toHaveBeenCalled();
+  });
+
+  describe("freno de mano: hilos donde Paula ya escribió", () => {
+    /** Lo que devuelve la consulta del freno cuando sí hay un mensaje suyo. */
+    const deOwner = { id: "message-owner-1" };
+
+    it("no manda nada si Paula ya había escrito en la conversación", async () => {
+      mocks.messageFindFirst.mockResolvedValue(deOwner);
+
+      await expect(runWhatsAppBot(input)).resolves.toEqual({
+        outcome: "skipped_owner_thread",
+      });
+
+      expect(mocks.send).not.toHaveBeenCalled();
+      expect(mocks.typing).not.toHaveBeenCalled();
+      expect(mocks.messageCreate).not.toHaveBeenCalled();
+      // Tampoco toca el estado: la conversación ya es de ella.
+      expect(mocks.conversationUpdate).not.toHaveBeenCalled();
+    });
+
+    it("pregunta solo por mensajes de Paula, no del bot ni de la clienta", async () => {
+      mocks.messageFindFirst.mockResolvedValue(deOwner);
+
+      await runWhatsAppBot(input);
+
+      expect(mocks.messageFindFirst).toHaveBeenCalledWith({
+        where: { conversationId: "conversation-1", sentBy: "OWNER" },
+        select: { id: true },
+      });
+    });
+
+    it("calla incluso si la clienta toca «Hablar con Paula»", async () => {
+      // Sin el freno esto mandaría el acuse encima de una conversación que
+      // ella ya está llevando.
+      mocks.messageFindFirst.mockResolvedValue(deOwner);
+
+      await expect(
+        runWhatsAppBot({ ...input, interactiveReplyId: TALK_TO_OWNER_BUTTON_ID }),
+      ).resolves.toEqual({ outcome: "skipped_owner_thread" });
+
+      expect(mocks.send).not.toHaveBeenCalled();
+      expect(mocks.conversationUpdate).not.toHaveBeenCalled();
+    });
+
+    it("el caso Chuchu: Paula escribe y la otra persona sigue escribiendo", async () => {
+      // Los 5 mensajes que el bot mandó de verdad en producción eran este
+      // caso: un hilo suyo, ella contestando, y el bot metiéndose entre medias
+      // con «Esa no me la sé» porque el eco de su celular dejaba el estado en
+      // OPEN. Ahora ninguno de los dos mensajes de la otra persona lo despierta.
+      mocks.messageFindFirst.mockResolvedValue(deOwner);
+
+      const primero = await runWhatsAppBot({
+        ...input,
+        body: "Si supera los 0,5 metros cúbicos, ya no puede considerarse una muestra.",
+      });
+      const segundo = await runWhatsAppBot({
+        ...input,
+        body: "Si tu primo lo necesita, quizá la próxima vez podamos incluir…",
+      });
+
+      expect(primero).toEqual({ outcome: "skipped_owner_thread" });
+      expect(segundo).toEqual({ outcome: "skipped_owner_thread" });
+      expect(mocks.send).not.toHaveBeenCalled();
+    });
+
+    it("una conversación nueva sin nada de Paula sigue igual que antes", async () => {
+      // El freno no puede apagar el bot donde sí hace falta: sin mensajes
+      // suyos, tanto la coincidencia como el aviso de «no sé» siguen saliendo.
+      mocks.messageFindFirst.mockResolvedValue(null);
+
+      await expect(runWhatsAppBot(input)).resolves.toEqual({
+        outcome: "replied",
+        trigger: "horario",
+      });
+      expect(mocks.send).toHaveBeenCalledWith(
+        "573001234567",
+        "Abrimos de 9 a 6.",
+        ESCAPE,
+      );
+
+      vi.clearAllMocks();
+      mocks.conversationFindUnique.mockResolvedValue({
+        id: "conversation-1",
+        status: "OPEN",
+        storeId: "store-1",
+      });
+      mocks.messageFindFirst.mockResolvedValue(null);
+      mocks.conversationUpdate.mockResolvedValue({});
+      mocks.send.mockResolvedValue({ ok: true, externalId: "wamid.BOT2" });
+      mocks.typing.mockResolvedValue({ ok: true });
+
+      await expect(
+        runWhatsAppBot({ ...input, body: "quiero un cuaderno rosado" }),
+      ).resolves.toEqual({ outcome: "escalated_no_match" });
+      expect(mocks.send.mock.calls[0][1]).toBe(NO_MATCH_ACKNOWLEDGEMENT);
+      expect(mocks.conversationUpdate).toHaveBeenCalledWith({
+        where: { id: "conversation-1" },
+        data: { status: "NEEDS_OWNER" },
+      });
+    });
   });
 
   it("avisa que no sabe y escala cuando ninguna palabra clave coincide", async () => {
