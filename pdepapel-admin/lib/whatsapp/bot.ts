@@ -13,6 +13,11 @@ import {
   renderBusinessFact,
 } from "@/lib/whatsapp/bot-facts";
 import {
+  areProductAnswersApproved,
+  answerProductQuestion,
+  looksLikeProductQuestion,
+} from "@/lib/whatsapp/bot-products";
+import {
   formatBotReply,
   matchWhatsAppKeyword,
   normalizeBotText,
@@ -83,6 +88,8 @@ export type WhatsAppBotOutcome =
   | "replied"
   /** Se contestó un dato del negocio (horario, ciudad, envíos…). */
   | "replied_business_fact"
+  /** Se contestó sobre productos (si hay, si queda). */
+  | "replied_product"
   /** Coincidió pero el envío falló. */
   | "escalated_send_failed";
 
@@ -325,7 +332,38 @@ export async function runWhatsAppBot(input: {
     }
   }
 
-  // 5. Solo palabra clave: sin coincidencia no se inventa una respuesta. Las
+  // 5. Productos: si tienen algo y si queda. A diferencia del paso 4, aquí
+  //    hace falta un modelo para entender la pregunta, así que TODO lo que
+  //    pueda salir mal —sin clave, sin cuota, lento, o una respuesta que no
+  //    cuadra— acaba igual: sin contestar aquí y siguiendo al paso 6.
+  if (looksLikeProductQuestion(input.body)) {
+    const productSettings =
+      input.settings ?? (await readSettings(conversation.storeId));
+    const answer =
+      productSettings && areProductAnswersApproved(productSettings)
+        ? await answerProductQuestion(conversation.storeId, input.body)
+        : null;
+    if (answer) {
+      const sent = await deliver(
+        conversation.id,
+        input.phone,
+        answer.text,
+        [],
+        pacing(input),
+      );
+      if (sent.ok) {
+        return { outcome: "replied_product", trigger: answer.intent };
+      }
+      await escalate(conversation.id);
+      return {
+        outcome: "escalated_send_failed",
+        trigger: answer.intent,
+        error: sent.error,
+      };
+    }
+  }
+
+  // 6. Solo palabra clave: sin coincidencia no se inventa una respuesta. Las
   //    respuestas las escribe la dueña desde el panel; si no ha creado
   //    ninguna, el bot calla y la conversación queda para ella.
   const keywords =

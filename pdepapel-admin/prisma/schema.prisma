@@ -1332,6 +1332,13 @@ model StoreSettings {
   botFactsApprovedBy String?
   botFactsVersion    String?
 
+  /// Lo mismo, pero para las respuestas sobre productos. Va aparte del visto
+  /// bueno de los datos del negocio a propósito: si compartieran versión,
+  /// añadir respuestas nuevas retiraría sin querer la aprobación de las viejas.
+  botProductsApprovedAt DateTime?
+  botProductsApprovedBy String?
+  botProductsVersion    String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

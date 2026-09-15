@@ -37,6 +37,8 @@ const completa: ResolvedStoreSettings = {
   botEnabled: true,
   botFactsApprovedAt: new Date("2026-09-15T00:00:00.000Z"),
   botFactsVersion: BUSINESS_FACT_TEMPLATES_VERSION,
+  botProductsApprovedAt: null,
+  botProductsVersion: null,
 };
 
 const con = (cambios: Partial<ResolvedStoreSettings>): ResolvedStoreSettings => ({

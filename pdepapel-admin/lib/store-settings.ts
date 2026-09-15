@@ -132,6 +132,9 @@ export interface ResolvedStoreSettings {
   /** Visto bueno a los textos con los que el bot da los datos del negocio. */
   botFactsApprovedAt: Date | null;
   botFactsVersion: string | null;
+  /** Visto bueno aparte, para lo que contesta sobre productos. */
+  botProductsApprovedAt: Date | null;
+  botProductsVersion: string | null;
 }
 
 /** Lo que ve quien pregunta, con los valores por defecto cuando no hay fila. */
@@ -171,6 +174,8 @@ export async function getStoreSettings(
     botEnabled: settings?.botEnabled ?? false,
     botFactsApprovedAt: settings?.botFactsApprovedAt ?? null,
     botFactsVersion: settings?.botFactsVersion ?? null,
+    botProductsApprovedAt: settings?.botProductsApprovedAt ?? null,
+    botProductsVersion: settings?.botProductsVersion ?? null,
   };
 }
 

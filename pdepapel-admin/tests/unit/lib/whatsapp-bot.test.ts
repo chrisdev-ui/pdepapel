@@ -10,8 +10,10 @@ const mocks = vi.hoisted(() => ({
   typing: vi.fn(),
   activeKeywords: vi.fn(),
   sendableReply: vi.fn(),
+  answerProduct: vi.fn(),
 }));
 
+vi.mock("@/lib/env.mjs", () => ({ env: {} }));
 vi.mock("@/lib/prismadb", () => ({
   default: {
     conversation: {
@@ -23,6 +25,10 @@ vi.mock("@/lib/prismadb", () => ({
       create: mocks.messageCreate,
     },
   },
+}));
+vi.mock("@/lib/whatsapp/bot-products", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/whatsapp/bot-products")>()),
+  answerProductQuestion: mocks.answerProduct,
 }));
 vi.mock("@/lib/whatsapp/send", () => ({
   sendWhatsAppButtonMessage: mocks.send,
@@ -53,6 +59,7 @@ import {
 } from "@/lib/whatsapp/bot";
 import type { ResolvedStoreSettings } from "@/lib/store-settings";
 import { BUSINESS_FACT_TEMPLATES_VERSION } from "@/lib/whatsapp/bot-facts";
+import { PRODUCT_TEMPLATES_VERSION } from "@/lib/whatsapp/bot-products";
 import {
   TALK_TO_OWNER_BUTTON_ID,
   TALK_TO_OWNER_BUTTON_TITLE,
@@ -333,29 +340,34 @@ describe("runWhatsAppBot", () => {
     });
   });
 
+  /** Una tienda con todo lleno y los datos del negocio ya aprobados. */
+  const ajustesBase: ResolvedStoreSettings = {
+    alwaysOpen: false,
+    openingHours: {
+      lun: { abre: "08:00", cierra: "18:00" },
+      mar: { abre: "08:00", cierra: "18:00" },
+      mie: { abre: "08:00", cierra: "18:00" },
+      jue: { abre: "08:00", cierra: "18:00" },
+      vie: { abre: "08:00", cierra: "18:00" },
+      sab: { abre: "08:00", cierra: "18:00" },
+      dom: { abre: "08:00", cierra: "18:00" },
+    },
+    cityName: "Medellín",
+    hasPhysicalStore: false,
+    physicalAddress: null,
+    minOrderRule: MinimumOrderRule.NONE,
+    minOrderAmount: null,
+    freeShippingThreshold: 120000,
+    deliveryEstimate: "2 a 4 días hábiles",
+    botEnabled: true,
+    botFactsApprovedAt: new Date("2026-09-15T00:00:00.000Z"),
+    botFactsVersion: BUSINESS_FACT_TEMPLATES_VERSION,
+    botProductsApprovedAt: null,
+    botProductsVersion: null,
+  };
+
   describe("datos del negocio", () => {
-    const aprobados: ResolvedStoreSettings = {
-      alwaysOpen: false,
-      openingHours: {
-        lun: { abre: "08:00", cierra: "18:00" },
-        mar: { abre: "08:00", cierra: "18:00" },
-        mie: { abre: "08:00", cierra: "18:00" },
-        jue: { abre: "08:00", cierra: "18:00" },
-        vie: { abre: "08:00", cierra: "18:00" },
-        sab: { abre: "08:00", cierra: "18:00" },
-        dom: { abre: "08:00", cierra: "18:00" },
-      },
-      cityName: "Medellín",
-      hasPhysicalStore: false,
-      physicalAddress: null,
-      minOrderRule: MinimumOrderRule.NONE,
-      minOrderAmount: null,
-      freeShippingThreshold: 120000,
-      deliveryEstimate: "2 a 4 días hábiles",
-      botEnabled: true,
-      botFactsApprovedAt: new Date("2026-09-15T00:00:00.000Z"),
-      botFactsVersion: BUSINESS_FACT_TEMPLATES_VERSION,
-    };
+    const aprobados: ResolvedStoreSettings = ajustesBase;
     const preguntar = (body: string, settings = aprobados) =>
       runWhatsAppBot({ ...input, body, settings });
 
@@ -476,6 +488,117 @@ describe("runWhatsAppBot", () => {
         outcome: "skipped_owner_active",
       });
       expect(mocks.send).not.toHaveBeenCalled();
+      vi.useRealTimers();
+    });
+  });
+
+  describe("preguntas por productos", () => {
+    const aprobado: ResolvedStoreSettings = {
+      ...ajustesBase,
+      botProductsApprovedAt: new Date("2026-09-15T00:00:00.000Z"),
+      botProductsVersion: PRODUCT_TEMPLATES_VERSION,
+    };
+
+    beforeEach(() => {
+      mocks.answerProduct.mockResolvedValue({
+        intent: "product.search",
+        text: "Sí 💛 Tengo Cuaderno Stitch en $18.000. ¿Te lo aparto?",
+      });
+    });
+
+    it("contesta con lo que encontró en el catálogo", async () => {
+      await expect(
+        runWhatsAppBot({
+          ...input,
+          body: "¿tienen cuadernos de Stitch?",
+          settings: aprobado,
+        }),
+      ).resolves.toEqual({
+        outcome: "replied_product",
+        trigger: "product.search",
+      });
+      expect(mocks.send.mock.calls[0][1]).toContain("Cuaderno Stitch");
+      expect(mocks.send.mock.calls[0][2]).toEqual(ESCAPE);
+    });
+
+    it("sin el visto bueno no contesta, pero tampoco calla", async () => {
+      await expect(
+        runWhatsAppBot({
+          ...input,
+          body: "¿tienen cuadernos de Stitch?",
+          settings: { ...aprobado, botProductsApprovedAt: null },
+        }),
+      ).resolves.toEqual({ outcome: "escalated_no_match" });
+      expect(mocks.answerProduct).not.toHaveBeenCalled();
+      expect(mocks.send.mock.calls[0][1]).toBe(NO_MATCH_ACKNOWLEDGEMENT);
+    });
+
+    it("si el modelo no pudo, sigue a las palabras clave de siempre", async () => {
+      // Esto es lo que pasa con la cuota agotada: `answerProductQuestion`
+      // devuelve null y el mensaje continúa como si este paso no existiera.
+      mocks.answerProduct.mockResolvedValue(null);
+
+      await expect(
+        runWhatsAppBot({
+          ...input,
+          body: "¿tienen algo de envio?",
+          settings: aprobado,
+        }),
+      ).resolves.toEqual({ outcome: "replied", trigger: "envio" });
+      expect(mocks.send.mock.calls[0][1]).toBe("Enviamos a todo el país.");
+    });
+
+    it("si no pudo y tampoco hay palabra clave, queda para Paula", async () => {
+      mocks.answerProduct.mockResolvedValue(null);
+
+      await expect(
+        runWhatsAppBot({
+          ...input,
+          body: "¿tienen algo de Kuromi?",
+          settings: aprobado,
+        }),
+      ).resolves.toEqual({ outcome: "escalated_no_match" });
+      expect(mocks.send.mock.calls[0][1]).toBe(NO_MATCH_ACKNOWLEDGEMENT);
+      expect(mocks.conversationUpdate).toHaveBeenCalledWith({
+        where: { id: "conversation-1" },
+        data: { status: "NEEDS_OWNER" },
+      });
+    });
+
+    it("los datos del negocio siguen ganando: se resuelven antes", async () => {
+      // «horario» es dato del negocio (paso 4) y no debe llegar al paso 5.
+      await expect(
+        runWhatsAppBot({
+          ...input,
+          body: "¿cuál es el horario?",
+          settings: aprobado,
+        }),
+      ).resolves.toEqual({
+        outcome: "replied_business_fact",
+        trigger: "business.hours",
+      });
+      expect(mocks.answerProduct).not.toHaveBeenCalled();
+    });
+
+    it("Paula en la conversación manda por encima de esto también", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-09-15T02:30:00.000Z"));
+      mocks.conversationFindUnique.mockResolvedValue({
+        id: "conversation-1",
+        status: "OPEN",
+        storeId: "store-1",
+        lastOwnerAt: new Date("2026-09-15T01:30:00.000Z"),
+      });
+
+      await expect(
+        runWhatsAppBot({
+          ...input,
+          body: "¿tienen cuadernos de Stitch?",
+          settings: aprobado,
+        }),
+      ).resolves.toEqual({ outcome: "skipped_owner_active" });
+      expect(mocks.send).not.toHaveBeenCalled();
+      expect(mocks.answerProduct).not.toHaveBeenCalled();
       vi.useRealTimers();
     });
   });

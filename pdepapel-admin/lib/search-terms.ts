@@ -85,3 +85,46 @@ export function productNameSearchWhere(query: string): Prisma.ProductWhereInput[
 export function productGroupNameSearchWhere(query: string): Prisma.ProductGroupWhereInput[] {
   return expandSearchTerms(query).map((term) => ({ name: { contains: term } }));
 }
+
+/** Palabras de unión: aparecen en casi todo y no dicen qué se busca. */
+const STOP_WORDS = new Set([
+  "de", "del", "la", "el", "los", "las", "un", "una", "unos", "unas",
+  "con", "para", "por", "y", "o", "que", "algo", "cosa", "cosas",
+]);
+
+/** Palabras de dos letras o menos aparecen dentro de demasiados nombres. */
+const MIN_TOKEN_LENGTH = 3;
+
+export function searchTokens(query: string): string[] {
+  return normalizeSearchTerm(query)
+    .split(" ")
+    .map((word) => word.trim())
+    .filter((word) => word.length >= MIN_TOKEN_LENGTH && !STOP_WORDS.has(word));
+}
+
+/**
+ * Búsqueda palabra por palabra, para cuando alguien pide dos cosas a la vez.
+ *
+ * `productNameSearchWhere` busca la frase entera dentro del nombre, que es lo
+ * que quiere el buscador de la tienda: quien escribe «cuaderno» y va viendo
+ * resultados. Por WhatsApp se pide de otra forma —«cuaderno de Stitch»— y esa
+ * frase no está dentro de ningún nombre: medido contra el catálogo real, diez
+ * de diez consultas así devolvían CERO.
+ *
+ * Aquí cada palabra tiene que aparecer por separado (en el nombre, con sus
+ * sinónimos, o en la descripción) y se exigen todas. Las mismas diez consultas
+ * pasan a devolver entre uno y seis productos, o cero de verdad cuando no se
+ * tiene lo que piden.
+ *
+ * Va aparte a propósito: el buscador de la tienda se queda como está.
+ */
+export function productTokenSearchWhere(query: string): Prisma.ProductWhereInput[] {
+  return searchTokens(query).map((token) => ({
+    OR: [
+      ...expandSearchTerms(token).map((term) => ({
+        name: { contains: term },
+      })),
+      { description: { contains: token } },
+    ],
+  }));
+}
