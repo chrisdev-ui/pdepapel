@@ -287,6 +287,66 @@ export async function sendWhatsAppButtonMessage(
 }
 
 /**
+ * Lo mismo, pero con una foto encima del texto.
+ *
+ * Confirmado contra la API el 2026-09-15: Chakra reenvía la cabecera de imagen
+ * a Meta sin tocarla, y Meta valida la forma en el momento —una cabecera con
+ * un `type` inventado vuelve con un 400 nombrando `interactive.header.type`, y
+ * una imagen sin `link` con `(#131009)`—, así que un 200 con wamid significa
+ * que la forma es buena. Christian lo vio en su teléfono: foto, texto y botón.
+ *
+ * Se usa `link` y no un `id` de Meta: las fotos ya están públicas en Cloudinary
+ * y así no hay que subirlas antes. La URL tiene que ser JPEG o PNG —Meta no
+ * acepta webp ni avif— y de eso se encarga la transformación de siempre, que
+ * devuelve JPEG a quien no pide otra cosa.
+ *
+ * Va con `interactive` y no con `type: "image"` a secas porque un mensaje de
+ * imagen suelto NO admite botones, y todo lo que manda el bot lleva el de
+ * «Hablar con Paula».
+ */
+export async function sendWhatsAppImageButtonMessage(
+  to: string,
+  body: string,
+  buttons: WhatsAppReplyButton[],
+  imageUrl: string,
+  environment: SendEnvironment = env,
+): Promise<WhatsAppSendResult> {
+  if (!to.trim() || !body.trim()) {
+    return { ok: false, error: "destinatario o mensaje vacío" };
+  }
+  if (!imageUrl.trim()) return { ok: false, error: "sin foto que mandar" };
+
+  const usable = buttons
+    .filter((button) => button.id.trim() && button.title.trim())
+    .slice(0, WHATSAPP_MAX_BUTTONS);
+  if (usable.length === 0) {
+    return { ok: false, error: "sin botones que mandar" };
+  }
+
+  return postToChakra(
+    to,
+    {
+      type: "interactive",
+      interactive: {
+        type: "button",
+        header: { type: "image", image: { link: imageUrl.trim() } },
+        body: { text: body.slice(0, WHATSAPP_INTERACTIVE_BODY_MAX_LENGTH) },
+        action: {
+          buttons: usable.map((button) => ({
+            type: "reply",
+            reply: {
+              id: button.id.trim(),
+              title: button.title.trim().slice(0, WHATSAPP_BUTTON_TITLE_MAX_LENGTH),
+            },
+          })),
+        },
+      },
+    },
+    environment,
+  );
+}
+
+/**
  * Muestra «escribiendo…» en el teléfono de la clienta y marca su mensaje como
  * leído (doble check azul), en una sola llamada.
  *

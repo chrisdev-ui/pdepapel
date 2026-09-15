@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   activeKeywords: vi.fn(),
   sendableReply: vi.fn(),
   answerProduct: vi.fn(),
+  sendImage: vi.fn(),
 }));
 
 vi.mock("@/lib/env.mjs", () => ({ env: {} }));
@@ -32,6 +33,7 @@ vi.mock("@/lib/whatsapp/bot-products", async (importOriginal) => ({
 }));
 vi.mock("@/lib/whatsapp/send", () => ({
   sendWhatsAppButtonMessage: mocks.send,
+  sendWhatsAppImageButtonMessage: mocks.sendImage,
   sendWhatsAppTypingIndicator: mocks.typing,
 }));
 // Los ayudantes puros (ids de botón, constantes) se dejan reales: son la
@@ -503,7 +505,9 @@ describe("runWhatsAppBot", () => {
       mocks.answerProduct.mockResolvedValue({
         intent: "product.search",
         text: "Sí 💛 Tengo Cuaderno Stitch en $18.000. ¿Te lo aparto?",
+        photo: null,
       });
+      mocks.sendImage.mockResolvedValue({ ok: true, externalId: "wamid.IMG1" });
     });
 
     it("contesta con lo que encontró en el catálogo", async () => {
@@ -599,6 +603,108 @@ describe("runWhatsAppBot", () => {
       ).resolves.toEqual({ outcome: "skipped_owner_active" });
       expect(mocks.send).not.toHaveBeenCalled();
       expect(mocks.answerProduct).not.toHaveBeenCalled();
+      vi.useRealTimers();
+    });
+  });
+
+  describe("fotos de producto", () => {
+    const FOTO = "https://res.cloudinary.com/x/image/upload/f_auto,q_auto,c_limit,w_1600/v1/a.jpg";
+    const conFoto = (photo: string | null) =>
+      mocks.answerProduct.mockResolvedValue({
+        intent: "product.search",
+        text: "Sí 💛 Tengo Cuaderno Stitch en $18.000. ¿Te lo aparto?",
+        photo,
+      });
+
+    const aprobado: ResolvedStoreSettings = {
+      ...ajustesBase,
+      botProductsApprovedAt: new Date("2026-09-15T00:00:00.000Z"),
+      botProductsVersion: PRODUCT_TEMPLATES_VERSION,
+    };
+    const preguntar = () =>
+      runWhatsAppBot({
+        ...input,
+        body: "¿tienen cuadernos de Stitch?",
+        settings: aprobado,
+      });
+
+    it("con foto sale por el envío con imagen, y el botón sigue ahí", async () => {
+      conFoto(FOTO);
+      await expect(preguntar()).resolves.toEqual({
+        outcome: "replied_product",
+        trigger: "product.search",
+      });
+      expect(mocks.sendImage).toHaveBeenCalledOnce();
+      expect(mocks.send).not.toHaveBeenCalled();
+      const [, texto, botones, foto] = mocks.sendImage.mock.calls[0];
+      expect(texto).toContain("Cuaderno Stitch");
+      expect(botones).toEqual(ESCAPE);
+      expect(foto).toBe(FOTO);
+      // Queda anotado como foto en el panel.
+      expect(mocks.messageCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({ mediaType: "image", mediaUrl: FOTO }),
+      });
+    });
+
+    it("sin foto sale por el envío normal, sin intentar imagen", async () => {
+      conFoto(null);
+      await expect(preguntar()).resolves.toMatchObject({ outcome: "replied_product" });
+      expect(mocks.sendImage).not.toHaveBeenCalled();
+      expect(mocks.send).toHaveBeenCalledOnce();
+      expect(mocks.messageCreate.mock.calls[0][0].data.mediaUrl).toBeUndefined();
+    });
+
+    it("SI META RECHAZA LA FOTO: se manda el mismo texto sin ella", async () => {
+      conFoto(FOTO);
+      // El rechazo real de Meta cuando la URL no le sirve.
+      mocks.sendImage.mockResolvedValue({
+        ok: false,
+        error: "(#131053) Media upload error",
+      });
+      mocks.send.mockResolvedValue({ ok: true, externalId: "wamid.TEXTO" });
+
+      await expect(preguntar()).resolves.toEqual({
+        outcome: "replied_product",
+        trigger: "product.search",
+      });
+
+      expect(mocks.sendImage).toHaveBeenCalledOnce();
+      // El respaldo: mismo texto, mismos botones, sin foto.
+      expect(mocks.send).toHaveBeenCalledOnce();
+      expect(mocks.send.mock.calls[0][1]).toBe(mocks.sendImage.mock.calls[0][1]);
+      expect(mocks.send.mock.calls[0][2]).toEqual(ESCAPE);
+      // Y en el panel NO se apunta una foto que nunca salió.
+      expect(mocks.messageCreate.mock.calls[0][0].data.mediaUrl).toBeUndefined();
+    });
+
+    it("si también falla el texto, queda como fallido y escala", async () => {
+      conFoto(FOTO);
+      mocks.sendImage.mockResolvedValue({ ok: false, error: "media error" });
+      mocks.send.mockResolvedValue({ ok: false, error: "caído" });
+
+      await expect(preguntar()).resolves.toMatchObject({
+        outcome: "escalated_send_failed",
+      });
+      expect(mocks.conversationUpdate).toHaveBeenCalledWith({
+        where: { id: "conversation-1" },
+        data: { status: "NEEDS_OWNER" },
+      });
+    });
+
+    it("Paula en la conversación manda por encima de la foto también", async () => {
+      conFoto(FOTO);
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-09-15T02:30:00.000Z"));
+      mocks.conversationFindUnique.mockResolvedValue({
+        id: "conversation-1",
+        status: "OPEN",
+        storeId: "store-1",
+        lastOwnerAt: new Date("2026-09-15T01:30:00.000Z"),
+      });
+
+      await expect(preguntar()).resolves.toEqual({ outcome: "skipped_owner_active" });
+      expect(mocks.sendImage).not.toHaveBeenCalled();
+      expect(mocks.send).not.toHaveBeenCalled();
       vi.useRealTimers();
     });
   });

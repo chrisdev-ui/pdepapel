@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
+import { getCloudinaryImageUrl } from "@/lib/cloudinary-image-loader";
 import { productTokenSearchWhere, searchTokens } from "@/lib/search-terms";
 import { type FactValue } from "@/lib/whatsapp/bot-facts";
 
@@ -32,7 +33,8 @@ export type ProductIntent =
   | "product.search"
   | "product.availability"
   | "product.price"
-  | "product.features";
+  | "product.features"
+  | "product.photo";
 
 /** Descripción más corta que esto no da para una respuesta: se pasa a Paula. */
 export const MIN_USEFUL_DESCRIPTION_LENGTH = 40;
@@ -52,6 +54,7 @@ export const productClassificationSchema = z.object({
     "product.availability",
     "product.price",
     "product.features",
+    "product.photo",
     "other",
   ]),
   productType: z.string().trim().max(40).nullable(),
@@ -70,6 +73,7 @@ intent:
 - "product.availability": pregunta si queda o está disponible ("¿queda la cartuchera de capibara?")
 - "product.price": pregunta cuánto cuesta ("¿cuánto vale el cuaderno de Stitch?")
 - "product.features": pregunta cómo es el producto: material, tamaño, qué trae, cuántas hojas
+- "product.photo": pide ver el producto ("mándame una foto del cuaderno", "cómo se ve?")
 - "other": cualquier otra cosa, incluido saludar, dar las gracias, envíos, horarios o quejas.
 
 productType: el tipo de artículo en singular (cuaderno, agenda, llavero, sticker...), o null si no lo dice.
@@ -142,6 +146,9 @@ const PRODUCT_SIGNALS = [
   // Cómo es.
   "material", "tamano", "medida", "que trae", "que incluye", "de que esta",
   "cuantas hojas", "cuantos", "como es", "caracteristica",
+  // Enséñamelo.
+  "foto", "fotos", "imagen", "imagenes", "como se ve", "ver el", "ver la",
+  "muestrame", "mandame", "manda una", "enviame",
 ];
 
 export function looksLikeProductQuestion(body: string): boolean {
@@ -168,6 +175,11 @@ export interface SearchResult<T> {
   matches: T[];
   total: number;
   hasMore: boolean;
+  /**
+   * La foto, solo cuando hay UN único producto: con una lista no se puede
+   * elegir cuál enseñar, y tres fotos seguidas serían un muro.
+   */
+  photo?: string | null;
 }
 
 /** Lo que se busca, armado con lo que dijo el modelo. */
@@ -198,10 +210,20 @@ async function runSearch(
   const [rows, total] = (await Promise.all([
     prismadb.product.findMany({
       where,
-      // `description` solo se pide cuando preguntan cómo es el producto.
-      select: options.withDescription
-        ? { ...MATCH_SELECT, description: true }
-        : MATCH_SELECT,
+      // `description` solo se pide cuando preguntan cómo es el producto. La
+      // foto se pide SIEMPRE: cualquier respuesta de un solo producto la lleva.
+      select: {
+        ...MATCH_SELECT,
+        ...(options.withDescription ? { description: true } : {}),
+        images: {
+          // La marcada como principal manda; las rotas (las marca el cron
+          // diario) ni se miran. Es el mismo criterio que usa la tienda.
+          where: { brokenAt: null },
+          orderBy: { isMain: "desc" as const },
+          select: { url: true },
+          take: 1,
+        },
+      },
       // El buscador de la tienda ordena por relevancia calculada en SQL, que
       // aquí no aplica. Lo más vendido primero es lo que más suele servir.
       orderBy: [{ soldCount: "desc" }, { createdAt: "desc" }],
@@ -209,10 +231,36 @@ async function runSearch(
     }),
     prismadb.product.count({ where }),
   ])) as [
-    { id: string; name: string; price: number; stock: number; description?: string | null }[],
+    {
+      id: string;
+      name: string;
+      price: number;
+      stock: number;
+      description?: string | null;
+      images: { url: string }[];
+    }[],
     number,
   ];
   return { rows, total };
+}
+
+/** El ancho que ya usan la tienda y el panel; pedir otro crearía copias nuevas. */
+export const PHOTO_WIDTH = 1600;
+
+/**
+ * La foto que se manda de un producto, ya lista para WhatsApp.
+ *
+ * `null` no es un fallo: son los ~9 productos de 845 sin ninguna utilizable
+ * (todas rotas, o solo webp). La respuesta sale igual, sin foto.
+ *
+ * Pasa por la transformación de siempre, que además de no crear copias nuevas
+ * en Cloudinary devuelve JPEG, lo único —con PNG— que Meta acepta.
+ */
+export function pickPhoto(images: { url: string }[] | undefined): string | null {
+  const url = images?.[0]?.url;
+  if (!url) return null;
+  const listo = getCloudinaryImageUrl(url, PHOTO_WIDTH);
+  return listo.trim() ? listo : null;
 }
 
 export async function resolveProductSearch(
@@ -228,6 +276,7 @@ export async function resolveProductSearch(
       matches: found.rows.map((p) => ({ name: p.name, price: p.price })),
       total: found.total,
       hasMore: found.total > PRODUCT_MATCH_LIMIT,
+      photo: found.total === 1 ? pickPhoto(found.rows[0]?.images) : null,
     },
   };
 }
@@ -288,6 +337,7 @@ export async function resolveAvailability(
       matches: found.rows.map((p) => ({ name: p.name, inStock: p.stock > 0 })),
       total: found.total,
       hasMore: found.total > PRODUCT_MATCH_LIMIT,
+      photo: found.total === 1 ? pickPhoto(found.rows[0]?.images) : null,
     },
   };
 }
@@ -324,6 +374,7 @@ export async function resolveProductFeatures(
         matches: found.rows.map((p) => ({ name: p.name, price: p.price })),
         total: found.total,
         hasMore: found.total > PRODUCT_MATCH_LIMIT,
+        photo: null,
       },
     };
   }
@@ -340,6 +391,7 @@ export async function resolveProductFeatures(
       matches: [{ name: only.name, description: trimForWhatsApp(description) }],
       total: 1,
       hasMore: false,
+      photo: pickPhoto(only.images),
     },
   };
 }
@@ -386,6 +438,10 @@ export const PRODUCT_TEMPLATES = {
     `${name} 💛\n${description}\n¿Te cuento algo más?`,
   "features.which": (lineas: string) =>
     `¿Cuál de estos? 💛\n${lineas}\nDime cuál y te cuento cómo es.`,
+  "photo.one": (name: string, price: string) =>
+    `Mira 💛 ${name} — ${price}. ¿Te lo aparto?`,
+  "photo.none.usable": (name: string, price: string) =>
+    `${name} está en ${price} 💛 No tengo foto de ese a la mano, pero le digo a Paula que te la mande.`,
   "features.which.many": (lineas: string, resto: number) =>
     `Tengo varios 💛\n${lineas}\n…y ${resto} más. Dime cuál y te cuento cómo es.`,
 } as const;
@@ -473,6 +529,14 @@ export function previewProductTemplates(): { label: string; text: string }[] {
       label: "Pregunta cómo es, pero hay varios",
       text: renderProductFeatures(varios),
     },
+    {
+      label: "Pide una foto y hay una",
+      text: renderProductPhoto({ ...uno, photo: "https://…/foto.jpg" }),
+    },
+    {
+      label: "Pide una foto pero no tenemos ninguna",
+      text: renderProductPhoto({ ...uno, photo: null }),
+    },
   ];
 }
 
@@ -519,6 +583,26 @@ export function renderProductFeatures(
     : t["features.which"](lineas);
 }
 
+export function renderProductPhoto(result: SearchResult<ProductMatch>): string {
+  const t = PRODUCT_TEMPLATES;
+  if (result.total === 0) return t["search.none"]();
+  if (result.total === 1) {
+    const only = result.matches[0];
+    const precio = formatCOP(only.price);
+    // Sin foto utilizable se avisa, porque aquí LA FOTO era lo que pedía.
+    return result.photo
+      ? t["photo.one"](only.name, precio)
+      : t["photo.none.usable"](only.name, precio);
+  }
+  // Con varios no se manda ninguna foto: primero hay que saber cuál.
+  const lineas = result.matches
+    .map((m) => linea(m.name, formatCOP(m.price)))
+    .join("\n");
+  return result.hasMore
+    ? t["price.many"](lineas, result.total - result.matches.length)
+    : t["price.few"](lineas);
+}
+
 export function renderProductSearch(result: SearchResult<ProductMatch>): string {
   const t = PRODUCT_TEMPLATES;
   if (result.total === 0) return t["search.none"]();
@@ -557,6 +641,8 @@ export function renderAvailability(
 export interface ProductAnswer {
   intent: ProductIntent;
   text: string;
+  /** Va con la respuesta cuando hay un solo producto y tiene foto sana. */
+  photo?: string | null;
 }
 
 /**
@@ -592,13 +678,13 @@ export async function answerProductQuestion(
   if (c.intent === "product.availability") {
     const fact = await resolveAvailability(storeId, c);
     if (!fact.known) return null;
-    return { intent: c.intent, text: renderAvailability(fact.value) };
+    return { intent: c.intent, text: renderAvailability(fact.value), photo: fact.value.photo };
   }
 
   if (c.intent === "product.price") {
     const fact = await resolveProductPrice(storeId, c);
     if (!fact.known) return null;
-    return { intent: c.intent, text: renderProductPrice(fact.value) };
+    return { intent: c.intent, text: renderProductPrice(fact.value), photo: fact.value.photo };
   }
 
   if (c.intent === "product.features") {
@@ -606,10 +692,20 @@ export async function answerProductQuestion(
     // pero su descripción no da para contar nada.
     const fact = await resolveProductFeatures(storeId, c);
     if (!fact.known) return null;
-    return { intent: c.intent, text: renderProductFeatures(fact.value) };
+    return { intent: c.intent, text: renderProductFeatures(fact.value), photo: fact.value.photo };
+  }
+
+  if (c.intent === "product.photo") {
+    const fact = await resolveProductSearch(storeId, c);
+    if (!fact.known) return null;
+    return {
+      intent: c.intent,
+      text: renderProductPhoto(fact.value),
+      photo: fact.value.photo,
+    };
   }
 
   const fact = await resolveProductSearch(storeId, c);
   if (!fact.known) return null;
-  return { intent: c.intent, text: renderProductSearch(fact.value) };
+  return { intent: c.intent, text: renderProductSearch(fact.value), photo: fact.value.photo };
 }

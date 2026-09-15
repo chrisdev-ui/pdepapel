@@ -33,6 +33,7 @@ import {
 } from "@/lib/whatsapp/bot-replies";
 import {
   sendWhatsAppButtonMessage,
+  sendWhatsAppImageButtonMessage,
   sendWhatsAppTypingIndicator,
   type WhatsAppReplyButton,
 } from "@/lib/whatsapp/send";
@@ -350,6 +351,7 @@ export async function runWhatsAppBot(input: {
         answer.text,
         [],
         pacing(input),
+        answer.photo,
       );
       if (sent.ok) {
         return { outcome: "replied_product", trigger: answer.intent };
@@ -440,6 +442,8 @@ async function deliver(
   answer: string,
   buttons: { title: string; targetReplyId: string }[],
   pace: Pacing,
+  /** Foto que va encima del texto, si el producto tiene una utilizable. */
+  photo?: string | null,
 ): Promise<{ ok: boolean; error?: string }> {
   const reply = formatBotReply(answer);
 
@@ -455,11 +459,24 @@ async function deliver(
   }
   if (!pace.skip) await sleep(getHumanPauseMs(reply));
 
-  const sent = await sendWhatsAppButtonMessage(
-    phone,
-    reply,
-    buildReplyButtons(buttons),
-  );
+  const conBotones = buildReplyButtons(buttons);
+  let salioConFoto = Boolean(photo);
+  let sent = photo
+    ? await sendWhatsAppImageButtonMessage(phone, reply, conBotones, photo)
+    : await sendWhatsAppButtonMessage(phone, reply, conBotones);
+
+  // Si lo que falló fue la foto (URL caída, formato raro, un no de Meta), se
+  // manda el MISMO texto sin ella. Perder la foto es un detalle; dejar a la
+  // clienta sin respuesta, no. Es el único reintento que hace el bot, y solo
+  // porque el primer envío no llegó a salir.
+  if (!sent.ok && photo) {
+    console.warn("[WHATSAPP_BOT] La foto no salió; se manda solo el texto", {
+      conversationId,
+      error: sent.error,
+    });
+    salioConFoto = false;
+    sent = await sendWhatsAppButtonMessage(phone, reply, conBotones);
+  }
 
   if (!sent.ok) {
     // Queda el intento escrito para que se vea qué se quiso mandar. No se
@@ -484,6 +501,9 @@ async function deliver(
       sentBy: ConversationMessageSentBy.BOT,
       externalId: sent.externalId,
       body: reply,
+      // Solo si de verdad salió con foto: si hubo que repetir sin ella, en el
+      // panel tiene que verse lo mismo que le llegó a la clienta.
+      ...(salioConFoto && photo ? { mediaType: "image", mediaUrl: photo } : {}),
       status: ConversationMessageStatus.SENT,
       createdAt: now,
     },

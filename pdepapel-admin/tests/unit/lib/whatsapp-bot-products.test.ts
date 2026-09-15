@@ -20,6 +20,7 @@ vi.mock("@/lib/env.mjs", () => ({ env: { GEMINI_API_KEY: "clave-de-prueba" } }))
 
 import {
   MIN_USEFUL_DESCRIPTION_LENGTH,
+  PHOTO_WIDTH,
   PRODUCT_TEMPLATES_VERSION,
   answerProductQuestion,
   areProductAnswersApproved,
@@ -28,7 +29,9 @@ import {
   looksLikeProductQuestion,
   previewProductTemplates,
   cleanDescription,
+  pickPhoto,
   renderAvailability,
+  renderProductPhoto,
   renderProductFeatures,
   renderProductPrice,
   renderProductSearch,
@@ -128,7 +131,7 @@ describe("resolvedores", () => {
     const fact = await resolveProductSearch("store-1", clasificacion);
     expect(fact).toEqual({
       known: true,
-      value: { matches: [], total: 0, hasMore: false },
+      value: { matches: [], total: 0, hasMore: false, photo: null },
     });
   });
 
@@ -147,7 +150,16 @@ describe("resolvedores", () => {
     mocks.count.mockResolvedValue(0);
     await resolveAvailability("store-1", clasificacion);
     const args = mocks.findMany.mock.calls[0][0];
-    expect(args.select).toEqual({ id: true, name: true, price: true, stock: true });
+    // Lo de siempre, más la foto; nada más. `stock` entra aquí y sale booleano.
+    expect(Object.keys(args.select).sort()).toEqual([
+      "id", "images", "name", "price", "stock",
+    ]);
+    expect(args.select.images).toEqual({
+      where: { brokenAt: null },
+      orderBy: { isMain: "desc" },
+      select: { url: true },
+      take: 1,
+    });
     expect(args.where.isArchived).toBe(false);
     expect(args.orderBy).toEqual([{ soldCount: "desc" }, { createdAt: "desc" }]);
     expect(args.take).toBe(3);
@@ -665,6 +677,162 @@ describe("las dos intenciones nuevas, de la pregunta al texto", () => {
       "de qué material es la agenda?",
       "qué tamaño tiene el planeador",
       "qué trae el kit escolar?",
+    ]) {
+      expect(looksLikeProductQuestion(q)).toBe(true);
+    }
+  });
+});
+
+// ===================== Fotos =====================
+
+const FOTO_CRUDA =
+  "https://res.cloudinary.com/dsogxa0hj/image/upload/v1785959687/ozk0z5nxhcqi0xv42he2.jpg";
+const FOTO_LISTA =
+  "https://res.cloudinary.com/dsogxa0hj/image/upload/f_auto,q_auto,c_limit,w_1600/v1785959687/ozk0z5nxhcqi0xv42he2.jpg";
+
+describe("elegir la foto", () => {
+  it("la pasa por la transformación de siempre", () => {
+    expect(pickPhoto([{ url: FOTO_CRUDA }])).toBe(FOTO_LISTA);
+    // Ese ancho ya lo usan tienda y panel: pedir otro crearía copias nuevas.
+    expect(PHOTO_WIDTH).toBe(1600);
+    expect(pickPhoto([{ url: FOTO_CRUDA }])).toContain("f_auto,q_auto,c_limit,w_1600");
+  });
+
+  it("sin fotos devuelve null, que no es un error", () => {
+    expect(pickPhoto([])).toBeNull();
+    expect(pickPhoto(undefined)).toBeNull();
+  });
+
+  it("la consulta ya trae la principal y descarta las rotas", async () => {
+    // El orden y el filtro los pone Prisma; aquí se comprueba que se piden.
+    vi.clearAllMocks();
+    mocks.findMany.mockResolvedValue([]);
+    mocks.count.mockResolvedValue(0);
+    await resolveProductSearch("store-1", clasificacion);
+    const { images } = mocks.findMany.mock.calls[0][0].select;
+    expect(images.where).toEqual({ brokenAt: null });
+    expect(images.orderBy).toEqual({ isMain: "desc" });
+    expect(images.take).toBe(1);
+  });
+});
+
+describe("la foto viaja con las respuestas de un solo producto", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const unSolo = (images: { url: string }[], extra: Record<string, unknown> = {}) => {
+    mocks.findMany.mockResolvedValue([
+      { id: "1", name: "Separador Harry", price: 9000, stock: 4, images, ...extra },
+    ]);
+    mocks.count.mockResolvedValue(1);
+  };
+
+  it("búsqueda, disponibilidad y precio la llevan", async () => {
+    for (const resolver of [resolveProductSearch, resolveAvailability, resolveProductPrice]) {
+      vi.clearAllMocks();
+      unSolo([{ url: FOTO_CRUDA }]);
+      const fact = await resolver("store-1", clasificacion);
+      expect(fact.known).toBe(true);
+      if (!fact.known) return;
+      expect(fact.value.photo).toBe(FOTO_LISTA);
+    }
+  });
+
+  it("características también", async () => {
+    unSolo([{ url: FOTO_CRUDA }], { description: DESCRIPCION_REAL });
+    const fact = await resolveProductFeatures("store-1", {
+      ...clasificacion,
+      intent: "product.features",
+    });
+    expect(fact.known).toBe(true);
+    if (!fact.known) return;
+    expect(fact.value.photo).toBe(FOTO_LISTA);
+  });
+
+  it("con VARIOS productos no va ninguna foto", async () => {
+    mocks.findMany.mockResolvedValue([
+      { id: "1", name: "A", price: 1000, stock: 1, images: [{ url: FOTO_CRUDA }] },
+      { id: "2", name: "B", price: 2000, stock: 1, images: [{ url: FOTO_CRUDA }] },
+    ]);
+    mocks.count.mockResolvedValue(2);
+    const fact = await resolveProductSearch("store-1", clasificacion);
+    expect(fact.known && fact.value.photo).toBeNull();
+  });
+
+  it("los ~9 productos sin foto utilizable: photo null y el texto sale igual", async () => {
+    unSolo([]);
+    const fact = await resolveProductSearch("store-1", clasificacion);
+    expect(fact.known).toBe(true);
+    if (!fact.known) return;
+    expect(fact.value.photo).toBeNull();
+    // Lo importante: la respuesta existe igual, sin disculpa ni escalado.
+    expect(renderProductSearch(fact.value)).toContain("Separador Harry");
+  });
+});
+
+describe("intención: pedir una foto", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("uno solo con foto: texto corto, la foto habla", () => {
+    const texto = renderProductPhoto({
+      matches: [{ name: "Separador Harry", price: 9000 }],
+      total: 1,
+      hasMore: false,
+      photo: FOTO_LISTA,
+    });
+    expect(texto).toContain("Separador Harry");
+    expect(texto).toContain("$9.000");
+    expect(texto.length).toBeLessThan(120);
+  });
+
+  it("uno solo SIN foto: aquí sí se avisa, porque era lo que pedía", () => {
+    const texto = renderProductPhoto({
+      matches: [{ name: "Separador Harry", price: 9000 }],
+      total: 1,
+      hasMore: false,
+      photo: null,
+    });
+    expect(texto).toMatch(/no tengo foto/i);
+    expect(texto).toContain("Paula");
+  });
+
+  it("varios: lista y pregunta cuál, sin mandar foto", () => {
+    const texto = renderProductPhoto({
+      matches: [
+        { name: "A", price: 1000 },
+        { name: "B", price: 2000 },
+      ],
+      total: 2,
+      hasMore: false,
+      photo: null,
+    });
+    expect(texto).toMatch(/cuál te interesa/i);
+  });
+
+  it("ninguno: el «no lo tengo» de siempre", () => {
+    expect(renderProductPhoto({ matches: [], total: 0, hasMore: false, photo: null })).toBe(
+      "Ay, eso no lo tengo por ahora 💛 Te aviso apenas llegue.",
+    );
+  });
+
+  it("de la pregunta al mensaje con foto", async () => {
+    mocks.generateText.mockResolvedValue({
+      output: { intent: "product.photo", productType: "separador", character: "Harry" },
+    });
+    mocks.findMany.mockResolvedValue([
+      { id: "1", name: "Separador Harry", price: 9000, stock: 4, images: [{ url: FOTO_CRUDA }] },
+    ]);
+    mocks.count.mockResolvedValue(1);
+    const r = await answerProductQuestion("store-1", "mándame una foto del separador de Harry");
+    expect(r?.intent).toBe("product.photo");
+    expect(r?.photo).toBe(FOTO_LISTA);
+  });
+
+  it("el portero deja pasar las formas de pedir una foto", () => {
+    for (const q of [
+      "mándame una foto del cuaderno",
+      "cómo se ve el separador?",
+      "tienes fotos de la agenda?",
+      "muéstrame el llavero",
     ]) {
       expect(looksLikeProductQuestion(q)).toBe(true);
     }
