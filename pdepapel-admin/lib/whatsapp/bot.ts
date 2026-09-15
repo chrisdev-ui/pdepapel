@@ -261,8 +261,8 @@ export async function runWhatsAppBot(input: {
   body: string;
   /** Id del botón tocado, si el mensaje fue un toque y no texto escrito. */
   interactiveReplyId?: string | null;
-  /** Un adjunto que llegó sin una sola palabra que leer. */
-  unreadableMedia?: boolean;
+  /** Una foto, un audio, un video o un documento: lo mira Paula. */
+  mediaForOwner?: boolean;
   /** `wamid` del mensaje entrante: hace falta para «escribiendo…». */
   inboundMessageId?: string | null;
   /**
@@ -424,10 +424,12 @@ export async function runWhatsAppBot(input: {
     return { outcome: "skipped_needs_owner" };
   }
 
-  // 2 bis. Un adjunto sin texto. Va aquí, después del portón de arriba, para
-  //    que si la conversación ya está esperando a Paula no salga un segundo
-  //    acuse: el silencio de ese portón vale también para las fotos.
-  if (input.unreadableMedia && !input.body.trim()) {
+  // 2 bis. Una foto o un audio. Ni con pie de foto se intenta contestar: lo
+  //    que importa está DENTRO del adjunto y el bot no lo ve, así que adivinar
+  //    por las palabras de al lado solo sirve para equivocarse. Va aquí,
+  //    después del portón de arriba, para que si la conversación ya espera a
+  //    Paula no salga un segundo acuse encima del primero.
+  if (input.mediaForOwner) {
     // Se marca primero, igual que en el paso 6: la pausa humana dura segundos
     // y en ese rato puede entrar otra foto de la misma ráfaga.
     await escalate(conversation.id);

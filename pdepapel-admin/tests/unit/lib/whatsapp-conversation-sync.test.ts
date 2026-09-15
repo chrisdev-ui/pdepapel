@@ -43,7 +43,7 @@ vi.mock("@/lib/prismadb", () => ({
 import {
   MAX_WHATSAPP_EVENT_ATTEMPTS,
   extractWhatsAppEvents,
-  isMediaWorthAnswering,
+  isMediaForOwner,
   processWhatsAppWebhookEvent,
 } from "@/lib/whatsapp/conversation-sync";
 
@@ -881,7 +881,7 @@ describe("processWhatsAppWebhookEvent", () => {
     // La imagen sin pie entra marcada, para que el bot sepa que no hay nada
     // que leer y conteste con su acuse propio en vez de callarse.
     expect(mocks.runBot).toHaveBeenCalledWith(
-      expect.objectContaining({ body: "", unreadableMedia: true }),
+      expect.objectContaining({ body: "", mediaForOwner: true }),
     );
     expect(mocks.runBot).toHaveBeenCalledWith({
       conversationId: "conversation-1",
@@ -1015,15 +1015,15 @@ describe("el pie de foto de una clienta", () => {
   });
 });
 
-describe("qué adjuntos merecen respuesta", () => {
+describe("qué adjuntos van derechos a Paula", () => {
   it.each(["image", "video", "document", "audio"])("%s sí", (tipo) => {
-    expect(isMediaWorthAnswering(tipo)).toBe(true);
+    expect(isMediaForOwner(tipo)).toBe(true);
   });
 
   it.each(["sticker", "reaction", "unsupported", null, ""])(
     "%s no: es un gesto, no una pregunta",
     (tipo) => {
-      expect(isMediaWorthAnswering(tipo as string | null)).toBe(false);
+      expect(isMediaForOwner(tipo as string | null)).toBe(false);
     },
   );
 });

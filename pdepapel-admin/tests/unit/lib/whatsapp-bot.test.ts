@@ -1077,7 +1077,7 @@ describe("ritmo humano", () => {
   });
 
   describe("una foto sin una sola palabra", () => {
-    const soloFoto = { ...input, body: "", unreadableMedia: true };
+    const soloFoto = { ...input, body: "", mediaForOwner: true };
 
     it("ya no se queda callado: acusa recibo y se lo pasa a Paula", async () => {
       await expect(runWhatsAppBot(soloFoto)).resolves.toEqual({
@@ -1130,12 +1130,24 @@ describe("ritmo humano", () => {
       expect(mocks.send).not.toHaveBeenCalled();
     });
 
-    it("una foto CON pie de foto sigue el camino normal, no este", async () => {
-      // El pie ya viene como `body`, así que es un mensaje como cualquier otro.
+    it("CON pie de foto tampoco se intenta: lo que importa está en la imagen", async () => {
+      // El 2026-09-15 una clienta mandó la foto de una lista del colegio y se
+      // le contestó con ocho productos sacados de la palabra «útiles». Ahora
+      // ni con texto al lado se adivina.
       await expect(
-        runWhatsAppBot({ ...input, body: "¿Cuál es el horario?", unreadableMedia: true }),
-      ).resolves.toEqual({ outcome: "replied", trigger: "horario" });
-      expect(mocks.send.mock.calls[0][1]).toBe("Abrimos de 9 a 6.");
+        runWhatsAppBot({
+          ...input,
+          body: "me están pidiendo estos útiles",
+          mediaForOwner: true,
+        }),
+      ).resolves.toEqual({ outcome: "escalated_unprocessable_media" });
+      expect(mocks.send.mock.calls[0][1]).toBe(UNREADABLE_MEDIA_ACKNOWLEDGEMENT);
+    });
+
+    it("un audio va por el mismo camino que una foto", async () => {
+      await expect(
+        runWhatsAppBot({ ...input, body: "", mediaForOwner: true }),
+      ).resolves.toEqual({ outcome: "escalated_unprocessable_media" });
     });
 
     it("si el acuse no sale, queda igualmente marcada para Paula", async () => {

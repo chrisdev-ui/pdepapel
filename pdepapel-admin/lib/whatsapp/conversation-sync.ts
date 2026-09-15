@@ -129,17 +129,23 @@ const MEDIA_WITH_CAPTION = [
 ] as const;
 
 /**
- * Adjuntos que, aun sin una palabra, son alguien pidiendo algo: una foto del
- * producto que quiere, un audio con la pregunta, un comprobante de pago.
- * Merecen respuesta aunque no haya nada que leer.
+ * Adjuntos que van derechos a Paula, lleven pie de foto o no.
+ *
+ * Lo que va dentro de una foto o de un audio —una lista de útiles del colegio,
+ * la marca exacta que le pidieron, «¿tienes esto?» dicho en voz— el bot no lo
+ * puede leer. Y adivinar por las dos palabras que vengan sueltas al lado sale
+ * mal: el 2026-09-15 una clienta mandó la foto de una lista del colegio y se
+ * le contestó con ocho productos al azar sacados de la palabra «útiles».
+ *
+ * Así que ni se intenta. Se acusa recibo y lo mira Paula, que sí puede verlo.
  *
  * Fuera quedan los stickers y las reacciones a propósito: son un gesto, no una
  * pregunta, y contestarles «se lo paso a Paula» sería ruido.
  */
-const MEDIA_WORTH_ANSWERING = ["image", "video", "document", "audio"];
+const MEDIA_FOR_OWNER = ["image", "video", "document", "audio"];
 
-export function isMediaWorthAnswering(mediaType: string | null): boolean {
-  return Boolean(mediaType && MEDIA_WORTH_ANSWERING.includes(mediaType));
+export function isMediaForOwner(mediaType: string | null): boolean {
+  return Boolean(mediaType && MEDIA_FOR_OWNER.includes(mediaType));
 }
 
 function getMessageBody(message: JsonRecord): string | null {
@@ -610,16 +616,18 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
       body: string;
       interactiveReplyId: string | null;
       inboundMessageId: string | null;
-      unreadableMedia?: boolean;
+      mediaForOwner?: boolean;
     }> = [];
 
     for (const message of extracted.messages) {
       const filed = await fileInboundMessage(storeId, message, event.id);
       if (filed.outcome !== "created") continue;
-      // Un adjunto sin una sola palabra tampoco puede quedarse sin respuesta:
-      // antes ni llegaba aquí y la clienta se quedaba mirando el chat.
-      const mudo = !message.body && isMediaWorthAnswering(message.mediaType);
-      if (!message.body && !mudo) continue;
+      // Una foto o un audio van a Paula lleven pie o no: el pie se guarda para
+      // que ella lo lea en el panel, pero no se usa para adivinar una
+      // respuesta. Antes esto ni llegaba aquí y la clienta se quedaba mirando
+      // el chat sin saber si su foto había llegado.
+      const paraPaula = isMediaForOwner(message.mediaType);
+      if (!message.body && !paraPaula) continue;
       botCandidates.push({
         conversationId: filed.conversationId,
         phone: message.phone,
@@ -627,7 +635,7 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
         interactiveReplyId: message.interactiveReplyId,
         // Hace falta para mostrar «escribiendo…» y marcar como leído.
         inboundMessageId: message.externalId,
-        ...(mudo ? { unreadableMedia: true } : {}),
+        ...(paraPaula ? { mediaForOwner: true } : {}),
       });
     }
 
