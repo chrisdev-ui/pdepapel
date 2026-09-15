@@ -156,6 +156,17 @@ export const TALK_TO_OWNER_ACKNOWLEDGEMENT =
 export const NO_MATCH_ACKNOWLEDGEMENT =
   "Esa no me la sé 💛 Le paso tu mensaje a Paula y ella te escribe apenas pueda.";
 
+/**
+ * Lo que se dice cuando entender la pregunta está tardando.
+ *
+ * El modelo llegó a tardar 30 segundos el 2026-09-15, y treinta segundos de
+ * silencio se leen como que el mensaje no llegó. Esto no acelera nada: sirve
+ * para que la espera se note acompañada. No pasa por el visto bueno de Paula
+ * porque no es una respuesta sobre productos, es un acuse, como los de arriba.
+ */
+export const SLOW_ANSWER_ACKNOWLEDGEMENT =
+  "Dame un segundito que lo busco 💛";
+
 /** Cuando el botón apunta a una respuesta que ya no está disponible. */
 export const UNAVAILABLE_OPTION_ACKNOWLEDGEMENT =
   "Esa opción ya no está disponible 💛 Le aviso a Paula para que te ayude.";
@@ -485,7 +496,28 @@ export async function runWhatsAppBot(input: {
       input.settings ?? (await readSettings(conversation.storeId));
     const answer =
       productSettings && areProductAnswersApproved(productSettings)
-        ? await answerProductQuestion(conversation.storeId, input.body)
+        ? await answerProductQuestion(conversation.storeId, input.body, {
+            // Sale solo si la clasificación se hace larga. Sin lista y sin
+            // pausa humana: ya se ha esperado bastante, y `deliver` no le
+            // pone `shown`, así que no estorba a «el primero» —la etapa de
+            // referencias busca el último mensaje CON lista y este no la
+            // lleva, igual que cualquier otro acuse.
+            onSlow: async () => {
+              const avisado = await deliver(
+                conversation.id,
+                input.phone,
+                SLOW_ANSWER_ACKNOWLEDGEMENT,
+                [],
+                { ...pacing(input), skip: true },
+              );
+              if (!avisado.ok) {
+                console.warn("[WHATSAPP_BOT] No salió el aviso de espera", {
+                  conversationId: conversation.id,
+                  error: avisado.error,
+                });
+              }
+            },
+          })
         : null;
     if (answer) {
       const sent = await deliver(

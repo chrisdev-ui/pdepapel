@@ -191,6 +191,19 @@ describe("resolveProductReference", () => {
     });
   });
 
+  it("un acuse por medio no tapa la lista: el aviso de «dame un segundito»", async () => {
+    // El aviso de espera se guarda SIN `shown`, así que la búsqueda del último
+    // mensaje con lista lo salta, igual que cualquier otro acuse.
+    mocks.messageFindMany.mockResolvedValue([
+      { metadata: null, createdAt: haceMinutos(0) },
+      mensajeCon(["p1", "p2"], 1),
+    ]);
+    await expect(resolver({ kind: "ordinal", position: 1 })).resolves.toMatchObject({
+      outcome: "resolved",
+      productId: "p1",
+    });
+  });
+
   it("usa la lista MÁS RECIENTE cuando hay dos", async () => {
     mocks.messageFindMany.mockResolvedValue([
       mensajeCon(["nueva1", "nueva2"], 1),

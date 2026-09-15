@@ -28,6 +28,9 @@ vi.mock("@/lib/env.mjs", () => ({ env: { GEMINI_API_KEY: "clave-de-prueba" } }))
 import {
   MIN_USEFUL_DESCRIPTION_LENGTH,
   PHOTO_WIDTH,
+  PRODUCT_TEMPLATES,
+  PRODUCT_CLASSIFIER_SLOW_NOTICE_MS,
+  PRODUCT_CLASSIFIER_TIMEOUT_MS,
   PRODUCT_MATCH_LIMIT,
   PRODUCT_TEMPLATES_VERSION,
   answerProductQuestion,
@@ -1173,5 +1176,121 @@ describe("contestar de un producto que ya se sabe cuál es", () => {
     });
     const answer = await answerAboutProduct("store-1", "p1", "product.photo");
     expect(answer?.photo).toContain("foto.jpg");
+  });
+});
+
+describe("cuando el modelo tarda", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
+  });
+
+  it("espera lo que hace falta, con margen bajo el «escribiendo…» de Meta", () => {
+    // Medido el 2026-09-15: hasta 30 s, 14 de mediana. Dos segundos y medio
+    // tumbaban 7 de cada 8 llamadas.
+    expect(PRODUCT_CLASSIFIER_TIMEOUT_MS).toBeGreaterThanOrEqual(15000);
+    // Meta mantiene el indicador unos 25 s; hay que caber dentro con la
+    // respuesta, no solo con la clasificación.
+    expect(PRODUCT_CLASSIFIER_TIMEOUT_MS).toBeLessThanOrEqual(20000);
+    expect(PRODUCT_CLASSIFIER_SLOW_NOTICE_MS).toBeLessThan(PRODUCT_CLASSIFIER_TIMEOUT_MS);
+  });
+
+  it("avisa si se pasa del umbral, y sigue esperando la misma respuesta", async () => {
+    vi.useFakeTimers();
+    try {
+      let soltar: (v: unknown) => void = () => undefined;
+      mocks.generateText.mockReturnValue(
+        new Promise((resolve) => {
+          soltar = resolve;
+        }),
+      );
+      mocks.findMany.mockResolvedValue([
+        { id: "p1", name: "Lapicero gel", price: 5500, stock: 3, images: [] },
+      ]);
+      mocks.count.mockResolvedValue(1);
+
+      const onSlow = vi.fn().mockResolvedValue(undefined);
+      const pendiente = answerProductQuestion("store-1", "tienen lapiceros en gel?", {
+        onSlow,
+      });
+
+      await vi.advanceTimersByTimeAsync(PRODUCT_CLASSIFIER_SLOW_NOTICE_MS + 10);
+      expect(onSlow).toHaveBeenCalledOnce();
+
+      // Y la respuesta de verdad sigue llegando después del aviso.
+      soltar({
+        output: { intent: "product.search", productType: "lapicero", character: null, descriptor: "gel" },
+      });
+      await vi.advanceTimersByTimeAsync(10);
+      const answer = await pendiente;
+      expect(answer?.text).toContain("Lapicero gel");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("si contesta rápido no avisa de nada", async () => {
+    mocks.generateText.mockResolvedValue({
+      output: { intent: "product.search", productType: "lapicero", character: null, descriptor: null },
+    });
+    mocks.findMany.mockResolvedValue([
+      { id: "p1", name: "Lapicero gel", price: 5500, stock: 3, images: [] },
+    ]);
+    mocks.count.mockResolvedValue(1);
+
+    const onSlow = vi.fn();
+    await answerProductQuestion("store-1", "tienen lapiceros?", { onSlow });
+    expect(onSlow).not.toHaveBeenCalled();
+  });
+
+  it("si el aviso revienta, la respuesta sale igual", async () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      let soltar: (v: unknown) => void = () => undefined;
+      mocks.generateText.mockReturnValue(new Promise((r) => { soltar = r; }));
+      mocks.findMany.mockResolvedValue([
+        { id: "p1", name: "Lapicero gel", price: 5500, stock: 3, images: [] },
+      ]);
+      mocks.count.mockResolvedValue(1);
+
+      const pendiente = answerProductQuestion("store-1", "tienen lapiceros?", {
+        onSlow: () => Promise.reject(new Error("Meta dijo que no")),
+      });
+      await vi.advanceTimersByTimeAsync(PRODUCT_CLASSIFIER_SLOW_NOTICE_MS + 10);
+      soltar({
+        output: { intent: "product.search", productType: "lapicero", character: null, descriptor: null },
+      });
+      await vi.advanceTimersByTimeAsync(10);
+
+      expect((await pendiente)?.text).toContain("Lapicero gel");
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+      warn.mockRestore();
+    }
+  });
+
+  it("sin `onSlow` no monta ningún temporizador", async () => {
+    mocks.generateText.mockResolvedValue({
+      output: { intent: "product.search", productType: "lapicero", character: null, descriptor: null },
+    });
+    mocks.findMany.mockResolvedValue([]);
+    mocks.count.mockResolvedValue(0);
+    await expect(
+      answerProductQuestion("store-1", "tienen lapiceros?"),
+    ).resolves.not.toBeNull();
+  });
+});
+
+describe("la copia de la lista", () => {
+  it("dice «escoge», no «tócame»", () => {
+    const body = PRODUCT_TEMPLATES["list.body.few"](3);
+    expect(body).toContain("escoge el que quieras");
+    expect(body).not.toContain("tócame");
+  });
+
+  it("la de «hay más» se queda como estaba", () => {
+    expect(PRODUCT_TEMPLATES["list.body.many"](9, 4)).toContain("Toca el que te guste");
   });
 });

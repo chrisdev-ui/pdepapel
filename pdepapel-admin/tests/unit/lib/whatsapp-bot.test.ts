@@ -66,6 +66,7 @@ import {
   HUMAN_PAUSE_MAX_MS,
   HUMAN_PAUSE_READ_MS,
   NO_MATCH_ACKNOWLEDGEMENT,
+  SLOW_ANSWER_ACKNOWLEDGEMENT,
   OWNER_TAKEOVER_WINDOW_HOURS,
   TALK_TO_OWNER_ACKNOWLEDGEMENT,
   UNAVAILABLE_OPTION_ACKNOWLEDGEMENT,
@@ -1067,6 +1068,88 @@ describe("ritmo humano", () => {
 
     expect(mocks.typing).not.toHaveBeenCalled();
     expect(mocks.send).toHaveBeenCalled();
+  });
+
+  describe("el aviso de que va lento", () => {
+    const aprobado: ResolvedStoreSettings = {
+      ...ajustesBase,
+      botProductsApprovedAt: new Date("2026-09-15T00:00:00.000Z"),
+      botProductsVersion: PRODUCT_TEMPLATES_VERSION,
+    };
+
+    /** Deja que el módulo de productos dispare el aviso cuando quiera. */
+    const conAviso = (respuesta: unknown) =>
+      mocks.answerProduct.mockImplementation(async (_store, _body, opciones) => {
+        await opciones?.onSlow?.();
+        return respuesta;
+      });
+
+    beforeEach(() => {
+      mocks.resolveReference.mockResolvedValue({ outcome: "none" });
+      mocks.sendImage.mockResolvedValue({ ok: true, externalId: "wamid.IMG1" });
+    });
+
+    const preguntar = () =>
+      runWhatsAppBot({ ...input, body: "tienen lapiceros en gel?", settings: aprobado });
+
+    it("sale el aviso y después la respuesta de verdad", async () => {
+      conAviso({
+        intent: "product.search",
+        text: "Sí 💛 Tengo Lapicero gel en $5.500. ¿Te lo aparto?",
+        photo: null,
+        shownIds: ["p1"],
+      });
+
+      await expect(preguntar()).resolves.toMatchObject({ outcome: "replied_product" });
+      expect(mocks.send).toHaveBeenCalledTimes(2);
+      expect(mocks.send.mock.calls[0][1]).toBe(SLOW_ANSWER_ACKNOWLEDGEMENT);
+      expect(mocks.send.mock.calls[1][1]).toContain("Lapicero gel");
+    });
+
+    it("el aviso NO se guarda como lista: «el primero» sigue mirando la buena", async () => {
+      conAviso({
+        intent: "product.search",
+        text: "Mira 💛 …",
+        photo: null,
+        shownIds: ["p1", "p2"],
+      });
+
+      await preguntar();
+      const guardados = mocks.messageCreate.mock.calls.map((c) => c[0].data);
+      const aviso = guardados.find((d) => d.body === SLOW_ANSWER_ACKNOWLEDGEMENT);
+      expect(aviso).toBeDefined();
+      expect(aviso.metadata).toBeUndefined();
+      // Y la respuesta de verdad sí la lleva.
+      expect(guardados.find((d) => d.metadata)?.metadata).toEqual({
+        shown: { ids: ["p1", "p2"], intent: "product.search" },
+      });
+    });
+
+    it("el aviso sale con el botón de Paula, como todo mensaje del bot", async () => {
+      conAviso(null);
+      await preguntar();
+      expect(mocks.send.mock.calls[0][2]).toEqual(ESCAPE);
+    });
+
+    it("si el aviso no sale, la respuesta llega igual", async () => {
+      mocks.send.mockResolvedValueOnce({ ok: false, error: "Meta dijo que no" });
+      conAviso({
+        intent: "product.search",
+        text: "Sí 💛 Tengo Lapicero gel en $5.500. ¿Te lo aparto?",
+        photo: null,
+        shownIds: ["p1"],
+      });
+
+      await expect(preguntar()).resolves.toMatchObject({ outcome: "replied_product" });
+      expect(mocks.send.mock.calls[1][1]).toContain("Lapicero gel");
+    });
+
+    it("si el modelo se cae después del aviso, sigue a las palabras clave", async () => {
+      conAviso(null);
+      await expect(preguntar()).resolves.toEqual({ outcome: "escalated_no_match" });
+      expect(mocks.send.mock.calls[0][1]).toBe(SLOW_ANSWER_ACKNOWLEDGEMENT);
+      expect(mocks.send.mock.calls[1][1]).toBe(NO_MATCH_ACKNOWLEDGEMENT);
+    });
   });
 
   describe("la lista tocable", () => {

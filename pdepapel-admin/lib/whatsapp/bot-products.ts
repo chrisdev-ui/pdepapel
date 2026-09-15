@@ -40,7 +40,29 @@ import {
  * camino: palabras clave y, si tampoco, a Paula. Callar no es una opción.
  */
 
-export const PRODUCT_CLASSIFIER_TIMEOUT_MS = 2500;
+/**
+ * Veinte segundos, no dos y medio.
+ *
+ * Medido el 2026-09-15 contra la clave de producción, después de que un
+ * «Tienes lapiceros en gel?» real acabara en «Esa no me la sé»: el modelo
+ * tardó entre 8 y 30 segundos, con 14 de mediana, y 7 de cada 8 llamadas se
+ * pasaban del tope viejo. No era la cuota —eso vuelve al instante— ni el
+ * esquema: una llamada de texto pelado al mismo modelo tarda lo mismo.
+ *
+ * El techo lo pone Meta, que mantiene el «escribiendo…» unos 25 segundos; 20
+ * deja margen para mandar la respuesta dentro de esa ventana. No se reintenta
+ * (`maxRetries: 0`): insistirle a un servicio que ya va lento solo alarga la
+ * espera. Lo que hace llevadera la espera es el aviso de abajo.
+ */
+export const PRODUCT_CLASSIFIER_TIMEOUT_MS = 20000;
+
+/**
+ * A partir de aquí la espera se nota y se avisa.
+ *
+ * Por debajo de esto no se dice nada: la mayoría de las clasificaciones vuelven
+ * rápido y un «dame un segundo» antes de contestar sobra.
+ */
+export const PRODUCT_CLASSIFIER_SLOW_NOTICE_MS = 3500;
 /**
  * Nueve, no tres.
  *
@@ -541,7 +563,7 @@ export const PRODUCT_TEMPLATES = {
   // La lista tocable. El cuerpo no repite las opciones: están en la lista, y
   // repetirlas sería el muro de texto que esto viene a quitar.
   "list.body.few": (cuantos: number) =>
-    `Sí 💛 Tengo ${cuantos} que te pueden servir. Míralos y tócame el que quieras.`,
+    `Sí 💛 Tengo ${cuantos} que te pueden servir. Míralos y escoge el que quieras.`,
   "list.body.many": (cuantos: number, resto: number) =>
     `Sí, tengo varios 💛 Aquí van ${cuantos}, y me quedan ${resto} más. Toca el que te guste, o dime algo más preciso y te busco mejor.`,
   "list.button": () => `Ver opciones`,
@@ -951,13 +973,53 @@ export interface ProductAnswer {
  * el mensaje no iba de esto, el modelo no pudo, o no se entendió qué buscaba.
  * Un `null` nunca es el final del camino, solo significa «que siga».
  */
+const MARCA_LENTA = Symbol("lenta");
+
+/**
+ * Clasifica y, si tarda, avisa.
+ *
+ * El aviso no interrumpe nada: se sigue esperando la misma respuesta. Quien
+ * manda el mensaje es `bot.ts` —aquí no se envía nada por WhatsApp, y eso no
+ * cambia—, así que esto solo sabe CUÁNDO merece la pena avisar.
+ */
+async function clasificarAvisandoSiTarda(
+  body: string,
+  onSlow?: () => Promise<void>,
+): Promise<ClassifyOutcome> {
+  const clasificando = classifyProductQuestion(body);
+  if (!onSlow) return clasificando;
+
+  let temporizador: ReturnType<typeof setTimeout> | undefined;
+  const aviso = new Promise<typeof MARCA_LENTA>((resolve) => {
+    temporizador = setTimeout(() => resolve(MARCA_LENTA), PRODUCT_CLASSIFIER_SLOW_NOTICE_MS);
+  });
+
+  try {
+    const primero = await Promise.race([clasificando, aviso]);
+    if (primero === MARCA_LENTA) {
+      // Si el aviso no sale, mala suerte: lo que no puede es tumbar la
+      // respuesta de verdad, que es la que la clienta está esperando.
+      try {
+        await onSlow();
+      } catch (error) {
+        console.warn("[WHATSAPP_BOT] No se pudo avisar de que iba lento", { error });
+      }
+    }
+  } finally {
+    if (temporizador) clearTimeout(temporizador);
+  }
+
+  return clasificando;
+}
+
 export async function answerProductQuestion(
   storeId: string,
   body: string,
+  options: { onSlow?: () => Promise<void> } = {},
 ): Promise<ProductAnswer | null> {
   if (!looksLikeProductQuestion(body)) return null;
 
-  const classified = await classifyProductQuestion(body);
+  const classified = await clasificarAvisandoSiTarda(body, options.onSlow);
   if (!classified.ok) {
     // Sin cuota es lo esperable en horas punta, no una avería: se anota flojito
     // y el mensaje sigue. Lo demás sí merece mirarse.
