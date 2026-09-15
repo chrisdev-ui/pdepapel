@@ -31,7 +31,14 @@ export type ProductReference =
   /** «el último». */
   | { kind: "last" }
   /** «ese», «esa» — solo vale si se enseñó UNO. */
-  | { kind: "demonstrative" };
+  | { kind: "demonstrative" }
+  /**
+   * «los acrílicos», «la caja», «el x8»: nombra en vez de señalar. `tokens`
+   * son las palabras que quedaron después de quitar artículos y cortesía —
+   * se resuelven después, contra lo que de verdad se enseñó, porque aquí
+   * todavía no se sabe si hay lista ni qué dice.
+   */
+  | { kind: "named"; tokens: string[] };
 
 const normalizar = (v: string) =>
   v
@@ -56,6 +63,23 @@ const CIERRES = new Set([
   "porfa", "porfavor", "por", "favor", "gracias", "please", "pls", "ps",
   "entonces", "ese", "esa", "eso", "plis",
 ]);
+
+/**
+ * Lo que se cae al nombrar un producto. A propósito NO están los verbos de
+ * pedir —«quiero», «dame»—: sin ellos una frase de verdad deja demasiadas
+ * palabras, se pasa del tope de tres y sigue su camino hacia el clasificador,
+ * que es justo lo que tiene que pasar.
+ */
+const REFERENCE_STOP_WORDS = new Set([
+  "el", "la", "los", "las", "un", "una", "unos", "unas",
+  "de", "del", "al", "y", "o", "que", "con", "para",
+  // `Array.from` y no un spread: el target de TS de este proyecto no itera Sets.
+  ...Array.from(CIERRES),
+]);
+
+function referenceTokens(texto: string): string[] {
+  return texto.split(" ").filter((p) => p.length >= 2 && !REFERENCE_STOP_WORDS.has(p));
+}
 
 /**
  * Qué señaló, si es que señaló algo. `null` = no es una referencia y el
@@ -84,6 +108,12 @@ export function detectProductReference(body: string): ProductReference | null {
 
   if (palabras.some((p) => DEMOSTRATIVOS.has(p))) return { kind: "demonstrative" };
 
+  // Nombrar en vez de señalar: «los acrílicos». Como mucho tres palabras, que
+  // es lo que mide una respuesta corta a una lista; de ahí para arriba ya es
+  // una frase y la contesta el clasificador, no esto.
+  const tokens = referenceTokens(texto);
+  if (tokens.length > 0 && tokens.length <= 3) return { kind: "named", tokens };
+
   return null;
 }
 
@@ -94,6 +124,21 @@ export type ReferenceResolution =
   | { outcome: "lost" }
   /** Nada a lo que señalar, o «ese» con varios: el mensaje sigue su camino. */
   | { outcome: "none" };
+
+function normalizarNombre(nombre: string): string {
+  return nombre.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+/**
+ * Deliberadamente simple: esto solo corre contra el puñado de productos que
+ * se acaban de enseñar, nunca contra el catálogo, así que no hace falta nada
+ * más listo que pedir que todas las palabras estén en el nombre.
+ */
+function encajaEnNombre(tokens: string[], nombre: string): boolean {
+  if (tokens.length === 0) return false;
+  const objetivo = normalizarNombre(nombre);
+  return tokens.every((t) => objetivo.includes(t));
+}
 
 /** Lee lo guardado en un mensaje del bot, si trae algo utilizable. */
 export function parseShownProducts(metadata: unknown): ShownProducts | null {
@@ -154,9 +199,30 @@ export async function resolveProductReference(input: {
   }
 
   const now = input.now ?? new Date();
-  if (now.getTime() - mostradaEn.getTime() > REFERENCE_TTL_MS) {
-    return { outcome: "lost" };
+  const vencida = now.getTime() - mostradaEn.getTime() > REFERENCE_TTL_MS;
+
+  // Aquí el orden importa, y es al revés que en todo lo demás.
+  //
+  // Un ordinal o un «ese» ya dicen por sí solos que se habla de la lista, así
+  // que si pasó el rato se admite el despiste. Nombrar no dice nada: la
+  // mayoría de los mensajes de una o dos palabras no van de la lista. Así que
+  // primero se mira si encaja con UNO, y solo entonces se mira el reloj; si no
+  // encaja con nada, el mensaje sigue su camino como si esto no existiera, en
+  // vez de contestarle «se me fue el hilo» a un «vale gracias».
+  if (input.reference.kind === "named") {
+    const { tokens } = input.reference;
+    const candidatos = await prismadb.product.findMany({
+      where: { id: { in: shown.ids }, storeId: input.storeId, isArchived: false },
+      select: { id: true, name: true },
+    });
+    const encajan = candidatos.filter((p) => encajaEnNombre(tokens, p.name));
+    // Ni con ninguno ni con varios se adivina: misma regla que «ese».
+    if (encajan.length !== 1) return { outcome: "none" };
+    if (vencida) return { outcome: "lost" };
+    return { outcome: "resolved", productId: encajan[0].id, intent: shown.intent };
   }
+
+  if (vencida) return { outcome: "lost" };
 
   const productId =
     input.reference.kind === "last"

@@ -183,6 +183,9 @@ const PRODUCT_SIGNALS = [
   "cuantas hojas", "cuantos", "como es", "caracteristica",
   // Enséñamelo.
   "foto", "fotos", "imagen", "imagenes", "como se ve", "ver el", "ver la",
+  // El plural no estaba y «¿puedo ver los acrílicos?» se caía aquí, antes de
+  // llegar a nada: el portero solo conocía «ver el» y «ver la».
+  "ver los", "ver las", "dejas ver", "dejame ver", "puedo ver",
   "muestrame", "mandame", "manda una", "enviame",
 ];
 

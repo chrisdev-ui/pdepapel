@@ -118,6 +118,19 @@ describe("el portero que ahorra cuota", () => {
     expect(looksLikeProductQuestion("gracias!!")).toBe(false);
     expect(looksLikeProductQuestion("hola buenas")).toBe(false);
   });
+
+  // El portero conocía «ver el» y «ver la» pero no el plural, así que
+  // «¿puedo ver los acrílicos?» —de una conversación real— no llegaba ni al
+  // clasificador: se caía aquí, antes de empezar.
+  it.each([
+    "puedo ver los acrílicos?",
+    "me dejas ver la caja?",
+    "¿me dejas ver los acrílicos?",
+    "déjame ver las carpetas",
+    "quisiera ver los separadores",
+  ])("deja pasar «%s»", (q) => {
+    expect(looksLikeProductQuestion(q)).toBe(true);
+  });
 });
 
 describe("resolvedores", () => {

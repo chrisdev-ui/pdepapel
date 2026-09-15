@@ -188,6 +188,11 @@ describe("runWhatsAppBot", () => {
     mocks.sendableReply.mockResolvedValue(null);
     mocks.send.mockResolvedValue({ ok: true, externalId: "wamid.BOT1" });
     mocks.typing.mockResolvedValue({ ok: true });
+    // Desde que se puede nombrar el producto, casi cualquier mensaje corto
+    // entra en la etapa de referencias. Que por defecto no resuelva nada es lo
+    // que hace en la vida real cuando no hay lista delante.
+    mocks.resolveReference.mockResolvedValue({ outcome: "none" });
+    mocks.shownIntent.mockResolvedValue("product.search");
   });
 
   it("answers a keyword match with the automatic marker and files it as BOT", async () => {
@@ -1395,13 +1400,33 @@ describe("ritmo humano", () => {
       expect(mocks.resolveReference).not.toHaveBeenCalled();
     });
 
-    it("un mensaje que no señala nada ni entra aquí", async () => {
+    it("una pregunta larga de verdad ni entra aquí", async () => {
+      // Una frase con más de tres palabras con peso ya no es responder a una
+      // lista: es una pregunta, y la contesta el clasificador.
       await runWhatsAppBot({
         ...input,
-        body: "¿tienen cuadernos de Stitch?",
+        body: "¿cuánto vale el cuaderno argollado de Stitch morado?",
         settings: aprobado,
       });
       expect(mocks.resolveReference).not.toHaveBeenCalled();
+    });
+
+    it("una pregunta corta sí entra, pero no encaja y sigue su camino", async () => {
+      // «tienen cuadernos» son tres palabras y podrían nombrar algo de la
+      // lista. Se mira, no encaja con nada, y el mensaje continúa igual que
+      // antes: la etapa no se traga preguntas nuevas.
+      mocks.answerProduct.mockResolvedValue({
+        intent: "product.search",
+        text: "Sí 💛 Tengo Cuaderno Stitch en $18.000. ¿Te lo aparto?",
+        photo: null,
+        shownIds: ["p1"],
+      });
+
+      await expect(
+        runWhatsAppBot({ ...input, body: "tienen cuadernos", settings: aprobado }),
+      ).resolves.toMatchObject({ outcome: "replied_product" });
+      expect(mocks.resolveReference).toHaveBeenCalled();
+      expect(mocks.answerProduct).toHaveBeenCalled();
     });
 
     it("no se cuela delante de un dato del negocio", async () => {

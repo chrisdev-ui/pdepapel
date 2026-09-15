@@ -3,12 +3,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   messageFindMany: vi.fn(),
   productFindFirst: vi.fn(),
+  productFindMany: vi.fn(),
 }));
 
 vi.mock("@/lib/prismadb", () => ({
   default: {
     conversationMessage: { findMany: mocks.messageFindMany },
-    product: { findFirst: mocks.productFindFirst },
+    product: {
+      findFirst: mocks.productFindFirst,
+      findMany: mocks.productFindMany,
+    },
   },
 }));
 
@@ -80,10 +84,9 @@ describe("detectProductReference", () => {
   );
 
   it.each([
-    "hola",
-    "tienen cuadernos",
     "cuánto vale el cuaderno de stitch",
     "quiero dos cuadernos morados y una cartuchera",
+    "necesito 5 cuadernos para el colegio de mi hija",
     "gracias",
     "",
     "   ",
@@ -91,13 +94,19 @@ describe("detectProductReference", () => {
     expect(detectProductReference(texto)).toBeNull();
   });
 
-  it.each([
-    "necesito 5 cuadernos para el colegio de mi hija",
-    "quiero 2 cuadernos",
-    "son 2 unidades",
-  ])("«%s» cuenta cuántos, no señala cuál", (texto) => {
-    expect(detectProductReference(texto)).toBeNull();
-  });
+  // Desde que se puede nombrar el producto, un mensaje corto cualquiera SÍ
+  // sale de aquí como candidato: «hola» son dos palabras y podrían ser el
+  // nombre de algo. Quien decide es el resolvedor, comparándolo con lo que de
+  // verdad se enseñó, y ahí no encaja con nada. Lo que hay que garantizar no
+  // es que esto devuelva `null`, es que la clienta no reciba una respuesta
+  // rara: eso se prueba abajo, contra una lista de verdad.
+  it.each(["hola", "tienen cuadernos", "quiero 2 cuadernos", "son 2 unidades"])(
+    "«%s» sale como candidato, pero no como una posición de la lista",
+    (texto) => {
+      expect(detectProductReference(texto)).not.toMatchObject({ kind: "ordinal" });
+      expect(detectProductReference(texto)).not.toMatchObject({ kind: "last" });
+    },
+  );
 
   it.each(["el 2 porfa", "dame el 3 gracias", "2 por favor"])(
     "«%s» sigue señalando aunque lleve cortesía detrás",
@@ -293,5 +302,115 @@ describe("no le quita el turno a nadie", () => {
 
   it.each(señalando)("«%s» no se confunde con una palabra clave", (texto) => {
     expect(matchWhatsAppKeyword(texto, palabrasDePaula)).toBeNull();
+  });
+});
+
+describe("nombrar el producto en vez de señalarlo", () => {
+  const CATALOGO = [
+    { id: "p1", name: "Lapicero retráctil semigel 0.7mm pastel" },
+    { id: "p2", name: "Caja de Lapiceros Offi-Esco Pocket Gel x4" },
+    { id: "p3", name: "Lapiceros acrílicos gel pen x8" },
+  ];
+
+  const nombrar = (tokens: string[], hace = 1) => {
+    mocks.messageFindMany.mockResolvedValue([mensajeCon(["p1", "p2", "p3"], hace)]);
+    return resolveProductReference({
+      conversationId: "c1",
+      storeId: "s1",
+      reference: { kind: "named", tokens },
+      now: AHORA,
+    });
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.productFindMany.mockResolvedValue(CATALOGO);
+  });
+
+  it("resuelve cuando las palabras encajan con UNO solo", async () => {
+    await expect(nombrar(["acrilicos"])).resolves.toEqual({
+      outcome: "resolved",
+      productId: "p3",
+      intent: "product.search",
+    });
+  });
+
+  it("encaja sin tildes y sin mayúsculas", async () => {
+    await expect(nombrar(["caja"])).resolves.toMatchObject({ productId: "p2" });
+    await expect(nombrar(["offi-esco"])).resolves.toMatchObject({ productId: "p2" });
+  });
+
+  it("pide que estén TODAS las palabras", async () => {
+    await expect(nombrar(["caja", "gel"])).resolves.toMatchObject({ productId: "p2" });
+    await expect(nombrar(["caja", "acrilicos"])).resolves.toEqual({ outcome: "none" });
+  });
+
+  it("sin ningún encaje sigue su camino, no dice que perdió el hilo", async () => {
+    await expect(nombrar(["cuaderno"])).resolves.toEqual({ outcome: "none" });
+  });
+
+  it("con varios encajes no adivina: misma regla que «ese»", async () => {
+    // «lapiceros» está en dos de los tres nombres.
+    await expect(nombrar(["lapiceros"])).resolves.toEqual({ outcome: "none" });
+  });
+
+  it("solo mira los productos que se enseñaron, nunca el catálogo entero", async () => {
+    await nombrar(["acrilicos"]);
+    expect(mocks.productFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: { in: ["p1", "p2", "p3"] },
+          storeId: "s1",
+          isArchived: false,
+        }),
+      }),
+    );
+  });
+
+  it("no ofrece un producto archivado desde que se enseñó", async () => {
+    mocks.productFindMany.mockResolvedValue(CATALOGO.filter((p) => p.id !== "p3"));
+    await expect(nombrar(["acrilicos"])).resolves.toEqual({ outcome: "none" });
+  });
+
+  it.each(["hola", "tienen cuadernos", "quiero 2 cuadernos", "son 2 unidades", "vale gracias"])(
+    "«%s» no se contesta contra la lista aunque la haya",
+    async (texto) => {
+      const senal = detectProductReference(texto);
+      if (!senal) return;
+      mocks.messageFindMany.mockResolvedValue([mensajeCon(["p1", "p2", "p3"], 1)]);
+      await expect(
+        resolveProductReference({
+          conversationId: "c1",
+          storeId: "s1",
+          reference: senal,
+          now: AHORA,
+        }),
+      ).resolves.toEqual({ outcome: "none" });
+    },
+  );
+
+  describe("el reloj se mira DESPUÉS de encajar, no antes", () => {
+    it("con encaje único y la lista vencida sí se admite el despiste", async () => {
+      await expect(nombrar(["acrilicos"], 30)).resolves.toEqual({ outcome: "lost" });
+    });
+
+    it("sin encaje y la lista vencida NO se contesta «se me fue el hilo»", async () => {
+      // Esto es lo que protege el cambio de orden: un «vale gracias» suelto
+      // horas después de una lista no puede acabar en una disculpa rara.
+      await expect(nombrar(["cuaderno"], 30)).resolves.toEqual({ outcome: "none" });
+    });
+
+    it("con varios encajes y la lista vencida tampoco", async () => {
+      await expect(nombrar(["lapiceros"], 30)).resolves.toEqual({ outcome: "none" });
+    });
+
+    it("los ordinales conservan su orden de siempre: primero el reloj", async () => {
+      mocks.messageFindMany.mockResolvedValue([mensajeCon(["p1", "p2"], 30)]);
+      await expect(resolver({ kind: "ordinal", position: 1 })).resolves.toEqual({
+        outcome: "lost",
+      });
+      // Y no llegó a preguntar por los productos: se cayó antes, como siempre.
+      expect(mocks.productFindMany).not.toHaveBeenCalled();
+    });
   });
 });
