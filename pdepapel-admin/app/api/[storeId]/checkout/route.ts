@@ -9,7 +9,7 @@ import {
 } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { env } from "@/lib/env.mjs";
-import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { AppError, ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
 import { createCorsHeaders } from "@/lib/cors";
 import { withIdempotency } from "@/lib/idempotency";
 import { normalizeGoogleAnalyticsClientId } from "@/lib/google-analytics";
@@ -21,7 +21,11 @@ import {
 import { getProductsPrices } from "@/lib/discount-engine";
 import { getActivePresalesByProduct, getPresaleCapacity } from "@/lib/presale";
 import prismadb from "@/lib/prismadb";
-import { requoteCartShipping } from "@/lib/shipping-helpers";
+import { requoteCartShipping, type RequotedRate } from "@/lib/shipping-helpers";
+import {
+  readCachedRates,
+  reconcileShippingRate,
+} from "@/lib/shipping-rate-reconcile";
 import { verifyEarlyAccessToken } from "@/lib/early-access";
 import { formatAvailableAt, isComingSoon } from "@/lib/product-availability";
 import {
@@ -94,6 +98,69 @@ export async function OPTIONS(req: Request) {
 }
 
 /** A retried checkout (timeout, double tap) replays the order it already created. */
+/**
+ * Qué hacer con la tarifa después de re-cotizar.
+ *
+ * Antes se buscaba por `idRate` y, si no aparecía, se caía la compra entera.
+ * El `idRate` cambia cuando cambian las medidas del paquete, así que bastaba
+ * que la re-cotización calculara un peso ligeramente distinto al de la
+ * cotización original para dejar a la clienta sin salida.
+ *
+ * Ahora manda el servicio: misma transportadora y mismo producto. Si el precio
+ * es el de antes (o casi), se sigue sin interrumpir. Si cambió de verdad, se
+ * devuelve 409 con la tarifa nueva para que la tienda la enseñe y la clienta
+ * decida —una subida de precio no se cuela sin que la vea—.
+ */
+function resolveRequotedRate(input: {
+  rateId: number;
+  freshRates: RequotedRate[];
+  previousCost: number | null;
+  previousCarrier?: string | null;
+  previousProduct?: string | null;
+  storeId: string;
+  daneCode: string;
+}): RequotedRate {
+  const result = reconcileShippingRate(input);
+
+  if (result.outcome === "same") {
+    console.log(
+      `✅ Re-cotizado ${input.rateId} → ${result.rate.idRate}: ${result.rate.carrier}, ${currencyFormatter(result.rate.totalCost)}`,
+    );
+    return result.rate;
+  }
+
+  if (result.outcome === "price_changed") {
+    console.warn("[ORDER_CHECKOUT] El envío cambió de precio al re-cotizar", {
+      storeId: input.storeId,
+      daneCode: input.daneCode,
+      carrier: result.rate.carrier,
+      antes: result.previousCost,
+      ahora: result.rate.totalCost,
+    });
+    throw new AppError(
+      `El envío con ${result.rate.carrier} cambió a ${currencyFormatter(result.rate.totalCost)}. Confírmalo para continuar.`,
+      409,
+      {
+        code: "SHIPPING_RATE_CHANGED",
+        rate: result.rate,
+        previousCost: result.previousCost,
+      },
+    );
+  }
+
+  console.error("[ORDER_CHECKOUT] La transportadora elegida ya no cubre el destino", {
+    storeId: input.storeId,
+    daneCode: input.daneCode,
+    rateId: input.rateId,
+    alternativas: result.alternatives.length,
+  });
+  throw new AppError(
+    "Esa transportadora ya no tiene cobertura para tu dirección. Elige otra opción de envío.",
+    409,
+    { code: "SHIPPING_RATE_UNAVAILABLE", alternatives: result.alternatives },
+  );
+}
+
 export async function POST(
   req: Request,
   context: { params: { storeId: string } },
@@ -326,9 +393,8 @@ async function createCheckout(
     // If we have active caches, try to validate (only for ENVIOCLICK rates)
     if (!isCustomShipping && shippingCaches && shippingCaches.length > 0) {
       for (const cache of shippingCaches) {
-        const quotesData = cache.quotesData as any;
-        const quotes = quotesData?.rates || [];
-        const found = quotes.find((q: any) => q.idRate === rateId);
+        const quotes = readCachedRates(cache.quotesData);
+        const found = quotes.find((q) => q.idRate === rateId);
 
         if (found) {
           selectedQuote = found;
@@ -358,16 +424,15 @@ async function createCheckout(
           );
         }
 
-        const fresh = freshRates.find((rate) => rate.idRate === rateId);
-        if (!fresh) {
-          throw ErrorFactory.InvalidRequest(
-            "La tarifa de envío ya no está disponible. Solicita una nueva cotización.",
-          );
-        }
-        selectedQuote = fresh;
-        console.log(
-          `✅ Re-cotizado ${rateId}: ${fresh.carrier}, ${currencyFormatter(fresh.totalCost)}`,
-        );
+        selectedQuote = resolveRequotedRate({
+          rateId,
+          freshRates,
+          previousCost: shipping.cost ?? null,
+          previousCarrier: shipping.carrierName || shipping.courier,
+          previousProduct: shipping.productName,
+          storeId: params.storeId,
+          daneCode,
+        });
       } else {
         console.log(
           `✅ Using cached quote for rate ID ${rateId}, carrier: ${selectedQuote.carrier}, cost: ${currencyFormatter(selectedQuote.totalCost)}`,
@@ -393,13 +458,15 @@ async function createCheckout(
         );
       }
 
-      const fresh = freshRates.find((rate) => rate.idRate === rateId);
-      if (!fresh) {
-        throw ErrorFactory.InvalidRequest(
-          "La tarifa de envío ya no está disponible. Solicita una nueva cotización.",
-        );
-      }
-      selectedQuote = fresh;
+      selectedQuote = resolveRequotedRate({
+        rateId,
+        freshRates,
+        previousCost: shipping.cost ?? null,
+        previousCarrier: shipping.carrierName || shipping.courier,
+        previousProduct: shipping.productName,
+        storeId: params.storeId,
+        daneCode,
+      });
     }
 
     // Ensure selectedQuote has required fields

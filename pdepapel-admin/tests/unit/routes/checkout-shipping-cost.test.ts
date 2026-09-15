@@ -81,9 +81,44 @@ describe("el costo de envío no lo pone quien compra", () => {
     });
 
     expect(mocks.requote).toHaveBeenCalledOnce();
-    expect(response.status).toBe(400);
+    // 409 y no 400: no es que la petición esté mal escrita, es que la tarifa
+    // que eligió ya no existe. El cuerpo trae con qué seguir comprando.
+    expect(response.status).toBe(409);
     await expect(response.json()).resolves.toMatchObject({
-      error: expect.stringContaining("tarifa de envío ya no está disponible"),
+      error: expect.stringContaining("Elige otra opción de envío"),
+      details: { code: "SHIPPING_RATE_UNAVAILABLE", alternatives: [] },
+    });
+  });
+
+  it("con un número inventado NO se cobra lo que diga el cliente", async () => {
+    // Lo que de verdad protege esta prueba: la transportadora sí responde,
+    // pero con otra tarifa. Jamás se acepta el `cost: 0` que mandó el cliente.
+    mocks.requote.mockResolvedValue([
+      {
+        idRate: 26341730,
+        idCarrier: 1,
+        idProduct: 2,
+        carrier: "Envia",
+        product: "Normal",
+        flete: 13997,
+        minimumInsurance: 0,
+        totalCost: 13997,
+        deliveryDays: 2,
+        isCOD: false,
+      },
+    ]);
+
+    const response = await call({
+      ...base,
+      guestId: "g1",
+      envioClickIdRate: 99999,
+      shipping: { cost: 0, provider: "ENVIOCLICK", carrierName: "Envia", idRate: 99999 },
+    });
+
+    // Mismo servicio pero de 0 a 13.997: eso lo confirma ella, no nosotros.
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      details: { code: "SHIPPING_RATE_CHANGED", previousCost: 0 },
     });
   });
 
@@ -127,5 +162,53 @@ describe("el costo de envío no lo pone quien compra", () => {
       const body = await response.json();
       expect(String(body.error)).not.toMatch(/envío|cotización/i);
     }
+  });
+
+  it("REGRESIÓN DEL INCIDENTE: caché vencida y el pedido SIGUE adelante", async () => {
+    // 2026-09-15, destino 05045000. La caché dura 2 h; al vencer se re-cotiza
+    // y se buscaba la tarifa por `idRate`. Ese número cambia cuando cambian
+    // las medidas del paquete (medido: 1,0 kg → 26341730, 1,5 kg → 26341752),
+    // y la re-cotización recalcula las medidas desde el carrito. Resultado:
+    // ningún id coincidía y la compra moría con un 400 sin salida.
+    //
+    // Ahora manda el servicio: misma transportadora, mismo producto, mismo
+    // precio ⇒ se sigue. Aquí se comprueba que el envío YA NO es el que frena
+    // la compra (después falla por otra cosa, porque este banco de pruebas no
+    // tiene productos: eso es justo lo que demuestra que pasó del envío).
+    mocks.quoteFindMany.mockResolvedValue([]); // caché vencida ⇒ sin filas
+    mocks.requote.mockResolvedValue([
+      {
+        idRate: 26341752, // ← distinto del que eligió la clienta
+        idCarrier: 1,
+        idProduct: 2,
+        carrier: "Envia",
+        product: "Normal",
+        flete: 13997,
+        minimumInsurance: 0,
+        totalCost: 13997,
+        deliveryDays: 2,
+        isCOD: false,
+      },
+    ]);
+
+    const response = await call({
+      ...base,
+      guestId: "g1",
+      envioClickIdRate: 26341730, // el de la cotización vencida
+      shipping: {
+        cost: 13997,
+        provider: "ENVIOCLICK",
+        carrierName: "Envia",
+        productName: "Normal",
+        idRate: 26341730,
+      },
+    });
+
+    expect(mocks.requote).toHaveBeenCalledOnce();
+    const cuerpo = await response.json();
+    // Lo que importa: ya no es el callejón sin salida de antes.
+    expect(cuerpo.error ?? "").not.toContain("tarifa de envío ya no está disponible");
+    expect(cuerpo.details?.code).not.toBe("SHIPPING_RATE_CHANGED");
+    expect(cuerpo.details?.code).not.toBe("SHIPPING_RATE_UNAVAILABLE");
   });
 });
