@@ -18,10 +18,12 @@ import {
   areProductAnswersApproved,
   answerAboutProduct,
   answerProductQuestion,
+  buildOwnerRow,
   looksLikeProductQuestion,
 } from "@/lib/whatsapp/bot-products";
 import {
   detectProductReference,
+  readShownIntentForProduct,
   resolveProductReference,
   type ShownProducts,
 } from "@/lib/whatsapp/bot-references";
@@ -35,6 +37,7 @@ import {
   TALK_TO_OWNER_BUTTON_ID,
   TALK_TO_OWNER_BUTTON_TITLE,
   buildButtonId,
+  readProductTarget,
   getActiveBotKeywords,
   getSendableBotReply,
   readButtonTarget,
@@ -42,7 +45,9 @@ import {
 import {
   sendWhatsAppButtonMessage,
   sendWhatsAppImageButtonMessage,
+  sendWhatsAppListMessage,
   sendWhatsAppTypingIndicator,
+  type WhatsAppListRow,
   type WhatsAppReplyButton,
 } from "@/lib/whatsapp/send";
 
@@ -272,6 +277,62 @@ export async function runWhatsAppBot(input: {
       : { outcome: "escalated_owner_requested", error: sent.error };
   }
 
+  // 1 bis. Tocó un producto de una lista. El id lleva el producto, así que no
+  //    hace falta interpretar nada: ni plazo, ni adivinar cuál. Va aquí arriba
+  //    porque tocar es la clienta eligiendo, igual que los botones de menú.
+  const productTarget = readProductTarget(buttonId);
+  if (productTarget) {
+    const settings =
+      input.settings ?? (await readSettings(conversation.storeId));
+    // Contesta con las plantillas de producto, así que pide su mismo permiso.
+    // Sin él —Paula editó un texto entre la lista y el toque— se pasa a ella
+    // en vez de callar, igual que con una opción que ya no existe.
+    const answer =
+      settings && areProductAnswersApproved(settings)
+        ? await answerAboutProduct(
+            conversation.storeId,
+            productTarget,
+            await readShownIntentForProduct(conversation.id, productTarget),
+          )
+        : null;
+    if (!answer) {
+      // El producto pudo archivarse después de mandarse la lista: una fila
+      // sigue siendo tocable para siempre y aquí no hay plazo que la caduque.
+      await escalate(conversation.id);
+      await deliver(
+        conversation.id,
+        input.phone,
+        UNAVAILABLE_OPTION_ACKNOWLEDGEMENT,
+        [],
+        pacing(input),
+      );
+      return { outcome: "escalated_button_unavailable" };
+    }
+    const sent = await deliver(
+      conversation.id,
+      input.phone,
+      answer.text,
+      [],
+      pacing(input),
+      {
+        photo: answer.photo,
+        // Abre ventana nueva: si después escribe «ese», eso es lo que señala.
+        shown: answer.shownIds
+          ? { ids: answer.shownIds, intent: answer.intent }
+          : null,
+      },
+    );
+    if (sent.ok) {
+      return { outcome: "replied_product_reference", trigger: answer.intent };
+    }
+    await escalate(conversation.id);
+    return {
+      outcome: "escalated_send_failed",
+      trigger: answer.intent,
+      error: sent.error,
+    };
+  }
+
   const buttonTarget = readButtonTarget(buttonId);
 
   // 2. Detenido: la conversación ya espera a una persona. Un mensaje escrito
@@ -375,10 +436,13 @@ export async function runWhatsAppBot(input: {
             answer.text,
             [],
             pacing(input),
-            answer.photo,
-            answer.shownIds
-              ? { ids: answer.shownIds, intent: answer.intent }
-              : null,
+            {
+              photo: answer.photo,
+              shown: answer.shownIds
+                ? { ids: answer.shownIds, intent: answer.intent }
+                : null,
+              list: answer.list,
+            },
           );
           if (sent.ok) {
             return {
@@ -430,8 +494,13 @@ export async function runWhatsAppBot(input: {
         answer.text,
         [],
         pacing(input),
-        answer.photo,
-        answer.shownIds ? { ids: answer.shownIds, intent: answer.intent } : null,
+        {
+          photo: answer.photo,
+          shown: answer.shownIds
+            ? { ids: answer.shownIds, intent: answer.intent }
+            : null,
+          list: answer.list,
+        },
       );
       if (sent.ok) {
         return { outcome: "replied_product", trigger: answer.intent };
@@ -522,14 +591,19 @@ async function deliver(
   answer: string,
   buttons: { title: string; targetReplyId: string }[],
   pace: Pacing,
-  /** Foto que va encima del texto, si el producto tiene una utilizable. */
-  photo?: string | null,
-  /**
-   * Qué productos enseña este mensaje. Se guarda para poder resolver después
-   * un «el primero»; no se enseña nunca ni sale de aquí.
-   */
-  shown?: ShownProducts | null,
+  extras: {
+    /** Foto que va encima del texto, si el producto tiene una utilizable. */
+    photo?: string | null;
+    /**
+     * Qué productos enseña este mensaje. Se guarda para poder resolver después
+     * un «el primero»; no se enseña nunca ni sale de aquí.
+     */
+    shown?: ShownProducts | null;
+    /** Las opciones tocables. `answer` queda como la versión escrita. */
+    list?: { body: string; rows: WhatsAppListRow[] } | null;
+  } = {},
 ): Promise<{ ok: boolean; error?: string }> {
+  const { photo, shown, list } = extras;
   const reply = formatBotReply(answer);
 
   // «Escribiendo…» primero y después la espera. Si el indicador falla no se
@@ -546,9 +620,38 @@ async function deliver(
 
   const conBotones = buildReplyButtons(buttons);
   let salioConFoto = Boolean(photo);
-  let sent = photo
-    ? await sendWhatsAppImageButtonMessage(phone, reply, conBotones, photo)
-    : await sendWhatsAppButtonMessage(phone, reply, conBotones);
+
+  // La lista manda cuando la hay: una lista no admite ni foto ni botones, así
+  // que la salida hacia Paula viaja como una fila más, la última.
+  let archivado = reply;
+  let sent;
+  if (list && list.rows.length > 0) {
+    salioConFoto = false;
+    const cuerpo = formatBotReply(list.body);
+    sent = await sendWhatsAppListMessage(phone, cuerpo, {
+      button: PRODUCT_TEMPLATES["list.button"](),
+      section: PRODUCT_TEMPLATES["list.section"](),
+      footer: PRODUCT_TEMPLATES["list.footer"](),
+      rows: [...list.rows, buildOwnerRow()],
+    });
+    if (sent.ok) {
+      // En el panel tiene que verse lo que se le ofreció, no solo la frase.
+      archivado = [cuerpo, ...list.rows.map((r) => `• ${r.description ?? r.title}`)].join("\n");
+    } else {
+      // Si Meta la rechaza se manda la versión escrita de siempre, que lleva
+      // las mismas opciones y el botón de Paula. Perder la lista es un
+      // detalle; dejar a la clienta sin respuesta, no.
+      console.warn("[WHATSAPP_BOT] La lista no salió; se manda el texto", {
+        conversationId,
+        error: sent.error,
+      });
+      sent = await sendWhatsAppButtonMessage(phone, reply, conBotones);
+    }
+  } else {
+    sent = photo
+      ? await sendWhatsAppImageButtonMessage(phone, reply, conBotones, photo)
+      : await sendWhatsAppButtonMessage(phone, reply, conBotones);
+  }
 
   // Si lo que falló fue la foto (URL caída, formato raro, un no de Meta), se
   // manda el MISMO texto sin ella. Perder la foto es un detalle; dejar a la
@@ -571,7 +674,7 @@ async function deliver(
         conversationId,
         direction: ConversationMessageDirection.OUTBOUND,
         sentBy: ConversationMessageSentBy.BOT,
-        body: reply,
+        body: archivado,
         status: ConversationMessageStatus.FAILED,
       },
     });
@@ -585,7 +688,7 @@ async function deliver(
       direction: ConversationMessageDirection.OUTBOUND,
       sentBy: ConversationMessageSentBy.BOT,
       externalId: sent.externalId,
-      body: reply,
+      body: archivado,
       // Solo si de verdad salió con foto: si hubo que repetir sin ella, en el
       // panel tiene que verse lo mismo que le llegó a la clienta.
       ...(salioConFoto && photo ? { mediaType: "image", mediaUrl: photo } : {}),

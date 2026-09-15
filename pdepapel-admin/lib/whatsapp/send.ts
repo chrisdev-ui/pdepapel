@@ -26,10 +26,33 @@ export const WHATSAPP_INTERACTIVE_BODY_MAX_LENGTH = 1024;
 export const WHATSAPP_MAX_BUTTONS = 3;
 export const WHATSAPP_BUTTON_TITLE_MAX_LENGTH = 20;
 
+/**
+ * Los topes de una lista, confirmados contra la documentación de Meta el
+ * 2026-09-15. Diez filas EN TOTAL, no diez por sección, y el título de cada
+ * una cabe en 24 caracteres: menos de lo que mide más de la mitad de los
+ * nombres del catálogo, por eso el nombre entero viaja en la descripción.
+ */
+export const WHATSAPP_LIST_MAX_ROWS = 10;
+export const WHATSAPP_LIST_ROW_TITLE_MAX_LENGTH = 24;
+export const WHATSAPP_LIST_ROW_DESCRIPTION_MAX_LENGTH = 72;
+export const WHATSAPP_LIST_ROW_ID_MAX_LENGTH = 200;
+export const WHATSAPP_LIST_SECTION_TITLE_MAX_LENGTH = 24;
+export const WHATSAPP_LIST_BUTTON_MAX_LENGTH = 20;
+export const WHATSAPP_LIST_FOOTER_MAX_LENGTH = 60;
+/** A diferencia de los botones, el cuerpo de una lista admite 4096. */
+export const WHATSAPP_LIST_BODY_MAX_LENGTH = 4096;
+
 export interface WhatsAppReplyButton {
   /** Vuelve tal cual en el webhook cuando la tocan. */
   id: string;
   title: string;
+}
+
+export interface WhatsAppListRow {
+  /** Vuelve tal cual en `list_reply.id` cuando la tocan. */
+  id: string;
+  title: string;
+  description?: string;
 }
 
 export type WhatsAppSendResult =
@@ -356,6 +379,81 @@ export async function sendWhatsAppImageButtonMessage(
  * Meta lo mantiene 25 segundos como máximo, o hasta que se mande la respuesta,
  * lo que ocurra primero. Nunca lanza: si falla, la respuesta igual sale.
  */
+/**
+ * La lista tocable: en vez de escribir «el primero», se toca.
+ *
+ * Una lista NO admite ni foto de cabecera ni botones de respuesta —confirmado
+ * contra la documentación de Meta: `action` es `{button, sections}` y la
+ * cabecera solo acepta texto—, así que la salida hacia Paula viaja como una
+ * fila más, con el mismo id que usa su botón. Por eso el tope real de
+ * productos es nueve y no diez.
+ *
+ * Los topes se aplican aquí, como en los botones: pasarse de uno solo es un
+ * rechazo entero, no un recorte.
+ */
+export async function sendWhatsAppListMessage(
+  to: string,
+  body: string,
+  list: {
+    /** Lo que se lee en el botón que abre la lista. */
+    button: string;
+    /** Encabezado de la sección, dentro de la lista ya abierta. */
+    section: string;
+    rows: WhatsAppListRow[];
+    footer?: string;
+  },
+  environment: SendEnvironment = env,
+): Promise<WhatsAppSendResult> {
+  if (!to.trim() || !body.trim()) {
+    return { ok: false, error: "destinatario o mensaje vacío" };
+  }
+
+  const rows = list.rows
+    .filter((row) => row.id.trim() && row.title.trim())
+    .slice(0, WHATSAPP_LIST_MAX_ROWS)
+    .map((row) => ({
+      id: row.id.trim().slice(0, WHATSAPP_LIST_ROW_ID_MAX_LENGTH),
+      title: row.title.trim().slice(0, WHATSAPP_LIST_ROW_TITLE_MAX_LENGTH),
+      ...(row.description?.trim()
+        ? {
+            description: row.description
+              .trim()
+              .slice(0, WHATSAPP_LIST_ROW_DESCRIPTION_MAX_LENGTH),
+          }
+        : {}),
+    }));
+  if (rows.length === 0) return { ok: false, error: "sin opciones que mandar" };
+
+  const button = list.button.trim().slice(0, WHATSAPP_LIST_BUTTON_MAX_LENGTH);
+  if (!button) return { ok: false, error: "sin texto para el botón de la lista" };
+
+  const footer = list.footer?.trim().slice(0, WHATSAPP_LIST_FOOTER_MAX_LENGTH);
+
+  return postToChakra(
+    to,
+    {
+      type: "interactive",
+      interactive: {
+        type: "list",
+        body: { text: body.slice(0, WHATSAPP_LIST_BODY_MAX_LENGTH) },
+        ...(footer ? { footer: { text: footer } } : {}),
+        action: {
+          button,
+          sections: [
+            {
+              title: list.section
+                .trim()
+                .slice(0, WHATSAPP_LIST_SECTION_TITLE_MAX_LENGTH),
+              rows,
+            },
+          ],
+        },
+      },
+    },
+    environment,
+  );
+}
+
 export async function sendWhatsAppTypingIndicator(
   inboundMessageId: string,
   environment: SendEnvironment = env,

@@ -28,6 +28,7 @@ vi.mock("@/lib/env.mjs", () => ({ env: { GEMINI_API_KEY: "clave-de-prueba" } }))
 import {
   MIN_USEFUL_DESCRIPTION_LENGTH,
   PHOTO_WIDTH,
+  PRODUCT_MATCH_LIMIT,
   PRODUCT_TEMPLATES_VERSION,
   answerProductQuestion,
   areProductAnswersApproved,
@@ -124,20 +125,30 @@ describe("resolvedores", () => {
     vi.clearAllMocks();
   });
 
-  it("devuelve hasta tres y avisa si hay más", async () => {
-    mocks.findMany.mockResolvedValue([
-      { id: "1", name: "Cuaderno Stitch", price: 18000, stock: 4 },
-      { id: "2", name: "Libreta Stitch", price: 12000, stock: 0 },
-      { id: "3", name: "Llavero Stitch", price: 9000, stock: 2 },
-    ]);
-    mocks.count.mockResolvedValue(6);
+  it("devuelve hasta el tope y avisa si hay más", async () => {
+    const filas = Array.from({ length: PRODUCT_MATCH_LIMIT }, (_, i) => ({
+      id: `${i}`, name: `Cuaderno Stitch ${i}`, price: 18000, stock: 4,
+    }));
+    mocks.findMany.mockResolvedValue(filas);
+    mocks.count.mockResolvedValue(PRODUCT_MATCH_LIMIT + 3);
 
     const fact = await resolveProductSearch("store-1", clasificacion);
     expect(fact.known).toBe(true);
     if (!fact.known) return;
-    expect(fact.value.matches).toHaveLength(3);
-    expect(fact.value.total).toBe(6);
+    expect(fact.value.matches).toHaveLength(PRODUCT_MATCH_LIMIT);
     expect(fact.value.hasMore).toBe(true);
+  });
+
+  it("no avisa de más cuando caben todos", async () => {
+    mocks.findMany.mockResolvedValue([
+      { id: "1", name: "Cuaderno Stitch", price: 18000, stock: 4 },
+      { id: "2", name: "Libreta Stitch", price: 12000, stock: 0 },
+    ]);
+    mocks.count.mockResolvedValue(2);
+
+    const fact = await resolveProductSearch("store-1", clasificacion);
+    if (!fact.known) throw new Error("debería saberse");
+    expect(fact.value.hasMore).toBe(false);
   });
 
   it("cero resultados SÍ se sabe: es «no lo tengo»", async () => {
@@ -178,7 +189,7 @@ describe("resolvedores", () => {
     });
     expect(args.where.isArchived).toBe(false);
     expect(args.orderBy).toEqual([{ soldCount: "desc" }, { createdAt: "desc" }]);
-    expect(args.take).toBe(3);
+    expect(args.take).toBe(PRODUCT_MATCH_LIMIT);
   });
 
   it("la disponibilidad sale como sí o no, nunca como número", async () => {

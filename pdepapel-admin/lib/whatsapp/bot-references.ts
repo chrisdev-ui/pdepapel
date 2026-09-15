@@ -176,3 +176,34 @@ export async function resolveProductReference(input: {
 
   return { outcome: "resolved", productId, intent: shown.intent };
 }
+
+/**
+ * Con qué pregunta se enseñó este producto.
+ *
+ * Una fila tocada solo lleva el producto, no lo que se preguntó, y no es lo
+ * mismo contestar «cómo es» que «cuánto vale». La intención ya quedó guardada
+ * con la lista, así que se lee de ahí. Sin plazo a propósito: una fila se
+ * puede tocar días después y el id sigue siendo bueno.
+ *
+ * Si no se encuentra nada se contesta como una búsqueda, que es la respuesta
+ * que sirve para cualquier pregunta: nombre, precio y si se lo aparta.
+ */
+export async function readShownIntentForProduct(
+  conversationId: string,
+  productId: string,
+): Promise<ProductIntent> {
+  const recientes = await prismadb.conversationMessage.findMany({
+    where: {
+      conversationId,
+      sentBy: ConversationMessageSentBy.BOT,
+    },
+    orderBy: { createdAt: "desc" },
+    select: { metadata: true },
+    take: 5,
+  });
+  for (const mensaje of recientes) {
+    const shown = parseShownProducts(mensaje.metadata);
+    if (shown?.ids.includes(productId)) return shown.intent;
+  }
+  return "product.search";
+}

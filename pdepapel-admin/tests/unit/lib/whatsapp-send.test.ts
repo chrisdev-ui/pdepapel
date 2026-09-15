@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/env.mjs", () => ({ env: {} }));
 
-import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send";
+import {
+  WHATSAPP_LIST_ROW_DESCRIPTION_MAX_LENGTH,
+  WHATSAPP_LIST_ROW_TITLE_MAX_LENGTH,
+  sendWhatsAppListMessage,
+  sendWhatsAppTextMessage,
+} from "@/lib/whatsapp/send";
 
 const configured = {
   CHAKRA_API_KEY: "chakra-key",
@@ -193,5 +198,96 @@ describe("sendWhatsAppTextMessage", () => {
     await sendWhatsAppTextMessage("573001234567", "a".repeat(9000), configured);
 
     expect(JSON.parse(fetchMock.mock.calls[0][1].body).text.body).toHaveLength(4096);
+  });
+});
+
+describe("sendWhatsAppListMessage", () => {
+  const fetchMock = vi.fn();
+
+  const filas = [
+    { id: "p:1", title: "verde pastel", description: "Carpeta plástica oficio verde pastel — $8.000" },
+    { id: "p:2", title: "rosada", description: "Carpeta plástica oficio rosada — $8.000" },
+    { id: "owner", title: "Hablar con Paula" },
+  ];
+  const lista = { button: "Ver opciones", section: "Elige uno", rows: filas, footer: "O escríbeme y te ayudo" };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("manda la forma que Meta documenta para una lista", async () => {
+    fetchMock.mockResolvedValue(response({ _data: { whatsappMessageId: "wamid.L1" } }));
+
+    await expect(
+      sendWhatsAppListMessage("573001234567", "Tengo 2 💛", lista, configured),
+    ).resolves.toEqual({ ok: true, externalId: "wamid.L1" });
+
+    const payload = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(payload.type).toBe("interactive");
+    expect(payload.interactive.type).toBe("list");
+    expect(payload.interactive.body).toEqual({ text: "Tengo 2 💛" });
+    expect(payload.interactive.footer).toEqual({ text: "O escríbeme y te ayudo" });
+    expect(payload.interactive.action.button).toBe("Ver opciones");
+    expect(payload.interactive.action.sections).toHaveLength(1);
+    expect(payload.interactive.action.sections[0].rows).toHaveLength(3);
+    // Una lista no lleva ni cabecera de imagen ni botones: Meta no los admite.
+    expect(payload.interactive.header).toBeUndefined();
+    expect(payload.interactive.action.buttons).toBeUndefined();
+  });
+
+  it("recorta a los topes de Meta en vez de arriesgar un rechazo entero", async () => {
+    fetchMock.mockResolvedValue(response({ _data: { whatsappMessageId: "wamid.L2" } }));
+
+    await sendWhatsAppListMessage(
+      "573001234567",
+      "Hola",
+      {
+        button: "Un texto de botón larguísimo que no cabe",
+        section: "Una sección con un título larguísimo",
+        rows: Array.from({ length: 14 }, (_, i) => ({
+          id: `p:${i}`,
+          title: `Un título de fila larguísimo número ${i}`,
+          description: `Una descripción larguísima ${"x".repeat(120)}`,
+        })),
+      },
+      configured,
+    );
+
+    const { interactive } = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(interactive.action.button.length).toBeLessThanOrEqual(20);
+    expect(interactive.action.sections[0].title.length).toBeLessThanOrEqual(24);
+    expect(interactive.action.sections[0].rows).toHaveLength(10);
+    for (const row of interactive.action.sections[0].rows) {
+      expect(row.title.length).toBeLessThanOrEqual(WHATSAPP_LIST_ROW_TITLE_MAX_LENGTH);
+      expect(row.description.length).toBeLessThanOrEqual(
+        WHATSAPP_LIST_ROW_DESCRIPTION_MAX_LENGTH,
+      );
+    }
+  });
+
+  it("una fila sin descripción no manda la clave vacía", async () => {
+    fetchMock.mockResolvedValue(response({ _data: { whatsappMessageId: "wamid.L3" } }));
+    await sendWhatsAppListMessage("573001234567", "Hola", lista, configured);
+    const { rows } = JSON.parse(fetchMock.mock.calls[0][1].body).interactive.action.sections[0];
+    expect(rows[2]).toEqual({ id: "owner", title: "Hablar con Paula" });
+  });
+
+  it.each([
+    ["sin destinatario", "", "Hola", lista],
+    ["sin cuerpo", "573001234567", "  ", lista],
+    ["sin filas", "573001234567", "Hola", { ...lista, rows: [] }],
+    ["sin texto de botón", "573001234567", "Hola", { ...lista, button: "  " }],
+  ])("no llama a la API %s", async (_caso, to, body, l) => {
+    await expect(
+      sendWhatsAppListMessage(to, body, l as typeof lista, configured),
+    ).resolves.toMatchObject({ ok: false });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

@@ -12,6 +12,16 @@ import {
   searchTokens,
 } from "@/lib/search-terms";
 import { type FactValue } from "@/lib/whatsapp/bot-facts";
+import {
+  TALK_TO_OWNER_BUTTON_ID,
+  TALK_TO_OWNER_BUTTON_TITLE,
+  buildProductRowId,
+} from "@/lib/whatsapp/bot-replies";
+import {
+  WHATSAPP_LIST_ROW_DESCRIPTION_MAX_LENGTH,
+  WHATSAPP_LIST_ROW_TITLE_MAX_LENGTH,
+  type WhatsAppListRow,
+} from "@/lib/whatsapp/send";
 
 /**
  * Preguntas sobre productos por WhatsApp: si tienen algo y si queda.
@@ -31,7 +41,14 @@ import { type FactValue } from "@/lib/whatsapp/bot-facts";
  */
 
 export const PRODUCT_CLASSIFIER_TIMEOUT_MS = 2500;
-export const PRODUCT_MATCH_LIMIT = 3;
+/**
+ * Nueve, no tres.
+ *
+ * Antes la lista se escribía en el mensaje y tres ya era un muro; ahora se
+ * toca, y Meta admite diez filas EN TOTAL. La décima es la de Paula, que no se
+ * negocia, así que a los productos les quedan nueve.
+ */
+export const PRODUCT_MATCH_LIMIT = 9;
 
 export type ProductIntent =
   | "product.search"
@@ -518,6 +535,15 @@ export const PRODUCT_TEMPLATES = {
   // o el número no existía. Se admite el despiste en vez de escalar.
   "reference.lost": () =>
     `Se me fue el hilo 💛 ¿Me dices otra vez cuál te interesa? Puedes escribir el nombre o el número de la lista.`,
+  // La lista tocable. El cuerpo no repite las opciones: están en la lista, y
+  // repetirlas sería el muro de texto que esto viene a quitar.
+  "list.body.few": (cuantos: number) =>
+    `Sí 💛 Tengo ${cuantos} que te pueden servir. Míralos y tócame el que quieras.`,
+  "list.body.many": (cuantos: number, resto: number) =>
+    `Sí, tengo varios 💛 Aquí van ${cuantos}, y me quedan ${resto} más. Toca el que te guste, o dime algo más preciso y te busco mejor.`,
+  "list.button": () => `Ver opciones`,
+  "list.section": () => `Elige uno`,
+  "list.footer": () => `O escríbeme y te ayudo`,
 } as const;
 
 export const PRODUCT_TEMPLATES_VERSION = createHash("sha256")
@@ -615,7 +641,44 @@ export function previewProductTemplates(): { label: string; text: string }[] {
       label: "Dice «el primero» y la lista ya caducó",
       text: PRODUCT_TEMPLATES["reference.lost"](),
     },
+    {
+      label: "Cuando hay varios, la lista para tocar",
+      text: previewList(),
+    },
   ];
+}
+
+/**
+ * La lista escrita como se ve en el teléfono.
+ *
+ * Paula aprueba lo que lee la clienta, y aquí lo que cambia no es solo el
+ * texto sino la forma: un botón que abre una lista de opciones tocables. Con
+ * las palabras sueltas no se entendería, así que se dibuja.
+ */
+function previewList(): string {
+  const ejemplo = [
+    { name: "Carpeta plástica oficio verde pastel", price: 12000 },
+    { name: "Carpeta plástica oficio rosada", price: 12000 },
+    { name: "Carpeta plástica oficio azul pastel", price: 12000 },
+  ];
+  const filas = buildProductRows(
+    ejemplo,
+    ejemplo.map((_, i) => `ejemplo-${i}`),
+  );
+  const dibujo = [
+    ...filas.map((f) => `   ▸ ${f.title}\n     ${f.description}`),
+    `   ▸ ${TALK_TO_OWNER_BUTTON_TITLE}`,
+  ].join("\n");
+  return [
+    PRODUCT_TEMPLATES["list.body.few"](ejemplo.length),
+    ``,
+    `[ ${PRODUCT_TEMPLATES["list.button"]()} ] ← la clienta toca aquí y se abre:`,
+    ``,
+    `   ${PRODUCT_TEMPLATES["list.section"]()}`,
+    dibujo,
+    ``,
+    PRODUCT_TEMPLATES["list.footer"](),
+  ].join("\n");
 }
 
 export function areProductAnswersApproved(s: {
@@ -714,6 +777,152 @@ export function renderAvailability(
     : t["availability.few"](lineas);
 }
 
+// --- 4. La lista tocable ------------------------------------------------
+
+/** Corta por la última palabra entera que quepa; «…» avisa de que se cortó. */
+function recortar(texto: string, max: number): string {
+  const limpio = texto.replace(/\s+/g, " ").trim();
+  if (limpio.length <= max) return limpio;
+  const corte = limpio.slice(0, max - 1);
+  const espacio = corte.lastIndexOf(" ");
+  return `${(espacio > max / 3 ? corte.slice(0, espacio) : corte).trim()}…`;
+}
+
+/** Lo mismo pero por el final: conserva lo que distingue, que suele ir ahí. */
+function recortarPorElFinal(texto: string, max: number): string {
+  const palabras = texto.replace(/\s+/g, " ").trim().split(" ");
+  const cola: string[] = [];
+  for (let i = palabras.length - 1; i >= 0; i -= 1) {
+    const prueba = [palabras[i], ...cola].join(" ");
+    if (prueba.length > max - 1) break;
+    cola.unshift(palabras[i]);
+  }
+  return cola.length > 0 ? `…${cola.join(" ")}` : recortar(texto, max);
+}
+
+/** Las palabras que TODOS comparten al principio, sin dejar a nadie sin nada. */
+function prefijoComun(nombres: string[]): number {
+  if (nombres.length < 2) return 0;
+  const palabras = nombres.map((n) => n.replace(/\s+/g, " ").trim().split(" "));
+  let comunes = 0;
+  const minimo = Math.min(...palabras.map((p) => p.length));
+  while (comunes < minimo - 1) {
+    const palabra = palabras[0][comunes].toLowerCase();
+    if (!palabras.every((p) => p[comunes].toLowerCase() === palabra)) break;
+    comunes += 1;
+  }
+  return comunes;
+}
+
+/**
+ * Los títulos de las filas: cortos, y sobre todo distintos entre sí.
+ *
+ * Meta da 24 caracteres, y más de la mitad de los nombres del catálogo miden
+ * más. Cortar por las bravas es justo el problema que esto viene a resolver:
+ * «Carpeta plástica oficio verde pastel», «…rosada» y «…azul pastel» quedarían
+ * los tres en «Carpeta plástica oficio» y habría que adivinar otra vez.
+ *
+ * Así que primero se quita lo que TODOS repiten al principio —que además ya lo
+ * dice el mensaje— y queda lo que de verdad los separa: «verde pastel»,
+ * «rosada», «azul pastel». Si aun así dos coinciden se prueba por el final, y
+ * si tampoco, se numeran: el nombre entero va en la descripción, así que el
+ * título es una etiqueta, pero una etiqueta repetida no sirve para nada.
+ */
+export function buildRowTitles(nombres: string[]): string[] {
+  const limpios = nombres.map((n) => n.replace(/\s+/g, " ").trim());
+  const comunes = prefijoComun(limpios);
+  const base = limpios.map((n) => {
+    const palabras = n.split(" ");
+    const resto = palabras.slice(comunes).join(" ");
+    return resto || n;
+  });
+
+  const titulos = base.map((n) => recortar(n, WHATSAPP_LIST_ROW_TITLE_MAX_LENGTH));
+
+  // Segunda pasada: a los repetidos se les mira la cola.
+  const cuenta = new Map<string, number>();
+  titulos.forEach((t) => cuenta.set(t, (cuenta.get(t) ?? 0) + 1));
+  const segunda = titulos.map((t, i) =>
+    (cuenta.get(t) ?? 0) > 1
+      ? recortarPorElFinal(base[i], WHATSAPP_LIST_ROW_TITLE_MAX_LENGTH)
+      : t,
+  );
+
+  // Último recurso: numerarlos. Feo, pero nunca dos iguales.
+  const vistos = new Set<string>();
+  return segunda.map((t) => {
+    if (!vistos.has(t)) {
+      vistos.add(t);
+      return t;
+    }
+    for (let n = 2; ; n += 1) {
+      const sufijo = ` (${n})`;
+      const corto = `${recortar(t, WHATSAPP_LIST_ROW_TITLE_MAX_LENGTH - sufijo.length)}${sufijo}`;
+      if (!vistos.has(corto)) {
+        vistos.add(corto);
+        return corto;
+      }
+    }
+  });
+}
+
+/**
+ * Las filas de producto, listas para mandar.
+ *
+ * El id lleva el producto, así que lo que se toca no depende de lo que se lee:
+ * el título puede estar recortado y la respuesta sigue siendo la correcta.
+ */
+export function buildProductRows(
+  matches: ProductMatch[],
+  ids: string[],
+): WhatsAppListRow[] {
+  const titulos = buildRowTitles(matches.map((m) => m.name));
+  return matches
+    .map((m, i) => ({ m, id: ids[i], title: titulos[i] }))
+    .filter((r) => Boolean(r.id))
+    .map((r) => ({
+      id: buildProductRowId(r.id),
+      title: r.title,
+      // El nombre entero cabe: ninguno de los 845 del catálogo pasa de 72, y
+      // con el precio al lado la fila ya dice todo lo que decía el texto.
+      description: recortar(
+        `${r.m.name} — ${formatCOP(r.m.price)}`,
+        WHATSAPP_LIST_ROW_DESCRIPTION_MAX_LENGTH,
+      ),
+    }));
+}
+
+/** Igual, pero cuando lo que se preguntó fue si queda. */
+export function buildAvailabilityRows(
+  matches: AvailabilityMatch[],
+  ids: string[],
+): WhatsAppListRow[] {
+  const titulos = buildRowTitles(matches.map((m) => m.name));
+  return matches
+    .map((m, i) => ({ m, id: ids[i], title: titulos[i] }))
+    .filter((r) => Boolean(r.id))
+    .map((r) => ({
+      id: buildProductRowId(r.id),
+      title: r.title,
+      description: recortar(
+        `${r.m.name} — ${r.m.inStock ? "disponible" : "agotado por ahora"}`,
+        WHATSAPP_LIST_ROW_DESCRIPTION_MAX_LENGTH,
+      ),
+    }));
+}
+
+/** El texto que acompaña a la lista; no repite las opciones, ya están dentro. */
+export function buildListBody(mostrados: number, total: number): string {
+  return total > mostrados
+    ? PRODUCT_TEMPLATES["list.body.many"](mostrados, total - mostrados)
+    : PRODUCT_TEMPLATES["list.body.few"](mostrados);
+}
+
+/** La fila de Paula, siempre la última. Mismo id que su botón de siempre. */
+export function buildOwnerRow(): WhatsAppListRow {
+  return { id: TALK_TO_OWNER_BUTTON_ID, title: TALK_TO_OWNER_BUTTON_TITLE };
+}
+
 // --- Unir las tres piezas --------------------------------------------------
 
 export interface ProductAnswer {
@@ -726,6 +935,12 @@ export interface ProductAnswer {
    * el mensaje para que «el primero» tenga a qué referirse.
    */
   shownIds?: string[];
+  /**
+   * Cuando hay varios, se manda como lista tocable en vez de como texto.
+   * `text` sigue siendo la versión escrita, que es a la que se cae si Meta
+   * rechaza la lista: perder la lista es un detalle, callar no.
+   */
+  list?: { body: string; rows: WhatsAppListRow[] };
 }
 
 /**
@@ -782,6 +997,10 @@ export async function answerProductQuestion(
       text: renderAvailability(fact.value),
       photo: fact.value.photo,
       shownIds: fact.value.ids,
+      list: listaSiHayVarios(
+        fact.value,
+        buildAvailabilityRows(fact.value.matches, fact.value.ids ?? []),
+      ),
     };
   }
 
@@ -793,6 +1012,10 @@ export async function answerProductQuestion(
       text: renderProductPrice(fact.value),
       photo: fact.value.photo,
       shownIds: fact.value.ids,
+      list: listaSiHayVarios(
+        fact.value,
+        buildProductRows(fact.value.matches as ProductMatch[], fact.value.ids ?? []),
+      ),
     };
   }
 
@@ -806,6 +1029,10 @@ export async function answerProductQuestion(
       text: renderProductFeatures(fact.value),
       photo: fact.value.photo,
       shownIds: fact.value.ids,
+      list: listaSiHayVarios(
+        fact.value,
+        buildProductRows(fact.value.matches as ProductMatch[], fact.value.ids ?? []),
+      ),
     };
   }
 
@@ -817,6 +1044,7 @@ export async function answerProductQuestion(
       text: renderProductPhoto(fact.value),
       photo: fact.value.photo,
       shownIds: fact.value.ids,
+      list: listaSiHayVarios(fact.value, buildProductRows(fact.value.matches, fact.value.ids ?? [])),
     };
   }
 
@@ -827,7 +1055,20 @@ export async function answerProductQuestion(
     text: renderProductSearch(fact.value),
     photo: fact.value.photo,
     shownIds: fact.value.ids,
+    list: listaSiHayVarios(fact.value, buildProductRows(fact.value.matches, fact.value.ids ?? [])),
   };
+}
+
+/**
+ * Con uno solo no hay nada que elegir: va la respuesta de siempre, con su foto.
+ * La lista es para cuando hay que decidir.
+ */
+function listaSiHayVarios(
+  result: { total: number; ids?: string[] },
+  rows: WhatsAppListRow[],
+): { body: string; rows: WhatsAppListRow[] } | undefined {
+  if (result.total < 2 || rows.length < 2) return undefined;
+  return { body: buildListBody(rows.length, result.total), rows };
 }
 
 /**

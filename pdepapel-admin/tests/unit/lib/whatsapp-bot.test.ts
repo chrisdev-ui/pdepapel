@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   conversationUpdate: vi.fn(),
   messageFindFirst: vi.fn(),
   messageCreate: vi.fn(),
+  messageFindMany: vi.fn(),
+  productFindFirst: vi.fn(),
   send: vi.fn(),
   typing: vi.fn(),
   activeKeywords: vi.fn(),
@@ -13,7 +15,9 @@ const mocks = vi.hoisted(() => ({
   answerProduct: vi.fn(),
   answerAboutProduct: vi.fn(),
   resolveReference: vi.fn(),
+  shownIntent: vi.fn(),
   sendImage: vi.fn(),
+  sendList: vi.fn(),
 }));
 
 vi.mock("@/lib/env.mjs", () => ({ env: {} }));
@@ -26,7 +30,9 @@ vi.mock("@/lib/prismadb", () => ({
     conversationMessage: {
       findFirst: mocks.messageFindFirst,
       create: mocks.messageCreate,
+      findMany: mocks.messageFindMany,
     },
+    product: { findFirst: mocks.productFindFirst },
   },
 }));
 vi.mock("@/lib/whatsapp/bot-products", async (importOriginal) => ({
@@ -39,10 +45,13 @@ vi.mock("@/lib/whatsapp/bot-products", async (importOriginal) => ({
 vi.mock("@/lib/whatsapp/bot-references", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/whatsapp/bot-references")>()),
   resolveProductReference: mocks.resolveReference,
+  readShownIntentForProduct: mocks.shownIntent,
 }));
-vi.mock("@/lib/whatsapp/send", () => ({
+vi.mock("@/lib/whatsapp/send", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/whatsapp/send")>()),
   sendWhatsAppButtonMessage: mocks.send,
   sendWhatsAppImageButtonMessage: mocks.sendImage,
+  sendWhatsAppListMessage: mocks.sendList,
   sendWhatsAppTypingIndicator: mocks.typing,
 }));
 // Los ayudantes puros (ids de botón, constantes) se dejan reales: son la
@@ -1053,6 +1062,235 @@ describe("ritmo humano", () => {
 
     expect(mocks.typing).not.toHaveBeenCalled();
     expect(mocks.send).toHaveBeenCalled();
+  });
+
+  describe("la lista tocable", () => {
+    const aprobado: ResolvedStoreSettings = {
+      ...ajustesBase,
+      botProductsApprovedAt: new Date("2026-09-15T00:00:00.000Z"),
+      botProductsVersion: PRODUCT_TEMPLATES_VERSION,
+    };
+    const tresCarpetas = {
+      intent: "product.search" as const,
+      text: "Mira 💛\n• Carpeta plástica oficio verde pastel — $8.000\n…",
+      photo: null,
+      shownIds: ["p1", "p2", "p3"],
+      list: {
+        body: "Sí 💛 Tengo 3 que te pueden servir. Míralos y tócame el que quieras.",
+        rows: [
+          { id: "p:p1", title: "verde pastel", description: "Carpeta plástica oficio verde pastel — $8.000" },
+          { id: "p:p2", title: "rosada", description: "Carpeta plástica oficio rosada — $8.000" },
+          { id: "p:p3", title: "lila", description: "Carpeta plástica oficio lila — $8.000" },
+        ],
+      },
+    };
+
+    beforeEach(() => {
+      mocks.resolveReference.mockResolvedValue({ outcome: "none" });
+      mocks.shownIntent.mockResolvedValue("product.search");
+      mocks.sendList.mockResolvedValue({ ok: true, externalId: "wamid.LIST1" });
+      mocks.sendImage.mockResolvedValue({ ok: true, externalId: "wamid.IMG1" });
+      mocks.answerProduct.mockResolvedValue(tresCarpetas);
+    });
+
+    const preguntar = () =>
+      runWhatsAppBot({ ...input, body: "¿tienen carpetas?", settings: aprobado });
+
+    it("con varios manda la lista, no el muro de texto", async () => {
+      await expect(preguntar()).resolves.toEqual({
+        outcome: "replied_product",
+        trigger: "product.search",
+      });
+      expect(mocks.sendList).toHaveBeenCalledOnce();
+      expect(mocks.send).not.toHaveBeenCalled();
+    });
+
+    it("la última fila es siempre la de Paula", async () => {
+      await preguntar();
+      const filas = mocks.sendList.mock.calls[0][2].rows;
+      expect(filas).toHaveLength(4);
+      expect(filas[filas.length - 1].id).toBe(TALK_TO_OWNER_BUTTON_ID);
+    });
+
+    it("nunca pasa de las diez filas que admite Meta", async () => {
+      await preguntar();
+      expect(mocks.sendList.mock.calls[0][2].rows.length).toBeLessThanOrEqual(10);
+    });
+
+    it("guarda lo que enseñó, igual que la lista escrita", async () => {
+      await preguntar();
+      expect(mocks.messageCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          metadata: { shown: { ids: ["p1", "p2", "p3"], intent: "product.search" } },
+        }),
+      });
+    });
+
+    it("en el panel se ve lo que se le ofreció, no solo la frase", async () => {
+      await preguntar();
+      const guardado = mocks.messageCreate.mock.calls[0][0].data.body as string;
+      expect(guardado).toContain("Carpeta plástica oficio rosada — $8.000");
+    });
+
+    it("si Meta rechaza la lista, sale el texto de siempre con el botón", async () => {
+      mocks.sendList.mockResolvedValue({ ok: false, error: "400 sections" });
+
+      await expect(preguntar()).resolves.toMatchObject({ outcome: "replied_product" });
+      expect(mocks.send).toHaveBeenCalledOnce();
+      expect(mocks.send.mock.calls[0][1]).toContain("Carpeta plástica oficio");
+      expect(mocks.send.mock.calls[0][2]).toEqual(ESCAPE);
+    });
+
+    it("con UNO solo no hay lista: va la respuesta de siempre con su foto", async () => {
+      mocks.answerProduct.mockResolvedValue({
+        intent: "product.search",
+        text: "Sí 💛 Tengo Cuaderno Stitch en $18.000. ¿Te lo aparto?",
+        photo: "https://…/foto.jpg",
+        shownIds: ["p1"],
+      });
+
+      await preguntar();
+      expect(mocks.sendList).not.toHaveBeenCalled();
+      expect(mocks.sendImage).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("tocar una fila de la lista", () => {
+    const aprobado: ResolvedStoreSettings = {
+      ...ajustesBase,
+      botProductsApprovedAt: new Date("2026-09-15T00:00:00.000Z"),
+      botProductsVersion: PRODUCT_TEMPLATES_VERSION,
+    };
+    const tocar = (id: string, settings = aprobado) =>
+      runWhatsAppBot({
+        ...input,
+        body: "rosada",
+        interactiveReplyId: id,
+        settings,
+      });
+
+    beforeEach(() => {
+      mocks.resolveReference.mockResolvedValue({ outcome: "none" });
+      mocks.shownIntent.mockResolvedValue("product.search");
+      mocks.sendList.mockResolvedValue({ ok: true, externalId: "wamid.LIST1" });
+      mocks.sendImage.mockResolvedValue({ ok: true, externalId: "wamid.IMG1" });
+      mocks.answerAboutProduct.mockResolvedValue({
+        intent: "product.search",
+        text: "Sí 💛 Tengo Carpeta plástica oficio rosada en $8.000. ¿Te lo aparto?",
+        photo: "https://…/rosada.jpg",
+        shownIds: ["p2"],
+      });
+    });
+
+    it("contesta del producto tocado, con su foto", async () => {
+      await expect(tocar("p:p2")).resolves.toEqual({
+        outcome: "replied_product_reference",
+        trigger: "product.search",
+      });
+      expect(mocks.answerAboutProduct).toHaveBeenCalledWith("store-1", "p2", "product.search");
+      expect(mocks.sendImage).toHaveBeenCalledOnce();
+    });
+
+    it("hereda la pregunta con la que se enseñó la lista", async () => {
+      mocks.shownIntent.mockResolvedValue("product.features");
+      await tocar("p:p2");
+      expect(mocks.answerAboutProduct).toHaveBeenCalledWith("store-1", "p2", "product.features");
+    });
+
+    it("abre ventana nueva: después «ese» señala lo que tocó", async () => {
+      await tocar("p:p2");
+      expect(mocks.messageCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          metadata: { shown: { ids: ["p2"], intent: "product.search" } },
+        }),
+      });
+    });
+
+    it("ni pregunta al modelo ni pasa por la etapa de referencias", async () => {
+      await tocar("p:p2");
+      expect(mocks.answerProduct).not.toHaveBeenCalled();
+      expect(mocks.resolveReference).not.toHaveBeenCalled();
+    });
+
+    it("un producto archivado no revienta ni calla: pasa a Paula", async () => {
+      mocks.answerAboutProduct.mockResolvedValue(null);
+
+      await expect(tocar("p:borrado")).resolves.toEqual({
+        outcome: "escalated_button_unavailable",
+      });
+      expect(mocks.send.mock.calls[0][1]).toBe(UNAVAILABLE_OPTION_ACKNOWLEDGEMENT);
+      expect(mocks.conversationUpdate).toHaveBeenCalledWith({
+        where: { id: "conversation-1" },
+        data: { status: "NEEDS_OWNER" },
+      });
+    });
+
+    it("sin el visto bueno tampoco calla: pasa a Paula", async () => {
+      await expect(
+        tocar("p:p2", { ...aprobado, botProductsApprovedAt: null }),
+      ).resolves.toEqual({ outcome: "escalated_button_unavailable" });
+      expect(mocks.answerAboutProduct).not.toHaveBeenCalled();
+      expect(mocks.send.mock.calls[0][1]).toBe(UNAVAILABLE_OPTION_ACKNOWLEDGEMENT);
+    });
+
+    it("despierta una conversación que ya esperaba a Paula: tocar es elegir", async () => {
+      mocks.conversationFindUnique.mockResolvedValue({
+        id: "conversation-1",
+        status: "NEEDS_OWNER",
+        storeId: "store-1",
+      });
+
+      await expect(tocar("p:p2")).resolves.toMatchObject({
+        outcome: "replied_product_reference",
+      });
+    });
+
+    // El eslabón que de verdad importa: lo que el toque GUARDA tiene que ser
+    // legible por la etapa de referencias. Aquí no se copia la forma a mano,
+    // se toma la fila tal y como quedó escrita y se le pasa al resolvedor real.
+    it("después de tocar, «ese» y «el 1» señalan lo que tocó", async () => {
+      await tocar("p:p2");
+      const guardado = mocks.messageCreate.mock.calls[0][0].data.metadata;
+      expect(guardado).toEqual({ shown: { ids: ["p2"], intent: "product.search" } });
+
+      const referencias = await vi.importActual<
+        typeof import("@/lib/whatsapp/bot-references")
+      >("@/lib/whatsapp/bot-references");
+
+      mocks.messageFindMany.mockResolvedValue([
+        { metadata: guardado, createdAt: new Date() },
+      ]);
+      mocks.productFindFirst.mockResolvedValue({ id: "p2" });
+
+      for (const texto of ["ese", "el 1", "el primero"]) {
+        const senal = referencias.detectProductReference(texto);
+        expect(senal).not.toBeNull();
+        await expect(
+          referencias.resolveProductReference({
+            conversationId: "conversation-1",
+            storeId: "store-1",
+            reference: senal!,
+          }),
+        ).resolves.toEqual({
+          outcome: "resolved",
+          productId: "p2",
+          intent: "product.search",
+        });
+      }
+    });
+
+    it("la fila de Paula sigue llamando a Paula, sin tocar nada nuevo", async () => {
+      await expect(
+        runWhatsAppBot({
+          ...input,
+          body: "Hablar con Paula",
+          interactiveReplyId: TALK_TO_OWNER_BUTTON_ID,
+          settings: aprobado,
+        }),
+      ).resolves.toEqual({ outcome: "escalated_owner_requested" });
+      expect(mocks.answerAboutProduct).not.toHaveBeenCalled();
+      expect(mocks.send.mock.calls[0][1]).toBe(TALK_TO_OWNER_ACKNOWLEDGEMENT);
+    });
   });
 
   describe("«el primero», «ese»", () => {

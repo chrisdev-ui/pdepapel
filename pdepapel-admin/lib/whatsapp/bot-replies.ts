@@ -27,6 +27,8 @@ export const TALK_TO_OWNER_BUTTON_ID = "owner";
 export const TALK_TO_OWNER_BUTTON_TITLE = "Hablar con Paula";
 /** Los botones que llevan a otra respuesta viajan como `r:<id>`. */
 export const BUTTON_TARGET_PREFIX = "r:";
+/** Las filas de producto de una lista viajan como `p:<id>`. */
+export const PRODUCT_ROW_PREFIX = "p:";
 
 export interface BotReplyButton {
   title: string;
@@ -63,6 +65,18 @@ export function buildButtonId(targetReplyId: string): string {
 export function readButtonTarget(buttonId: string | null | undefined): string | null {
   if (!buttonId || !buttonId.startsWith(BUTTON_TARGET_PREFIX)) return null;
   const target = buttonId.slice(BUTTON_TARGET_PREFIX.length).trim();
+  return target || null;
+}
+
+/** `p:<id>` para las filas de producto de una lista. */
+export function buildProductRowId(productId: string): string {
+  return `${PRODUCT_ROW_PREFIX}${productId}`;
+}
+
+/** Devuelve el producto que señala una fila tocada, si señala alguno. */
+export function readProductTarget(rowId: string | null | undefined): string | null {
+  if (!rowId || !rowId.startsWith(PRODUCT_ROW_PREFIX)) return null;
+  const target = rowId.slice(PRODUCT_ROW_PREFIX.length).trim();
   return target || null;
 }
 
