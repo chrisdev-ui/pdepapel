@@ -76,6 +76,7 @@ import { isValidPhoneNumber } from "react-phone-number-input";
 import { MultiStepForm } from "./multi-step-form";
 import { StepNavigation } from "./step-navigation";
 import { BasicInfoStep } from "./steps/basic-info-step";
+import { useDeferredResubmit } from "@/hooks/use-deferred-resubmit";
 import { PaymentInfoStep, StockConflictItem } from "./steps/payment-info-step";
 import type {
   RecoveryRate,
@@ -446,6 +447,12 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
         ),
       [activeItems, couponState.coupon, shippingCost, freeShippingThreshold],
     );
+
+  // Reenviar SOLO cuando `shipping.cost` ya es el nuevo: en ese render `total`
+  // también lo es, porque sale del mismo `useMemo`.
+  const { scheduleResubmit } = useDeferredResubmit(shippingCost, () => {
+    void form.handleSubmit(onSubmit, handleInvalidSubmit)();
+  });
 
   // Mismo cuidado que en el carrito: sin la compra mínima el cupón se quita
   // con aviso en vez de fallar al final con un 409.
@@ -869,9 +876,10 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     trackCustomerEvent("checkout_shipping_rate_confirmed", {
       checkout_step: currentStep,
     });
-    // Si vuelve a fallar, `onError` lo recoge otra vez y vuelve a salir esta
-    // misma tarjeta: no hay forma de acabar en un error sin salida.
-    await form.handleSubmit(onSubmit, handleInvalidSubmit)();
+    // El reenvío lo dispara el efecto de abajo, cuando el total ya se rehizo
+    // con el envío nuevo. Si vuelve a fallar, `onError` lo recoge y vuelve a
+    // salir esta misma tarjeta: no hay forma de acabar en un error sin salida.
+    scheduleResubmit(rate.totalCost);
   };
 
   /** «Elegir otro envío»: de vuelta al paso de entrega, con todo lo demás puesto. */

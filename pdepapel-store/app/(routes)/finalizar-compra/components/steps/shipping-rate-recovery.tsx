@@ -3,7 +3,9 @@
 import { PackageSearch, Truck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Currency } from "@/components/ui/currency";
+// `Currency` pinta un <div> y aquí los precios van dentro de <span> y de un
+// <button>: anidarlo rompía la hidratación y con ella los clics del formulario.
+import { currencyFormatter } from "@/lib/utils";
 
 /** Una tarifa tal como la devuelve el API cuando hay que volver a elegir. */
 export interface RecoveryRate {
@@ -96,15 +98,13 @@ export function ShippingRateRecovery({
             </span>
             <span className="flex items-baseline gap-2">
               {recovery.previousCost > 0 && (
-                <Currency
-                  className="text-sm text-muted-foreground line-through"
-                  value={recovery.previousCost}
-                />
+                <span className="font-quicksand text-sm text-muted-foreground line-through">
+                  {currencyFormatter.format(recovery.previousCost)}
+                </span>
               )}
-              <Currency
-                className="text-base font-semibold"
-                value={recovery.rate.totalCost}
-              />
+              <span className="font-quicksand text-base font-semibold">
+                {currencyFormatter.format(recovery.rate.totalCost)}
+              </span>
             </span>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -148,10 +148,9 @@ export function ShippingRateRecovery({
                           : ""}
                       </span>
                     </span>
-                    <Currency
-                      className="text-base font-semibold"
-                      value={rate.totalCost}
-                    />
+                    <span className="font-quicksand text-base font-semibold">
+                      {currencyFormatter.format(rate.totalCost)}
+                    </span>
                   </button>
                 </li>
               ))}
