@@ -87,6 +87,7 @@ export const storeSettingsInputSchema = z
     physicalAddress: z.string().trim().max(191).nullable().optional(),
     minOrderRule: z.nativeEnum(MinimumOrderRule).optional(),
     minOrderAmount: z.number().int().min(0).nullable().optional(),
+    deliveryEstimate: z.string().trim().max(120).nullable().optional(),
     botEnabled: z.boolean().optional(),
   })
   .refine(
@@ -125,7 +126,12 @@ export interface ResolvedStoreSettings {
    * contradiciéndose, y el que manda en la plata es el del checkout.
    */
   freeShippingThreshold: number | null;
+  /** Lo que se le promete a la clienta («2 a 4 días hábiles»). */
+  deliveryEstimate: string | null;
   botEnabled: boolean;
+  /** Visto bueno a los textos con los que el bot da los datos del negocio. */
+  botFactsApprovedAt: Date | null;
+  botFactsVersion: string | null;
 }
 
 /** Lo que ve quien pregunta, con los valores por defecto cuando no hay fila. */
@@ -158,7 +164,13 @@ export async function getStoreSettings(
     minOrderRule: settings?.minOrderRule ?? MinimumOrderRule.NONE,
     minOrderAmount: settings?.minOrderAmount ?? null,
     freeShippingThreshold: store?.freeShippingThreshold ?? null,
-    botEnabled: settings?.botEnabled ?? true,
+    deliveryEstimate: settings?.deliveryEstimate?.trim() || null,
+    // Sin fila guardada el bot queda APAGADO. Al revés —que una tabla vacía
+    // lo diera por encendido— es como se enciende solo el día que alguien
+    // conecte esta bandera.
+    botEnabled: settings?.botEnabled ?? false,
+    botFactsApprovedAt: settings?.botFactsApprovedAt ?? null,
+    botFactsVersion: settings?.botFactsVersion ?? null,
   };
 }
 
@@ -179,7 +191,13 @@ export async function saveStoreSettings(
       input.minOrderRule === MinimumOrderRule.FIXED
         ? (input.minOrderAmount ?? null)
         : null,
-    botEnabled: input.botEnabled ?? true,
+    // Igual que al leer: si el formulario no manda la bandera, el bot NO se
+    // enciende solo por guardar los datos del negocio.
+    botEnabled: input.botEnabled ?? false,
+    // Un campo que no venga se deja como estaba, en vez de borrarlo.
+    ...(input.deliveryEstimate === undefined
+      ? {}
+      : { deliveryEstimate: input.deliveryEstimate?.trim() || null }),
   };
 
   return prismadb.storeSettings.upsert({
@@ -188,6 +206,13 @@ export async function saveStoreSettings(
     create: { storeId, ...data },
   });
 }
+
+/**
+ * Lo que se promete mientras nadie diga otra cosa. No es un número inventado:
+ * sobre 106 entregas reales la mediana fue 0,9 días, el 94 % llegó en 4 o
+ * menos y el 100 % en 7.
+ */
+export const DEFAULT_DELIVERY_ESTIMATE = "2 a 4 días hábiles";
 
 export const ALWAYS_OPEN_LABEL = "Todos los días, a toda hora";
 

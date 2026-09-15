@@ -1317,9 +1317,20 @@ model StoreSettings {
   /// Subtotal desde el cual el envío es gratis; lo que el bot responde a la
   /// pregunta general de envíos sin tener que cotizar.
   freeShippingThreshold Int?
-  /// Apaga el bot sin borrar sus respuestas. Todavía no lo lee nadie: se
-  /// conecta en la etapa 2, junto con la lógica de respuestas.
-  botEnabled       Boolean            @default(true)
+  /// Cuánto tarda en llegar un pedido, tal como se le dice a la clienta
+  /// («2 a 4 días hábiles»). Único sitio: la tienda y el bot leen de aquí.
+  deliveryEstimate String?
+  /// Apaga el bot sin borrar sus respuestas. Apagado por defecto a propósito:
+  /// se enciende cuando alguien lo decide, no por crear la fila.
+  botEnabled       Boolean            @default(false)
+
+  /// Visto bueno de Paula a los textos con los que el bot contesta los datos
+  /// del negocio. `botFactsVersion` guarda la versión aprobada: si se edita
+  /// un texto en el código la versión cambia y la aprobación deja de valer,
+  /// igual que editar una respuesta borra su `approvedAt`.
+  botFactsApprovedAt DateTime?
+  botFactsApprovedBy String?
+  botFactsVersion    String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

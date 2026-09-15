@@ -145,7 +145,10 @@ export default async function RootLayout({
           <link rel="preconnect" href="https://res.cloudinary.com" />
           <ReactQueryProvider>
             <StorefrontSettingsProvider
-              value={{ freeShippingThreshold: settings.freeShippingThreshold }}
+              value={{
+                freeShippingThreshold: settings.freeShippingThreshold,
+                deliveryEstimate: settings.deliveryEstimate,
+              }}
             >
               <CartPreviewProvider>
                 <ModalProvider />

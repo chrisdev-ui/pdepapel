@@ -3,8 +3,6 @@
 import { CalendarClock, Check, CreditCard, Flame, PackageX, ShieldCheck, Truck, Undo2 } from "lucide-react";
 import Link from "next/link";
 
-import { DELIVERY_WINDOW } from "@/constants";
-
 import { FreeShippingProgress } from "@/components/free-shipping-progress";
 import { NotifyMeForm } from "@/components/notify-me-form";
 import { useCart } from "@/hooks/use-cart";
@@ -21,9 +19,6 @@ interface ProductSignalsProps {
   quantity: number;
   className?: string;
 }
-
-/** Tiempo de entrega publicado en la política de envíos. */
-export { DELIVERY_WINDOW };
 
 const TONES = {
   green: { bg: "bg-kawaii-mint-light/60", text: "text-green-700", Icon: Check },
@@ -42,7 +37,7 @@ const TONES = {
  */
 export function ProductSignals({ product, availability, quantity, className }: ProductSignalsProps) {
   const items = useCart((state) => state.items);
-  const { freeShippingThreshold } = useStorefrontSettings();
+  const { freeShippingThreshold, deliveryEstimate } = useStorefrontSettings();
   const tone = TONES[availability.tone];
   const inCart = items.some((item) => item.id === product.id);
   const projectedSubtotal =
@@ -82,7 +77,14 @@ export function ProductSignals({ product, availability, quantity, className }: P
           <p className="flex items-center gap-2">
             <Truck aria-hidden="true" className="h-4 w-4 shrink-0" />
             <span>
-              Llega en <strong>{DELIVERY_WINDOW}</strong> a toda Colombia ·{" "}
+              {deliveryEstimate ? (
+                <>
+                  Llega en <strong>{deliveryEstimate}</strong> a toda Colombia
+                </>
+              ) : (
+                <>Enviamos a toda Colombia</>
+              )}{" "}
+              ·{" "}
               <Link href={STOREFRONT_ROUTES.shippingPolicy} className="underline underline-offset-2">
                 ver envíos
               </Link>

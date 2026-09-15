@@ -4,7 +4,6 @@ import Link from "next/link";
 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { RichTextDisplay } from "@/components/ui/rich-text-display";
-import { DELIVERY_WINDOW } from "@/components/product-signals";
 import { getCustomerFacingProductOptions, getStructuredProductSize } from "@/lib/product-options";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { currencyFormatter } from "@/lib/utils";
@@ -19,7 +18,7 @@ const TRIGGER = "py-4 font-sans text-base font-bold text-blue-yankees hover:no-u
 
 /** Descripción, detalles y envíos en acordeón; la descripción abre por defecto. */
 export function ProductDetailsAccordion({ product }: ProductDetailsAccordionProps) {
-  const { freeShippingThreshold } = useStorefrontSettings();
+  const { freeShippingThreshold, deliveryEstimate } = useStorefrontSettings();
   const size = getStructuredProductSize(product);
   const details: { label: string; value: string }[] = [
     ...(product.sku ? [{ label: "Referencia", value: product.sku }] : []),
@@ -67,7 +66,10 @@ export function ProductDetailsAccordion({ product }: ProductDetailsAccordionProp
         </AccordionTrigger>
         <AccordionContent>
           <ul className="flex list-disc flex-col gap-1.5 pl-5 font-sans text-sm text-blue-yankees">
-            <li>Enviamos a toda Colombia con transportadora; llega en {DELIVERY_WINDOW} después del pago.</li>
+            <li>
+              Enviamos a toda Colombia con transportadora
+              {deliveryEstimate ? `; llega en ${deliveryEstimate} después del pago.` : " una vez se confirma el pago."}
+            </li>
             {freeShippingThreshold ? <li>Envío gratis en pedidos desde {currencyFormatter.format(freeShippingThreshold)}.</li> : null}
             <li>Pago en línea o transferencia bancaria; el pedido se despacha cuando el pago se confirma.</li>
             <li>Cambios hasta 5 días calendario después de la compra, con el producto sin uso y en su empaque.</li>

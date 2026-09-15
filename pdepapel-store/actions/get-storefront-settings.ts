@@ -11,6 +11,7 @@ export const EMPTY_STOREFRONT_SETTINGS: StorefrontSettings = {
   cityName: null,
   hasPhysicalStore: false,
   physicalAddress: null,
+  deliveryEstimate: null,
 };
 
 /**
@@ -43,6 +44,11 @@ export const getStorefrontSettings = cache(
           typeof data?.physicalAddress === "string" &&
           data.physicalAddress.trim()
             ? data.physicalAddress.trim()
+            : null,
+        deliveryEstimate:
+          typeof data?.deliveryEstimate === "string" &&
+          data.deliveryEstimate.trim()
+            ? data.deliveryEstimate.trim()
             : null,
       };
     } catch {

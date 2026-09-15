@@ -365,6 +365,8 @@ export interface StorefrontSettings {
   cityName: string | null;
   hasPhysicalStore: boolean;
   physicalAddress: string | null;
+  /** Cuánto tarda en llegar un pedido («2 a 4 días hábiles»); null si no está configurado. */
+  deliveryEstimate: string | null;
 }
 
 export interface SearchResult {

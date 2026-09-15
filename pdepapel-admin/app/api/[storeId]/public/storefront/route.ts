@@ -72,6 +72,7 @@ export async function GET(
         cityName: settings?.cityName ?? null,
         hasPhysicalStore: settings?.hasPhysicalStore ?? false,
         physicalAddress: settings?.physicalAddress ?? null,
+        deliveryEstimate: settings?.deliveryEstimate ?? null,
       },
       { headers },
     );

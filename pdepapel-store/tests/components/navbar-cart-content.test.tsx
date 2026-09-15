@@ -63,7 +63,7 @@ describe("NavbarCartContent", () => {
 
   it("shows how much is missing for free shipping when the store has a threshold", () => {
     render(
-      <StorefrontSettingsProvider value={{ freeShippingThreshold: 120000 }}>
+      <StorefrontSettingsProvider value={{ freeShippingThreshold: 120000, deliveryEstimate: null }}>
         <Sheet open>
           <NavbarCartContent onClose={onClose} />
         </Sheet>

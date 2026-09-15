@@ -6,6 +6,12 @@ import {
 } from "@prisma/client";
 
 import prismadb from "@/lib/prismadb";
+import { getStoreSettings, type ResolvedStoreSettings } from "@/lib/store-settings";
+import {
+  areBusinessFactsApproved,
+  classifyBusinessFact,
+  renderBusinessFact,
+} from "@/lib/whatsapp/bot-facts";
 import {
   formatBotReply,
   matchWhatsAppKeyword,
@@ -75,6 +81,8 @@ export type WhatsAppBotOutcome =
   | "escalated_button_unavailable"
   /** Coincidió y se envió. */
   | "replied"
+  /** Se contestó un dato del negocio (horario, ciudad, envíos…). */
+  | "replied_business_fact"
   /** Coincidió pero el envío falló. */
   | "escalated_send_failed";
 
@@ -164,6 +172,21 @@ export function isOwnerActive(
   );
 }
 
+/** Los ajustes; si la lectura falla el bot sigue por el camino de siempre. */
+async function readSettings(
+  storeId: string,
+): Promise<ResolvedStoreSettings | null> {
+  try {
+    return await getStoreSettings(storeId);
+  } catch (error) {
+    console.error("[WHATSAPP_BOT] no se pudieron leer los datos del negocio", {
+      storeId,
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return null;
+  }
+}
+
 async function escalate(conversationId: string) {
   await prismadb.conversation.update({
     where: { id: conversationId },
@@ -192,6 +215,8 @@ export async function runWhatsAppBot(input: {
   skipHumanPause?: boolean;
   /** Solo para pruebas: si no se pasa, se leen las respuestas de la tienda. */
   keywords?: WhatsAppBotKeyword[];
+  /** Solo para pruebas: si no se pasa, se leen los datos de la tienda. */
+  settings?: ResolvedStoreSettings;
 }): Promise<WhatsAppBotResult> {
   const conversation = await prismadb.conversation.findUnique({
     where: { id: input.conversationId },
@@ -264,7 +289,43 @@ export async function runWhatsAppBot(input: {
     );
   }
 
-  // 4. Solo palabra clave: sin coincidencia no se inventa una respuesta. Las
+  // 4. Datos del negocio: horario, ciudad, local, mínimo, envío gratis y
+  //    cuánto tarda. La respuesta se arma con el dato guardado, nunca con uno
+  //    inventado: si el campo está vacío, esto no contesta y el mensaje sigue
+  //    su camino hasta quedar para Paula.
+  const factIntent = classifyBusinessFact(input.body);
+  if (factIntent) {
+    const settings =
+      input.settings ?? (await readSettings(conversation.storeId));
+    // Los textos salen solo con el visto bueno de Paula, y editar uno en el
+    // código lo retira. Sin aprobación esto no es un error: se sigue de largo.
+    if (settings && areBusinessFactsApproved(settings)) {
+      const answer = renderBusinessFact(factIntent, settings);
+      if (answer) {
+        const sent = await deliver(
+          conversation.id,
+          input.phone,
+          answer,
+          // Sin menú propio: `deliver` ya añade «Hablar con Paula», que es la
+          // salida que lleva todo mensaje del bot.
+          [],
+          pacing(input),
+        );
+        if (sent.ok) {
+          return { outcome: "replied_business_fact", trigger: factIntent };
+        }
+        // Si no salió, se trata como cualquier envío fallido: pasa a Paula.
+        await escalate(conversation.id);
+        return {
+          outcome: "escalated_send_failed",
+          trigger: factIntent,
+          error: sent.error,
+        };
+      }
+    }
+  }
+
+  // 5. Solo palabra clave: sin coincidencia no se inventa una respuesta. Las
   //    respuestas las escribe la dueña desde el panel; si no ha creado
   //    ninguna, el bot calla y la conversación queda para ella.
   const keywords =

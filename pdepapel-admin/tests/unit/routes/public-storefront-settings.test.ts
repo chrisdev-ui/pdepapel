@@ -53,6 +53,7 @@ describe("public storefront settings endpoint", () => {
       cityName: null,
       hasPhysicalStore: false,
       physicalAddress: null,
+      deliveryEstimate: null,
     });
     expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
       "https://papeleriapdepapel.com",

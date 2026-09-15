@@ -1,3 +1,4 @@
+import { MinimumOrderRule } from "@prisma/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -50,6 +51,8 @@ import {
   normalizeBotText,
   runWhatsAppBot,
 } from "@/lib/whatsapp/bot";
+import type { ResolvedStoreSettings } from "@/lib/store-settings";
+import { BUSINESS_FACT_TEMPLATES_VERSION } from "@/lib/whatsapp/bot-facts";
 import {
   TALK_TO_OWNER_BUTTON_ID,
   TALK_TO_OWNER_BUTTON_TITLE,
@@ -327,6 +330,153 @@ describe("runWhatsAppBot", () => {
         where: { id: "conversation-1" },
         data: { status: "NEEDS_OWNER" },
       });
+    });
+  });
+
+  describe("datos del negocio", () => {
+    const aprobados: ResolvedStoreSettings = {
+      alwaysOpen: false,
+      openingHours: {
+        lun: { abre: "08:00", cierra: "18:00" },
+        mar: { abre: "08:00", cierra: "18:00" },
+        mie: { abre: "08:00", cierra: "18:00" },
+        jue: { abre: "08:00", cierra: "18:00" },
+        vie: { abre: "08:00", cierra: "18:00" },
+        sab: { abre: "08:00", cierra: "18:00" },
+        dom: { abre: "08:00", cierra: "18:00" },
+      },
+      cityName: "Medellín",
+      hasPhysicalStore: false,
+      physicalAddress: null,
+      minOrderRule: MinimumOrderRule.NONE,
+      minOrderAmount: null,
+      freeShippingThreshold: 120000,
+      deliveryEstimate: "2 a 4 días hábiles",
+      botEnabled: true,
+      botFactsApprovedAt: new Date("2026-09-15T00:00:00.000Z"),
+      botFactsVersion: BUSINESS_FACT_TEMPLATES_VERSION,
+    };
+    const preguntar = (body: string, settings = aprobados) =>
+      runWhatsAppBot({ ...input, body, settings });
+
+    it("contesta el horario con el dato guardado", async () => {
+      await expect(preguntar("¿cuál es el horario?")).resolves.toEqual({
+        outcome: "replied_business_fact",
+        trigger: "business.hours",
+      });
+      expect(mocks.send.mock.calls[0][1]).toContain("08:00 - 18:00");
+      // Sale con la salida de siempre, como cualquier mensaje del bot.
+      expect(mocks.send.mock.calls[0][2]).toEqual(ESCAPE);
+    });
+
+    it("contesta las otras cinco", async () => {
+      const casos: [string, string][] = [
+        ["¿en qué ciudad están?", "Medellín"],
+        ["tienen tienda fisica?", "solo vendemos en línea"],
+        ["hay pedido minimo?", "No hay pedido mínimo"],
+        ["desde cuanto es gratis el envio?", "$120.000"],
+        ["cuanto se demora en llegar?", "2 a 4 días hábiles"],
+      ];
+      for (const [pregunta, esperado] of casos) {
+        vi.clearAllMocks();
+        mocks.conversationFindUnique.mockResolvedValue({
+          id: "conversation-1",
+          status: "OPEN",
+          storeId: "store-1",
+          lastOwnerAt: null,
+        });
+        mocks.send.mockResolvedValue({ ok: true, externalId: "wamid.BOT1" });
+        mocks.typing.mockResolvedValue({ ok: true });
+        const res = await preguntar(pregunta);
+        expect(res.outcome).toBe("replied_business_fact");
+        expect(mocks.send.mock.calls[0][1]).toContain(esperado);
+      }
+    });
+
+    it("sin el dato guardado NO inventa: cae al camino de siempre y escala", async () => {
+      // La ciudad está vacía, que es como está hoy la tienda de verdad.
+      await expect(
+        preguntar("¿en qué ciudad están?", { ...aprobados, cityName: null }),
+      ).resolves.toEqual({ outcome: "escalated_no_match" });
+
+      expect(mocks.send).toHaveBeenCalledOnce();
+      expect(mocks.send.mock.calls[0][1]).toBe(NO_MATCH_ACKNOWLEDGEMENT);
+      expect(mocks.conversationUpdate).toHaveBeenCalledWith({
+        where: { id: "conversation-1" },
+        data: { status: "NEEDS_OWNER" },
+      });
+    });
+
+    it("sin el visto bueno de Paula no sale, pero tampoco calla", async () => {
+      // Se pregunta por la ciudad, que no tiene palabra clave configurada, para
+      // ver el final del camino sin que lo tape el emparejador.
+      await expect(
+        preguntar("¿en qué ciudad están?", {
+          ...aprobados,
+          botFactsApprovedAt: null,
+        }),
+      ).resolves.toEqual({ outcome: "escalated_no_match" });
+      expect(mocks.send).toHaveBeenCalledOnce();
+      expect(mocks.send.mock.calls[0][1]).toBe(NO_MATCH_ACKNOWLEDGEMENT);
+      expect(mocks.send.mock.calls[0][1]).not.toContain("Medellín");
+    });
+
+    it("si se edita un texto, la aprobación vieja ya no vale", async () => {
+      await expect(
+        preguntar("¿en qué ciudad están?", {
+          ...aprobados,
+          botFactsVersion: "version-vieja",
+        }),
+      ).resolves.toEqual({ outcome: "escalated_no_match" });
+      expect(mocks.send.mock.calls[0][1]).not.toContain("Medellín");
+    });
+
+    it("lo que no es un dato del negocio sigue con las palabras clave de hoy", async () => {
+      await expect(
+        runWhatsAppBot({ ...input, body: "necesito un ENVÍO", settings: aprobados }),
+      ).resolves.toEqual({ outcome: "replied", trigger: "envio" });
+      expect(mocks.send.mock.calls[0][1]).toBe("Enviamos a todo el país.");
+    });
+
+    it("sin aprobar, una palabra clave configurada sigue contestando", async () => {
+      // El camino completo: no hay visto bueno, así que el paso nuevo se salta
+      // y contesta la respuesta que Paula ya tenía guardada para «horario».
+      await expect(
+        preguntar("¿Cuál es el horario?", {
+          ...aprobados,
+          botFactsApprovedAt: null,
+        }),
+      ).resolves.toEqual({ outcome: "replied", trigger: "horario" });
+      expect(mocks.send.mock.calls[0][1]).toBe("Abrimos de 9 a 6.");
+    });
+
+    it("aprobado, el dato guardado gana a la palabra clave", async () => {
+      // Con visto bueno, «horario» lo contesta el dato real y no el texto de
+      // ejemplo: el paso nuevo va antes que el emparejador.
+      await expect(preguntar("¿Cuál es el horario?")).resolves.toEqual({
+        outcome: "replied_business_fact",
+        trigger: "business.hours",
+      });
+      expect(mocks.send.mock.calls[0][1]).toContain("08:00 - 18:00");
+    });
+
+    it("Paula en la conversación manda por encima de todo esto", async () => {
+      // Aunque la pregunta tenga respuesta y esté aprobada, si ella está en el
+      // hilo no le llega nada a la clienta.
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-09-15T02:30:00.000Z"));
+      mocks.conversationFindUnique.mockResolvedValue({
+        id: "conversation-1",
+        status: "OPEN",
+        storeId: "store-1",
+        lastOwnerAt: new Date("2026-09-15T01:30:00.000Z"),
+      });
+
+      await expect(preguntar("¿cuál es el horario?")).resolves.toEqual({
+        outcome: "skipped_owner_active",
+      });
+      expect(mocks.send).not.toHaveBeenCalled();
+      vi.useRealTimers();
     });
   });
 

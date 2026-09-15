@@ -4,7 +4,7 @@ import Link from "next/link";
 
 import { getStorefrontSettings } from "@/actions/get-storefront-settings";
 import { PolicyPage, type PolicyFact, type PolicySection } from "@/components/policy/policy-page";
-import { BASE_URL, DELIVERY_WINDOW } from "@/constants";
+import { BASE_URL } from "@/constants";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { currencyFormatter } from "@/lib/utils";
 
@@ -23,18 +23,22 @@ export const metadata: Metadata = {
 export const revalidate = 300;
 
 export default async function ShippingPolicyPage() {
-  const { freeShippingThreshold } = await getStorefrontSettings();
+  const { freeShippingThreshold, deliveryEstimate } = await getStorefrontSettings();
   const freeShippingLabel = freeShippingThreshold
     ? currencyFormatter.format(freeShippingThreshold)
     : null;
 
   const facts: PolicyFact[] = [
-    {
-      icon: Clock,
-      tint: "bg-kawaii-blue-light",
-      value: DELIVERY_WINDOW,
-      label: "después de confirmar el pago",
-    },
+    ...(deliveryEstimate
+      ? [
+          {
+            icon: Clock,
+            tint: "bg-kawaii-blue-light",
+            value: deliveryEstimate,
+            label: "después de confirmar el pago",
+          } satisfies PolicyFact,
+        ]
+      : []),
     freeShippingLabel
       ? {
           icon: Gift,
@@ -64,11 +68,21 @@ export default async function ShippingPolicyPage() {
         <>
           <p>
             Preparamos y despachamos los pedidos desde Medellín después de
-            confirmar el pago. A partir de ahí, la transportadora entrega en{" "}
-            <strong>{DELIVERY_WINDOW}</strong> en la mayoría de ciudades de
-            Colombia; en municipios lejanos puede tomar un poco más. En el
-            checkout ves el tiempo estimado de cada transportadora antes de
-            pagar.
+            confirmar el pago.{" "}
+            {deliveryEstimate ? (
+              <>
+                A partir de ahí, la transportadora entrega en{" "}
+                <strong>{deliveryEstimate}</strong> en la mayoría de ciudades de
+                Colombia; en municipios lejanos puede tomar un poco más.
+              </>
+            ) : (
+              <>
+                A partir de ahí el tiempo depende de la ciudad de destino y de
+                la transportadora.
+              </>
+            )}{" "}
+            En el checkout ves el tiempo estimado de cada transportadora antes
+            de pagar.
           </p>
           <ul>
             <li>
