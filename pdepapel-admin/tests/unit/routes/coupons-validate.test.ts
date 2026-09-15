@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   findFirst: vi.fn(),
   orderCount: vi.fn(),
+  orderFindMany: vi.fn(),
   welcome: vi.fn(),
 }));
 
@@ -17,7 +18,7 @@ vi.mock("@/lib/customer-benefits", () => ({ assertWelcomeBenefitEligibility: moc
 vi.mock("@/lib/prismadb", () => ({
   default: {
     coupon: { fields: { maxUses: "maxUses-ref" }, findFirst: mocks.findFirst },
-    order: { count: mocks.orderCount },
+    order: { count: mocks.orderCount, findMany: mocks.orderFindMany },
   },
 }));
 
@@ -36,6 +37,7 @@ describe("POST /coupons/validate", () => {
     vi.clearAllMocks();
     mocks.auth.mockResolvedValue({ userId: null });
     mocks.orderCount.mockResolvedValue(0);
+    mocks.orderFindMany.mockResolvedValue([]);
     mocks.welcome.mockResolvedValue(undefined);
   });
 
@@ -50,7 +52,10 @@ describe("POST /coupons/validate", () => {
 
   it("refuses when pending orders already reserved the last uses", async () => {
     mocks.findFirst.mockResolvedValue(coupon);
-    mocks.orderCount.mockResolvedValue(2);
+    mocks.orderFindMany.mockResolvedValue([
+      { createdAt: new Date(), payment: { method: "Bold" } },
+      { createdAt: new Date(), payment: { method: "Bold" } },
+    ]);
     const response = await call({ code: "VUELVE10", subtotal: 50000 });
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({ error: expect.stringContaining("reservados por pedidos pendientes") });

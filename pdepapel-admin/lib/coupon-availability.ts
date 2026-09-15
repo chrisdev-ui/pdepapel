@@ -1,7 +1,19 @@
 import { ErrorFactory } from "@/lib/api-errors";
 import { normalizeCouponCode } from "@/lib/coupon-code";
 import { promotionWindowFilter } from "@/lib/promotion-window";
-import { OrderStatus, type Prisma, type PrismaClient } from "@prisma/client";
+import {
+  OrderStatus,
+  type PaymentMethod,
+  type Prisma,
+  type PrismaClient,
+} from "@prisma/client";
+
+import {
+  PRESALE_HOLD_WINDOW_MINUTES,
+  PRESALE_HOLD_WINDOW_TRANSFER_MINUTES,
+  presaleHoldCutoff,
+  presaleHoldMinutes,
+} from "@/lib/presale";
 
 /**
  * Disponibilidad real de un cupón.
@@ -13,7 +25,10 @@ import { OrderStatus, type Prisma, type PrismaClient } from "@prisma/client";
  */
 
 /** Estados en los que un pedido sin pagar todavía puede cobrarse y consumir el cupón. */
-export const COUPON_RESERVING_STATUSES: OrderStatus[] = [OrderStatus.CREATED, OrderStatus.PENDING];
+export const COUPON_RESERVING_STATUSES: OrderStatus[] = [
+  OrderStatus.CREATED,
+  OrderStatus.PENDING,
+];
 
 type CouponDatabase = Pick<PrismaClient, "coupon" | "order">;
 
@@ -40,27 +55,64 @@ export function activeCouponWhere(
     OR: [
       { maxUses: null },
       {
-        AND: [{ maxUses: { not: null } }, { usedCount: { lt: db.coupon.fields.maxUses } }],
+        AND: [
+          { maxUses: { not: null } },
+          { usedCount: { lt: db.coupon.fields.maxUses } },
+        ],
       },
     ],
   };
 }
 
+/**
+ * Cuánto tiempo un pedido sin pagar sigue reservando un uso del cupón.
+ *
+ * Se reutilizan las ventanas de la preventa: salen del tiempo real entre crear
+ * el pedido y confirmarse el pago en esta tienda, que es la misma pregunta.
+ * Cuando haya datos propios de pedidos con cupón conviene medirlos aparte.
+ */
+function couponHoldCutoff(
+  method: PaymentMethod | null | undefined,
+  now: Date,
+): Date {
+  return presaleHoldCutoff(now, presaleHoldMinutes(method));
+}
+
 export async function getCouponUsage(
   db: Pick<PrismaClient, "order">,
   coupon: { id: string; maxUses: number | null; usedCount: number },
-  options: { excludeOrderId?: string } = {},
+  options: { excludeOrderId?: string; now?: Date } = {},
 ): Promise<CouponUsage> {
-  const reserved = await db.order.count({
+  const now = options.now ?? new Date();
+  // Sin tope de tiempo, un carrito abandonado se quedaba con el último uso
+  // para siempre. Se traen los candidatos dentro de la ventana más larga y
+  // cada uno se filtra con la que le toca por su forma de pago.
+  const candidates = await db.order.findMany({
     where: {
       couponId: coupon.id,
       status: { in: COUPON_RESERVING_STATUSES },
       paidAt: null,
-      ...(options.excludeOrderId ? { id: { not: options.excludeOrderId } } : {}),
+      createdAt: {
+        gte: presaleHoldCutoff(
+          now,
+          Math.max(
+            PRESALE_HOLD_WINDOW_MINUTES,
+            PRESALE_HOLD_WINDOW_TRANSFER_MINUTES,
+          ),
+        ),
+      },
+      ...(options.excludeOrderId
+        ? { id: { not: options.excludeOrderId } }
+        : {}),
     },
+    select: { createdAt: true, payment: { select: { method: true } } },
   });
+  const reserved = candidates.filter(
+    (order) => order.createdAt >= couponHoldCutoff(order.payment?.method, now),
+  ).length;
   const limit = coupon.maxUses ?? null;
-  const remaining = limit === null ? null : Math.max(limit - coupon.usedCount - reserved, 0);
+  const remaining =
+    limit === null ? null : Math.max(limit - coupon.usedCount - reserved, 0);
   return {
     used: coupon.usedCount,
     reserved,
@@ -73,7 +125,12 @@ export async function getCouponUsage(
 /** Rechaza el cupón cuando sus usos (pagados más reservados) ya llegaron al máximo. */
 export async function assertCouponHasUses(
   db: Pick<PrismaClient, "order">,
-  coupon: { id: string; code: string; maxUses: number | null; usedCount: number },
+  coupon: {
+    id: string;
+    code: string;
+    maxUses: number | null;
+    usedCount: number;
+  },
   options: { excludeOrderId?: string } = {},
 ): Promise<CouponUsage> {
   const usage = await getCouponUsage(db, coupon, options);
@@ -90,8 +147,14 @@ export async function assertCouponHasUses(
 export const COUPON_RECENT_ORDERS_LIMIT = 5;
 
 /** Datos del cupón que ve el panel: el registro, su uso real y sus últimos pedidos (sin datos personales). */
-export async function getCouponDetail(db: CouponDatabase, storeId: string, couponId: string) {
-  const coupon = await db.coupon.findFirst({ where: { id: couponId, storeId } });
+export async function getCouponDetail(
+  db: CouponDatabase,
+  storeId: string,
+  couponId: string,
+) {
+  const coupon = await db.coupon.findFirst({
+    where: { id: couponId, storeId },
+  });
   if (!coupon) return null;
   const [usage, ordersCount, recentOrders] = await Promise.all([
     getCouponUsage(db, coupon),
@@ -100,16 +163,30 @@ export async function getCouponDetail(db: CouponDatabase, storeId: string, coupo
       where: { couponId: coupon.id },
       orderBy: { createdAt: "desc" },
       take: COUPON_RECENT_ORDERS_LIMIT,
-      select: { id: true, orderNumber: true, status: true, paidAt: true, total: true, couponDiscount: true, createdAt: true },
+      select: {
+        id: true,
+        orderNumber: true,
+        status: true,
+        paidAt: true,
+        total: true,
+        couponDiscount: true,
+        createdAt: true,
+      },
     }),
   ]);
   return { ...coupon, usage, ordersCount, recentOrders };
 }
 
-export type CouponDetail = NonNullable<Awaited<ReturnType<typeof getCouponDetail>>>;
+export type CouponDetail = NonNullable<
+  Awaited<ReturnType<typeof getCouponDetail>>
+>;
 
 /** Otro beneficio de bienvenida activo y vigente en la tienda (excluyendo `exceptId`). */
-export async function findOtherActiveWelcomeBenefit(db: Pick<PrismaClient, "coupon">, storeId: string, exceptId?: string) {
+export async function findOtherActiveWelcomeBenefit(
+  db: Pick<PrismaClient, "coupon">,
+  storeId: string,
+  exceptId?: string,
+) {
   return db.coupon.findFirst({
     where: {
       storeId,

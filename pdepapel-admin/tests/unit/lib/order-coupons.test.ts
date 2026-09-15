@@ -29,7 +29,10 @@ function couponDatabase(result: Coupon | null) {
       fields: { maxUses: "maxUses-field-reference" },
     },
     // Reservas de pedidos pendientes: ninguna en estas pruebas.
-    order: { count: vi.fn().mockResolvedValue(0) },
+    order: {
+      count: vi.fn().mockResolvedValue(0),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
   } as unknown as NonNullable<
     Parameters<typeof resolveCouponForOrderUpdate>[0]["database"]
   >;

@@ -2,13 +2,31 @@ import { ContactFormEmail } from "@/emails/contact-form";
 import { env } from "@/lib/env.mjs";
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
+import { z } from "zod";
 
 const resend = new Resend(env.RESEND_API_KEY);
 
+/** Lo mismo que valida el formulario, aplicado también aquí: la ruta es
+ *  pública y el correo sale desde el dominio de la tienda. */
+const contactSchema = z.object({
+  name: z.string().trim().min(1).max(50),
+  email: z.string().trim().email().max(120),
+  subject: z.string().trim().max(150).optional(),
+  message: z.string().trim().max(4000).optional(),
+  mobile: z.string().optional(),
+});
+
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { name, email, subject, message, mobile } = body;
+    const body = await req.json().catch(() => null);
+    const parsed = contactSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Revisa los datos del formulario" },
+        { status: 400 },
+      );
+    }
+    const { name, email, subject, message, mobile } = parsed.data;
 
     // Honeypot check: If mobile field is present, it's a bot
     if (mobile) {

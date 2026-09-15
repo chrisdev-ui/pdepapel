@@ -14,6 +14,11 @@ import {
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
 import { envioClickClient } from "@/lib/envioclick";
+import { consumeRateLimit, getClientKey } from "@/lib/rate-limit";
+
+/** Cotizaciones reales contra la transportadora por IP y hora. */
+const QUOTE_RATE_LIMIT = 20;
+const QUOTE_RATE_WINDOW_SECONDS = 60 * 60;
 
 const getCorsHeaders = (request: Request) =>
   createCorsHeaders(request, { methods: "POST, OPTIONS" });
@@ -202,6 +207,33 @@ export async function POST(
           },
         );
       }
+    }
+
+    // Se cuentan solo las cotizaciones que llegan a la transportadora, no las
+    // peticiones: repetir la misma dirección sale de la caché y no gasta nada.
+    // Así una clienta puede comparar varias direcciones sin toparse con esto,
+    // y nadie puede generar llamadas facturables sin límite variando el
+    // destino.
+    const rate = await consumeRateLimit({
+      key: `quote-rl:${params.storeId}:${getClientKey(req)}`,
+      limit: QUOTE_RATE_LIMIT,
+      windowSeconds: QUOTE_RATE_WINDOW_SECONDS,
+    });
+    if (!rate.allowed) {
+      return NextResponse.json(
+        {
+          error:
+            "Demasiadas cotizaciones seguidas. Espera un momento y vuelve a intentarlo.",
+        },
+        {
+          status: 429,
+          headers: {
+            ...corsHeaders,
+            ...CACHE_HEADERS.NO_CACHE,
+            "Retry-After": String(rate.retryAfterSeconds),
+          },
+        },
+      );
     }
 
     const packageForApi = {

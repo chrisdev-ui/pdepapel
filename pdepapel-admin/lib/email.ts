@@ -9,6 +9,7 @@ import {
 } from "@prisma/client";
 import { OrderNotification } from "@/emails/order-notification";
 import { resend } from "@/lib/resend";
+import { recordFailedNotification } from "@/lib/notification-failures";
 import {
   currencyFormatter,
   getReadablePaymentMethod,
@@ -36,11 +37,7 @@ function getOrderLink(orderId: string) {
 }
 
 async function getOrderAccountClaimEmailLink(order: Order) {
-  if (
-    !order.email ||
-    order.userId ||
-    order.type !== OrderType.STANDARD
-  ) {
+  if (!order.email || order.userId || order.type !== OrderType.STANDARD) {
     return null;
   }
 
@@ -192,6 +189,14 @@ export const sendOrderEmail = async (
     }
   } catch (error) {
     console.error("Error sending email:", error);
+    await recordFailedNotification({
+      storeId: order.storeId,
+      channel: "EMAIL",
+      kind: `order:${status}`,
+      recipient: order.email,
+      orderId: order.id,
+      error,
+    });
   }
 };
 

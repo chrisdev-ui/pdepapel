@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   getProductsPrices: vi.fn(),
   normalizeGoogleAnalyticsClientId: vi.fn(),
   orderCreate: vi.fn(),
+  orderFindMany: vi.fn(),
+  orderCount: vi.fn(),
   sendOrderEmail: vi.fn(),
 }));
 
@@ -23,12 +25,34 @@ vi.mock("@clerk/nextjs/server", () => ({
   auth: mocks.auth,
   clerkClient: async () => ({ users: { getUser: vi.fn() } }),
 }));
+/** Cliente de transacción: los mismos mocks que el cliente global. */
+const txMock = () => ({
+  order: {
+    create: mocks.orderCreate,
+    findUnique: mocks.findOrder,
+    findMany: mocks.orderFindMany,
+    count: mocks.orderCount,
+  },
+  customerAddress: {
+    findFirst: vi.fn().mockResolvedValue(null),
+    create: vi.fn(),
+    update: vi.fn(),
+    updateMany: vi.fn(),
+  },
+  coupon: { findFirst: mocks.findCoupon, update: vi.fn(), updateMany: vi.fn() },
+});
 vi.mock("@/lib/prismadb", () => ({
   default: {
+    // El pedido se crea siempre dentro de una transacción: es lo que hace
+    // atómico el cupo del cupón.
+    $transaction: (fn: (tx: unknown) => unknown) =>
+      typeof fn === "function" ? fn(txMock()) : fn,
     coupon: { findFirst: mocks.findCoupon, fields: { maxUses: "maxUses" } },
     order: {
       create: mocks.orderCreate,
       findUnique: mocks.findOrder,
+      findMany: mocks.orderFindMany,
+      count: mocks.orderCount,
     },
     product: { findMany: mocks.findProducts },
     // Sin preventas activas: estas pruebas cubren la compra normal.

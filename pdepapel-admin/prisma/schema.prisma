@@ -87,6 +87,7 @@ model Store {
   businessCashMovements          BusinessCashMovement[]
   growthCampaigns                GrowthCampaign[]
   orderInventoryIssues           OrderInventoryIssue[]
+  failedNotifications            FailedNotification[]
   jobRuns                        JobRun[]
   shippingWebhookEvents          ShippingWebhookEvent[]
 }
@@ -1261,6 +1262,32 @@ enum OrderInventoryIssueKind {
 
 /// Última ejecución de cada tarea programada o de fondo (crons, revalidación
 /// de la tienda). Una fila por nombre: se sobreescribe en cada corrida.
+/// Un aviso que no salió. Es el registro mínimo para poder responder «¿le
+/// llegó el correo a esta clienta?»: no hay reintento automático todavía, así
+/// que quien mire esta tabla es quien lo resuelve a mano.
+model FailedNotification {
+  id        String   @id @default(uuid())
+  storeId   String?
+  /// EMAIL | WHATSAPP
+  channel   String
+  /// Para qué era: confirmación de pedido, aviso de envío, retraso de preventa…
+  kind      String
+  /// A quién se intentaba llegar (correo o teléfono), para poder buscarlo.
+  recipient String?
+  /// Pedido relacionado, cuando lo hay.
+  orderId   String?
+  error     String   @db.Text
+  createdAt DateTime @default(now())
+  /// Cuando alguien ya lo resolvió a mano.
+  resolvedAt DateTime?
+
+  store Store? @relation(fields: [storeId], references: [id])
+
+  @@index([storeId, createdAt])
+  @@index([orderId])
+  @@index([resolvedAt])
+}
+
 model JobRun {
   id      String   @id @default(uuid())
   storeId String?

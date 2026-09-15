@@ -4,10 +4,18 @@ import { activeCouponWhere, assertCouponHasUses, getCouponDetail, getCouponUsage
 
 const coupon = { id: "c1", code: "VUELVE10", maxUses: 3, usedCount: 1 };
 
+/** `reserved` pedidos pendientes, todos recientes (dentro de la ventana). */
 function db(reserved: number) {
+  const recientes = Array.from({ length: reserved }, () => ({
+    createdAt: new Date(),
+    payment: { method: "Bold" },
+  }));
   return {
     coupon: { fields: { maxUses: "maxUses-ref" }, findFirst: vi.fn() },
-    order: { count: vi.fn().mockResolvedValue(reserved), findMany: vi.fn().mockResolvedValue([]) },
+    order: {
+      count: vi.fn().mockResolvedValue(reserved),
+      findMany: vi.fn().mockResolvedValue(recientes),
+    },
   } as unknown as Parameters<typeof getCouponUsage>[0] & Parameters<typeof activeCouponWhere>[0];
 }
 
@@ -15,9 +23,18 @@ describe("coupon availability", () => {
   it("counts pending unpaid orders as reservations", async () => {
     const database = db(1);
     await expect(getCouponUsage(database, coupon)).resolves.toEqual({ used: 1, reserved: 1, limit: 3, remaining: 1, exhausted: false });
-    expect(database.order.count).toHaveBeenCalledWith({
-      where: { couponId: "c1", status: { in: ["CREATED", "PENDING"] }, paidAt: null },
-    });
+    expect(database.order.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          couponId: "c1",
+          status: { in: ["CREATED", "PENDING"] },
+          paidAt: null,
+          // Solo cuentan las reservas recientes: un carrito abandonado no
+          // se queda con el último uso para siempre.
+          createdAt: { gte: expect.any(Date) },
+        }),
+      }),
+    );
   });
 
   it("treats an unlimited coupon as never exhausted", async () => {
@@ -37,9 +54,11 @@ describe("coupon availability", () => {
   it("ignores the order being edited when it holds the reservation", async () => {
     const database = db(0);
     await assertCouponHasUses(database, coupon, { excludeOrderId: "o9" });
-    expect(database.order.count).toHaveBeenCalledWith({
-      where: { couponId: "c1", status: { in: ["CREATED", "PENDING"] }, paidAt: null, id: { not: "o9" } },
-    });
+    expect(database.order.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: { not: "o9" } }),
+      }),
+    );
   });
 
   it("builds the active-coupon filter with a normalized code and the real window", () => {
@@ -57,7 +76,7 @@ describe("coupon availability", () => {
   it("returns the detail with usage, order count and recent orders scoped to the store", async () => {
     const database = db(0);
     (database.coupon.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({ ...coupon, storeId: "s1" });
-    (database.order.count as ReturnType<typeof vi.fn>).mockResolvedValueOnce(0).mockResolvedValueOnce(4);
+    (database.order.count as ReturnType<typeof vi.fn>).mockResolvedValue(4);
     const detail = await getCouponDetail(database, "s1", "c1");
     expect(database.coupon.findFirst).toHaveBeenCalledWith({ where: { id: "c1", storeId: "s1" } });
     expect(detail).toMatchObject({ id: "c1", usage: { used: 1, reserved: 0 }, ordersCount: 4, recentOrders: [] });

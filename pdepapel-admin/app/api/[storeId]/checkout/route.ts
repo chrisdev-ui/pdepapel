@@ -604,8 +604,9 @@ async function createCheckout(
         );
       }
 
-      // Usos pagados más reservados por pedidos pendientes: así varios
-      // pedidos no se reparten el último uso.
+      // Aquí solo se responde pronto con un mensaje claro; la comprobación que
+      // manda corre dentro de la transacción que crea el pedido, porque dos
+      // compras simultáneas pasan las dos por esta.
       await assertCouponHasUses(prismadb, coupon);
 
       if (subtotal < Number(coupon.minOrderValue ?? 0)) {
@@ -797,30 +798,31 @@ async function createCheckout(
       return createdOrder;
     };
 
-    if (coupon?.isWelcomeBenefit) {
-      if (!authenticatedUserId) {
-        throw ErrorFactory.Unauthenticated();
+    if (coupon?.isWelcomeBenefit && !authenticatedUserId) {
+      throw ErrorFactory.Unauthenticated();
+    }
+
+    // Todo el pedido se crea en UNA transacción, también cuando no hay cupón
+    // ni dirección que guardar. Es lo que permite que el cupo del cupón se
+    // compruebe y se tome sin que dos compras simultáneas se lo repartan.
+    order = (await prismadb.$transaction(async (tx) => {
+      if (coupon) {
+        await assertCouponHasUses(tx, coupon);
       }
 
-      order = (await prismadb.$transaction(async (tx) => {
-        const createdOrder = await createStandardOrder(tx);
+      const createdOrder = await createStandardOrder(tx);
 
+      if (coupon?.isWelcomeBenefit) {
         await reserveWelcomeBenefit(tx, {
           couponId: coupon.id,
           storeId: params.storeId,
-          userId: authenticatedUserId,
+          userId: authenticatedUserId!,
           orderId: createdOrder.id,
         });
+      }
 
-        return createdOrder;
-      })) as unknown as CheckoutOrder;
-    } else if (shouldSaveCustomerAddress) {
-      order = (await prismadb.$transaction((tx) =>
-        createStandardOrder(tx),
-      )) as unknown as CheckoutOrder;
-    } else {
-      order = (await createNewOrder(prismadb)) as unknown as CheckoutOrder;
-    }
+      return createdOrder;
+    })) as unknown as CheckoutOrder;
 
     // Send email asynchronously
     setImmediate(async () => {

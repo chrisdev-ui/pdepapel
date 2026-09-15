@@ -92,7 +92,12 @@ describe("coupon routes", () => {
 
   it("GET returns the detail with usage and recent orders, scoped to the store", async () => {
     mocks.couponFindFirst.mockResolvedValue({ id: "c1", storeId: "store-1", maxUses: 50, usedCount: 1 });
-    mocks.orderCount.mockResolvedValueOnce(2).mockResolvedValueOnce(3);
+    mocks.orderCount.mockResolvedValue(3);
+    // Dos pedidos pendientes recientes reservan dos usos.
+    mocks.orderFindMany.mockResolvedValueOnce([
+      { createdAt: new Date(), payment: { method: "Bold" } },
+      { createdAt: new Date(), payment: { method: "Bold" } },
+    ]);
     mocks.orderFindMany.mockResolvedValue([{ id: "o1", orderNumber: "4871" }]);
     const response = await GET(json("GET"), { params: itemParams });
     expect(response.status).toBe(200);
