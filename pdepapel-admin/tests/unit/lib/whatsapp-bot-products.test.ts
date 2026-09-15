@@ -19,6 +19,7 @@ vi.mock("@ai-sdk/google", () => ({
 vi.mock("@/lib/env.mjs", () => ({ env: { GEMINI_API_KEY: "clave-de-prueba" } }));
 
 import {
+  MIN_USEFUL_DESCRIPTION_LENGTH,
   PRODUCT_TEMPLATES_VERSION,
   answerProductQuestion,
   areProductAnswersApproved,
@@ -26,10 +27,16 @@ import {
   classifyProductQuestion,
   looksLikeProductQuestion,
   previewProductTemplates,
+  cleanDescription,
   renderAvailability,
+  renderProductFeatures,
+  renderProductPrice,
   renderProductSearch,
   resolveAvailability,
+  resolveProductFeatures,
+  resolveProductPrice,
   resolveProductSearch,
+  trimForWhatsApp,
 } from "@/lib/whatsapp/bot-products";
 import { productTokenSearchWhere, searchTokens } from "@/lib/search-terms";
 
@@ -394,5 +401,257 @@ describe("visto bueno, aparte del de los datos del negocio", () => {
     expect(
       buildSearchQuery({ intent: "product.search", productType: null, character: "Kuromi" }),
     ).toBe("Kuromi");
+  });
+});
+
+// ===================== B2: precio y características =====================
+
+/** Tal cual está guardada en producción, con el marcado del editor. */
+const DESCRIPCION_REAL =
+  "<p>Lleva tu identificación con la ternura y diversión de <strong>Doraemon</strong>. " +
+  "Este portacarnet cuenta con un diseño inspirado en el famoso gato cósmico, acompañado " +
+  "de una <strong>cinta para cuello estampada</strong>, ideal para mantener tu carnet " +
+  "siempre al alcance.</p><p>Incluye un <strong>protector rígido transparente</strong> " +
+  "para cuidar tu identificación.</p><ul><li>Cinta ajustable</li><li>Gancho de liberación rápida</li></ul>";
+
+describe("limpiar la descripción", () => {
+  it("quita el marcado real del editor y deja un mensaje legible", () => {
+    const limpio = cleanDescription(DESCRIPCION_REAL);
+    expect(limpio).not.toMatch(/<[^>]+>/);
+    expect(limpio).toContain("Doraemon");
+    expect(limpio).toContain("cinta para cuello estampada");
+    // Las viñetas se conservan como viñetas.
+    expect(limpio).toContain("• Cinta ajustable");
+    expect(limpio).toContain("• Gancho de liberación rápida");
+    // Los párrafos siguen separados, pero sin huecos enormes.
+    expect(limpio).toContain("\n\n");
+    expect(limpio).not.toMatch(/\n{3,}/);
+    expect(limpio.startsWith(" ")).toBe(false);
+  });
+
+  it("convierte los saltos de línea y no deja entidades sueltas", () => {
+    expect(cleanDescription("<p>uno<br>dos</p>")).toBe("uno\ndos");
+    expect(cleanDescription("<p>tinta &amp; papel&nbsp;fino</p>")).toBe("tinta & papel fino");
+  });
+
+  it("una descripción vacía o nula no revienta", () => {
+    expect(cleanDescription(null)).toBe("");
+    expect(cleanDescription("")).toBe("");
+    expect(cleanDescription("<p></p>")).toBe("");
+  });
+
+  it("recorta lo muy largo por la última frase entera", () => {
+    const largo = `${"Una frase de relleno bastante larga. ".repeat(40)}`;
+    const corto = trimForWhatsApp(largo);
+    expect(corto.length).toBeLessThanOrEqual(620);
+    expect(corto.endsWith("…")).toBe(true);
+    expect(trimForWhatsApp("corto")).toBe("corto");
+  });
+});
+
+describe("precio", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("uno solo: lo dice derecho", async () => {
+    mocks.findMany.mockResolvedValue([
+      { id: "1", name: "Cuaderno Stitch", price: 18000, stock: 3 },
+    ]);
+    mocks.count.mockResolvedValue(1);
+    const fact = await resolveProductPrice("store-1", { ...clasificacion, intent: "product.price" });
+    expect(fact.known).toBe(true);
+    if (!fact.known) return;
+    const texto = renderProductPrice(fact.value);
+    expect(texto).toContain("Cuaderno Stitch");
+    expect(texto).toContain("$18.000");
+  });
+
+  it("dos o tres: la lista YA lleva los precios, así que contesta igual", () => {
+    const texto = renderProductPrice({
+      matches: [
+        { name: "Cuaderno Stitch", price: 18000 },
+        { name: "Libreta Stitch", price: 12000 },
+      ],
+      total: 2,
+      hasMore: false,
+    });
+    // Los dos precios salen en el mismo mensaje: no hace falta otra vuelta.
+    expect(texto).toContain("$18.000");
+    expect(texto).toContain("$12.000");
+    expect(texto).toMatch(/cuál te interesa/i);
+  });
+
+  it("más de tres: tres con precio y cuántos faltan", () => {
+    const texto = renderProductPrice({
+      matches: [
+        { name: "A", price: 1000 },
+        { name: "B", price: 2000 },
+        { name: "C", price: 3000 },
+      ],
+      total: 7,
+      hasMore: true,
+    });
+    expect(texto).toContain("$1.000");
+    expect(texto).toContain("y 4 más");
+  });
+
+  it("ninguno: lo mismo que la búsqueda, sin escalar", () => {
+    expect(renderProductPrice({ matches: [], total: 0, hasMore: false })).toMatch(/no lo tengo/i);
+  });
+});
+
+describe("características", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const unSoloCon = (description: string) => {
+    mocks.findMany.mockResolvedValue([
+      { id: "1", name: "Portacarnet Doraemon", price: 15000, stock: 2, description },
+    ]);
+    mocks.count.mockResolvedValue(1);
+  };
+
+  it("con una descripción de verdad, la cuenta ya limpia", async () => {
+    unSoloCon(DESCRIPCION_REAL);
+    const fact = await resolveProductFeatures("store-1", {
+      ...clasificacion,
+      intent: "product.features",
+    });
+    expect(fact.known).toBe(true);
+    if (!fact.known) return;
+    const texto = renderProductFeatures(fact.value);
+    expect(texto).toContain("Portacarnet Doraemon");
+    expect(texto).toContain("Doraemon");
+    expect(texto).not.toMatch(/<[^>]+>/);
+    expect(texto).not.toContain("&amp;");
+  });
+
+  it("pide la descripción a la base SOLO en este caso", async () => {
+    unSoloCon(DESCRIPCION_REAL);
+    await resolveProductFeatures("store-1", { ...clasificacion, intent: "product.features" });
+    expect(mocks.findMany.mock.calls[0][0].select.description).toBe(true);
+
+    vi.clearAllMocks();
+    mocks.findMany.mockResolvedValue([]);
+    mocks.count.mockResolvedValue(0);
+    await resolveProductSearch("store-1", clasificacion);
+    expect(mocks.findMany.mock.calls[0][0].select.description).toBeUndefined();
+  });
+
+  it("DESCRIPCIÓN VACÍA: no se inventa nada, se escala", async () => {
+    unSoloCon("");
+    expect(
+      await resolveProductFeatures("store-1", { ...clasificacion, intent: "product.features" }),
+    ).toEqual({ known: false });
+  });
+
+  it("DESCRIPCIÓN CORTA PERO NO VACÍA: también se escala", async () => {
+    // Caso distinto del vacío a propósito: «Borrador rosado.» es texto real,
+    // pero contarlo como respuesta se lee peor que pasárselo a Paula.
+    const corta = "<p>Borrador rosado.</p>";
+    expect(cleanDescription(corta).length).toBeLessThan(MIN_USEFUL_DESCRIPTION_LENGTH);
+    unSoloCon(corta);
+    expect(
+      await resolveProductFeatures("store-1", { ...clasificacion, intent: "product.features" }),
+    ).toEqual({ known: false });
+  });
+
+  it("justo en el umbral sí se cuenta", async () => {
+    const justa = `<p>${"a".repeat(MIN_USEFUL_DESCRIPTION_LENGTH)}</p>`;
+    unSoloCon(justa);
+    const fact = await resolveProductFeatures("store-1", {
+      ...clasificacion,
+      intent: "product.features",
+    });
+    expect(fact.known).toBe(true);
+  });
+
+  it("con varios candidatos pregunta cuál, sin descripciones", async () => {
+    mocks.findMany.mockResolvedValue([
+      { id: "1", name: "Cuaderno Stitch", price: 18000, stock: 1, description: DESCRIPCION_REAL },
+      { id: "2", name: "Libreta Stitch", price: 12000, stock: 1, description: DESCRIPCION_REAL },
+    ]);
+    mocks.count.mockResolvedValue(2);
+    const fact = await resolveProductFeatures("store-1", {
+      ...clasificacion,
+      intent: "product.features",
+    });
+    expect(fact.known).toBe(true);
+    if (!fact.known) return;
+    const texto = renderProductFeatures(fact.value);
+    expect(texto).toMatch(/cuál/i);
+    expect(texto).toContain("Cuaderno Stitch");
+    // No se vuelca la descripción de dos productos en un mensaje.
+    expect(texto).not.toContain("Doraemon");
+  });
+});
+
+describe("las dos intenciones nuevas, de la pregunta al texto", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("precio", async () => {
+    mocks.generateText.mockResolvedValue({
+      output: { intent: "product.price", productType: "cuaderno", character: "Stitch" },
+    });
+    mocks.findMany.mockResolvedValue([
+      { id: "1", name: "Cuaderno Stitch", price: 18000, stock: 3 },
+    ]);
+    mocks.count.mockResolvedValue(1);
+    const r = await answerProductQuestion("store-1", "cuánto cuesta el cuaderno de Stitch");
+    expect(r?.intent).toBe("product.price");
+    expect(r?.text).toContain("$18.000");
+  });
+
+  it("características", async () => {
+    mocks.generateText.mockResolvedValue({
+      output: { intent: "product.features", productType: "portacarnet", character: "Doraemon" },
+    });
+    mocks.findMany.mockResolvedValue([
+      { id: "1", name: "Portacarnet Doraemon", price: 15000, stock: 2, description: DESCRIPCION_REAL },
+    ]);
+    mocks.count.mockResolvedValue(1);
+    const r = await answerProductQuestion("store-1", "de qué material es el portacarnet de Doraemon?");
+    expect(r?.intent).toBe("product.features");
+    expect(r?.text).not.toMatch(/<[^>]+>/);
+  });
+
+  it("características con descripción pobre no contesta: deja seguir", async () => {
+    mocks.generateText.mockResolvedValue({
+      output: { intent: "product.features", productType: "borrador", character: null },
+    });
+    mocks.findMany.mockResolvedValue([
+      { id: "1", name: "Borrador", price: 2000, stock: 9, description: "<p>Rosado.</p>" },
+    ]);
+    mocks.count.mockResolvedValue(1);
+    expect(await answerProductQuestion("store-1", "cómo es el borrador?")).toBeNull();
+  });
+
+  it.each([
+    ["cuota", new Error("You exceeded your current quota, please check your plan")],
+    ["tiempo", Object.assign(new Error("operation was aborted due to timeout"), { name: "TimeoutError" })],
+    ["transporte", new Error("socket hang up")],
+  ])("precio y características también se caen bien si el modelo falla por %s", async (_motivo, error) => {
+    mocks.generateText.mockRejectedValue(error);
+    expect(await answerProductQuestion("store-1", "cuánto cuesta el cuaderno de Stitch")).toBeNull();
+    expect(await answerProductQuestion("store-1", "de qué material es la agenda?")).toBeNull();
+    expect(mocks.findMany).not.toHaveBeenCalled();
+  });
+
+  it("una respuesta con una intención inventada no se cuela como precio", async () => {
+    mocks.generateText.mockResolvedValue({
+      output: { intent: "product.cost", productType: "cuaderno", character: null },
+    });
+    expect(await answerProductQuestion("store-1", "cuánto cuesta el cuaderno")).toBeNull();
+    expect(mocks.findMany).not.toHaveBeenCalled();
+  });
+
+  it("el portero deja pasar las preguntas de precio y de cómo es", () => {
+    for (const q of [
+      "cuánto cuesta el cuaderno de Stitch",
+      "cuanto vale ese llavero",
+      "de qué material es la agenda?",
+      "qué tamaño tiene el planeador",
+      "qué trae el kit escolar?",
+    ]) {
+      expect(looksLikeProductQuestion(q)).toBe(true);
+    }
   });
 });
