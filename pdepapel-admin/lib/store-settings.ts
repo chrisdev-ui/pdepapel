@@ -88,7 +88,11 @@ export const storeSettingsInputSchema = z
     minOrderRule: z.nativeEnum(MinimumOrderRule).optional(),
     minOrderAmount: z.number().int().min(0).nullable().optional(),
     deliveryEstimate: z.string().trim().max(120).nullable().optional(),
-    paymentMethodsInfo: z.string().trim().max(1000).nullable().optional(),
+    paymentCashInfo: z.string().trim().max(300).nullable().optional(),
+    paymentBancolombiaAccount: z.string().trim().max(300).nullable().optional(),
+    paymentNequiNumber: z.string().trim().max(300).nullable().optional(),
+    paymentDaviplataNumber: z.string().trim().max(300).nullable().optional(),
+    paymentCardInfo: z.string().trim().max(300).nullable().optional(),
     botEnabled: z.boolean().optional(),
   })
   .refine(
@@ -129,8 +133,15 @@ export interface ResolvedStoreSettings {
   freeShippingThreshold: number | null;
   /** Lo que se le promete a la clienta («2 a 4 días hábiles»). */
   deliveryEstimate: string | null;
-  /** Las formas de pago con sus números, una por línea. */
-  paymentMethodsInfo: string | null;
+  /**
+   * Las formas de pago, una por campo. Vacía = no se ofrece, y el menú del bot
+   * ni la enseña.
+   */
+  paymentCashInfo: string | null;
+  paymentBancolombiaAccount: string | null;
+  paymentNequiNumber: string | null;
+  paymentDaviplataNumber: string | null;
+  paymentCardInfo: string | null;
   botEnabled: boolean;
   /** Visto bueno a los textos con los que el bot da los datos del negocio. */
   botFactsApprovedAt: Date | null;
@@ -171,7 +182,11 @@ export async function getStoreSettings(
     minOrderAmount: settings?.minOrderAmount ?? null,
     freeShippingThreshold: store?.freeShippingThreshold ?? null,
     deliveryEstimate: settings?.deliveryEstimate?.trim() || null,
-    paymentMethodsInfo: settings?.paymentMethodsInfo?.trim() || null,
+    paymentCashInfo: settings?.paymentCashInfo?.trim() || null,
+    paymentBancolombiaAccount: settings?.paymentBancolombiaAccount?.trim() || null,
+    paymentNequiNumber: settings?.paymentNequiNumber?.trim() || null,
+    paymentDaviplataNumber: settings?.paymentDaviplataNumber?.trim() || null,
+    paymentCardInfo: settings?.paymentCardInfo?.trim() || null,
     // Sin fila guardada el bot queda APAGADO. Al revés —que una tabla vacía
     // lo diera por encendido— es como se enciende solo el día que alguien
     // conecte esta bandera.
@@ -207,9 +222,22 @@ export async function saveStoreSettings(
     ...(input.deliveryEstimate === undefined
       ? {}
       : { deliveryEstimate: input.deliveryEstimate?.trim() || null }),
-    ...(input.paymentMethodsInfo === undefined
+    // Un campo que no venga se deja como estaba, igual que los de arriba.
+    ...(input.paymentCashInfo === undefined
       ? {}
-      : { paymentMethodsInfo: input.paymentMethodsInfo?.trim() || null }),
+      : { paymentCashInfo: input.paymentCashInfo?.trim() || null }),
+    ...(input.paymentBancolombiaAccount === undefined
+      ? {}
+      : { paymentBancolombiaAccount: input.paymentBancolombiaAccount?.trim() || null }),
+    ...(input.paymentNequiNumber === undefined
+      ? {}
+      : { paymentNequiNumber: input.paymentNequiNumber?.trim() || null }),
+    ...(input.paymentDaviplataNumber === undefined
+      ? {}
+      : { paymentDaviplataNumber: input.paymentDaviplataNumber?.trim() || null }),
+    ...(input.paymentCardInfo === undefined
+      ? {}
+      : { paymentCardInfo: input.paymentCardInfo?.trim() || null }),
   };
 
   return prismadb.storeSettings.upsert({

@@ -43,7 +43,11 @@ const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const formSchema = z.object({
   cityName: z.string().trim().max(80),
   deliveryEstimate: z.string().trim().max(120),
-  paymentMethodsInfo: z.string().trim().max(1000),
+  paymentCashInfo: z.string().trim().max(300),
+  paymentBancolombiaAccount: z.string().trim().max(300),
+  paymentNequiNumber: z.string().trim().max(300),
+  paymentDaviplataNumber: z.string().trim().max(300),
+  paymentCardInfo: z.string().trim().max(300),
   hasPhysicalStore: z.boolean(),
   physicalAddress: z.string().trim().max(191),
   minOrderRule: z.nativeEnum(MinimumOrderRule),
@@ -76,7 +80,11 @@ export function BusinessInfoPanel({
     defaultValues: {
       cityName: settings.cityName ?? "",
       deliveryEstimate: settings.deliveryEstimate ?? DEFAULT_DELIVERY_ESTIMATE,
-      paymentMethodsInfo: settings.paymentMethodsInfo ?? "",
+      paymentCashInfo: settings.paymentCashInfo ?? "",
+      paymentBancolombiaAccount: settings.paymentBancolombiaAccount ?? "",
+      paymentNequiNumber: settings.paymentNequiNumber ?? "",
+      paymentDaviplataNumber: settings.paymentDaviplataNumber ?? "",
+      paymentCardInfo: settings.paymentCardInfo ?? "",
       hasPhysicalStore: settings.hasPhysicalStore,
       physicalAddress: settings.physicalAddress ?? "",
       minOrderRule: settings.minOrderRule,
@@ -131,7 +139,11 @@ export function BusinessInfoPanel({
       await axios.patch(`/api/${params.storeId}/settings`, {
         cityName: values.cityName || null,
         deliveryEstimate: values.deliveryEstimate || null,
-        paymentMethodsInfo: values.paymentMethodsInfo || null,
+        paymentCashInfo: values.paymentCashInfo || null,
+        paymentBancolombiaAccount: values.paymentBancolombiaAccount || null,
+        paymentNequiNumber: values.paymentNequiNumber || null,
+        paymentDaviplataNumber: values.paymentDaviplataNumber || null,
+        paymentCardInfo: values.paymentCardInfo || null,
         hasPhysicalStore: values.hasPhysicalStore,
         physicalAddress: values.physicalAddress || null,
         minOrderRule: values.minOrderRule,
@@ -220,30 +232,122 @@ export function BusinessInfoPanel({
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="paymentMethodsInfo"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Cómo se paga</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      disabled={loading}
-                      rows={4}
-                      placeholder={"Cuenta Bancolombia Ahorros #…\nNequi …\nDaviplata …"}
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Una forma de pago por línea, con sus números. El bot manda
-                    esta lista tal cual, con el saludo y la petición del
-                    comprobante ya puestos. Revisa los números antes de
-                    guardar: van a una clienta que va a transferir.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="space-y-4 rounded-lg border p-4 md:col-span-2">
+              <div>
+                <h4 className="text-sm font-medium">Cómo se paga</h4>
+                <p className="text-sm text-muted-foreground">
+                  El bot ofrece estas formas en un menú que la clienta toca. La
+                  que dejes vacía no se muestra, así que llena solo las que de
+                  verdad aceptas. Revisa los números antes de guardar: van a
+                  alguien que va a transferir.
+                </p>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="paymentCashInfo"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Efectivo</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          disabled={loading}
+                          rows={2}
+                          placeholder="Con gusto, trae el valor exacto si puedes."
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        La dirección ya sale de «¿Hay tienda física?»; aquí va
+                        solo la nota.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="paymentCardInfo"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Datáfono</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          disabled={loading}
+                          rows={2}
+                          placeholder="Recibimos todas las tarjetas en el datáfono."
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Qué tarjetas recibes y si hay algún recargo.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="space-y-4 rounded-md border border-dashed p-4">
+                <div>
+                  <h5 className="text-sm font-medium">Transferencia</h5>
+                  <p className="text-sm text-muted-foreground">
+                    Estas tres salen en un segundo menú, al tocar
+                    «Transferencia». La de Bancolombia va con el QR.
+                  </p>
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="paymentBancolombiaAccount"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Bancolombia</FormLabel>
+                      <FormControl>
+                        <Input
+                          disabled={loading}
+                          placeholder="Cuenta de Ahorros #…"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="paymentNequiNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nequi</FormLabel>
+                        <FormControl>
+                          <Input disabled={loading} placeholder="31…" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="paymentDaviplataNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Daviplata</FormLabel>
+                        <FormControl>
+                          <Input disabled={loading} placeholder="31…" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            </div>
 
             <FormField
               control={form.control}

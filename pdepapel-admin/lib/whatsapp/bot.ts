@@ -10,8 +10,11 @@ import prismadb from "@/lib/prismadb";
 import { getStoreSettings, type ResolvedStoreSettings } from "@/lib/store-settings";
 import {
   areBusinessFactsApproved,
+  buildPaymentMenuRows,
   classifyBusinessFact,
+  parsePaymentOption,
   renderBusinessFact,
+  renderPaymentOption,
 } from "@/lib/whatsapp/bot-facts";
 import {
   PRODUCT_TEMPLATES,
@@ -37,6 +40,7 @@ import {
   TALK_TO_OWNER_BUTTON_ID,
   TALK_TO_OWNER_BUTTON_TITLE,
   buildButtonId,
+  readPaymentTarget,
   readProductTarget,
   getActiveBotKeywords,
   getSendableBotReply,
@@ -344,6 +348,56 @@ export async function runWhatsAppBot(input: {
     };
   }
 
+  // 1 ter. Tocó una forma de pago. Igual que las filas de producto: el id
+  //    dice qué se tocó, así que no hay nada que interpretar. «Transferencia»
+  //    no contesta, abre el segundo menú; las demás sí contestan.
+  const paymentTarget = parsePaymentOption(readPaymentTarget(buttonId));
+  if (paymentTarget) {
+    const settings =
+      input.settings ?? (await readSettings(conversation.storeId));
+    const leaf =
+      settings && areBusinessFactsApproved(settings)
+        ? renderPaymentOption(paymentTarget, settings)
+        : null;
+
+    // La opción existía cuando se enseñó el menú pero ya no: Paula vació ese
+    // campo, o retiró el visto bueno. No se calla ni se inventa: pasa a ella.
+    if (!leaf) {
+      await escalate(conversation.id);
+      await deliver(
+        conversation.id,
+        input.phone,
+        UNAVAILABLE_OPTION_ACKNOWLEDGEMENT,
+        [],
+        pacing(input),
+      );
+      return { outcome: "escalated_button_unavailable" };
+    }
+
+    const sent = await deliver(
+      conversation.id,
+      input.phone,
+      leaf.text,
+      [],
+      pacing(input),
+      {
+        photo: leaf.photo,
+        ...(leaf.rows && leaf.rows.length > 0
+          ? { list: { body: leaf.text, rows: leaf.rows } }
+          : {}),
+      },
+    );
+    if (sent.ok) {
+      return { outcome: "replied_business_fact", trigger: `payment.${paymentTarget}` };
+    }
+    await escalate(conversation.id);
+    return {
+      outcome: "escalated_send_failed",
+      trigger: `payment.${paymentTarget}`,
+      error: sent.error,
+    };
+  }
+
   const buttonTarget = readButtonTarget(buttonId);
 
   // 2. Detenido: la conversación ya espera a una persona. Un mensaje escrito
@@ -394,6 +448,10 @@ export async function runWhatsAppBot(input: {
     if (settings && areBusinessFactsApproved(settings)) {
       const answer = renderBusinessFact(factIntent, settings);
       if (answer) {
+        // «Cómo se paga» no es un texto sino un menú: tres formas de pago más
+        // la salida a Paula son cuatro opciones, y de botones solo caben tres.
+        const filas =
+          factIntent === "payment.methods" ? buildPaymentMenuRows(settings) : [];
         const sent = await deliver(
           conversation.id,
           input.phone,
@@ -402,6 +460,7 @@ export async function runWhatsAppBot(input: {
           // salida que lleva todo mensaje del bot.
           [],
           pacing(input),
+          filas.length > 0 ? { list: { body: answer, rows: filas } } : {},
         );
         if (sent.ok) {
           return { outcome: "replied_business_fact", trigger: factIntent };

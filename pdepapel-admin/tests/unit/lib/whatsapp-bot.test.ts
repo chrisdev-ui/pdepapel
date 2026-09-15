@@ -127,7 +127,11 @@ const ajustesBase: ResolvedStoreSettings = {
   minOrderAmount: null,
   freeShippingThreshold: 120000,
   deliveryEstimate: "2 a 4 días hábiles",
-  paymentMethodsInfo: null,
+  paymentCashInfo: "Con gusto, trae el valor exacto si puedes.",
+  paymentBancolombiaAccount: "Cuenta de Ahorros #00000000000",
+  paymentNequiNumber: "3000000000",
+  paymentDaviplataNumber: "3000000001",
+  paymentCardInfo: "Recibimos todas las tarjetas.",
   botEnabled: true,
   botFactsApprovedAt: new Date("2026-09-15T00:00:00.000Z"),
   botFactsVersion: BUSINESS_FACT_TEMPLATES_VERSION,
@@ -1069,6 +1073,127 @@ describe("ritmo humano", () => {
 
     expect(mocks.typing).not.toHaveBeenCalled();
     expect(mocks.send).toHaveBeenCalled();
+  });
+
+  describe("el menú de formas de pago", () => {
+    const aprobado: ResolvedStoreSettings = ajustesBase;
+
+    beforeEach(() => {
+      mocks.resolveReference.mockResolvedValue({ outcome: "none" });
+      mocks.sendList.mockResolvedValue({ ok: true, externalId: "wamid.LIST1" });
+      mocks.sendImage.mockResolvedValue({ ok: true, externalId: "wamid.IMG1" });
+    });
+
+    const preguntar = () =>
+      runWhatsAppBot({ ...input, body: "¿cómo puedo pagar?", settings: aprobado });
+    const tocar = (id: string, settings = aprobado) =>
+      runWhatsAppBot({ ...input, body: "Efectivo", interactiveReplyId: id, settings });
+
+    it("manda un menú tocable, no un muro con todas las cuentas", async () => {
+      await expect(preguntar()).resolves.toEqual({
+        outcome: "replied_business_fact",
+        trigger: "payment.methods",
+      });
+      expect(mocks.sendList).toHaveBeenCalledOnce();
+      const filas = mocks.sendList.mock.calls[0][2].rows;
+      expect(filas.map((f: { title: string }) => f.title)).toEqual([
+        "Efectivo", "Transferencia", "Datáfono", TALK_TO_OWNER_BUTTON_TITLE,
+      ]);
+    });
+
+    it("ninguna cuenta viaja en el primer mensaje", async () => {
+      await preguntar();
+      expect(JSON.stringify(mocks.sendList.mock.calls[0])).not.toContain("00000000000");
+    });
+
+    it("tocar «Efectivo» contesta solo lo del efectivo", async () => {
+      await expect(tocar("pay:efectivo")).resolves.toEqual({
+        outcome: "replied_business_fact",
+        trigger: "payment.efectivo",
+      });
+      expect(mocks.send.mock.calls[0][1]).toContain("valor exacto");
+      expect(mocks.send.mock.calls[0][1]).not.toContain("00000000000");
+      expect(mocks.send.mock.calls[0][2]).toEqual(ESCAPE);
+    });
+
+    it("tocar «Transferencia» abre el segundo menú, con la salida a Paula", async () => {
+      await tocar("pay:transferencia");
+      const filas = mocks.sendList.mock.calls[0][2].rows;
+      expect(filas.map((f: { title: string }) => f.title)).toEqual([
+        "Bancolombia", "Daviplata", "Nequi", TALK_TO_OWNER_BUTTON_TITLE,
+      ]);
+    });
+
+    it("tocar «Bancolombia» manda la cuenta CON el QR", async () => {
+      await expect(tocar("pay:bancolombia")).resolves.toMatchObject({
+        outcome: "replied_business_fact",
+      });
+      expect(mocks.sendImage).toHaveBeenCalledOnce();
+      const [, texto, botones, foto] = mocks.sendImage.mock.calls[0];
+      expect(foto).toContain("qr-bre-b.jpeg");
+      expect(texto).toContain("#00000000000");
+      expect(texto).toContain("comprobante");
+      expect(botones).toEqual(ESCAPE);
+    });
+
+    it("Nequi va sin foto", async () => {
+      await tocar("pay:nequi");
+      expect(mocks.sendImage).not.toHaveBeenCalled();
+      expect(mocks.send.mock.calls[0][1]).toContain("3000000000");
+    });
+
+    it("una opción vaciada entre el menú y el toque pasa a Paula", async () => {
+      await expect(
+        tocar("pay:nequi", { ...aprobado, paymentNequiNumber: null }),
+      ).resolves.toEqual({ outcome: "escalated_button_unavailable" });
+      expect(mocks.send.mock.calls[0][1]).toBe(UNAVAILABLE_OPTION_ACKNOWLEDGEMENT);
+    });
+
+    it("…y las demás opciones siguen contestando igual", async () => {
+      await expect(
+        tocar("pay:bancolombia", { ...aprobado, paymentNequiNumber: null }),
+      ).resolves.toMatchObject({ outcome: "replied_business_fact" });
+    });
+
+    it("sin el visto bueno de Paula, un toque tampoco contesta", async () => {
+      await expect(
+        tocar("pay:efectivo", { ...aprobado, botFactsApprovedAt: null }),
+      ).resolves.toEqual({ outcome: "escalated_button_unavailable" });
+      expect(mocks.send.mock.calls[0][1]).toBe(UNAVAILABLE_OPTION_ACKNOWLEDGEMENT);
+    });
+
+    it("una fila de pago no se confunde con una de producto", async () => {
+      await tocar("pay:efectivo");
+      expect(mocks.answerAboutProduct).not.toHaveBeenCalled();
+    });
+
+    it("la fila de Paula sigue llamando a Paula desde el menú de pagos", async () => {
+      await expect(
+        runWhatsAppBot({
+          ...input,
+          body: TALK_TO_OWNER_BUTTON_TITLE,
+          interactiveReplyId: TALK_TO_OWNER_BUTTON_ID,
+          settings: aprobado,
+        }),
+      ).resolves.toEqual({ outcome: "escalated_owner_requested" });
+    });
+
+    it("sin ninguna forma llena, la pregunta acaba en Paula como antes", async () => {
+      await expect(
+        runWhatsAppBot({
+          ...input,
+          body: "¿cómo puedo pagar?",
+          settings: {
+            ...aprobado,
+            paymentCashInfo: null, paymentCardInfo: null,
+            paymentBancolombiaAccount: null, paymentNequiNumber: null,
+            paymentDaviplataNumber: null,
+          },
+        }),
+      ).resolves.toEqual({ outcome: "escalated_no_match" });
+      expect(mocks.sendList).not.toHaveBeenCalled();
+      expect(mocks.send.mock.calls[0][1]).toBe(NO_MATCH_ACKNOWLEDGEMENT);
+    });
   });
 
   describe("el aviso de que va lento", () => {

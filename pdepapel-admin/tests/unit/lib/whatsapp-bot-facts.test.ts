@@ -12,22 +12,29 @@ import {
   resolveFreeShippingThreshold,
   resolveHours,
   resolveMinOrder,
-  resolvePaymentMethods,
   resolvePhysicalStore,
+  BANCOLOMBIA_QR_URL,
+  buildPaymentMenuRows,
+  buildTransferMenuRows,
+  parsePaymentOption,
+  renderPaymentOption,
 } from "@/lib/whatsapp/bot-facts";
+import { readPaymentTarget } from "@/lib/whatsapp/bot-replies";
 
 /**
  * Cuentas INVENTADAS a propósito.
  *
  * Las de verdad viven en la base de datos y no en este repositorio, que es
- * público. Lo que se prueba aquí es el envoltorio —que el texto guardado salga
+ * público. Lo que se prueba aquí es el envoltorio —que el dato guardado salga
  * TAL CUAL, sin tocar un dígito—, y para eso sirve igual una cuenta falsa.
  */
-const PAGOS_DE_MENTIRA = [
-  "🪄Cuenta Bancolombia Ahorros #00000000000",
-  "🪄Daviplata 3000000000",
-  "🪄Nequi 3000000000",
-].join("\n");
+const PAGOS_DE_MENTIRA = {
+  paymentCashInfo: "Con gusto, trae el valor exacto si puedes.",
+  paymentBancolombiaAccount: "Cuenta de Ahorros #00000000000",
+  paymentNequiNumber: "3000000000",
+  paymentDaviplataNumber: "3000000001",
+  paymentCardInfo: "Recibimos todas las tarjetas.",
+};
 
 /** Una tienda con todo lleno; cada prueba vacía solo lo que le interesa. */
 const completa: ResolvedStoreSettings = {
@@ -48,7 +55,7 @@ const completa: ResolvedStoreSettings = {
   minOrderAmount: null,
   freeShippingThreshold: 120000,
   deliveryEstimate: "2 a 4 días hábiles",
-  paymentMethodsInfo: PAGOS_DE_MENTIRA,
+  ...PAGOS_DE_MENTIRA,
   botEnabled: true,
   botFactsApprovedAt: new Date("2026-09-15T00:00:00.000Z"),
   botFactsVersion: BUSINESS_FACT_TEMPLATES_VERSION,
@@ -241,60 +248,166 @@ describe("cómo se paga", () => {
     expect(classifyBusinessFact("gracias!")).toBeNull();
   });
 
-  it("sin el dato guardado no se inventa una cuenta", () => {
-    for (const vacio of [null, "", "   "]) {
-      expect(resolvePaymentMethods({ ...completa, paymentMethodsInfo: vacio })).toEqual({
-        known: false,
-      });
-      expect(
-        renderBusinessFact("payment.methods", { ...completa, paymentMethodsInfo: vacio }),
-      ).toBeNull();
-    }
+  it("sin ninguna forma llena, no hay menú y la pregunta pasa a Paula", () => {
+    const sinNada = {
+      ...completa,
+      paymentCashInfo: null, paymentCardInfo: null,
+      paymentBancolombiaAccount: null, paymentNequiNumber: null,
+      paymentDaviplataNumber: null,
+    };
+    expect(buildPaymentMenuRows(sinNada)).toEqual([]);
+    expect(renderBusinessFact("payment.methods", sinNada)).toBeNull();
   });
 
-  it("con el dato guardado lo devuelve tal cual", () => {
-    expect(resolvePaymentMethods(completa)).toEqual({
-      known: true,
-      value: PAGOS_DE_MENTIRA,
-    });
+  it("el menú de arriba son tres opciones tocables", () => {
+    const filas = buildPaymentMenuRows(completa);
+    expect(filas.map((f) => f.title)).toEqual(["Efectivo", "Transferencia", "Datáfono"]);
+    expect(filas.map((f) => readPaymentTarget(f.id))).toEqual([
+      "efectivo", "transferencia", "datafono",
+    ]);
   });
 
-  it("el texto sale con el saludo, la lista SIN TOCAR y el comprobante", () => {
-    const texto = renderBusinessFact("payment.methods", completa);
-    expect(texto).toBe(
-      "Estos son nuestros métodos de pago:\n" +
-        PAGOS_DE_MENTIRA +
-        "\nCuando realices el pago, me envías el comprobante, por favor 🤗",
+  it("una forma sin llenar ni se ofrece", () => {
+    const filas = buildPaymentMenuRows({ ...completa, paymentCardInfo: null });
+    expect(filas.map((f) => f.title)).toEqual(["Efectivo", "Transferencia"]);
+  });
+
+  it("«Transferencia» solo aparece si hay alguna cuenta detrás", () => {
+    const sinCuentas = {
+      ...completa,
+      paymentBancolombiaAccount: null, paymentNequiNumber: null,
+      paymentDaviplataNumber: null,
+    };
+    expect(buildPaymentMenuRows(sinCuentas).map((f) => f.title)).toEqual([
+      "Efectivo", "Datáfono",
+    ]);
+  });
+
+  it("el segundo menú son las tres cuentas", () => {
+    // El mismo orden en que Paula las manda hoy a mano.
+    expect(buildTransferMenuRows(completa).map((f) => f.title)).toEqual([
+      "Bancolombia", "Daviplata", "Nequi",
+    ]);
+  });
+
+  it("caben de sobra bajo el tope de filas de Meta, con la de Paula incluida", () => {
+    // Tres opciones más «Hablar con Paula» son cuatro; de botones solo caben
+    // tres, por eso esto va como lista y no como botones.
+    expect(buildPaymentMenuRows(completa).length + 1).toBeLessThanOrEqual(10);
+    expect(buildTransferMenuRows(completa).length + 1).toBeLessThanOrEqual(10);
+  });
+
+  it("efectivo y datáfono contestan con lo guardado, tal cual", () => {
+    expect(renderPaymentOption("efectivo", completa)?.text).toContain(
+      PAGOS_DE_MENTIRA.paymentCashInfo,
     );
+    expect(renderPaymentOption("datafono", completa)?.text).toContain(
+      PAGOS_DE_MENTIRA.paymentCardInfo,
+    );
+  });
+
+  it("Bancolombia va con el QR y con la línea del comprobante", () => {
+    const hoja = renderPaymentOption("bancolombia", completa)!;
+    expect(hoja.photo).toBe(BANCOLOMBIA_QR_URL);
+    expect(hoja.text).toContain(PAGOS_DE_MENTIRA.paymentBancolombiaAccount);
+    expect(hoja.text).toContain("QR");
+    expect(hoja.text).toContain(
+      "Cuando realices el pago, me envías el comprobante, por favor 🤗",
+    );
+  });
+
+  it.each(["nequi", "daviplata"] as const)(
+    "%s contesta con su número y el comprobante, sin foto",
+    (option) => {
+      const hoja = renderPaymentOption(option, completa)!;
+      expect(hoja.photo).toBeUndefined();
+      expect(hoja.text).toContain(
+        "Cuando realices el pago, me envías el comprobante, por favor 🤗",
+      );
+    },
+  );
+
+  it("Nequi y Daviplata no se confunden de número", () => {
+    expect(renderPaymentOption("nequi", completa)!.text).toContain(
+      PAGOS_DE_MENTIRA.paymentNequiNumber,
+    );
+    expect(renderPaymentOption("daviplata", completa)!.text).toContain(
+      PAGOS_DE_MENTIRA.paymentDaviplataNumber,
+    );
+  });
+
+  it("«Transferencia» no contesta: abre el segundo menú", () => {
+    const hoja = renderPaymentOption("transferencia", completa)!;
+    expect(hoja.rows).toHaveLength(3);
+    expect(hoja.photo).toBeUndefined();
+  });
+
+  it("una opción que se vació entre el menú y el toque devuelve null", () => {
+    // Quien llama lo trata como opción caducada y se lo pasa a Paula.
+    expect(
+      renderPaymentOption("nequi", { ...completa, paymentNequiNumber: null }),
+    ).toBeNull();
+    // Y no estorba a las demás, que siguen contestando.
+    expect(
+      renderPaymentOption("bancolombia", { ...completa, paymentNequiNumber: null }),
+    ).not.toBeNull();
+  });
+
+  it("las respuestas de plata van sin 💛, a propósito", () => {
+    for (const option of ["bancolombia", "nequi", "daviplata"] as const) {
+      expect(renderPaymentOption(option, completa)!.text).not.toContain("💛");
+    }
+    // Los menús sí lo llevan: son navegación, no plata.
+    expect(renderBusinessFact("payment.methods", completa)).toContain("💛");
   });
 
   it("ni un dígito de lo guardado se pierde por el camino", () => {
-    // Lo que de verdad importa: los números salen como entraron. Si alguien
-    // «arregla» el formato algún día, esto se cae.
-    const texto = renderBusinessFact("payment.methods", completa)!;
-    for (const linea of PAGOS_DE_MENTIRA.split("\n")) {
-      expect(texto).toContain(linea);
-    }
+    const hoja = renderPaymentOption("bancolombia", completa)!;
+    expect(hoja.text).toContain("#00000000000");
   });
 
-  it("no le cuelga el 💛 de los demás textos", () => {
-    // Deliberado: son las palabras de Paula tal como las manda hoy.
-    expect(renderBusinessFact("payment.methods", completa)).not.toContain("💛");
-    expect(renderBusinessFact("payment.methods", completa)).toContain("🤗");
+  it.each([
+    ["efectivo", "efectivo"], ["bancolombia", "bancolombia"],
+    ["inventada", null], ["", null], [null, null],
+  ])("parsePaymentOption(%s)", (valor, esperado) => {
+    expect(parsePaymentOption(valor as string | null)).toBe(esperado);
   });
 
-  it("aparece en la pantalla que aprueba Paula, con su etiqueta", () => {
+  it("Paula puede LEER el recorrido entero antes de aprobarlo", () => {
     const fila = previewBusinessFacts(completa).find(
       (f) => f.intent === "payment.methods",
     );
-    expect(fila?.label).toBe("Cómo se paga");
-    expect(fila?.text).toContain("métodos de pago");
+    expect(fila?.label).toBe("Cómo se paga (menú)");
+    const texto = fila!.text!;
+    // Las tres de arriba y las tres de detrás de «Transferencia».
+    for (const etiqueta of ["Efectivo", "Transferencia", "Datáfono",
+                            "Bancolombia", "Nequi", "Daviplata"]) {
+      expect(texto).toContain(etiqueta);
+    }
+    // Con sus datos de verdad, no con ejemplos.
+    expect(texto).toContain(PAGOS_DE_MENTIRA.paymentBancolombiaAccount);
+    expect(texto).toContain(PAGOS_DE_MENTIRA.paymentNequiNumber);
+    // Y avisando de que una lleva foto.
+    expect(texto).toContain("QR");
+    // La salida a Paula se ve en el menú dibujado.
+    expect(texto).toContain("Hablar con Paula");
   });
 
-  it("sin el dato, la pantalla lo enseña vacío para que sepa qué llenar", () => {
-    const fila = previewBusinessFacts({ ...completa, paymentMethodsInfo: null }).find(
+  it("lo que no está lleno tampoco sale en la vista previa", () => {
+    const fila = previewBusinessFacts({ ...completa, paymentCardInfo: null }).find(
       (f) => f.intent === "payment.methods",
     );
+    expect(fila!.text).not.toContain("Datáfono");
+    expect(fila!.text).toContain("Efectivo");
+  });
+
+  it("sin nada llenado, la pantalla lo enseña vacío para que sepa qué llenar", () => {
+    const fila = previewBusinessFacts({
+      ...completa,
+      paymentCashInfo: null, paymentCardInfo: null,
+      paymentBancolombiaAccount: null, paymentNequiNumber: null,
+      paymentDaviplataNumber: null,
+    }).find((f) => f.intent === "payment.methods");
     expect(fila?.text).toBeNull();
   });
 });

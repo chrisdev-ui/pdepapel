@@ -29,6 +29,8 @@ export const TALK_TO_OWNER_BUTTON_TITLE = "Hablar con Paula";
 export const BUTTON_TARGET_PREFIX = "r:";
 /** Las filas de producto de una lista viajan como `p:<id>`. */
 export const PRODUCT_ROW_PREFIX = "p:";
+/** Las del menú de pagos, como `pay:<opcion>`. */
+export const PAYMENT_ROW_PREFIX = "pay:";
 
 export interface BotReplyButton {
   title: string;
@@ -77,6 +79,18 @@ export function buildProductRowId(productId: string): string {
 export function readProductTarget(rowId: string | null | undefined): string | null {
   if (!rowId || !rowId.startsWith(PRODUCT_ROW_PREFIX)) return null;
   const target = rowId.slice(PRODUCT_ROW_PREFIX.length).trim();
+  return target || null;
+}
+
+/** `pay:<opcion>` para las filas del menú de formas de pago. */
+export function buildPaymentRowId(option: string): string {
+  return `${PAYMENT_ROW_PREFIX}${option}`;
+}
+
+/** Qué opción del menú de pagos se tocó, si se tocó alguna. */
+export function readPaymentTarget(rowId: string | null | undefined): string | null {
+  if (!rowId || !rowId.startsWith(PAYMENT_ROW_PREFIX)) return null;
+  const target = rowId.slice(PAYMENT_ROW_PREFIX.length).trim();
   return target || null;
 }
 

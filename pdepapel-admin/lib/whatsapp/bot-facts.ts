@@ -4,6 +4,12 @@ import { MinimumOrderRule } from "@prisma/client";
 
 import { formatOpeningHours, type ResolvedStoreSettings } from "@/lib/store-settings";
 import { normalizeBotText } from "@/lib/whatsapp/bot-matching";
+import {
+  TALK_TO_OWNER_BUTTON_TITLE,
+  buildPaymentRowId,
+  readPaymentTarget,
+} from "@/lib/whatsapp/bot-replies";
+import type { WhatsAppListRow } from "@/lib/whatsapp/send";
 
 /**
  * Datos del negocio por WhatsApp.
@@ -152,17 +158,83 @@ export function resolveDeliveryEstimate(
   return s.deliveryEstimate?.trim() ? known(s.deliveryEstimate.trim()) : unknown;
 }
 
+// --- Las formas de pago, que son un menú y no un texto --------------------
+
 /**
- * Las formas de pago. Sin el dato guardado no se contesta: aquí no hay un
- * valor por defecto razonable que valga —una cuenta equivocada es plata que se
- * pierde—, así que si está vacío la pregunta se le pasa a Paula.
+ * Cada opción que se puede tocar. Las tres primeras son el menú de arriba;
+ * las tres últimas salen al tocar «Transferencia».
  */
-export function resolvePaymentMethods(
+export type PaymentOption =
+  | "efectivo"
+  | "transferencia"
+  | "datafono"
+  | "bancolombia"
+  | "nequi"
+  | "daviplata";
+
+/** El QR de Bancolombia, servido por la tienda. Meta solo acepta JPEG o PNG. */
+export const BANCOLOMBIA_QR_URL =
+  "https://papeleriapdepapel.com/images/qr-bre-b.jpeg";
+
+const PAYMENT_TITLES: Record<PaymentOption, string> = {
+  efectivo: "Efectivo",
+  transferencia: "Transferencia",
+  datafono: "Datáfono",
+  bancolombia: "Bancolombia",
+  nequi: "Nequi",
+  daviplata: "Daviplata",
+};
+
+/** El dato guardado de cada opción, o vacío si no se ofrece. */
+function paymentValue(
+  option: PaymentOption,
   s: ResolvedStoreSettings,
-): FactValue<string> {
-  return s.paymentMethodsInfo?.trim()
-    ? known(s.paymentMethodsInfo.trim())
-    : unknown;
+): string | null {
+  switch (option) {
+    case "efectivo":
+      return s.paymentCashInfo?.trim() || null;
+    case "datafono":
+      return s.paymentCardInfo?.trim() || null;
+    case "bancolombia":
+      return s.paymentBancolombiaAccount?.trim() || null;
+    case "nequi":
+      return s.paymentNequiNumber?.trim() || null;
+    case "daviplata":
+      return s.paymentDaviplataNumber?.trim() || null;
+    // No tiene dato propio: es la puerta a las tres cuentas.
+    case "transferencia":
+      return hasAnyTransfer(s) ? "-" : null;
+  }
+}
+
+/** El mismo orden en que Paula las manda hoy a mano. */
+const TRANSFER_OPTIONS: PaymentOption[] = ["bancolombia", "daviplata", "nequi"];
+
+function hasAnyTransfer(s: ResolvedStoreSettings): boolean {
+  return TRANSFER_OPTIONS.some((option) => Boolean(paymentValue(option, s)));
+}
+
+const row = (option: PaymentOption): WhatsAppListRow => ({
+  id: buildPaymentRowId(option),
+  title: PAYMENT_TITLES[option],
+});
+
+/**
+ * Las opciones de arriba, SOLO las que se pueden contestar.
+ *
+ * Una opción sin dato no se enseña: es mejor un menú de dos que uno de tres
+ * donde una lleva a «esa no la tengo». Y si no queda ninguna, esto devuelve
+ * lista vacía y la pregunta acaba donde acababa antes, en Paula.
+ */
+export function buildPaymentMenuRows(s: ResolvedStoreSettings): WhatsAppListRow[] {
+  return (["efectivo", "transferencia", "datafono"] as PaymentOption[])
+    .filter((option) => Boolean(paymentValue(option, s)))
+    .map(row);
+}
+
+/** Las tres cuentas, con el mismo criterio. */
+export function buildTransferMenuRows(s: ResolvedStoreSettings): WhatsAppListRow[] {
+  return TRANSFER_OPTIONS.filter((option) => Boolean(paymentValue(option, s))).map(row);
 }
 
 // --- Los textos ------------------------------------------------------------
@@ -198,14 +270,20 @@ export const BUSINESS_FACT_TEMPLATES = {
     `Desde ${threshold} el envío es gratis 💛 Si te falta poquito, te sugiero agregar algo más y te lo llevas sin pagar envío.`,
   "shipping.delivery_days": (estimate: string) =>
     `Tu pedido llega en ${estimate} 💛 Te paso el número de guía apenas lo despache.`,
-  // Las palabras son las de Paula, tal como las manda hoy a mano, hasta el
-  // 🤗 del final. Aquí no se impone el 💛 de los demás textos: cambiar la
-  // redacción de algo que trata de plata solo para que pegue con el resto
-  // sería cambiarlo por gusto, y esta es la versión que sus clientas ya
-  // reconocen. Lo único que pone el bot es el envoltorio; los números salen
-  // de lo guardado, nunca escritos aquí.
-  "payment.methods": (methods: string) =>
-    `Estos son nuestros métodos de pago:\n${methods}\nCuando realices el pago, me envías el comprobante, por favor 🤗`,
+  // Los dos menús son navegación, y ahí el 💛 de la casa encaja.
+  "payment.menu": () => `¿Cómo prefieres pagar? 💛`,
+  "payment.transfer.menu": () => `¿A cuál te queda mejor? 💛`,
+  // Las respuestas, en cambio, van sin 💛 a propósito: son la parte que trata
+  // de plata, y la petición del comprobante es literal la de Paula, 🤗
+  // incluido. Los números salen de lo guardado, nunca escritos aquí.
+  "payment.cash": (info: string) => `En efectivo, claro.\n${info}`,
+  "payment.card": (info: string) => `Sí, tenemos datáfono.\n${info}`,
+  "payment.bancolombia": (account: string) =>
+    `Bancolombia\n${account}\nTambién puedes pagar escaneando el QR de la foto.\nCuando realices el pago, me envías el comprobante, por favor 🤗`,
+  "payment.nequi": (number: string) =>
+    `Nequi\n${number}\nCuando realices el pago, me envías el comprobante, por favor 🤗`,
+  "payment.daviplata": (number: string) =>
+    `Daviplata\n${number}\nCuando realices el pago, me envías el comprobante, por favor 🤗`,
 } as const;
 
 /**
@@ -226,6 +304,49 @@ export const BUSINESS_FACT_TEMPLATES_VERSION = createHash("sha256")
   .digest("hex")
   .slice(0, 32);
 
+/**
+ * Lo que se contesta al tocar una opción del menú de pagos.
+ *
+ * `null` cuando esa opción ya no tiene dato: pudo vaciarse entre que se enseñó
+ * el menú y que la clienta lo tocó, igual que una fila de producto que se
+ * archiva. Quien llama lo trata como opción caducada y se lo pasa a Paula, sin
+ * que eso estorbe a las demás opciones, que siguen contestando.
+ */
+export function renderPaymentOption(
+  option: PaymentOption,
+  s: ResolvedStoreSettings,
+): { text: string; photo?: string; rows?: WhatsAppListRow[] } | null {
+  const t = BUSINESS_FACT_TEMPLATES;
+  const value = paymentValue(option, s);
+  if (!value) return null;
+
+  switch (option) {
+    case "transferencia": {
+      const rows = buildTransferMenuRows(s);
+      return rows.length > 0 ? { text: t["payment.transfer.menu"](), rows } : null;
+    }
+    case "efectivo":
+      return { text: t["payment.cash"](value) };
+    case "datafono":
+      return { text: t["payment.card"](value) };
+    case "bancolombia":
+      // La foto es el QR: quien prefiera escanear no tiene que teclear nada.
+      return { text: t["payment.bancolombia"](value), photo: BANCOLOMBIA_QR_URL };
+    case "nequi":
+      return { text: t["payment.nequi"](value) };
+    case "daviplata":
+      return { text: t["payment.daviplata"](value) };
+  }
+}
+
+/** Lee «efectivo», «bancolombia»… de lo que vino en la fila tocada. */
+export function parsePaymentOption(value: string | null): PaymentOption | null {
+  const options: PaymentOption[] = [
+    "efectivo", "transferencia", "datafono", "bancolombia", "nequi", "daviplata",
+  ];
+  return options.find((option) => option === value) ?? null;
+}
+
 /** Etiqueta de cada intención para la pantalla de aprobación. */
 export const BUSINESS_FACT_LABELS: Record<BusinessFactIntent, string> = {
   "business.hours": "Horario de atención",
@@ -234,7 +355,7 @@ export const BUSINESS_FACT_LABELS: Record<BusinessFactIntent, string> = {
   "business.min_order": "Pedido mínimo",
   "shipping.free_threshold": "Desde cuánto el envío es gratis",
   "shipping.delivery_days": "Cuánto tarda en llegar",
-  "payment.methods": "Cómo se paga",
+  "payment.methods": "Cómo se paga (menú)",
 };
 
 /**
@@ -249,9 +370,57 @@ export function previewBusinessFacts(
     (intent) => ({
       intent,
       label: BUSINESS_FACT_LABELS[intent],
-      text: renderBusinessFact(intent, settings),
+      text:
+        intent === "payment.methods"
+          ? previewPaymentFlow(settings)
+          : renderBusinessFact(intent, settings),
     }),
   );
+}
+
+/**
+ * El menú de pagos, escrito entero para que Paula pueda leerlo.
+ *
+ * Los demás datos son un mensaje y se enseñan tal cual. Este son hasta seis,
+ * y cuál sale depende de lo que toque la clienta: aprobar solo el primero
+ * sería aprobar a ciegas los otros cinco. Así que se dibuja el recorrido, con
+ * cada respuesta debajo del toque que la produce, y con SUS datos de verdad.
+ *
+ * Las opciones sin llenar no salen —tampoco las verá la clienta—, así que lo
+ * que lee aquí es exactamente lo que va a pasar.
+ */
+function previewPaymentFlow(s: ResolvedStoreSettings): string | null {
+  const menu = buildPaymentMenuRows(s);
+  if (menu.length === 0) return null;
+
+  const partes: string[] = [
+    BUSINESS_FACT_TEMPLATES["payment.menu"](),
+    menu.map((r) => `   ▸ ${r.title}`).join("\n") + `\n   ▸ ${TALK_TO_OWNER_BUTTON_TITLE}`,
+  ];
+
+  for (const fila of menu) {
+    const option = parsePaymentOption(readPaymentTarget(fila.id));
+    if (!option) continue;
+    const hoja = renderPaymentOption(option, s);
+    if (!hoja) continue;
+
+    partes.push(`\n── Si toca «${fila.title}» ──`);
+    partes.push(hoja.photo ? `${hoja.text}\n   (va con la foto del QR)` : hoja.text);
+
+    // «Transferencia» no contesta: abre otro menú, y detrás hay tres respuestas
+    // más que también hay que poder leer.
+    for (const sub of hoja.rows ?? []) {
+      const subOption = parsePaymentOption(readPaymentTarget(sub.id));
+      const subHoja = subOption ? renderPaymentOption(subOption, s) : null;
+      if (!subHoja) continue;
+      partes.push(`\n   ── …y luego «${sub.title}» ──`);
+      partes.push(
+        subHoja.photo ? `${subHoja.text}\n   (va con la foto del QR)` : subHoja.text,
+      );
+    }
+  }
+
+  return partes.join("\n");
 }
 
 export function areBusinessFactsApproved(s: {
@@ -315,8 +484,10 @@ export function renderBusinessFact(
       return fact.known ? t["shipping.delivery_days"](fact.value) : null;
     }
     case "payment.methods": {
-      const fact = resolvePaymentMethods(settings);
-      return fact.known ? t["payment.methods"](fact.value) : null;
+      // Aquí solo sale el texto que acompaña al menú; las opciones las arma
+      // `buildPaymentMenuRows`. Sin ninguna opción con dato no se contesta,
+      // igual que cualquier otro dato del negocio sin llenar.
+      return buildPaymentMenuRows(settings).length > 0 ? t["payment.menu"]() : null;
     }
   }
 }
