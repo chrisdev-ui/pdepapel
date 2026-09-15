@@ -159,7 +159,7 @@ export const BUSINESS_FACT_TEMPLATES = {
   "business.hours": (hours: string) =>
     `Nuestro horario es ${hours} 💛 Escríbeme cuando quieras y te respondo apenas pueda.`,
   "business.city": (city: string) =>
-    `Estamos en ${city} 💛 y enviamos a toda Colombia.`,
+    `Estamos en ${city} 💛 y hacemos envíos a toda Colombia.`,
   "business.physical_store.yes": (address: string) =>
     `Sí, puedes visitarnos en ${address} 💛 Te esperamos.`,
   "business.physical_store.no": () =>

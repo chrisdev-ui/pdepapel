@@ -217,8 +217,23 @@ describe("plantillas", () => {
 
   it("ninguno: contesta que no, sin escalar", () => {
     const texto = renderProductSearch(search([], 0));
-    expect(texto).toMatch(/no lo tengo/i);
-    expect(texto).toContain("💛");
+    expect(texto).toBe("Ay, eso no lo tengo por ahora 💛 Te aviso apenas llegue.");
+  });
+
+  it("al decir que no, no se vuelve a preguntar qué buscaba", () => {
+    // Ya lo dijo en su mensaje; volver a preguntarlo se lee a formulario.
+    // Son dos textos distintos (búsqueda y disponibilidad), y los dos tenían
+    // la misma repetición, así que los dos se arreglaron.
+    const sinNada = { matches: [], total: 0, hasMore: false };
+    for (const texto of [
+      renderProductSearch(sinNada),
+      renderProductPrice(sinNada),
+      renderProductFeatures(sinNada),
+      renderAvailability({ matches: [], total: 0, hasMore: false }),
+    ]) {
+      expect(texto).not.toMatch(/buscabas/i);
+      expect(texto).toBe("Ay, eso no lo tengo por ahora 💛 Te aviso apenas llegue.");
+    }
   });
 
   it("disponibilidad: sí, agotado y varios", () => {

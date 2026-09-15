@@ -359,7 +359,7 @@ const linea = (name: string, detalle: string) => `• ${name} — ${detalle}`;
  */
 export const PRODUCT_TEMPLATES = {
   "search.none": () =>
-    `Ay, eso no lo tengo por ahora 💛 Si quieres dime qué buscabas y te aviso apenas llegue.`,
+    `Ay, eso no lo tengo por ahora 💛 Te aviso apenas llegue.`,
   "search.one": (name: string, price: string) =>
     `Sí 💛 Tengo ${name} en ${price}. ¿Te lo aparto?`,
   "search.few": (lineas: string) =>
@@ -367,7 +367,7 @@ export const PRODUCT_TEMPLATES = {
   "search.many": (lineas: string, resto: number) =>
     `Sí, tengo varios 💛 Estos son los que más salen:\n${lineas}\n…y ${resto} más. Dime cuál te interesa y te cuento.`,
   "availability.none": () =>
-    `Ay, eso no lo tengo por ahora 💛 Dime qué buscabas y te aviso apenas llegue.`,
+    `Ay, eso no lo tengo por ahora 💛 Te aviso apenas llegue.`,
   "availability.one.yes": (name: string) =>
     `¡Sí! Tengo ${name} disponible 💛 ¿Te lo aparto?`,
   "availability.one.no": (name: string) =>

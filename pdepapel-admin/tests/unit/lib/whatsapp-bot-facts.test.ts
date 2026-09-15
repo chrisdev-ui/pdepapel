@@ -134,7 +134,9 @@ describe("resolver el dato", () => {
 describe("armar la respuesta", () => {
   it("cada intención con el dato puesto", () => {
     expect(renderBusinessFact("business.hours", completa)).toContain("08:00 - 18:00");
-    expect(renderBusinessFact("business.city", completa)).toContain("Medellín");
+    expect(renderBusinessFact("business.city", completa)).toBe(
+      "Estamos en Medellín 💛 y hacemos envíos a toda Colombia.",
+    );
     expect(renderBusinessFact("business.physical_store", completa)).toContain("solo vendemos en línea");
     expect(renderBusinessFact("business.min_order", completa)).toContain("No hay pedido mínimo");
     expect(renderBusinessFact("shipping.free_threshold", completa)).toContain("$120.000");
