@@ -379,6 +379,55 @@ export interface RequotedRate {
  * de cotizaciones: sin esto, el servidor se creía el costo de envío que venía
  * en la petición y cualquiera podía pedir envío gratis.
  */
+/**
+ * Cuánto puede bailar el peso y seguir siendo el mismo carrito.
+ *
+ * La transportadora redondea y ajusta, así que el peso guardado nunca es
+ * exactamente el calculado. Un 10 % cubre ese ajuste sin llegar a confundir un
+ * carrito con otro: añadir o quitar un artículo mueve el peso mucho más.
+ */
+export const QUOTE_WEIGHT_REUSE_TOLERANCE = 0.1;
+
+export function isSameCartWeight(
+  storedWeight: number,
+  calculatedWeight: number,
+): boolean {
+  if (storedWeight <= 0 || calculatedWeight <= 0) return false;
+  const mayor = Math.max(storedWeight, calculatedWeight);
+  return Math.abs(storedWeight - calculatedWeight) / mayor <= QUOTE_WEIGHT_REUSE_TOLERANCE;
+}
+
+/**
+ * Las medidas de la última cotización a ese destino, si el carrito es el mismo.
+ *
+ * Se mira aunque esté vencida: lo que interesa no es la tarifa (esa se vuelve
+ * a pedir igual) sino con qué medidas se pidió, para que la transportadora
+ * devuelva las mismas opciones y no haya que reconciliar nada.
+ */
+export async function findReusableQuoteDimensions(input: {
+  storeId: string;
+  destDaneCode: string;
+  calculatedWeight: number;
+}): Promise<{ weight: number; height: number; width: number; length: number } | null> {
+  const previa = await prismadb.shippingQuote
+    .findFirst({
+      where: { storeId: input.storeId, destDaneCode: input.destDaneCode },
+      orderBy: { createdAt: "desc" },
+      select: { weight: true, height: true, width: true, length: true },
+    })
+    .catch(() => null);
+
+  if (!previa?.height || !previa.width || !previa.length) return null;
+  if (!isSameCartWeight(previa.weight, input.calculatedWeight)) return null;
+
+  return {
+    weight: previa.weight,
+    height: previa.height,
+    width: previa.width,
+    length: previa.length,
+  };
+}
+
 export async function requoteCartShipping(input: {
   storeId: string;
   items: { productId: string; quantity: number }[];
@@ -417,11 +466,28 @@ export async function requoteCartShipping(input: {
     };
   }
 
-  const dimensions = calculatePackageDimensions(
+  const calculadas = calculatePackageDimensions(
     input.items as never,
     products as never,
     boxConfigurations,
   );
+
+  // Se reaprovechan las medidas de la cotización original cuando el carrito
+  // no ha cambiado. Por qué: `/shipment/quote` guarda las medidas que devolvió
+  // la TRANSPORTADORA (`quotation.data.packages[0]`), que no son las que se
+  // calculan aquí, y además tiene un camino de «caja forzada» que aquí no
+  // existe. Con el mismo carrito, las dos rutas mandaban pesos distintos, y el
+  // `idRate` depende del peso: de ahí salía el fallo.
+  //
+  // Si el carrito cambió de verdad, el peso calculado ya no se parece al
+  // guardado y se cotiza de cero, que es lo correcto: otro carrito, otro
+  // precio.
+  const dimensions =
+    (await findReusableQuoteDimensions({
+      storeId: input.storeId,
+      destDaneCode: input.destination.daneCode,
+      calculatedWeight: calculadas.weight,
+    })) ?? calculadas;
 
   const quotation = await envioClickClient.quoteShipment({
     packages: [

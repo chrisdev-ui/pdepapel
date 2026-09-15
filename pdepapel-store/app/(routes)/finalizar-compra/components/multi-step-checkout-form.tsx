@@ -13,7 +13,7 @@ import { Currency } from "@/components/ui/currency";
 import { Form } from "@/components/ui/form";
 import { NoResults } from "@/components/ui/no-results";
 import { Skeleton } from "@/components/ui/skeleton";
-import { KAWAII_FACE_SAD, PaymentMethod } from "@/constants";
+import { KAWAII_FACE_SAD, PaymentMethod, ShippingStatus } from "@/constants";
 import { useCart } from "@/hooks/use-cart";
 import useCheckout from "@/hooks/use-checkout";
 import {
@@ -32,6 +32,7 @@ import {
   summarizeCheckoutValidationErrors,
 } from "@/lib/checkout-analytics";
 import {
+  CHECKOUT_FIELD_STEPS,
   CHECKOUT_TOTAL_STEPS,
   getFirstInvalidStep,
   getStepFields,
@@ -76,6 +77,10 @@ import { MultiStepForm } from "./multi-step-form";
 import { StepNavigation } from "./step-navigation";
 import { BasicInfoStep } from "./steps/basic-info-step";
 import { PaymentInfoStep, StockConflictItem } from "./steps/payment-info-step";
+import type {
+  RecoveryRate,
+  ShippingRecovery,
+} from "./steps/shipping-rate-recovery";
 import { ShippingInfoStep } from "./steps/shipping-info-step";
 
 type CheckoutFormUser = {
@@ -238,6 +243,9 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
   const cart = useCart();
   const [isMounted, setIsMounted] = useState(false);
   const [stockConflicts, setStockConflicts] = useState<StockConflictItem[]>([]);
+  /** Cotización vencida: se resuelve aquí mismo, sin perder nada de lo puesto. */
+  const [shippingRecovery, setShippingRecovery] =
+    useState<ShippingRecovery | null>(null);
   const { toast } = useToast();
   const { fireConfetti } = useConfetti();
   const setStoredStep = useCheckoutStore((state) => state.setCurrentStep);
@@ -667,6 +675,35 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     onError(err: any) {
       console.error(err);
 
+      // El envío se resuelve aquí, no con un aviso rojo: la clienta ya llenó
+      // todo y perder la compra por una cotización vencida es perderla por
+      // nada. Va ANTES del 409 genérico, que si no se lo traga y le dice
+      // «este pedido ya existe», que además es mentira.
+      const detalle = err?.response?.data?.details;
+      if (detalle?.code === "SHIPPING_RATE_CHANGED" && detalle?.rate) {
+        setShippingRecovery({
+          kind: "changed",
+          rate: detalle.rate as RecoveryRate,
+          previousCost: Number(detalle.previousCost ?? 0),
+        });
+        trackCustomerEvent("checkout_shipping_rate_changed", {
+          checkout_step: currentStep,
+        });
+        scrollToTop();
+        return;
+      }
+      if (detalle?.code === "SHIPPING_RATE_UNAVAILABLE") {
+        setShippingRecovery({
+          kind: "unavailable",
+          alternatives: (detalle.alternatives ?? []) as RecoveryRate[],
+        });
+        trackCustomerEvent("checkout_shipping_rate_unavailable", {
+          checkout_step: currentStep,
+        });
+        scrollToTop();
+        return;
+      }
+
       if (err?.response?.status === 409) {
         toast({
           title: "Este pedido ya existe",
@@ -805,6 +842,43 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     observer.observe(target);
     return () => observer.disconnect();
   }, [isMounted, currentStep, activeItems.length, completedOrderPath]);
+
+  /**
+   * Toma la tarifa nueva y vuelve a mandar el pedido.
+   *
+   * Solo se tocan los dos campos del envío: el carrito, la dirección, el
+   * cupón y el método de pago se quedan como estaban. Se cambia también la
+   * llave de idempotencia porque esto ya es otro intento —con otro precio—,
+   * y con la anterior el servidor devolvería la respuesta del intento viejo.
+   */
+  const applyRecoveryRate = async (rate: RecoveryRate) => {
+    form.setValue("envioClickIdRate", rate.idRate, { shouldDirty: true });
+    form.setValue("shipping", {
+      carrierName: rate.carrier,
+      courier: rate.carrier,
+      productName: rate.product,
+      flete: rate.flete,
+      minimumInsurance: rate.minimumInsurance,
+      deliveryDays: Number(rate.deliveryDays),
+      isCOD: rate.isCOD,
+      cost: rate.totalCost,
+      status: ShippingStatus.Preparing,
+    });
+    idempotencyKeyRef.current = createIdempotencyKey();
+    setShippingRecovery(null);
+    trackCustomerEvent("checkout_shipping_rate_confirmed", {
+      checkout_step: currentStep,
+    });
+    // Si vuelve a fallar, `onError` lo recoge otra vez y vuelve a salir esta
+    // misma tarjeta: no hay forma de acabar en un error sin salida.
+    await form.handleSubmit(onSubmit, handleInvalidSubmit)();
+  };
+
+  /** «Elegir otro envío»: de vuelta al paso de entrega, con todo lo demás puesto. */
+  const backToShippingStep = () => {
+    setShippingRecovery(null);
+    goToStep(CHECKOUT_FIELD_STEPS.envioClickIdRate ?? 2);
+  };
 
   const adjustStockConflict = (productId: string, quantity: number) => {
     if (quantity <= 0) cart.removeItem(productId);
@@ -1364,6 +1438,12 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
                           stockConflicts={stockConflicts}
                           onAdjustStock={adjustStockConflict}
                           onDismissStockConflicts={() => setStockConflicts([])}
+                          shippingRecovery={shippingRecovery}
+                          onConfirmShippingRate={applyRecoveryRate}
+                          onChooseAnotherShipping={backToShippingStep}
+                          isSubmittingRecovery={
+                            status === "pending" || isPreparingSubmit
+                          }
                         />
                       )}
                     </div>

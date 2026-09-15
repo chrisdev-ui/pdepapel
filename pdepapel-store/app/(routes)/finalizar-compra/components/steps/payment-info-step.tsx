@@ -26,6 +26,12 @@ export interface StockConflictItem {
   available: number;
 }
 
+import {
+  ShippingRateRecovery,
+  type RecoveryRate,
+  type ShippingRecovery,
+} from "./shipping-rate-recovery";
+
 interface PaymentInfoStepProps {
   form: UseFormReturn<CheckoutFormValue>;
   isLoading?: boolean;
@@ -41,6 +47,11 @@ interface PaymentInfoStepProps {
   stockConflicts: StockConflictItem[];
   onAdjustStock: (productId: string, quantity: number) => void;
   onDismissStockConflicts: () => void;
+  /** Cotización de envío vencida: se resuelve sin salir de aquí. */
+  shippingRecovery: ShippingRecovery | null;
+  onConfirmShippingRate: (rate: RecoveryRate) => void;
+  onChooseAnotherShipping: () => void;
+  isSubmittingRecovery: boolean;
 }
 
 const formatDeliveryDays = (days?: number) => {
@@ -63,6 +74,10 @@ export const PaymentInfoStep = ({
   stockConflicts,
   onAdjustStock,
   onDismissStockConflicts,
+  shippingRecovery,
+  onConfirmShippingRate,
+  onChooseAnotherShipping,
+  isSubmittingRecovery,
 }: PaymentInfoStepProps) => {
   const cartItems = useCart((state) => state.items);
   const isCODShipment = form.watch("shipping.isCOD");
@@ -92,6 +107,15 @@ export const PaymentInfoStep = ({
           Elige cómo pagar y revisa que todo esté bien.
         </p>
       </div>
+
+      {shippingRecovery && (
+        <ShippingRateRecovery
+          recovery={shippingRecovery}
+          onConfirm={onConfirmShippingRate}
+          onChooseAnother={onChooseAnotherShipping}
+          isSubmitting={isSubmittingRecovery}
+        />
+      )}
 
       {stockConflicts.length > 0 && (
         <div

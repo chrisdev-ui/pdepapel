@@ -23,6 +23,10 @@ import { getActivePresalesByProduct, getPresaleCapacity } from "@/lib/presale";
 import prismadb from "@/lib/prismadb";
 import { requoteCartShipping, type RequotedRate } from "@/lib/shipping-helpers";
 import {
+  SHIPPING_RATE_INCIDENT,
+  countIncident,
+} from "@/lib/incident-counter";
+import {
   readCachedRates,
   reconcileShippingRate,
 } from "@/lib/shipping-rate-reconcile";
@@ -128,6 +132,12 @@ function resolveRequotedRate(input: {
     );
     return result.rate;
   }
+
+  // No se espera: si empieza a pasar seguido, que se note en el log.
+  void countIncident({
+    ...SHIPPING_RATE_INCIDENT,
+    context: { daneCode: input.daneCode, outcome: result.outcome },
+  });
 
   if (result.outcome === "price_changed") {
     console.warn("[ORDER_CHECKOUT] El envío cambió de precio al re-cotizar", {
