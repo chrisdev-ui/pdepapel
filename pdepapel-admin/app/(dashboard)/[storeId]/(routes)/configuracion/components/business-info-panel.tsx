@@ -259,8 +259,10 @@ export function BusinessInfoPanel({
                         />
                       </FormControl>
                       <FormDescription>
-                        La dirección ya sale de «¿Hay tienda física?»; aquí va
-                        solo la nota.
+                        Si recibes el pago en un sitio concreto, la dirección va
+                        aquí: con «¿Hay tienda física?» apagado, este es el
+                        único lugar donde una clienta la ve. Decirla aquí no es
+                        abrir un local al público.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
