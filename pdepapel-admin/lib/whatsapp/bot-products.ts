@@ -6,7 +6,11 @@ import { z } from "zod";
 import { env } from "@/lib/env.mjs";
 import prismadb from "@/lib/prismadb";
 import { getCloudinaryImageUrl } from "@/lib/cloudinary-image-loader";
-import { productTokenSearchWhere, searchTokens } from "@/lib/search-terms";
+import {
+  productNameTokenSearchWhere,
+  productTokenSearchWhere,
+  searchTokens,
+} from "@/lib/search-terms";
 import { type FactValue } from "@/lib/whatsapp/bot-facts";
 
 /**
@@ -230,14 +234,39 @@ const MATCH_SELECT = {
   stock: true,
 } as const;
 
+/**
+ * Primero por nombre; a la descripción solo si el nombre no da nada.
+ *
+ * Mirar también las descripciones ensucia la lista: un color mencionado de
+ * pasada en otro producto lo cuela. Medido contra el catálogo real,
+ * «borrador morado» pasaba de 6 productos a 1, y «cuaderno azul pastel» de 12
+ * a 3, sin perder ninguno de los buenos.
+ *
+ * Pero a veces la palabra SOLO vive en la descripción —«agenda grande» no
+ * encuentra nada por nombre y sí dos por descripción—, así que ahí se amplía.
+ * El orden importa: ampliar solo puede añadir productos, nunca quitarlos, así
+ * que se hace cuando falta algo, no cuando sobra.
+ */
 async function runSearch(
   storeId: string,
   query: string,
   options: { withDescription?: boolean } = {},
 ) {
-  const tokens = productTokenSearchWhere(query);
-  if (tokens.length === 0) return null;
+  const porNombre = productNameTokenSearchWhere(query);
+  if (porNombre.length === 0) return null;
 
+  const primera = await buscarCon(storeId, porNombre, options);
+  if (primera.total > 0) return primera;
+
+  // El nombre no encontró nada: puede que la palabra esté en la descripción.
+  return buscarCon(storeId, productTokenSearchWhere(query), options);
+}
+
+async function buscarCon(
+  storeId: string,
+  tokens: ReturnType<typeof productTokenSearchWhere>,
+  options: { withDescription?: boolean },
+) {
   const where = { storeId, isArchived: false, AND: tokens };
   const [rows, total] = (await Promise.all([
     prismadb.product.findMany({

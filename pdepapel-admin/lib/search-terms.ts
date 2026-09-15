@@ -150,3 +150,27 @@ export function productTokenSearchWhere(query: string): Prisma.ProductWhereInput
     ],
   }));
 }
+
+/**
+ * Lo mismo, pero mirando SOLO el nombre.
+ *
+ * Es la primera pasada, y casi siempre la buena. Un color o un material que
+ * aparece de pasada en la descripción de otro producto ensuciaba la lista:
+ * medido contra el catálogo real, «borrador morado» devolvía 6 productos
+ * mirando también las descripciones y 1 mirando solo el nombre —el borrador
+ * morado—; «cuaderno azul pastel», 12 frente a 3.
+ *
+ * Ampliar a la descripción solo puede AÑADIR productos (por cada palabra es
+ * «nombre O descripción»), nunca quitar. Por eso la segunda pasada es para
+ * cuando el nombre no encuentra NADA, no para cuando encuentra demasiado.
+ */
+export function productNameTokenSearchWhere(query: string): Prisma.ProductWhereInput[] {
+  return searchTokens(query).map((token) => {
+    const variantes = expandSearchTerms(token);
+    return {
+      OR: (variantes.length ? variantes : [token]).map((term) => ({
+        name: { contains: term },
+      })),
+    };
+  });
+}

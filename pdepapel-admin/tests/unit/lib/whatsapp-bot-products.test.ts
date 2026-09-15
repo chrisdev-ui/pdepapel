@@ -43,7 +43,11 @@ import {
   resolveProductSearch,
   trimForWhatsApp,
 } from "@/lib/whatsapp/bot-products";
-import { productTokenSearchWhere, searchTokens } from "@/lib/search-terms";
+import {
+  productNameTokenSearchWhere,
+  productTokenSearchWhere,
+  searchTokens,
+} from "@/lib/search-terms";
 
 const clasificacion = {
   intent: "product.search" as const,
@@ -947,6 +951,90 @@ describe("lo que sigue SIN resolverse (hace falta memoria de conversación)", ()
     // lista que se acaba de mandar, no hay forma. Queda fuera de este arreglo.
     for (const frase of ["el primero", "ese", "el segundo", "quiero ese"]) {
       expect(fallbackQueryFromMessage(frase)).toBe("");
+    }
+  });
+});
+
+// ============ Primero el nombre; la descripción solo si hace falta ============
+
+describe("buscar primero por nombre", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("la búsqueda por nombre no mira la descripción", () => {
+    const where = productNameTokenSearchWhere("borrador morado");
+    expect(where).toHaveLength(2);
+    for (const clausula of where) {
+      const claves = clausula.OR!.map((c: any) => Object.keys(c)[0]);
+      expect(claves.every((k) => k === "name")).toBe(true);
+    }
+    // La amplia sí la mira: son dos consultas distintas a propósito.
+    const amplia = productTokenSearchWhere("borrador morado");
+    expect(JSON.stringify(amplia)).toContain("description");
+  });
+
+  it("si el nombre encuentra algo, NO se vuelve a consultar", async () => {
+    // El caso ruidoso: «borrador morado» daba 6 productos mirando también las
+    // descripciones (colores mencionados de pasada en otros productos) y da 1
+    // mirando solo el nombre.
+    mocks.findMany.mockResolvedValue([
+      { id: "1", name: "Borrador Morado fluorescente", price: 1800, stock: 9, images: [] },
+    ]);
+    mocks.count.mockResolvedValue(1);
+
+    const fact = await resolveProductSearch("store-1", {
+      intent: "product.search", productType: "borrador", character: null, descriptor: "morado",
+    });
+    expect(fact.known && fact.value.total).toBe(1);
+    // Una sola pasada.
+    expect(mocks.count).toHaveBeenCalledOnce();
+    expect(JSON.stringify(mocks.findMany.mock.calls[0][0].where)).not.toContain("description");
+  });
+
+  it("si el nombre no encuentra nada, SÍ se amplía a la descripción", async () => {
+    // «agenda grande»: por nombre no hay ninguna, pero el tamaño está escrito
+    // en la descripción de dos productos. Perderlos sería peor que el ruido.
+    mocks.count.mockResolvedValueOnce(0).mockResolvedValueOnce(2);
+    mocks.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      { id: "1", name: "Agenda ejecutiva", price: 30000, stock: 3, images: [] },
+      { id: "2", name: "Agenda semanal", price: 28000, stock: 1, images: [] },
+    ]);
+
+    const fact = await resolveProductSearch("store-1", {
+      intent: "product.search", productType: "agenda", character: null, descriptor: "grande",
+    });
+    expect(fact.known && fact.value.total).toBe(2);
+    // Dos pasadas: la segunda ya mira la descripción.
+    expect(mocks.count).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(mocks.findMany.mock.calls[0][0].where)).not.toContain("description");
+    expect(JSON.stringify(mocks.findMany.mock.calls[1][0].where)).toContain("description");
+  });
+
+  it("si no hay nada por ningún lado, se responde que no se tiene", async () => {
+    mocks.count.mockResolvedValue(0);
+    mocks.findMany.mockResolvedValue([]);
+    const fact = await resolveProductSearch("store-1", {
+      intent: "product.search", productType: "termo", character: null, descriptor: "de acero",
+    });
+    expect(fact.known && fact.value.total).toBe(0);
+    expect(mocks.count).toHaveBeenCalledTimes(2);
+  });
+
+  it("los casos del arreglo anterior siguen resolviéndose por nombre", async () => {
+    // «morado pastel» y «cuaderno morado pastel» ya daban 1 producto: el orden
+    // nuevo no puede cambiarlos.
+    for (const descriptor of ["morado pastel"]) {
+      for (const productType of [null, "cuaderno"]) {
+        vi.clearAllMocks();
+        mocks.findMany.mockResolvedValue([
+          { id: "1", name: "Cuadernos Stitch Morado pastel", price: 13000, stock: 4, images: [] },
+        ]);
+        mocks.count.mockResolvedValue(1);
+        const fact = await resolveProductSearch("store-1", {
+          intent: "product.photo", productType, character: null, descriptor,
+        });
+        expect(fact.known && fact.value.total).toBe(1);
+        expect(mocks.count).toHaveBeenCalledOnce();
+      }
     }
   });
 });
