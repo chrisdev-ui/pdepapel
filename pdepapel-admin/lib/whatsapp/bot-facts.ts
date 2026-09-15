@@ -8,7 +8,7 @@ import { normalizeBotText } from "@/lib/whatsapp/bot-matching";
 /**
  * Datos del negocio por WhatsApp.
  *
- * Seis preguntas que la gente hace todo el rato y que tienen UNA respuesta
+ * Siete preguntas que la gente hace todo el rato y que tienen UNA respuesta
  * correcta guardada en algún lado. Nada de esto adivina: cada intención tiene
  * un resolvedor que lee el dato de verdad y dice si lo sabe o no. Si no lo
  * sabe, no se inventa nada —la conversación sigue su camino de siempre hasta
@@ -25,7 +25,8 @@ export type BusinessFactIntent =
   | "business.physical_store"
   | "business.min_order"
   | "shipping.free_threshold"
-  | "shipping.delivery_days";
+  | "shipping.delivery_days"
+  | "payment.methods";
 
 /** Lo que devuelve un resolvedor: el valor de verdad, o que no se sabe. */
 export type FactValue<T> = { known: true; value: T } | { known: false };
@@ -67,6 +68,16 @@ const PATTERNS: Record<BusinessFactIntent, string[]> = {
     "cuanto se demora", "cuanto tarda", "cuantos dias", "en cuanto llega",
     "cuando llega", "cuanto demora el envio", "tiempo de entrega",
     "cuanto se tarda en llegar",
+  ],
+  // Ojo con las frases sueltas: «pago» a secas también aparece en «cuándo
+  // llega mi pago», así que se piden formas completas. «nequi» y «daviplata»
+  // sí van solas porque nombran justo esto y nada más.
+  "payment.methods": [
+    "metodos de pago", "medios de pago", "formas de pago", "forma de pago",
+    "como pago", "como puedo pagar", "como te pago", "como hago el pago",
+    "donde pago", "donde consigno", "numero de cuenta", "cuenta bancaria",
+    "datos bancarios", "a que cuenta", "nequi", "daviplata", "bancolombia",
+    "aceptan transferencia", "puedo transferir", "como se paga",
   ],
 };
 
@@ -141,6 +152,19 @@ export function resolveDeliveryEstimate(
   return s.deliveryEstimate?.trim() ? known(s.deliveryEstimate.trim()) : unknown;
 }
 
+/**
+ * Las formas de pago. Sin el dato guardado no se contesta: aquí no hay un
+ * valor por defecto razonable que valga —una cuenta equivocada es plata que se
+ * pierde—, así que si está vacío la pregunta se le pasa a Paula.
+ */
+export function resolvePaymentMethods(
+  s: ResolvedStoreSettings,
+): FactValue<string> {
+  return s.paymentMethodsInfo?.trim()
+    ? known(s.paymentMethodsInfo.trim())
+    : unknown;
+}
+
 // --- Los textos ------------------------------------------------------------
 
 /** Pesos colombianos como los escribe una persona: «$120.000». */
@@ -174,6 +198,14 @@ export const BUSINESS_FACT_TEMPLATES = {
     `Desde ${threshold} el envío es gratis 💛 Si te falta poquito, te sugiero agregar algo más y te lo llevas sin pagar envío.`,
   "shipping.delivery_days": (estimate: string) =>
     `Tu pedido llega en ${estimate} 💛 Te paso el número de guía apenas lo despache.`,
+  // Las palabras son las de Paula, tal como las manda hoy a mano, hasta el
+  // 🤗 del final. Aquí no se impone el 💛 de los demás textos: cambiar la
+  // redacción de algo que trata de plata solo para que pegue con el resto
+  // sería cambiarlo por gusto, y esta es la versión que sus clientas ya
+  // reconocen. Lo único que pone el bot es el envoltorio; los números salen
+  // de lo guardado, nunca escritos aquí.
+  "payment.methods": (methods: string) =>
+    `Estos son nuestros métodos de pago:\n${methods}\nCuando realices el pago, me envías el comprobante, por favor 🤗`,
 } as const;
 
 /**
@@ -202,6 +234,7 @@ export const BUSINESS_FACT_LABELS: Record<BusinessFactIntent, string> = {
   "business.min_order": "Pedido mínimo",
   "shipping.free_threshold": "Desde cuánto el envío es gratis",
   "shipping.delivery_days": "Cuánto tarda en llegar",
+  "payment.methods": "Cómo se paga",
 };
 
 /**
@@ -280,6 +313,10 @@ export function renderBusinessFact(
     case "shipping.delivery_days": {
       const fact = resolveDeliveryEstimate(settings);
       return fact.known ? t["shipping.delivery_days"](fact.value) : null;
+    }
+    case "payment.methods": {
+      const fact = resolvePaymentMethods(settings);
+      return fact.known ? t["payment.methods"](fact.value) : null;
     }
   }
 }

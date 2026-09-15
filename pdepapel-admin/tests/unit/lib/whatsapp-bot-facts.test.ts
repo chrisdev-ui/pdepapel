@@ -12,8 +12,22 @@ import {
   resolveFreeShippingThreshold,
   resolveHours,
   resolveMinOrder,
+  resolvePaymentMethods,
   resolvePhysicalStore,
 } from "@/lib/whatsapp/bot-facts";
+
+/**
+ * Cuentas INVENTADAS a propósito.
+ *
+ * Las de verdad viven en la base de datos y no en este repositorio, que es
+ * público. Lo que se prueba aquí es el envoltorio —que el texto guardado salga
+ * TAL CUAL, sin tocar un dígito—, y para eso sirve igual una cuenta falsa.
+ */
+const PAGOS_DE_MENTIRA = [
+  "🪄Cuenta Bancolombia Ahorros #00000000000",
+  "🪄Daviplata 3000000000",
+  "🪄Nequi 3000000000",
+].join("\n");
 
 /** Una tienda con todo lleno; cada prueba vacía solo lo que le interesa. */
 const completa: ResolvedStoreSettings = {
@@ -34,6 +48,7 @@ const completa: ResolvedStoreSettings = {
   minOrderAmount: null,
   freeShippingThreshold: 120000,
   deliveryEstimate: "2 a 4 días hábiles",
+  paymentMethodsInfo: PAGOS_DE_MENTIRA,
   botEnabled: true,
   botFactsApprovedAt: new Date("2026-09-15T00:00:00.000Z"),
   botFactsVersion: BUSINESS_FACT_TEMPLATES_VERSION,
@@ -188,5 +203,98 @@ describe("visto bueno", () => {
     // Editar un texto cambia la versión y retira la aprobación sola.
     expect(areBusinessFactsApproved(con({ botFactsVersion: "otra-version" }))).toBe(false);
     expect(areBusinessFactsApproved(con({ botFactsVersion: null }))).toBe(false);
+  });
+});
+
+describe("cómo se paga", () => {
+  const preguntas = [
+    "métodos de pago?", "cuáles son los medios de pago", "formas de pago",
+    "cómo pago?", "cómo puedo pagar", "cómo te pago", "cómo hago el pago",
+    "dónde pago", "me pasas el número de cuenta", "tienen cuenta bancaria",
+    "a qué cuenta transfiero?", "tienen nequi?", "manejan daviplata",
+    "aceptan transferencia", "puedo transferir a bancolombia?", "cómo se paga",
+    "dónde consigno", "me das los datos bancarios",
+  ];
+
+  it.each(preguntas)("«%s» pregunta por las formas de pago", (q) => {
+    expect(classifyBusinessFact(q)).toBe("payment.methods");
+  });
+
+  // El desempate es por coincidencia MÁS LARGA, igual que «envío gratis» con
+  // «cuánto vale el envío»: una frase de pago no puede robarle el turno a otra
+  // intención, ni al revés.
+  it.each([
+    ["¿a qué hora abren?", "business.hours"],
+    ["¿en qué ciudad están?", "business.city"],
+    ["¿tienen tienda física?", "business.physical_store"],
+    ["¿hay pedido mínimo?", "business.min_order"],
+    ["¿desde cuánto es el envío gratis?", "shipping.free_threshold"],
+    ["¿cuánto se demora en llegar?", "shipping.delivery_days"],
+  ])("«%s» sigue siendo %s", (q, intent) => {
+    expect(classifyBusinessFact(q)).toBe(intent);
+  });
+
+  it("no se activa con un «pago» que no pregunta por esto", () => {
+    expect(classifyBusinessFact("ya hice el pago, cuándo llega?")).toBe(
+      "shipping.delivery_days",
+    );
+    expect(classifyBusinessFact("gracias!")).toBeNull();
+  });
+
+  it("sin el dato guardado no se inventa una cuenta", () => {
+    for (const vacio of [null, "", "   "]) {
+      expect(resolvePaymentMethods({ ...completa, paymentMethodsInfo: vacio })).toEqual({
+        known: false,
+      });
+      expect(
+        renderBusinessFact("payment.methods", { ...completa, paymentMethodsInfo: vacio }),
+      ).toBeNull();
+    }
+  });
+
+  it("con el dato guardado lo devuelve tal cual", () => {
+    expect(resolvePaymentMethods(completa)).toEqual({
+      known: true,
+      value: PAGOS_DE_MENTIRA,
+    });
+  });
+
+  it("el texto sale con el saludo, la lista SIN TOCAR y el comprobante", () => {
+    const texto = renderBusinessFact("payment.methods", completa);
+    expect(texto).toBe(
+      "Estos son nuestros métodos de pago:\n" +
+        PAGOS_DE_MENTIRA +
+        "\nCuando realices el pago, me envías el comprobante, por favor 🤗",
+    );
+  });
+
+  it("ni un dígito de lo guardado se pierde por el camino", () => {
+    // Lo que de verdad importa: los números salen como entraron. Si alguien
+    // «arregla» el formato algún día, esto se cae.
+    const texto = renderBusinessFact("payment.methods", completa)!;
+    for (const linea of PAGOS_DE_MENTIRA.split("\n")) {
+      expect(texto).toContain(linea);
+    }
+  });
+
+  it("no le cuelga el 💛 de los demás textos", () => {
+    // Deliberado: son las palabras de Paula tal como las manda hoy.
+    expect(renderBusinessFact("payment.methods", completa)).not.toContain("💛");
+    expect(renderBusinessFact("payment.methods", completa)).toContain("🤗");
+  });
+
+  it("aparece en la pantalla que aprueba Paula, con su etiqueta", () => {
+    const fila = previewBusinessFacts(completa).find(
+      (f) => f.intent === "payment.methods",
+    );
+    expect(fila?.label).toBe("Cómo se paga");
+    expect(fila?.text).toContain("métodos de pago");
+  });
+
+  it("sin el dato, la pantalla lo enseña vacío para que sepa qué llenar", () => {
+    const fila = previewBusinessFacts({ ...completa, paymentMethodsInfo: null }).find(
+      (f) => f.intent === "payment.methods",
+    );
+    expect(fila?.text).toBeNull();
   });
 });

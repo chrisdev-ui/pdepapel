@@ -88,6 +88,7 @@ export const storeSettingsInputSchema = z
     minOrderRule: z.nativeEnum(MinimumOrderRule).optional(),
     minOrderAmount: z.number().int().min(0).nullable().optional(),
     deliveryEstimate: z.string().trim().max(120).nullable().optional(),
+    paymentMethodsInfo: z.string().trim().max(1000).nullable().optional(),
     botEnabled: z.boolean().optional(),
   })
   .refine(
@@ -128,6 +129,8 @@ export interface ResolvedStoreSettings {
   freeShippingThreshold: number | null;
   /** Lo que se le promete a la clienta («2 a 4 días hábiles»). */
   deliveryEstimate: string | null;
+  /** Las formas de pago con sus números, una por línea. */
+  paymentMethodsInfo: string | null;
   botEnabled: boolean;
   /** Visto bueno a los textos con los que el bot da los datos del negocio. */
   botFactsApprovedAt: Date | null;
@@ -168,6 +171,7 @@ export async function getStoreSettings(
     minOrderAmount: settings?.minOrderAmount ?? null,
     freeShippingThreshold: store?.freeShippingThreshold ?? null,
     deliveryEstimate: settings?.deliveryEstimate?.trim() || null,
+    paymentMethodsInfo: settings?.paymentMethodsInfo?.trim() || null,
     // Sin fila guardada el bot queda APAGADO. Al revés —que una tabla vacía
     // lo diera por encendido— es como se enciende solo el día que alguien
     // conecte esta bandera.
@@ -203,6 +207,9 @@ export async function saveStoreSettings(
     ...(input.deliveryEstimate === undefined
       ? {}
       : { deliveryEstimate: input.deliveryEstimate?.trim() || null }),
+    ...(input.paymentMethodsInfo === undefined
+      ? {}
+      : { paymentMethodsInfo: input.paymentMethodsInfo?.trim() || null }),
   };
 
   return prismadb.storeSettings.upsert({

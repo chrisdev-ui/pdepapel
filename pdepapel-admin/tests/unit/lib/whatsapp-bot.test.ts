@@ -127,6 +127,7 @@ const ajustesBase: ResolvedStoreSettings = {
   minOrderAmount: null,
   freeShippingThreshold: 120000,
   deliveryEstimate: "2 a 4 días hábiles",
+  paymentMethodsInfo: null,
   botEnabled: true,
   botFactsApprovedAt: new Date("2026-09-15T00:00:00.000Z"),
   botFactsVersion: BUSINESS_FACT_TEMPLATES_VERSION,

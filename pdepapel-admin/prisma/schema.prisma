@@ -1320,6 +1320,11 @@ model StoreSettings {
   /// Cuánto tarda en llegar un pedido, tal como se le dice a la clienta
   /// («2 a 4 días hábiles»). Único sitio: la tienda y el bot leen de aquí.
   deliveryEstimate String?
+  /// Las formas de pago, tal como se las manda Paula a una clienta: una por
+  /// línea, con sus números. Solo la lista; el saludo y la petición del
+  /// comprobante los pone la plantilla, que no se edita desde el panel.
+  /// Texto y no columnas sueltas porque las cuentas cambian y se añaden.
+  paymentMethodsInfo String? @db.Text
   /// Apaga el bot sin borrar sus respuestas. Apagado por defecto a propósito:
   /// se enciende cuando alguien lo decide, no por crear la fila.
   botEnabled       Boolean            @default(false)

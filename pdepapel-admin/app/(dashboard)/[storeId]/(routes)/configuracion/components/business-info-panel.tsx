@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import {
   DAY_LABELS,
@@ -42,6 +43,7 @@ const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const formSchema = z.object({
   cityName: z.string().trim().max(80),
   deliveryEstimate: z.string().trim().max(120),
+  paymentMethodsInfo: z.string().trim().max(1000),
   hasPhysicalStore: z.boolean(),
   physicalAddress: z.string().trim().max(191),
   minOrderRule: z.nativeEnum(MinimumOrderRule),
@@ -74,6 +76,7 @@ export function BusinessInfoPanel({
     defaultValues: {
       cityName: settings.cityName ?? "",
       deliveryEstimate: settings.deliveryEstimate ?? DEFAULT_DELIVERY_ESTIMATE,
+      paymentMethodsInfo: settings.paymentMethodsInfo ?? "",
       hasPhysicalStore: settings.hasPhysicalStore,
       physicalAddress: settings.physicalAddress ?? "",
       minOrderRule: settings.minOrderRule,
@@ -128,6 +131,7 @@ export function BusinessInfoPanel({
       await axios.patch(`/api/${params.storeId}/settings`, {
         cityName: values.cityName || null,
         deliveryEstimate: values.deliveryEstimate || null,
+        paymentMethodsInfo: values.paymentMethodsInfo || null,
         hasPhysicalStore: values.hasPhysicalStore,
         physicalAddress: values.physicalAddress || null,
         minOrderRule: values.minOrderRule,
@@ -210,6 +214,31 @@ export function BusinessInfoPanel({
                     envíos, y es lo que contesta el bot. Sobre 106 entregas
                     reales: la mitad llegó en menos de un día y el 94 % en
                     cuatro o menos.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="paymentMethodsInfo"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Cómo se paga</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      disabled={loading}
+                      rows={4}
+                      placeholder={"Cuenta Bancolombia Ahorros #…\nNequi …\nDaviplata …"}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Una forma de pago por línea, con sus números. El bot manda
+                    esta lista tal cual, con el saludo y la petición del
+                    comprobante ya puestos. Revisa los números antes de
+                    guardar: van a una clienta que va a transferir.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
