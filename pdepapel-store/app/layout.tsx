@@ -144,21 +144,26 @@ export default async function RootLayout({
           <link rel="dns-prefetch" href="https://res.cloudinary.com" />
           <link rel="preconnect" href="https://res.cloudinary.com" />
           <ReactQueryProvider>
-            <StorefrontSettingsProvider value={{ freeShippingThreshold: settings.freeShippingThreshold }}>
-            <CartPreviewProvider>
-              <ModalProvider />
-              <WishlistSyncProvider />
-              <Navbar
-                season={currentSeason}
-                types={navigationTypes}
-                featuredByType={featuredByType}
-                freeShippingThreshold={settings.freeShippingThreshold}
-              />
-              <ClarityPrivacyBoundary>{children}</ClarityPrivacyBoundary>
-              <Footer season={currentSeason} />
-              {currentSeason === Season.Christmas && <Christmas />}
-              {currentSeason === Season.Spooky && <Spooky />}
-            </CartPreviewProvider>
+            <StorefrontSettingsProvider
+              value={{ freeShippingThreshold: settings.freeShippingThreshold }}
+            >
+              <CartPreviewProvider>
+                <ModalProvider />
+                <WishlistSyncProvider />
+                <Navbar
+                  season={currentSeason}
+                  types={navigationTypes}
+                  featuredByType={featuredByType}
+                  freeShippingThreshold={settings.freeShippingThreshold}
+                />
+                <ClarityPrivacyBoundary>{children}</ClarityPrivacyBoundary>
+                <Footer
+                  season={currentSeason}
+                  openingHoursLabel={settings.openingHoursLabel}
+                />
+                {currentSeason === Season.Christmas && <Christmas />}
+                {currentSeason === Season.Spooky && <Spooky />}
+              </CartPreviewProvider>
             </StorefrontSettingsProvider>
             <Toaster />
             <CustomerAnalyticsProvider

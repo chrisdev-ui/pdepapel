@@ -15,11 +15,12 @@ import { Suspense } from "react";
 import { AboutPage as AboutPageSchema, WithContext } from "schema-dts";
 
 import { getPosts } from "@/actions/get-posts";
+import { getStorefrontSettings } from "@/actions/get-storefront-settings";
 import { Icons } from "@/components/icons";
 import Newsletter from "@/components/newsletter";
 import { Container } from "@/components/ui/container";
 import { Skeleton } from "@/components/ui/skeleton";
-import { BASE_URL } from "@/constants";
+import { FACEBOOK_PAGE_URL, BASE_URL } from "@/constants";
 import { STOREFRONT_ROUTES } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import SocialMedia from "./components/social-media";
@@ -30,7 +31,6 @@ const INSTAGRAM_URL =
   "https://instagram.com/papeleria.pdepapel?igshid=OGQ5ZDc2ODk2ZA==";
 const TIKTOK_URL =
   "https://www.tiktok.com/@papeleria.pdepapel?_t=8gctJXIdqD7&_r=1";
-const FACEBOOK_URL = "https://www.facebook.com/papeleria.pdepapel";
 
 const jsonLd: WithContext<AboutPageSchema> = {
   "@context": "https://schema.org",
@@ -143,7 +143,7 @@ const values = [
   },
 ];
 
-const facts = [
+const buildFacts = (openingHoursLabel: string | null) => [
   {
     id: "medellin",
     title: "Operamos desde Medellín",
@@ -161,7 +161,7 @@ const facts = [
     title: "Atención todos los días",
     description: (
       <span className="inline-flex items-center gap-1.5">
-        8:00 a. m. a 8:00 p. m.
+        {openingHoursLabel ?? "8:00 a. m. a 8:00 p. m."}
         <Icons.flags.colombia className="h-3.5 w-3.5" aria-hidden="true" />
       </span>
     ),
@@ -188,7 +188,9 @@ function SocialMediaSkeleton() {
   );
 }
 
-export default function AboutPage() {
+export default async function AboutPage() {
+  const { openingHoursLabel } = await getStorefrontSettings();
+  const facts = buildFacts(openingHoursLabel);
   return (
     <div className="bg-white">
       {/* --- Hero --- */}
@@ -400,7 +402,7 @@ export default function AboutPage() {
               key={fact.id}
               className="flex items-center gap-4 rounded-3xl border border-pink-shell/30 bg-white px-5 py-5 shadow-sm sm:px-6 xl:gap-5 xl:px-7 xl:py-6"
             >
-              <span className="bg-kawaii-pink-light/40 inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-pink-shell xl:h-16 xl:w-16">
+              <span className="inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-kawaii-pink-light/40 text-pink-shell xl:h-16 xl:w-16">
                 {fact.icon}
               </span>
               <div className="min-w-0">
@@ -434,7 +436,7 @@ export default function AboutPage() {
                 label="Instagram"
               />
               <SocialButton
-                href={FACEBOOK_URL}
+                href={FACEBOOK_PAGE_URL}
                 icon={<Icons.facebook className="h-6 w-6" />}
                 label="Facebook"
               />

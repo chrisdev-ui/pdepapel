@@ -38,7 +38,9 @@ vi.mock("@/lib/whatsapp/bot-replies", async (importOriginal) => ({
 import {
   HUMAN_PAUSE_MAX_MS,
   HUMAN_PAUSE_READ_MS,
+  NO_MATCH_ACKNOWLEDGEMENT,
   TALK_TO_OWNER_ACKNOWLEDGEMENT,
+  UNAVAILABLE_OPTION_ACKNOWLEDGEMENT,
   buildReplyButtons,
   formatBotReply,
   getHumanPauseMs,
@@ -52,7 +54,9 @@ import {
 } from "@/lib/whatsapp/bot-replies";
 
 /** Todo mensaje del bot sale con este botón de escape al final. */
-const ESCAPE = [{ id: TALK_TO_OWNER_BUTTON_ID, title: TALK_TO_OWNER_BUTTON_TITLE }];
+const ESCAPE = [
+  { id: TALK_TO_OWNER_BUTTON_ID, title: TALK_TO_OWNER_BUTTON_TITLE },
+];
 
 const keywords = [
   { triggers: ["horario", "a que hora"], answer: "Abrimos de 9 a 6." },
@@ -71,8 +75,12 @@ const input = {
 describe("keyword matching", () => {
   it("ignores case and accents, using the same pattern as slugify", () => {
     expect(normalizeBotText("¿A QUÉ HORA  abren?")).toBe("¿a que hora abren?");
-    expect(matchWhatsAppKeyword("¿A QUÉ HORA abren?", keywords)?.keyword.answer).toBe("Abrimos de 9 a 6.");
-    expect(matchWhatsAppKeyword("necesito un ENVÍO", keywords)?.keyword.answer).toBe("Enviamos a todo el país.");
+    expect(
+      matchWhatsAppKeyword("¿A QUÉ HORA abren?", keywords)?.keyword.answer,
+    ).toBe("Abrimos de 9 a 6.");
+    expect(
+      matchWhatsAppKeyword("necesito un ENVÍO", keywords)?.keyword.answer,
+    ).toBe("Enviamos a todo el país.");
   });
 
   it("takes the first entry that matches and returns null when none does", () => {
@@ -80,8 +88,12 @@ describe("keyword matching", () => {
       { triggers: ["horario"], answer: "primera" },
       { triggers: ["horario"], answer: "segunda" },
     ];
-    expect(matchWhatsAppKeyword("horario", both)?.keyword.answer).toBe("primera");
-    expect(matchWhatsAppKeyword("quiero un cuaderno rosado", keywords)).toBeNull();
+    expect(matchWhatsAppKeyword("horario", both)?.keyword.answer).toBe(
+      "primera",
+    );
+    expect(
+      matchWhatsAppKeyword("quiero un cuaderno rosado", keywords),
+    ).toBeNull();
     expect(matchWhatsAppKeyword("   ", keywords)).toBeNull();
   });
 
@@ -103,7 +115,11 @@ describe("runWhatsAppBot", () => {
     vi.clearAllMocks();
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
     vi.spyOn(console, "error").mockImplementation(() => undefined);
-    mocks.conversationFindUnique.mockResolvedValue({ id: "conversation-1", status: "OPEN", storeId: "store-1" });
+    mocks.conversationFindUnique.mockResolvedValue({
+      id: "conversation-1",
+      status: "OPEN",
+      storeId: "store-1",
+    });
     mocks.activeKeywords.mockResolvedValue(keywords);
     mocks.conversationUpdate.mockResolvedValue({});
     mocks.messageFindFirst.mockResolvedValue(null);
@@ -114,7 +130,10 @@ describe("runWhatsAppBot", () => {
   });
 
   it("answers a keyword match with the automatic marker and files it as BOT", async () => {
-    await expect(runWhatsAppBot(input)).resolves.toEqual({ outcome: "replied", trigger: "horario" });
+    await expect(runWhatsAppBot(input)).resolves.toEqual({
+      outcome: "replied",
+      trigger: "horario",
+    });
 
     expect(mocks.send).toHaveBeenCalledWith(
       "573001234567",
@@ -137,9 +156,14 @@ describe("runWhatsAppBot", () => {
   });
 
   it("stays silent once the conversation is waiting for a person", async () => {
-    mocks.conversationFindUnique.mockResolvedValue({ id: "conversation-1", status: "NEEDS_OWNER" });
+    mocks.conversationFindUnique.mockResolvedValue({
+      id: "conversation-1",
+      status: "NEEDS_OWNER",
+    });
 
-    await expect(runWhatsAppBot(input)).resolves.toEqual({ outcome: "skipped_needs_owner" });
+    await expect(runWhatsAppBot(input)).resolves.toEqual({
+      outcome: "skipped_needs_owner",
+    });
 
     expect(mocks.send).not.toHaveBeenCalled();
     expect(mocks.messageCreate).not.toHaveBeenCalled();
@@ -152,21 +176,45 @@ describe("runWhatsAppBot", () => {
     // clienta puede seguir con el bot porque siempre ve el botón de salida.
     mocks.messageFindFirst.mockResolvedValue({ sentBy: "BOT" });
 
-    await expect(runWhatsAppBot(input)).resolves.toMatchObject({ outcome: "replied" });
+    await expect(runWhatsAppBot(input)).resolves.toMatchObject({
+      outcome: "replied",
+    });
     expect(mocks.send).toHaveBeenCalled();
   });
 
-  it("sends nothing and escalates when no keyword matches", async () => {
+  it("avisa que no sabe y escala cuando ninguna palabra clave coincide", async () => {
+    // Antes no contestaba nada y la clienta se quedaba sin saber si su
+    // mensaje llegó.
     await expect(
       runWhatsAppBot({ ...input, body: "quiero un cuaderno rosado" }),
     ).resolves.toEqual({ outcome: "escalated_no_match" });
 
-    expect(mocks.send).not.toHaveBeenCalled();
-    expect(mocks.messageCreate).not.toHaveBeenCalled();
+    expect(mocks.send).toHaveBeenCalledOnce();
+    expect(mocks.send.mock.calls[0][1]).toBe(NO_MATCH_ACKNOWLEDGEMENT);
     expect(mocks.conversationUpdate).toHaveBeenCalledWith({
       where: { id: "conversation-1" },
       data: { status: "NEEDS_OWNER" },
     });
+  });
+
+  it("marca la conversación ANTES de avisar, para no avisar dos veces", async () => {
+    // Durante la pausa humana puede entrar otro mensaje: si la conversación
+    // no estuviera marcada ya, ese segundo mensaje avisaría otra vez.
+    const orden: string[] = [];
+    mocks.conversationUpdate.mockImplementation(
+      async (args: { data?: { status?: string } }) => {
+        if (args.data?.status === "NEEDS_OWNER") orden.push("escala");
+        return {};
+      },
+    );
+    mocks.send.mockImplementation(async () => {
+      orden.push("avisa");
+      return { ok: true, externalId: "wamid.ack" };
+    });
+
+    await runWhatsAppBot({ ...input, body: "algo que nadie configuró" });
+
+    expect(orden).toEqual(["escala", "avisa"]);
   });
 
   it("records a failed send as FAILED, escalates and never retries", async () => {
@@ -196,17 +244,23 @@ describe("runWhatsAppBot", () => {
 
   it("reads the store's replies when the caller does not pass any", async () => {
     const { keywords: _ignored, ...withoutKeywords } = input;
-    await expect(runWhatsAppBot(withoutKeywords)).resolves.toMatchObject({ outcome: "replied" });
+    await expect(runWhatsAppBot(withoutKeywords)).resolves.toMatchObject({
+      outcome: "replied",
+    });
     expect(mocks.activeKeywords).toHaveBeenCalledWith("store-1");
   });
 
-  it("stays silent and escalates while the store has no replies defined", async () => {
-    // Es el estado en el que nace la tabla: sin respuestas, el bot calla.
+  it("avisa igual mientras la tienda no tenga respuestas definidas", async () => {
+    // Es el estado en el que nace la tabla.
     mocks.activeKeywords.mockResolvedValue([]);
     const { keywords: _ignored, ...withoutKeywords } = input;
 
-    await expect(runWhatsAppBot(withoutKeywords)).resolves.toEqual({ outcome: "escalated_no_match" });
-    expect(mocks.send).not.toHaveBeenCalled();
+    await expect(runWhatsAppBot(withoutKeywords)).resolves.toEqual({
+      outcome: "escalated_no_match",
+    });
+    // Sin respuestas configuradas igual contesta que le pasa el mensaje a
+    // Paula: es el estado en el que está la tienda hoy.
+    expect(mocks.send.mock.calls[0][1]).toBe(NO_MATCH_ACKNOWLEDGEMENT);
     expect(mocks.conversationUpdate).toHaveBeenCalledWith({
       where: { id: "conversation-1" },
       data: { status: "NEEDS_OWNER" },
@@ -216,7 +270,9 @@ describe("runWhatsAppBot", () => {
   it("does nothing when the conversation vanished", async () => {
     mocks.conversationFindUnique.mockResolvedValue(null);
 
-    await expect(runWhatsAppBot(input)).resolves.toEqual({ outcome: "skipped_needs_owner" });
+    await expect(runWhatsAppBot(input)).resolves.toEqual({
+      outcome: "skipped_needs_owner",
+    });
     expect(mocks.send).not.toHaveBeenCalled();
   });
 });
@@ -225,7 +281,11 @@ describe("botón «Hablar con Paula»", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(console, "error").mockImplementation(() => undefined);
-    mocks.conversationFindUnique.mockResolvedValue({ id: "conversation-1", status: "OPEN", storeId: "store-1" });
+    mocks.conversationFindUnique.mockResolvedValue({
+      id: "conversation-1",
+      status: "OPEN",
+      storeId: "store-1",
+    });
     mocks.conversationUpdate.mockResolvedValue({});
     mocks.messageCreate.mockResolvedValue({});
     mocks.sendableReply.mockResolvedValue(null);
@@ -235,10 +295,9 @@ describe("botón «Hablar con Paula»", () => {
 
   it("va siempre de último, aunque la respuesta no tenga menú", () => {
     expect(buildReplyButtons(undefined)).toEqual(ESCAPE);
-    expect(buildReplyButtons([{ title: "Ver horarios", targetReplyId: "abc" }])).toEqual([
-      { id: "r:abc", title: "Ver horarios" },
-      ...ESCAPE,
-    ]);
+    expect(
+      buildReplyButtons([{ title: "Ver horarios", targetReplyId: "abc" }]),
+    ).toEqual([{ id: "r:abc", title: "Ver horarios" }, ...ESCAPE]);
   });
 
   it("confirma y deja la conversación para Paula", async () => {
@@ -265,19 +324,30 @@ describe("botón «Hablar con Paula»", () => {
     ).resolves.toMatchObject({ outcome: "escalated_owner_requested" });
 
     expect(mocks.send).toHaveBeenCalledTimes(1);
-    expect(mocks.send.mock.calls[0][1]).toContain(TALK_TO_OWNER_ACKNOWLEDGEMENT);
+    expect(mocks.send.mock.calls[0][1]).toContain(
+      TALK_TO_OWNER_ACKNOWLEDGEMENT,
+    );
   });
 });
 
 describe("menús por botón", () => {
   const menu = [
-    { id: "reply-horarios", triggers: ["horario"], answer: "Abrimos de 9 a 6.", buttons: [] },
+    {
+      id: "reply-horarios",
+      triggers: ["horario"],
+      answer: "Abrimos de 9 a 6.",
+      buttons: [],
+    },
   ];
 
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(console, "error").mockImplementation(() => undefined);
-    mocks.conversationFindUnique.mockResolvedValue({ id: "conversation-1", status: "OPEN", storeId: "store-1" });
+    mocks.conversationFindUnique.mockResolvedValue({
+      id: "conversation-1",
+      status: "OPEN",
+      storeId: "store-1",
+    });
     mocks.conversationUpdate.mockResolvedValue({});
     mocks.messageCreate.mockResolvedValue({});
     mocks.sendableReply.mockResolvedValue(null);
@@ -305,28 +375,48 @@ describe("menús por botón", () => {
 
   it("despierta al bot aunque la conversación esté esperando a Paula", async () => {
     // Tocar un botón es la clienta eligiendo al bot a propósito.
-    mocks.conversationFindUnique.mockResolvedValue({ id: "conversation-1", status: "NEEDS_OWNER", storeId: "store-1" });
+    mocks.conversationFindUnique.mockResolvedValue({
+      id: "conversation-1",
+      status: "NEEDS_OWNER",
+      storeId: "store-1",
+    });
 
     await expect(
-      runWhatsAppBot({ ...input, interactiveReplyId: "r:reply-horarios", keywords: menu }),
+      runWhatsAppBot({
+        ...input,
+        interactiveReplyId: "r:reply-horarios",
+        keywords: menu,
+      }),
     ).resolves.toMatchObject({ outcome: "replied" });
   });
 
   it("un mensaje escrito NO la despierta", async () => {
-    mocks.conversationFindUnique.mockResolvedValue({ id: "conversation-1", status: "NEEDS_OWNER", storeId: "store-1" });
-
-    await expect(runWhatsAppBot({ ...input, keywords: menu })).resolves.toEqual({
-      outcome: "skipped_needs_owner",
+    mocks.conversationFindUnique.mockResolvedValue({
+      id: "conversation-1",
+      status: "NEEDS_OWNER",
+      storeId: "store-1",
     });
+
+    await expect(runWhatsAppBot({ ...input, keywords: menu })).resolves.toEqual(
+      {
+        outcome: "skipped_needs_owner",
+      },
+    );
     expect(mocks.send).not.toHaveBeenCalled();
   });
 
   it("llama a Paula si el botón apunta a algo borrado, apagado o sin aprobar", async () => {
     await expect(
-      runWhatsAppBot({ ...input, interactiveReplyId: "r:ya-no-existe", keywords: menu }),
+      runWhatsAppBot({
+        ...input,
+        interactiveReplyId: "r:ya-no-existe",
+        keywords: menu,
+      }),
     ).resolves.toEqual({ outcome: "escalated_button_unavailable" });
 
-    expect(mocks.send).not.toHaveBeenCalled();
+    expect(mocks.send.mock.calls[0][1]).toBe(
+      UNAVAILABLE_OPTION_ACKNOWLEDGEMENT,
+    );
     expect(mocks.conversationUpdate).toHaveBeenCalledWith({
       where: { id: "conversation-1" },
       data: { status: "NEEDS_OWNER" },
@@ -343,7 +433,10 @@ describe("menús por botón", () => {
     const { keywords: _ignored, ...withoutKeywords } = input;
 
     await expect(
-      runWhatsAppBot({ ...withoutKeywords, interactiveReplyId: "r:reply-envios" }),
+      runWhatsAppBot({
+        ...withoutKeywords,
+        interactiveReplyId: "r:reply-envios",
+      }),
     ).resolves.toMatchObject({ outcome: "replied" });
 
     expect(mocks.sendableReply).toHaveBeenCalledWith("store-1", "reply-envios");
@@ -359,7 +452,11 @@ describe("ritmo humano", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    mocks.conversationFindUnique.mockResolvedValue({ id: "conversation-1", status: "OPEN", storeId: "store-1" });
+    mocks.conversationFindUnique.mockResolvedValue({
+      id: "conversation-1",
+      status: "OPEN",
+      storeId: "store-1",
+    });
     mocks.conversationUpdate.mockResolvedValue({});
     mocks.messageCreate.mockResolvedValue({});
     mocks.send.mockResolvedValue({ ok: true, externalId: "wamid.BOT1" });

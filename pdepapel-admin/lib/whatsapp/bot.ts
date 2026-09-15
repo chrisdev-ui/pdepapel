@@ -105,6 +105,20 @@ export const TALK_TO_OWNER_ACKNOWLEDGEMENT =
   "Listo, le aviso a Paula. Ella te escribe apenas pueda 💛";
 
 /**
+ * Lo que se contesta cuando el bot no sabe.
+ *
+ * Antes no se contestaba nada: la conversación pasaba a NEEDS_OWNER y la
+ * clienta se quedaba mirando el chat sin saber si su mensaje llegó. Con cero
+ * respuestas configuradas ese era el caso de SIEMPRE.
+ */
+export const NO_MATCH_ACKNOWLEDGEMENT =
+  "Esa no me la sé 💛 Le paso tu mensaje a Paula y ella te escribe apenas pueda.";
+
+/** Cuando el botón apunta a una respuesta que ya no está disponible. */
+export const UNAVAILABLE_OPTION_ACKNOWLEDGEMENT =
+  "Esa opción ya no está disponible 💛 Le aviso a Paula para que te ayude.";
+
+/**
  * Botones de un mensaje del bot. El de «Hablar con Paula» se añade siempre y
  * va de último: es la salida, no una opción más del menú.
  */
@@ -115,7 +129,10 @@ export function buildReplyButtons(
     id: buildButtonId(button.targetReplyId),
     title: button.title,
   }));
-  return [...menu, { id: TALK_TO_OWNER_BUTTON_ID, title: TALK_TO_OWNER_BUTTON_TITLE }];
+  return [
+    ...menu,
+    { id: TALK_TO_OWNER_BUTTON_ID, title: TALK_TO_OWNER_BUTTON_TITLE },
+  ];
 }
 
 async function escalate(conversationId: string) {
@@ -158,7 +175,13 @@ export async function runWhatsAppBot(input: {
   // 1. Pidió a Paula: se le confirma y el bot se calla. Es la única salida que
   //    no se puede deshacer tocando otro botón.
   if (buttonId === TALK_TO_OWNER_BUTTON_ID) {
-    const sent = await deliver(conversation.id, input.phone, TALK_TO_OWNER_ACKNOWLEDGEMENT, [], pacing(input));
+    const sent = await deliver(
+      conversation.id,
+      input.phone,
+      TALK_TO_OWNER_ACKNOWLEDGEMENT,
+      [],
+      pacing(input),
+    );
     await escalate(conversation.id);
     return sent.ok
       ? { outcome: "escalated_owner_requested" }
@@ -179,25 +202,57 @@ export async function runWhatsAppBot(input: {
   if (buttonTarget) {
     const target =
       input.keywords?.find((keyword) => keyword.id === buttonTarget) ??
-      (input.keywords ? null : await getSendableBotReply(conversation.storeId, buttonTarget));
+      (input.keywords
+        ? null
+        : await getSendableBotReply(conversation.storeId, buttonTarget));
     if (!target) {
       await escalate(conversation.id);
+      await deliver(
+        conversation.id,
+        input.phone,
+        UNAVAILABLE_OPTION_ACKNOWLEDGEMENT,
+        [],
+        pacing(input),
+      );
       return { outcome: "escalated_button_unavailable" };
     }
-    return respond(conversation.id, input.phone, target, undefined, pacing(input));
+    return respond(
+      conversation.id,
+      input.phone,
+      target,
+      undefined,
+      pacing(input),
+    );
   }
 
   // 4. Solo palabra clave: sin coincidencia no se inventa una respuesta. Las
   //    respuestas las escribe la dueña desde el panel; si no ha creado
   //    ninguna, el bot calla y la conversación queda para ella.
-  const keywords = input.keywords ?? (await getActiveBotKeywords(conversation.storeId));
+  const keywords =
+    input.keywords ?? (await getActiveBotKeywords(conversation.storeId));
   const match = matchWhatsAppKeyword(input.body, keywords);
   if (!match) {
+    // El orden importa: se marca primero. La pausa humana de `deliver` dura
+    // segundos y en ese rato puede entrar otro mensaje; con la conversación ya
+    // marcada, ese segundo mensaje se salta y no se avisa dos veces.
     await escalate(conversation.id);
+    await deliver(
+      conversation.id,
+      input.phone,
+      NO_MATCH_ACKNOWLEDGEMENT,
+      [],
+      pacing(input),
+    );
     return { outcome: "escalated_no_match" };
   }
 
-  return respond(conversation.id, input.phone, match.keyword, match.trigger, pacing(input));
+  return respond(
+    conversation.id,
+    input.phone,
+    match.keyword,
+    match.trigger,
+    pacing(input),
+  );
 }
 
 interface Pacing {
@@ -223,7 +278,13 @@ async function respond(
   trigger: string | undefined,
   pace: Pacing,
 ): Promise<WhatsAppBotResult> {
-  const sent = await deliver(conversationId, phone, keyword.answer, keyword.buttons ?? [], pace);
+  const sent = await deliver(
+    conversationId,
+    phone,
+    keyword.answer,
+    keyword.buttons ?? [],
+    pace,
+  );
   if (!sent.ok) {
     await escalate(conversationId);
     return { outcome: "escalated_send_failed", trigger, error: sent.error };
@@ -256,7 +317,11 @@ async function deliver(
   }
   if (!pace.skip) await sleep(getHumanPauseMs(reply));
 
-  const sent = await sendWhatsAppButtonMessage(phone, reply, buildReplyButtons(buttons));
+  const sent = await sendWhatsAppButtonMessage(
+    phone,
+    reply,
+    buildReplyButtons(buttons),
+  );
 
   if (!sent.ok) {
     // Queda el intento escrito para que se vea qué se quiso mandar. No se

@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ findStore: vi.fn() }));
+const mocks = vi.hoisted(() => ({ findStore: vi.fn(), findSettings: vi.fn() }));
 
 vi.mock("@/lib/prismadb", () => ({
-  default: { store: { findUnique: mocks.findStore } },
+  default: {
+    store: { findUnique: mocks.findStore },
+    storeSettings: { findUnique: mocks.findSettings },
+  },
 }));
 vi.mock("@/lib/utils", () => ({
   CACHE_HEADERS: {
@@ -23,6 +26,7 @@ const request = (origin = "https://papeleriapdepapel.com") =>
 describe("public storefront settings endpoint", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.findSettings.mockResolvedValue(null);
     vi.spyOn(console, "info").mockImplementation(() => undefined);
   });
 
@@ -43,6 +47,12 @@ describe("public storefront settings endpoint", () => {
       storeId: "store-1",
       name: "P de Papel",
       freeShippingThreshold: 120000,
+      // Datos del negocio: sin fila guardada salen vacíos y la tienda usa sus
+      // textos de siempre.
+      openingHoursLabel: null,
+      cityName: null,
+      hasPhysicalStore: false,
+      physicalAddress: null,
     });
     expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
       "https://papeleriapdepapel.com",

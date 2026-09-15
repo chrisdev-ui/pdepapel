@@ -15,6 +15,14 @@ import { Social } from "@prisma/client";
 export const STORE_SOCIAL_HANDLE = "papeleria.pdepapel";
 
 /**
+ * Página de Facebook de la tienda. Va por `profile.php?id=` porque el usuario
+ * bonito dejó de funcionar; `STORE_SOCIAL_HANDLE` sigue siendo válido para
+ * TikTok, por eso no se toca.
+ */
+export const FACEBOOK_PAGE_URL =
+  "https://www.facebook.com/profile.php?id=61594204506152";
+
+/**
  * Redes que la tienda en línea sabe mostrar (`nosotros/components/social-media.tsx`).
  * `Twitter` sigue en el enum de Prisma por los registros antiguos, pero la
  * tienda no tiene cuenta en X y la tienda en línea ya no la renderiza.
@@ -123,7 +131,12 @@ const RULES: Record<Social, SocialRule> = {
     bareId: /^[A-Za-z0-9_-]{11}$/,
   },
   Pinterest: {
-    hosts: ["pinterest.com", "pinterest.es", "pinterest.com.mx", "pinterest.co"],
+    hosts: [
+      "pinterest.com",
+      "pinterest.es",
+      "pinterest.com.mx",
+      "pinterest.co",
+    ],
     urlPatterns: [/\/pin\/(\d{6,})/],
     bareId: /^\d{6,}$/,
   },
@@ -149,7 +162,11 @@ export function isSocial(value: unknown): value is Social {
 }
 
 function looksLikeUrl(value: string): boolean {
-  return /^(?:https?:)?\/\//i.test(value) || /^[a-z0-9.-]+\.[a-z]{2,}\//i.test(value) || /^www\./i.test(value);
+  return (
+    /^(?:https?:)?\/\//i.test(value) ||
+    /^[a-z0-9.-]+\.[a-z]{2,}\//i.test(value) ||
+    /^www\./i.test(value)
+  );
 }
 
 function parseUrl(value: string): URL | null {
@@ -223,7 +240,20 @@ export function buildSocialPostUrl(social: Social, postId: string): string {
     case Social.TikTok:
       return `https://www.tiktok.com/@${STORE_SOCIAL_HANDLE}/video/${id}`;
     case Social.Facebook:
-      return `https://www.facebook.com/${STORE_SOCIAL_HANDLE}/posts/${id}`;
+      // Se lleva a la PÁGINA, no a la publicación.
+      //
+      // El camino `/usuario/posts/{id}` dependía del usuario bonito, que ya no
+      // resuelve. La forma con el id numérico de la página no se pudo
+      // comprobar desde aquí —Facebook responde 400 a todo lo que no sea un
+      // navegador— y hoy no hay ni una publicación de Facebook guardada, así
+      // que no hay nada roto que arreglar ni con qué probar.
+      //
+      // Para volver a tener enlace por publicación hace falta guardar el
+      // `story_fbid` junto al id de la página cuando se registra el post, y
+      // entonces armar `permalink.php?story_fbid={story}&id={pagina}`, que no
+      // depende del usuario. Mientras tanto, la página antes que un enlace
+      // muerto.
+      return FACEBOOK_PAGE_URL;
     case Social.Youtube:
       return `https://www.youtube.com/watch?v=${id}`;
     case Social.Pinterest:

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { ErrorFactory, handleErrorResponse } from "@/lib/api-errors";
+import { formatOpeningHours, getStoreSettings } from "@/lib/store-settings";
 import { createCorsHeaders } from "@/lib/cors";
 import prismadb from "@/lib/prismadb";
 import { CACHE_HEADERS } from "@/lib/utils";
@@ -32,7 +33,10 @@ export async function GET(
       })
       .catch(async (error: unknown) => {
         // Column not migrated yet: still answer, with the promise disabled.
-        console.error("[PUBLIC_STOREFRONT_SETTINGS] threshold unavailable:", error);
+        console.error(
+          "[PUBLIC_STOREFRONT_SETTINGS] threshold unavailable:",
+          error,
+        );
         const fallback = await prismadb.store.findUnique({
           where: { id: params.storeId },
           select: { id: true, name: true },
@@ -40,6 +44,18 @@ export async function GET(
         return fallback ? { ...fallback, freeShippingThreshold: null } : null;
       });
     if (!store) throw ErrorFactory.NotFound("Tienda no encontrada");
+
+    // Mismo criterio que el umbral: si la tabla todavía no está migrada, se
+    // responde igual y la tienda usa sus textos de siempre.
+    const settings = await getStoreSettings(params.storeId).catch(
+      (error: unknown) => {
+        console.error(
+          "[PUBLIC_STOREFRONT_SETTINGS] datos del negocio no disponibles:",
+          error,
+        );
+        return null;
+      },
+    );
 
     return NextResponse.json(
       {
@@ -49,6 +65,13 @@ export async function GET(
           store.freeShippingThreshold && store.freeShippingThreshold > 0
             ? store.freeShippingThreshold
             : null,
+        openingHoursLabel: formatOpeningHours(
+          settings?.openingHours ?? null,
+          settings?.alwaysOpen ?? false,
+        ),
+        cityName: settings?.cityName ?? null,
+        hasPhysicalStore: settings?.hasPhysicalStore ?? false,
+        physicalAddress: settings?.physicalAddress ?? null,
       },
       { headers },
     );

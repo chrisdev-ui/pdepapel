@@ -1,9 +1,13 @@
 "use client";
 
 import { Social } from "@/constants";
+import { FACEBOOK_PAGE_URL } from "@/constants";
 import { Post } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
-import { readSocialEmbedsConsent, writeSocialEmbedsConsent } from "@/lib/social-embeds-consent";
+import {
+  readSocialEmbedsConsent,
+  writeSocialEmbedsConsent,
+} from "@/lib/social-embeds-consent";
 import { ExternalLink } from "lucide-react";
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import {
@@ -57,7 +61,9 @@ export function buildEmbedUrl(post: Post): string {
     case Social.TikTok:
       return `https://www.tiktok.com/@${STORE_SOCIAL_HANDLE}/video/${id}`;
     case Social.Facebook:
-      return `https://www.facebook.com/${STORE_SOCIAL_HANDLE}/posts/${id}`;
+      // Sin enlace a la publicación concreta: ver `buildSocialPostUrl` en el
+      // panel. Se lleva a la página para no dejar un enlace muerto.
+      return FACEBOOK_PAGE_URL;
     case Social.Youtube:
       return `https://www.youtube.com/watch?v=${id}`;
     case Social.Pinterest:
@@ -103,7 +109,11 @@ function SocialEmbed({ post }: { post: Post }) {
     case Social.TikTok:
       return (
         <SocialEmbedFrame maxWidth={328}>
-          <TikTokEmbed url={url} width="100%" linkText={PLACEHOLDER_LINK_TEXT} />
+          <TikTokEmbed
+            url={url}
+            width="100%"
+            linkText={PLACEHOLDER_LINK_TEXT}
+          />
         </SocialEmbedFrame>
       );
     case Social.Facebook:
@@ -171,7 +181,9 @@ const SOCIAL_LABELS: Record<string, string> = {
 
 /** Nombres de las redes presentes, para la explicación del aviso. */
 export function describeSocialSources(posts: Post[]): string {
-  const names = Array.from(new Set(posts.map((post) => SOCIAL_LABELS[post.social]).filter(Boolean)));
+  const names = Array.from(
+    new Set(posts.map((post) => SOCIAL_LABELS[post.social]).filter(Boolean)),
+  );
   if (names.length <= 1) return names[0] ?? "";
   return `${names.slice(0, -1).join(", ")} y ${names[names.length - 1]}`;
 }
@@ -182,7 +194,13 @@ export function describeSocialSources(posts: Post[]): string {
  * navegador; «Preferencias de privacidad» del pie no la toca porque es otro
  * propósito.
  */
-function SocialEmbedsConsentGate({ posts, onAccept }: { posts: Post[]; onAccept: () => void }) {
+function SocialEmbedsConsentGate({
+  posts,
+  onAccept,
+}: {
+  posts: Post[];
+  onAccept: () => void;
+}) {
   const sources = describeSocialSources(posts);
   return (
     <div
@@ -190,8 +208,9 @@ function SocialEmbedsConsentGate({ posts, onAccept }: { posts: Post[]; onAccept:
       data-testid="social-media-consent"
     >
       <p className="max-w-xl font-sans text-sm text-blue-yankees">
-        Para mostrar aquí nuestras publicaciones se cargan scripts de {sources}, que pueden guardar cookies en tu
-        navegador. Puedes verlas directamente en cada red o cargarlas aquí.
+        Para mostrar aquí nuestras publicaciones se cargan scripts de {sources},
+        que pueden guardar cookies en tu navegador. Puedes verlas directamente
+        en cada red o cargarlas aquí.
       </p>
       <button
         type="button"
@@ -200,7 +219,10 @@ function SocialEmbedsConsentGate({ posts, onAccept }: { posts: Post[]; onAccept:
       >
         Cargar publicaciones
       </button>
-      <ul className="flex flex-wrap justify-center gap-2" aria-label="Publicaciones en redes sociales">
+      <ul
+        className="flex flex-wrap justify-center gap-2"
+        aria-label="Publicaciones en redes sociales"
+      >
         {posts.map((post) => (
           <li key={post.id}>
             <a

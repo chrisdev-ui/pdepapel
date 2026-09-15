@@ -1,3 +1,12 @@
+/**
+ * Página de Facebook de la tienda.
+ *
+ * Va por `profile.php?id=` porque el usuario bonito (`/papeleria.pdepapel`)
+ * dejó de funcionar: esta es la única forma que resuelve.
+ */
+export const FACEBOOK_PAGE_URL =
+  "https://www.facebook.com/profile.php?id=61594204506152";
+
 import { ShippingCarrier } from "@/types";
 
 export const TOAST_DURATION = 2000;

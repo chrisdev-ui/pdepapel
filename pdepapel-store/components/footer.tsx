@@ -7,11 +7,19 @@ import { ArrowRight, CalendarDays, Mail, MapPin, Phone } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
+/** Lo que se muestra mientras nadie haya configurado el horario. */
+export const DEFAULT_OPENING_HOURS_LABEL = "08:00 - 20:00, Lun - Dom";
+
 interface FooterProps {
   season?: Season;
+  /** Viene de Configuración; si falta, se usa el texto de siempre. */
+  openingHoursLabel?: string | null;
 }
 
-export const Footer: React.FC<FooterProps> = ({ season = Season.Default }) => {
+export const Footer: React.FC<FooterProps> = ({
+  season = Season.Default,
+  openingHoursLabel,
+}) => {
   const seasonConfig = SEASON_CONFIG[season];
   const footerLinkClassName =
     "flex min-h-[44px] min-w-0 items-center gap-3 rounded-md py-2 text-left text-blue-yankees hover:text-pink-shell focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-shell focus-visible:ring-offset-2";
@@ -102,7 +110,7 @@ export const Footer: React.FC<FooterProps> = ({ season = Season.Default }) => {
               </li>
               <li className="min-h-11 flex items-center gap-3 py-2 text-blue-yankees">
                 <CalendarDays aria-hidden="true" className="h-5 w-5 shrink-0" />
-                08:00 - 20:00, Lun - Dom
+                {openingHoursLabel ?? DEFAULT_OPENING_HOURS_LABEL}
               </li>
               <li className="min-h-11 flex items-start gap-3 py-2 text-blue-yankees">
                 <MapPin

@@ -88,6 +88,7 @@ model Store {
   growthCampaigns                GrowthCampaign[]
   orderInventoryIssues           OrderInventoryIssue[]
   failedNotifications            FailedNotification[]
+  settings                       StoreSettings?
   jobRuns                        JobRun[]
   shippingWebhookEvents          ShippingWebhookEvent[]
 }
@@ -1286,6 +1287,55 @@ model FailedNotification {
   @@index([storeId, createdAt])
   @@index([orderId])
   @@index([resolvedAt])
+}
+
+/// Datos del negocio que la dueña edita desde Configuración.
+///
+/// Existe para que estas respuestas dejen de estar repartidas entre el pie de
+/// página de la tienda y constantes del código: el bot y el sitio tienen que
+/// decir lo mismo, y para cambiar un horario no debería hacer falta desplegar.
+///
+/// Ojo con `cityName`: es la ciudad del NEGOCIO, no el origen de los envíos.
+/// El origen vive en `constants/shipping.ts` (`STORE_SHIPPING_INFO`) porque es
+/// lo que se le manda a la transportadora. Hoy coinciden; son cosas distintas.
+model StoreSettings {
+  id      String @id @default(uuid())
+  storeId String @unique
+
+  /// Atención a toda hora. Cuando está en true el horario por día no se mira:
+  /// el horario describe cuándo contesta Paula, y el bot cubre el resto.
+  alwaysOpen       Boolean            @default(false)
+  /// Horario por día: { "lun": { "abre": "08:00", "cierra": "20:00" }, … }.
+  /// Un día ausente o null significa cerrado.
+  openingHours     Json?
+  cityName         String?
+  hasPhysicalStore Boolean            @default(false)
+  physicalAddress  String?
+  minOrderRule     MinimumOrderRule   @default(NONE)
+  /// Solo se usa con la regla FIXED.
+  minOrderAmount   Int?
+  /// Subtotal desde el cual el envío es gratis; lo que el bot responde a la
+  /// pregunta general de envíos sin tener que cotizar.
+  freeShippingThreshold Int?
+  /// Apaga el bot sin borrar sus respuestas. Todavía no lo lee nadie: se
+  /// conecta en la etapa 2, junto con la lógica de respuestas.
+  botEnabled       Boolean            @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+}
+
+/// Cómo se sugiere un pedido mínimo. MATCH_SHIPPING es la regla de la casa:
+/// que el pedido valga al menos lo que cuesta el envío. Es sugerencia, nunca
+/// un bloqueo.
+enum MinimumOrderRule {
+  NONE
+  MATCH_SHIPPING
+  FIXED
 }
 
 model JobRun {
