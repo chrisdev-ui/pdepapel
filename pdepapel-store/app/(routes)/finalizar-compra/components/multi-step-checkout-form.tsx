@@ -1,6 +1,7 @@
 "use client";
 
 import { checkLiveStock } from "@/actions/check-live-stock";
+import { safeStockPrecheck } from "@/lib/checkout-precheck";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
@@ -931,7 +932,10 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
     try {
       // Stock is re-checked right before creating the order so the customer
       // fixes quantities here instead of getting a server rejection.
-      const stockMap = await checkLiveStock(activeItems.map((i) => i.id));
+      // Si esta cortesía falla, se sigue: el servidor revisa el stock igual.
+      const { stock: stockMap } = await safeStockPrecheck(() =>
+        checkLiveStock(activeItems.map((i) => i.id)),
+      );
       const conflicts: StockConflictItem[] = activeItems.flatMap((item) => {
         const live = stockMap?.[item.id];
         const requested = item.quantity ?? 1;
@@ -1049,6 +1053,18 @@ export const MultiStepCheckoutForm: React.FC<CheckoutFormProps> = ({
       }).catch(() => {
         // Already reported through onError.
       });
+    } catch (error) {
+      // Sin esto, cualquier fallo antes de la llamada al API se escapaba de
+      // `onSubmit`, react-hook-form se lo tragaba y la clienta se quedaba sin
+      // pedido y sin explicación. Callar es el único final inaceptable.
+      console.error("[CHECKOUT] Falló antes de enviar el pedido:", error);
+      toast({
+        title: "No pudimos enviar tu pedido",
+        description:
+          "Vuelve a intentarlo; si sigue pasando, actualiza la página. No se creó ningún pedido ni se cobró nada.",
+        variant: "destructive",
+      });
+      scrollToTop();
     } finally {
       isSubmittingRef.current = false;
       setIsPreparingSubmit(false);
