@@ -44,12 +44,12 @@ export { formatBotReply, matchWhatsAppKeyword, normalizeBotText };
  * clienta quiere seguir con el bot puede, porque siempre tiene a la vista el
  * botón para salirse a hablar con Paula.
  *
- * Freno de mano (2026-09-15): si Paula escribió alguna vez en la conversación,
- * el bot no manda NADA ahí, ni siquiera el aviso de que no sabe. Es a propósito
- * más bruto de lo que debería —también calla hilos viejos y fríos— porque el
- * arreglo fino (`lastOwnerAt` + ventana de 24 h) va aparte y necesita migración.
- * Sin esto, `fileOwnerEcho` devolvía la conversación a `OPEN` cada vez que ella
- * contestaba desde el celular, y el bot volvía a hablarle encima.
+ * Mientras Paula esté encima (2026-09-15): si ella escribió en la conversación
+ * hace menos de `OWNER_TAKEOVER_WINDOW_HOURS`, el bot no le manda NADA a la
+ * clienta, ni siquiera el aviso de que no sabe; por dentro sí deja el hilo en
+ * `NEEDS_OWNER` para que a ella le aparezca pendiente. Sin esto, `fileOwnerEcho`
+ * devolvía la conversación a `OPEN` cada vez que ella contestaba desde el
+ * celular, y el bot volvía a hablarle encima.
  *
  * Qué pasa con `NEEDS_OWNER`:
  * - un mensaje ESCRITO no despierta al bot; la conversación ya es de una
@@ -65,8 +65,8 @@ export { formatBotReply, matchWhatsAppKeyword, normalizeBotText };
 export type WhatsAppBotOutcome =
   /** La conversación ya esperaba a una persona: el bot no hace nada. */
   | "skipped_needs_owner"
-  /** Paula ya había escrito en esta conversación: el bot no se mete. */
-  | "skipped_owner_thread"
+  /** Paula anda en la conversación ahora mismo: el bot no se mete. */
+  | "skipped_owner_active"
   /** Ninguna palabra clave coincidió. */
   | "escalated_no_match"
   /** Tocó «Hablar con Paula»: se avisa y el bot se calla. */
@@ -145,23 +145,23 @@ export function buildReplyButtons(
 }
 
 /**
- * ¿Paula escribió alguna vez aquí?
+ * Cuánto se aparta el bot después de que Paula escriba.
  *
- * `sentBy: OWNER` solo lo escribe `fileOwnerEcho`, o sea el eco de su propio
- * celular: si hay una fila, la conversación es suya. `Conversation` no sirve
- * para esto porque `lastOutboundAt` lo mueven tanto el bot como ella, así que
- * no distingue quién habló.
- *
- * Vale una consulta por mensaje entrante: cae en el índice
- * `[conversationId, createdAt]` y corta en la primera fila (13 ms medidos
- * sobre el hilo más largo que hay en producción, 620 mensajes).
+ * Un día: cubre que ella conteste de noche y siga por la mañana. Pasado eso
+ * el hilo se da por frío y el bot vuelve a atender, que es justo lo que el
+ * parche del 2026-09-15 no hacía: callaba para siempre.
  */
-async function ownerHasSpoken(conversationId: string): Promise<boolean> {
-  const owner = await prismadb.conversationMessage.findFirst({
-    where: { conversationId, sentBy: ConversationMessageSentBy.OWNER },
-    select: { id: true },
-  });
-  return owner !== null;
+export const OWNER_TAKEOVER_WINDOW_HOURS = 24;
+
+export function isOwnerActive(
+  lastOwnerAt: Date | null | undefined,
+  now: Date,
+): boolean {
+  if (!lastOwnerAt) return false;
+  return (
+    now.getTime() - lastOwnerAt.getTime() <
+    OWNER_TAKEOVER_WINDOW_HOURS * 60 * 60 * 1000
+  );
 }
 
 async function escalate(conversationId: string) {
@@ -195,14 +195,18 @@ export async function runWhatsAppBot(input: {
 }): Promise<WhatsAppBotResult> {
   const conversation = await prismadb.conversation.findUnique({
     where: { id: input.conversationId },
-    select: { id: true, status: true, storeId: true },
+    select: { id: true, status: true, storeId: true, lastOwnerAt: true },
   });
   if (!conversation) return { outcome: "skipped_needs_owner" };
 
-  // 0. Hilo de Paula: silencio total. Va antes que todo, incluso que el botón
-  //    de «Hablar con Paula», porque ella ya está ahí y no hay nada que avisar.
-  if (await ownerHasSpoken(conversation.id)) {
-    return { outcome: "skipped_owner_thread" };
+  // 0. Paula está en la conversación: a la clienta no le llega nada, ni
+  //    siquiera si tocó «Hablar con Paula» (ella ya está ahí). Por dentro sí
+  //    queda marcada, que es como le aparece pendiente en el panel.
+  if (isOwnerActive(conversation.lastOwnerAt, new Date())) {
+    if (conversation.status !== ConversationStatus.NEEDS_OWNER) {
+      await escalate(conversation.id);
+    }
+    return { outcome: "skipped_owner_active" };
   }
 
   const buttonId = input.interactiveReplyId?.trim() || null;

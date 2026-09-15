@@ -475,8 +475,11 @@ async function fileOwnerEcho(
       phone: echo.phone,
       status: ConversationStatus.OPEN,
       lastOutboundAt: sentAt,
+      lastOwnerAt: sentAt,
     },
-    update: { lastOutboundAt: sentAt },
+    // `lastOwnerAt` es lo que aparta al bot 24 h: aquí es donde se sabe que
+    // quien escribió fue ella y no él, porque esto es el eco de su celular.
+    update: { lastOutboundAt: sentAt, lastOwnerAt: sentAt },
     select: { id: true },
   });
 

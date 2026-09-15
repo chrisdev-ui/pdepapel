@@ -701,6 +701,49 @@ describe("processWhatsAppWebhookEvent", () => {
     expect(mocks.conversationUpsert).not.toHaveBeenCalled();
   });
 
+  it("anota en lastOwnerAt la hora del mensaje de Paula, no la de ahora", async () => {
+    // La ventana de 24 h del bot se mide contra esta fecha. Tiene que ser la
+    // del mensaje —lo mismo que rellenó la migración— y no `new Date()`, o un
+    // eco que llegue tarde alargaría el silencio más de la cuenta.
+    const enviado = 1789300100;
+    mocks.findEvent.mockResolvedValue(
+      event({
+        payload: {
+          entry: [
+            {
+              id: WABA,
+              changes: [
+                {
+                  field: "smb_message_echoes",
+                  value: {
+                    message_echoes: [
+                      {
+                        from: "573132582293",
+                        to: "573001234567",
+                        id: "wamid.echo-fecha",
+                        timestamp: String(enviado),
+                        type: "text",
+                        text: { body: "Ya te lo separo" },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+
+    await expect(processWhatsAppWebhookEvent("event-1")).resolves.toMatchObject(
+      { processed: true, ownerEchoes: 1 },
+    );
+
+    const payload = mocks.conversationUpsert.mock.calls[0][0];
+    expect(payload.update.lastOwnerAt).toEqual(new Date(enviado * 1000));
+    expect(payload.create.lastOwnerAt).toEqual(new Date(enviado * 1000));
+  });
+
   it("files an owner echo as OUTBOUND and clears NEEDS_OWNER", async () => {
     mocks.findEvent.mockResolvedValue(
       event({
@@ -754,8 +797,12 @@ describe("processWhatsAppWebhookEvent", () => {
         phone: "573001234567",
         status: "OPEN",
         lastOutboundAt: new Date(1789300100 * 1000),
+        lastOwnerAt: new Date(1789300100 * 1000),
       },
-      update: { lastOutboundAt: new Date(1789300100 * 1000) },
+      update: {
+        lastOutboundAt: new Date(1789300100 * 1000),
+        lastOwnerAt: new Date(1789300100 * 1000),
+      },
       select: { id: true },
     });
     // Paula contestó desde el celular: la conversación deja de esperarla.

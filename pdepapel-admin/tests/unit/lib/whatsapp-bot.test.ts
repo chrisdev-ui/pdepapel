@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   conversationFindUnique: vi.fn(),
@@ -39,11 +39,13 @@ import {
   HUMAN_PAUSE_MAX_MS,
   HUMAN_PAUSE_READ_MS,
   NO_MATCH_ACKNOWLEDGEMENT,
+  OWNER_TAKEOVER_WINDOW_HOURS,
   TALK_TO_OWNER_ACKNOWLEDGEMENT,
   UNAVAILABLE_OPTION_ACKNOWLEDGEMENT,
   buildReplyButtons,
   formatBotReply,
   getHumanPauseMs,
+  isOwnerActive,
   matchWhatsAppKeyword,
   normalizeBotText,
   runWhatsAppBot,
@@ -180,73 +182,64 @@ describe("runWhatsAppBot", () => {
     expect(mocks.send).toHaveBeenCalled();
   });
 
-  describe("freno de mano: hilos donde Paula ya escribió", () => {
-    /** Lo que devuelve la consulta del freno cuando sí hay un mensaje suyo. */
-    const deOwner = { id: "message-owner-1" };
+  describe("mientras Paula esté encima de la conversación", () => {
+    const AHORA = new Date("2026-09-15T02:30:00.000Z");
+    /** Deja la conversación con el último mensaje de Paula hace `horas`. */
+    const pauleóHace = (horas: number, status = "OPEN") =>
+      mocks.conversationFindUnique.mockResolvedValue({
+        id: "conversation-1",
+        status,
+        storeId: "store-1",
+        lastOwnerAt: new Date(AHORA.getTime() - horas * 60 * 60 * 1000),
+      });
 
-    it("no manda nada si Paula ya había escrito en la conversación", async () => {
-      mocks.messageFindFirst.mockResolvedValue(deOwner);
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(AHORA);
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("hace una hora: no le llega nada a la clienta, pero queda marcada", async () => {
+      pauleóHace(1);
 
       await expect(runWhatsAppBot(input)).resolves.toEqual({
-        outcome: "skipped_owner_thread",
+        outcome: "skipped_owner_active",
       });
 
       expect(mocks.send).not.toHaveBeenCalled();
       expect(mocks.typing).not.toHaveBeenCalled();
       expect(mocks.messageCreate).not.toHaveBeenCalled();
-      // Tampoco toca el estado: la conversación ya es de ella.
+      // Callarse hacia afuera no es no hacer nada: por dentro queda pendiente.
+      expect(mocks.conversationUpdate).toHaveBeenCalledWith({
+        where: { id: "conversation-1" },
+        data: { status: "NEEDS_OWNER" },
+      });
+    });
+
+    it("no vuelve a marcar lo que ya estaba marcado", async () => {
+      pauleóHace(1, "NEEDS_OWNER");
+
+      await expect(runWhatsAppBot(input)).resolves.toEqual({
+        outcome: "skipped_owner_active",
+      });
       expect(mocks.conversationUpdate).not.toHaveBeenCalled();
     });
 
-    it("pregunta solo por mensajes de Paula, no del bot ni de la clienta", async () => {
-      mocks.messageFindFirst.mockResolvedValue(deOwner);
+    it("hace 23,9 horas: justo dentro, sigue callado", async () => {
+      pauleóHace(23.9);
 
-      await runWhatsAppBot(input);
-
-      expect(mocks.messageFindFirst).toHaveBeenCalledWith({
-        where: { conversationId: "conversation-1", sentBy: "OWNER" },
-        select: { id: true },
+      await expect(runWhatsAppBot(input)).resolves.toEqual({
+        outcome: "skipped_owner_active",
       });
-    });
-
-    it("calla incluso si la clienta toca «Hablar con Paula»", async () => {
-      // Sin el freno esto mandaría el acuse encima de una conversación que
-      // ella ya está llevando.
-      mocks.messageFindFirst.mockResolvedValue(deOwner);
-
-      await expect(
-        runWhatsAppBot({ ...input, interactiveReplyId: TALK_TO_OWNER_BUTTON_ID }),
-      ).resolves.toEqual({ outcome: "skipped_owner_thread" });
-
-      expect(mocks.send).not.toHaveBeenCalled();
-      expect(mocks.conversationUpdate).not.toHaveBeenCalled();
-    });
-
-    it("el caso Chuchu: Paula escribe y la otra persona sigue escribiendo", async () => {
-      // Los 5 mensajes que el bot mandó de verdad en producción eran este
-      // caso: un hilo suyo, ella contestando, y el bot metiéndose entre medias
-      // con «Esa no me la sé» porque el eco de su celular dejaba el estado en
-      // OPEN. Ahora ninguno de los dos mensajes de la otra persona lo despierta.
-      mocks.messageFindFirst.mockResolvedValue(deOwner);
-
-      const primero = await runWhatsAppBot({
-        ...input,
-        body: "Si supera los 0,5 metros cúbicos, ya no puede considerarse una muestra.",
-      });
-      const segundo = await runWhatsAppBot({
-        ...input,
-        body: "Si tu primo lo necesita, quizá la próxima vez podamos incluir…",
-      });
-
-      expect(primero).toEqual({ outcome: "skipped_owner_thread" });
-      expect(segundo).toEqual({ outcome: "skipped_owner_thread" });
       expect(mocks.send).not.toHaveBeenCalled();
     });
 
-    it("una conversación nueva sin nada de Paula sigue igual que antes", async () => {
-      // El freno no puede apagar el bot donde sí hace falta: sin mensajes
-      // suyos, tanto la coincidencia como el aviso de «no sé» siguen saliendo.
-      mocks.messageFindFirst.mockResolvedValue(null);
+    it("hace 25 horas: el hilo se enfrió y el bot vuelve a atender", async () => {
+      // Esta es LA diferencia con el parche del 2026-09-15, que aquí se
+      // habría quedado callado para siempre.
+      pauleóHace(25);
 
       await expect(runWhatsAppBot(input)).resolves.toEqual({
         outcome: "replied",
@@ -257,14 +250,71 @@ describe("runWhatsAppBot", () => {
         "Abrimos de 9 a 6.",
         ESCAPE,
       );
+    });
+
+    it("justo en las 24 horas ya se considera frío", async () => {
+      pauleóHace(24);
+
+      await expect(runWhatsAppBot(input)).resolves.toMatchObject({
+        outcome: "replied",
+      });
+    });
+
+    it("calla incluso si la clienta toca «Hablar con Paula»", async () => {
+      // Avisarle de algo que ya está leyendo no aporta nada.
+      pauleóHace(1);
+
+      await expect(
+        runWhatsAppBot({ ...input, interactiveReplyId: TALK_TO_OWNER_BUTTON_ID }),
+      ).resolves.toEqual({ outcome: "skipped_owner_active" });
+
+      expect(mocks.send).not.toHaveBeenCalled();
+    });
+
+    it("el caso Chuchu, con las horas reales de producción", async () => {
+      // El hilo de la proveedora: ella contestó a las 02:25:28 y el bot se
+      // metió cinco veces entre sus mensajes. Con la ventana, los mensajes
+      // que llegan justo después ya no lo despiertan.
+      mocks.conversationFindUnique.mockResolvedValue({
+        id: "conversation-chuchu",
+        status: "OPEN",
+        storeId: "store-1",
+        lastOwnerAt: new Date("2026-09-15T02:25:28.000Z"),
+      });
+
+      const entrantes = [
+        "Si supera los 0,5 metros cúbicos, ya no puede considerarse una muestra.",
+        "Si tu primo lo necesita, quizá la próxima vez podamos incluir…",
+        "¡Tu esposo es increíble!",
+      ];
+      for (const body of entrantes) {
+        await expect(
+          runWhatsAppBot({ ...input, conversationId: "conversation-chuchu", body }),
+        ).resolves.toEqual({ outcome: "skipped_owner_active" });
+      }
+      expect(mocks.send).not.toHaveBeenCalled();
+    });
+
+    it("sin nada de Paula nunca, todo sigue como antes", async () => {
+      mocks.conversationFindUnique.mockResolvedValue({
+        id: "conversation-1",
+        status: "OPEN",
+        storeId: "store-1",
+        lastOwnerAt: null,
+      });
+
+      await expect(runWhatsAppBot(input)).resolves.toEqual({
+        outcome: "replied",
+        trigger: "horario",
+      });
 
       vi.clearAllMocks();
       mocks.conversationFindUnique.mockResolvedValue({
         id: "conversation-1",
         status: "OPEN",
         storeId: "store-1",
+        lastOwnerAt: null,
       });
-      mocks.messageFindFirst.mockResolvedValue(null);
       mocks.conversationUpdate.mockResolvedValue({});
       mocks.send.mockResolvedValue({ ok: true, externalId: "wamid.BOT2" });
       mocks.typing.mockResolvedValue({ ok: true });
@@ -277,6 +327,24 @@ describe("runWhatsAppBot", () => {
         where: { id: "conversation-1" },
         data: { status: "NEEDS_OWNER" },
       });
+    });
+  });
+
+  describe("isOwnerActive", () => {
+    const ahora = new Date("2026-09-15T02:30:00.000Z");
+    const hace = (horas: number) =>
+      new Date(ahora.getTime() - horas * 60 * 60 * 1000);
+
+    it("sin fecha no hay nadie llevando el hilo", () => {
+      expect(isOwnerActive(null, ahora)).toBe(false);
+      expect(isOwnerActive(undefined, ahora)).toBe(false);
+    });
+
+    it("la ventana se cierra justo a las 24 horas", () => {
+      expect(isOwnerActive(hace(23.99), ahora)).toBe(true);
+      expect(isOwnerActive(hace(24), ahora)).toBe(false);
+      expect(isOwnerActive(hace(24.01), ahora)).toBe(false);
+      expect(OWNER_TAKEOVER_WINDOW_HOURS).toBe(24);
     });
   });
 

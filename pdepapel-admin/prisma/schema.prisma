@@ -2274,6 +2274,9 @@ model Conversation {
   status         ConversationStatus  @default(OPEN)
   lastInboundAt  DateTime?
   lastOutboundAt DateTime?
+  /// Último mensaje de Paula desde su propio celular (`fileOwnerEcho`). Es lo
+  /// que frena al bot: `lastOutboundAt` no sirve porque lo mueven los dos.
+  lastOwnerAt    DateTime?
   orderId        String?
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
