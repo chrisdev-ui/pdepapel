@@ -2,12 +2,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   findMany: vi.fn(),
+  findFirst: vi.fn(),
   count: vi.fn(),
   generateText: vi.fn(),
 }));
 
 vi.mock("@/lib/prismadb", () => ({
-  default: { product: { findMany: mocks.findMany, count: mocks.count } },
+  default: {
+    product: {
+      findMany: mocks.findMany,
+      count: mocks.count,
+      findFirst: mocks.findFirst,
+    },
+  },
 }));
 vi.mock("ai", async (importOriginal) => ({
   ...(await importOriginal<typeof import("ai")>()),
@@ -40,6 +47,7 @@ import {
   resolveAvailability,
   resolveProductFeatures,
   resolveProductPrice,
+  answerAboutProduct,
   resolveProductSearch,
   trimForWhatsApp,
 } from "@/lib/whatsapp/bot-products";
@@ -138,7 +146,7 @@ describe("resolvedores", () => {
     const fact = await resolveProductSearch("store-1", clasificacion);
     expect(fact).toEqual({
       known: true,
-      value: { matches: [], total: 0, hasMore: false, photo: null },
+      value: { matches: [], ids: [], total: 0, hasMore: false, photo: null },
     });
   });
 
@@ -1036,5 +1044,110 @@ describe("buscar primero por nombre", () => {
         expect(mocks.count).toHaveBeenCalledOnce();
       }
     }
+  });
+});
+
+describe("los ids viajan con la respuesta, para poder señalar después", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("guarda los ids en el mismo orden en que salen escritos", async () => {
+    mocks.findMany.mockResolvedValue([
+      { id: "p1", name: "Cuaderno Stitch", price: 18000, stock: 4, images: [] },
+      { id: "p2", name: "Libreta Stitch", price: 12000, stock: 0, images: [] },
+    ]);
+    mocks.count.mockResolvedValue(2);
+
+    const fact = await resolveProductSearch("store-1", clasificacion);
+    if (!fact.known) throw new Error("debería saberse");
+    expect(fact.value.ids).toEqual(["p1", "p2"]);
+    expect(fact.value.matches.map((m) => m.name)).toEqual([
+      "Cuaderno Stitch",
+      "Libreta Stitch",
+    ]);
+  });
+
+  it("el id nunca sale escrito en el texto", async () => {
+    mocks.findMany.mockResolvedValue([
+      { id: "clave-secreta-123", name: "Cuaderno Stitch", price: 18000, stock: 4, images: [] },
+    ]);
+    mocks.count.mockResolvedValue(1);
+
+    const fact = await resolveProductSearch("store-1", clasificacion);
+    if (!fact.known) throw new Error("debería saberse");
+    expect(renderProductSearch(fact.value)).not.toContain("clave-secreta-123");
+  });
+});
+
+describe("contestar de un producto que ya se sabe cuál es", () => {
+  const producto = {
+    id: "p1",
+    name: "Cuaderno Stitch",
+    price: 18000,
+    stock: 4,
+    description: null as string | null,
+    images: [] as { url: string }[],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.findFirst.mockResolvedValue(producto);
+  });
+
+  it("vuelve a consultar el catálogo: nunca usa el precio de hace diez minutos", async () => {
+    mocks.findFirst.mockResolvedValue({ ...producto, price: 25000 });
+    const answer = await answerAboutProduct("store-1", "p1", "product.price");
+    expect(answer?.text).toContain("$25.000");
+    expect(mocks.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "p1", storeId: "store-1", isArchived: false },
+      }),
+    );
+  });
+
+  it("contesta si queda, con las existencias de ahora", async () => {
+    mocks.findFirst.mockResolvedValue({ ...producto, stock: 0 });
+    const answer = await answerAboutProduct("store-1", "p1", "product.availability");
+    expect(answer?.text).toContain("se me agotó");
+    // Y el número no sale nunca.
+    expect(answer?.text).not.toContain("0");
+  });
+
+  it("no inventa nada si el producto ya no está", async () => {
+    mocks.findFirst.mockResolvedValue(null);
+    await expect(answerAboutProduct("store-1", "p1", "product.search")).resolves.toBeNull();
+  });
+
+  it("no cuenta cómo es si la descripción no da para nada", async () => {
+    mocks.findFirst.mockResolvedValue({ ...producto, description: "<p>Lindo</p>" });
+    await expect(
+      answerAboutProduct("store-1", "p1", "product.features"),
+    ).resolves.toBeNull();
+  });
+
+  it("cuenta cómo es cuando sí hay descripción", async () => {
+    mocks.findFirst.mockResolvedValue({
+      ...producto,
+      description:
+        "<p>Cuaderno argollado de 100 hojas con tapa dura ilustrada. Trae separador de páginas y bolsillo interior para guardar apuntes sueltos.</p>",
+    });
+    const answer = await answerAboutProduct("store-1", "p1", "product.features");
+    expect(answer?.text).toContain("100 hojas");
+    expect(answer?.text).not.toContain("<p>");
+  });
+
+  it("deja dicho qué producto enseñó, para poder volver a señalarlo", async () => {
+    const answer = await answerAboutProduct("store-1", "p1", "product.search");
+    expect(answer?.shownIds).toEqual(["p1"]);
+  });
+
+  it("manda la foto si el producto tiene una sana", async () => {
+    mocks.findFirst.mockResolvedValue({
+      ...producto,
+      images: [{ url: "https://res.cloudinary.com/demo/image/upload/v1/foto.jpg" }],
+    });
+    const answer = await answerAboutProduct("store-1", "p1", "product.photo");
+    expect(answer?.photo).toContain("foto.jpg");
   });
 });

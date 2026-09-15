@@ -3,6 +3,7 @@ import {
   ConversationMessageSentBy,
   ConversationMessageStatus,
   ConversationStatus,
+  type Prisma,
 } from "@prisma/client";
 
 import prismadb from "@/lib/prismadb";
@@ -13,10 +14,17 @@ import {
   renderBusinessFact,
 } from "@/lib/whatsapp/bot-facts";
 import {
+  PRODUCT_TEMPLATES,
   areProductAnswersApproved,
+  answerAboutProduct,
   answerProductQuestion,
   looksLikeProductQuestion,
 } from "@/lib/whatsapp/bot-products";
+import {
+  detectProductReference,
+  resolveProductReference,
+  type ShownProducts,
+} from "@/lib/whatsapp/bot-references";
 import {
   formatBotReply,
   matchWhatsAppKeyword,
@@ -91,6 +99,10 @@ export type WhatsAppBotOutcome =
   | "replied_business_fact"
   /** Se contestó sobre productos (si hay, si queda). */
   | "replied_product"
+  /** Dijo «el primero» y se supo cuál era. */
+  | "replied_product_reference"
+  /** Señaló una opción de una lista que ya no valía; se le pidió repetirla. */
+  | "replied_reference_lost"
   /** Coincidió pero el envío falló. */
   | "escalated_send_failed";
 
@@ -333,6 +345,73 @@ export async function runWhatsAppBot(input: {
     }
   }
 
+  // 4 bis. «El primero», «ese», «el 2»: señalar sin nombrar. Va ANTES del
+  //    paso 5 porque ahí no hay nada que buscar —«el primero» no tiene ni una
+  //    palabra de producto— y acabaría gastando una llamada al modelo para
+  //    terminar igual en «esa no me la sé».
+  const reference = detectProductReference(input.body);
+  if (reference) {
+    const refSettings =
+      input.settings ?? (await readSettings(conversation.storeId));
+    // Contesta con las mismas plantillas del paso 5, así que pide el mismo
+    // visto bueno.
+    if (refSettings && areProductAnswersApproved(refSettings)) {
+      const resolved = await resolveProductReference({
+        conversationId: conversation.id,
+        storeId: conversation.storeId,
+        reference,
+      });
+
+      if (resolved.outcome === "resolved") {
+        const answer = await answerAboutProduct(
+          conversation.storeId,
+          resolved.productId,
+          resolved.intent,
+        );
+        if (answer) {
+          const sent = await deliver(
+            conversation.id,
+            input.phone,
+            answer.text,
+            [],
+            pacing(input),
+            answer.photo,
+            answer.shownIds
+              ? { ids: answer.shownIds, intent: answer.intent }
+              : null,
+          );
+          if (sent.ok) {
+            return {
+              outcome: "replied_product_reference",
+              trigger: answer.intent,
+            };
+          }
+          await escalate(conversation.id);
+          return {
+            outcome: "escalated_send_failed",
+            trigger: answer.intent,
+            error: sent.error,
+          };
+        }
+      } else if (resolved.outcome === "lost") {
+        // No se escala: se admite el despiste y se le pide que lo repita, que
+        // es una conversación de un mensaje más y no una espera a Paula.
+        const sent = await deliver(
+          conversation.id,
+          input.phone,
+          PRODUCT_TEMPLATES["reference.lost"](),
+          [],
+          pacing(input),
+        );
+        if (sent.ok) return { outcome: "replied_reference_lost" };
+        await escalate(conversation.id);
+        return { outcome: "escalated_send_failed", error: sent.error };
+      }
+      // `none` —y un producto del que no se pudo contar nada— siguen su camino
+      // sin tocar nada, como si esto no existiera.
+    }
+  }
+
   // 5. Productos: si tienen algo y si queda. A diferencia del paso 4, aquí
   //    hace falta un modelo para entender la pregunta, así que TODO lo que
   //    pueda salir mal —sin clave, sin cuota, lento, o una respuesta que no
@@ -352,6 +431,7 @@ export async function runWhatsAppBot(input: {
         [],
         pacing(input),
         answer.photo,
+        answer.shownIds ? { ids: answer.shownIds, intent: answer.intent } : null,
       );
       if (sent.ok) {
         return { outcome: "replied_product", trigger: answer.intent };
@@ -444,6 +524,11 @@ async function deliver(
   pace: Pacing,
   /** Foto que va encima del texto, si el producto tiene una utilizable. */
   photo?: string | null,
+  /**
+   * Qué productos enseña este mensaje. Se guarda para poder resolver después
+   * un «el primero»; no se enseña nunca ni sale de aquí.
+   */
+  shown?: ShownProducts | null,
 ): Promise<{ ok: boolean; error?: string }> {
   const reply = formatBotReply(answer);
 
@@ -504,6 +589,9 @@ async function deliver(
       // Solo si de verdad salió con foto: si hubo que repetir sin ella, en el
       // panel tiene que verse lo mismo que le llegó a la clienta.
       ...(salioConFoto && photo ? { mediaType: "image", mediaUrl: photo } : {}),
+      ...(shown && shown.ids.length > 0
+        ? { metadata: { shown } as unknown as Prisma.InputJsonValue }
+        : {}),
       status: ConversationMessageStatus.SENT,
       createdAt: now,
     },

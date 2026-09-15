@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   activeKeywords: vi.fn(),
   sendableReply: vi.fn(),
   answerProduct: vi.fn(),
+  answerAboutProduct: vi.fn(),
+  resolveReference: vi.fn(),
   sendImage: vi.fn(),
 }));
 
@@ -30,6 +32,13 @@ vi.mock("@/lib/prismadb", () => ({
 vi.mock("@/lib/whatsapp/bot-products", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/whatsapp/bot-products")>()),
   answerProductQuestion: mocks.answerProduct,
+  answerAboutProduct: mocks.answerAboutProduct,
+}));
+// `detectProductReference` se deja real: es puro y es justo lo que decide si
+// el mensaje entra en esta etapa.
+vi.mock("@/lib/whatsapp/bot-references", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/whatsapp/bot-references")>()),
+  resolveProductReference: mocks.resolveReference,
 }));
 vi.mock("@/lib/whatsapp/send", () => ({
   sendWhatsAppButtonMessage: mocks.send,
@@ -61,7 +70,10 @@ import {
 } from "@/lib/whatsapp/bot";
 import type { ResolvedStoreSettings } from "@/lib/store-settings";
 import { BUSINESS_FACT_TEMPLATES_VERSION } from "@/lib/whatsapp/bot-facts";
-import { PRODUCT_TEMPLATES_VERSION } from "@/lib/whatsapp/bot-products";
+import {
+  PRODUCT_TEMPLATES,
+  PRODUCT_TEMPLATES_VERSION,
+} from "@/lib/whatsapp/bot-products";
 import {
   TALK_TO_OWNER_BUTTON_ID,
   TALK_TO_OWNER_BUTTON_TITLE,
@@ -84,6 +96,32 @@ const input = {
   keywords,
   // Sin esto cada prueba esperaría la pausa humana de verdad.
   skipHumanPause: true,
+};
+
+/** Una tienda con todo lleno y los datos del negocio ya aprobados. */
+const ajustesBase: ResolvedStoreSettings = {
+  alwaysOpen: false,
+  openingHours: {
+    lun: { abre: "08:00", cierra: "18:00" },
+    mar: { abre: "08:00", cierra: "18:00" },
+    mie: { abre: "08:00", cierra: "18:00" },
+    jue: { abre: "08:00", cierra: "18:00" },
+    vie: { abre: "08:00", cierra: "18:00" },
+    sab: { abre: "08:00", cierra: "18:00" },
+    dom: { abre: "08:00", cierra: "18:00" },
+  },
+  cityName: "Medellín",
+  hasPhysicalStore: false,
+  physicalAddress: null,
+  minOrderRule: MinimumOrderRule.NONE,
+  minOrderAmount: null,
+  freeShippingThreshold: 120000,
+  deliveryEstimate: "2 a 4 días hábiles",
+  botEnabled: true,
+  botFactsApprovedAt: new Date("2026-09-15T00:00:00.000Z"),
+  botFactsVersion: BUSINESS_FACT_TEMPLATES_VERSION,
+  botProductsApprovedAt: null,
+  botProductsVersion: null,
 };
 
 describe("keyword matching", () => {
@@ -342,31 +380,6 @@ describe("runWhatsAppBot", () => {
     });
   });
 
-  /** Una tienda con todo lleno y los datos del negocio ya aprobados. */
-  const ajustesBase: ResolvedStoreSettings = {
-    alwaysOpen: false,
-    openingHours: {
-      lun: { abre: "08:00", cierra: "18:00" },
-      mar: { abre: "08:00", cierra: "18:00" },
-      mie: { abre: "08:00", cierra: "18:00" },
-      jue: { abre: "08:00", cierra: "18:00" },
-      vie: { abre: "08:00", cierra: "18:00" },
-      sab: { abre: "08:00", cierra: "18:00" },
-      dom: { abre: "08:00", cierra: "18:00" },
-    },
-    cityName: "Medellín",
-    hasPhysicalStore: false,
-    physicalAddress: null,
-    minOrderRule: MinimumOrderRule.NONE,
-    minOrderAmount: null,
-    freeShippingThreshold: 120000,
-    deliveryEstimate: "2 a 4 días hábiles",
-    botEnabled: true,
-    botFactsApprovedAt: new Date("2026-09-15T00:00:00.000Z"),
-    botFactsVersion: BUSINESS_FACT_TEMPLATES_VERSION,
-    botProductsApprovedAt: null,
-    botProductsVersion: null,
-  };
 
   describe("datos del negocio", () => {
     const aprobados: ResolvedStoreSettings = ajustesBase;
@@ -1040,5 +1053,155 @@ describe("ritmo humano", () => {
 
     expect(mocks.typing).not.toHaveBeenCalled();
     expect(mocks.send).toHaveBeenCalled();
+  });
+
+  describe("«el primero», «ese»", () => {
+    const aprobado: ResolvedStoreSettings = {
+      ...ajustesBase,
+      botProductsApprovedAt: new Date("2026-09-15T00:00:00.000Z"),
+      botProductsVersion: PRODUCT_TEMPLATES_VERSION,
+    };
+    const señalar = (body: string) =>
+      runWhatsAppBot({ ...input, body, settings: aprobado });
+
+    beforeEach(() => {
+      mocks.resolveReference.mockResolvedValue({ outcome: "none" });
+      mocks.answerProduct.mockResolvedValue(null);
+      mocks.sendImage.mockResolvedValue({ ok: true, externalId: "wamid.IMG1" });
+    });
+
+    it("contesta del producto que señaló", async () => {
+      mocks.resolveReference.mockResolvedValue({
+        outcome: "resolved",
+        productId: "p2",
+        intent: "product.price",
+      });
+      mocks.answerAboutProduct.mockResolvedValue({
+        intent: "product.price",
+        text: "Cuaderno Stitch está en $18.000 💛 ¿Te lo aparto?",
+        photo: null,
+        shownIds: ["p2"],
+      });
+
+      await expect(señalar("el segundo")).resolves.toEqual({
+        outcome: "replied_product_reference",
+        trigger: "product.price",
+      });
+      expect(mocks.answerAboutProduct).toHaveBeenCalledWith(
+        "store-1",
+        "p2",
+        "product.price",
+      );
+      expect(mocks.send.mock.calls[0][1]).toContain("Cuaderno Stitch");
+    });
+
+    it("no gasta una llamada al modelo: ni llega al paso de productos", async () => {
+      mocks.resolveReference.mockResolvedValue({
+        outcome: "resolved",
+        productId: "p1",
+        intent: "product.search",
+      });
+      mocks.answerAboutProduct.mockResolvedValue({
+        intent: "product.search",
+        text: "Sí 💛 Tengo Cuaderno Stitch en $18.000. ¿Te lo aparto?",
+        photo: null,
+        shownIds: ["p1"],
+      });
+
+      await señalar("quiero el primero");
+      expect(mocks.answerProduct).not.toHaveBeenCalled();
+    });
+
+    it("pide que lo repita cuando la lista ya no vale, sin pasarlo a Paula", async () => {
+      mocks.resolveReference.mockResolvedValue({ outcome: "lost" });
+
+      await expect(señalar("el primero")).resolves.toEqual({
+        outcome: "replied_reference_lost",
+      });
+      expect(mocks.send.mock.calls[0][1]).toBe(PRODUCT_TEMPLATES["reference.lost"]());
+      // No se marca para Paula: es una conversación de un mensaje más.
+      expect(mocks.conversationUpdate).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: { status: "NEEDS_OWNER" } }),
+      );
+    });
+
+    it("con «ese» y varios enseñados sigue su camino sin tocar nada", async () => {
+      mocks.resolveReference.mockResolvedValue({ outcome: "none" });
+
+      await expect(señalar("ese")).resolves.toEqual({ outcome: "escalated_no_match" });
+      expect(mocks.answerAboutProduct).not.toHaveBeenCalled();
+      expect(mocks.send.mock.calls[0][1]).toBe(NO_MATCH_ACKNOWLEDGEMENT);
+    });
+
+    it("sigue su camino si del producto no se pudo contar nada", async () => {
+      mocks.resolveReference.mockResolvedValue({
+        outcome: "resolved",
+        productId: "p1",
+        intent: "product.features",
+      });
+      mocks.answerAboutProduct.mockResolvedValue(null);
+
+      await expect(señalar("el primero")).resolves.toEqual({
+        outcome: "escalated_no_match",
+      });
+    });
+
+    it("sin el visto bueno de Paula esta etapa no existe", async () => {
+      await expect(
+        runWhatsAppBot({
+          ...input,
+          body: "el primero",
+          settings: { ...aprobado, botProductsApprovedAt: null },
+        }),
+      ).resolves.toEqual({ outcome: "escalated_no_match" });
+      expect(mocks.resolveReference).not.toHaveBeenCalled();
+    });
+
+    it("un mensaje que no señala nada ni entra aquí", async () => {
+      await runWhatsAppBot({
+        ...input,
+        body: "¿tienen cuadernos de Stitch?",
+        settings: aprobado,
+      });
+      expect(mocks.resolveReference).not.toHaveBeenCalled();
+    });
+
+    it("no se cuela delante de un dato del negocio", async () => {
+      // «primero» no aparece aquí, pero la etapa va DESPUÉS del paso 4 y esta
+      // prueba lo fija: un horario se sigue contestando como siempre.
+      await runWhatsAppBot({
+        ...input,
+        body: "¿a qué hora abren?",
+        settings: aprobado,
+      });
+      expect(mocks.resolveReference).not.toHaveBeenCalled();
+    });
+
+    it("guarda lo que enseñó para poder resolverlo después", async () => {
+      mocks.answerProduct.mockResolvedValue({
+        intent: "product.search",
+        text: "Sí, mira 💛 Tengo estos:\n• uno\n• dos\n¿Cuál te interesa?",
+        photo: null,
+        shownIds: ["p1", "p2"],
+      });
+
+      await runWhatsAppBot({
+        ...input,
+        body: "¿tienen cuadernos de Stitch?",
+        settings: aprobado,
+      });
+      expect(mocks.messageCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          metadata: { shown: { ids: ["p1", "p2"], intent: "product.search" } },
+        }),
+      });
+    });
+
+    it("una respuesta sin productos no guarda nada", async () => {
+      await runWhatsAppBot(input);
+      expect(mocks.messageCreate).toHaveBeenCalledWith({
+        data: expect.not.objectContaining({ metadata: expect.anything() }),
+      });
+    });
   });
 });

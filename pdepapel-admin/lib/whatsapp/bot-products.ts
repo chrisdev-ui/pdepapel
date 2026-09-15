@@ -194,6 +194,11 @@ export interface SearchResult<T> {
   total: number;
   hasMore: boolean;
   /**
+   * Los ids de `matches`, en el mismo orden. Se guardan con el mensaje para
+   * poder resolver luego un «el primero». Nunca se enseñan.
+   */
+  ids?: string[];
+  /**
    * La foto, solo cuando hay UN único producto: con una lista no se puede
    * elegir cuál enseñar, y tres fotos seguidas serían un muro.
    */
@@ -335,6 +340,7 @@ export async function resolveProductSearch(
     known: true,
     value: {
       matches: found.rows.map((p) => ({ name: p.name, price: p.price })),
+      ids: found.rows.map((p) => p.id),
       total: found.total,
       hasMore: found.total > PRODUCT_MATCH_LIMIT,
       photo: found.total === 1 ? pickPhoto(found.rows[0]?.images) : null,
@@ -396,6 +402,7 @@ export async function resolveAvailability(
     value: {
       // Aquí muere `stock`: de este map sale un sí o un no, nunca un número.
       matches: found.rows.map((p) => ({ name: p.name, inStock: p.stock > 0 })),
+      ids: found.rows.map((p) => p.id),
       total: found.total,
       hasMore: found.total > PRODUCT_MATCH_LIMIT,
       photo: found.total === 1 ? pickPhoto(found.rows[0]?.images) : null,
@@ -433,6 +440,7 @@ export async function resolveProductFeatures(
       known: true,
       value: {
         matches: found.rows.map((p) => ({ name: p.name, price: p.price })),
+        ids: found.rows.map((p) => p.id),
         total: found.total,
         hasMore: found.total > PRODUCT_MATCH_LIMIT,
         photo: null,
@@ -450,6 +458,7 @@ export async function resolveProductFeatures(
     known: true,
     value: {
       matches: [{ name: only.name, description: trimForWhatsApp(description) }],
+      ids: [only.id],
       total: 1,
       hasMore: false,
       photo: pickPhoto(only.images),
@@ -505,6 +514,10 @@ export const PRODUCT_TEMPLATES = {
     `${name} está en ${price} 💛 No tengo foto de ese a la mano, pero le digo a Paula que te la mande.`,
   "features.which.many": (lineas: string, resto: number) =>
     `Tengo varios 💛\n${lineas}\n…y ${resto} más. Dime cuál y te cuento cómo es.`,
+  // Señaló una opción de una lista que ya no está: pasaron más de diez minutos
+  // o el número no existía. Se admite el despiste en vez de escalar.
+  "reference.lost": () =>
+    `Se me fue el hilo 💛 ¿Me dices otra vez cuál te interesa? Puedes escribir el nombre o el número de la lista.`,
 } as const;
 
 export const PRODUCT_TEMPLATES_VERSION = createHash("sha256")
@@ -597,6 +610,10 @@ export function previewProductTemplates(): { label: string; text: string }[] {
     {
       label: "Pide una foto pero no tenemos ninguna",
       text: renderProductPhoto({ ...uno, photo: null }),
+    },
+    {
+      label: "Dice «el primero» y la lista ya caducó",
+      text: PRODUCT_TEMPLATES["reference.lost"](),
     },
   ];
 }
@@ -704,6 +721,11 @@ export interface ProductAnswer {
   text: string;
   /** Va con la respuesta cuando hay un solo producto y tiene foto sana. */
   photo?: string | null;
+  /**
+   * Lo que se acaba de enseñar, en el orden en que sale escrito. Se guarda con
+   * el mensaje para que «el primero» tenga a qué referirse.
+   */
+  shownIds?: string[];
 }
 
 /**
@@ -755,13 +777,23 @@ export async function answerProductQuestion(
   if (c.intent === "product.availability") {
     const fact = await resolveAvailability(storeId, buscar);
     if (!fact.known) return null;
-    return { intent: c.intent, text: renderAvailability(fact.value), photo: fact.value.photo };
+    return {
+      intent: c.intent,
+      text: renderAvailability(fact.value),
+      photo: fact.value.photo,
+      shownIds: fact.value.ids,
+    };
   }
 
   if (c.intent === "product.price") {
     const fact = await resolveProductPrice(storeId, buscar);
     if (!fact.known) return null;
-    return { intent: c.intent, text: renderProductPrice(fact.value), photo: fact.value.photo };
+    return {
+      intent: c.intent,
+      text: renderProductPrice(fact.value),
+      photo: fact.value.photo,
+      shownIds: fact.value.ids,
+    };
   }
 
   if (c.intent === "product.features") {
@@ -769,7 +801,12 @@ export async function answerProductQuestion(
     // pero su descripción no da para contar nada.
     const fact = await resolveProductFeatures(storeId, buscar);
     if (!fact.known) return null;
-    return { intent: c.intent, text: renderProductFeatures(fact.value), photo: fact.value.photo };
+    return {
+      intent: c.intent,
+      text: renderProductFeatures(fact.value),
+      photo: fact.value.photo,
+      shownIds: fact.value.ids,
+    };
   }
 
   if (c.intent === "product.photo") {
@@ -779,10 +816,88 @@ export async function answerProductQuestion(
       intent: c.intent,
       text: renderProductPhoto(fact.value),
       photo: fact.value.photo,
+      shownIds: fact.value.ids,
     };
   }
 
   const fact = await resolveProductSearch(storeId, buscar);
   if (!fact.known) return null;
-  return { intent: c.intent, text: renderProductSearch(fact.value), photo: fact.value.photo };
+  return {
+    intent: c.intent,
+    text: renderProductSearch(fact.value),
+    photo: fact.value.photo,
+    shownIds: fact.value.ids,
+  };
+}
+
+/**
+ * La respuesta sobre UN producto concreto, cuando ya se sabe cuál.
+ *
+ * Es la otra mitad de «el primero»: la referencia dice qué producto, y esto
+ * contesta de él con las mismas plantillas de siempre. Se vuelve a consultar
+ * el catálogo a propósito —el precio o las existencias pueden haber cambiado
+ * desde que se enseñó la lista— y se contesta con la intención de entonces,
+ * porque «el primero» hereda la pregunta que lo trajo.
+ */
+export async function answerAboutProduct(
+  storeId: string,
+  productId: string,
+  intent: ProductIntent,
+): Promise<ProductAnswer | null> {
+  const producto = (await prismadb.product.findFirst({
+    where: { id: productId, storeId, isArchived: false },
+    select: {
+      ...MATCH_SELECT,
+      description: true,
+      images: {
+        where: { brokenAt: null },
+        orderBy: { isMain: "desc" as const },
+        select: { url: true },
+        take: 1,
+      },
+    },
+  })) as {
+    id: string;
+    name: string;
+    price: number;
+    stock: number;
+    description: string | null;
+    images: { url: string }[];
+  } | null;
+  if (!producto) return null;
+
+  const foto = pickPhoto(producto.images);
+  const base = { total: 1, hasMore: false, ids: [producto.id], photo: foto };
+  const comun = { intent, photo: foto, shownIds: [producto.id] };
+
+  if (intent === "product.availability") {
+    return {
+      ...comun,
+      text: renderAvailability({
+        ...base,
+        matches: [{ name: producto.name, inStock: producto.stock > 0 }],
+      }),
+    };
+  }
+
+  if (intent === "product.features") {
+    const descripcion = cleanDescription(producto.description);
+    // Igual que en la búsqueda: sin descripción utilizable no se inventa nada.
+    if (descripcion.length < MIN_USEFUL_DESCRIPTION_LENGTH) return null;
+    return {
+      ...comun,
+      text: renderProductFeatures({
+        ...base,
+        matches: [{ name: producto.name, description: trimForWhatsApp(descripcion) }],
+      }),
+    };
+  }
+
+  const uno: SearchResult<ProductMatch> = {
+    ...base,
+    matches: [{ name: producto.name, price: producto.price }],
+  };
+  if (intent === "product.price") return { ...comun, text: renderProductPrice(uno) };
+  if (intent === "product.photo") return { ...comun, text: renderProductPhoto(uno) };
+  return { ...comun, text: renderProductSearch(uno) };
 }
