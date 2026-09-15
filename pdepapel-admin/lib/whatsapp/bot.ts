@@ -112,6 +112,8 @@ export type WhatsAppBotOutcome =
   | "replied_product_reference"
   /** Señaló una opción de una lista que ya no valía; se le pidió repetirla. */
   | "replied_reference_lost"
+  /** Llegó un adjunto sin texto: no hay nada que clasificar, va para Paula. */
+  | "escalated_unprocessable_media"
   /** Coincidió pero el envío falló. */
   | "escalated_send_failed";
 
@@ -170,6 +172,20 @@ export const NO_MATCH_ACKNOWLEDGEMENT =
  */
 export const SLOW_ANSWER_ACKNOWLEDGEMENT =
   "Dame un segundito que lo busco 💛";
+
+/**
+ * Lo que se contesta a un adjunto sin una sola palabra.
+ *
+ * Una foto suelta no se puede clasificar —el bot no mira imágenes— pero
+ * tampoco puede quedarse sin respuesta: hasta ahora ni siquiera llegaba al
+ * bot, y la clienta se quedaba mirando el chat sin saber si su foto llegó.
+ *
+ * Se dice «lo que me enviaste» y no «tu foto» porque por aquí también pasan
+ * audios, videos y documentos, y contestarle «recibí tu foto» a una nota de
+ * voz se lee como que nadie la escuchó.
+ */
+export const UNREADABLE_MEDIA_ACKNOWLEDGEMENT =
+  "Recibí lo que me enviaste 💛 Se lo paso a Paula y ella te escribe apenas pueda.";
 
 /** Cuando el botón apunta a una respuesta que ya no está disponible. */
 export const UNAVAILABLE_OPTION_ACKNOWLEDGEMENT =
@@ -245,6 +261,8 @@ export async function runWhatsAppBot(input: {
   body: string;
   /** Id del botón tocado, si el mensaje fue un toque y no texto escrito. */
   interactiveReplyId?: string | null;
+  /** Un adjunto que llegó sin una sola palabra que leer. */
+  unreadableMedia?: boolean;
   /** `wamid` del mensaje entrante: hace falta para «escribiendo…». */
   inboundMessageId?: string | null;
   /**
@@ -404,6 +422,25 @@ export async function runWhatsAppBot(input: {
   //    no la despierta; tocar un botón sí, porque es la clienta eligiendo.
   if (conversation.status === ConversationStatus.NEEDS_OWNER && !buttonTarget) {
     return { outcome: "skipped_needs_owner" };
+  }
+
+  // 2 bis. Un adjunto sin texto. Va aquí, después del portón de arriba, para
+  //    que si la conversación ya está esperando a Paula no salga un segundo
+  //    acuse: el silencio de ese portón vale también para las fotos.
+  if (input.unreadableMedia && !input.body.trim()) {
+    // Se marca primero, igual que en el paso 6: la pausa humana dura segundos
+    // y en ese rato puede entrar otra foto de la misma ráfaga.
+    await escalate(conversation.id);
+    const sent = await deliver(
+      conversation.id,
+      input.phone,
+      UNREADABLE_MEDIA_ACKNOWLEDGEMENT,
+      [],
+      pacing(input),
+    );
+    return sent.ok
+      ? { outcome: "escalated_unprocessable_media" }
+      : { outcome: "escalated_unprocessable_media", error: sent.error };
   }
 
   // 3. Por botón se sirve la respuesta exacta a la que apunta, sin pasar por

@@ -67,6 +67,7 @@ import {
   HUMAN_PAUSE_READ_MS,
   NO_MATCH_ACKNOWLEDGEMENT,
   SLOW_ANSWER_ACKNOWLEDGEMENT,
+  UNREADABLE_MEDIA_ACKNOWLEDGEMENT,
   OWNER_TAKEOVER_WINDOW_HOURS,
   TALK_TO_OWNER_ACKNOWLEDGEMENT,
   UNAVAILABLE_OPTION_ACKNOWLEDGEMENT,
@@ -1073,6 +1074,82 @@ describe("ritmo humano", () => {
 
     expect(mocks.typing).not.toHaveBeenCalled();
     expect(mocks.send).toHaveBeenCalled();
+  });
+
+  describe("una foto sin una sola palabra", () => {
+    const soloFoto = { ...input, body: "", unreadableMedia: true };
+
+    it("ya no se queda callado: acusa recibo y se lo pasa a Paula", async () => {
+      await expect(runWhatsAppBot(soloFoto)).resolves.toEqual({
+        outcome: "escalated_unprocessable_media",
+      });
+      expect(mocks.send.mock.calls[0][1]).toBe(UNREADABLE_MEDIA_ACKNOWLEDGEMENT);
+      expect(mocks.send.mock.calls[0][2]).toEqual(ESCAPE);
+      expect(mocks.conversationUpdate).toHaveBeenCalledWith({
+        where: { id: "conversation-1" },
+        data: { status: "NEEDS_OWNER" },
+      });
+    });
+
+    it("no dice «esa no me la sé»: no preguntó nada con palabras", async () => {
+      await runWhatsAppBot(soloFoto);
+      expect(mocks.send.mock.calls[0][1]).not.toBe(NO_MATCH_ACKNOWLEDGEMENT);
+    });
+
+    it("no habla de «foto»: por aquí pasan audios y documentos", async () => {
+      expect(UNREADABLE_MEDIA_ACKNOWLEDGEMENT).not.toContain("foto");
+    });
+
+    it("si la conversación YA esperaba a Paula, se queda callado", async () => {
+      // Lo importante del sitio donde va la rama: detrás del portón del paso 2,
+      // para que una foto detrás de un mensaje ya escalado no mande un segundo
+      // acuse encima del primero.
+      mocks.conversationFindUnique.mockResolvedValue({
+        id: "conversation-1",
+        status: "NEEDS_OWNER",
+        storeId: "store-1",
+      });
+
+      await expect(runWhatsAppBot(soloFoto)).resolves.toEqual({
+        outcome: "skipped_needs_owner",
+      });
+      expect(mocks.send).not.toHaveBeenCalled();
+    });
+
+    it("tampoco contesta si Paula está escribiendo ahora mismo", async () => {
+      mocks.conversationFindUnique.mockResolvedValue({
+        id: "conversation-1",
+        status: "OPEN",
+        storeId: "store-1",
+        lastOwnerAt: new Date(),
+      });
+
+      await expect(runWhatsAppBot(soloFoto)).resolves.toEqual({
+        outcome: "skipped_owner_active",
+      });
+      expect(mocks.send).not.toHaveBeenCalled();
+    });
+
+    it("una foto CON pie de foto sigue el camino normal, no este", async () => {
+      // El pie ya viene como `body`, así que es un mensaje como cualquier otro.
+      await expect(
+        runWhatsAppBot({ ...input, body: "¿Cuál es el horario?", unreadableMedia: true }),
+      ).resolves.toEqual({ outcome: "replied", trigger: "horario" });
+      expect(mocks.send.mock.calls[0][1]).toBe("Abrimos de 9 a 6.");
+    });
+
+    it("si el acuse no sale, queda igualmente marcada para Paula", async () => {
+      mocks.send.mockResolvedValue({ ok: false, error: "Meta dijo que no" });
+
+      await expect(runWhatsAppBot(soloFoto)).resolves.toMatchObject({
+        outcome: "escalated_unprocessable_media",
+        error: "Meta dijo que no",
+      });
+      expect(mocks.conversationUpdate).toHaveBeenCalledWith({
+        where: { id: "conversation-1" },
+        data: { status: "NEEDS_OWNER" },
+      });
+    });
   });
 
   describe("el menú de formas de pago", () => {

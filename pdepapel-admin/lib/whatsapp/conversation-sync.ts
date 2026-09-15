@@ -120,6 +120,28 @@ const STATUS_BY_META: Record<string, ConversationMessageStatus> = {
   failed: ConversationMessageStatus.FAILED,
 };
 
+const MEDIA_WITH_CAPTION = [
+  "image",
+  "video",
+  "document",
+  "audio",
+  "sticker",
+] as const;
+
+/**
+ * Adjuntos que, aun sin una palabra, son alguien pidiendo algo: una foto del
+ * producto que quiere, un audio con la pregunta, un comprobante de pago.
+ * Merecen respuesta aunque no haya nada que leer.
+ *
+ * Fuera quedan los stickers y las reacciones a propósito: son un gesto, no una
+ * pregunta, y contestarles «se lo paso a Paula» sería ruido.
+ */
+const MEDIA_WORTH_ANSWERING = ["image", "video", "document", "audio"];
+
+export function isMediaWorthAnswering(mediaType: string | null): boolean {
+  return Boolean(mediaType && MEDIA_WORTH_ANSWERING.includes(mediaType));
+}
+
 function getMessageBody(message: JsonRecord): string | null {
   const text = isRecord(message.text) ? asString(message.text.body) : null;
   if (text) return text;
@@ -138,11 +160,27 @@ function getMessageBody(message: JsonRecord): string | null {
     interactive && isRecord(interactive.list_reply)
       ? interactive.list_reply
       : null;
-  return (
+  const tocado =
     (reply && asString(reply.title)) ??
     (listReply && asString(listReply.title)) ??
-    null
-  );
+    null;
+  if (tocado) return tocado;
+
+  // El pie de una foto es texto escrito por la clienta, no adorno: quien manda
+  // una imagen con «¿tienen este cuaderno?» preguntó igual que si lo hubiera
+  // escrito suelto. Esto lo hacía solo el camino de los ecos de Paula, así que
+  // a las clientas se les caía la pregunta y el mensaje llegaba sin cuerpo.
+  return getMediaCaption(message);
+}
+
+/** El pie de cualquiera de los adjuntos que lo admiten. */
+function getMediaCaption(message: JsonRecord): string | null {
+  for (const key of MEDIA_WITH_CAPTION) {
+    const media = isRecord(message[key]) ? message[key] : null;
+    const caption = media ? asString(media.caption) : null;
+    if (caption) return caption;
+  }
+  return null;
 }
 
 /**
@@ -167,28 +205,16 @@ function getInteractiveReplyId(message: JsonRecord): string | null {
   );
 }
 
-const MEDIA_WITH_CAPTION = [
-  "image",
-  "video",
-  "document",
-  "audio",
-  "sticker",
-] as const;
-
 /**
  * Cuerpo de un eco. Además del texto, rescata el pie de una imagen y el texto
  * nuevo de una edición; de un `revoke` no hay nada que rescatar. Lo que no se
  * entienda queda como `null` y el tipo viaja en `mediaType`.
  */
 function getEchoBody(echo: JsonRecord): string | null {
+  // `getMessageBody` ya rescata el pie de los adjuntos, para ecos y para lo
+  // que mandan las clientas por igual.
   const direct = getMessageBody(echo);
   if (direct) return direct;
-
-  for (const key of MEDIA_WITH_CAPTION) {
-    const media = isRecord(echo[key]) ? echo[key] : null;
-    const caption = media ? asString(media.caption) : null;
-    if (caption) return caption;
-  }
 
   const edit = isRecord(echo.edit) ? echo.edit : null;
   const edited = edit && isRecord(edit.message) ? edit.message : null;
@@ -584,20 +610,25 @@ export async function processWhatsAppWebhookEvent(eventId: string) {
       body: string;
       interactiveReplyId: string | null;
       inboundMessageId: string | null;
+      unreadableMedia?: boolean;
     }> = [];
 
     for (const message of extracted.messages) {
       const filed = await fileInboundMessage(storeId, message, event.id);
-      if (filed.outcome === "created" && message.body) {
-        botCandidates.push({
-          conversationId: filed.conversationId,
-          phone: message.phone,
-          body: message.body,
-          interactiveReplyId: message.interactiveReplyId,
-          // Hace falta para mostrar «escribiendo…» y marcar como leído.
-          inboundMessageId: message.externalId,
-        });
-      }
+      if (filed.outcome !== "created") continue;
+      // Un adjunto sin una sola palabra tampoco puede quedarse sin respuesta:
+      // antes ni llegaba aquí y la clienta se quedaba mirando el chat.
+      const mudo = !message.body && isMediaWorthAnswering(message.mediaType);
+      if (!message.body && !mudo) continue;
+      botCandidates.push({
+        conversationId: filed.conversationId,
+        phone: message.phone,
+        body: message.body ?? "",
+        interactiveReplyId: message.interactiveReplyId,
+        // Hace falta para mostrar «escribiendo…» y marcar como leído.
+        inboundMessageId: message.externalId,
+        ...(mudo ? { unreadableMedia: true } : {}),
+      });
     }
 
     // Los ecos se archivan antes de que conteste el bot: si en el mismo evento

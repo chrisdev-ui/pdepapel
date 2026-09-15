@@ -43,6 +43,7 @@ vi.mock("@/lib/prismadb", () => ({
 import {
   MAX_WHATSAPP_EVENT_ATTEMPTS,
   extractWhatsAppEvents,
+  isMediaWorthAnswering,
   processWhatsAppWebhookEvent,
 } from "@/lib/whatsapp/conversation-sync";
 
@@ -491,8 +492,13 @@ describe("processWhatsAppWebhookEvent", () => {
       ownerEchoes: 0,
       statuses: 0,
       skipped: 0,
-      // Solo los dos mensajes con texto pasan por el bot: la imagen no tiene cuerpo.
-      botOutcomes: ["escalated_no_match", "escalated_no_match"],
+      // Los dos con texto y también la imagen: desde que un adjunto sin una
+      // palabra merece acuse, la foto ya no se queda fuera del bot.
+      botOutcomes: [
+        "escalated_no_match",
+        "escalated_no_match",
+        "escalated_no_match",
+      ],
     });
 
     expect(mocks.claimRow).toHaveBeenCalledWith({
@@ -863,14 +869,19 @@ describe("processWhatsAppWebhookEvent", () => {
     expect(mocks.runBot).not.toHaveBeenCalled();
   });
 
-  it("runs the bot once per new inbound message that carries text", async () => {
+  it("runs the bot once per new inbound message, media included", async () => {
     mocks.findEvent.mockResolvedValue(event());
     mocks.runBot.mockResolvedValue({ outcome: "replied" });
 
     await expect(processWhatsAppWebhookEvent("event-1")).resolves.toMatchObject(
       {
-        botOutcomes: ["replied", "replied"],
+        botOutcomes: ["replied", "replied", "replied"],
       },
+    );
+    // La imagen sin pie entra marcada, para que el bot sepa que no hay nada
+    // que leer y conteste con su acuse propio en vez de callarse.
+    expect(mocks.runBot).toHaveBeenCalledWith(
+      expect.objectContaining({ body: "", unreadableMedia: true }),
     );
     expect(mocks.runBot).toHaveBeenCalledWith({
       conversationId: "conversation-1",
@@ -948,4 +959,71 @@ describe("processWhatsAppWebhookEvent", () => {
       },
     });
   });
+});
+
+describe("el pie de foto de una clienta", () => {
+  const conFoto = (media: Record<string, unknown>, type = "image") =>
+    extractWhatsAppEvents({
+      entry: [
+        {
+          changes: [
+            {
+              field: "messages",
+              value: {
+                metadata: { display_phone_number: "573009999999" },
+                messages: [
+                  {
+                    from: "573001234567",
+                    id: "wamid.foto",
+                    timestamp: "1789300000",
+                    type,
+                    [type]: media,
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+  it("se rescata igual que el de un eco de Paula", () => {
+    // Antes esto solo pasaba con los ecos, y a las clientas se les caía la
+    // pregunta: la foto llegaba sin cuerpo y el bot ni se enteraba.
+    const { messages } = conFoto({ id: "m1", caption: "¿tienen este cuaderno?" });
+    expect(messages[0].body).toBe("¿tienen este cuaderno?");
+    expect(messages[0].mediaType).toBe("image");
+  });
+
+  it.each(["video", "document", "audio", "sticker"])(
+    "también en un %s, que admite pie igual que una imagen",
+    (tipo) => {
+      const { messages } = conFoto({ id: "m1", caption: "mira esto" }, tipo);
+      expect(messages[0].body).toBe("mira esto");
+    },
+  );
+
+  it("sin pie de foto el cuerpo sigue siendo null, y el tipo viaja aparte", () => {
+    const { messages } = conFoto({ id: "m1", mime_type: "image/jpeg" });
+    expect(messages[0].body).toBeNull();
+    expect(messages[0].mediaType).toBe("image");
+  });
+
+  it("un pie vacío no se cuela como si fuera texto", () => {
+    const { messages } = conFoto({ id: "m1", caption: "   " });
+    expect(messages[0].body).toBeNull();
+  });
+});
+
+describe("qué adjuntos merecen respuesta", () => {
+  it.each(["image", "video", "document", "audio"])("%s sí", (tipo) => {
+    expect(isMediaWorthAnswering(tipo)).toBe(true);
+  });
+
+  it.each(["sticker", "reaction", "unsupported", null, ""])(
+    "%s no: es un gesto, no una pregunta",
+    (tipo) => {
+      expect(isMediaWorthAnswering(tipo as string | null)).toBe(false);
+    },
+  );
 });
