@@ -1,9 +1,11 @@
 "use client";
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 
-const queryClient = new QueryClient();
+import { createQueryClient } from "@/lib/query-client";
+
+const queryClient = createQueryClient();
 
 export function ReactQueryProvider({
   children,

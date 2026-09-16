@@ -22,6 +22,9 @@ import Products from "../app/(routes)/tienda/components/products";
 import ShopSearchBar from "../app/(routes)/tienda/components/shop-search-bar";
 import { ProductListSkeleton } from "../app/(routes)/tienda/components/skeletons";
 
+/** How long the grid may show its loading tint before giving up on it. */
+const CATALOG_BUSY_HINT_MS = 8_000;
+
 const MobileFilters = dynamic(() => import("@/components/mobile-filters"), {
   ssr: false,
   loading: () => <div aria-hidden="true" className="h-11 flex-1 rounded-full border-[1.5px] border-blue-yankees/30" />,
@@ -91,6 +94,24 @@ export const ShopContent: React.FC<ShopContentProps> = ({
     enabled: isMounted,
     placeholderData: keepPreviousData,
   });
+
+  // `isFetching` can stick on true: a catalog query whose server action was
+  // dropped mid-navigation never settles. It may tint the grid, never disable
+  // it, and it stops claiming «busy» after a few seconds so the page does not
+  // sit there pretending to load.
+  const [busyHintExpired, setBusyHintExpired] = useState(false);
+  useEffect(() => {
+    if (!isFetching) {
+      setBusyHintExpired(false);
+      return;
+    }
+    const timer = window.setTimeout(
+      () => setBusyHintExpired(true),
+      CATALOG_BUSY_HINT_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [isFetching]);
+  const showBusyHint = isFetching && !isLoading && !busyHintExpired;
 
   const facets = data?.facets;
   const typeFilteredCategories = categories.filter((category) => effectiveFilters.typeId.length === 0 || effectiveFilters.typeId.includes(category.typeId));
@@ -215,10 +236,10 @@ export const ShopContent: React.FC<ShopContentProps> = ({
         <section
           id="catalog-results"
           tabIndex={-1}
-          aria-busy={isFetching}
+          aria-busy={showBusyHint}
           aria-label="Resultados del catálogo"
           aria-live="polite"
-          className={`min-h-[400px] outline-none transition-opacity duration-300 ease-in-out ${isFetching && !isLoading ? "pointer-events-none opacity-50" : "opacity-100"}`}
+          className={`min-h-[400px] outline-none transition-opacity duration-300 ease-in-out ${showBusyHint ? "opacity-70" : "opacity-100"}`}
         >
           {isLoading ? (
             <ProductListSkeleton />
