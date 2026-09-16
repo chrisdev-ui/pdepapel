@@ -84,7 +84,7 @@ test("oculta productos archivados de la tienda", async ({
 
   expect(response?.status()).toBe(404);
   await expect(
-    page.getByRole("heading", { name: "!Página no encontrada!" }),
+    page.getByRole("heading", { name: "No encontramos esta página" }),
   ).toBeVisible();
 });
 
@@ -96,7 +96,7 @@ test("muestra una página de orden no encontrada sin convertirla en error 500", 
   });
 
   await expect(
-    page.getByRole("heading", { name: "Orden no encontrada" }),
+    page.getByRole("heading", { name: "No encontramos este pedido" }),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "500", exact: true }),
