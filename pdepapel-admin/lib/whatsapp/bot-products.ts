@@ -40,42 +40,16 @@ import {
  * camino: palabras clave y, si tampoco, a Paula. Callar no es una opción.
  */
 
-/**
- * Veinte segundos, no dos y medio.
- *
- * Medido el 2026-09-15 contra la clave de producción, después de que un
- * «Tienes lapiceros en gel?» real acabara en «Esa no me la sé»: el modelo
- * tardó entre 8 y 30 segundos, con 14 de mediana, y 7 de cada 8 llamadas se
- * pasaban del tope viejo. No era la cuota —eso vuelve al instante— ni el
- * esquema: una llamada de texto pelado al mismo modelo tarda lo mismo.
- *
- * El techo lo pone Meta, que mantiene el «escribiendo…» unos 25 segundos; 20
- * deja margen para mandar la respuesta dentro de esa ventana. No se reintenta
- * (`maxRetries: 0`): insistirle a un servicio que ya va lento solo alarga la
- * espera. Lo que hace llevadera la espera es el aviso de abajo.
- */
+/** Medido: el modelo tarda de 8 a 30 s. El techo son los ~25 s que Meta
+ * mantiene el «escribiendo…», y hay que caber dentro con la respuesta. */
 export const PRODUCT_CLASSIFIER_TIMEOUT_MS = 20000;
 
-/**
- * A partir de aquí la espera se nota y se avisa.
- *
- * Por debajo de esto no se dice nada: la mayoría de las clasificaciones vuelven
- * rápido y un «dame un segundo» antes de contestar sobra.
- */
+/** A partir de aquí la espera se nota y se avisa. */
 export const PRODUCT_CLASSIFIER_SLOW_NOTICE_MS = 3500;
 
-/**
- * Palabras que hacen falta para que buscar sea buscar y no adivinar. Dos:
- * una sola —«útiles», «papel», «cuadernos»— describe un estante entero.
- */
+/** Una sola palabra —«útiles», «papel»— describe un estante entero. */
 export const MIN_SEARCH_TOKENS = 2;
-/**
- * Nueve, no tres.
- *
- * Antes la lista se escribía en el mensaje y tres ya era un muro; ahora se
- * toca, y Meta admite diez filas EN TOTAL. La décima es la de Paula, que no se
- * negocia, así que a los productos les quedan nueve.
- */
+/** Meta admite diez filas; la décima es la de Paula. */
 export const PRODUCT_MATCH_LIMIT = 9;
 
 export type ProductIntent =
@@ -864,18 +838,9 @@ function prefijoComun(nombres: string[]): number {
 }
 
 /**
- * Los títulos de las filas: cortos, y sobre todo distintos entre sí.
- *
- * Meta da 24 caracteres, y más de la mitad de los nombres del catálogo miden
- * más. Cortar por las bravas es justo el problema que esto viene a resolver:
- * «Carpeta plástica oficio verde pastel», «…rosada» y «…azul pastel» quedarían
- * los tres en «Carpeta plástica oficio» y habría que adivinar otra vez.
- *
- * Así que primero se quita lo que TODOS repiten al principio —que además ya lo
- * dice el mensaje— y queda lo que de verdad los separa: «verde pastel»,
- * «rosada», «azul pastel». Si aun así dos coinciden se prueba por el final, y
- * si tampoco, se numeran: el nombre entero va en la descripción, así que el
- * título es una etiqueta, pero una etiqueta repetida no sirve para nada.
+ * Títulos cortos y, sobre todo, distintos entre sí. Se quita lo que todos
+ * repiten al principio y queda lo que los separa; si aún coinciden se prueba
+ * por el final, y si no, se numeran. El nombre entero va en la descripción.
  */
 export function buildRowTitles(nombres: string[]): string[] {
   const limpios = nombres.map((n) => n.replace(/\s+/g, " ").trim());
@@ -1175,13 +1140,8 @@ function listaSiHayVarios(
 }
 
 /**
- * La respuesta sobre UN producto concreto, cuando ya se sabe cuál.
- *
- * Es la otra mitad de «el primero»: la referencia dice qué producto, y esto
- * contesta de él con las mismas plantillas de siempre. Se vuelve a consultar
- * el catálogo a propósito —el precio o las existencias pueden haber cambiado
- * desde que se enseñó la lista— y se contesta con la intención de entonces,
- * porque «el primero» hereda la pregunta que lo trajo.
+ * La respuesta sobre un producto ya identificado. Se vuelve a consultar el
+ * catálogo: el precio y las existencias pueden haber cambiado.
  */
 export async function answerAboutProduct(
   storeId: string,

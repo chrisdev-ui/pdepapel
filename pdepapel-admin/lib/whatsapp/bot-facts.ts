@@ -227,13 +227,7 @@ const row = (option: PaymentOption): WhatsAppListRow => ({
   title: PAYMENT_TITLES[option],
 });
 
-/**
- * Las opciones de arriba, SOLO las que se pueden contestar.
- *
- * Una opción sin dato no se enseña: es mejor un menú de dos que uno de tres
- * donde una lleva a «esa no la tengo». Y si no queda ninguna, esto devuelve
- * lista vacía y la pregunta acaba donde acababa antes, en Paula.
- */
+/** Solo las que se pueden contestar: una opción sin dato no se enseña. */
 export function buildPaymentMenuRows(s: ResolvedStoreSettings): WhatsAppListRow[] {
   return (["efectivo", "transferencia", "datafono"] as PaymentOption[])
     .filter((option) => Boolean(paymentValue(option, s)))
@@ -278,12 +272,10 @@ export const BUSINESS_FACT_TEMPLATES = {
     `Desde ${threshold} el envío es gratis 💛 Si te falta poquito, te sugiero agregar algo más y te lo llevas sin pagar envío.`,
   "shipping.delivery_days": (estimate: string) =>
     `Tu pedido llega en ${estimate} 💛 Te paso el número de guía apenas lo despache.`,
-  // Los dos menús son navegación, y ahí el 💛 de la casa encaja.
+  // Los menús llevan 💛; las respuestas de plata no, son las palabras de Paula.
   "payment.menu": () => `¿Cómo prefieres pagar? 💛`,
   "payment.transfer.menu": () => `¿A cuál te queda mejor? 💛`,
-  // Las respuestas, en cambio, van sin 💛 a propósito: son la parte que trata
-  // de plata, y la petición del comprobante es literal la de Paula, 🤗
-  // incluido. Los números salen de lo guardado, nunca escritos aquí.
+
   "payment.cash": (info: string) => `En efectivo, claro.\n${info}`,
   "payment.card": (info: string) => `Sí, tenemos datáfono.\n${info}`,
   "payment.bancolombia": (account: string) =>
@@ -312,14 +304,7 @@ export const BUSINESS_FACT_TEMPLATES_VERSION = createHash("sha256")
   .digest("hex")
   .slice(0, 32);
 
-/**
- * Lo que se contesta al tocar una opción del menú de pagos.
- *
- * `null` cuando esa opción ya no tiene dato: pudo vaciarse entre que se enseñó
- * el menú y que la clienta lo tocó, igual que una fila de producto que se
- * archiva. Quien llama lo trata como opción caducada y se lo pasa a Paula, sin
- * que eso estorbe a las demás opciones, que siguen contestando.
- */
+/** `null` si esa opción se vació entre que se enseñó el menú y el toque. */
 export function renderPaymentOption(
   option: PaymentOption,
   s: ResolvedStoreSettings,
@@ -387,15 +372,8 @@ export function previewBusinessFacts(
 }
 
 /**
- * El menú de pagos, escrito entero para que Paula pueda leerlo.
- *
- * Los demás datos son un mensaje y se enseñan tal cual. Este son hasta seis,
- * y cuál sale depende de lo que toque la clienta: aprobar solo el primero
- * sería aprobar a ciegas los otros cinco. Así que se dibuja el recorrido, con
- * cada respuesta debajo del toque que la produce, y con SUS datos de verdad.
- *
- * Las opciones sin llenar no salen —tampoco las verá la clienta—, así que lo
- * que lee aquí es exactamente lo que va a pasar.
+ * El menú de pagos son hasta seis mensajes según lo que se toque: se dibuja el
+ * recorrido entero para que Paula no apruebe a ciegas lo que no puede leer.
  */
 function previewPaymentFlow(s: ResolvedStoreSettings): string | null {
   const menu = buildPaymentMenuRows(s);

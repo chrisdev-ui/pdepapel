@@ -228,18 +228,8 @@ export const conversationStatusUpdateSchema = z.object({
 export type ConversationStatusUpdate = z.infer<typeof conversationStatusUpdateSchema>;
 
 /**
- * Devolver la conversación al bot.
- *
- * Cuando Paula contesta desde el celular, `fileOwnerEcho` le pone
- * `lastOwnerAt` y el bot se aparta 24 horas. Eso está bien mientras ella está
- * en la conversación, pero cuando termina no había forma de decir «ya, sigue
- * tú»: había que esperar el día entero. Esto es esa forma.
- *
- * Se pone `lastOwnerAt` en null y no una fecha vieja: null es justo lo que ese
- * campo ya significa —Paula no está en esta conversación— y `isOwnerActive` lo
- * entiende sin más. Una fecha inventada sería mentira en la ficha que ella lee.
- *
- * No manda ningún mensaje. Solo deja al bot escuchando otra vez.
+ * Quita la parada de 24 h y deja la conversación abierta. `lastOwnerAt` a null
+ * porque es lo que ese campo ya significa. No manda ningún mensaje.
  */
 export async function handBackToBot(
   storeId: string,

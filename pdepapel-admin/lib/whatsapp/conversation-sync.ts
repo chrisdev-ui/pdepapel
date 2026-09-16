@@ -129,18 +129,8 @@ const MEDIA_WITH_CAPTION = [
 ] as const;
 
 /**
- * Adjuntos que van derechos a Paula, lleven pie de foto o no.
- *
- * Lo que va dentro de una foto o de un audio —una lista de útiles del colegio,
- * la marca exacta que le pidieron, «¿tienes esto?» dicho en voz— el bot no lo
- * puede leer. Y adivinar por las dos palabras que vengan sueltas al lado sale
- * mal: el 2026-09-15 una clienta mandó la foto de una lista del colegio y se
- * le contestó con ocho productos al azar sacados de la palabra «útiles».
- *
- * Así que ni se intenta. Se acusa recibo y lo mira Paula, que sí puede verlo.
- *
- * Fuera quedan los stickers y las reacciones a propósito: son un gesto, no una
- * pregunta, y contestarles «se lo paso a Paula» sería ruido.
+ * Adjuntos que van derechos a Paula, lleven pie de foto o no. Fuera los
+ * stickers y las reacciones: son un gesto, no una pregunta.
  */
 const MEDIA_FOR_OWNER = ["image", "video", "document", "audio"];
 

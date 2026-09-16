@@ -164,28 +164,11 @@ export const TALK_TO_OWNER_ACKNOWLEDGEMENT =
 export const NO_MATCH_ACKNOWLEDGEMENT =
   "Esa no me la sé 💛 Le paso tu mensaje a Paula y ella te escribe apenas pueda.";
 
-/**
- * Lo que se dice cuando entender la pregunta está tardando.
- *
- * El modelo llegó a tardar 30 segundos el 2026-09-15, y treinta segundos de
- * silencio se leen como que el mensaje no llegó. Esto no acelera nada: sirve
- * para que la espera se note acompañada. No pasa por el visto bueno de Paula
- * porque no es una respuesta sobre productos, es un acuse, como los de arriba.
- */
+/** Para que 20 s de espera no se lean como que el mensaje no llegó. */
 export const SLOW_ANSWER_ACKNOWLEDGEMENT =
   "Dame un segundito que lo busco 💛";
 
-/**
- * Lo que se contesta a un adjunto sin una sola palabra.
- *
- * Una foto suelta no se puede clasificar —el bot no mira imágenes— pero
- * tampoco puede quedarse sin respuesta: hasta ahora ni siquiera llegaba al
- * bot, y la clienta se quedaba mirando el chat sin saber si su foto llegó.
- *
- * Se dice «lo que me enviaste» y no «tu foto» porque por aquí también pasan
- * audios, videos y documentos, y contestarle «recibí tu foto» a una nota de
- * voz se lee como que nadie la escuchó.
- */
+/** «Lo que me enviaste» y no «tu foto»: por aquí pasan audios y documentos. */
 export const UNREADABLE_MEDIA_ACKNOWLEDGEMENT =
   "Recibí lo que me enviaste 💛 Se lo paso a Paula y ella te escribe apenas pueda.";
 
@@ -249,13 +232,7 @@ function buttonIdOf(input: { interactiveReplyId?: string | null }): string | nul
   return input.interactiveReplyId?.trim() || null;
 }
 
-/**
- * ¿Entró algo de la clienta después de este mensaje?
- *
- * Se mira en el momento de decidir, no al recibir: entre que llega el webhook
- * y que se contesta pasan segundos —la pausa humana—, y en ese rato es cuando
- * suele llegar el resto de la ráfaga.
- */
+/** Se mira al decidir, no al recibir: la ráfaga llega durante la pausa humana. */
 async function hasNewerInbound(
   conversationId: string,
   inboundAt: Date | null | undefined,
@@ -273,18 +250,7 @@ async function hasNewerInbound(
   return masNuevo !== null;
 }
 
-/**
- * Un minuto, no cinco.
- *
- * Esto es una red contra un envío doble —dos webhooks de lo mismo, una carrera—
- * y ya no contra las ráfagas, que se resuelven antes dejando pasar el mensaje
- * que tiene otro más nuevo detrás.
- *
- * La ventana es corta a propósito: si una clienta vuelve a preguntar lo mismo
- * a los tres minutos, merece que se le vuelva a contestar. Callarle sería
- * justo lo que este bot no puede hacer nunca, y por ahorrar una repetición
- * que ya casi no ocurre.
- */
+/** Corta a propósito: si vuelve a preguntar lo mismo, merece respuesta. */
 export const REPEAT_WINDOW_MS = 60 * 1000;
 
 async function justSaid(conversationId: string, reply: string): Promise<boolean> {
@@ -351,16 +317,8 @@ export async function runWhatsAppBot(input: {
     return { outcome: "skipped_owner_active" };
   }
 
-  // 0 bis. ¿Ya llegó otro mensaje después de este?
-  //
-  // Una clienta escribe «Holaa», «Buenas noches» y la pregunta de verdad en
-  // veintitrés segundos. Contestando uno por uno salían dos saludos iguales
-  // seguidos y después una respuesta a destiempo. Una persona lee los tres y
-  // contesta una vez, al último. Eso es lo que se hace aquí: si hay algo más
-  // reciente, este mensaje se deja pasar y lo contesta el que venga.
-  //
-  // Los toques de botón no entran en esto: cada toque es una elección suya y
-  // merece su respuesta.
+  // 0 bis. Una ráfaga se contesta una vez, al último mensaje. Los toques de
+  //    botón no entran: cada toque es una elección suya.
   if (!buttonIdOf(input) && (await hasNewerInbound(conversation.id, input.inboundAt))) {
     return { outcome: "skipped_superseded" };
   }
@@ -497,11 +455,8 @@ export async function runWhatsAppBot(input: {
     return { outcome: "skipped_needs_owner" };
   }
 
-  // 2 bis. Una foto o un audio. Ni con pie de foto se intenta contestar: lo
-  //    que importa está DENTRO del adjunto y el bot no lo ve, así que adivinar
-  //    por las palabras de al lado solo sirve para equivocarse. Va aquí,
-  //    después del portón de arriba, para que si la conversación ya espera a
-  //    Paula no salga un segundo acuse encima del primero.
+  // 2 bis. Una foto o un audio: lo que importa está dentro y el bot no lo ve.
+  //    Va tras el portón de arriba para no acusar recibo dos veces.
   if (input.mediaForOwner) {
     // Se marca primero, igual que en el paso 6: la pausa humana dura segundos
     // y en ese rato puede entrar otra foto de la misma ráfaga.
@@ -658,12 +613,7 @@ export async function runWhatsAppBot(input: {
     }
   }
 
-  // 5. Lo que Paula escribió gana.
-  //
-  //    Estaba después de la búsqueda de productos, y eso hacía que una
-  //    respuesta suya —escrita a mano, aprobada por ella— perdiera contra un
-  //    listado sacado del catálogo por dos palabras sueltas. Si ella ya
-  //    escribió qué contestar a algo, se contesta eso.
+  // 5. Lo que Paula escribió gana al catálogo: va antes que la búsqueda.
   const keywords =
     input.keywords ?? (await getActiveBotKeywords(conversation.storeId));
   const match = matchWhatsAppKeyword(input.body, keywords);
@@ -814,12 +764,7 @@ async function deliver(
   const { photo, shown, list } = extras;
   const reply = formatBotReply(answer);
 
-  // Red de seguridad: nunca dos veces lo mismo seguido.
-  //
-  // No sustituye a no contestar de más —eso se resuelve antes, dejando pasar
-  // los mensajes que ya tienen uno más nuevo detrás—, pero si algo se cuela,
-  // que no sea un mensaje idéntico al anterior. Medido: de 16 repeticiones
-  // reales, 10 estaban a menos de cinco minutos.
+  // Red contra un envío doble; las ráfagas se resuelven antes.
   if (await justSaid(conversationId, reply)) {
     console.info("[WHATSAPP_BOT] Se evita repetir lo mismo", { conversationId });
     return { ok: true };

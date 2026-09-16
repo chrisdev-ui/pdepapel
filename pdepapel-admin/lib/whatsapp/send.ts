@@ -26,12 +26,7 @@ export const WHATSAPP_INTERACTIVE_BODY_MAX_LENGTH = 1024;
 export const WHATSAPP_MAX_BUTTONS = 3;
 export const WHATSAPP_BUTTON_TITLE_MAX_LENGTH = 20;
 
-/**
- * Los topes de una lista, confirmados contra la documentación de Meta el
- * 2026-09-15. Diez filas EN TOTAL, no diez por sección, y el título de cada
- * una cabe en 24 caracteres: menos de lo que mide más de la mitad de los
- * nombres del catálogo, por eso el nombre entero viaja en la descripción.
- */
+/** Topes de Meta. Diez filas EN TOTAL, no diez por sección. */
 export const WHATSAPP_LIST_MAX_ROWS = 10;
 export const WHATSAPP_LIST_ROW_TITLE_MAX_LENGTH = 24;
 export const WHATSAPP_LIST_ROW_DESCRIPTION_MAX_LENGTH = 72;
@@ -380,16 +375,9 @@ export async function sendWhatsAppImageButtonMessage(
  * lo que ocurra primero. Nunca lanza: si falla, la respuesta igual sale.
  */
 /**
- * La lista tocable: en vez de escribir «el primero», se toca.
- *
- * Una lista NO admite ni foto de cabecera ni botones de respuesta —confirmado
- * contra la documentación de Meta: `action` es `{button, sections}` y la
- * cabecera solo acepta texto—, así que la salida hacia Paula viaja como una
- * fila más, con el mismo id que usa su botón. Por eso el tope real de
- * productos es nueve y no diez.
- *
- * Los topes se aplican aquí, como en los botones: pasarse de uno solo es un
- * rechazo entero, no un recorte.
+ * La lista tocable. No admite foto de cabecera ni botones de respuesta, así
+ * que la salida hacia Paula viaja como una fila más. Los topes se aplican
+ * aquí: pasarse de uno solo es un rechazo entero, no un recorte.
  */
 export async function sendWhatsAppListMessage(
   to: string,

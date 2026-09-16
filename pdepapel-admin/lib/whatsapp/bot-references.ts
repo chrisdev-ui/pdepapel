@@ -4,16 +4,8 @@ import prismadb from "@/lib/prismadb";
 import type { ProductIntent } from "@/lib/whatsapp/bot-products";
 
 /**
- * «El primero», «ese», «el 2».
- *
- * Señalar sin nombrar es lo más natural del mundo después de una lista, y era
- * justo lo único que el bot no sabía hacer: no recuerda nada de un mensaje al
- * siguiente, así que «el primero» no tiene ni una palabra que buscar y acababa
- * en «Esa no me la sé».
- *
- * La memoria que hace falta es mínima: qué productos se acaban de enseñar. Eso
- * ya se puede guardar en `ConversationMessage.metadata`, que existe y hoy solo
- * se usa para los carritos que llegan del catálogo. Sin columna nueva.
+ * «El primero», «ese», «el 2»: señalar una lista ya enseñada. Lo enseñado se
+ * guarda en `ConversationMessage.metadata`, sin columna nueva.
  */
 
 /** Diez minutos. Medido sobre 167 respuestas reales: el 86 % llega antes. */
@@ -244,15 +236,8 @@ export async function resolveProductReference(input: {
 }
 
 /**
- * Con qué pregunta se enseñó este producto.
- *
- * Una fila tocada solo lleva el producto, no lo que se preguntó, y no es lo
- * mismo contestar «cómo es» que «cuánto vale». La intención ya quedó guardada
- * con la lista, así que se lee de ahí. Sin plazo a propósito: una fila se
- * puede tocar días después y el id sigue siendo bueno.
- *
- * Si no se encuentra nada se contesta como una búsqueda, que es la respuesta
- * que sirve para cualquier pregunta: nombre, precio y si se lo aparta.
+ * Con qué pregunta se enseñó este producto: la fila tocada lleva el producto
+ * pero no la intención. Sin plazo: una fila se puede tocar días después.
  */
 export async function readShownIntentForProduct(
   conversationId: string,
