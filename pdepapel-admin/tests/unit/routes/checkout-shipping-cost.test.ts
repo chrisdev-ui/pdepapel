@@ -13,6 +13,9 @@ vi.mock("@clerk/nextjs/server", () => ({
   currentUser: mocks.currentUser,
 }));
 vi.mock("@/lib/env.mjs", () => ({ env: {} }));
+// Sin esto se carga lib/resend, que construye el cliente al importarse y
+// revienta el archivo entero donde no hay RESEND_API_KEY —como en CI—.
+vi.mock("@/lib/email", () => ({ sendOrderEmail: vi.fn() }));
 vi.mock("@/lib/cors", () => ({ createCorsHeaders: () => ({}) }));
 vi.mock("@/lib/idempotency", () => ({
   withIdempotency: (_req: unknown, _store: string, handler: () => unknown) =>

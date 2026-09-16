@@ -37,7 +37,8 @@ describe("datos del negocio", () => {
       cityName: null,
       hasPhysicalStore: false,
       minOrderRule: "NONE",
-      botEnabled: true,
+      // El bot sale apagado: lo enciende Paula, no una tienda recién creada.
+      botEnabled: false,
     });
     // El umbral sale de Store, que es el que usa el checkout.
     expect(settings.freeShippingThreshold).toBe(120000);

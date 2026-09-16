@@ -24,6 +24,8 @@ const placeholders: Record<string, string> = {
   INTERNAL_API_SECRET: "integration-placeholder",
   ENVIOCLICK_API_KEY: "integration-placeholder",
   ENVIOCLICK_WEBHOOK_SECRET: "integration-placeholder-envioclick-secret",
+  // min(24) en lib/env.mjs: si se acorta, la validación vuelve a fallar.
+  WHATSAPP_WEBHOOK_VERIFY_TOKEN: "integration-placeholder-whatsapp-verify",
   BOLD_SECRET_KEY: "integration-placeholder-bold-secret",
   MIPAQUETE_API_KEY: "integration-placeholder",
   KV_REST_API_URL: "https://kv.integration.invalid",
